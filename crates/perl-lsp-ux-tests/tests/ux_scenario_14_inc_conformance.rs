@@ -16,6 +16,8 @@
 //! | `scenario_14_no_lib_cancellation` | `use lib` then `no lib` | NOT resolved |
 //! | `scenario_14_findbin_relative` | `use FindBin; use lib "$FindBin::Bin/lib"` | resolves |
 //! | `scenario_14_system_inc` | system @INC via PERL5LIB | resolves |
+//! | `scenario_14_nested_module_relative_include_path` | `includePaths: ["lib"]` + `Nested::Deep` | resolves |
+//! | `scenario_14_include_path_missing_module_consistency` | `includePaths: ["lib"]` + missing module | NOT resolved |
 //!
 //! ## Acceptance criteria
 //!
@@ -663,4 +665,161 @@ fn scenario_14_system_inc() {
 
     // Keep system_dir alive until after all LSP calls complete.
     drop(system_dir);
+}
+
+// =============================================================================
+// Fixture 6: nested module path via includePaths
+// =============================================================================
+
+const NESTED_INCLUDE_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use Nested::Deep;\n\
+\n\
+print Nested::Deep::answer();\n\
+";
+
+const NESTED_INCLUDE_MODULE: &str = "\
+package Nested::Deep;\n\
+use strict;\n\
+use warnings;\n\
+sub answer {\n\
+    return 314;\n\
+}\n\
+1;\n\
+";
+
+#[test]
+fn scenario_14_nested_module_relative_include_path() {
+    if !binary_available() {
+        eprintln!(
+            "SKIP scenario_14_nested_module_relative_include_path: perl-lsp binary not found"
+        );
+        return;
+    }
+
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .with_file("fixture.pl", NESTED_INCLUDE_SOURCE)
+            .with_file("lib/Nested/Deep.pm", NESTED_INCLUDE_MODULE),
+    )
+    .expect("Failed to create UX harness");
+
+    send_include_paths(&harness, &["lib"]);
+
+    harness.open_file("fixture.pl", NESTED_INCLUDE_SOURCE).expect("didOpen should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+
+    let diags = wait_diagnostics(&harness, "fixture.pl");
+    let pl701_absent = !has_pl701(&diags);
+
+    // `use Nested::Deep` at line 2, col 4.
+    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
+    let def_resolves = !defs.is_empty();
+
+    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
+    let hover_ok = true;
+
+    print_conformance("nested_module_relative_include_path", pl701_absent, def_resolves, hover_ok);
+
+    if def_resolves && !pl701_absent {
+        panic!(
+            "Consumer inconsistency (nested_module_relative_include_path): goto-def resolved but PL701 fired.\n\
+             goto-def: {:?}\n\
+             diagnostics: {:?}",
+            defs, diags
+        );
+    }
+
+    assert!(
+        def_resolves,
+        "Expected goto-definition to resolve Nested::Deep via includePaths=['lib'], got empty result.\n\
+         diagnostics: {:?}",
+        diags
+    );
+    assert!(
+        pl701_absent,
+        "Expected no PL701 for Nested::Deep when includePaths=['lib'] is configured.\n\
+         diagnostics: {:?}",
+        diags
+    );
+
+    if let Some(hover) = hover_result {
+        assert!(hover.get("contents").is_some(), "Hover result must have 'contents': {:?}", hover);
+    }
+
+    harness.assert_no_crash();
+}
+
+// =============================================================================
+// Fixture 7: includePaths configured but module missing
+// =============================================================================
+
+const INCLUDE_MISSING_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use MissingFromInclude;\n\
+\n\
+print \"still running\\n\";\n\
+";
+
+#[test]
+fn scenario_14_include_path_missing_module_consistency() {
+    if !binary_available() {
+        eprintln!(
+            "SKIP scenario_14_include_path_missing_module_consistency: perl-lsp binary not found"
+        );
+        return;
+    }
+
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .with_file("fixture.pl", INCLUDE_MISSING_SOURCE),
+    )
+    .expect("Failed to create UX harness");
+
+    send_include_paths(&harness, &["lib"]);
+
+    harness.open_file("fixture.pl", INCLUDE_MISSING_SOURCE).expect("didOpen should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+
+    let diags = wait_diagnostics(&harness, "fixture.pl");
+    let pl701_fires = has_pl701(&diags);
+
+    // `use MissingFromInclude` at line 2, col 4.
+    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
+    let def_empty = defs.is_empty();
+
+    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
+
+    print_conformance(
+        "include_path_missing_module_consistency",
+        pl701_fires,
+        def_empty,
+        hover_result.is_none(),
+    );
+
+    if !def_empty && pl701_fires {
+        panic!(
+            "Consumer inconsistency (include_path_missing_module_consistency): goto-def resolved \
+             but PL701 fired.\n\
+             goto-def: {:?}\n\
+             diagnostics: {:?}",
+            defs, diags
+        );
+    }
+
+    assert!(
+        def_empty,
+        "Expected goto-definition to return empty for MissingFromInclude, got {:?}",
+        defs
+    );
+    assert!(
+        pl701_fires,
+        "Expected PL701 for MissingFromInclude when module does not exist.\n\
+         diagnostics: {:?}",
+        diags
+    );
+
+    harness.assert_no_crash();
 }

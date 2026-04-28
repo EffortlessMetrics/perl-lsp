@@ -214,13 +214,21 @@ impl<'a> Parser<'a> {
                 ));
             }
 
-            // Variable declarations
+            // Variable declarations (`my $x`, `our @y`, ...) and scoped sub declarations
+            // (`my sub helper { ... }`, `our sub helper { ... }`, `state sub memo { ... }`).
             TokenKind::My | TokenKind::Our | TokenKind::State => {
-                let decl = self.parse_variable_declaration()?;
-                if self.peek_kind() == Some(TokenKind::FatArrow) {
-                    self.finish_expression_from(decl)
+                if matches!(self.tokens.peek_second().map(|t| t.kind), Ok(TokenKind::Sub)) {
+                    let decl_token = self.consume_token()?;
+                    let mut sub_node = self.parse_subroutine()?;
+                    sub_node.location.start = decl_token.start;
+                    self.finish_subroutine_statement(sub_node)
                 } else {
-                    Ok(self.parse_word_or_expr(decl)?)
+                    let decl = self.parse_variable_declaration()?;
+                    if self.peek_kind() == Some(TokenKind::FatArrow) {
+                        self.finish_expression_from(decl)
+                    } else {
+                        Ok(self.parse_word_or_expr(decl)?)
+                    }
                 }
             }
             // `field` is a variable declarator only in Perl 5.38+ class bodies.
@@ -297,7 +305,16 @@ impl<'a> Parser<'a> {
                 let sub_node = self.parse_subroutine()?;
                 self.finish_subroutine_statement(sub_node)
             }
-            TokenKind::Class => self.parse_class(),
+            TokenKind::Class
+                if matches!(
+                    self.tokens.peek_second().map(|t| t.kind),
+                    Ok(TokenKind::Identifier)
+                        | Ok(TokenKind::DoubleColon)
+                        | Ok(TokenKind::Colon)
+                ) =>
+            {
+                self.parse_class()
+            }
             // `method NAME SIGNATURE BLOCK` is a Perl 5.38+ declaration.
             // Legacy code uses `method` as a function name; disambiguate by
             // checking the next token is an Identifier (the method name).
@@ -339,7 +356,26 @@ impl<'a> Parser<'a> {
             | TokenKind::End
             | TokenKind::Check
             | TokenKind::Init
-            | TokenKind::Unitcheck => self.parse_phase_block(),
+            | TokenKind::Unitcheck
+                if self
+                    .tokens
+                    .peek_second()
+                    .ok()
+                    .map(|t| t.kind == TokenKind::LeftBrace)
+                    .unwrap_or(false) =>
+            {
+                self.parse_phase_block()
+            }
+
+            // Phase keywords can also be used as barewords/sub names in normal
+            // statement position (e.g. `CHECK();` from CPAN code).  If there is
+            // no `{` after the keyword, parse as a regular expression statement
+            // instead of forcing phase-block syntax.
+            TokenKind::Begin
+            | TokenKind::End
+            | TokenKind::Check
+            | TokenKind::Init
+            | TokenKind::Unitcheck => self.parse_expression_statement(),
 
             // Data sections
             TokenKind::DataMarker => self.parse_data_section(),
@@ -545,7 +581,13 @@ impl<'a> Parser<'a> {
     ) -> ParseResult<Node> {
         let omit_optional_arg = allow_no_args
             && (self.peek_kind().is_some_and(Self::is_binary_operator)
-                || self.peek_kind() == Some(TokenKind::Slash));
+                || self.peek_kind() == Some(TokenKind::Slash)
+                // Nullary/named-unary builtins at statement start may be
+                // followed by a comma operator:
+                //   shift, return ...
+                // In that form `shift` has no explicit argument; the comma
+                // belongs to the surrounding expression list.
+                || self.peek_kind() == Some(TokenKind::Comma));
 
         // String comparison operators (ne, eq, lt, le, gt, ge) are tokenized as
         // Identifier tokens, so `is_binary_operator` won't catch them. When a
@@ -665,7 +707,7 @@ impl<'a> Parser<'a> {
                     }
 
                     if has_parens {
-                        self.expect(TokenKind::RightParen)?;
+                        self.expect_closing_delimiter(TokenKind::RightParen)?;
                     }
 
                     let end = self.previous_position();
@@ -861,6 +903,11 @@ impl<'a> Parser<'a> {
                                     // Skip optional comma or fat arrow
                                     if matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
                                         self.consume_token()?;
+                                    }
+                                    // Allow optional trailing separator in list-builtin
+                                    // argument lists (e.g. `grep defined, @list,;`).
+                                    if self.is_at_statement_end() {
+                                        break;
                                     }
                                     args.push(self.parse_assignment()?);
                                 }
@@ -1130,8 +1177,18 @@ impl<'a> Parser<'a> {
 
         self.mark_not_stmt_start();
 
-        // Check for optional label
-        let label = if let Some(TokenKind::Identifier) = self.peek_kind() {
+        // Check for optional label.
+        // Labels may be ordinary identifiers, and phase keywords are also
+        // valid labels when used in labeled-loop control (`last CHECK`).
+        let label = if matches!(
+            self.peek_kind(),
+            Some(TokenKind::Identifier)
+                | Some(TokenKind::Begin)
+                | Some(TokenKind::End)
+                | Some(TokenKind::Check)
+                | Some(TokenKind::Init)
+                | Some(TokenKind::Unitcheck)
+        ) {
             let label_token = self.consume_token()?;
             Some(label_token.text.to_string())
         } else {

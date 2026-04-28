@@ -475,7 +475,7 @@ pub fn handle_hover(params: HoverParams, model: &SemanticModel) -> Option<Hover>
 ## Next Steps After Integration
 
 1. **Wire one LSP feature** (recommend `textDocument/definition`)
-2. **Add E2E test** in `crates/perl-lsp/tests/`
+2. **Add E2E test** in `crates/perl-lsp-rs/tests/`
 3. **Measure impact** (response time, correctness)
 4. **Iterate** on remaining LSP features
 

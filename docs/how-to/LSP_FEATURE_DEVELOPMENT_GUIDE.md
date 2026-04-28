@@ -16,9 +16,9 @@ and `cargo test -p perl-lsp-rs` passing.
 
 Every new feature requires exactly these changes, in this order:
 
-1. **Provider logic** — implement the business logic in `crates/perl-lsp/src/features/` or a dedicated `perl-lsp-*` crate.
-2. **Language handler** — add a method on `LspServer` in `crates/perl-lsp/src/runtime/language/`.
-3. **Dispatch wiring** — route the JSON-RPC method string to your handler in `crates/perl-lsp/src/runtime/dispatch/`.
+1. **Provider logic** — implement the business logic in `crates/perl-lsp-rs/src/features/` or a dedicated `perl-lsp-*` crate.
+2. **Language handler** — add a method on `LspServer` in `crates/perl-lsp-rs/src/runtime/language/`.
+3. **Dispatch wiring** — route the JSON-RPC method string to your handler in `crates/perl-lsp-rs/src/runtime/dispatch/`.
 4. **Capability flag** — tell the client you support the feature via `BuildFlags` and `capabilities_for()`.
 5. **Catalog entry** — register the feature in `features.toml` and add tests.
 
@@ -26,13 +26,13 @@ Every new feature requires exactly these changes, in this order:
 
 ## Step 1: write the provider
 
-Providers live in `crates/perl-lsp/src/features/`. Simple features can be a single
+Providers live in `crates/perl-lsp-rs/src/features/`. Simple features can be a single
 file; complex ones use a sub-directory.
 
 The existing code-action provider is a good model:
 
 ```
-crates/perl-lsp/src/features/code_actions_provider/
+crates/perl-lsp-rs/src/features/code_actions_provider/
     mod.rs          ← public struct CodeActionsProvider, get_code_actions()
     fixes.rs        ← concrete fix implementations
     source_utils.rs ← shared text-manipulation helpers
@@ -46,7 +46,7 @@ return domain objects. It must not touch JSON or LSP types. That translation
 happens in the handler.
 
 ```rust
-// crates/perl-lsp/src/features/code_actions_provider/mod.rs (excerpt)
+// crates/perl-lsp-rs/src/features/code_actions_provider/mod.rs (excerpt)
 
 /// Provides code actions (quick-fixes) for diagnostics.
 pub struct CodeActionsProvider {
@@ -78,11 +78,11 @@ Key conventions:
 
 ## Step 2: add the language handler
 
-Handlers live in `crates/perl-lsp/src/runtime/language/`. One file per feature
+Handlers live in `crates/perl-lsp-rs/src/runtime/language/`. One file per feature
 group:
 
 ```
-crates/perl-lsp/src/runtime/language/
+crates/perl-lsp-rs/src/runtime/language/
     code_actions.rs    ← textDocument/codeAction, codeAction/resolve
     completion.rs      ← textDocument/completion
     hover.rs           ← textDocument/hover
@@ -95,12 +95,12 @@ crates/perl-lsp/src/runtime/language/
 Add your method as an `impl LspServer` block in the appropriate file. For a new
 code-action kind you would extend `code_actions.rs`; for a brand-new method you
 would create a new file and add a `mod` line to
-`crates/perl-lsp/src/runtime/language/mod.rs`.
+`crates/perl-lsp-rs/src/runtime/language/mod.rs`.
 
 The handler pattern is uniform across all features:
 
 ```rust
-// crates/perl-lsp/src/runtime/language/code_actions.rs (excerpt)
+// crates/perl-lsp-rs/src/runtime/language/code_actions.rs (excerpt)
 
 use super::super::*;
 use crate::protocol::{req_range, req_uri};
@@ -173,7 +173,7 @@ Helpers available in `super::super::*` (re-exported from `LspServer`'s impl scop
 
 ## Step 3: wire the dispatch
 
-Open `crates/perl-lsp/src/runtime/dispatch/mod.rs`. There are two places to touch:
+Open `crates/perl-lsp-rs/src/runtime/dispatch/mod.rs`. There are two places to touch:
 
 ### 3a. Register the method for cancellation tracking
 
@@ -182,7 +182,7 @@ Long-running operations (anything that might take >50 ms) should be listed in th
 `$/cancelRequest`:
 
 ```rust
-// crates/perl-lsp/src/runtime/dispatch/mod.rs (excerpt)
+// crates/perl-lsp-rs/src/runtime/dispatch/mod.rs (excerpt)
 let needs_cancellation = matches!(
     request.method.as_str(),
     "textDocument/completion"
@@ -201,7 +201,7 @@ Lightweight notification handlers that return immediately do not need this.
 Add a match arm in the main dispatch function:
 
 ```rust
-// crates/perl-lsp/src/runtime/dispatch/mod.rs
+// crates/perl-lsp-rs/src/runtime/dispatch/mod.rs
 "textDocument/codeAction"   => self.handle_code_action_dispatch(request.params),
 "codeAction/resolve"        => self.handle_code_action_resolve_dispatch(request.params),
 // your new method:
@@ -210,12 +210,12 @@ Add a match arm in the main dispatch function:
 
 ### 3c. Add the dispatch shim
 
-Dispatch shims live in `crates/perl-lsp/src/runtime/dispatch/text_document.rs`
+Dispatch shims live in `crates/perl-lsp-rs/src/runtime/dispatch/text_document.rs`
 (for `textDocument/*`) or `workspace.rs` (for `workspace/*`). The shim is a thin
 wrapper that calls your language handler:
 
 ```rust
-// crates/perl-lsp/src/runtime/dispatch/text_document.rs
+// crates/perl-lsp-rs/src/runtime/dispatch/text_document.rs
 impl LspServer {
     pub(super) fn handle_your_new_method_dispatch(
         &self,
@@ -239,7 +239,7 @@ This is driven by a chain of three files:
 ```
 crates/perl-lsp-feature-flags/src/lib.rs    ← BuildFlags struct (one bool per feature)
 crates/perl-lsp-protocol/src/capabilities.rs ← capabilities_for(BuildFlags) → ServerCapabilities
-crates/perl-lsp/src/runtime/lifecycle/capabilities.rs ← calls capabilities_for(), sends response
+crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs ← calls capabilities_for(), sends response
 ```
 
 ### 4a. Add a field to `BuildFlags`
@@ -275,7 +275,7 @@ docs for the exact field name and type.
 
 If the feature should be disableable via `initializationOptions.disabledFeatures`,
 add a case to `apply_disabled_feature_id()` in
-`crates/perl-lsp/src/runtime/lifecycle/capabilities.rs`:
+`crates/perl-lsp-rs/src/runtime/lifecycle/capabilities.rs`:
 
 ```rust
 "lsp.your_new_feature" => flags.your_new_feature = false,
@@ -307,7 +307,7 @@ Once the feature is stable enough for production, change `maturity` to `"ga"`.
 ### Unit test: provider logic (fast, no server)
 
 ```rust
-// crates/perl-lsp/tests/your_feature_tests.rs
+// crates/perl-lsp-rs/tests/your_feature_tests.rs
 // (or in the provider module under #[cfg(test)])
 
 use perl_lsp::features::your_feature_provider::YourFeatureProvider;
@@ -336,7 +336,7 @@ fn test_your_feature_basic_case() -> Result<(), Box<dyn std::error::Error>> {
 ### Integration test: JSON-RPC over a real server
 
 ```rust
-// crates/perl-lsp/tests/lsp_your_feature_tests.rs
+// crates/perl-lsp-rs/tests/lsp_your_feature_tests.rs
 
 mod support;
 use serde_json::json;
@@ -400,10 +400,10 @@ nix develop -c just ci-gate
 
 Item-by-item checklist:
 
-- [ ] Provider lives in `crates/perl-lsp/src/features/` and has no LSP/JSON imports
-- [ ] Language handler is in `crates/perl-lsp/src/runtime/language/`
-- [ ] Dispatch shim added to `crates/perl-lsp/src/runtime/dispatch/text_document.rs` (or `workspace.rs`)
-- [ ] Method string wired in `crates/perl-lsp/src/runtime/dispatch/mod.rs`
+- [ ] Provider lives in `crates/perl-lsp-rs/src/features/` and has no LSP/JSON imports
+- [ ] Language handler is in `crates/perl-lsp-rs/src/runtime/language/`
+- [ ] Dispatch shim added to `crates/perl-lsp-rs/src/runtime/dispatch/text_document.rs` (or `workspace.rs`)
+- [ ] Method string wired in `crates/perl-lsp-rs/src/runtime/dispatch/mod.rs`
 - [ ] `BuildFlags` field added in `crates/perl-lsp-feature-flags/src/lib.rs`
 - [ ] Capability advertised in `crates/perl-lsp-protocol/src/capabilities.rs`
 - [ ] `features.toml` entry added
@@ -423,7 +423,7 @@ Item-by-item checklist:
 | Completion | `src/features/completion.rs` | `src/runtime/language/completion.rs` | `src/runtime/dispatch/text_document.rs` | `tests/lsp_workspace_completion_tests.rs` |
 | References | `src/features/references.rs` | `src/runtime/language/references.rs` | `src/runtime/dispatch/text_document.rs` | `tests/lsp_workspace_index_e2e.rs` |
 
-All paths are relative to `crates/perl-lsp/`.
+All paths are relative to `crates/perl-lsp-rs/`.
 
 ---
 

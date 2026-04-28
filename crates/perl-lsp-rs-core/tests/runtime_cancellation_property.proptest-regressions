@@ -1,0 +1,10 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+#
+# Migrated from crates/perl-lsp-cancellation/tests/cancellation_property.proptest-regressions
+# when crate was absorbed into perl-lsp-rs-core::runtime::cancellation (Wave G2, #4520).
+cc 39959468feb2b2e8232cf223f1c07354b1337df5d1c8f634d05a2b5d89a323a7 # shrinks to ids = [0]

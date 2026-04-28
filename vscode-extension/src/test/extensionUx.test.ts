@@ -94,7 +94,8 @@ describe('extension UX warnings', () => {
 
     expect(showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('src/libx'),
-      'Open Settings'
+      'Open Settings',
+      'Create Missing Directories'
     );
     expect(globalState.update).toHaveBeenCalledWith(
       expect.stringContaining('perl-lsp.includePathsWarning.'),
@@ -109,8 +110,145 @@ describe('extension UX warnings', () => {
     await validateIncludePaths(context);
     expect(showWarningMessage).toHaveBeenCalledWith(
       expect.stringContaining('vendorx'),
+      'Open Settings',
+      'Create Missing Directories'
+    );
+  });
+
+  test('can create missing relative include paths directly from the warning', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-create-'));
+    const context = makeContext();
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    const getConfiguration = vscode.workspace.getConfiguration as jest.Mock;
+    getConfiguration.mockImplementation(() => ({
+      get: jest.fn(() => ['lib', 'vendor/perl']),
+    }));
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue('Create Missing Directories');
+
+    await validateIncludePaths(context);
+
+    expect(fs.existsSync(path.join(workspaceDir, 'lib'))).toBe(true);
+    expect(fs.existsSync(path.join(workspaceDir, 'vendor/perl'))).toBe(true);
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining('Created 2 include directories')
+    );
+  });
+
+  test('does not offer directory creation when include path traverses a symlink outside workspace', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-symlink-'));
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-outside-'));
+    const symlinkPath = path.join(workspaceDir, 'linked');
+    try {
+      fs.symlinkSync(outsideDir, symlinkPath, 'dir');
+    } catch {
+      return;
+    }
+
+    const context = makeContext();
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    const getConfiguration = vscode.workspace.getConfiguration as jest.Mock;
+    getConfiguration.mockImplementation(() => ({
+      get: jest.fn(() => ['linked/created-from-warning']),
+    }));
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue(undefined);
+
+    await validateIncludePaths(context);
+
+    // The symlinked path must be excluded from creatablePaths so only 'Open Settings' is offered.
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('linked/created-from-warning'),
       'Open Settings'
     );
+    expect(showWarningMessage).not.toHaveBeenCalledWith(
+      expect.any(String),
+      'Open Settings',
+      'Create Missing Directories'
+    );
+    // Belt-and-suspenders: even if the user somehow triggered creation, nothing should land outside.
+    expect(fs.existsSync(path.join(outsideDir, 'created-from-warning'))).toBe(false);
+  });
+
+  test('does not create directories outside workspace when user clicks Create Missing Directories with a symlinked include path', async () => {
+    // This test verifies the T2 re-check guard in the mkdir loop: even if creatablePaths
+    // somehow contains a symlinked path (e.g. due to a race between the T1 filter and the
+    // actual mkdir call), hasSafeExistingAncestor is re-evaluated before mkdirSync runs.
+    // We simulate this by injecting a mixed set of paths: one safe (inside workspace) and
+    // one that resolves through a symlink to outside.  We then verify only the safe one is
+    // created and nothing lands outside.
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-symlink2-'));
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-outside2-'));
+    const symlinkPath = path.join(workspaceDir, 'linked2');
+    try {
+      fs.symlinkSync(outsideDir, symlinkPath, 'dir');
+    } catch {
+      // Symlink creation not supported on this platform/environment — skip.
+      return;
+    }
+
+    const context = makeContext();
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    const getConfiguration = vscode.workspace.getConfiguration as jest.Mock;
+    // 'safe-lib' is inside the workspace; 'linked2/escape' traverses the symlink outside.
+    getConfiguration.mockImplementation(() => ({
+      get: jest.fn(() => ['safe-lib', 'linked2/escape']),
+    }));
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    // The user clicks 'Create Missing Directories'.
+    showWarningMessage.mockResolvedValue('Create Missing Directories');
+
+    await validateIncludePaths(context);
+
+    // 'safe-lib' is safe: it should be created inside the workspace.
+    expect(fs.existsSync(path.join(workspaceDir, 'safe-lib'))).toBe(true);
+    // 'linked2/escape' resolves through a symlink outside: nothing should be created there.
+    expect(fs.existsSync(path.join(outsideDir, 'escape'))).toBe(false);
   });
 
   test('warns once per major version when conflicting Perl extensions are installed', async () => {
@@ -185,6 +323,8 @@ describe('extension UX warnings', () => {
             return { workspaceValue: 5 };
           case 'perlcritic.profile':
             return { workspaceValue: '/tmp/.perlcriticrc' };
+          case 'perlcritic.theme':
+            return { workspaceValue: 'classic' };
           default:
             return undefined;
         }
@@ -203,6 +343,7 @@ describe('extension UX warnings', () => {
               enabled: true,
               severity: 5,
               profile: '/tmp/.perlcriticrc',
+              theme: 'classic',
             }),
           }),
         }),

@@ -133,7 +133,7 @@ let links = compute_links(uri, source, &roots);
 
 ### Test Coverage
 
-**Test File**: `crates/perl-lsp/tests/lsp_document_links_test.rs`
+**Test File**: `crates/perl-lsp-rs/tests/lsp_document_links_test.rs`
 
 **Coverage**:
 - Basic URL handling (Windows/Unix paths)
@@ -304,7 +304,7 @@ for lens in &mut lenses {
 
 ### Test Coverage
 
-**Test File**: `crates/perl-lsp/tests/lsp_code_lens_reference_test.rs`
+**Test File**: `crates/perl-lsp-rs/tests/lsp_code_lens_reference_test.rs`
 
 **Coverage**:
 - Code lens extraction for subroutines (test and non-test)
@@ -719,7 +719,7 @@ let highlights = provider.find_highlights(&ast, source, 4);
 
 ### Test Coverage
 
-**Test File**: `crates/perl-lsp/tests/lsp_document_highlight_test.rs`
+**Test File**: `crates/perl-lsp-rs/tests/lsp_document_highlight_test.rs`
 
 **Coverage**:
 - Scalar variable highlighting with write/read detection
@@ -1003,7 +1003,7 @@ ranges.extend(heredoc_ranges);
 
 ### Test Coverage
 
-**Test File**: `crates/perl-lsp/tests/lsp_folding_ranges_test.rs`
+**Test File**: `crates/perl-lsp-rs/tests/lsp_folding_ranges_test.rs`
 
 **Coverage**:
 - Subroutine folding
@@ -1181,7 +1181,7 @@ assert_eq!(locations.len(), 1);
 
 ### Test Coverage
 
-**Test File**: `crates/perl-lsp/tests/lsp_type_definition_tests.rs`
+**Test File**: `crates/perl-lsp-rs/tests/lsp_type_definition_tests.rs`
 
 **Coverage**:
 - Basic package definition finding
@@ -1401,7 +1401,7 @@ assert_eq!(implementations.len(), 2);
 
 ### Test Coverage
 
-**Test File**: `crates/perl-lsp/tests/lsp_implementation_tests.rs`
+**Test File**: `crates/perl-lsp-rs/tests/lsp_implementation_tests.rs`
 
 **Coverage**:
 - Finding subclasses via `use parent`

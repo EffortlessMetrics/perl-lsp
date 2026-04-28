@@ -352,6 +352,71 @@ layering and matches the same reasoning that kept `perl-symbol` (Amendment 3) an
 
 The 30-crate published target and all other ADR content remain unchanged.
 
+### Amendment 5 — 2026-04-17: Ledger corrected — perl-line-index, perl-uri, perl-pod stay published (Wave D)
+
+**Source:** Same pattern as Amendments 3 and 4 (perl-symbol, perl-token). Ledger/ADR conflict; ADR wins.
+
+The migration ledger at `.spec/microcrate-collapse/ledger.md` previously listed `perl-line-index`,
+`perl-uri`, and `perl-pod` in the Wave 4 parser/AST satellites table as modules absorbing into
+`perl-parser`. This contradicted the Decision section above ("Foundation primitives (5):
+`perl-lexer`, `perl-token`, `perl-line-index`, `perl-uri`, `perl-pod`") and Amendment 1's
+confirmation of those three crates as members of the 5 foundation primitives.
+
+**The correction:** Wave D (the parser/AST collapse) does **not** absorb `perl-line-index`,
+`perl-uri`, or `perl-pod`. They remain separately published foundation primitives per ADR-0041's
+original design. `perl-uri-classify` still folds — but into the retained `perl-uri` crate, not
+into `perl-parser`.
+
+**Rationale for keeping these three as their own published crates:**
+Each is a minimal, durable foundation primitive consumed across multiple products and layers:
+- `perl-line-index` — line/column <-> byte-offset conversion used by parser, semantic analyzer,
+  LSP providers, DAP.
+- `perl-uri` — Perl-aware URI handling used by LSP navigation, workspace discovery, DAP source
+  location resolution. Absorbs `perl-uri-classify` during Wave D.
+- `perl-pod` — POD documentation parsing used by hover, completion, and parser diagnostics.
+
+Folding any of them into `perl-parser` would force every downstream consumer (LSP providers,
+DAP, workspace index) to depend on the full parser implementation just to get the primitive.
+Keeping them as small, focused, published crates preserves clean layering and matches the same
+reasoning that kept `perl-symbol` (Amendment 3), `perl-token` (Amendment 4), and `perl-workspace`
+(Amendment 2) as their own published crates.
+
+The 30-crate published target and all other ADR content remain unchanged.
+
+### Amendment 6 — 2026-04-18: `perl-lsp-rs-core` facade/core split for LSP waves
+
+**Source:** Architectural decision made during Wave F scoping (#4489, #4491). Oppositional-planner and advocatus-diaboli both flagged the absence of an implementation sibling as the structural question blocking Wave F and Wave G1/G2/G3.
+
+**The decision:** Apply the same thin UX facade / implementation core pattern established by Wave D (`perl-parser` / `perl-parser-core`) to the LSP lane:
+
+- **`perl-lsp-rs`** — thin user-facing facade (re-exports, ergonomic wrappers, binary entry point in `crates/perl-lsp-rs/src/main.rs`).
+- **`perl-lsp-rs-core`** — implementation home for Wave F/G1/G2/G3 absorptions (features, providers, runtime, governance).
+
+Dependency direction: `perl-lsp-rs → perl-lsp-rs-core` (one-way; no cycle).
+
+**Why this is the right model:**
+
+- **House pattern.** `perl-parser` / `perl-parser-core` (Wave D, #4486), `tree-sitter-perl-rs` (facade over native stack), and now `perl-lsp-rs` / `perl-lsp-rs-core` all follow the same split. Consistent across the codebase.
+- **Preserves compilation unit boundary** during the ~50-crate LSP-side absorption. Modifying feature-level code should not force rebuild of the binary entry point.
+- **Facade stays thin.** `perl-lsp-rs` remains legible as "the LSP server's public API" rather than bloating into a mega-crate with 50+ internal modules.
+- **Unblocks subsequent waves.** Wave F/G1/G2/G3 all land into the same `perl-lsp-rs-core` crate; no mid-program architectural pivots.
+
+**Published target update: 30 → 31.**
+
+`perl-lsp-rs-core` joins the Products (core-public) section alongside `perl-lsp-rs`. This mirrors `perl-parser` / `perl-parser-core`, which already occupy two slots in the published surface. The 30-crate target in the original Decision section becomes **31**.
+
+**Wave execution plan under this amendment:**
+
+| Wave | Scope | Absorption target |
+|---|---|---|
+| F | 8 `perl-lsp-feature-*` + `perl-lsp-capability-map` | `perl-lsp-rs-core::features` + `::capability_map` — creates the crate |
+| G1 | ~25 providers | `perl-lsp-rs-core::providers` |
+| G2 | ~7 runtime crates | `perl-lsp-rs-core::runtime` |
+| G3 | ~6 governance crates | `perl-lsp-rs-core::governance` |
+| Final | `perl-lsp-rs` trims to facade shape | re-exports + binary only |
+
+**Same pattern as:** Amendments 2 (`perl-workspace` naming), 3 (`perl-symbol` kept public), 4 (`perl-token` kept public), 5 (`perl-line-index` / `perl-uri` / `perl-pod` kept public) — each amendment refined the migration based on architectural reality discovered during planning. This amendment applies the already-proven Wave D pattern to the remaining LSP-side waves.
+
 ## References
 
 - [Tracking issue #4410: Microcrate collapse to ~30 published crates](https://github.com/EffortlessMetrics/perl-lsp/issues/4410)
@@ -362,3 +427,94 @@ The 30-crate published target and all other ADR content remain unchanged.
 - [Cargo manifest: publish field](https://doc.rust-lang.org/cargo/reference/manifest.html#the-publish-field)
 - [Cargo: specifying dependencies (path + version pattern)](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
 - [crates.io publishing rules](https://doc.rust-lang.org/cargo/reference/publishing.html)
+
+---
+
+### Amendment 7 — 2026-04-21: Wave G2 Retrospective (transport + performance deferred due to protocol cycle)
+
+**Context:** Wave G2 (#4521, merged 2026-04-21) absorbed 5 runtime-infra crates into `perl-lsp-rs-core::runtime` but deferred `perl-lsp-transport` and `perl-lsp-performance`.
+
+**Root cause of deferral:** `perl-lsp-transport` depends on `perl-lsp-protocol`, which in turn depends on `perl-lsp-rs-core`. This created a three-way cycle:
+
+```
+perl-lsp-transport → perl-lsp-protocol → perl-lsp-rs-core
+```
+
+Absorbing `perl-lsp-transport` into `perl-lsp-rs-core` without first resolving this cycle would produce a self-referential dependency graph. The Wave G2 builder correctly identified this and deferred both crates rather than risk breaking the workspace graph.
+
+**Why `perl-lsp-performance` was deferred together:** `perl-lsp-tooling` (also deferred) depends directly on `perl-lsp-performance`. Absorbing performance alone would leave tooling with a dependency on a `publish = false` crate it could not build against. The cleanest resolution was to defer both to G3 and absorb them in order (performance before tooling).
+
+**Resolution plan:** Wave G3 resolves the cycle by absorbing `perl-lsp-protocol` into `perl-lsp-rs-core::protocol` first (step 2), before absorbing `perl-lsp-transport` (step 4). See Amendment 8 for the confirmed decision.
+
+---
+
+### Amendment 8 — 2026-04-21: Wave G3 — Protocol Absorption (Option A confirmed, zero external consumers, config deferred)
+
+**Context:** Wave G3 (#4535) absorbs 7 remaining LSP infra crates into `perl-lsp-rs-core`.
+
+**Protocol absorption — Option A confirmed:**
+
+The plan-review process verified that `perl-lsp-protocol` has zero external crates.io consumers (only `perl-lsp-transport` + `perl-lsp-rs` as reverse-deps, both internal). Absorbing it into `perl-lsp-rs-core::protocol` is therefore a net simplification with no external migration cost.
+
+- **Option B rejected:** Inverting the Wave F dependency direction would destabilize completed work.
+- **Option C rejected:** Keeping transport standalone forever defeats the v0.13.0 published-count target.
+
+**Mandatory absorption order (D2):**
+1. `perl-lsp-feature-governance` → `perl-lsp-rs-core::governance` (dissolves governance→rs-core cycle)
+2. `perl-lsp-protocol` → `perl-lsp-rs-core::protocol` (dissolves transport cycle)
+3. `perl-lsp-uri` → `perl-lsp-rs-core::uri`
+4. `perl-lsp-transport` → `perl-lsp-rs-core::transport` (layer-check gate after this step)
+5. `perl-lsp-performance` → `perl-lsp-rs-core::performance`
+6. `perl-lsp-critic-parser` → `perl-lsp-rs-core::critic_parser`
+7. `perl-lsp-tooling` → `perl-lsp-rs-core::tooling`
+
+**`perl-lsp-config` deferred to Wave H (new blocker discovered):**
+
+During plan-review, a hard cycle was discovered: `perl-lsp-config` → `perl-dap` → `perl-lsp-rs-core`. Absorbing config would create a self-referential dependency. Wave H will address this after the DAP crate absorption or dependency inversion.
+
+**`perl-content-length-framing` kept published:**
+
+Three consumers exist: `perl-dap`, `perl-lsp-transport` (absorbed in step 4), and `perl-lsp` binary. Full internalization creates a hard cycle via `perl-dap`. Decision: keep published, add as direct dep of `perl-lsp-rs-core` Cargo.toml (transport's framing calls go through this dep).
+
+**Count corrected: 44 → 37 (not 36 as originally estimated):**
+
+The original G3 estimate of 44 → 36 assumed absorbing 8 crates. The `perl-lsp-config` deferral reduces absorptions to 7, and `perl-content-length-framing` is not absorbed, giving 44 − 7 = 37 published crates post-G3.
+
+**Feature flag routing (D5) — original plan, superseded by orchestrator decision:**
+
+The original D5 plan was to gate `lsp-types` as an optional dep via `lsp-compat = ["dep:lsp-types"]`.
+After implementation, the builder found that `perl-lsp-rs-core` uses `lsp_types` unconditionally in
+five or more modules (`capability_map`, `protocol`, `providers`, `tooling`, `uri`), making the optional
+dep approach require invasive `#[cfg(feature = "lsp-compat")]` gating throughout. The orchestrator
+elected **Option A**: keep `lsp-types` as a required dep, keep `lsp-compat = []` as an empty signal
+feature for downstream consumers (PR #4539, commit 928cfe235). The `lsp-ga-lock` cleanup sub-part of D5
+was completed: dead refs to `perl-lsp-protocol/lsp-ga-lock` and `perl-lsp-feature-governance/lsp-ga-lock`
+were removed from `perl-lsp/Cargo.toml`; only `perl-lsp-rs-core/lsp-ga-lock` remains.
+Real optional-gating for WASM-style builds is tracked in follow-up #4540.
+
+
+---
+
+### Amendment 9 — 2026-04-21: Wave Final PR B — Last 3 infra crates absorbed; v0.13.0 target reached (34 → 31)
+
+**Context:** Wave Final PR B (#4541) absorbs the last 3 remaining infra crates into `perl-lsp-rs-core`, completing the v0.13.0 collapse target.
+
+**Absorbed crates:**
+- `perl-feature-catalog` → `perl-lsp-rs-core::feature_catalog` (runtime catalog types + functions)
+- `perl-lsp-config` → `perl-lsp-rs-core::config` (ServerConfig, WorkspaceConfig, etc.)
+- `perl-content-length-framing` → `perl-lsp-rs-core::transport::framing` (ContentLengthFramer inlined)
+
+**Cycle breaking (D6 confirmed):**
+
+The previously-discovered `perl-lsp-config → perl-dap` cycle was broken by:
+1. Extracting `resolve_perl_path_with_toolchain()` + perlbrew/plenv helpers from `perl-dap::platform` into `perl-lsp-rs-core::platform` (new module).
+2. Repointing `perl-lsp-config` to import from `crate::platform` (within rs-core) instead of `perl_dap::platform`.
+3. Then `perl-lsp-config` can be safely absorbed into rs-core without creating a cycle.
+
+**Build script architecture (D4 confirmed):**
+
+`perl-feature-catalog` was used in both `perl-lsp-rs-core/build.rs` and `perl-dap/build.rs`. Build scripts are separate compilation units that cannot use `crate::` imports from the main lib. Solution: create `crates/perl-lsp-rs-core/build_catalog.rs` as a standalone file shared via `include!()` macro in both build scripts. This avoids duplication without creating a new crate.
+
+**Published count: 34 → 31 (v0.13.0 target achieved)**
+
+All three crate directories deleted; workspace membership and publish allowlist updated accordingly.

@@ -44,7 +44,7 @@ Provide the following context to the analyzer:
 ```
 <capability_changes>
 [Code changes that add/modify/remove LSP features or capabilities]
-[From crates/perl-parser/src/lsp/, crates/perl-lsp/src/]
+[From crates/perl-parser/src/lsp/, crates/perl-lsp-rs/src/]
 </capability_changes>
 ```
 
@@ -283,7 +283,7 @@ new file mode 100644
 +    // Implementation...
 +}
 
-diff --git a/crates/perl-lsp/src/handlers.rs b/crates/perl-lsp/src/handlers.rs
+diff --git a/crates/perl-lsp-rs/src/handlers.rs b/crates/perl-lsp-rs/src/handlers.rs
 +    .workspace_symbol_provider(Some(OneOf::Left(true)))
 </capability_changes>
 
@@ -307,7 +307,7 @@ catalog_drift:
   violations:
     - capability: lsp.workspace_symbol
       change_type: added
-      code_evidence: "crates/perl-lsp/src/handlers.rs:42"
+      code_evidence: "crates/perl-lsp-rs/src/handlers.rs:42"
       catalog_updated: no
       severity: P1
       notes: "New LSP feature advertised but not in features.toml catalog"
@@ -370,7 +370,7 @@ findings:
     category: catalog_drift
     summary: New workspace_symbol capability not added to features.toml
     evidence:
-      - anchor: crates/perl-lsp/src/handlers.rs:42
+      - anchor: crates/perl-lsp-rs/src/handlers.rs:42
         content: ".workspace_symbol_provider(Some(OneOf::Left(true)))"
       - anchor: features.toml
         content: "No lsp.workspace_symbol entry found"

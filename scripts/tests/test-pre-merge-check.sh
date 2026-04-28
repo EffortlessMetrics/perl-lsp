@@ -63,7 +63,7 @@ run_check_with_output() {
 # ── Test 1: Draft PR fails ────────────────────────────────────────────────────
 
 test_draft_pr_fails() {
-    local json='{"isDraft":true,"labels":[{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat: add thing (#3321)","files":[{"path":"crates/perl-lsp/src/main.rs"}]}'
+    local json='{"isDraft":true,"labels":[{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat: add thing (#3321)","files":[{"path":"crates/perl-lsp-rs/src/main.rs"}]}'
     local mock
     mock="$(make_mock_gh "$json")"
 
@@ -81,7 +81,7 @@ test_draft_pr_fails() {
 # ── Test 2: Missing merge-ready label fails ───────────────────────────────────
 
 test_missing_merge_ready_label_fails() {
-    local json='{"isDraft":false,"labels":[{"name":"in-review"},{"name":"reviewed-deep"}],"title":"feat: add thing (#3321)","files":[{"path":"crates/perl-lsp/src/main.rs"}]}'
+    local json='{"isDraft":false,"labels":[{"name":"in-review"},{"name":"reviewed-deep"}],"title":"feat: add thing (#3321)","files":[{"path":"crates/perl-lsp-rs/src/main.rs"}]}'
     local mock
     mock="$(make_mock_gh "$json")"
 
@@ -99,7 +99,7 @@ test_missing_merge_ready_label_fails() {
 # ── Test 3: Missing issue ref in title fails ──────────────────────────────────
 
 test_missing_issue_ref_fails() {
-    local json='{"isDraft":false,"labels":[{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat: add thing without issue ref","files":[{"path":"crates/perl-lsp/src/main.rs"}]}'
+    local json='{"isDraft":false,"labels":[{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat: add thing without issue ref","files":[{"path":"crates/perl-lsp-rs/src/main.rs"}]}'
     local mock
     mock="$(make_mock_gh "$json")"
 
@@ -117,7 +117,7 @@ test_missing_issue_ref_fails() {
 # ── Test 4: Clean PR passes ───────────────────────────────────────────────────
 
 test_clean_pr_passes() {
-    local json='{"isDraft":false,"labels":[{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat: add thing (#3321)","files":[{"path":"crates/perl-lsp/src/main.rs"}]}'
+    local json='{"isDraft":false,"labels":[{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat: add thing (#3321)","files":[{"path":"crates/perl-lsp-rs/src/main.rs"}]}'
     local mock
     mock="$(make_mock_gh "$json")"
 
@@ -135,7 +135,7 @@ test_clean_pr_passes() {
 # ── Test 5: Error message names the failure (draft) ──────────────────────────
 
 test_draft_error_message_is_clear() {
-    local json='{"isDraft":true,"labels":[{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat: add thing (#3321)","files":[{"path":"crates/perl-lsp/src/main.rs"}]}'
+    local json='{"isDraft":true,"labels":[{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat: add thing (#3321)","files":[{"path":"crates/perl-lsp-rs/src/main.rs"}]}'
     local mock
     mock="$(make_mock_gh "$json")"
 
@@ -153,7 +153,7 @@ test_draft_error_message_is_clear() {
 # ── Test 6: Error message names the failure (label) ──────────────────────────
 
 test_label_error_message_is_clear() {
-    local json='{"isDraft":false,"labels":[],"title":"feat: add thing (#3321)","files":[{"path":"crates/perl-lsp/src/main.rs"}]}'
+    local json='{"isDraft":false,"labels":[],"title":"feat: add thing (#3321)","files":[{"path":"crates/perl-lsp-rs/src/main.rs"}]}'
     local mock
     mock="$(make_mock_gh "$json")"
 
@@ -171,7 +171,7 @@ test_label_error_message_is_clear() {
 # ── Test 7: Error message names the failure (title) ──────────────────────────
 
 test_title_error_message_is_clear() {
-    local json='{"isDraft":false,"labels":[{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat: no issue ref here","files":[{"path":"crates/perl-lsp/src/main.rs"}]}'
+    local json='{"isDraft":false,"labels":[{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat: no issue ref here","files":[{"path":"crates/perl-lsp-rs/src/main.rs"}]}'
     local mock
     mock="$(make_mock_gh "$json")"
 
@@ -202,7 +202,7 @@ test_no_pr_number_fails() {
 # ── Test 9: Multiple labels — merge-ready present passes ─────────────────────
 
 test_merge_ready_among_multiple_labels_passes() {
-    local json='{"isDraft":false,"labels":[{"name":"in-build"},{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat: add thing (#3321)","files":[{"path":"crates/perl-lsp/src/main.rs"}]}'
+    local json='{"isDraft":false,"labels":[{"name":"in-build"},{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat: add thing (#3321)","files":[{"path":"crates/perl-lsp-rs/src/main.rs"}]}'
     local mock
     mock="$(make_mock_gh "$json")"
 
@@ -222,7 +222,7 @@ test_merge_ready_among_multiple_labels_passes() {
 test_issue_ref_middle_of_title_passes() {
     # Spec requires (#NNN) anywhere — the CI validate-title pattern uses end-of-title,
     # but our guard just checks presence. Test that (#NNN) in the middle is acceptable.
-    local json='{"isDraft":false,"labels":[{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat(ops): pre-merge guard (#3321)","files":[{"path":"crates/perl-lsp/src/main.rs"}]}'
+    local json='{"isDraft":false,"labels":[{"name":"merge-ready"},{"name":"reviewed-deep"}],"title":"feat(ops): pre-merge guard (#3321)","files":[{"path":"crates/perl-lsp-rs/src/main.rs"}]}'
     local mock
     mock="$(make_mock_gh "$json")"
 
@@ -258,7 +258,7 @@ test_docs_only_pr_passes_without_reviewed_deep() {
 # ── Test 12: Non-docs PR without reviewed-deep fails ────────────────────────
 
 test_non_docs_pr_requires_reviewed_deep() {
-    local json='{"isDraft":false,"labels":[{"name":"merge-ready"}],"title":"fix(lsp): add thing (#4097)","files":[{"path":"crates/perl-lsp/src/runtime/mod.rs"}]}'
+    local json='{"isDraft":false,"labels":[{"name":"merge-ready"}],"title":"fix(lsp): add thing (#4097)","files":[{"path":"crates/perl-lsp-rs/src/runtime/mod.rs"}]}'
     local mock
     mock="$(make_mock_gh "$json")"
 
@@ -276,7 +276,7 @@ test_non_docs_pr_requires_reviewed_deep() {
 # ── Test 13: Deep-review failure message is clear ────────────────────────────
 
 test_review_gate_error_message_is_clear() {
-    local json='{"isDraft":false,"labels":[{"name":"merge-ready"}],"title":"fix(lsp): add thing (#4097)","files":[{"path":"crates/perl-lsp/src/runtime/mod.rs"}]}'
+    local json='{"isDraft":false,"labels":[{"name":"merge-ready"}],"title":"fix(lsp): add thing (#4097)","files":[{"path":"crates/perl-lsp-rs/src/runtime/mod.rs"}]}'
     local mock
     mock="$(make_mock_gh "$json")"
 

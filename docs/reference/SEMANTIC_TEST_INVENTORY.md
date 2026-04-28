@@ -93,7 +93,7 @@
 ### 🔴 Category C: High Resource (LSP Integration Tests)
 **Runtime**: Varies (60s+ on constrained hardware)
 **Memory**: 200-500MB
-**Location**: `crates/perl-lsp/tests/semantic_definition.rs`
+**Location**: `crates/perl-lsp-rs/tests/semantic_definition.rs`
 **LSP Overhead**: HIGH (full LSP server initialization)
 
 | Test Name | Est. Time | Validates | Notes |

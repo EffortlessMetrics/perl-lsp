@@ -1,0 +1,35 @@
+# Wave 4-Completion — Acceptance Criteria
+
+- [ ] 3 absorbed crate dirs marked `publish = false` in their Cargo.toml files
+- [ ] 3 allowlist entries removed from root `Cargo.toml` line 123, 166, 169
+- [ ] `xtask/published-crate-baseline.txt` updated 37 → 34
+- [ ] Existing G3 baseline assertions in `crates/perl-lsp-rs-core/tests/g3_published_count.rs` updated to expect 34
+- [ ] Existing G3 baseline assertions in `crates/perl-lsp-rs-core/tests/g3_publish_baseline_enforcement.rs` updated to expect 34
+- [ ] `perl-parser/src/dead_code/mod.rs` created with absorbed content from `crates/perl-dead-code/src/lib.rs`
+- [ ] `perl-parser/src/refactor/` directory created with absorbed content from `crates/perl-refactoring/src/refactor/`
+- [ ] `perl-parser/src/incremental/` directory created with absorbed content from `crates/perl-incremental-parsing/src/incremental/`
+- [ ] `perl-parser/src/lib.rs` line 459 changed from `pub use perl_dead_code as dead_code_detector;` to `pub mod dead_code; pub use dead_code as dead_code_detector;`
+- [ ] `perl-parser/src/refactor.rs` replaced with real module (pub mod refactor; // real content)
+- [ ] `perl-parser/src/incremental.rs` replaced with real module (pub mod incremental; // real content, feature-gated)
+- [ ] `crates/perl-parser/Cargo.toml` line 30 removed `perl-dead-code = { workspace = true }`
+- [ ] `crates/perl-parser/Cargo.toml` line 32 removed `perl-refactoring = { workspace = true }`
+- [ ] `crates/perl-parser/Cargo.toml` lines 83-84 removed perl-refactoring from feature forwarding
+- [ ] `crates/perl-parser/Cargo.toml` line 33 removed `perl-incremental-parsing = { workspace = true, optional = true }`
+- [ ] `crates/perl-parser/Cargo.toml` line 64 removed perl-incremental-parsing from feature deps
+- [ ] `crates/perl-lsp/src/runtime/text_sync.rs` 6+ `perl_incremental_parsing::` imports rewired to `perl_parser::incremental::`
+- [ ] `crates/perl-lsp/Cargo.toml` line 34 removed optional `perl-incremental-parsing` dep
+- [ ] `crates/perl-lsp/Cargo.toml` line 95 updated `incremental` feature to remove perl-incremental-parsing
+- [ ] `cargo check --workspace` passes
+- [ ] `cargo xtask layer-check` passes (no new cycles)
+- [ ] `cargo xtask published-crate-count` returns 34
+- [ ] `cargo xtask publish-closure` reports zero violations
+- [ ] New test file `crates/perl-parser/tests/wave4_completion_absorption_tests.rs` created with:
+  - [ ] `#[test] fn dead_code_accessible_via_parser()` — verify module accessible
+  - [ ] `#[test] fn refactoring_accessible_via_parser()` — verify module accessible
+  - [ ] `#[test] fn incremental_accessible_via_parser()` — verify module accessible (feature-gated)
+  - [ ] `#[test] fn wave4_crates_have_publish_false()` — read 3 Cargo.toml files and assert publish = false
+  - [ ] `#[test] fn wave4_crates_not_in_publish_allowlist()` — read root Cargo.toml and assert absent from lines 123, 166, 169
+  - [ ] `#[test] fn published_count_is_34_after_wave4()` — read baseline.txt and assert == 34
+- [ ] `RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs` passes
+- [ ] `cargo clippy --workspace --lib -D warnings` passes
+- [ ] `cargo xtask fmt` produces no changes

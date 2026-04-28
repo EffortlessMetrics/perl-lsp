@@ -61,7 +61,7 @@
 use crate::ast::{Node, NodeKind};
 use crate::position::Position;
 use lsp_types::*;
-use perl_keywords::PARSER_LSP_KEYWORDS;
+use perl_lexer::PARSER_LSP_KEYWORDS;
 use std::collections::HashMap;
 use url::Url;
 

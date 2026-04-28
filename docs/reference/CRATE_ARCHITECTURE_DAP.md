@@ -1323,7 +1323,7 @@ pub fn resolve_stack_frame(
 **Design**: Separate binaries, optional integration
 
 ```rust
-// crates/perl-lsp/src/main.rs (unchanged)
+// crates/perl-lsp-rs/src/main.rs (unchanged)
 // LSP server runs independently, no DAP dependency
 
 // crates/perl-dap/src/main.rs (new)

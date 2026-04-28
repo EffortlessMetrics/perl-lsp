@@ -1,6 +1,10 @@
 //! Execution control: continue, next, step in, step out, pause, goto, cancel.
 
 use super::*;
+use std::sync::LazyLock;
+
+static STEP_IN_TARGET_CALL_RE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"(\w[\w:]*)\s*\(").ok());
 
 impl DebugAdapter {
     /// Handle continue request
@@ -21,7 +25,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Continue;
-            session.variables.clear();
+            session.variable_cache.clear();
             thread_id = session.thread_id;
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
         {
@@ -65,7 +69,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Next;
-            session.variables.clear();
+            session.variable_cache.clear();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -101,7 +105,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepIn;
-            session.variables.clear();
+            session.variable_cache.clear();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -138,7 +142,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepOut;
-            session.variables.clear();
+            session.variable_cache.clear();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -167,10 +171,11 @@ impl DebugAdapter {
         arguments: Option<Value>,
     ) -> DapMessage {
         let _args: Option<PauseArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
-        let success = if let Some(ref session) =
+        let success = if let Some(ref mut session) =
             *lock_or_recover(&self.session, "debug_adapter.session")
         {
             let pid = session.process.id();
+            session.variable_cache.clear();
             self.send_interrupt_signal(pid)
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
         {
@@ -352,7 +357,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Goto;
-            session.variables.clear();
+            session.variable_cache.clear();
             let t_id = session.thread_id;
 
             self.send_event(
@@ -427,26 +432,14 @@ impl DebugAdapter {
                     let line_idx = frame_line as usize;
                     if let Some(source_line) = content.lines().nth(line_idx.saturating_sub(1)) {
                         // Find function call patterns
-                        let call_re = match Regex::new(r"(\w[\w:]*)\s*\(") {
-                            Ok(re) => re,
-                            Err(_) => {
-                                let body = StepInTargetsResponseBody { targets };
-                                return DapMessage::Response {
-                                    seq,
-                                    request_seq,
-                                    success: true,
-                                    command: "stepInTargets".to_string(),
-                                    body: serde_json::to_value(&body).ok(),
-                                    message: None,
-                                };
-                            }
-                        };
-                        for (idx, cap) in call_re.captures_iter(source_line).enumerate() {
-                            if let Some(name) = cap.get(1) {
-                                targets.push(StepInTarget {
-                                    id: idx as i64,
-                                    label: name.as_str().to_string(),
-                                });
+                        if let Some(call_re) = STEP_IN_TARGET_CALL_RE.as_ref() {
+                            for (idx, cap) in call_re.captures_iter(source_line).enumerate() {
+                                if let Some(name) = cap.get(1) {
+                                    targets.push(StepInTarget {
+                                        id: idx as i64,
+                                        label: name.as_str().to_string(),
+                                    });
+                                }
                             }
                         }
                     }

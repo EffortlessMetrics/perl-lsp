@@ -10,8 +10,8 @@
 
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
-use perl_error::{ParseError, RecoveryKind, RecoverySite};
-use perl_parser_core::{NodeKind, Parser};
+use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
+use perl_parser_core::{NodeKind, Parser, RecoverySalvageClass, RecoverySalvageProfile};
 use perl_tdd_support::must;
 
 // ---------------------------------------------------------------------------
@@ -97,16 +97,20 @@ fn missing_paren_before_semicolon_emits_recovered() {
     );
 }
 
-/// `$hash{$key` — missing `}` before `;`.
-/// Note: hash subscripts use `expect()` not `expect_closing_delimiter()`, so
-/// this path does not emit `ParseError::Recovered { InsertedCloser }` yet
-/// (that is a Phase 1 extension beyond this function).  We verify that the
-/// parser does not crash and produces a partial AST.
+/// `$hash{$key` — missing `}` before `;` should emit InsertedCloser recovery.
 #[test]
-fn missing_hash_brace_before_semicolon_does_not_crash() {
+fn missing_hash_brace_before_semicolon_emits_recovered() {
     let src = "$hash{$key; my $x = 1;";
-    let (ast, _errors) = parse_errors(src);
-    // Parser must return a Program node (not panic or produce Err)
+    let (ast, errors) = parse_errors(src);
+
+    let recovered = count_inserted_closer(&errors);
+    assert!(
+        recovered >= 1,
+        "Expected InsertedCloser for missing '}}' before ';' in '{}', got errors: {:?}",
+        src,
+        errors
+    );
+
     assert!(
         matches!(ast.kind, NodeKind::Program { .. }),
         "Parser must return a Program node for '{}' (partial parse is OK)",
@@ -209,6 +213,30 @@ fn missing_bracket_before_eof_emits_recovered() {
     );
 }
 
+/// The `Recovered` error for `}` must record `RecoverySite::HashSubscript`.
+#[test]
+fn recovered_error_has_correct_site_for_hash_subscript() {
+    let src = "$hash{$key;";
+    let (_ast, errors) = parse_errors(src);
+
+    let has_hash_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::HashSubscript,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+
+    assert!(
+        has_hash_recovery,
+        "Expected Recovered {{ site: HashSubscript, kind: InsertedCloser }} for '{}', got: {:?}",
+        src, errors
+    );
+}
+
 /// The `Recovered` error for `]` must record `RecoverySite::ArraySubscript`.
 #[test]
 fn recovered_error_has_correct_site_for_array_subscript() {
@@ -286,6 +314,100 @@ fn missing_paren_at_eof_in_list_assignment_emits_recovered() {
     );
 }
 
+/// Missing `]` recovered when parser sees a `)` owned by the outer call.
+/// This prevents ownership loss in postfix-deref/call chains.
+#[test]
+fn missing_bracket_before_outer_paren_emits_recovered() {
+    assert_clean_parse("foo($arr[$i]);");
+
+    let src = "foo($arr[$i));";
+    let (_ast, errors) = parse_errors(src);
+
+    let has_array_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::ArraySubscript,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+    assert!(
+        has_array_recovery,
+        "Expected array-subscript InsertedCloser before outer ')', got: {:?}",
+        errors
+    );
+}
+
+/// Missing `)` in declaration list recovered when `]` closes an outer index.
+#[test]
+fn missing_paren_before_outer_bracket_emits_recovered() {
+    assert_clean_parse("my $x = $list[(foo($a))];");
+
+    let src = "my $x = $list[(foo($a)];";
+    let (_ast, errors) = parse_errors(src);
+
+    let has_arg_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::ArgList,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+    assert!(
+        has_arg_recovery,
+        "Expected arg-list InsertedCloser before outer ']', got: {:?}",
+        errors
+    );
+}
+
+/// Triple-nested mismatch: `foo(bar($arr[$i))` — innermost `]` missing before
+/// the outer `)` owned by `bar`.  Both `bar`'s `]` recovery and `foo`'s inner
+/// `)` must fire; the final `)` belonging to `foo` is consumed normally.
+#[test]
+fn triple_nested_mismatch_outer_paren_emits_recovered() {
+    // Balanced baseline
+    assert_clean_parse("foo(bar($arr[$i]));");
+
+    // Missing `]` — outer `)` of bar triggers sibling-closer recovery.
+    let src = "foo(bar($arr[$i)));";
+    let (_ast, errors) = parse_errors(src);
+
+    let has_array_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::ArraySubscript,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+    assert!(
+        has_array_recovery,
+        "Expected ArraySubscript InsertedCloser in triple-nested mismatch '{}', got: {:?}",
+        src, errors
+    );
+}
+
+/// Sanity check: `if` with fully-matched delimiters parses clean.
+/// The `LeftBrace` arm in `is_delimiter_recovery_point` is a pre-existing
+/// entry intended for cases where an expression parser returns *without*
+/// consuming `{`; in practice the postfix/primary parsers tend to consume `{`
+/// first (as a hash subscript or hash-ref constructor), so that arm is a
+/// latent guard rather than an active test target.  This test simply confirms
+/// the happy path is unaffected by the PR.
+#[test]
+fn if_condition_clean_parse_unaffected() {
+    assert_clean_parse("if ($x > 0) { print 1; }");
+    assert_clean_parse("while ($x > 0) { $x--; }");
+    assert_clean_parse("for (my $i = 0; $i < 10; $i++) { print $i; }");
+}
+
 // ---------------------------------------------------------------------------
 // Regression: clean-parse inputs must produce zero Recovered errors
 // ---------------------------------------------------------------------------
@@ -332,4 +454,14 @@ fn clean_inputs_produce_zero_inserted_closer() {
             src, recovered
         );
     }
+}
+
+#[test]
+fn missing_closer_profiles_as_structured_recovery_only() {
+    let mut parser = Parser::new("my @arr = ($a, $b;");
+    let ast = must(parser.parse());
+    let profile = RecoverySalvageProfile::from_parse(&ast, parser.errors(), false);
+    assert_eq!(profile.class, RecoverySalvageClass::StructuredRecoveryOnly);
+    assert!(profile.recovered_count >= 1);
+    assert_eq!(profile.error_node_count, 0);
 }

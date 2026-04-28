@@ -139,3 +139,112 @@ fn bdd_given_multiple_realistic_statements_when_parsed_then_program_shape_is_sta
         "Did not expect recovery ERROR nodes for valid script: {sexp}"
     );
 }
+
+#[test]
+fn bdd_given_postfix_flow_and_ternary_when_parsed_then_control_flow_nodes_are_retained()
+-> TestResult {
+    // Given: a developer writes concise Perl with postfix conditionals and ternary expressions.
+    let code = r#"
+        my $count = 2;
+        print "nonzero" if $count;
+        my $label = $count > 1 ? "many" : "one";
+    "#;
+
+    // When: the parser processes the snippet.
+    let sexp = parse_sexp(code)?;
+
+    // Then: compact control-flow structure remains visible in AST output.
+    assert!(sexp.contains("statement_modifier"), "Expected statement modifier node in: {sexp}");
+    assert!(sexp.contains("ternary"), "Expected ternary node in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_unclosed_quote_when_parsed_then_recovery_is_reported_without_panicking() {
+    // Given: a developer is typing and leaves a quoted string unfinished.
+    let code = r#"my $name = "perl; print $name;"#;
+
+    // When: the parser attempts to build an AST.
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    // Then: parser should return an error or emit recovery nodes, but never panic.
+    match result {
+        Ok(ast) => {
+            let sexp = ast.to_sexp();
+            assert!(
+                sexp.contains("ERROR")
+                    || sexp.contains("(UNKNOWN_REST)")
+                    || sexp.contains("(missing_expression)")
+                    || sexp.contains("(missing_statement)"),
+                "Expected recovery marker for malformed quoted string: {sexp}"
+            );
+        }
+        Err(err) => {
+            assert!(!err.to_string().is_empty(), "Expected non-empty parse failure message");
+        }
+    }
+}
+
+#[test]
+fn bdd_given_package_and_constructor_pattern_when_parsed_then_namespace_and_bless_flow_are_preserved()
+-> TestResult {
+    // Given: a developer writes a package with a constructor that blesses a hashref.
+    let code = r#"
+        package My::Service;
+        use strict;
+        use warnings;
+
+        sub new {
+            my ($class, %args) = @_;
+            my $self = bless { %args }, $class;
+            return $self;
+        }
+    "#;
+
+    // When: the parser processes this object-construction pattern.
+    let sexp = parse_sexp(code)?;
+
+    // Then: namespace + constructor flow is represented without recovery artifacts.
+    assert!(sexp.contains("My::Service"), "Expected package name in AST output: {sexp}");
+    assert!(sexp.contains("bless"), "Expected bless call in AST output: {sexp}");
+    assert!(sexp.contains("(return"), "Expected Return node in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_partial_hashref_literal_when_parsed_then_parser_recovers_without_panicking() {
+    // Given: a developer is typing a hashref literal and stops mid-expression.
+    let code = r#"
+        my $cfg = {
+            host => "localhost",
+            port =>
+    "#;
+
+    // When: the parser attempts to process incomplete input.
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    // Then: parser should recover (ERROR node) or return a descriptive parse failure.
+    // Note: AST recovery node names are ERROR, (UNKNOWN_REST), (missing_expression),
+    // (missing_statement) — lowercase "unknown" is not a valid sexp token name.
+    match result {
+        Ok(ast) => {
+            let sexp = ast.to_sexp();
+            assert!(
+                sexp.contains("ERROR")
+                    || sexp.contains("(UNKNOWN_REST)")
+                    || sexp.contains("(missing_expression)")
+                    || sexp.contains("(missing_statement)"),
+                "Expected recovery marker for incomplete hashref literal: {sexp}"
+            );
+        }
+        Err(err) => {
+            assert!(!err.to_string().is_empty(), "Expected non-empty parse failure message");
+        }
+    }
+}

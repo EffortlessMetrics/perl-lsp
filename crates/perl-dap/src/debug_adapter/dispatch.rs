@@ -3,6 +3,46 @@
 use super::*;
 
 impl DebugAdapter {
+    const SUPPORTED_COMMANDS: [&str; 37] = [
+        "initialize",
+        "launch",
+        "attach",
+        "disconnect",
+        "terminate",
+        "setBreakpoints",
+        "setFunctionBreakpoints",
+        "setExceptionBreakpoints",
+        "configurationDone",
+        "threads",
+        "stackTrace",
+        "scopes",
+        "variables",
+        "setVariable",
+        "continue",
+        "next",
+        "stepIn",
+        "stepOut",
+        "pause",
+        "evaluate",
+        "inlineValues",
+        "breakpointLocations",
+        "source",
+        "loadedSources",
+        "modules",
+        "completions",
+        "exceptionInfo",
+        "restart",
+        "setExpression",
+        "dataBreakpointInfo",
+        "setDataBreakpoints",
+        "cancel",
+        "stepInTargets",
+        "gotoTargets",
+        "goto",
+        "restartFrame",
+        "terminateThreads",
+    ];
+
     pub fn handle_request(
         &mut self,
         request_seq: i64,
@@ -95,9 +135,21 @@ impl DebugAdapter {
                 success: false,
                 command: command.to_string(),
                 body: None,
-                message: Some(format!("Unknown command: {}", command)),
+                message: Some(Self::unknown_command_message(command)),
             },
         }
+    }
+
+    fn unknown_command_message(command: &str) -> String {
+        if let Some(suggestion) = Self::suggested_command(command) {
+            format!("Unknown command: {command}. Did you mean '{suggestion}'?")
+        } else {
+            format!("Unknown command: {command}")
+        }
+    }
+
+    fn suggested_command(command: &str) -> Option<&'static str> {
+        Self::SUPPORTED_COMMANDS.iter().copied().find(|known| known.eq_ignore_ascii_case(command))
     }
 
     pub(super) fn response_succeeded_for_command(

@@ -117,9 +117,9 @@ dependencies = [
 
 [[package]]
 name = "assert_cmd"
-version = "2.2.0"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a686bbee5efb88a82df0621b236e74d925f470e5445d3220a5648b892ec99c9"
+checksum = "39bae1d3fa576f7c6519514180a72559268dd7d1fe104070956cb687bc6673bd"
 dependencies = [
  "anstyle",
  "bstr",
@@ -1487,32 +1487,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-ast-utils"
-version = "0.12.4"
-dependencies = [
- "perl-ast",
-]
-
-[[package]]
 name = "perl-ast-v2"
 version = "0.12.4"
 dependencies = [
  "perl-position-tracking",
-]
-
-[[package]]
-name = "perl-builtins"
-version = "0.12.4"
-dependencies = [
- "perl-builtins-phf",
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-builtins-phf"
-version = "0.12.4"
-dependencies = [
- "phf",
 ]
 
 [[package]]
@@ -1527,10 +1505,6 @@ dependencies = [
  "toml",
  "walkdir",
 ]
-
-[[package]]
-name = "perl-content-length-framing"
-version = "0.12.4"
 
 [[package]]
 name = "perl-corpus"
@@ -1559,13 +1533,11 @@ dependencies = [
  "criterion",
  "nix",
  "once_cell",
- "perl-content-length-framing",
- "perl-feature-catalog",
- "perl-keywords",
- "perl-lsp-launcher",
+ "perl-lexer",
+ "perl-lsp-rs-core",
  "perl-module",
  "perl-parser",
- "perl-path-security",
+ "perl-parser-core",
  "perl-tdd-support",
  "proptest",
  "regex",
@@ -1575,6 +1547,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "toml",
  "tracing",
  "winapi",
 ]
@@ -1598,71 +1571,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-edit"
-version = "0.12.4"
-dependencies = [
- "perl-position-tracking",
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-error"
-version = "0.12.4"
-dependencies = [
- "perl-ast",
- "perl-ast-v2",
- "perl-lexer",
- "perl-position-tracking",
- "perl-regex",
- "perl-tdd-support",
- "thiserror",
-]
-
-[[package]]
-name = "perl-feature-catalog"
-version = "0.12.4"
-dependencies = [
- "perl-tdd-support",
- "serde",
- "tempfile",
- "thiserror",
- "toml",
-]
-
-[[package]]
-name = "perl-heredoc"
-version = "0.12.4"
-dependencies = [
- "perl-position-tracking",
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-heredoc-anti-patterns"
-version = "0.12.4"
-dependencies = [
- "regex",
-]
-
-[[package]]
 name = "perl-incremental-parsing"
 version = "0.12.4"
 dependencies = [
- "anyhow",
+ "criterion",
  "lsp-types",
- "perl-edit",
  "perl-lexer",
- "perl-line-index",
- "perl-parser-core",
+ "perl-parser",
  "perl-tdd-support",
  "ropey",
  "serde_json",
- "tracing",
 ]
-
-[[package]]
-name = "perl-keywords"
-version = "0.12.4"
 
 [[package]]
 name = "perl-lexer"
@@ -1670,8 +1589,12 @@ version = "0.12.4"
 dependencies = [
  "criterion",
  "memchr",
- "perl-keywords",
+ "perl-ast-v2",
+ "perl-parser-core",
  "perl-position-tracking",
+ "perl-tdd-support",
+ "perl-token",
+ "phf",
  "proptest",
  "thiserror",
  "tracing",
@@ -1683,340 +1606,6 @@ name = "perl-line-index"
 version = "0.12.4"
 
 [[package]]
-name = "perl-lsp-ai-provider"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-inline-completion",
- "serde_json",
- "ureq",
-]
-
-[[package]]
-name = "perl-lsp-cancellation"
-version = "0.12.4"
-dependencies = [
- "proptest",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-capability-map"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-lsp-feature-ids",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-code-actions"
-version = "0.12.4"
-dependencies = [
- "perl-ast-utils",
- "perl-builtins",
- "perl-diagnostics",
- "perl-lsp-diagnostics",
- "perl-lsp-import-management",
- "perl-lsp-rename",
- "perl-lsp-text-utils",
- "perl-parser-core",
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-lsp-code-lens"
-version = "0.12.4"
-dependencies = [
- "perl-parser",
- "perl-parser-core",
- "perl-position-tracking",
- "perl-tdd-support",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-color-provider"
-version = "0.12.4"
-dependencies = [
- "once_cell",
- "perl-position-tracking",
- "regex",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-completion"
-version = "0.12.4"
-dependencies = [
- "criterion",
- "perl-keywords",
- "perl-lsp-completion-item",
- "perl-lsp-file-completion",
- "perl-module",
- "perl-parser-core",
- "perl-semantic-analyzer",
- "perl-tdd-support",
- "perl-workspace",
- "serde_json",
- "url",
-]
-
-[[package]]
-name = "perl-lsp-completion-item"
-version = "0.12.4"
-dependencies = [
- "perl-parser-core",
-]
-
-[[package]]
-name = "perl-lsp-config"
-version = "0.12.4"
-dependencies = [
- "perl-dap",
- "serde",
- "serde_json",
- "tempfile",
- "toml",
-]
-
-[[package]]
-name = "perl-lsp-critic-parser"
-version = "0.12.4"
-dependencies = [
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-lsp-diagnostics"
-version = "0.12.4"
-dependencies = [
- "insta",
- "perl-corpus",
- "perl-diagnostics",
- "perl-heredoc-anti-patterns",
- "perl-parser",
- "perl-parser-core",
- "perl-pragma",
- "perl-semantic-analyzer",
- "perl-tdd-support",
- "perl-workspace",
- "tempfile",
-]
-
-[[package]]
-name = "perl-lsp-document-highlight"
-version = "0.12.4"
-dependencies = [
- "perl-ast",
- "perl-parser",
-]
-
-[[package]]
-name = "perl-lsp-document-links"
-version = "0.12.4"
-dependencies = [
- "perl-module",
- "serde_json",
- "url",
-]
-
-[[package]]
-name = "perl-lsp-feature-contracts"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-feature-catalog",
- "perl-lsp-capability-map",
- "perl-tdd-support",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-feature-flags"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-ids",
-]
-
-[[package]]
-name = "perl-lsp-feature-governance"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-grid",
- "perl-lsp-feature-policy",
- "perl-lsp-feature-profile",
- "perl-lsp-feature-profile-cli",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-feature-grid"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-policy",
- "perl-tdd-support",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-feature-ids"
-version = "0.12.4"
-
-[[package]]
-name = "perl-lsp-feature-policy"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-flags",
- "perl-lsp-feature-profile",
-]
-
-[[package]]
-name = "perl-lsp-feature-profile"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-contracts",
-]
-
-[[package]]
-name = "perl-lsp-feature-profile-cli"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-feature-policy",
- "perl-lsp-feature-profile",
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-lsp-file-completion"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-completion-item",
- "perl-path-security",
- "tempfile",
- "walkdir",
-]
-
-[[package]]
-name = "perl-lsp-folding"
-version = "0.12.4"
-dependencies = [
- "perl-lexer",
- "perl-parser-core",
-]
-
-[[package]]
-name = "perl-lsp-formatting"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-formatting-types",
- "perl-lsp-perltidy",
- "perl-lsp-tooling",
- "perl-tdd-support",
- "thiserror",
-]
-
-[[package]]
-name = "perl-lsp-formatting-types"
-version = "0.12.4"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-import-management"
-version = "0.12.4"
-
-[[package]]
-name = "perl-lsp-inlay-hints"
-version = "0.12.4"
-dependencies = [
- "perl-builtins",
- "perl-parser-core",
- "perl-position-tracking",
- "perl-semantic-analyzer",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-inline-completion"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-position-tracking",
- "serde",
-]
-
-[[package]]
-name = "perl-lsp-input-validation"
-version = "0.12.4"
-dependencies = [
- "anyhow",
- "perl-lsp-limits",
- "perl-path-security",
- "perl-tdd-support",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "perl-lsp-launcher"
-version = "0.12.4"
-dependencies = [
- "clap",
- "perl-lsp-feature-governance",
- "perl-tdd-support",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "perl-lsp-limits"
-version = "0.12.4"
-dependencies = [
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-navigation"
-version = "0.12.4"
-dependencies = [
- "criterion",
- "lsp-types",
- "perl-lsp-document-links",
- "perl-lsp-type-hierarchy",
- "perl-lsp-workspace-symbols",
- "perl-parser-core",
- "perl-position-tracking",
- "perl-qualified-name",
- "perl-tdd-support",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-on-type-formatting"
-version = "0.12.4"
-dependencies = [
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-performance"
-version = "0.12.4"
-dependencies = [
- "moka",
- "perl-parser-core",
- "perl-symbol",
-]
-
-[[package]]
 name = "perl-lsp-perltidy"
 version = "0.12.4"
 dependencies = [
@@ -2024,54 +1613,6 @@ dependencies = [
  "perl-tdd-support",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-protocol"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-flags",
- "serde",
- "serde_json",
- "tracing",
-]
-
-[[package]]
-name = "perl-lsp-providers"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-lsp-code-actions",
- "perl-lsp-code-lens",
- "perl-lsp-completion",
- "perl-lsp-diagnostics",
- "perl-lsp-folding",
- "perl-lsp-formatting",
- "perl-lsp-inlay-hints",
- "perl-lsp-navigation",
- "perl-lsp-on-type-formatting",
- "perl-lsp-rename",
- "perl-lsp-semantic-tokens",
- "perl-lsp-tooling",
- "perl-lsp-uri",
- "perl-parser-core",
- "perl-semantic-analyzer",
- "perl-tdd-support",
- "rustc-hash",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-rename"
-version = "0.12.4"
-dependencies = [
- "perl-keywords",
- "perl-parser-core",
- "perl-semantic-analyzer",
- "perl-symbol",
- "perl-tdd-support",
 ]
 
 [[package]]
@@ -2086,64 +1627,21 @@ dependencies = [
  "md5",
  "once_cell",
  "parking_lot",
- "perl-ast-utils",
- "perl-content-length-framing",
  "perl-corpus",
  "perl-dap",
  "perl-diagnostics",
- "perl-incremental-parsing",
- "perl-keywords",
- "perl-lsp-ai-provider",
- "perl-lsp-cancellation",
- "perl-lsp-capability-map",
- "perl-lsp-code-actions",
- "perl-lsp-code-lens",
- "perl-lsp-color-provider",
- "perl-lsp-completion",
- "perl-lsp-completion-item",
- "perl-lsp-config",
- "perl-lsp-critic-parser",
- "perl-lsp-diagnostics",
- "perl-lsp-document-highlight",
- "perl-lsp-document-links",
- "perl-lsp-feature-contracts",
- "perl-lsp-feature-flags",
- "perl-lsp-feature-governance",
- "perl-lsp-feature-grid",
- "perl-lsp-feature-policy",
- "perl-lsp-feature-profile",
- "perl-lsp-feature-profile-cli",
- "perl-lsp-formatting",
- "perl-lsp-formatting-types",
- "perl-lsp-import-management",
- "perl-lsp-inlay-hints",
- "perl-lsp-inline-completion",
- "perl-lsp-input-validation",
- "perl-lsp-launcher",
- "perl-lsp-limits",
- "perl-lsp-navigation",
- "perl-lsp-performance",
+ "perl-lexer",
  "perl-lsp-perltidy",
- "perl-lsp-protocol",
- "perl-lsp-providers",
- "perl-lsp-rename",
- "perl-lsp-selection-range",
- "perl-lsp-semantic-tokens",
- "perl-lsp-symbol-query",
- "perl-lsp-tooling",
- "perl-lsp-transport",
- "perl-lsp-type-hierarchy",
- "perl-lsp-uri",
- "perl-lsp-workspace-symbols",
+ "perl-lsp-rs-core",
  "perl-module",
  "perl-parser",
+ "perl-parser-core",
  "perl-pod",
  "perl-position-tracking",
- "perl-qualified-name",
- "perl-source-file",
  "perl-subprocess-runtime",
  "perl-symbol",
  "perl-tdd-support",
+ "perl-uri",
  "perl-workspace",
  "predicates",
  "proptest",
@@ -2162,73 +1660,44 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-selection-range"
+name = "perl-lsp-rs-core"
 version = "0.12.4"
 dependencies = [
+ "anyhow",
+ "clap",
+ "insta",
  "lsp-types",
-]
-
-[[package]]
-name = "perl-lsp-semantic-tokens"
-version = "0.12.4"
-dependencies = [
+ "moka",
+ "once_cell",
+ "perl-ast",
+ "perl-diagnostics",
  "perl-lexer",
- "perl-parser-core",
- "perl-tdd-support",
- "regex",
- "rustc-hash",
-]
-
-[[package]]
-name = "perl-lsp-symbol-query"
-version = "0.12.4"
-
-[[package]]
-name = "perl-lsp-text-utils"
-version = "0.12.4"
-
-[[package]]
-name = "perl-lsp-tooling"
-version = "0.12.4"
-dependencies = [
- "criterion",
- "lsp-types",
- "perl-lsp-critic-parser",
- "perl-lsp-performance",
  "perl-lsp-perltidy",
- "perl-parser-core",
- "perl-subprocess-runtime",
- "perl-tdd-support",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-transport"
-version = "0.12.4"
-dependencies = [
- "perl-content-length-framing",
- "perl-lsp-protocol",
- "serde_json",
- "tracing",
-]
-
-[[package]]
-name = "perl-lsp-type-hierarchy"
-version = "0.12.4"
-dependencies = [
+ "perl-lsp-rs",
+ "perl-module",
+ "perl-parser",
  "perl-parser-core",
  "perl-position-tracking",
+ "perl-pragma",
+ "perl-semantic-analyzer",
+ "perl-subprocess-runtime",
+ "perl-symbol",
  "perl-tdd-support",
+ "perl-workspace",
+ "proptest",
+ "regex",
+ "rustc-hash",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-uri"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "ureq",
+ "url",
+ "walkdir",
 ]
 
 [[package]]
@@ -2243,27 +1712,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-workspace-symbols"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-symbol-query",
- "perl-module",
- "perl-parser-core",
- "perl-position-tracking",
- "perl-qualified-name",
- "perl-semantic-analyzer",
- "perl-tdd-support",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "perl-module"
 version = "0.12.4"
 dependencies = [
- "perl-path-security",
+ "perl-parser-core",
  "perl-tdd-support",
- "perl-text-line",
  "perl-workspace",
  "proptest",
  "tempfile",
@@ -2278,14 +1731,13 @@ dependencies = [
  "criterion",
  "insta",
  "lsp-types",
+ "perl-ast",
  "perl-corpus",
- "perl-dead-code",
- "perl-incremental-parsing",
- "perl-keywords",
  "perl-lexer",
- "perl-lsp-semantic-tokens",
+ "perl-line-index",
+ "perl-lsp-rs-core",
+ "perl-module",
  "perl-parser-core",
- "perl-refactoring",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace",
@@ -2294,9 +1746,12 @@ dependencies = [
  "ropey",
  "rstest",
  "rustc-hash",
+ "serde",
  "serde_json",
  "serial_test",
  "tempfile",
+ "thiserror",
+ "tracing",
  "url",
 ]
 
@@ -2314,17 +1769,15 @@ version = "0.12.4"
 dependencies = [
  "perl-ast",
  "perl-ast-v2",
- "perl-builtins",
- "perl-edit",
- "perl-error",
- "perl-heredoc",
  "perl-lexer",
  "perl-position-tracking",
  "perl-pragma",
- "perl-quote",
  "perl-regex",
  "perl-tdd-support",
- "perl-tokenizer",
+ "perl-token",
+ "proptest",
+ "tempfile",
+ "thiserror",
  "tracing-subscriber",
 ]
 
@@ -2339,30 +1792,6 @@ dependencies = [
  "serde",
  "stacker",
  "thiserror",
-]
-
-[[package]]
-name = "perl-path-normalize"
-version = "0.12.4"
-dependencies = [
- "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "perl-path-security"
-version = "0.12.4"
-dependencies = [
- "perl-path-normalize",
- "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "perl-percentile"
-version = "0.12.4"
-dependencies = [
- "proptest",
 ]
 
 [[package]]
@@ -2386,22 +1815,8 @@ dependencies = [
 name = "perl-pragma"
 version = "0.12.4"
 dependencies = [
+ "criterion",
  "perl-ast",
-]
-
-[[package]]
-name = "perl-qualified-name"
-version = "0.12.4"
-dependencies = [
- "proptest",
-]
-
-[[package]]
-name = "perl-quote"
-version = "0.12.4"
-dependencies = [
- "perl-tdd-support",
- "proptest",
 ]
 
 [[package]]
@@ -2410,7 +1825,6 @@ version = "0.12.4"
 dependencies = [
  "perl-module",
  "perl-parser-core",
- "perl-qualified-name",
  "perl-tdd-support",
  "perl-workspace",
  "regex",
@@ -2424,6 +1838,7 @@ dependencies = [
 name = "perl-regex"
 version = "0.12.4"
 dependencies = [
+ "proptest",
  "thiserror",
 ]
 
@@ -2431,18 +1846,17 @@ dependencies = [
 name = "perl-semantic-analyzer"
 version = "0.12.4"
 dependencies = [
+ "perl-module",
  "perl-parser-core",
  "perl-symbol",
  "perl-tdd-support",
+ "perl-test-generators",
  "perl-workspace",
+ "proptest",
  "regex",
  "rustc-hash",
  "tracing",
 ]
-
-[[package]]
-name = "perl-source-file"
-version = "0.12.4"
 
 [[package]]
 name = "perl-subprocess-runtime"
@@ -2455,7 +1869,10 @@ dependencies = [
 name = "perl-symbol"
 version = "0.12.4"
 dependencies = [
+ "anyhow",
+ "criterion",
  "perl-ast",
+ "perl-parser-core",
  "perl-tdd-support",
  "serde",
  "serde_json",
@@ -2485,28 +1902,14 @@ name = "perl-test-must"
 version = "0.12.4"
 
 [[package]]
-name = "perl-text-line"
-version = "0.12.4"
-dependencies = [
- "perl-module",
- "perl-tdd-support",
- "proptest",
-]
-
-[[package]]
 name = "perl-token"
 version = "0.12.4"
-
-[[package]]
-name = "perl-tokenizer"
-version = "0.12.4"
 dependencies = [
- "perl-ast-v2",
- "perl-error",
+ "criterion",
  "perl-lexer",
- "perl-position-tracking",
- "perl-tdd-support",
- "perl-token",
+ "perl-parser-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2515,15 +1918,7 @@ version = "0.12.4"
 dependencies = [
  "percent-encoding",
  "perl-tdd-support",
- "perl-uri-classify",
  "tempfile",
- "url",
-]
-
-[[package]]
-name = "perl-uri-classify"
-version = "0.12.4"
-dependencies = [
  "url",
 ]
 
@@ -2536,9 +1931,7 @@ dependencies = [
  "lsp-types",
  "parking_lot",
  "perl-parser-core",
- "perl-percentile",
  "perl-position-tracking",
- "perl-source-file",
  "perl-symbol",
  "perl-tdd-support",
  "perl-uri",
@@ -3093,9 +2486,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.12"
+version = "0.103.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8279bb85272c9f10811ae6a6c547ff594d6a7f3c6c6b02ee9726d1d0dcfcdd06"
+checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -3432,6 +2825,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
+name = "symlink"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7973cce6668464ea31f176d85b13c7ab3bba2cb3b77a2ed26abd7801688010a"
+
+[[package]]
 name = "syn"
 version = "2.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3661,11 +3060,12 @@ dependencies = [
 
 [[package]]
 name = "tracing-appender"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "786d480bce6247ab75f005b14ae1624ad978d3029d9113f0a22fa1ac773faeaf"
+checksum = "050686193eb999b4bb3bc2acfa891a13da00f79734704c4b8b4ef1a10b368a3c"
 dependencies = [
  "crossbeam-channel",
+ "symlink",
  "thiserror",
  "time",
  "tracing-subscriber",
@@ -3757,6 +3157,7 @@ version = "0.12.4"
 dependencies = [
  "cc",
  "tree-sitter",
+ "tree-sitter-language",
 ]
 
 [[package]]
@@ -3765,15 +3166,19 @@ version = "0.12.4"
 dependencies = [
  "insta",
  "perl-ast",
+ "perl-module",
  "perl-parser-core",
+ "perl-position-tracking",
+ "perl-pragma",
+ "perl-semantic-analyzer",
  "perl-tdd-support",
 ]
 
 [[package]]
 name = "typenum"
-version = "1.19.0"
+version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 
 [[package]]
 name = "ucd-trie"
@@ -3935,11 +3340,11 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasip2"
-version = "1.0.2+wasi-0.2.9"
+version = "1.0.3+wasi-0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9517f9239f02c069db75e65f174b3da828fe5f5b945c4dd26bd25d89c03ebcf5"
+checksum = "20064672db26d7cdc89c7798c48a0fdfac8213434a1186e5ef29fd560ae223d6"
 dependencies = [
- "wit-bindgen",
+ "wit-bindgen 0.57.1",
 ]
 
 [[package]]
@@ -3948,7 +3353,7 @@ version = "0.4.0+wasi-0.3.0-rc-2026-01-06"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5428f8bf88ea5ddc08faddef2ac4a67e390b88186c703ce6dbd955e1c145aca5"
 dependencies = [
- "wit-bindgen",
+ "wit-bindgen 0.51.0",
 ]
 
 [[package]]
@@ -4342,6 +3747,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "wit-bindgen"
+version = "0.57.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+
+[[package]]
 name = "wit-bindgen-core"
 version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4449,12 +3860,13 @@ dependencies = [
  "console",
  "duct",
  "flate2",
+ "glob",
  "indicatif",
  "notify",
  "peak_alloc",
  "perl-corpus",
- "perl-feature-catalog",
- "perl-lsp-feature-governance",
+ "perl-lsp-rs-core",
+ "perl-lsp-ux-tests",
  "perl-parser",
  "perl-parser-pest",
  "perl-tdd-support",

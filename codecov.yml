@@ -38,7 +38,7 @@ flags:
     target: 75%
   lsp:
     paths:
-      - crates/perl-lsp/src/
+      - crates/perl-lsp-rs/src/
     target: 70%
   lexer:
     paths:

@@ -1,4 +1,6 @@
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
+#[path = "support/perf_scorecard.rs"]
+mod perf_scorecard;
 use perl_parser::incremental::{Edit, IncrementalState, apply_edits};
 use perl_parser::incremental_document::IncrementalDocument;
 use perl_parser::incremental_edit::{IncrementalEdit, IncrementalEditSet};
@@ -35,6 +37,19 @@ process_data($items);
     let start = must_some(source.find("transform"));
     let old_end = start + "transform".len();
 
+    let metric = perf_scorecard::sample_metric(35, || {
+        let mut state = IncrementalState::new(source.clone());
+        let edit = Edit {
+            start_byte: start,
+            old_end_byte: old_end,
+            new_end_byte: start + "process".len(),
+            new_text: "process".to_string(),
+        };
+        must(apply_edits(&mut state, &[edit]));
+        black_box(&state.ast);
+    });
+    perf_scorecard::record_metric("incremental_small_edit", metric);
+
     c.bench_function("incremental small edit", |b| {
         b.iter_batched(
             || IncrementalState::new(source.clone()),
@@ -60,13 +75,13 @@ use warnings;
 
 sub process_data {
     my ($data) = @_;
-    
+
     # Process each item
     for my $item (@$data) {
         my $result = transform($item);
         print "Result: $result\n";
     }
-    
+
     return 1;
 }
 
@@ -80,11 +95,81 @@ process_data($items);
 "#
     .to_string();
 
+    let metric = perf_scorecard::sample_metric(30, || {
+        let state = IncrementalState::new(black_box(source.clone()));
+        black_box(&state.ast);
+    });
+    perf_scorecard::record_metric("cold_parse", metric);
+
     c.bench_function("full reparse", |b| {
         b.iter(|| {
             let state = IncrementalState::new(black_box(source.clone()));
             black_box(&state.ast);
         })
+    });
+}
+
+/// Warm reparse: build an `IncrementalState` once, then measure the cost of
+/// reparsing the same content from an already-allocated state via
+/// `apply_edits(&mut state, &[])`, which internally takes the `full_reparse`
+/// path without the cold-start allocations incurred by `IncrementalState::new`.
+///
+/// This is the missing third regime of the cold / warm / incremental trifecta
+/// called out in the #4063 parser scorecard plan-review (the pyright phase-
+/// timing lesson and the rust-analyzer/gopls cold-vs-warm separation).
+///
+/// - `bench_full_reparse` — cold: fresh allocation of state, rope, line_index,
+///   AST, and tokens (everything paid from scratch).
+/// - `bench_warm_reparse` — warm: allocator warm, state object reused, content
+///   reparsed via `apply_edits(&mut state, &[])`.
+/// - `bench_incremental_small_edit` — incremental: allocator warm, state
+///   reused, single small edit applied via the checkpoint-driven incremental
+///   lexing path.
+fn bench_warm_reparse(c: &mut Criterion) {
+    let source = r#"
+use strict;
+use warnings;
+
+sub process_data {
+    my ($data) = @_;
+
+    # Process each item
+    for my $item (@$data) {
+        my $result = transform($item);
+        print "Result: $result\n";
+    }
+
+    return 1;
+}
+
+sub transform {
+    my ($value) = @_;
+    return $value * 2;
+}
+
+my $items = [1, 2, 3, 4, 5];
+process_data($items);
+"#
+    .to_string();
+
+    let metric = perf_scorecard::sample_metric(35, || {
+        let mut state = IncrementalState::new(source.clone());
+        must(apply_edits(&mut state, &[]));
+        black_box(&state.ast);
+    });
+    perf_scorecard::record_metric("warm_reparse", metric);
+
+    c.bench_function("warm reparse", |b| {
+        b.iter_batched(
+            || IncrementalState::new(source.clone()),
+            |mut state| {
+                // Empty edit list triggers the warm full_reparse path
+                // without recreating the outer IncrementalState allocation.
+                must(apply_edits(&mut state, &[]));
+                black_box(&state.ast);
+            },
+            BatchSize::SmallInput,
+        );
     });
 }
 
@@ -99,6 +184,27 @@ print "$x $y $z\n";
 
     let pos_1 = must_some(source.find("= 1")) + 2;
     let pos_2 = must_some(source.find("= 2")) + 2;
+
+    let metric = perf_scorecard::sample_metric(35, || {
+        let mut state = IncrementalState::new(source.clone());
+        let edits = vec![
+            Edit {
+                start_byte: pos_1,
+                old_end_byte: pos_1 + 1,
+                new_end_byte: pos_1 + 2,
+                new_text: "10".to_string(),
+            },
+            Edit {
+                start_byte: pos_2,
+                old_end_byte: pos_2 + 1,
+                new_end_byte: pos_2 + 2,
+                new_text: "20".to_string(),
+            },
+        ];
+        must(apply_edits(&mut state, &edits));
+        black_box(&state.ast);
+    });
+    perf_scorecard::record_metric("incremental_multiple_edits", metric);
 
     c.bench_function("incremental multiple edits", |b| {
         b.iter_batched(
@@ -164,12 +270,23 @@ fn bench_incremental_document_multiple_edits(c: &mut Criterion) {
     });
 }
 
+// Cold / warm / incremental regime group — the three parse regimes a
+// language server has to care about, instrumented together so their p50/p95
+// estimates land in sibling Criterion reports under the same group name.
+//
+// See `docs/project/metrics/parser.md` ("Cold / warm / incremental regimes")
+// and issue #4063 for the rationale.
+criterion_group!(
+    parse_regime,
+    bench_full_reparse,           // cold
+    bench_warm_reparse,           // warm
+    bench_incremental_small_edit, // incremental
+);
+
 criterion_group!(
     benches,
-    bench_incremental_small_edit,
-    bench_full_reparse,
     bench_multiple_edits,
     bench_incremental_document_single_edit,
     bench_incremental_document_multiple_edits,
 );
-criterion_main!(benches);
+criterion_main!(parse_regime, benches);

@@ -120,7 +120,7 @@ RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
 
 **LSP integration exists and is wired:**
 - Handler in `lsp_server.rs:3463` uses `SemanticAnalyzer::analyze()` and `find_definition()`
-- Test infrastructure in place (`crates/perl-lsp/tests/semantic_definition.rs`)
+- Test infrastructure in place (`crates/perl-lsp-rs/tests/semantic_definition.rs`)
 - 4 realistic test scenarios defined (scalar, subroutine, scoped, package-qualified)
 - Validation blocked only by WSL resource limits, not implementation issues
 

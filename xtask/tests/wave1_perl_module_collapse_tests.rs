@@ -333,7 +333,7 @@ fn test_perl_module_api_rs_has_public_re_exports() -> Result<(), Box<dyn std::er
 fn test_perl_lsp_cargo_uses_perl_module_not_individual_crates()
 -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
-    let perl_lsp_cargo = root.join("crates/perl-lsp/Cargo.toml");
+    let perl_lsp_cargo = root.join("crates/perl-lsp-rs/Cargo.toml");
     let content = fs::read_to_string(&perl_lsp_cargo)?;
 
     // perl-lsp should NOT have any perl-module-* deps (those are absorbed)

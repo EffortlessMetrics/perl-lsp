@@ -150,9 +150,11 @@ impl DebugAdapter {
         let mut top_level = Vec::new();
         let mut child_cache = HashMap::new();
         for (idx, (name, value)) in parsed.into_iter().skip(start).take(count).enumerate() {
-            let child_ref = variables_ref.saturating_mul(1000).saturating_add(
-                Self::i64_to_i32_saturating(i64::try_from(idx + 1).unwrap_or(i64::from(i32::MAX))),
-            );
+            let absolute_index = start.saturating_add(idx).saturating_add(1);
+            let child_ref =
+                variables_ref.saturating_mul(1000).saturating_add(Self::i64_to_i32_saturating(
+                    i64::try_from(absolute_index).unwrap_or(i64::from(i32::MAX)),
+                ));
             let rendered = if value.is_expandable() {
                 renderer.render_with_reference(&name, &value, i64::from(child_ref))
             } else {
@@ -221,6 +223,26 @@ impl DebugAdapter {
 
             if allow_fallback_line {
                 return Some((text.to_string(), Self::infer_debugger_value_type(text)));
+            }
+        }
+
+        None
+    }
+
+    /// Parse explicit debugger error lines from evaluate output.
+    pub(super) fn parse_evaluate_error_from_lines(lines: &[String]) -> Option<String> {
+        const ERROR_PREFIXES: &[&str] =
+            &["Undefined", "Can't ", "syntax error", "Execution of ", "Use of uninitialized"];
+
+        for line in lines.iter().rev() {
+            let normalized = Self::normalize_debugger_output_line(line);
+            let text = normalized.trim();
+            if text.is_empty() || prompt_re().is_some_and(|re| re.is_match(text)) {
+                continue;
+            }
+
+            if ERROR_PREFIXES.iter().any(|prefix| text.starts_with(prefix)) {
+                return Some(format!("evaluate failed: {text}"));
             }
         }
 
@@ -376,6 +398,41 @@ mod tests {
             DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 0, 20);
         let names = vars.iter().map(|v| v.name.as_str()).collect::<Vec<_>>();
         assert_eq!(names, vec!["$alpha", "$mid", "$zeta"]);
+        Ok(())
+    }
+
+    #[test]
+    pub(super) fn test_parse_scope_variables_child_refs_stable_across_pages()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let lines = vec![
+            "@alpha = (1, 2)".to_string(),
+            "@beta = (3, 4)".to_string(),
+            "@gamma = (5, 6)".to_string(),
+        ];
+
+        let (page_one, page_one_children) =
+            DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 0, 1);
+        let (page_two, page_two_children) =
+            DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 1, 1);
+
+        let first_ref = page_one
+            .first()
+            .map(|variable| variable.variables_reference)
+            .ok_or("expected first page variable")?;
+        let second_ref = page_two
+            .first()
+            .map(|variable| variable.variables_reference)
+            .ok_or("expected second page variable")?;
+
+        assert_ne!(first_ref, second_ref, "paged variables must not reuse child references");
+        assert!(
+            page_one_children.contains_key(&first_ref),
+            "expected first page child cache for first reference"
+        );
+        assert!(
+            page_two_children.contains_key(&second_ref),
+            "expected second page child cache for second reference"
+        );
         Ok(())
     }
 
@@ -723,6 +780,20 @@ mod tests {
         assert_eq!(frames[0].source.path, r"C:\workspace\script.pl");
         assert_eq!(frames[0].source.name, Some("script.pl".to_string()));
         assert_eq!(frames[1].source.path, r"C:\workspace\lib\Foo.pm");
+        assert_eq!(frames[1].source.name, Some("Foo.pm".to_string()));
+    }
+
+    #[test]
+    pub(super) fn test_parse_stack_trace_with_space_in_paths() {
+        let output = r#"# 0 main::test at /tmp/My Project/script.pl line 10
+# 1 Foo::bar called at C:\Work Files\lib\Foo.pm line 25"#;
+
+        let frames = DebugAdapter::parse_stack_trace(output);
+
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].source.path, "/tmp/My Project/script.pl");
+        assert_eq!(frames[0].source.name, Some("script.pl".to_string()));
+        assert_eq!(frames[1].source.path, r"C:\Work Files\lib\Foo.pm");
         assert_eq!(frames[1].source.name, Some("Foo.pm".to_string()));
     }
 

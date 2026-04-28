@@ -2,7 +2,10 @@
 //!
 //! Covers: plan_module_rename_edits, apply_module_rename_edits, ModuleLineEdit
 
-use perl_module::rename::{ModuleLineEdit, apply_module_rename_edits, plan_module_rename_edits};
+use perl_module::rename::{
+    ModuleLineEdit, apply_module_rename_edits, line_references_qualified_call,
+    plan_module_rename_edits, replace_module_name_prefix,
+};
 
 // ──────────────────────────────────────────────────────────────
 // plan_module_rename_edits — early-return / empty-input guards
@@ -122,6 +125,63 @@ fn plan_rewrites_use_base_qw() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn plan_rewrites_moose_extends_single_quoted() -> Result<(), Box<dyn std::error::Error>> {
+    let edits = plan_module_rename_edits("extends 'Foo::Bar';", "Foo::Bar", "New::Mod");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "extends 'New::Mod';");
+    Ok(())
+}
+
+#[test]
+fn plan_rewrites_moo_with_qw() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "with qw(Foo::Bar Other::Role);";
+    let edits = plan_module_rename_edits(source, "Foo::Bar", "New::Role");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "with qw(New::Role Other::Role);");
+    Ok(())
+}
+
+// plan_module_rename_edits — Moose/Moo DSL (extends/with) edge cases
+
+#[test]
+fn plan_rewrites_moose_extends_double_quoted() -> Result<(), Box<dyn std::error::Error>> {
+    let edits = plan_module_rename_edits("extends \"Foo::Bar\";", "Foo::Bar", "New::Mod");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "extends \"New::Mod\";");
+    Ok(())
+}
+
+#[test]
+fn plan_rewrites_extends_multiple_parents() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "extends qw(Foo::Bar Other::Base);";
+    let edits = plan_module_rename_edits(source, "Foo::Bar", "New::Mod");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "extends qw(New::Mod Other::Base);");
+    Ok(())
+}
+
+#[test]
+fn plan_no_false_positive_extends_in_comment() -> Result<(), Box<dyn std::error::Error>> {
+    // A comment line starting with # should not be rewritten.
+    let edits = plan_module_rename_edits("# extends 'Foo::Bar'", "Foo::Bar", "New::Mod");
+    // Comments do not start a line with 'extends', so this should produce no edit.
+    // (The line trim_start would yield "# extends ...", which does not start_with "extends ")
+    assert!(edits.is_empty(), "comment line should not be rewritten: {edits:?}");
+    Ok(())
+}
+
+#[test]
+fn plan_no_false_positive_with_in_non_moose_context() -> Result<(), Box<dyn std::error::Error>> {
+    // "with" appears as a statement modifier in non-Moose code.
+    // Because line_references_moose_moo_dsl checks trim_start starts_with("with "),
+    // a line like `open($fh, "<", $f) or die "err"` does not trigger.
+    let source = "open($fh, '<', $f) or die 'err';";
+    let edits = plan_module_rename_edits(source, "Foo::Bar", "New::Mod");
+    assert!(edits.is_empty());
+    Ok(())
+}
+
 // ──────────────────────────────────────────────────────────────
 // plan_module_rename_edits — legacy separator (single-quote)
 // ──────────────────────────────────────────────────────────────
@@ -174,6 +234,49 @@ fn plan_ignores_plain_code_with_module_name() -> Result<(), Box<dyn std::error::
     let source = "my $obj = Foo::Bar->new();";
     let edits = plan_module_rename_edits(source, "Foo::Bar", "X::Y");
     assert!(edits.is_empty());
+    Ok(())
+}
+
+#[test]
+fn qualified_call_ignores_package_declaration_and_string_literals()
+-> Result<(), Box<dyn std::error::Error>> {
+    assert!(!line_references_qualified_call("package Foo::Bar;", "Foo::Bar"));
+    assert!(!line_references_qualified_call("use Foo'Bar'Baz;", "Foo'Bar"));
+    assert!(!line_references_qualified_call("'Foo::Bar::func()'", "Foo::Bar"));
+    assert!(!line_references_qualified_call("\"Foo::Bar::func()\"", "Foo::Bar"));
+    assert!(line_references_qualified_call("Foo::Bar::func()", "Foo::Bar"));
+    assert!(line_references_qualified_call("Foo::Bar'func()", "Foo::Bar"));
+    assert!(line_references_qualified_call("Foo'Bar'func()", "Foo'Bar"));
+    Ok(())
+}
+
+#[test]
+fn replace_prefix_skips_package_lines_and_quoted_occurrences()
+-> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        replace_module_name_prefix("package Foo::Bar;", "Foo::Bar", "New::Mod"),
+        "package Foo::Bar;"
+    );
+    assert_eq!(
+        replace_module_name_prefix("use Foo'Bar'Baz;", "Foo'Bar", "New'Path"),
+        "use Foo'Bar'Baz;"
+    );
+    assert_eq!(
+        replace_module_name_prefix("'Foo::Bar::func()'", "Foo::Bar", "New::Mod"),
+        "'Foo::Bar::func()'"
+    );
+    assert_eq!(
+        replace_module_name_prefix("Foo::Bar::func()", "Foo::Bar", "New::Mod"),
+        "New::Mod::func()"
+    );
+    assert_eq!(
+        replace_module_name_prefix("Foo::Bar'func()", "Foo::Bar", "New::Mod"),
+        "New::Mod'func()"
+    );
+    assert_eq!(
+        replace_module_name_prefix("Foo'Bar'func()", "Foo'Bar", "New'Path"),
+        "New'Path'func()"
+    );
     Ok(())
 }
 
@@ -532,5 +635,25 @@ fn plan_rename_deep_to_shallow() -> Result<(), Box<dyn std::error::Error>> {
     let edits = plan_module_rename_edits("use A::B::C::D;", "A::B::C::D", "Foo");
     assert_eq!(edits.len(), 1);
     assert_eq!(edits[0].new_text, "use Foo;");
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────
+// Regression: package declaration rewrite (restored in #4594, broken by #4554)
+// ──────────────────────────────────────────────────────────────
+
+#[test]
+fn test_rename_rewrites_package_declaration_in_target_file()
+-> Result<(), Box<dyn std::error::Error>> {
+    // The target file's own `package` declaration must be rewritten when renaming.
+    let source = "package Old::Name;\n\nsub new { bless {}, shift }\n";
+    let edits = plan_module_rename_edits(source, "Old::Name", "New::Name");
+    assert_eq!(edits.len(), 1, "expected exactly one edit for the package declaration line");
+    assert_eq!(edits[0].line, 0, "edit should be on line 0 (the package declaration)");
+    assert_eq!(edits[0].new_text, "package New::Name;");
+
+    // Also verify roundtrip via apply
+    let result = apply_module_rename_edits(source, &edits);
+    assert!(result.starts_with("package New::Name;"));
     Ok(())
 }

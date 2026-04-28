@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Latest Release**: 0.12.4 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md)
+**Latest Release**: 0.12.4 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md) | **Implementation agents**: [AGENTS.md](AGENTS.md)
 
 ## Orchestration Model
 
@@ -46,6 +46,10 @@ Every change flows through this pipeline. Each stage is a cheap pass that catche
 - Reviewers push improvements directly to PR branches. Every PR gets improved, no LGTM-only.
 - Every agent recommends next steps for the orchestrator.
 - Learning is continuous — every agent-wrapup captures what was learned.
+- **Master must stay green; merge requires green** (2026-04-26 directive). Per-crate green is necessary but not sufficient — workspace-wide xtask fmt and clippy cascades break master if a single PR's drift goes unchecked. Verify workspace-wide CI before merging; route to fmt/clippy fix if not.
+- **Each agent's pass produces ONE routing decision.** Sign-off is itself one of the routing options — applied across ALL agents (reviewer, maintainer-pr, refactor-planner, green-tdd, deep-reviewer, diff-auditor, green-ci, accuracy-scout, research-verifier, oppositional-planner, advocatus-diaboli, architecture-reviewer, maintainer-issue, spec-test-code-match). Each pass picks exactly one of: (a) sign off (gate clean, apply `<gate>-reviewed`) OR (b) bounce back (apply the appropriate `needs-*` routing label). Never both. Per the 2026-04-26 #6780 incident: applying `review-reviewed` AND `needs-builder-fix` simultaneously confused the merge gate and let unfixed bugs ride to master. The principle is one-decision-per-pass: gate-clean OR bounce, not gate-clean AND bounce.
+- **No `needs-*` label on a PR may merge.** Even with `merge-ready`, presence of any `needs-builder-fix` / `needs-ci-fix` / `needs-diff-fix` / `needs-spec-fix` / `needs-red-tdd-fix` label MUST block ops merge. The presence of an active routing label means the PR has unaddressed work.
+- **External-source PRs (claude-burst, codex-burst, diffguard-bot, etc.) require the same gate set as internal PRs.** Don't shortcut review on third-party PRs; they're frequently the source of cross-PR contamination, hallucinated APIs, and scope drift between title and diff.
 
 ### Pipeline State Labels
 
@@ -208,7 +212,7 @@ cargo test --workspace --lib          # Run all tests
 | Crate | Path | Purpose |
 |-------|------|---------|
 | **perl-parser** | `crates/perl-parser/` | Main parser (v3 recursive descent) |
-| **perl-lsp** | `crates/perl-lsp/` | LSP server binary |
+| **perl-lsp** | `crates/perl-lsp-rs/` | LSP server binary |
 | **perl-dap** | `crates/perl-dap/` | Debug Adapter Protocol |
 | **perl-lexer** | `crates/perl-lexer/` | Context-aware tokenizer |
 | **perl-parser-core** | `crates/perl-parser-core/` | Core parsing infrastructure |
@@ -299,7 +303,7 @@ just cpan-corpus-ratchet              # Auto-add clean modules to manifest
 |------|-------|
 | Parser source | `crates/perl-parser/src/` |
 | LSP providers | `crates/perl-lsp-*/src/` |
-| LSP server binary | `crates/perl-lsp/src/` |
+| LSP server binary | `crates/perl-lsp-rs/src/` |
 | DAP server | `crates/perl-dap/src/` |
 | Tests | `crates/*/tests/` |
 | Test corpus | `test_corpus/`, `tree-sitter-perl/test/corpus/` |
@@ -338,7 +342,7 @@ Invoke `/coding-standards` for full detail.
 - **Banned in production code**: `unwrap()`, `expect()`, `panic!()`, `todo!()`, `unimplemented!()`, `std::process::abort()`, `dbg!()`
   - Use `?`, `.ok_or_else()`, pattern matching, `Result`/`Option` instead
   - `std::process::exit()` only in `bin/` and `lifecycle.rs`
-  - Exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp/src/util/uri.rs`
+  - Exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp-rs/src/util/uri.rs`
   - Exception: `bin/` targets may use `#[allow(clippy::expect_used)]` for profiling / CLI entry points, including `crates/perl-workspace-index/src/bin/workspace_memory_profile.rs`
   - Exception: static `LazyLock<Regex>` initializers may use `unreachable!()`/`expect()` for known-good patterns, including `crates/perl-heredoc-anti-patterns/src/lib.rs`
   - Tests: `Result<()>` returns or `perl_tdd_support::must`/`must_some`

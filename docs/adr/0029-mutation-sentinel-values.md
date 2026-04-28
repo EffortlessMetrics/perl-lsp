@@ -189,7 +189,7 @@ crates/perl-parser/tests/
 ## References
 
 - [crates/perl-parser/tests/quote_parser_mutation_hardening.rs](../../crates/perl-parser/tests/quote_parser_mutation_hardening.rs) - Mutation tests
-- [crates/perl-lsp/tests/mutation_survivors_elimination.rs](../../crates/perl-lsp/tests/mutation_survivors_elimination.rs) - LSP mutation tests
-- [crates/perl-lsp/tests/critical_mutation_hardening.rs](../../crates/perl-lsp/tests/critical_mutation_hardening.rs) - Critical mutation tests
+- [crates/perl-lsp-rs/tests/mutation_survivors_elimination.rs](../../crates/perl-lsp-rs/tests/mutation_survivors_elimination.rs) - LSP mutation tests
+- [crates/perl-lsp-rs/tests/critical_mutation_hardening.rs](../../crates/perl-lsp-rs/tests/critical_mutation_hardening.rs) - Critical mutation tests
 - [CONTRIBUTING.md](../../CONTRIBUTING.md) - Contribution guidelines
 - [cargo-mutants](https://github.com/sourcegraph/cargo-mutants) - Mutation testing tool

@@ -126,6 +126,22 @@ jobs:
 
           echo "✅ Changelog checked"
 
+      - name: Verify curated release notes exist
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          NOTE_FILE="docs/releases/${TAG}.md"
+          if [ ! -f "$NOTE_FILE" ]; then
+            echo "::error file=$NOTE_FILE::Release notes file missing: $NOTE_FILE"
+            echo "::error::Every release must ship a curated note at docs/releases/${TAG}.md before tagging."
+            echo "::error::See RELEASE.md \"Release History Updates\" for the template."
+            exit 1
+          fi
+          if ! head -1 "$NOTE_FILE" | grep -q '^---$'; then
+            echo "::error file=$NOTE_FILE::Release notes must open with a YAML frontmatter block (---)."
+            exit 1
+          fi
+          echo "✅ Found curated release notes: $NOTE_FILE"
+
       - name: Summary
         run: |
           echo "## Release Validation Complete :white_check_mark:" >> "$GITHUB_STEP_SUMMARY"

@@ -250,7 +250,7 @@ Given GitHub Actions is offline for 2+ weeks:
 - LSP handler: `crates/perl-parser/src/lsp_server.rs:3463`
 - Parser tests: `crates/perl-parser/src/semantic.rs` (tests module)
 - Smoke tests: `crates/perl-parser/tests/semantic_smoke_tests.rs`
-- LSP tests: `crates/perl-lsp/tests/semantic_definition.rs`
+- LSP tests: `crates/perl-lsp-rs/tests/semantic_definition.rs`
 
 ---
 

@@ -93,6 +93,12 @@ impl<'a> Parser<'a> {
                 // For local, parse a general lvalue expression
                 self.parse_assignment()?
             } else {
+                // Legacy typed lexical declarations are used by pseudo-hash `fields`-style code:
+                //     my Package::Type $self = shift;
+                // Perl accepts this syntax; consume the optional leading type token so that
+                // parsing continues at the declared variable.
+                self.consume_legacy_decl_type_constraint()?;
+
                 // For my/our/state, parse a simple variable
                 let var = self.parse_variable()?;
                 // If -> follows the declared variable, treat it as an lvalue subscript chain
@@ -154,6 +160,51 @@ impl<'a> Parser<'a> {
             );
             Ok(node)
         }
+    }
+
+    /// Consume an optional legacy type constraint in lexical declarations.
+    ///
+    /// This supports old pseudo-hash style declarations like:
+    /// `my Debconf::DbDriver $this = shift;`
+    ///
+    /// The type constraint is intentionally ignored in the AST for now.
+    fn consume_legacy_decl_type_constraint(&mut self) -> ParseResult<()> {
+        if self.peek_kind() != Some(TokenKind::Identifier) {
+            return Ok(());
+        }
+
+        let looks_like_type = {
+            let current = self.tokens.peek()?;
+            if current.text.starts_with('$')
+                || current.text.starts_with('@')
+                || current.text.starts_with('%')
+                || current.text.starts_with('&')
+                || current.text.starts_with('*')
+            {
+                false
+            } else {
+                let next = self.tokens.peek_second()?;
+                matches!(
+                    next.kind,
+                    TokenKind::ScalarSigil
+                        | TokenKind::ArraySigil
+                        | TokenKind::HashSigil
+                        | TokenKind::SubSigil
+                        | TokenKind::GlobSigil
+                ) || (next.kind == TokenKind::Identifier
+                    && next
+                        .text
+                        .chars()
+                        .next()
+                        .is_some_and(|c| matches!(c, '$' | '@' | '%' | '&' | '*')))
+            }
+        };
+
+        if looks_like_type {
+            self.consume_token()?;
+        }
+
+        Ok(())
     }
 
     /// Parse local statement (can localize any lvalue, not just simple variables)
@@ -642,15 +693,22 @@ impl<'a> Parser<'a> {
     fn parse_signature(&mut self) -> ParseResult<Vec<Node>> {
         self.expect(TokenKind::LeftParen)?; // consume (
         let mut params = Vec::new();
+        let mut seen_invocant_separator = false;
 
         while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
             // Parse parameter
             let param = self.parse_signature_param()?;
             params.push(param);
 
-            // Check for comma or end of signature
+            // Check for separator or end of signature.
+            // Perl method signatures may use an invocant separator:
+            //   method run ($self: $arg1, $arg2) { ... }
+            // Treat the first `:` after a parameter as a valid separator.
             if self.peek_kind() == Some(TokenKind::Comma) {
                 self.tokens.next()?; // consume comma
+            } else if self.peek_kind() == Some(TokenKind::Colon) && !seen_invocant_separator {
+                self.tokens.next()?; // consume invocant separator
+                seen_invocant_separator = true;
             } else if self.peek_kind() == Some(TokenKind::RightParen) {
                 break;
             } else {
@@ -761,6 +819,13 @@ impl<'a> Parser<'a> {
         // Parse the variable
         let variable = self.parse_variable()?;
 
+        // Some signature-capable frameworks (and Object::Pad-style code in the wild)
+        // attach parameter traits/attributes after the variable:
+        //   sub f ($x :param, $y :reader(foo)) { ... }
+        // Treat these as parseable syntax and preserve only span/shape for now.
+        let mut end = variable.location.end;
+        end = self.consume_signature_param_attributes(end)?;
+
         // Check for default value (= expression)
         let default_value = if self.peek_kind() == Some(TokenKind::Assign) {
             self.tokens.next()?; // consume =
@@ -770,10 +835,10 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let end = if let Some(ref default) = default_value {
+        end = if let Some(ref default) = default_value {
             default.location.end
         } else {
-            variable.location.end
+            end
         };
 
         // Check if variable is slurpy (@args or %hash)
@@ -791,6 +856,57 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Node::new(param_kind, SourceLocation { start, end }))
+    }
+
+    fn consume_signature_param_attributes(&mut self, mut end: usize) -> ParseResult<usize> {
+        // Only consume `:identifier(...)` parameter attributes. A bare `:` (with `)`,
+        // sigil, variable, or other non-bareword token following) is the
+        // method-invocant separator and must be left for `parse_signature` to
+        // handle — see #6254 for the invocant separator support that this
+        // helper must coexist with.
+        //
+        // Note: the perl-lexer returns variables as Identifier tokens whose text
+        // begins with the sigil (e.g. `$b`). A real parameter attribute is a
+        // bareword identifier (e.g. `param`, `reader`), so reject identifier
+        // texts that begin with a Perl sigil character.
+        while self.peek_kind() == Some(TokenKind::Colon) {
+            let next_is_attr_ident = match self.tokens.peek_second() {
+                Ok(tok) if tok.kind == TokenKind::Identifier => {
+                    let first = tok.text.chars().next();
+                    !matches!(first, Some('$' | '@' | '%' | '&' | '*'))
+                }
+                _ => false,
+            };
+            if !next_is_attr_ident {
+                break;
+            }
+            self.consume_token()?; // consume ':'
+            let attr = self.expect(TokenKind::Identifier)?;
+            end = attr.end;
+
+            if self.peek_kind() == Some(TokenKind::LeftParen) {
+                self.consume_token()?; // consume '('
+                let mut depth = 1usize;
+                while depth > 0 && !self.tokens.is_eof() {
+                    let token = self.consume_token()?;
+                    end = token.end;
+                    match token.kind {
+                        TokenKind::LeftParen => depth += 1,
+                        TokenKind::RightParen => depth -= 1,
+                        _ => {}
+                    }
+                }
+
+                if depth != 0 {
+                    return Err(ParseError::syntax(
+                        "Unterminated signature parameter attribute arguments",
+                        self.current_position(),
+                    ));
+                }
+            }
+        }
+
+        Ok(end)
     }
 
     /// Check if the parenthesized content after sub name is a prototype (not a signature)

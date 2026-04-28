@@ -1,0 +1,15 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_cap_snap.rs
+expression: "&commands"
+---
+- perl.runTests
+- perl.runFile
+- perl.runTestSub
+- perl.runCritic
+- perl.runTest
+- perl.runTestFile
+- perl.runSubtest
+- perl.debugFile
+- perl.debugTest
+- perl.goToTest
+- perl.goToImplementation

@@ -1,7 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use perl_lsp_cancellation::{CancellationRegistry, PerlLspCancellationToken};
+use perl_lsp_rs_core::runtime::cancellation::{CancellationRegistry, PerlLspCancellationToken};
 use serde_json::Value;
 
 fn split_u64(data: &[u8], index: usize) -> Option<u64> {

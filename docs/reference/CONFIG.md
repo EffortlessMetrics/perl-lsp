@@ -60,6 +60,8 @@ All LSP workspace settings live under the `perl` namespace:
 
 `.perl-lsp.toml` is an optional, editor-agnostic project configuration file that you commit to your repository. It lets you share settings with your whole team without requiring each developer to configure their own editor. The file lives at the **workspace root** (the directory containing your `.git` folder or `Makefile.PL` / `cpanfile`).
 
+For v0.13, this per-folder `.perl-lsp.toml` model is the supported multi-root mechanism. Fully dynamic per-folder scoping through the `workspace/configuration` reverse-request flow is deferred (see [#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515)).
+
 The server silently skips the file if it does not exist. If the file exists but contains invalid TOML, the server emits a `window/showMessage` warning and continues with defaults.
 
 Unknown keys and sections are silently ignored for forward compatibility.
@@ -864,15 +866,46 @@ inlayHints.enabled = true
 
 #### Sublime Text (LSP package)
 
+Open `Preferences: LSP Server Configurations` and add:
+
 ```json
 {
-  "clients": {
-    "perl-lsp": {
-      "initializationOptions": {
-        "perl": {
-          "workspace": {
-            "includePaths": ["lib", ".", "local/lib/perl5"]
-          }
+  "perl-lsp": {
+    "enabled": true,
+    "command": ["perllsp", "--stdio"],
+    "selector": "source.perl",
+    "initialization_options": {
+      "perl": {
+        "workspace": {
+          "includePaths": ["lib", ".", "local/lib/perl5"]
+        }
+      }
+    }
+  }
+}
+```
+
+Sublime LSP uses `initialization_options`; the LSP protocol field is named
+`initializationOptions`.
+
+#### Claude Code (plugin `.lsp.json`)
+
+```json
+{
+  "perl-lsp": {
+    "command": "perllsp",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".pl": "perl",
+      ".pm": "perl",
+      ".t": "perl",
+      ".psgi": "perl"
+    },
+    "initializationOptions": {
+      "perl": {
+        "workspace": {
+          "includePaths": ["lib", ".", "local/lib/perl5"],
+          "useSystemInc": false
         }
       }
     }

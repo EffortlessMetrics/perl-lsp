@@ -176,7 +176,7 @@ perl-lsp/src/main.rs
     forwards JsonRpcRequest to tokio mpsc channel
     |
     v
-LspServer::serve_async (crates/perl-lsp/src/runtime/serving.rs)
+LspServer::serve_async (crates/perl-lsp-rs/src/runtime/serving.rs)
     Ingress loop -- no heavy work inline
     Calls scheduler::classify(method) -> RequestClass
     |
@@ -190,13 +190,13 @@ LspServer::serve_async (crates/perl-lsp/src/runtime/serving.rs)
                                              N concurrent workers
     |
     v
-LspServer::handle_request (crates/perl-lsp/src/runtime/dispatch/)
+LspServer::handle_request (crates/perl-lsp-rs/src/runtime/dispatch/)
     dispatch/lifecycle/  -- initialize, shutdown, exit
     dispatch/text_document/  -- per-method handlers
     dispatch/workspace/  -- workspace-level handlers
     |
     v
-Feature provider (crates/perl-lsp/src/features/)
+Feature provider (crates/perl-lsp-rs/src/features/)
     Calls into perl-semantic-analyzer, perl-workspace-index, providers
     Returns LSP-shaped response (serde_json::Value)
     |
@@ -304,11 +304,11 @@ Key microcrates: `perl-dap-config` (launch/attach config), `perl-dap-platform`
 | Diagnostics / lints | `crates/perl-lsp-diagnostics/src/lints/` |
 | Scope analysis | `crates/perl-semantic-analyzer/src/analysis/scope_analyzer.rs` |
 | Workspace symbol index | `crates/perl-workspace-index/src/workspace/workspace_index.rs` |
-| LSP request routing | `crates/perl-lsp/src/runtime/dispatch/` |
-| LSP threading / scheduling | `crates/perl-lsp/src/runtime/scheduler.rs` |
+| LSP request routing | `crates/perl-lsp-rs/src/runtime/dispatch/` |
+| LSP threading / scheduling | `crates/perl-lsp-rs/src/runtime/scheduler.rs` |
 | Feature flags / profiles | `crates/perl-lsp-feature-policy/src/` |
 | DAP debugging | `crates/perl-dap/src/` |
-| Binary CLI / startup | `crates/perl-lsp/src/main.rs` |
+| Binary CLI / startup | `crates/perl-lsp-rs/src/main.rs` |
 
 ## Adding a new parser test
 
@@ -338,7 +338,7 @@ the metrics pipeline accurate (required by CI).
 2. Wire the flag in `crates/perl-lsp-feature-policy/src/lib.rs` under the
    appropriate profile.
 3. Create or extend a provider crate under `crates/perl-lsp-<name>/`.
-4. Add the handler in `crates/perl-lsp/src/runtime/dispatch/text_document/`
+4. Add the handler in `crates/perl-lsp-rs/src/runtime/dispatch/text_document/`
    or `workspace/`.
 5. Add a BDD acceptance criterion in `crates/perl-lsp-feature-contracts/`.
 

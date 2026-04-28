@@ -125,7 +125,7 @@ and would have caught this incident on day one.
 PR #3984 (merged 2026-04-10), discovered dormant during the #4068
 scoping pass on 2026-04-11.
 
-`crates/perl-lsp/tests/multi_root_workspace_tests.rs` is 1020 lines of
+`crates/perl-lsp-rs/tests/multi_root_workspace_tests.rs` is 1020 lines of
 integration tests covering multi-root workspace support for issue #3513.
 Per-folder TOML configuration loading. Cross-folder module navigation.
 Same-name symbol ambiguity resolution. Workspace folder removal. Hover

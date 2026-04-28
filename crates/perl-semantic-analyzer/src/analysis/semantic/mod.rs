@@ -19,6 +19,7 @@ mod builtins;
 mod hover;
 mod model;
 mod node_analysis;
+mod query_facade;
 mod references;
 mod tokens;
 
@@ -30,6 +31,10 @@ pub use builtins::{
 };
 pub use hover::HoverInfo;
 pub use model::SemanticModel;
+pub use query_facade::{
+    DefinitionLocation, EffectivePragmaState, ParentChain, ResolvedSymbol, SemanticQueryFacade,
+    VisibleImport,
+};
 pub use tokens::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
 use crate::SourceLocation;
@@ -37,6 +42,8 @@ use crate::analysis::class_model::{ClassModel, ClassModelBuilder, MethodResoluti
 use crate::ast::Node;
 use crate::symbol::{Symbol, SymbolExtractor, SymbolTable, is_universal_method};
 use std::collections::{HashMap, HashSet};
+
+const MAX_MRO_TRAVERSAL_DEPTH: usize = 1024;
 
 #[derive(Debug)]
 /// Semantic analyzer providing comprehensive IDE features for Perl code.
@@ -315,6 +322,21 @@ impl SemanticAnalyzer {
         None
     }
 
+    /// Resolve the ordered parent chain for a class in same-file class models.
+    ///
+    /// Returns ancestors in configured method-resolution order, excluding `receiver_class`.
+    pub fn resolve_parent_chain(&self, receiver_class: &str) -> Option<Vec<String>> {
+        let models_by_name: HashMap<&str, &ClassModel> =
+            self.class_models.iter().map(|model| (model.name.as_str(), model)).collect();
+        let receiver_model = models_by_name.get(receiver_class).copied()?;
+
+        let chain = match receiver_model.mro {
+            MethodResolutionOrder::Dfs => self.dfs_ancestor_order(receiver_class, &models_by_name),
+            MethodResolutionOrder::C3 => self.c3_ancestor_order(receiver_class, &models_by_name),
+        };
+        Some(chain)
+    }
+
     fn resolve_inherited_method_hover_ordered(
         &self,
         receiver_class: &str,
@@ -477,7 +499,12 @@ impl SemanticAnalyzer {
             models_by_name: &HashMap<&str, &ClassModel>,
             seen: &mut HashSet<String>,
             out: &mut Vec<String>,
+            depth: usize,
         ) {
+            if depth >= MAX_MRO_TRAVERSAL_DEPTH {
+                return;
+            }
+
             let Some(model) = models_by_name.get(package).copied() else {
                 return;
             };
@@ -485,14 +512,14 @@ impl SemanticAnalyzer {
             for parent in &model.parents {
                 if seen.insert(parent.clone()) {
                     out.push(parent.clone());
-                    walk(parent, models_by_name, seen, out);
+                    walk(parent, models_by_name, seen, out, depth + 1);
                 }
             }
         }
 
         let mut seen = HashSet::from([package.to_string()]);
         let mut out = Vec::new();
-        walk(package, models_by_name, &mut seen, &mut out);
+        walk(package, models_by_name, &mut seen, &mut out, 0);
         out
     }
 
@@ -505,7 +532,12 @@ impl SemanticAnalyzer {
             package: &str,
             models_by_name: &HashMap<&str, &ClassModel>,
             visited: &mut HashSet<String>,
+            depth: usize,
         ) -> Vec<String> {
+            if depth >= MAX_MRO_TRAVERSAL_DEPTH {
+                return vec![package.to_string()];
+            }
+
             if !visited.insert(package.to_string()) {
                 return vec![];
             }
@@ -521,7 +553,7 @@ impl SemanticAnalyzer {
 
             let mut parent_mros: Vec<Vec<String>> = parents
                 .iter()
-                .map(|parent| linearize(parent, models_by_name, &mut visited.clone()))
+                .map(|parent| linearize(parent, models_by_name, &mut visited.clone(), depth + 1))
                 .collect();
             parent_mros.push(parents.clone());
 
@@ -567,7 +599,7 @@ impl SemanticAnalyzer {
             result
         }
 
-        linearize(package, models_by_name, &mut HashSet::new()).into_iter().skip(1).collect()
+        linearize(package, models_by_name, &mut HashSet::new(), 0).into_iter().skip(1).collect()
     }
 }
 
@@ -670,6 +702,18 @@ sub add { 1 }
         assert!(!sub_symbols.is_empty());
         let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
         assert_eq!(hover.documentation.as_deref(), Some("Adds two numbers"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_extract_documentation_with_out_of_bounds_offset()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "sub add { 1 }\n";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        assert_eq!(analyzer.extract_documentation(code.len() + 1), None);
         Ok(())
     }
 
@@ -1002,6 +1046,30 @@ my $documented = 42;
                 byte_offset
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_analyzer_find_definition_goto_label() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "START: while (1) {\n    goto START;\n}\n";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let ref_pos = code.find("START;\n").ok_or("could not find goto label")?;
+
+        let symbol = analyzer
+            .find_definition(ref_pos)
+            .ok_or("definition not found for goto label reference")?;
+
+        assert_eq!(symbol.name, "START");
+        assert_eq!(symbol.kind, SymbolKind::Label);
+        assert!(
+            symbol.location.start < ref_pos,
+            "Label definition {:?} should precede goto reference at byte {}",
+            symbol.location.start,
+            ref_pos
+        );
         Ok(())
     }
 
@@ -1431,6 +1499,33 @@ push @items, 5;
     }
 
     #[test]
+    fn test_core_prefixed_builtin_hover_for_function_call() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let code = r#"
+my $value = "abc";
+CORE::length($value);
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let length_pos = code.find("CORE::length").ok_or("CORE::length not found")?;
+        let hover = analyzer
+            .hover_info
+            .iter()
+            .find(|(loc, _)| loc.start <= length_pos && loc.end > length_pos);
+
+        assert!(hover.is_some(), "Should have hover info for CORE::length builtin");
+        let (_, hover) = hover.ok_or("missing hover for CORE::length")?;
+        assert!(
+            hover.signature.contains("length"),
+            "Hover signature should contain 'length', got: {}",
+            hover.signature
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_package_hover_with_pod_name_section() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 =head1 NAME
@@ -1722,8 +1817,9 @@ my %config = (key => "value");
     #[test]
     fn test_find_definition_redirects_method_modifier_to_target_method()
     -> Result<(), Box<dyn std::error::Error>> {
-        let code =
-            include_str!("../../../../perl-lsp/tests/fixtures/frameworks/moo_method_modifiers.pl");
+        let code = include_str!(
+            "../../../../perl-lsp-rs/tests/fixtures/frameworks/moo_method_modifiers.pl"
+        );
         let mut parser = Parser::new(code);
         let ast = parser.parse()?;
 
@@ -1754,6 +1850,45 @@ my %config = (key => "value");
             );
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_inherited_method_location_limits_dfs_depth()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let chain_len = MAX_MRO_TRAVERSAL_DEPTH + 10;
+        let mut code = String::new();
+        for i in 0..chain_len {
+            code.push_str(&format!("package P{i}; use parent 'P{}';\n", i + 1));
+        }
+        code.push_str(&format!("package P{chain_len}; sub target {{ 1 }}\n"));
+
+        let mut parser = Parser::new(&code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, &code);
+
+        let location = analyzer.resolve_inherited_method_location("P0", "target");
+        assert!(location.is_none(), "DFS traversal should stop at depth limit");
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_inherited_method_location_limits_c3_depth()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let chain_len = MAX_MRO_TRAVERSAL_DEPTH + 10;
+        let mut code = String::new();
+        code.push_str("package P0; use mro 'c3'; use parent 'P1';\n");
+        for i in 1..chain_len {
+            code.push_str(&format!("package P{i}; use parent 'P{}';\n", i + 1));
+        }
+        code.push_str(&format!("package P{chain_len}; sub target {{ 1 }}\n"));
+
+        let mut parser = Parser::new(&code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, &code);
+
+        let location = analyzer.resolve_inherited_method_location("P0", "target");
+        assert!(location.is_none(), "C3 traversal should stop at depth limit");
         Ok(())
     }
 }

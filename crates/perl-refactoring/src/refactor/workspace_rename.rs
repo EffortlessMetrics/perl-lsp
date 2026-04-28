@@ -50,7 +50,7 @@
 use crate::refactor::refactoring::BackupInfo;
 use crate::refactor::workspace_refactor::{FileEdit, TextEdit};
 use crate::workspace_index::WorkspaceIndex;
-use perl_qualified_name::split_qualified_name;
+use perl_parser_core::qualified_name::split_qualified_name;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -82,9 +82,6 @@ pub struct WorkspaceRenameConfig {
 
     /// Validate syntax after each file edit (default: true)
     pub validate_syntax: bool,
-
-    /// Follow symbolic links (default: false, security)
-    pub follow_symlinks: bool,
 }
 
 impl Default for WorkspaceRenameConfig {
@@ -98,7 +95,6 @@ impl Default for WorkspaceRenameConfig {
             max_files: 0,
             report_progress: true,
             validate_syntax: true,
-            follow_symlinks: false,
         }
     }
 }
@@ -379,7 +375,7 @@ impl WorkspaceRename {
 
         // Extract the bare name and optional package qualifier from old_name
         let (old_package, old_bare) = split_qualified_name(old_name);
-        let (_new_package, new_bare) = split_qualified_name(new_name);
+        let (new_package, new_bare) = split_qualified_name(new_name);
 
         // AC:AC2 - Name conflict validation
         // Check if any symbol already exists with the new name
@@ -514,19 +510,13 @@ impl WorkspaceRename {
 
                     if in_scope {
                         // Also replace the package qualifier if it precedes the match
-                        let (edit_start, replacement) = if let Some(ref pkg) = scope_package {
-                            let prefix = format!("{}::", pkg);
-                            if match_start >= prefix.len()
-                                && text[match_start - prefix.len()..match_start] == *prefix
-                            {
-                                // Replace "Package::old_bare" with "Package::new_bare"
-                                (match_start - prefix.len(), format!("{}::{}", pkg, new_bare))
-                            } else {
-                                (match_start, new_bare.to_string())
-                            }
-                        } else {
-                            (match_start, new_bare.to_string())
-                        };
+                        let (edit_start, replacement) = build_replacement_text(
+                            text,
+                            match_start,
+                            &scope_package,
+                            new_package,
+                            new_bare,
+                        );
 
                         let (start_line, start_col) = line_index.offset_to_position(edit_start);
                         let (end_line, end_col) = line_index.offset_to_position(match_end);
@@ -813,6 +803,24 @@ impl WorkspaceRename {
     }
 }
 
+fn build_replacement_text(
+    text: &str,
+    match_start: usize,
+    scope_package: &Option<String>,
+    new_package: Option<&str>,
+    new_bare: &str,
+) -> (usize, String) {
+    if let Some(pkg) = scope_package {
+        let prefix = format!("{pkg}::");
+        if match_start >= prefix.len() && text[match_start - prefix.len()..match_start] == *prefix {
+            let target_package = new_package.unwrap_or(pkg.as_str());
+            return (match_start - prefix.len(), format!("{target_package}::{new_bare}"));
+        }
+    }
+
+    (match_start, new_bare.to_string())
+}
+
 /// Check if a byte is a valid Perl identifier character
 fn is_identifier_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
@@ -855,7 +863,6 @@ mod tests {
         assert_eq!(config.max_files, 0);
         assert!(config.report_progress);
         assert!(config.validate_syntax);
-        assert!(!config.follow_symlinks);
     }
 
     #[test]
@@ -882,5 +889,38 @@ mod tests {
         assert_eq!(find_package_at_offset(text, 20), Some("Foo".to_string()));
         assert_eq!(find_package_at_offset(text, 45), Some("Bar".to_string()));
         assert_eq!(find_package_at_offset(text, 0), None);
+    }
+
+    #[test]
+    fn test_build_replacement_text_qualified_uses_new_package_when_provided() {
+        let text = "Old::process()";
+        let scope_package = Some("Old".to_string());
+        let (start, replacement) =
+            build_replacement_text(text, "Old::".len(), &scope_package, Some("New"), "execute");
+
+        assert_eq!(start, 0);
+        assert_eq!(replacement, "New::execute");
+    }
+
+    #[test]
+    fn test_build_replacement_text_qualified_keeps_old_package_when_new_is_unqualified() {
+        let text = "Old::process()";
+        let scope_package = Some("Old".to_string());
+        let (start, replacement) =
+            build_replacement_text(text, "Old::".len(), &scope_package, None, "execute");
+
+        assert_eq!(start, 0);
+        assert_eq!(replacement, "Old::execute");
+    }
+
+    #[test]
+    fn test_build_replacement_text_unqualified_replaces_bare_symbol_only() {
+        let text = "process()";
+        let scope_package = Some("Old".to_string());
+        let (start, replacement) =
+            build_replacement_text(text, 0, &scope_package, Some("New"), "execute");
+
+        assert_eq!(start, 0);
+        assert_eq!(replacement, "execute");
     }
 }

@@ -45,7 +45,7 @@ export interface HealthCheckResult {
  */
 export const PERL_MISSING_MESSAGE =
   'Perl interpreter not found. ' +
-  'Install Perl 5.10+ (e.g. https://www.perl.org/get.html or Strawberry Perl for Windows) ' +
+  'Install Perl 5.10+ (Windows: Strawberry Perl at https://strawberryperl.com/, macOS: `brew install perl`, Linux: use your distro package manager) ' +
   'and reload the window. ' +
   'Alternatively, set the `perl-lsp.perl.path` setting to an existing Perl executable.';
 
@@ -165,7 +165,8 @@ export class OnboardingManager {
         label,
         ok: false,
         status: HealthCheckStatus.Error,
-        detail: `Perl not found on PATH. Install Perl and reload. (${msg})`,
+        detail:
+          'Perl not found on PATH. Install Perl (Windows: strawberryperl.com, macOS: `brew install perl`, Linux: use your distro package manager) and reload.',
       };
     }
   }
@@ -390,14 +391,23 @@ function defaultExecCheck(
 ): Promise<{ stdout: string; stderr: string }> {
   const initialInvocation = { command: cmd, args };
   return runExecInvocation(initialInvocation).catch(async (err: unknown) => {
-    const fallbackInvocation = await resolveWindowsInvocationFallback(
+    const windowsFallback = await resolveWindowsInvocationFallback(
       initialInvocation,
       err,
     );
-    if (!fallbackInvocation) {
-      throw err;
+    if (windowsFallback) {
+      return runExecInvocation(windowsFallback);
     }
-    return runExecInvocation(fallbackInvocation);
+
+    const unixShellFallback = resolveUnixShellInvocationFallback(
+      initialInvocation,
+      err,
+    );
+    if (unixShellFallback) {
+      return runExecInvocation(unixShellFallback);
+    }
+
+    throw err;
   });
 }
 
@@ -460,6 +470,40 @@ function resolveWindowsCommandCandidate(command: string): Promise<string | null>
       resolve(selectWindowsCommandCandidate(stdout));
     });
   });
+}
+
+export function resolveUnixShellInvocationFallback(
+  invocation: ExecInvocation,
+  err: unknown,
+): ExecInvocation | null {
+  if (
+    process.platform === 'win32' ||
+    !isSpawnNotFound(err) ||
+    invocation.command.includes('/') ||
+    invocation.command.includes('\\')
+  ) {
+    return null;
+  }
+
+  const shell = process.env.SHELL?.trim();
+  if (!shell) {
+    return null;
+  }
+
+  return {
+    command: shell,
+    // Warp and other terminals often expose PATH/tooling via shell startup
+    // scripts; using login-shell exec improves compatibility for health checks.
+    args: ['-lc', toPosixShellCommand(invocation.command, invocation.args)],
+  };
+}
+
+export function toPosixShellCommand(command: string, args: string[]): string {
+  return [command, ...args].map(escapePosixShellArg).join(' ');
+}
+
+function escapePosixShellArg(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 export function selectWindowsCommandCandidate(stdout: string): string | null {

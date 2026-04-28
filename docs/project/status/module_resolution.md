@@ -70,11 +70,11 @@ environment variable. Requires `usePerl5lib: true` in workspace config.
 ## Implementation Notes
 
 - Position-aware resolution is implemented in `crates/perl-module-resolution/src/use_lib.rs` via `resolve_use_lib_paths_from_source()` (lines 147-173).
-- The three LSP consumers all call either `resolve_module_to_path_with_doc()` or `resolve_module_path_with_uri()` from `crates/perl-lsp/src/runtime/lifecycle/module_resolution.rs`.
+- The three LSP consumers all call either `resolve_module_to_path_with_doc()` or `resolve_module_path_with_uri()` from `crates/perl-lsp-rs/src/runtime/lifecycle/module_resolution.rs`.
 - Consumer call sites:
-  - PL701 diagnostic: `crates/perl-lsp/src/runtime/diagnostics.rs` — calls at lines 110, 280, 521
-  - goto-definition: `crates/perl-lsp/src/runtime/language/navigation.rs` — call at line 966
-  - hover: `crates/perl-lsp/src/runtime/language/hover.rs` — calls at lines 1100, 1118
+  - PL701 diagnostic: `crates/perl-lsp-rs/src/runtime/diagnostics.rs` — calls at lines 110, 280, 521
+  - goto-definition: `crates/perl-lsp-rs/src/runtime/language/navigation.rs` — call at line 966
+  - hover: `crates/perl-lsp-rs/src/runtime/language/hover.rs` — calls at lines 1100, 1118
 
 ## Follow-up Scope (PR 2)
 

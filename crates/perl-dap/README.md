@@ -30,3 +30,19 @@ perl-dap --stdio
 perl-dap --socket --port 13603
 perl-dap --bridge
 ```
+
+## BridgeAdapter dependency
+
+`--bridge` mode requires the CPAN module `Perl::LanguageServer`.
+Install it with either:
+
+```bash
+cpan Perl::LanguageServer
+cpanm Perl::LanguageServer
+```
+
+You can verify availability with:
+
+```bash
+perl -e "use Perl::LanguageServer::DebuggerInterface; print qq{OK\n};"
+```

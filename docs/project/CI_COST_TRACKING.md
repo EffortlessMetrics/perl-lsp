@@ -488,7 +488,7 @@ Use third-party tools:
   - Time: ~10 minutes
 
 - 🏷️ **Full LSP tests** (auto-triggers on code changes)
-  - When: Changes to `crates/perl-lsp/` or `crates/perl-parser/src/lsp/`
+  - When: Changes to `crates/perl-lsp-rs/` or `crates/perl-parser/src/lsp/`
   - Cost: $0.03/run
   - Time: ~4 minutes
 

@@ -5,7 +5,7 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PragmaState, PragmaTracker};
+use perl_pragma::{PragmaQueryCursor, PragmaState, PragmaTracker};
 
 fn loc(start: usize, end: usize) -> SourceLocation {
     SourceLocation { start, end }
@@ -142,6 +142,20 @@ fn given_use_builtin_qw_when_querying_scope_then_each_imported_name_is_available
 }
 
 #[test]
+fn given_no_builtin_when_querying_scope_then_selected_imports_are_removed() {
+    let ast = program(vec![
+        use_node("builtin", &["qw(true false ceil)"], 0, 30),
+        no_node("builtin", &["'false'"], 31, 49),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 40);
+    assert!(state.has_builtin_import("true"));
+    assert!(!state.has_builtin_import("false"));
+    assert!(state.has_builtin_import("ceil"));
+}
+
+#[test]
 fn given_use_feature_qw_when_querying_state_then_requested_features_and_unicode_strings_are_enabled()
  {
     let ast = program(vec![use_node("feature", &["'qw(signatures unicode_strings)'"], 0, 41)]);
@@ -152,6 +166,42 @@ fn given_use_feature_qw_when_querying_state_then_requested_features_and_unicode_
     assert!(state.strict_subs);
     assert!(state.strict_refs);
     assert!(state.unicode_strings);
+}
+
+#[test]
+fn given_use_if_feature_bundle_when_querying_state_then_bundle_features_are_recorded() {
+    let ast = program(vec![use_node("if", &["$]", ">=", "5.036", "feature", "':5.36'"], 0, 44)]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 20);
+    assert!(state.has_feature("say"));
+    assert!(state.has_feature("signatures"));
+    assert!(state.has_feature("isa"));
+}
+
+#[test]
+fn given_no_feature_all_then_use_feature_bundle_when_querying_state_then_bundle_is_reenabled() {
+    let ast = program(vec![
+        use_node("v5.40", &[], 0, 12),
+        no_node("feature", &["':all'"], 13, 31),
+        use_node("feature", &["':5.40'"], 32, 52),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 40);
+    assert!(state.has_feature("builtin"));
+    assert!(state.has_feature("say"));
+}
+
+#[test]
+fn given_use_feature_signatures_when_querying_state_then_effective_strict_modes_are_enabled() {
+    let ast = program(vec![use_node("feature", &["'signatures'"], 0, 24)]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 12);
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
 }
 
 #[test]
@@ -290,4 +340,127 @@ fn given_unitcheck_block_with_use_strict_when_querying_after_block_then_strict_i
     assert!(!after_unitcheck.strict_vars);
     assert!(!after_unitcheck.strict_subs);
     assert!(!after_unitcheck.strict_refs);
+}
+
+#[test]
+fn given_pragmas_when_querying_final_state_then_last_effective_state_is_returned() {
+    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 13, 28)]);
+    let map = PragmaTracker::build(&ast);
+
+    let final_state = PragmaTracker::final_state(&map);
+    assert!(final_state.strict_vars);
+    assert!(final_state.strict_subs);
+    assert!(final_state.strict_refs);
+    assert!(final_state.warnings);
+}
+
+#[test]
+fn given_monotonic_lookups_when_using_cursor_then_states_match_offset_queries() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &["refs"], 20, 36)], 18, 40),
+        use_node("warnings", &[], 42, 57),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let mut cursor = PragmaQueryCursor::new();
+    let s1 = cursor.state_for_offset(&map, 8);
+    let s2 = cursor.state_for_offset(&map, 30);
+    let s3 = cursor.state_for_offset(&map, 50);
+
+    assert_eq!(s1, PragmaTracker::state_for_offset(&map, 8));
+    assert_eq!(s2, PragmaTracker::state_for_offset(&map, 30));
+    assert_eq!(s3, PragmaTracker::state_for_offset(&map, 50));
+}
+
+/// The cursor's fallback to binary search must produce the same result as the
+/// static `state_for_offset` when called with a backward (decreasing) offset.
+/// This is important when a caller (e.g., a diagnostic pass) queries nodes out
+/// of source order.
+#[test]
+fn given_backward_lookup_when_cursor_past_end_then_fallback_matches_static_query() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &["refs"], 20, 36)], 18, 40),
+        use_node("warnings", &[], 42, 57),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    // Advance cursor to the end of the map.
+    let mut cursor = PragmaQueryCursor::new();
+    let _ = cursor.state_for_offset(&map, 50);
+
+    // Now query backward to an earlier offset — must fall back to binary search.
+    let backward = cursor.state_for_offset(&map, 8);
+    assert_eq!(
+        backward,
+        PragmaTracker::state_for_offset(&map, 8),
+        "backward seek must match static query result"
+    );
+}
+
+/// Querying an empty pragma map via the cursor must return the default state,
+/// matching the behavior of the static `state_for_offset`.
+#[test]
+fn given_empty_pragma_map_cursor_returns_default() {
+    let map: Vec<(std::ops::Range<usize>, perl_pragma::PragmaState)> = vec![];
+    let mut cursor = PragmaQueryCursor::new();
+    let state = cursor.state_for_offset(&map, 999);
+    assert_eq!(state, PragmaTracker::state_for_offset(&map, 999));
+}
+
+#[test]
+fn given_empty_pragma_map_when_querying_final_state_then_default_state_is_returned() {
+    // PragmaTracker::final_state must not panic on an empty map and must return
+    // the same all-false default that state_for_offset returns for an empty map.
+    let state = PragmaTracker::final_state(&[]);
+    assert!(!state.strict_vars);
+    assert!(!state.strict_refs);
+    assert!(!state.strict_subs);
+    assert!(!state.warnings);
+}
+
+#[test]
+fn given_cursor_when_offset_is_before_first_pragma_then_default_state_is_returned() {
+    // Query an offset before the first pragma range; cursor must return default
+    // state just as state_for_offset does (exercises the index=0 with start>offset
+    // branch that calls partition_point returning 0).
+    let ast = program(vec![use_node("strict", &[], 10, 22)]);
+    let map = PragmaTracker::build(&ast);
+
+    let mut cursor = PragmaQueryCursor::new();
+    let s = cursor.state_for_offset(&map, 5);
+
+    assert_eq!(s, PragmaTracker::state_for_offset(&map, 5));
+    assert!(!s.strict_vars, "no pragma has started at offset 5");
+}
+
+/// `final_state` must return the restored top-level state even when the last
+/// entry in the sorted pragma map is a scope-exit restore point (an entry
+/// pushed by `build_scoped_body` at `body.end..body.end`).
+///
+/// In a file where a subroutine is the last thing and it overrides strict,
+/// `final_state` should return the state AFTER the sub (restored to outer),
+/// not the in-sub state.
+#[test]
+fn given_sub_last_in_file_when_querying_final_state_then_outer_state_is_returned() {
+    // use strict; sub foo { no strict; }
+    // After `sub foo` closes, state is restored to strict=true.
+    // The pragma map's last entry is the restore point at end-of-sub,
+    // which has strict_vars = true.
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &[], 14, 24)], 13, 25),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let final_state = PragmaTracker::final_state(&map);
+    assert!(
+        final_state.strict_vars,
+        "final_state must reflect outer (restored) strict=true after a scoped block"
+    );
+    assert!(
+        final_state.strict_subs,
+        "final_state must reflect outer (restored) strict=true after a scoped block"
+    );
 }

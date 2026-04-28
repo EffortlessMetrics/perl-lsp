@@ -29,7 +29,7 @@ Format: date, who hit it, what happened, suggested fix.
 **Category**: test-debt
 **Who**: Builder working on async runtime migration (PR #1555)
 **What**: After migrating `LspServer` methods from `&mut self` to `&self`, approximately 150 test call sites still passed `&mut LspServer`. These generate clippy warnings (not errors) and do not break tests but create noise in CI output and mislead contributors about the actual signature.
-**Files**: ~26 test files in `crates/perl-lsp/tests/`
+**Files**: ~26 test files in `crates/perl-lsp-rs/tests/`
 **Suggested fix**: A single-pass `sed` or automated refactor across the test directory. Tracked as Task #6 (Async test helper cleanup). See ADR-0031 for context.
 
 ---
@@ -39,7 +39,7 @@ Format: date, who hit it, what happened, suggested fix.
 **Category**: architecture
 **Who**: Reviewer of PR #1555
 **What**: `unsafe impl Send for LspServer` and `unsafe impl Sync for LspServer` are required because `ParentMap` holds raw pointers into AST nodes. The compiler cannot verify safety. The safety invariant (pointers are only accessed while `Arc<Mutex>` lock is held; pointed-to AST is not dropped while pointers live) is documented in the code but not in any ADR or architecture doc. Future contributors modifying `LspServer` field layout may not discover this constraint.
-**Files**: `crates/perl-lsp/src/server.rs` (approximately)
+**Files**: `crates/perl-lsp-rs/src/server.rs` (approximately)
 **Suggested fix**: ADR-0031 now documents this. Long-term: replace raw pointers with index-based references in `ParentMap` to eliminate the unsafe entirely.
 
 ---

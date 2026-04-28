@@ -115,7 +115,7 @@ These items should all be ✓ before the version-bump PR is merged.
 
 Each item requires a human to verify and record sign-off date + initials.
 
-- [ ] **Banned-constructs audit clean** — zero `unwrap()`, `expect()`, `panic!()`, `todo!()`, `dbg!()` in production library code outside the one allowlisted exception (`crates/perl-lsp/src/util/uri.rs`).
+- [ ] **Banned-constructs audit clean** — zero `unwrap()`, `expect()`, `panic!()`, `todo!()`, `dbg!()` in production library code outside the one allowlisted exception (`crates/perl-lsp-rs/src/util/uri.rs`).
   - Verify: `just ci-unwrap-panic-ratchet` — must pass. Also `just clippy-prod-no-unwrap`.
   - Current status: ✓ — `docs/project/status/index.md` records `unwrap/expect=0`, panic-family=0, unsafe=0 in production baseline as of 2026-04-07. Unsafe blocks documented or eliminated in #3292 (merged 2026-04-08). Confirm on v0.13.0 tree with `just ci-unwrap-panic-ratchet`.
   - Sign-off: _______________ Date: _______________

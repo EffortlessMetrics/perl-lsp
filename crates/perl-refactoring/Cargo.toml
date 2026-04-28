@@ -1,5 +1,6 @@
 [package]
 name = "perl-refactoring"
+publish = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -26,7 +27,6 @@ doctest = false
 perl-parser-core = { workspace = true }
 perl-workspace = { workspace = true }
 perl-module = { workspace = true }
-perl-qualified-name = { workspace = true }
 regex.workspace = true
 serde = { workspace = true }
 url.workspace = true

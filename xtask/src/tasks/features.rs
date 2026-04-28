@@ -1,6 +1,6 @@
 use color_eyre::eyre::{Context, Result, bail, eyre};
-use perl_feature_catalog::{Catalog, Maturity};
-use perl_lsp_feature_governance::{FeatureProfile, catalog_advertised_feature_ids};
+use perl_lsp_rs_core::feature_catalog::{Catalog, Maturity};
+use perl_lsp_rs_core::governance::{FeatureProfile, catalog_advertised_feature_ids};
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;
@@ -25,7 +25,7 @@ pub fn invariants() -> Result<()> {
 
 fn load_features() -> Result<Catalog> {
     let manifest_dir = env::current_dir().context("Failed to get current working directory")?;
-    let (catalog, _) = perl_feature_catalog::load_catalog_for_build(&manifest_dir)
+    let (catalog, _) = perl_lsp_rs_core::feature_catalog::load_catalog_for_build(&manifest_dir)
         .context("Failed to load features catalog from features.toml")?;
     Ok(catalog)
 }
@@ -37,7 +37,7 @@ fn repo_relative_path(path: impl AsRef<Path>) -> PathBuf {
 
 fn lsp_feature_snapshot_path() -> PathBuf {
     repo_relative_path(
-        "crates/perl-lsp/tests/snapshots/lsp_features_snapshot_test__advertised_vs_caps.snap",
+        "crates/perl-lsp-rs/tests/snapshots/lsp_features_snapshot_test__advertised_vs_caps.snap",
     )
 }
 
@@ -132,7 +132,7 @@ fn sync_docs_impl() -> Result<()> {
 
 fn update_roadmap(
     catalog: &Catalog,
-    area_stats: &BTreeMap<String, perl_feature_catalog::AreaStats>,
+    area_stats: &BTreeMap<String, perl_lsp_rs_core::feature_catalog::AreaStats>,
 ) -> Result<()> {
     let roadmap_path = Path::new("ROADMAP.md");
     let mut content = fs::read_to_string(roadmap_path)?;
@@ -192,7 +192,8 @@ fn update_lsp_status(catalog: &Catalog) -> Result<()> {
         }
     }
 
-    let mut by_area: BTreeMap<String, Vec<&perl_feature_catalog::Feature>> = BTreeMap::new();
+    let mut by_area: BTreeMap<String, Vec<&perl_lsp_rs_core::feature_catalog::Feature>> =
+        BTreeMap::new();
     for feature in catalog.features() {
         by_area.entry(feature.area.clone()).or_default().push(feature);
     }
@@ -509,8 +510,8 @@ mod tests {
 
     #[test]
     fn repo_relative_path_keeps_catalog_test_paths_rooted_at_repo() {
-        let path = repo_relative_path("crates/perl-lsp/tests/lsp_completion_tests.rs");
-        assert_eq!(path, PathBuf::from("crates/perl-lsp/tests/lsp_completion_tests.rs"));
+        let path = repo_relative_path("crates/perl-lsp-rs/tests/lsp_completion_tests.rs");
+        assert_eq!(path, PathBuf::from("crates/perl-lsp-rs/tests/lsp_completion_tests.rs"));
     }
 
     #[test]
@@ -518,7 +519,7 @@ mod tests {
         assert_eq!(
             lsp_feature_snapshot_path(),
             PathBuf::from(
-                "crates/perl-lsp/tests/snapshots/lsp_features_snapshot_test__advertised_vs_caps.snap"
+                "crates/perl-lsp-rs/tests/snapshots/lsp_features_snapshot_test__advertised_vs_caps.snap"
             )
         );
     }
@@ -546,7 +547,7 @@ mod tests {
     fn snapshot_caps_from_content_handles_insta_two_doc_snapshot() -> Result<()> {
         let content = "\
 ---\n\
-source: crates/perl-lsp/tests/lsp_features_snapshot_test.rs\n\
+source: crates/perl-lsp-rs/tests/lsp_features_snapshot_test.rs\n\
 expression: \"&snapshot_data\"\n\
 ---\n\
 caps:\n\

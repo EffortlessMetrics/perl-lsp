@@ -1,0 +1,8 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_capability_snapshot_test.rs
+expression: "&kinds"
+---
+- quickfix
+- source.organizeImports
+- refactor.extract
+- source.fixAll

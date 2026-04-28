@@ -22,13 +22,14 @@ walkdir.workspace = true
 serde = { workspace = true }
 serde_json.workspace = true
 anyhow.workspace = true
-perl-feature-catalog = { workspace = true }
-perl-lsp-feature-governance = { workspace = true }
+# (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
+perl-lsp-rs-core = { workspace = true }
 indicatif = "0.18.4"
 console = "0.16.2"
 chrono = { version = "0.4.43", features = ["serde"] }
 perl-parser = { workspace = true }
 perl-corpus = { workspace = true }
+perl-lsp-ux-tests = { workspace = true }
 perl-parser-pest = { workspace = true, optional = true }
 tree-sitter = { workspace = true }
 tree-sitter-perl-c = { path = "../crates/tree-sitter-perl-c", optional = true }
@@ -41,6 +42,7 @@ notify = "8.2.0"
 flate2 = "1.1.5"
 tar = "0.4.44"
 tempfile.workspace = true
+glob = "0.3.3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = "0.18.0"

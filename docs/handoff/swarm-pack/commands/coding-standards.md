@@ -13,7 +13,7 @@ Invoke this skill to load project coding standards into your context.
 - `dbg!()` → use `tracing::debug!`
 - `std::process::abort()` → never
 - `std::process::exit()` → only in `bin/` directories and `lifecycle.rs`
-- **Exception**: One `#[allow(clippy::expect_used)]` in `crates/perl-lsp/src/util/uri.rs`
+- **Exception**: One `#[allow(clippy::expect_used)]` in `crates/perl-lsp-rs/src/util/uri.rs`
 
 ## Patterns
 - Regex init: `Option<Regex>` with `.ok()` for graceful degradation

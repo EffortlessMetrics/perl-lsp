@@ -275,7 +275,7 @@ lsp_spec_name = "textDocument/hover"
 maturity = "ga"
 advertised = true
 implemented = true
-test_location = "crates/perl-lsp/tests/lsp/hover_test.rs"
+test_location = "crates/perl-lsp-rs/tests/lsp/hover_test.rs"
 ```
 
 Then CI computes: "Advertised features: 53/53 (100%)" ✓
@@ -301,7 +301,7 @@ description = "Show type/documentation on hover"
 maturity = "ga"
 advertised = true
 implemented = true
-test_location = "crates/perl-lsp/tests/lsp/hover_test.rs"
+test_location = "crates/perl-lsp-rs/tests/lsp/hover_test.rs"
 notes = "Full type info, documentation, and signature"
 
 [[features]]
@@ -311,7 +311,7 @@ category = "Core LSP"
 maturity = "ga"
 advertised = true
 implemented = true
-test_location = "crates/perl-lsp/tests/lsp/definition_test.rs"
+test_location = "crates/perl-lsp-rs/tests/lsp/definition_test.rs"
 
 [[features]]
 name = "Smart Rename"

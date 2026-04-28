@@ -36,6 +36,35 @@ These documents are polished prose ready for editorial review or direct publicat
 | [PARSER_WINS.md](PARSER_WINS.md) | "Perl Parsing Hall of Fame" | Hardest constructs handled: heredocs, slash ambiguity, fat arrows |
 | [THREE_LAYER_PRODUCT.md](THREE_LAYER_PRODUCT.md) | "The Three-Layer Product" — LSP + swarm OS + memory/evidence | Why the repo is three products in one |
 
+### Session 2026-04-24: Economic Maturity + Deep Review Catalog + Architecture Audit
+
+Articles from the 2026-04-24 session (75 merged, 156 closed, 231 total resolved). Economic
+analysis from ChatGPT synthesis; deep-review catalog with 17 verified findings; architecture
+audit after Wave 4-Completion (31 published crates).
+
+| File | Title | Notes |
+|------|-------|-------|
+| [ECONOMIC_MATURITY_THROUGHPUT_VS_TRUSTWORTHY.md](ECONOMIC_MATURITY_THROUGHPUT_VS_TRUSTWORTHY.md) | "Economic Maturity: From Throughput to Trustworthy Throughput" | 3-metric evolution, 4 forward metrics, verified cost numbers, 4 biggest cost sinks. |
+| [DEEP_REVIEW_FIX_FORWARD_CATALOG_2026_04_24.md](DEEP_REVIEW_FIX_FORWARD_CATALOG_2026_04_24.md) | "Deep Review Fix-Forward Catalog: Session 2026-04-24" | 17 findings across 14 PRs; double-parse regression, coordinate-space mixing, p95 formula, vacuous assertions, schema mismatch. |
+| [ARCHITECTURE_POST_COLLAPSE_AUDIT.md](ARCHITECTURE_POST_COLLAPSE_AUDIT.md) | "Architecture Post-Collapse Audit: State and Next Steps" | 135→31 collapse done; 3 seams needing surface tightening; parser-family tracker-vs-manifest; post-alpha roadmap. |
+| [SESSION_2026_04_24_ECONOMICS.md](SESSION_2026_04_24_ECONOMICS.md) | "Session Economics: 2026-04-24" | Verified numbers (75 merged, 156 closed); master bit-rot cascade pattern; Windows short-name canonicalize fix. |
+
+### Wave G1 Collapse Session (2026-04-19)
+
+Articles from the Wave G1 collapse session — 5 PRs merged, 74 → 49 published crates. Each is self-contained; [SCOPE_PIVOT_ON_DEFER.md](SCOPE_PIVOT_ON_DEFER.md), [LLM_READS_SPEC_NOT_CODE.md](LLM_READS_SPEC_NOT_CODE.md), and [VERIFICATION_LADDER_PER_LAYER_ROI.md](VERIFICATION_LADDER_PER_LAYER_ROI.md) are the strongest standalone pieces.
+
+| File | Title | Notes |
+|------|-------|-------|
+| [SCOPE_PIVOT_ON_DEFER.md](SCOPE_PIVOT_ON_DEFER.md) | "Scope-Pivot on DEFER" | Agent verdicts are hypotheses bound to scope; shrink scope and defer-rationale often evaporates. Two reversals = 30-40% productivity. |
+| [LLM_READS_SPEC_NOT_CODE.md](LLM_READS_SPEC_NOT_CODE.md) | "Your LLM Reads the Spec, Not the Code" | Red-TDD failure mode with growth data (G1a=3 fixes → G1b=6 fixes). Fix: explicit API-read step in agent prompt. |
+| [VERIFICATION_LADDER_PER_LAYER_ROI.md](VERIFICATION_LADDER_PER_LAYER_ROI.md) | "Verification Ladder ROI by Layer" | Concrete per-layer catch data: which agent caught what, cost per catch. 9 agents, ~16 unique bugs, 5 PRs. |
+| [VERIFY_BY_READING.md](VERIFY_BY_READING.md) | "Verify By Reading" | Prior comments are hypotheses; tool success reports ≠ state change. Verify-by-reading as a hardening principle. |
+| [AGGREGATOR_ABSORPTION_PATTERN.md](AGGREGATOR_ABSORPTION_PATTERN.md) | "The Aggregator Absorption Pattern" | Collapsing a 1,600-LOC aggregator crate into a module with deprecated alias preservation. |
+| [WINDOWS_HARNESS_GAPS.md](WINDOWS_HARNESS_GAPS.md) | "Five Windows Harness Gaps in One Session" | Five distinct platform-specific bugs; systemic fix via migration to `xtask`. |
+| [MEMORY_COMPOUNDS_WITHIN_SESSION.md](MEMORY_COMPOUNDS_WITHIN_SESSION.md) | "Memory Compounds Within a Session" | Memory writes as context-window extensions within a single long session. |
+| [CODERABBIT_INVERSE_SAFETY.md](CODERABBIT_INVERSE_SAFETY.md) | "CodeRabbit Skips Big PRs" | Inverse safety pattern — automated review thins out when human review should thicken. |
+| [PIPELINE_STATE_MACHINE.md](PIPELINE_STATE_MACHINE.md) | "Pipeline State Machine" | Label-driven state machine reference: sign-off labels, state labels, routing labels, invariants, transition diagrams for issue / build / PR pipelines. |
+
 ---
 
 ## 2. Research Documents

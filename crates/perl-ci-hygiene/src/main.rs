@@ -1,4 +1,4 @@
-mod version_sync;
+use perl_ci_hygiene::version_sync;
 
 use chrono::Utc;
 use clap::{Parser, Subcommand};
@@ -867,6 +867,10 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
         "  c-grammar  : bench_parser_c      (tree-sitter C grammar binding, requires libclang)"
     );
     println!();
+    println!("Building benchmark binaries...");
+    build_quick_bench_binaries(repo_root)?;
+    println!("Using median of {QUICK_BENCH_SAMPLES} direct binary runs per parser/file.");
+    println!();
 
     let files = vec![
         repo_root.join("test_corpus/simple.pl"),
@@ -1172,27 +1176,70 @@ const FACADE_BENCH_CRATE: &str = "tree-sitter-perl-rs";
 /// `three_way_bench_all_binaries_distinct`.
 const FACADE_BENCH_BIN: &str = "bench_facade";
 
-/// Run the v3 native Rust parser bench binary against `file`.
+/// Number of timed samples collected per parser/file pair in quick-bench mode.
+const QUICK_BENCH_SAMPLES: usize = 3;
+
+/// Build the quick-bench parser binaries ahead of timing.
 ///
-/// Returns wall-clock duration in microseconds, or `None` if the bench
-/// binary exits non-zero. Note that the elapsed time includes the
-/// `cargo run` startup overhead; both [`run_rust_bench_us`] and
-/// [`run_c_bench_us`] share that overhead so the comparison stays fair.
-fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
+/// The C grammar bench is optional because it depends on libclang. Failures
+/// while building that bench are treated as "N/A" at measurement time.
+fn build_quick_bench_binaries(repo_root: &Path) -> Result<()> {
+    command_status_strict(
+        repo_root,
+        "cargo",
+        &["build", "--quiet", "--release", "-p", RUST_BENCH_CRATE, "--bin", RUST_BENCH_BIN],
+        &[],
+    )?;
+    command_status_strict(
+        repo_root,
+        "cargo",
+        &["build", "--quiet", "--release", "-p", FACADE_BENCH_CRATE, "--bin", FACADE_BENCH_BIN],
+        &[],
+    )?;
+    // Optional dependency path: allow failure and report as N/A during run.
+    let _ = command_status(
+        repo_root,
+        "cargo",
+        &[
+            "build",
+            "--quiet",
+            "--release",
+            "--manifest-path",
+            C_BENCH_MANIFEST,
+            "--bin",
+            C_BENCH_BIN,
+            "--features",
+            "test-utils",
+        ],
+        &[],
+    )?;
+    Ok(())
+}
+
+/// Return the median duration in microseconds over `QUICK_BENCH_SAMPLES` runs.
+fn run_bench_samples_us(repo_root: &Path, command: &Path, file: &Path) -> Result<Option<f64>> {
+    let command_str = command.to_string_lossy().into_owned();
     let file_arg = file.to_string_lossy().into_owned();
-    let args = [
-        "run",
-        "--quiet",
-        "--release",
-        "-p",
-        RUST_BENCH_CRATE,
-        "--bin",
-        RUST_BENCH_BIN,
-        "--",
-        file_arg.as_str(),
-    ];
-    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
-    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+    let args = [file_arg.as_str()];
+    let mut samples = Vec::with_capacity(QUICK_BENCH_SAMPLES);
+    for _ in 0..QUICK_BENCH_SAMPLES {
+        let (status, elapsed) = command_timed_status(repo_root, &command_str, &args, &[])?;
+        if status != 0 {
+            return Ok(None);
+        }
+        samples.push(elapsed.as_micros() as f64);
+    }
+    if samples.is_empty() {
+        return Ok(None);
+    }
+    samples.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    Ok(samples.get(samples.len() / 2).copied())
+}
+
+/// Run the v3 native Rust parser bench binary against `file`.
+fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
+    let binary = repo_root.join("target").join("release").join(RUST_BENCH_BIN);
+    run_bench_samples_us(repo_root, &binary, file)
 }
 
 /// Run the legacy C tree-sitter parser bench binary against `file`.
@@ -1207,22 +1254,13 @@ fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
 /// libclang installed). Quick-bench treats `None` as N/A in the speedup
 /// column rather than failing the whole run.
 fn run_c_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
-    let file_arg = file.to_string_lossy().into_owned();
-    let args = [
-        "run",
-        "--quiet",
-        "--release",
-        "--manifest-path",
-        C_BENCH_MANIFEST,
-        "--bin",
-        C_BENCH_BIN,
-        "--features",
-        "test-utils",
-        "--",
-        file_arg.as_str(),
-    ];
-    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
-    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+    let binary = repo_root
+        .join("crates")
+        .join("tree-sitter-perl-c")
+        .join("target")
+        .join("release")
+        .join(C_BENCH_BIN);
+    run_bench_samples_us(repo_root, &binary, file)
 }
 
 /// Run the `tree-sitter-perl-rs` facade bench binary against `file`.
@@ -1231,20 +1269,8 @@ fn run_c_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
 /// `-p` rather than `--manifest-path`. Returns wall-clock duration in
 /// microseconds, or `None` if the bench binary exits non-zero.
 fn run_facade_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
-    let file_arg = file.to_string_lossy().into_owned();
-    let args = [
-        "run",
-        "--quiet",
-        "--release",
-        "-p",
-        FACADE_BENCH_CRATE,
-        "--bin",
-        FACADE_BENCH_BIN,
-        "--",
-        file_arg.as_str(),
-    ];
-    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
-    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+    let binary = repo_root.join("target").join("release").join(FACADE_BENCH_BIN);
+    run_bench_samples_us(repo_root, &binary, file)
 }
 
 fn timed_file_run_ms(repo_root: &Path, parser: &Path, file: &Path) -> Result<f64> {
@@ -1984,8 +2010,12 @@ fi
 # Falls back to the full gate if classification is ambiguous.
 SINGLE_CRATE_COUNT="$(printf '%s' "$SINGLE_CRATE_NAMES" | grep -c . 2>/dev/null || echo 0)"
 if [ "$SINGLE_CRATE_ALL_UNDER_CRATES" = true ] && [ "$SINGLE_CRATE_COUNT" = "1" ]; then
-    SINGLE_CRATE_NAME="$(printf '%s' "$SINGLE_CRATE_NAMES" | tr -d '[:space:]')"
-    echo "Single-crate push (${SINGLE_CRATE_NAME}) — running targeted gate"
+    SINGLE_CRATE_DIR="$(printf '%s' "$SINGLE_CRATE_NAMES" | tr -d '[:space:]')"
+    # Resolve the Cargo package name from Cargo.toml, not the directory basename.
+    # This fixes the perl-lsp -> perl-lsp-rs mismatch (issue #4512).
+    # Falls back to directory name if cargo xtask is unavailable.
+    SINGLE_CRATE_NAME="$(cargo xtask resolve-package-name "crates/${SINGLE_CRATE_DIR}" 2>/dev/null || printf '%s' "$SINGLE_CRATE_DIR")"
+    echo "Single-crate push (${SINGLE_CRATE_DIR} -> ${SINGLE_CRATE_NAME}) — running targeted gate"
     echo "   (Skip with: git push --no-verify)"
     echo ""
     run_single_crate_gate() {
@@ -3151,9 +3181,12 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
-fn is_allowlisted_prod_panic_hit(rel_path: &str, line: &str) -> bool {
-    normalize_path_for_match(rel_path) == "crates/perl-heredoc-anti-patterns/src/lib.rs"
-        && line.contains("regex failed to compile")
+fn is_allowlisted_prod_panic_hit(_rel_path: &str, line: &str) -> bool {
+    // Static LazyLock<Regex> initializers that use unreachable!() for known-good patterns
+    // are exempt regardless of which file they live in.  Two message conventions:
+    //   • "... regex failed to compile" — used in heredoc anti-pattern initializers
+    //   • "... is a known-good static pattern ..." — used in other static regex initializers
+    line.contains("regex failed to compile") || line.contains("known-good static pattern")
 }
 
 fn cmd_quick_check(repo_root: &Path) -> Result<i32> {
@@ -3288,10 +3321,8 @@ fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> 
     } else {
         repo_root.join(docs_dir)
     };
-    let home_machine = Regex::new(r"/home/[^u]")?;
-    let home_steven = Regex::new(r"/home/steven")?;
-    let users_machine = Regex::new(r"/Users/[^N]")?;
-    let users_placeholder = Regex::new(r"/Users/Name")?;
+    let home_user_path = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+    let users_name_path = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
 
     let mut hard_failures = Vec::new();
     let mut warnings = Vec::new();
@@ -3312,13 +3343,10 @@ fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> 
         let contents = fs::read_to_string(path)?;
         for (line_no, line) in contents.lines().enumerate() {
             let number = line_no + 1;
-            if home_machine.is_match(line) && !line.contains("/home/user") {
+            if has_machine_specific_home_path(line, &home_user_path) {
                 hard_failures.push(format!("{rel}:{number}:{line}"));
             }
-            if home_steven.is_match(line) {
-                hard_failures.push(format!("{rel}:{number}:{line}"));
-            }
-            if users_machine.is_match(line) && !users_placeholder.is_match(line) {
+            if has_machine_specific_users_path(line, &users_name_path) {
                 warnings.push(format!("{rel}:{number}:{line}"));
             }
         }
@@ -3348,6 +3376,21 @@ fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> 
     Ok(1)
 }
 
+fn has_machine_specific_home_path(line: &str, home_user_path: &Regex) -> bool {
+    home_user_path.captures_iter(line).any(|captures| {
+        captures.get(1).is_some_and(|name| !name.as_str().eq_ignore_ascii_case("user"))
+    })
+}
+
+fn has_machine_specific_users_path(line: &str, users_name_path: &Regex) -> bool {
+    users_name_path.captures_iter(line).any(|captures| {
+        captures.get(1).is_some_and(|name| {
+            let value = name.as_str();
+            !(value.eq_ignore_ascii_case("name") || value.eq_ignore_ascii_case("user"))
+        })
+    })
+}
+
 fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
     let baseline_path = repo_root.join("ci").join("todo_baseline.txt");
     // "xtask" is excluded because it is build tooling whose source code documents and implements
@@ -3373,7 +3416,7 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
             .join("complex_paren_args_tests.rs"),
     ];
 
-    let todo_re = Regex::new(r"TODO|FIXME")?;
+    let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
     let entries = collect_todo_hits(repo_root, &exclude_dirs, &exclude_files, &todo_re)?;
 
     if list_mode {
@@ -3813,9 +3856,21 @@ fn collect_todo_hits(
             continue;
         }
         let contents = read_lines(path)?;
+        let mut raw_string_state = None;
+        let mut in_block_comment = false;
         for (line_no, line) in contents.iter().enumerate() {
             let match_line = if is_rust {
-                has_unlinked_todo_in_rust_line(line, todo_re)
+                has_unlinked_todo_in_rust_line_with_context(
+                    line,
+                    todo_re,
+                    &mut raw_string_state,
+                    &mut in_block_comment,
+                )
+            } else if path
+                .extension()
+                .is_some_and(|ext| matches!(ext.to_str(), Some("pl" | "pm" | "t")))
+            {
+                has_unlinked_todo_in_perl_line(line, todo_re)
             } else {
                 has_unlinked_todo_in_hash_line(line, todo_re)
             };
@@ -3828,37 +3883,339 @@ fn collect_todo_hits(
     Ok(hits)
 }
 
+#[cfg(test)]
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
-    let mut has_hit = false;
-    if let Some(idx) = line.find("//")
-        && !is_url_like_hash_comment(line, idx)
-        && has_unlinked_token(&line[idx + 2..], token_re)
-    {
-        has_hit = true;
+    let mut raw_string_state = None;
+    let mut in_block_comment = false;
+    has_unlinked_todo_in_rust_line_with_context(
+        line,
+        token_re,
+        &mut raw_string_state,
+        &mut in_block_comment,
+    )
+}
+
+#[cfg(test)]
+fn has_unlinked_todo_in_rust_line_with_block_context(
+    line: &str,
+    token_re: &Regex,
+    in_block_comment: &mut bool,
+) -> bool {
+    let mut raw_string_state = None;
+    has_unlinked_todo_in_rust_line_with_context(
+        line,
+        token_re,
+        &mut raw_string_state,
+        in_block_comment,
+    )
+}
+
+#[cfg(test)]
+fn has_unlinked_todo_in_rust_line_with_state(
+    line: &str,
+    token_re: &Regex,
+    raw_string_state: &mut Option<usize>,
+) -> bool {
+    let mut in_block_comment = false;
+    has_unlinked_todo_in_rust_line_with_context(
+        line,
+        token_re,
+        raw_string_state,
+        &mut in_block_comment,
+    )
+}
+
+fn has_unlinked_todo_in_rust_line_with_context(
+    line: &str,
+    token_re: &Regex,
+    raw_string_state: &mut Option<usize>,
+    in_block_comment: &mut bool,
+) -> bool {
+    if *in_block_comment {
+        if let Some(end_idx) = find_block_comment_end(line, 0) {
+            let mut found = has_unlinked_token(&line[..end_idx], token_re);
+            *in_block_comment = false;
+            found |= has_unlinked_todo_in_rust_line_with_context(
+                &line[end_idx + 2..],
+                token_re,
+                raw_string_state,
+                in_block_comment,
+            );
+            return found;
+        }
+        return has_unlinked_token(line, token_re);
     }
-    if let Some(idx) = line.find("/*")
-        && has_unlinked_token(&line[idx + 2..], token_re)
-    {
-        has_hit = true;
+
+    for (idx, _) in line.match_indices("//") {
+        if is_index_in_rust_literal(line, idx, *raw_string_state) {
+            continue;
+        }
+        if is_url_like_hash_comment(line, idx) {
+            continue;
+        }
+        if is_likely_string_literal_comment_start(line, idx) {
+            continue;
+        }
+        return has_unlinked_token(&line[idx + 2..], token_re);
     }
-    let trimmed = line.trim_start();
-    if trimmed.starts_with('*') && has_unlinked_token(trimmed, token_re) {
-        has_hit = true;
+
+    for (idx, _) in line.match_indices("/*") {
+        if is_index_in_rust_literal(line, idx, *raw_string_state) {
+            continue;
+        }
+        if is_likely_string_literal_comment_start(line, idx) {
+            continue;
+        }
+        if let Some(end_idx) = find_block_comment_end(line, idx + 2) {
+            if has_unlinked_token(&line[idx + 2..end_idx], token_re) {
+                return true;
+            }
+            continue;
+        }
+        *in_block_comment = true;
+        return has_unlinked_token(&line[idx + 2..], token_re);
     }
-    has_hit
+
+    *raw_string_state = rust_raw_string_state_after_line(line, *raw_string_state);
+    false
+}
+
+fn find_block_comment_end(line: &str, start_idx: usize) -> Option<usize> {
+    let mut depth = 1usize;
+    let mut cursor = start_idx;
+
+    while cursor < line.len() {
+        let next_open = line[cursor..]
+            .match_indices("/*")
+            .map(|(rel_idx, _)| cursor + rel_idx)
+            .find(|&idx| !is_index_in_rust_literal(line, idx, None));
+        let next_close = line[cursor..]
+            .match_indices("*/")
+            .map(|(rel_idx, _)| cursor + rel_idx)
+            .find(|&idx| !is_index_in_rust_literal(line, idx, None));
+
+        match (next_open, next_close) {
+            (_, None) => return None,
+            (None, Some(close_idx)) => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(close_idx);
+                }
+                cursor = close_idx + 2;
+            }
+            (Some(open_idx), Some(close_idx)) if open_idx < close_idx => {
+                depth += 1;
+                cursor = open_idx + 2;
+            }
+            (_, Some(close_idx)) => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(close_idx);
+                }
+                cursor = close_idx + 2;
+            }
+        }
+    }
+
+    None
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
-    if let Some(idx) = line.find('#') {
-        if idx > 0 && line.as_bytes()[idx - 1] == b'!' {
-            return false;
+    let Some(idx) = find_hash_comment_start(line, false) else {
+        return false;
+    };
+    has_unlinked_token(&line[idx + 1..], token_re)
+}
+
+fn has_unlinked_todo_in_perl_line(line: &str, token_re: &Regex) -> bool {
+    let Some(idx) = find_hash_comment_start(line, true) else {
+        return false;
+    };
+    has_unlinked_token(&line[idx + 1..], token_re)
+}
+
+#[derive(Clone, Copy)]
+struct PerlQuoteLikeState {
+    close_delimiter: char,
+    remaining_closures: u8,
+    escaped: bool,
+}
+
+fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut in_backtick = false;
+    let mut prev_was_escape_single = false;
+    let mut prev_was_escape_double = false;
+    let mut prev_was_escape_backtick = false;
+    let mut perl_quote_like: Option<PerlQuoteLikeState> = None;
+
+    for (idx, ch) in line.char_indices() {
+        if let Some(mut quote_like) = perl_quote_like {
+            if quote_like.escaped {
+                quote_like.escaped = false;
+                perl_quote_like = Some(quote_like);
+                continue;
+            }
+            if ch == '\\' {
+                quote_like.escaped = true;
+                perl_quote_like = Some(quote_like);
+                continue;
+            }
+            if ch == quote_like.close_delimiter {
+                quote_like.remaining_closures = quote_like.remaining_closures.saturating_sub(1);
+                if quote_like.remaining_closures == 0 {
+                    perl_quote_like = None;
+                } else {
+                    perl_quote_like = Some(quote_like);
+                }
+            } else {
+                perl_quote_like = Some(quote_like);
+            }
+            continue;
         }
-        if idx > 0 && !line[..idx].chars().next_back().is_some_and(char::is_whitespace) {
-            return false;
+
+        if in_single {
+            if prev_was_escape_single {
+                prev_was_escape_single = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_was_escape_single = true;
+                continue;
+            }
+            if ch == '\'' {
+                in_single = false;
+                prev_was_escape_single = false;
+            }
+            continue;
         }
-        has_unlinked_token(&line[idx + 1..], token_re)
+        if in_double {
+            if prev_was_escape_double {
+                prev_was_escape_double = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_was_escape_double = true;
+                continue;
+            }
+            if ch == '"' {
+                in_double = false;
+            }
+            continue;
+        }
+        if in_backtick {
+            if prev_was_escape_backtick {
+                prev_was_escape_backtick = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_was_escape_backtick = true;
+                continue;
+            }
+            if ch == '`' {
+                in_backtick = false;
+            }
+            continue;
+        }
+
+        if perl_mode && let Some(state) = perl_quote_like_state_at_delimiter(line, idx) {
+            perl_quote_like = Some(state);
+            continue;
+        }
+
+        match ch {
+            '\'' => {
+                in_single = true;
+                prev_was_escape_single = false;
+            }
+            '"' => {
+                in_double = true;
+                prev_was_escape_double = false;
+            }
+            '`' => {
+                in_backtick = true;
+                prev_was_escape_backtick = false;
+            }
+            '#' => {
+                // Bash/Perl parameter-length expansion (`${#var}`) is not a comment.
+                if idx >= 2 && line.as_bytes().get(idx - 2..idx) == Some(b"${") {
+                    continue;
+                }
+                if idx == 0 && line.as_bytes().get(1) == Some(&b'!') {
+                    return None;
+                }
+                if idx == 0 {
+                    return Some(idx);
+                }
+                if perl_mode {
+                    return Some(idx);
+                }
+                if let Some(prev) = line[..idx].chars().next_back()
+                    && (prev.is_whitespace()
+                        || matches!(
+                            prev,
+                            ';' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|' | '<' | '>' | ','
+                        ))
+                {
+                    return Some(idx);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn perl_quote_like_state_at_delimiter(
+    line: &str,
+    delimiter_idx: usize,
+) -> Option<PerlQuoteLikeState> {
+    let delimiter = line[delimiter_idx..].chars().next()?;
+    if delimiter.is_ascii_alphanumeric() || delimiter.is_ascii_whitespace() || delimiter == '_' {
+        return None;
+    }
+
+    let prefix = &line[..delimiter_idx];
+    let mut op_end = prefix.len();
+
+    while op_end > 0 && prefix.as_bytes()[op_end - 1].is_ascii_whitespace() {
+        op_end -= 1;
+    }
+    if op_end == 0 {
+        return None;
+    }
+
+    let mut op_start = op_end;
+    while op_start > 0 && prefix.as_bytes()[op_start - 1].is_ascii_alphabetic() {
+        op_start -= 1;
+    }
+
+    if op_start == op_end {
+        return None;
+    }
+
+    if op_start > 0 {
+        let before = prefix.as_bytes()[op_start - 1];
+        if before.is_ascii_alphanumeric() || before == b'_' || matches!(before, b'$' | b'@' | b'%')
+        {
+            return None;
+        }
+    }
+
+    let op = &prefix[op_start..op_end];
+    let remaining_closures = if matches!(op, "s" | "tr" | "y") { 2 } else { 1 };
+    let close_delimiter = match delimiter {
+        '(' => ')',
+        '{' => '}',
+        '[' => ']',
+        '<' => '>',
+        other => other,
+    };
+    if matches!(op, "m" | "q" | "qq" | "qw" | "qx" | "qr" | "s" | "tr" | "y") {
+        Some(PerlQuoteLikeState { close_delimiter, remaining_closures, escaped: false })
     } else {
-        false
+        None
     }
 }
 
@@ -3870,6 +4227,201 @@ fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
     matches!(before, b'/' | b':' | b'"')
 }
 
+fn is_likely_string_literal_comment_start(line: &str, comment_idx: usize) -> bool {
+    if comment_idx == 0 {
+        return false;
+    }
+    matches!(line.as_bytes()[comment_idx - 1], b'"' | b'\'' | b'#')
+}
+
+fn is_index_in_rust_literal(
+    line: &str,
+    target_idx: usize,
+    initial_raw_hashes: Option<usize>,
+) -> bool {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    let mut in_string = false;
+    let mut in_char = false;
+    let mut escape = false;
+    let mut raw_hashes = initial_raw_hashes;
+
+    while i < bytes.len() && i < target_idx {
+        if let Some(hash_count) = raw_hashes {
+            if bytes[i] == b'"'
+                && i + 1 + hash_count <= bytes.len()
+                && bytes[i + 1..i + 1 + hash_count].iter().all(|&b| b == b'#')
+            {
+                raw_hashes = None;
+                i += 1 + hash_count;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_string {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_char {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'\'' {
+                in_char = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if is_prefixed_string_start(bytes, i, b'b') || is_prefixed_string_start(bytes, i, b'c') {
+            in_string = true;
+            i += 2;
+            continue;
+        }
+
+        let raw_prefix_len = raw_string_prefix_len(bytes, i);
+        if raw_prefix_len > 0 {
+            let mut j = i + raw_prefix_len;
+            while j < bytes.len() && bytes[j] == b'#' {
+                j += 1;
+            }
+            if j < bytes.len() && bytes[j] == b'"' {
+                raw_hashes = Some(j.saturating_sub(i + raw_prefix_len));
+                i = j + 1;
+                continue;
+            }
+        }
+
+        if bytes[i] == b'"' {
+            in_string = true;
+            i += 1;
+            continue;
+        }
+
+        if bytes[i] == b'\'' {
+            in_char = true;
+            i += 1;
+            continue;
+        }
+
+        i += 1;
+    }
+
+    in_string || in_char || raw_hashes.is_some()
+}
+
+fn is_prefixed_string_start(bytes: &[u8], idx: usize, prefix: u8) -> bool {
+    bytes[idx] == prefix && idx + 1 < bytes.len() && bytes[idx + 1] == b'"'
+}
+
+fn raw_string_prefix_len(bytes: &[u8], idx: usize) -> usize {
+    if bytes[idx] == b'r' {
+        return 1;
+    }
+    if idx + 1 < bytes.len() && (bytes[idx] == b'b' || bytes[idx] == b'c') && bytes[idx + 1] == b'r'
+    {
+        return 2;
+    }
+    0
+}
+
+fn rust_raw_string_state_after_line(
+    line: &str,
+    initial_raw_hashes: Option<usize>,
+) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    let mut in_string = false;
+    let mut in_char = false;
+    let mut escape = false;
+    let mut raw_hashes = initial_raw_hashes;
+
+    while i < bytes.len() {
+        if let Some(hash_count) = raw_hashes {
+            if bytes[i] == b'"'
+                && i + 1 + hash_count <= bytes.len()
+                && bytes[i + 1..i + 1 + hash_count].iter().all(|&b| b == b'#')
+            {
+                raw_hashes = None;
+                i += 1 + hash_count;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_string {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_char {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'\'' {
+                in_char = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if is_prefixed_string_start(bytes, i, b'b') || is_prefixed_string_start(bytes, i, b'c') {
+            in_string = true;
+            i += 2;
+            continue;
+        }
+
+        let raw_prefix_len = raw_string_prefix_len(bytes, i);
+        if raw_prefix_len > 0 {
+            let mut j = i + raw_prefix_len;
+            while j < bytes.len() && bytes[j] == b'#' {
+                j += 1;
+            }
+            if j < bytes.len() && bytes[j] == b'"' {
+                raw_hashes = Some(j.saturating_sub(i + raw_prefix_len));
+                i = j + 1;
+                continue;
+            }
+        }
+
+        if bytes[i] == b'"' {
+            in_string = true;
+            i += 1;
+            continue;
+        }
+
+        if bytes[i] == b'\'' {
+            in_char = true;
+            i += 1;
+            continue;
+        }
+
+        i += 1;
+    }
+
+    raw_hashes
+}
+
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
     for m in token_re.find_iter(comment) {
         let suffix = &comment[m.end()..];
@@ -3877,11 +4429,35 @@ fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
             return true;
         }
     }
+    let upper_comment = comment.to_ascii_uppercase();
+    for token in ["TODO", "FIXME"] {
+        for (idx, _) in upper_comment.match_indices(token) {
+            if !is_ascii_word_boundary(comment, idx, idx + token.len()) {
+                continue;
+            }
+            let suffix = &comment[idx + token.len()..];
+            if !linked_marker(suffix) {
+                return true;
+            }
+        }
+    }
     false
 }
 
+fn is_ascii_word_boundary(s: &str, start: usize, end: usize) -> bool {
+    let bytes = s.as_bytes();
+    let prev_ok =
+        start == 0 || !bytes[start - 1].is_ascii_alphanumeric() && bytes[start - 1] != b'_';
+    let next_ok = end >= bytes.len() || !bytes[end].is_ascii_alphanumeric() && bytes[end] != b'_';
+    prev_ok && next_ok
+}
+
 fn linked_marker(suffix: &str) -> bool {
-    let suffix = suffix.trim_start();
+    let mut suffix = suffix.trim_start();
+    while let Some(next) = suffix.strip_prefix(':').or_else(|| suffix.strip_prefix('-')) {
+        suffix = next.trim_start();
+    }
+
     let Some(rest) = suffix.strip_prefix("(#") else {
         return false;
     };
@@ -3972,6 +4548,7 @@ fn collect_ignored_matches(crates_root: &Path, repo_root: &Path) -> Result<Vec<I
 fn categorize_ignore(reason: &str, context: &str) -> String {
     let reason = reason.trim().to_lowercase();
     let context = context.to_lowercase();
+    let reason_no_space = reason.replace(' ', "");
 
     if reason.starts_with("manual:")
         || reason.contains("manual ")
@@ -4011,6 +4588,7 @@ fn categorize_ignore(reason: &str, context: &str) -> String {
         return "bug".to_string();
     }
     if reason.starts_with("todo:")
+        || reason_no_space.starts_with("todo(#")
         || reason.starts_with("infra:")
         || reason.contains("infra ")
         || reason.contains("fixme")
@@ -4034,7 +4612,8 @@ fn categorize_ignore(reason: &str, context: &str) -> String {
         || reason.contains("pending")
         || reason.contains("when.implemented")
         || reason.contains("remove.when")
-        || reason.contains("ac")
+        || reason.contains("ac:")
+        || reason.contains("ac ")
         || reason.contains("not.yet")
         || reason.contains("tdd.scaffold")
         || reason.contains("scaffold")
@@ -4110,6 +4689,9 @@ mod tests {
     fn linked_marker_requires_parenthesized_issue_number() {
         assert!(linked_marker("(#123)"));
         assert!(linked_marker("   (#42) trailing text"));
+        assert!(linked_marker(": (#42) trailing text"));
+        assert!(linked_marker(" - (#42) trailing text"));
+        assert!(linked_marker(":- (#42) trailing text"));
         assert!(!linked_marker("#123"));
         assert!(!linked_marker("(#)"));
         assert!(!linked_marker("(#12"));
@@ -4118,24 +4700,365 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_ignores_linked_or_url_like_comments() -> Result<()> {
-        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
 
         assert!(has_unlinked_todo_in_rust_line("// TODO: investigate", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line("// todo: investigate", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line("// FiXmE: investigate", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line("// TODO(#123): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line("// todo(#123): tracked", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line("let u = \"http://TODO\";", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let u = \"http://TODO\"; // TODO: investigate",
+            &todo_re
+        ));
         assert!(has_unlinked_todo_in_rust_line("/* FIXME: needs fix */", &todo_re));
 
         Ok(())
     }
 
     #[test]
-    fn hash_comment_todo_detection_handles_shebang_and_inline_hashes() -> Result<()> {
+    fn rust_todo_detection_ignores_raw_string_comment_markers() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line("let s = r#\"// TODO in literal\"#;", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = r#\"/* FIXME in literal */\"#;",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_c_string_comment_markers() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line("let s = c\"// TODO in literal\";", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = cr#\"/* FIXME in literal */\"#;",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let s = c\"safe literal\"; // TODO: follow up",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_multiline_raw_string_content() -> Result<()> {
         let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut raw_state = None;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_state(
+            "let s = r#\"",
+            &todo_re,
+            &mut raw_state,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_state(
+            "// TODO in multiline raw literal",
+            &todo_re,
+            &mut raw_state,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_state("\"#;", &todo_re, &mut raw_state,));
+        assert!(has_unlinked_todo_in_rust_line_with_state(
+            "// TODO: actual follow-up comment",
+            &todo_re,
+            &mut raw_state,
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_multiline_c_raw_string_content() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut raw_state = None;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_state(
+            "let s = cr#\"",
+            &todo_re,
+            &mut raw_state,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_state(
+            "// TODO in multiline C raw literal",
+            &todo_re,
+            &mut raw_state,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_state("\"#;", &todo_re, &mut raw_state,));
+        assert!(has_unlinked_todo_in_rust_line_with_state(
+            "// TODO: actual follow-up comment",
+            &todo_re,
+            &mut raw_state,
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_non_raw_string_comment_markers() -> Result<()> {
+        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = \"not a comment // TODO in literal\";",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = \"block marker /* FIXME in literal */\";",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let s = \"safe literal\"; // TODO: follow up",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn todo_detection_uses_word_boundaries() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line("// METHODOLOGY notes", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line("// PREFIXME suffix", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line("// TODO: real marker", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi # FIXME: real marker", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_c_string_literals() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line("let s = c\"// TODO in C string\";", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = cr#\"/* FIXME in C raw string */\"#;",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line("let s = c\"safe\"; // TODO: follow up", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_scans_only_block_comment_text() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line(
+            "/* tracked */ let s = \"TODO in code string\";",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "/* TODO: follow up */ let s = \"safe\";",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "/* TODO(#123): tracked */ let s = \"safe\";",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_tracks_multiline_block_comments_across_lines() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+        let mut in_block_comment = false;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "/* context",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(in_block_comment);
+        assert!(has_unlinked_todo_in_rust_line_with_block_context(
+            "  TODO: capture this follow-up",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(in_block_comment);
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "*/ let x = 1;",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!in_block_comment);
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_linked_todos_inside_multiline_block_comments() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut in_block_comment = false;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "/* header",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            " * TODO(#123): tracked",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            " */",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!in_block_comment);
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_handles_nested_block_comments() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(has_unlinked_todo_in_rust_line(
+            "let x = 1; /* outer /* nested */ TODO: follow up */",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let x = 1; /* outer /* nested */ TODO(#42): tracked */",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn hash_comment_todo_detection_handles_shebang_and_inline_hashes() -> Result<()> {
+        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
 
         assert!(!has_unlinked_todo_in_hash_line("#!/usr/bin/env bash", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("len=${#TODO_COUNT}", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi;# TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi;# fixme: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo \"#not-a-comment\" # TODO: follow up",
+            &todo_re,
+        ));
+        assert!(!has_unlinked_todo_in_hash_line("echo '# TODO in string' && true", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line(r"print 'it\'s # TODO in string';", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo '# TODO in string' # TODO: follow up",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line("print 'it\\'s # TODO in string';", &todo_re,));
+        assert!(has_unlinked_todo_in_hash_line(
+            "print 'it\\'s # TODO in string'; # TODO: follow up",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_hash_line(
+            r"print 'it\'s # TODO in string'; # TODO: follow up",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_hash_line("echo ok&&# TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo ok||# TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("cat <# TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("cat ># TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("len=${#value} # TODO: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi&&# TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi||# TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("echo `printf '# TODO in backticks'`", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo `printf '# TODO in backticks'` # TODO: follow up",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_hash_line("my @x = (1,# TODO: follow up", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("my @x = (1,# TODO(#77): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("print 'it\\'s # TODO in string';", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "print 'it\\'s # TODO in string'; # TODO: follow up",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "printf $'it\\'s # TODO in string' && true",
+            &todo_re,
+        ));
+        assert!(has_unlinked_todo_in_hash_line(
+            "printf $'it\\'s # TODO in string' # TODO: follow up",
+            &todo_re,
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn hash_comment_todo_detection_handles_escaped_quotes_before_comment() -> Result<()> {
+        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
+
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo \"quoted \\\"value\\\"\" # TODO: follow up",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo \"quoted # TODO in string\" && true",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn perl_todo_detection_allows_comment_start_without_whitespace() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(has_unlinked_todo_in_perl_line("print# TODO: perl comment", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $s = '# TODO in string';", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("print# TODO(#123): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $re = m#TODO#;", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $s = q#TODO#;", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $s = qq #TODO#;", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $s = s#foo#TODO#;", &todo_re));
+        assert!(has_unlinked_todo_in_perl_line(
+            "my $s = s#foo#bar#; # TODO: add edge-cases",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+    #[test]
+    fn home_path_detection_only_allows_generic_user_examples() -> Result<()> {
+        let home_user_path = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+
+        assert!(!has_machine_specific_home_path(
+            "Use /home/user/project as the example.",
+            &home_user_path,
+        ));
+        assert!(has_machine_specific_home_path(
+            "My path is /home/ubuntu/workspace/perl-lsp",
+            &home_user_path,
+        ));
+        assert!(has_machine_specific_home_path("Local path: /home/u/project", &home_user_path,));
+
+        Ok(())
+    }
+
+    #[test]
+    fn users_path_detection_only_allows_generic_name_examples() -> Result<()> {
+        let users_name_path = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
+
+        assert!(!has_machine_specific_users_path(
+            "Template: /Users/Name/project",
+            &users_name_path,
+        ));
+        assert!(!has_machine_specific_users_path(
+            "Template: /Users/user/project",
+            &users_name_path,
+        ));
+        assert!(has_machine_specific_users_path(
+            "Personal path: /Users/alice/dev/perl-lsp",
+            &users_name_path,
+        ));
 
         Ok(())
     }
@@ -4144,8 +5067,12 @@ mod tests {
     fn categorize_ignore_maps_reasons_to_expected_buckets() {
         assert_eq!(categorize_ignore("manual: run locally", ""), "manual");
         assert_eq!(categorize_ignore("TODO: requires CI setup", ""), "infra");
+        assert_eq!(categorize_ignore("TODO(#123): tracked follow-up", ""), "infra");
+        assert_eq!(categorize_ignore("TODO (#123): tracked follow-up", ""), "infra");
         assert_eq!(categorize_ignore("feature: not implemented", ""), "feature");
+        assert_eq!(categorize_ignore("AC: parser behavior", ""), "feature");
         assert_eq!(categorize_ignore("placeholder", "#[ignore] // AC: parser behavior"), "feature");
+        assert_eq!(categorize_ignore("cache invalidation follow-up", ""), "other");
         assert_eq!(categorize_ignore("ignore", ""), "bare");
         assert_eq!(categorize_ignore("some new reason", ""), "other");
     }
@@ -4178,7 +5105,7 @@ mod tests {
             r"crates\perl-parser\src\bin\perl-parse.rs:127:std::process::exit(0);"
         ));
         assert!(is_allowlisted_exit_hit(
-            "crates/perl-lsp/src/runtime/dispatch/lifecycle.rs:29:std::process::exit(exit_code);"
+            "crates/perl-lsp-rs/src/runtime/dispatch/lifecycle.rs:29:std::process::exit(exit_code);"
         ));
         assert!(!is_allowlisted_exit_hit(
             r#"crates\perl-ci-hygiene\src\main.rs:3196:println!("std::process::exit")"#
@@ -4187,23 +5114,35 @@ mod tests {
 
     #[test]
     fn allowlisted_prod_panic_hit_matches_heredoc_regex_initializers() {
+        // Line content is the discriminator — path no longer matters after the
+        // heredoc anti-patterns module moved into perl-parser.
+        assert!(is_allowlisted_prod_panic_hit(
+            "crates/perl-parser/src/heredoc_anti_patterns.rs",
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+        ));
+        assert!(is_allowlisted_prod_panic_hit(
+            r"crates\perl-parser\src\heredoc_anti_patterns.rs",
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+        ));
+        // Old path still matches (line content drives the decision)
         assert!(is_allowlisted_prod_panic_hit(
             "crates/perl-heredoc-anti-patterns/src/lib.rs",
             r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
         ));
+        // "known-good static pattern" convention used in other LazyLock<Regex> initializers
         assert!(is_allowlisted_prod_panic_hit(
-            r"crates\perl-heredoc-anti-patterns\src\lib.rs",
-            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+            "crates/perl-lsp-rs/src/runtime/language/code_actions.rs",
+            r#"        Err(err) => unreachable!("GLOBAL_VAR_ASSIGNMENT_RE is a known-good static pattern: {err}"),"#
         ));
+        // Bare unreachable!() without a qualifying message is NOT allowlisted
         assert!(!is_allowlisted_prod_panic_hit(
             "crates/perl-lsp-diagnostics/src/lints/ffi_checklib.rs",
             r#"                        _ => unreachable!(),"#
         ));
     }
 
-    // Regression guard for issue #4245: is_allowlisted_prod_panic_hit() must pass
-    // all 7 unreachable!() calls in perl-heredoc-anti-patterns/src/lib.rs under
-    // both forward-slash and backslash path separators (Windows vs Unix).
+    // Regression guard for issue #4245: all unreachable!() calls in the heredoc
+    // anti-patterns module must be allowlisted regardless of which file they live in.
     #[test]
     fn allowlisted_prod_panic_hit_all_seven_patterns_both_separators() {
         let all_seven = [
@@ -4215,8 +5154,8 @@ mod tests {
             r#"        Err(_) => unreachable!("EVAL_HEREDOC_PATTERN regex failed to compile"),"#,
             r#"    Err(_) => unreachable!("TIE_PATTERN regex failed to compile"),"#,
         ];
-        let forward = "crates/perl-heredoc-anti-patterns/src/lib.rs";
-        let backward = r"crates\perl-heredoc-anti-patterns\src\lib.rs";
+        let forward = "crates/perl-parser/src/heredoc_anti_patterns.rs";
+        let backward = r"crates\perl-parser\src\heredoc_anti_patterns.rs";
         for line in &all_seven {
             assert!(
                 is_allowlisted_prod_panic_hit(forward, line),

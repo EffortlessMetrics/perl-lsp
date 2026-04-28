@@ -1,0 +1,175 @@
+pub mod perl_parser
+pub use perl_parser::DuplicateImport
+pub use perl_parser::HoverInfo
+pub use perl_parser::ImportAnalysis
+pub use perl_parser::ImportEntry
+pub use perl_parser::ImportOptimizer
+pub use perl_parser::IssueKind
+pub use perl_parser::LineEnding
+pub use perl_parser::MissingImport
+pub use perl_parser::ModernizationPattern
+pub use perl_parser::Node
+pub use perl_parser::NodeKind
+pub use perl_parser::NodeWithTrivia
+pub use perl_parser::OrganizationSuggestion
+pub use perl_parser::ParseError
+pub use perl_parser::ParseResult
+pub use perl_parser::Parser
+pub use perl_parser::PerlType
+pub use perl_parser::PositionMapper
+pub use perl_parser::PragmaState
+pub use perl_parser::PragmaTracker
+pub use perl_parser::RefactoringConfig
+pub use perl_parser::RefactoringEngine
+pub use perl_parser::RefactoringOperation
+pub use perl_parser::RefactoringResult
+pub use perl_parser::RefactoringScope
+pub use perl_parser::RefactoringType
+pub use perl_parser::ScalarType
+pub use perl_parser::ScopeAnalyzer
+pub use perl_parser::ScopeIssue
+pub use perl_parser::SemanticAnalyzer
+pub use perl_parser::SemanticModel
+pub use perl_parser::SemanticToken
+pub use perl_parser::SemanticTokenModifier
+pub use perl_parser::SemanticTokenType
+pub use perl_parser::SourceLocation
+pub use perl_parser::SuggestionPriority
+pub use perl_parser::Symbol
+pub use perl_parser::SymbolExtractor
+pub use perl_parser::SymbolKind
+pub use perl_parser::SymbolReference
+pub use perl_parser::SymbolTable
+pub use perl_parser::Token
+pub use perl_parser::TokenKind
+pub use perl_parser::TokenStream
+pub use perl_parser::Trivia
+pub use perl_parser::TriviaPreservingParser
+pub use perl_parser::TriviaToken
+pub use perl_parser::TypeBasedCompletion
+pub use perl_parser::TypeConstraint
+pub use perl_parser::TypeEnvironment
+pub use perl_parser::TypeInferenceEngine
+pub use perl_parser::TypeLocation
+pub use perl_parser::UnusedImport
+pub use perl_parser::ast
+pub use perl_parser::ast_v2
+pub use perl_parser::builtin_signatures
+pub use perl_parser::builtin_signatures_phf
+pub use perl_parser::dead_code_detector
+pub use perl_parser::declaration
+pub use perl_parser::document_store
+pub use perl_parser::edit
+pub use perl_parser::error
+pub use perl_parser::error_classifier
+pub use perl_parser::error_recovery
+pub use perl_parser::format_with_trivia
+pub use perl_parser::heredoc_collector
+pub use perl_parser::import_optimizer
+pub use perl_parser::index
+pub use perl_parser::line_index
+pub use perl_parser::modernize
+pub use perl_parser::modernize_refactored
+pub use perl_parser::parser
+pub use perl_parser::parser_context
+pub use perl_parser::path_normalize
+pub use perl_parser::path_security
+pub use perl_parser::percentile
+pub use perl_parser::position
+pub use perl_parser::pragma_tracker
+pub use perl_parser::qualified_name
+pub use perl_parser::quote_parser
+pub use perl_parser::refactoring
+pub use perl_parser::scope_analyzer
+pub use perl_parser::semantic
+pub use perl_parser::source_file
+pub use perl_parser::symbol
+pub use perl_parser::tdd_basic
+pub use perl_parser::test_generator
+pub use perl_parser::test_runner
+pub use perl_parser::text_line
+pub use perl_parser::token_stream
+pub use perl_parser::token_wrapper
+pub use perl_parser::trivia
+pub use perl_parser::trivia_parser
+pub use perl_parser::type_inference
+pub use perl_parser::util
+pub use perl_parser::workspace_index
+pub use perl_parser::workspace_refactor
+pub use perl_parser::workspace_rename
+pub mod perl_parser::analysis
+pub use perl_parser::analysis::<<perl_semantic_analyzer::analysis::*>>
+pub mod perl_parser::ast_utils
+pub fn perl_parser::ast_utils::find_declaration_position(source: &str, error_pos: usize) -> usize
+pub fn perl_parser::ast_utils::find_function_insert_position(source: &str) -> usize
+pub fn perl_parser::ast_utils::find_node_at_range(node: &perl_ast::ast::Node, range: (usize, usize)) -> core::option::Option<&perl_ast::ast::Node>
+pub fn perl_parser::ast_utils::find_statement_start(source: &str, pos: usize) -> usize
+pub fn perl_parser::ast_utils::get_indent_at(source: &str, pos: usize) -> alloc::string::String
+pub mod perl_parser::builtins
+pub use perl_parser::builtins::<<perl_parser_core::builtins::*>>
+pub mod perl_parser::engine
+pub use perl_parser::engine::<<perl_parser_core::engine::*>>
+pub mod perl_parser::heredoc_anti_patterns
+pub enum perl_parser::heredoc_anti_patterns::AntiPattern
+pub perl_parser::heredoc_anti_patterns::AntiPattern::BeginTimeHeredoc
+pub perl_parser::heredoc_anti_patterns::AntiPattern::BeginTimeHeredoc::heredoc_content: alloc::string::String
+pub perl_parser::heredoc_anti_patterns::AntiPattern::BeginTimeHeredoc::location: perl_parser::heredoc_anti_patterns::Location
+pub perl_parser::heredoc_anti_patterns::AntiPattern::BeginTimeHeredoc::side_effects: alloc::vec::Vec<alloc::string::String>
+pub perl_parser::heredoc_anti_patterns::AntiPattern::DynamicHeredocDelimiter
+pub perl_parser::heredoc_anti_patterns::AntiPattern::DynamicHeredocDelimiter::expression: alloc::string::String
+pub perl_parser::heredoc_anti_patterns::AntiPattern::DynamicHeredocDelimiter::location: perl_parser::heredoc_anti_patterns::Location
+pub perl_parser::heredoc_anti_patterns::AntiPattern::EvalStringHeredoc
+pub perl_parser::heredoc_anti_patterns::AntiPattern::EvalStringHeredoc::location: perl_parser::heredoc_anti_patterns::Location
+pub perl_parser::heredoc_anti_patterns::AntiPattern::FormatHeredoc
+pub perl_parser::heredoc_anti_patterns::AntiPattern::FormatHeredoc::format_name: alloc::string::String
+pub perl_parser::heredoc_anti_patterns::AntiPattern::FormatHeredoc::heredoc_delimiter: alloc::string::String
+pub perl_parser::heredoc_anti_patterns::AntiPattern::FormatHeredoc::location: perl_parser::heredoc_anti_patterns::Location
+pub perl_parser::heredoc_anti_patterns::AntiPattern::RegexCodeBlockHeredoc
+pub perl_parser::heredoc_anti_patterns::AntiPattern::RegexCodeBlockHeredoc::location: perl_parser::heredoc_anti_patterns::Location
+pub perl_parser::heredoc_anti_patterns::AntiPattern::SourceFilterHeredoc
+pub perl_parser::heredoc_anti_patterns::AntiPattern::SourceFilterHeredoc::location: perl_parser::heredoc_anti_patterns::Location
+pub perl_parser::heredoc_anti_patterns::AntiPattern::SourceFilterHeredoc::module: alloc::string::String
+pub perl_parser::heredoc_anti_patterns::AntiPattern::TiedHandleHeredoc
+pub perl_parser::heredoc_anti_patterns::AntiPattern::TiedHandleHeredoc::handle_name: alloc::string::String
+pub perl_parser::heredoc_anti_patterns::AntiPattern::TiedHandleHeredoc::location: perl_parser::heredoc_anti_patterns::Location
+pub fn perl_parser::heredoc_anti_patterns::AntiPattern::clone(&self) -> perl_parser::heredoc_anti_patterns::AntiPattern
+pub fn perl_parser::heredoc_anti_patterns::AntiPattern::eq(&self, other: &perl_parser::heredoc_anti_patterns::AntiPattern) -> bool
+pub fn perl_parser::heredoc_anti_patterns::AntiPattern::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum perl_parser::heredoc_anti_patterns::Severity
+pub perl_parser::heredoc_anti_patterns::Severity::Error
+pub perl_parser::heredoc_anti_patterns::Severity::Info
+pub perl_parser::heredoc_anti_patterns::Severity::Warning
+pub fn perl_parser::heredoc_anti_patterns::Severity::clone(&self) -> perl_parser::heredoc_anti_patterns::Severity
+pub fn perl_parser::heredoc_anti_patterns::Severity::eq(&self, other: &perl_parser::heredoc_anti_patterns::Severity) -> bool
+pub fn perl_parser::heredoc_anti_patterns::Severity::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct perl_parser::heredoc_anti_patterns::AntiPatternDetector
+pub fn perl_parser::heredoc_anti_patterns::AntiPatternDetector::detect_all(&self, code: &str) -> alloc::vec::Vec<perl_parser::heredoc_anti_patterns::Diagnostic>
+pub fn perl_parser::heredoc_anti_patterns::AntiPatternDetector::format_report(&self, diagnostics: &[perl_parser::heredoc_anti_patterns::Diagnostic]) -> alloc::string::String
+pub fn perl_parser::heredoc_anti_patterns::AntiPatternDetector::new() -> Self
+pub fn perl_parser::heredoc_anti_patterns::AntiPatternDetector::default() -> Self
+pub struct perl_parser::heredoc_anti_patterns::Diagnostic
+pub perl_parser::heredoc_anti_patterns::Diagnostic::explanation: alloc::string::String
+pub perl_parser::heredoc_anti_patterns::Diagnostic::message: alloc::string::String
+pub perl_parser::heredoc_anti_patterns::Diagnostic::pattern: perl_parser::heredoc_anti_patterns::AntiPattern
+pub perl_parser::heredoc_anti_patterns::Diagnostic::references: alloc::vec::Vec<alloc::string::String>
+pub perl_parser::heredoc_anti_patterns::Diagnostic::severity: perl_parser::heredoc_anti_patterns::Severity
+pub perl_parser::heredoc_anti_patterns::Diagnostic::suggested_fix: core::option::Option<alloc::string::String>
+pub fn perl_parser::heredoc_anti_patterns::Diagnostic::clone(&self) -> perl_parser::heredoc_anti_patterns::Diagnostic
+pub fn perl_parser::heredoc_anti_patterns::Diagnostic::eq(&self, other: &perl_parser::heredoc_anti_patterns::Diagnostic) -> bool
+pub fn perl_parser::heredoc_anti_patterns::Diagnostic::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct perl_parser::heredoc_anti_patterns::Location
+pub perl_parser::heredoc_anti_patterns::Location::column: usize
+pub perl_parser::heredoc_anti_patterns::Location::line: usize
+pub perl_parser::heredoc_anti_patterns::Location::offset: usize
+pub fn perl_parser::heredoc_anti_patterns::Location::clone(&self) -> perl_parser::heredoc_anti_patterns::Location
+pub fn perl_parser::heredoc_anti_patterns::Location::eq(&self, other: &perl_parser::heredoc_anti_patterns::Location) -> bool
+pub fn perl_parser::heredoc_anti_patterns::Location::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub mod perl_parser::refactor
+pub use perl_parser::refactor::<<perl_refactoring::refactor::*>>
+pub mod perl_parser::tdd
+pub use perl_parser::tdd::<<perl_tdd_support::tdd::*>>
+pub mod perl_parser::tokens
+pub use perl_parser::tokens::<<perl_parser_core::tokens::*>>
+pub mod perl_parser::workspace
+pub use perl_parser::workspace::<<perl_workspace::workspace::*>>
+pub use perl_parser::workspace::workspace_refactor

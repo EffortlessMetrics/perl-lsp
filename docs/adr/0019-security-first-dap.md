@@ -77,6 +77,11 @@ pub struct EvalConfig {
 - Explicit opt-in for mutating operations
 - Expression sanitization before execution
 
+**Security Note**: Safe evaluation provides syntactic validation (admission control) that blocks
+known dangerous operations, but it does **not provide interpreter isolation** or OS-level sandboxing.
+Expressions are still evaluated in the debugger context. This is one layer of defense; timeout
+enforcement provides DoS protection as a complementary measure.
+
 #### 3. Timeout Enforcement
 
 ```rust

@@ -3,8 +3,8 @@
 // Tests use panic! as structured test failure reporters.
 #![allow(clippy::panic)]
 
-use perl_content_length_framing::frame;
 use perl_dap::{DapMessage, DebugAdapter};
+use perl_lsp_rs_core::transport::framing::frame;
 use serde_json::{Value, json};
 use std::error::Error;
 use std::io::{Read, Write};

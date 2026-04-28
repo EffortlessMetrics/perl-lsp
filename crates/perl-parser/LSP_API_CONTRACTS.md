@@ -230,7 +230,7 @@ These contracts are enforced by the following test categories:
 1. **Initialization Tests**
    - ✅ Basic initialization
    - ✅ Minimal client capabilities
-   - ⚠️ Double initialization rejection (TODO: Fix server)
+   - ✅ Double initialization rejection (InvalidRequest on second call)
 
 2. **Response Shape Tests**
    - ✅ Completion response shapes

@@ -6,15 +6,18 @@
 use perl_workspace::workspace::workspace_index::WorkspaceIndex;
 use url::Url;
 
+fn parse_uri(uri: &str) -> Result<Url, url::ParseError> {
+    Url::parse(uri)
+}
+
 #[test]
-fn test_folder_uri_in_file_index() {
+fn test_folder_uri_in_file_index() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
-    let uri = Url::parse("file:///test.pl").expect("Invalid URI");
+    let uri = parse_uri("file:///test.pl")?;
     let code = "package MyPackage;\nsub example { return 42; }";
 
     // Index a file (folder_uri will be None for now, as determine_folder_uri returns None)
-    let result = index.index_file(uri.clone(), code.to_string());
-    assert!(result.is_ok(), "Indexing should succeed");
+    index.index_file(uri.clone(), code.to_string())?;
 
     // Verify that the file was indexed
     let file_count = index.file_count();
@@ -30,50 +33,56 @@ fn test_folder_uri_in_file_index() {
         // This will be updated in PR 4 when proper folder tracking is implemented
         assert!(symbol.workspace_folder_uri.is_none());
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_files_in_folder_query() {
+fn test_files_in_folder_query() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Index multiple files
-    let uri1 = Url::parse("file:///test1.pl").expect("Invalid URI");
-    let uri2 = Url::parse("file:///test2.pl").expect("Invalid URI");
+    let uri1 = parse_uri("file:///test1.pl")?;
+    let uri2 = parse_uri("file:///test2.pl")?;
     let code = "package MyPackage;\nsub example { return 42; }";
 
-    index.index_file(uri1, code.to_string()).unwrap();
-    index.index_file(uri2, code.to_string()).unwrap();
+    index.index_file(uri1, code.to_string())?;
+    index.index_file(uri2, code.to_string())?;
 
     // Query for files in a folder (returns empty for now)
     let files = index.files_in_folder("file:///folder");
     assert_eq!(files.len(), 0, "Should return empty for non-existent folder");
+
+    Ok(())
 }
 
 #[test]
-fn test_symbols_in_folder_query() {
+fn test_symbols_in_folder_query() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Index a file
-    let uri = Url::parse("file:///test.pl").expect("Invalid URI");
+    let uri = parse_uri("file:///test.pl")?;
     let code = "package MyPackage;\nsub example { return 42; }";
-    index.index_file(uri, code.to_string()).unwrap();
+    index.index_file(uri, code.to_string())?;
 
     // Query for symbols in a folder (returns empty for now)
     let symbols = index.symbols_in_folder("file:///folder");
     assert_eq!(symbols.len(), 0, "Should return empty for non-existent folder");
+
+    Ok(())
 }
 
 #[test]
-fn test_remove_folder() {
+fn test_remove_folder() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Index multiple files
-    let uri1 = Url::parse("file:///test1.pl").expect("Invalid URI");
-    let uri2 = Url::parse("file:///test2.pl").expect("Invalid URI");
+    let uri1 = parse_uri("file:///test1.pl")?;
+    let uri2 = parse_uri("file:///test2.pl")?;
     let code = "package MyPackage;\nsub example { return 42; }";
 
-    index.index_file(uri1, code.to_string()).unwrap();
-    index.index_file(uri2, code.to_string()).unwrap();
+    index.index_file(uri1, code.to_string())?;
+    index.index_file(uri2, code.to_string())?;
 
     let initial_count = index.file_count();
     assert_eq!(initial_count, 2, "Should have 2 indexed files");
@@ -84,23 +93,27 @@ fn test_remove_folder() {
     // File count should remain the same
     let final_count = index.file_count();
     assert_eq!(final_count, 2, "File count should remain unchanged");
+
+    Ok(())
 }
 
 #[test]
-fn test_folder_provenance_serialization() {
+fn test_folder_provenance_serialization() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
-    let uri = Url::parse("file:///test.pl").expect("Invalid URI");
+    let uri = parse_uri("file:///test.pl")?;
     let code = "package MyPackage;\nsub example { return 42; }";
 
-    index.index_file(uri, code.to_string()).unwrap();
+    index.index_file(uri, code.to_string())?;
 
     // Get symbols and verify they can be serialized
     let symbols = index.all_symbols();
     assert!(!symbols.is_empty());
+
+    Ok(())
 }
 
 #[test]
-fn test_rank_symbols_by_folder() {
+fn test_rank_symbols_by_folder() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Set up workspace folders
@@ -110,13 +123,13 @@ fn test_rank_symbols_by_folder() {
     ]);
 
     // Index files in different folders
-    let uri1 = Url::parse("file:///project1/lib/Module1.pm").expect("Invalid URI");
+    let uri1 = parse_uri("file:///project1/lib/Module1.pm")?;
     let code1 = "package Module1;\nsub example { return 42; }";
-    index.index_file(uri1, code1.to_string()).unwrap();
+    index.index_file(uri1, code1.to_string())?;
 
-    let uri2 = Url::parse("file:///project2/lib/Module2.pm").expect("Invalid URI");
+    let uri2 = parse_uri("file:///project2/lib/Module2.pm")?;
     let code2 = "package Module2;\nsub example { return 42; }";
-    index.index_file(uri2, code2.to_string()).unwrap();
+    index.index_file(uri2, code2.to_string())?;
 
     // Search for "example" - should find both
     let symbols = index.search_symbols("example");
@@ -139,10 +152,12 @@ fn test_rank_symbols_by_folder() {
         Some("file:///project2".to_string()),
         "Second result should be from different folder"
     );
+
+    Ok(())
 }
 
 #[test]
-fn test_search_symbols_ranked() {
+fn test_search_symbols_ranked() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Set up workspace folders
@@ -152,13 +167,13 @@ fn test_search_symbols_ranked() {
     ]);
 
     // Index files in different folders
-    let uri1 = Url::parse("file:///project1/lib/Module1.pm").expect("Invalid URI");
+    let uri1 = parse_uri("file:///project1/lib/Module1.pm")?;
     let code1 = "package Module1;\nsub test_sub { return 1; }";
-    index.index_file(uri1, code1.to_string()).unwrap();
+    index.index_file(uri1, code1.to_string())?;
 
-    let uri2 = Url::parse("file:///project2/lib/Module2.pm").expect("Invalid URI");
+    let uri2 = parse_uri("file:///project2/lib/Module2.pm")?;
     let code2 = "package Module2;\nsub test_sub { return 2; }";
-    index.index_file(uri2, code2.to_string()).unwrap();
+    index.index_file(uri2, code2.to_string())?;
 
     // Search with ranking from project1 perspective
     let ranked = index.search_symbols_ranked("test_sub", "file:///project1/src/main.pl");
@@ -170,10 +185,12 @@ fn test_search_symbols_ranked() {
         Some("file:///project1".to_string()),
         "First result should be from same folder"
     );
+
+    Ok(())
 }
 
 #[test]
-fn test_rank_symbols_no_folder_context() {
+fn test_rank_symbols_no_folder_context() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Set up workspace folders
@@ -183,13 +200,13 @@ fn test_rank_symbols_no_folder_context() {
     ]);
 
     // Index files in different folders
-    let uri1 = Url::parse("file:///project1/lib/Module1.pm").expect("Invalid URI");
+    let uri1 = parse_uri("file:///project1/lib/Module1.pm")?;
     let code1 = "package Module1;\nsub no_context { return 1; }";
-    index.index_file(uri1, code1.to_string()).unwrap();
+    index.index_file(uri1, code1.to_string())?;
 
-    let uri2 = Url::parse("file:///project2/lib/Module2.pm").expect("Invalid URI");
+    let uri2 = parse_uri("file:///project2/lib/Module2.pm")?;
     let code2 = "package Module2;\nsub no_context { return 2; }";
-    index.index_file(uri2, code2.to_string()).unwrap();
+    index.index_file(uri2, code2.to_string())?;
 
     // Get symbols
     let symbols = index.search_symbols("no_context");
@@ -202,6 +219,8 @@ fn test_rank_symbols_no_folder_context() {
     // Without folder context, all symbols should be treated as different folder
     // Results should be sorted by name for stability
     assert!(ranked[0].name <= ranked[1].name, "Should be sorted by name for stability");
+
+    Ok(())
 }
 
 #[test]

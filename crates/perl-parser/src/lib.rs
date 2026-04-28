@@ -7,7 +7,7 @@
 //!
 //! - **Tree-sitter Compatible**: AST with kinds, fields, and position tracking compatible with tree-sitter grammar
 //! - **Comprehensive Parsing**: ~100% edge case coverage for Perl 5.8-5.40 syntax
-//! - **LSP Integration**: Full Language Server Protocol feature set (~82% coverage in v0.8.6)
+//! - **LSP Integration**: Full Language Server Protocol feature set (100% compliance, LSP 3.18)
 //! - **TDD Workflow**: Intelligent test generation with return value analysis
 //! - **Incremental Parsing**: Efficient re-parsing for real-time editing
 //! - **Error Recovery**: Graceful handling of malformed input with detailed diagnostics
@@ -273,7 +273,7 @@
 //! ## Compatibility
 //!
 //! - **Perl Versions**: 5.8 through 5.40 (covers 99% of CPAN)
-//! - **LSP Protocol**: LSP 3.17 specification
+//! - **LSP Protocol**: LSP 3.18 specification
 //! - **Tree-sitter**: Compatible AST format and position tracking
 //! - **UTF-16**: Full Unicode support with correct LSP position mapping
 //!
@@ -414,6 +414,29 @@ pub mod tokens;
 /// Workspace indexing, document store, and cross-file operations.
 pub mod workspace;
 
+// =============================================================================
+// Wave D absorbed satellite crates (as internal modules)
+// =============================================================================
+
+/// AST range and insertion helpers for Perl LSP features (previously `perl-ast-utils`).
+pub mod ast_utils;
+/// Anti-pattern detection for problematic Perl heredoc patterns (previously `perl-heredoc-anti-patterns`).
+// Wave D: allow missing_docs — original crate had an explicit exception per CLAUDE.md
+#[allow(missing_docs)]
+pub mod heredoc_anti_patterns;
+/// Secure workspace-relative path normalization (previously `perl-path-normalize`; from perl-parser-core).
+pub use perl_parser_core::path_normalize;
+/// Workspace-bound path validation and traversal prevention (previously `perl-path-security`; from perl-parser-core).
+pub use perl_parser_core::path_security;
+/// Nearest-rank percentile helpers for integer latency samples (previously `perl-percentile`; from perl-parser-core).
+pub use perl_parser_core::percentile;
+/// Perl qualified-name parsing, splitting, and validation helpers (previously `perl-qualified-name`; from perl-parser-core).
+pub use perl_parser_core::qualified_name;
+/// Shared Perl source-file classification helpers (previously `perl-source-file`; from perl-parser-core).
+pub use perl_parser_core::source_file;
+/// Text-line cursor and boundary helpers (previously `perl-text-line`; from perl-parser-core).
+pub use perl_parser_core::text_line;
+
 /// Variable and subroutine declaration analysis.
 pub use analysis::declaration;
 #[cfg(not(target_arch = "wasm32"))]
@@ -431,9 +454,12 @@ pub use analysis::type_inference;
 pub use builtins::builtin_signatures;
 /// Perfect hash function (PHF) based builtin signature lookup.
 pub use builtins::builtin_signatures_phf;
-/// Dead code detection for Perl workspaces.
+/// Dead code detection for Perl workspaces (absorbed from `perl-dead-code`).
 #[cfg(not(target_arch = "wasm32"))]
-pub use perl_dead_code as dead_code_detector;
+pub mod dead_code;
+/// Backwards-compatibility alias: `perl_parser::dead_code_detector` still works.
+#[cfg(not(target_arch = "wasm32"))]
+pub use dead_code as dead_code_detector;
 
 /// Import statement analysis and optimization.
 pub use refactor::import_optimizer;
@@ -501,7 +527,7 @@ pub use workspace::workspace_rename;
 /// AST node, node kind enum, and source location types.
 pub use ast::{Node, NodeKind, SourceLocation};
 /// Parse error and result types for parser output.
-pub use error::{ParseError, ParseResult};
+pub use error::{ParseError, ParseResult, RecoverySalvageClass, RecoverySalvageProfile};
 #[cfg(feature = "incremental")]
 /// Checkpointed incremental parser with simple edit tracking.
 pub use incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};

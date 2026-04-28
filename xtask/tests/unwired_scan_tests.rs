@@ -42,7 +42,7 @@ resolver = "2"
     // perl-lsp-rs: the root LSP crate
     write_file(
         root,
-        "crates/perl-lsp/Cargo.toml",
+        "crates/perl-lsp-rs/Cargo.toml",
         r#"[package]
 name = "perl-lsp-rs"
 version = "0.1.0"
@@ -54,7 +54,7 @@ perl-wired = { path = "../perl-wired" }
     );
     write_file(
         root,
-        "crates/perl-lsp/src/lib.rs",
+        "crates/perl-lsp-rs/src/lib.rs",
         r#"// main lsp crate
 "#,
     );

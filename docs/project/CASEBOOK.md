@@ -128,9 +128,9 @@ Each exhibit shows:
 **What it proves:** Systematic infrastructure fixes eliminate entire classes of flakiness rather than patching individual tests.
 
 **Review map:**
-- `crates/perl-lsp/tests/*.rs` (test harness)
-- `crates/perl-lsp/src/errors.rs` (new error codes)
-- `crates/perl-lsp/src/lsp/server_impl/dispatch.rs` (shutdown handling)
+- `crates/perl-lsp-rs/tests/*.rs` (test harness)
+- `crates/perl-lsp-rs/src/errors.rs` (new error codes)
+- `crates/perl-lsp-rs/src/lsp/server_impl/dispatch.rs` (shutdown handling)
 
 **Proof bundle:**
 - Ignored test baseline: `brokenpipe=386` → `brokenpipe=0` (100% elimination)

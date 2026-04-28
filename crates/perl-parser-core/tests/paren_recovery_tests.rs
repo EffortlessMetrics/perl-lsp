@@ -10,20 +10,20 @@ use cpan_test_helpers::*;
 
 #[test]
 fn test_unclosed_paren_with_identifier_tail_produces_error() {
-    // Parser should report an error for the unexpected identifier inside parens.
-    assert_has_error("print($foo bar)", "expected");
+    // Perl allows filehandle-style print forms: print($fh EXPR).
+    assert_clean_parse("print($foo bar)");
 }
 
 #[test]
 fn test_unclosed_paren_at_eof_produces_error() {
     // Missing closing paren at end of input.
-    assert_has_error("my @x = (1, 2, 3", "expected");
+    assert_has_error("my @x = (1, 2, 3", "insertedcloser");
 }
 
 #[test]
 fn test_mixed_sigils_in_unclosed_paren_produces_error() {
     // Missing closing paren with mixed variable sigils.
-    assert_has_error("foo($x, @y, %z", "expected");
+    assert_has_error("foo($x, @y, %z", "insertedcloser");
 }
 
 // ── Clean cases: well-formed parenthesized expressions ─────────────────

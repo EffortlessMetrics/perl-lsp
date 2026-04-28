@@ -1,4 +1,5 @@
 use proptest::prelude::*;
+use proptest::test_runner::Config as ProptestConfig;
 
 use perl_workspace::slo::{OperationResult, OperationType, SloTracker};
 
@@ -29,6 +30,11 @@ fn operation_index(operation_type: OperationType) -> usize {
 }
 
 proptest! {
+    #![proptest_config(ProptestConfig {
+        failure_persistence: None,
+        ..ProptestConfig::default()
+    })]
+
     #[test]
     fn prop_generated_operations_record_expected_counts_and_errors(
         ops in prop::collection::vec((0u8..8u8, any::<bool>()), 0..128),

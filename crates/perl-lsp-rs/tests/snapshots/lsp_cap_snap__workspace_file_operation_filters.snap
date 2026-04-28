@@ -1,0 +1,64 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_cap_snap.rs
+expression: "&file_operations"
+---
+didCreate:
+  filters:
+    - pattern:
+        glob: "**/*.pl"
+    - pattern:
+        glob: "**/*.pm"
+    - pattern:
+        glob: "**/*.t"
+    - pattern:
+        glob: "**/*.psgi"
+didDelete:
+  filters:
+    - pattern:
+        glob: "**/*.pl"
+    - pattern:
+        glob: "**/*.pm"
+    - pattern:
+        glob: "**/*.t"
+    - pattern:
+        glob: "**/*.psgi"
+didRename:
+  filters:
+    - pattern:
+        glob: "**/*.pl"
+    - pattern:
+        glob: "**/*.pm"
+    - pattern:
+        glob: "**/*.t"
+    - pattern:
+        glob: "**/*.psgi"
+willCreate:
+  filters:
+    - pattern:
+        glob: "**/*.pl"
+    - pattern:
+        glob: "**/*.pm"
+    - pattern:
+        glob: "**/*.t"
+    - pattern:
+        glob: "**/*.psgi"
+willDelete:
+  filters:
+    - pattern:
+        glob: "**/*.pl"
+    - pattern:
+        glob: "**/*.pm"
+    - pattern:
+        glob: "**/*.t"
+    - pattern:
+        glob: "**/*.psgi"
+willRename:
+  filters:
+    - pattern:
+        glob: "**/*.pl"
+    - pattern:
+        glob: "**/*.pm"
+    - pattern:
+        glob: "**/*.t"
+    - pattern:
+        glob: "**/*.psgi"

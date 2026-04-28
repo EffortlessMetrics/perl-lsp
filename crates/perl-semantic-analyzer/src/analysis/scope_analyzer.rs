@@ -50,33 +50,51 @@
 //! ```
 
 use crate::ast::{Node, NodeKind};
-use crate::pragma_tracker::{PragmaState, PragmaTracker};
+use crate::pragma_tracker::{PragmaQueryCursor, PragmaState};
+use perl_module::import::resolve_known_export_tag;
 use rustc_hash::FxHashMap;
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::ops::Range;
 use std::rc::Rc;
 
+/// Category of scope-related issue detected during analysis.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum IssueKind {
+    /// A variable declared in an inner scope shadows one in an outer scope.
     VariableShadowing,
+    /// A declared variable is never read.
     UnusedVariable,
+    /// A variable is used without a prior declaration (`my`/`our`/`local`).
     UndeclaredVariable,
+    /// The same variable name is declared twice in the same scope.
     VariableRedeclaration,
+    /// A subroutine parameter name appears more than once in the signature.
     DuplicateParameter,
+    /// A parameter name shadows a package-level (`our`) variable.
     ParameterShadowsGlobal,
+    /// A subroutine parameter is never used inside the body.
     UnusedParameter,
+    /// A bareword was used where a string or identifier was expected.
     UnquotedBareword,
+    /// A variable was accessed before any initializing assignment.
     UninitializedVariable,
     /// Capture variable (`$1`, `$2`, etc.) used with no preceding regex match in scope.
     CaptureVarWithoutRegexMatch,
 }
 
+/// A single scope-analysis finding with location and human-readable description.
 #[derive(Debug, Clone)]
 pub struct ScopeIssue {
+    /// The category of scope problem detected.
     pub kind: IssueKind,
+    /// The bare variable name (without sigil) involved in the issue.
     pub variable_name: String,
+    /// Zero-based line number of the first token of the offending construct.
     pub line: usize,
+    /// Byte offset range `(start, end)` of the offending construct.
     pub range: (usize, usize),
+    /// Human-readable explanation of the issue.
     pub description: String,
 }
 
@@ -357,19 +375,31 @@ enum ExtractedName<'a> {
 struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
+    pragma_cursor: RefCell<PragmaQueryCursor>,
+    imported_barewords: HashSet<String>,
     line_starts: RefCell<Option<Vec<usize>>>,
     /// Current package name, updated as `package` statements are traversed.
     current_package: RefCell<String>,
 }
 
 impl<'a> AnalysisContext<'a> {
-    fn new(code: &'a str, pragma_map: &'a [(Range<usize>, PragmaState)]) -> Self {
+    fn new(ast: &Node, code: &'a str, pragma_map: &'a [(Range<usize>, PragmaState)]) -> Self {
         Self {
             code,
             pragma_map,
+            pragma_cursor: RefCell::new(PragmaQueryCursor::new()),
+            imported_barewords: collect_imported_barewords(ast),
             line_starts: RefCell::new(None),
             current_package: RefCell::new("main".to_string()),
         }
+    }
+
+    fn pragma_state_for_offset(&self, offset: usize) -> PragmaState {
+        self.pragma_cursor.borrow_mut().state_for_offset(self.pragma_map, offset)
+    }
+
+    fn has_imported_bareword(&self, name: &str) -> bool {
+        self.imported_barewords.contains(name)
     }
 
     fn get_line(&self, offset: usize) -> usize {
@@ -436,6 +466,11 @@ impl<'a> ExtractedName<'a> {
     }
 }
 
+/// Analyzes an AST for scope-related issues such as unused variables and shadowing.
+///
+/// Produces a list of [`ScopeIssue`]s that can be surfaced as LSP diagnostics
+/// or used by the refactoring engine.  The analyzer is stateless and may be
+/// reused across multiple invocations.
 pub struct ScopeAnalyzer;
 
 impl Default for ScopeAnalyzer {
@@ -445,6 +480,7 @@ impl Default for ScopeAnalyzer {
 }
 
 impl ScopeAnalyzer {
+    /// Create a new scope analyzer instance.
     pub fn new() -> Self {
         Self
     }
@@ -546,6 +582,9 @@ impl ScopeAnalyzer {
         })
     }
 
+    /// Analyze `ast` for scope issues, using `pragma_map` to honour `use strict` regions.
+    ///
+    /// Returns all detected issues sorted by byte offset.
     pub fn analyze(
         &self,
         ast: &Node,
@@ -558,7 +597,7 @@ impl ScopeAnalyzer {
         // Use a vector as a stack for ancestors to avoid O(N) HashMap allocation
         let mut ancestors: Vec<&Node> = Vec::new();
 
-        let context = AnalysisContext::new(code, pragma_map);
+        let context = AnalysisContext::new(ast, code, pragma_map);
 
         self.analyze_node(ast, &root_scope, &mut ancestors, &mut issues, &context);
 
@@ -577,7 +616,7 @@ impl ScopeAnalyzer {
         context: &AnalysisContext<'a>,
     ) {
         // Get effective pragma state at this node's location
-        let pragma_state = PragmaTracker::state_for_offset(context.pragma_map, node.location.start);
+        let pragma_state = context.pragma_state_for_offset(node.location.start);
         let strict_vars_mode = pragma_state.strict_vars || pragma_state.signatures_strict;
         let strict_subs_mode = pragma_state.strict_subs || pragma_state.signatures_strict;
         match &node.kind {
@@ -978,6 +1017,7 @@ impl ScopeAnalyzer {
                     && !self.is_in_hash_key_context(node, ancestors, 1)
                     && !is_known_function(name)
                     && !pragma_state.has_builtin_import(name)
+                    && !context.has_imported_bareword(name)
                     && !self.is_in_hash_key_context(node, ancestors, 10)
                 {
                     issues.push(ScopeIssue {
@@ -1071,7 +1111,7 @@ impl ScopeAnalyzer {
                 let sub_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 // Check for duplicate parameters and shadowing
-                let mut param_names = std::collections::HashSet::new();
+                let mut param_names = HashSet::new();
 
                 // Extract parameters from signature if present
                 // Optimization: Use slice to avoid cloning the parameters vector (deep copy of AST nodes)
@@ -1350,6 +1390,17 @@ impl ScopeAnalyzer {
                 "{}" => return Some(("%", name)),
                 _ => {}
             }
+        }
+
+        // Hash slice syntax (`@hash{...}`) reads from `%hash`, not a lexical `@hash`.
+        // Bridge this so strict-vars and usage tracking resolve against the declared hash.
+        if sigil == "@"
+            && let Some(parent) = ancestors.last()
+            && let NodeKind::Binary { op, left, .. } = &parent.kind
+            && op == "{}"
+            && std::ptr::eq(left.as_ref(), node)
+        {
+            return Some(("%", name));
         }
 
         // When the parser interprets `print $arr[0]` as indirect-object syntax, it produces
@@ -1777,6 +1828,7 @@ impl ScopeAnalyzer {
         false
     }
 
+    /// Return one human-readable fix suggestion per issue.
     pub fn get_suggestions(&self, issues: &[ScopeIssue]) -> Vec<String> {
         issues
             .iter()
@@ -1820,6 +1872,144 @@ impl ScopeAnalyzer {
             })
             .collect()
     }
+}
+
+fn collect_imported_barewords(ast: &Node) -> HashSet<String> {
+    fn push_symbol(imported: &mut HashSet<String>, module: &str, token: &str) {
+        let symbol = token.trim().trim_matches('\'').trim_matches('"').trim();
+        if symbol.is_empty() || symbol == "," {
+            return;
+        }
+
+        if symbol.starts_with(':') {
+            if let Some(expanded) = resolve_known_export_tag(module, symbol) {
+                imported.extend(expanded.iter().map(|name| (*name).to_string()));
+            }
+            return;
+        }
+
+        let is_bareword = symbol.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+            && symbol
+                .as_bytes()
+                .first()
+                .is_some_and(|first| first.is_ascii_alphabetic() || *first == b'_');
+        if is_bareword {
+            imported.insert(symbol.to_string());
+        }
+    }
+
+    fn require_module_name(node: &Node) -> Option<String> {
+        let NodeKind::FunctionCall { name, args } = &node.kind else {
+            return None;
+        };
+        if name != "require" {
+            return None;
+        }
+        let first = args.first()?;
+        match &first.kind {
+            NodeKind::Identifier { name } => Some(name.clone()),
+            NodeKind::String { value, .. } => {
+                let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+                if cleaned.is_empty() {
+                    return None;
+                }
+                Some(cleaned.trim_end_matches(".pm").replace('/', "::"))
+            }
+            _ => None,
+        }
+    }
+
+    fn maybe_record_manual_imports(
+        node: &Node,
+        required_modules: &HashSet<String>,
+        imported: &mut HashSet<String>,
+    ) {
+        let NodeKind::MethodCall { object, method, args } = &node.kind else {
+            return;
+        };
+        if method != "import" {
+            return;
+        }
+        let NodeKind::Identifier { name: module } = &object.kind else {
+            return;
+        };
+        if !required_modules.contains(module) {
+            return;
+        }
+        for arg in args {
+            match &arg.kind {
+                NodeKind::String { value, .. } => push_symbol(imported, module, value),
+                NodeKind::Identifier { name } => {
+                    if name.starts_with("qw") {
+                        let content = name
+                            .trim_start_matches("qw")
+                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                        for token in content.split_whitespace() {
+                            push_symbol(imported, module, token);
+                        }
+                    } else {
+                        push_symbol(imported, module, name);
+                    }
+                }
+                NodeKind::ArrayLiteral { elements } => {
+                    for el in elements {
+                        if let NodeKind::String { value, .. } = &el.kind {
+                            push_symbol(imported, module, value);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Unwrap an `ExpressionStatement` node to its inner expression, or return
+    /// the node itself if it is not an expression statement.
+    fn inner_node(stmt: &Node) -> &Node {
+        if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
+            expression.as_ref()
+        } else {
+            stmt
+        }
+    }
+
+    fn visit(node: &Node, imported: &mut HashSet<String>) {
+        if let NodeKind::Use { module, args, .. } = &node.kind {
+            for arg in args {
+                if arg.starts_with("qw") {
+                    let content = arg
+                        .trim_start_matches("qw")
+                        .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                        .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                    for token in content.split_whitespace() {
+                        push_symbol(imported, module, token);
+                    }
+                } else {
+                    push_symbol(imported, module, arg);
+                }
+            }
+        } else if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind
+        {
+            let required_modules: HashSet<String> = statements
+                .iter()
+                .filter_map(|stmt| require_module_name(inner_node(stmt)))
+                .collect();
+            if !required_modules.is_empty() {
+                for stmt in statements {
+                    maybe_record_manual_imports(inner_node(stmt), &required_modules, imported);
+                }
+            }
+        }
+
+        for child in node.children() {
+            visit(child, imported);
+        }
+    }
+
+    let mut imported = HashSet::new();
+    visit(ast, &mut imported);
+    imported
 }
 
 /// Returns true if `name` (without sigil) is a numbered capture variable.
@@ -1915,7 +2105,7 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
             }
         },
         b'@' => matches!(name, "_" | "+" | "-" | "INC" | "ARGV" | "EXPORT" | "EXPORT_OK" | "ISA"),
-        b'%' => matches!(name, "_" | "+" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS"),
+        b'%' => matches!(name, "_" | "+" | "-" | "!" | "ENV" | "INC" | "SIG" | "EXPORT_TAGS"),
         _ => false,
     }
 }

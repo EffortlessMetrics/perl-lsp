@@ -13,9 +13,9 @@ both the workspace structure and the server entrypoints:
 
 - dedicated runtime crates such as `perl-lsp-protocol`, `perl-lsp-transport`,
   `perl-content-length-framing`, and `perl-lsp-cancellation`
-- direct `serve_async()` dispatch in `crates/perl-lsp/src/main.rs`
+- direct `serve_async()` dispatch in `crates/perl-lsp-rs/src/main.rs`
 - explicit scheduler, outbound writer, and cancellation routing modules under
-  `crates/perl-lsp/src/runtime/`
+  `crates/perl-lsp-rs/src/runtime/`
 
 This architecture is apparent in the codebase, but until now it was primarily described in project
 narrative documentation rather than recorded as an ADR.
@@ -50,7 +50,7 @@ The runtime is split across intentionally small components:
 | Protocol | `perl-lsp-protocol` | JSON-RPC/LSP message types, method constants, errors, capabilities |
 | Framing | `perl-content-length-framing`, `perl-lsp-transport` | Content-Length parsing, serialization, stdio/TCP transport glue |
 | Cancellation | `perl-lsp-cancellation` | request tokens, registry, cleanup, hot-path cancellation checks |
-| Server runtime | `crates/perl-lsp/src/runtime/*` | ingress classification, scheduler, outbound writer, lifecycle routing |
+| Server runtime | `crates/perl-lsp-rs/src/runtime/*` | ingress classification, scheduler, outbound writer, lifecycle routing |
 | Launch/config | `perl-lsp-launcher` | CLI parsing, transport selection, feature-profile selection |
 
 ### Why This Was Chosen
@@ -151,8 +151,8 @@ Review this ADR if any of the following become true:
 
 ## References
 
-- `crates/perl-lsp/src/main.rs`
-- `crates/perl-lsp/src/runtime/serving.rs`
-- `crates/perl-lsp/src/runtime/scheduler.rs`
-- `crates/perl-lsp/src/runtime/outbound.rs`
+- `crates/perl-lsp-rs/src/main.rs`
+- `crates/perl-lsp-rs/src/runtime/serving.rs`
+- `crates/perl-lsp-rs/src/runtime/scheduler.rs`
+- `crates/perl-lsp-rs/src/runtime/outbound.rs`
 - `docs/project/CUSTOM_LSP_RUNTIME.md`

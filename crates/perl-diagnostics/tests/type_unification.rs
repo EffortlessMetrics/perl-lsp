@@ -155,8 +155,6 @@ fn mixed_tag_assignments_from_both_paths() {
 // Test 13: Severity — to_lsp_value() available from both paths
 #[test]
 fn severity_to_lsp_value_works_from_both_paths() {
-    use perl_diagnostics::codes::DiagnosticSeverity;
-
     // Both paths should have to_lsp_value() method
     let codes_lsp = CodesSeverity::Error.to_lsp_value();
     let types_lsp = TypesSeverity::Error.to_lsp_value();

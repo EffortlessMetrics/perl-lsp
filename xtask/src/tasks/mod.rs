@@ -1,5 +1,8 @@
 //! Task implementations for xtask automation
 
+pub mod agent_lease;
+pub mod agent_receipt;
+pub mod aggregate_receipts;
 pub mod bench;
 pub mod benchmarks;
 #[cfg(feature = "parser-tasks")]
@@ -17,6 +20,7 @@ pub mod ci_hygiene;
 pub mod ci_measure;
 pub mod ci_metrics;
 pub mod ci_policy;
+pub mod ci_scope;
 pub mod clean;
 pub mod compare;
 #[cfg(feature = "parser-tasks")]
@@ -24,6 +28,7 @@ pub mod compare_parsers;
 #[cfg(feature = "legacy")]
 pub mod corpus;
 pub mod corpus_audit;
+pub mod count_ratchet;
 pub mod cpan_corpus;
 pub mod dead_code;
 pub mod debt_report;
@@ -34,10 +39,14 @@ pub mod doc_claims;
 pub mod e2e_validate;
 pub mod edge_cases;
 pub mod features;
+pub mod finalize_check;
+pub mod fix_forward;
 pub mod fmt;
 pub mod forbid_fatal_constructs;
 pub mod forensics;
+pub mod gate_receipts;
 pub mod gates;
+pub mod generated_files;
 pub mod github;
 pub mod hardening;
 #[cfg(feature = "parser-tasks")]
@@ -45,7 +54,10 @@ pub mod highlight;
 pub mod hook_checks;
 pub mod ignored_tests;
 pub mod inject_sha_assets;
+pub mod intent_diff_gate;
 pub mod layer_check;
+pub mod merge_ready;
+pub mod methodology_gate;
 pub mod metrics;
 pub mod parse_rust;
 pub mod parser_corpus_sweep;
@@ -55,10 +67,16 @@ pub mod prep_crates_io_launch;
 pub mod publication_facts;
 pub mod publish;
 pub mod publish_closure;
+pub mod publish_manifest_check;
 pub mod publish_receipts;
+pub mod queue_health;
+pub mod queue_snapshot;
 pub mod receipts;
 pub mod release;
+pub mod release_evidence;
+pub mod release_notes;
 pub mod release_turnkey;
+pub mod review_receipts;
 pub mod srp_microcrates;
 pub mod swarm_summary;
 pub mod targeted_checks;
@@ -67,5 +85,9 @@ pub mod test_lsp;
 pub mod unwired_scan;
 pub mod update_homebrew;
 pub mod update_status;
+pub mod ux_scorecard;
 pub mod validate_workspace_exclusions;
+pub mod workflow_policy_lint;
+pub mod workflow_trigger_lint;
+pub mod worktree_allocator;
 pub mod worktrees;

@@ -23,6 +23,10 @@ impl<'a> Parser<'a> {
         matches!(kind, Some(TokenKind::Or) | Some(TokenKind::DefinedOr))
     }
 
+    /// Returns true if the token kind is a postfix increment/decrement operator.
+    ///
+    /// These operators (`++` and `--`) can appear after an expression like `$x++`
+    /// unlike prefix operators which appear before.
     #[inline]
     fn is_postfix_op(kind: Option<TokenKind>) -> bool {
         matches!(kind, Some(TokenKind::Increment) | Some(TokenKind::Decrement))
@@ -119,6 +123,7 @@ impl<'a> Parser<'a> {
             Some(TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor | TokenKind::WordNot) => {
                 false
             }
+            Some(TokenKind::Question) => false,
             Some(kind) if Self::is_stmt_modifier_kind(kind) => self.is_keyword_before_fat_arrow(),
             _ => true,
         }
@@ -168,7 +173,7 @@ impl<'a> Parser<'a> {
     /// Delegates to the canonical builtin registry in `perl-builtins-phf`,
     /// excluding nullary builtins and keywords that have dedicated parser handlers.
     fn is_builtin_function(name: &str) -> bool {
-        perl_builtins::builtin_signatures_phf::is_builtin(name)
+        perl_lexer::builtins::builtin_signatures_phf::is_builtin(name)
             && !Self::is_nullary_builtin(name)
             && !Self::is_keyword_handled_builtin(name)
     }
@@ -610,14 +615,45 @@ impl<'a> Parser<'a> {
     /// `;`, `}`, `)`, `]`, or EOF.  Encountering one after consuming an infix
     /// operator is a clear sign that the operand is missing.
     fn is_infix_rhs_absent(&mut self) -> bool {
+        if self.peek_kind() == Some(TokenKind::Sub) && self.next_token_starts_anonymous_sub() {
+            return false;
+        }
+
         matches!(
             self.peek_kind(),
             Some(TokenKind::Semicolon)
                 | Some(TokenKind::RightBrace)
                 | Some(TokenKind::RightParen)
                 | Some(TokenKind::RightBracket)
+                // Statement-starter keywords cannot serve as an expression RHS.
+                // Treating them as "missing operand" allows declaration parsing
+                // to recover cleanly and resume at the next statement boundary.
+                | Some(TokenKind::My)
+                | Some(TokenKind::Our)
+                | Some(TokenKind::State)
+                | Some(TokenKind::Sub)
+                | Some(TokenKind::Package)
+                | Some(TokenKind::Use)
+                | Some(TokenKind::No)
+                | Some(TokenKind::If)
+                | Some(TokenKind::Unless)
+                | Some(TokenKind::Elsif)
+                | Some(TokenKind::Else)
+                | Some(TokenKind::While)
+                | Some(TokenKind::Until)
+                | Some(TokenKind::For)
+                | Some(TokenKind::Foreach)
                 | Some(TokenKind::Eof)
                 | None
+        )
+    }
+
+    /// Returns true when `sub` is followed by tokens that start an anonymous
+    /// subroutine expression (`sub {}`, `sub (...) {}`, or `sub :attr {}`).
+    fn next_token_starts_anonymous_sub(&mut self) -> bool {
+        matches!(
+            self.tokens.peek_second().ok().map(|token| token.kind),
+            Some(TokenKind::LeftBrace | TokenKind::LeftParen | TokenKind::Colon)
         )
     }
 
@@ -698,7 +734,15 @@ impl<'a> Parser<'a> {
     }
 
     /// Check if current token is a strong follower at which a missing closer can
-    /// be inferred.  The set covers hard statement boundaries and EOF.
+    /// be inferred.  The set covers two categories:
+    ///
+    /// - **Statement boundaries**: `;`, `}`, `{`, keywords (`my`, `if`, `while`,
+    ///   etc.), and EOF — tokens that cannot appear inside a well-formed
+    ///   delimiter pair.
+    /// - **Sibling closers**: `)` and `]` — a closer owned by an *outer* nesting
+    ///   level that proves the *current* closer is missing.  When
+    ///   `expect_closing_delimiter` fires recovery here it does **not** consume
+    ///   the sibling token so the outer frame can consume it normally.
     ///
     /// `peek_kind()` returns `Some(TokenKind::Eof)` at end-of-input (the EOF
     /// token is sticky) so we match it explicitly alongside `None` (which covers
@@ -707,6 +751,8 @@ impl<'a> Parser<'a> {
         matches!(
             self.peek_kind(),
             Some(TokenKind::Semicolon)
+                | Some(TokenKind::RightParen)
+                | Some(TokenKind::RightBracket)
                 | Some(TokenKind::RightBrace)
                 | Some(TokenKind::LeftBrace)
                 | Some(TokenKind::Eof)

@@ -339,6 +339,10 @@ pub enum FrameworkKind {
     Moose,
     /// `use Moose::Role;`
     MooseRole,
+    /// `use Role::Tiny;` — the package is a role
+    RoleTiny,
+    /// `use Role::Tiny::With;` — the package consumes roles
+    RoleTinyWith,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -457,8 +461,12 @@ impl SymbolExtractor {
                 continue;
             };
             let new_kind = match kind {
-                FrameworkKind::Moo | FrameworkKind::Moose => SymbolKind::Class,
-                FrameworkKind::MooRole | FrameworkKind::MooseRole => SymbolKind::Role,
+                FrameworkKind::Moo | FrameworkKind::Moose | FrameworkKind::RoleTinyWith => {
+                    SymbolKind::Class
+                }
+                FrameworkKind::MooRole | FrameworkKind::MooseRole | FrameworkKind::RoleTiny => {
+                    SymbolKind::Role
+                }
             };
             if let Some(symbols) = self.table.symbols.get_mut(pkg_name) {
                 for symbol in symbols.iter_mut() {
@@ -817,6 +825,9 @@ impl SymbolExtractor {
                 if module == "EV" {
                     self.synthesize_ev_framework_symbol(node.location);
                 }
+                if module == "constant" {
+                    self.synthesize_use_constant_symbols(args, node.location);
+                }
             }
 
             NodeKind::No { module: _, args: _, .. } => {
@@ -961,9 +972,31 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::Untie { variable } | NodeKind::Goto { target: variable } => {
+            NodeKind::Untie { variable } => {
                 self.visit_node(variable);
             }
+
+            NodeKind::Goto { target } => match &target.kind {
+                NodeKind::Identifier { name } => {
+                    self.table.add_reference(SymbolReference {
+                        name: name.clone(),
+                        kind: SymbolKind::Label,
+                        location: target.location,
+                        scope_id: self.table.current_scope(),
+                        is_write: false,
+                    });
+                }
+                NodeKind::Variable { sigil, name } if sigil == "&" => {
+                    self.table.add_reference(SymbolReference {
+                        name: name.clone(),
+                        kind: SymbolKind::Subroutine,
+                        location: target.location,
+                        scope_id: self.table.current_scope(),
+                        is_write: false,
+                    });
+                }
+                _ => self.visit_node(target),
+            },
 
             // Regex related nodes - we recurse into expression
             NodeKind::Regex { .. } => {}
@@ -1223,7 +1256,7 @@ impl SymbolExtractor {
         {
             let modifier_name = name.as_str();
             let method_names: Vec<String> =
-                args.first().map(Self::collect_symbol_names).unwrap_or_default();
+                args.iter().flat_map(Self::collect_symbol_names).collect();
             if !method_names.is_empty() {
                 let scope_id = self.table.current_scope();
                 let package = self.table.current_package.clone();
@@ -2121,6 +2154,8 @@ impl SymbolExtractor {
             "Moo::Role" | "Mouse::Role" => Some(FrameworkKind::MooRole),
             "Moose" => Some(FrameworkKind::Moose),
             "Moose::Role" => Some(FrameworkKind::MooseRole),
+            "Role::Tiny" => Some(FrameworkKind::RoleTiny),
+            "Role::Tiny::With" => Some(FrameworkKind::RoleTinyWith),
             _ => None,
         };
 
@@ -2896,6 +2931,22 @@ impl SymbolExtractor {
         }
     }
 
+    fn synthesize_use_constant_symbols(&mut self, args: &[String], location: SourceLocation) {
+        let constant_names = extract_constant_names_from_use_args(args);
+        for name in constant_names {
+            self.table.add_symbol(Symbol {
+                name: name.clone(),
+                qualified_name: format!("{}::{}", self.table.current_package, name),
+                kind: SymbolKind::Constant,
+                location,
+                scope_id: self.table.current_scope(),
+                declaration: Some("constant".to_string()),
+                documentation: Some("use constant declaration".to_string()),
+                attributes: vec![],
+            });
+        }
+    }
+
     fn register_catch_variable(&mut self, full_name: &str, catch_block_location: SourceLocation) {
         let (sigil, name) = split_variable_name(full_name);
         let kind = match sigil {
@@ -2968,7 +3019,11 @@ impl SymbolExtractor {
         // Simple regex to find scalar variables in strings
         // This handles $var, ${var}, but not arrays/hashes for now
         let scalar_re = match SCALAR_RE
-            .get_or_init(|| Regex::new(r"\$([a-zA-Z_]\w*|\{[a-zA-Z_]\w*\})"))
+            .get_or_init(|| {
+                Regex::new(
+                    r"\$((?:[a-zA-Z_]\w*(?:::[a-zA-Z_]\w*)*)|\{(?:[a-zA-Z_]\w*(?:::[a-zA-Z_]\w*)*)\})",
+                )
+            })
             .as_ref()
         {
             Ok(re) => re,
@@ -3015,11 +3070,171 @@ fn split_variable_name(full_name: &str) -> (&str, &str) {
         .unwrap_or(("", ""))
 }
 
+/// Extract constant names from `NodeKind::Use { module: "constant", args, .. }`.
+fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
+    fn push_unique(names: &mut Vec<String>, seen: &mut HashSet<String>, candidate: &str) {
+        if seen.insert(candidate.to_string()) {
+            names.push(candidate.to_string());
+        }
+    }
+
+    fn normalize_constant_name(token: &str) -> Option<&str> {
+        let stripped = token.trim_matches(|c: char| {
+            matches!(c, '\'' | '"' | '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';')
+        });
+        if stripped.is_empty() || stripped.starts_with('-') {
+            return None;
+        }
+        stripped.chars().all(|c| c.is_alphanumeric() || c == '_').then_some(stripped)
+    }
+
+    let mut names = Vec::new();
+    let mut seen = HashSet::new();
+    let Some(first) = args.first().map(String::as_str) else {
+        return names;
+    };
+
+    if first.starts_with("qw") {
+        let (qw_words, remainder) = extract_qw_words(first);
+        if remainder.trim().is_empty() {
+            for word in qw_words {
+                if let Some(candidate) = normalize_constant_name(&word) {
+                    push_unique(&mut names, &mut seen, candidate);
+                }
+            }
+            return names;
+        }
+
+        let content = first.trim_start_matches("qw").trim_start();
+        let content = content
+            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+        for word in content.split_whitespace() {
+            if let Some(candidate) = normalize_constant_name(word) {
+                push_unique(&mut names, &mut seen, candidate);
+            }
+        }
+        return names;
+    }
+
+    let starts_hash_form = first == "{"
+        || first == "+{"
+        || (first == "+" && args.get(1).map(String::as_str) == Some("{"));
+    if starts_hash_form {
+        let mut skipped_leading_plus = false;
+        let mut iter = args.iter().peekable();
+        while let Some(arg) = iter.next() {
+            if arg == "+{" {
+                skipped_leading_plus = true;
+                continue;
+            }
+            if arg == "+" && !skipped_leading_plus {
+                skipped_leading_plus = true;
+                continue;
+            }
+            if arg == "{" || arg == "}" || arg == "," || arg == "=>" {
+                continue;
+            }
+            if let Some(candidate) = normalize_constant_name(arg)
+                && iter.peek().map(|s| s.as_str()) == Some("=>")
+            {
+                push_unique(&mut names, &mut seen, candidate);
+            }
+        }
+        return names;
+    }
+
+    if let Some(candidate) = normalize_constant_name(first) {
+        push_unique(&mut names, &mut seen, candidate);
+    }
+
+    names
+}
+
+fn extract_qw_words(input: &str) -> (Vec<String>, String) {
+    let chars: Vec<char> = input.chars().collect();
+    let mut i = 0;
+    let mut words = Vec::new();
+    let mut remainder = String::new();
+
+    while i < chars.len() {
+        if chars[i] == 'q'
+            && i + 1 < chars.len()
+            && chars[i + 1] == 'w'
+            && (i == 0 || !chars[i - 1].is_alphanumeric())
+        {
+            let mut j = i + 2;
+            while j < chars.len() && chars[j].is_whitespace() {
+                j += 1;
+            }
+            if j >= chars.len() {
+                remainder.push(chars[i]);
+                i += 1;
+                continue;
+            }
+
+            let open = chars[j];
+            let (close, is_paired_delimiter) = match open {
+                '(' => (')', true),
+                '[' => (']', true),
+                '{' => ('}', true),
+                '<' => ('>', true),
+                _ => (open, false),
+            };
+            if open.is_alphanumeric() || open == '_' || open == '\'' || open == '"' {
+                remainder.push(chars[i]);
+                i += 1;
+                continue;
+            }
+
+            let mut k = j + 1;
+            if is_paired_delimiter {
+                let mut depth = 1usize;
+                while k < chars.len() && depth > 0 {
+                    if chars[k] == open {
+                        depth += 1;
+                    } else if chars[k] == close {
+                        depth -= 1;
+                    }
+                    k += 1;
+                }
+                if depth != 0 {
+                    remainder.extend(chars[i..].iter());
+                    break;
+                }
+                k -= 1;
+            } else {
+                while k < chars.len() && chars[k] != close {
+                    k += 1;
+                }
+                if k >= chars.len() {
+                    remainder.extend(chars[i..].iter());
+                    break;
+                }
+            }
+
+            let content: String = chars[j + 1..k].iter().collect();
+            for word in content.split_whitespace() {
+                if !word.is_empty() {
+                    words.push(word.to_string());
+                }
+            }
+            i = k + 1;
+            continue;
+        }
+
+        remainder.push(chars[i]);
+        i += 1;
+    }
+
+    (words, remainder)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::parser::Parser;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_symbol_extraction() {
@@ -3284,6 +3499,49 @@ sub configure ($x, %opts) {
         assert_eq!(
             span_len, 2,
             "symbol location should cover just '$y' (2 chars), not the full '$y = 0' (6 chars)"
+        );
+    }
+
+    #[test]
+    fn test_goto_label_creates_label_reference() {
+        let code = r#"
+sub run {
+    goto FINISH;
+FINISH:
+    return 1;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        let references = must_some(table.references.get("FINISH"));
+
+        assert!(
+            references.iter().any(|reference| reference.kind == SymbolKind::Label),
+            "goto FINISH should produce a label reference"
+        );
+    }
+
+    #[test]
+    fn test_goto_ampersand_creates_subroutine_reference() {
+        let code = r#"
+sub target { return 42; }
+sub jump {
+    goto &target;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        let references = must_some(table.references.get("target"));
+
+        assert!(
+            references.iter().any(|reference| reference.kind == SymbolKind::Subroutine),
+            "goto &target should produce a subroutine reference"
         );
     }
 }

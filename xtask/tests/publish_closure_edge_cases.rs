@@ -141,9 +141,9 @@ fn publish_closure_invalid_crate_names_rejected() -> Result<()> {
 /// not just perl-token. Pick a different published crate.
 #[test]
 fn publish_closure_filtering_works_for_multiple_crates() -> Result<()> {
-    // perl-error is another core published crate
+    // perl-parser is a stable top-level published crate in the allowlist.
     let output = Command::cargo_bin("xtask")?
-        .args(["publish-closure", "--crate-name", "perl-error"])
+        .args(["publish-closure", "--crate-name", "perl-parser"])
         .output()?;
 
     assert!(output.status.success());
@@ -160,7 +160,7 @@ fn publish_closure_multiple_crate_name_flags_rejected() -> Result<()> {
     // Clap parser rejects repeated non-repeatable flags with a clear error.
     // Ensure the command fails gracefully with a helpful message.
     let output = Command::cargo_bin("xtask")?
-        .args(["publish-closure", "--crate-name", "perl-token", "--crate-name", "perl-error"])
+        .args(["publish-closure", "--crate-name", "perl-token", "--crate-name", "perl-parser"])
         .output()?;
 
     assert!(!output.status.success());
@@ -337,12 +337,11 @@ fn publish_closure_exits_nonzero_on_error() -> Result<()> {
 // Numeric Boundary Tests
 // =============================================================================
 
-/// Test that the count of crates checked is numeric and reasonable.
+/// Test that the count of crates checked matches the publish allowlist size.
 ///
-/// Boundary condition: Extract the count from the output.
-/// As of April 2026, the allowlist has 132 crates.
-/// Verify the count is between 100 and 150 (reasonable range).
-/// This catches off-by-one errors in the crate counting logic.
+/// Regression guard: read `[workspace.metadata.publish.allow]` from the root
+/// Cargo.toml and assert the CLI count matches exactly. This avoids brittle
+/// hardcoded ranges when the allowlist grows or shrinks.
 #[test]
 fn publish_closure_crate_count_is_reasonable() -> Result<()> {
     let output = Command::cargo_bin("xtask")?.args(["publish-closure"]).output()?;
@@ -350,24 +349,51 @@ fn publish_closure_crate_count_is_reasonable() -> Result<()> {
     assert!(output.status.success(), "Command should succeed");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // Extract the count: "publish-closure: OK (132 crates checked, 0 violations)"
-    // This is a basic sanity check — count should be between 100 and 200.
     assert!(
         stdout.contains("crates checked"),
         "Output should contain 'crates checked'. Output was: {}",
         stdout
     );
-    // Additional check: if we can parse the number, verify it's reasonable
-    if let Some(pos) = stdout.find('(')
-        && let Some(space_pos) = stdout[pos..].find(' ')
-    {
-        let count_str = &stdout[pos + 1..pos + space_pos];
-        if let Ok(count) = count_str.parse::<u32>() {
-            assert!((100..=200).contains(&count), "Crate count {} is out of expected range", count);
-        }
-    }
+
+    let observed = parse_checked_count(&stdout).ok_or_else(|| {
+        color_eyre::eyre::eyre!("Could not parse checked crate count from: {stdout}")
+    })?;
+    let expected = publish_allowlist_count()?;
+
+    assert_eq!(
+        observed, expected,
+        "publish-closure checked count should match [workspace.metadata.publish.allow]"
+    );
 
     Ok(())
+}
+
+fn parse_checked_count(stdout: &str) -> Option<usize> {
+    let start = stdout.find('(')? + 1;
+    let end = stdout[start..].find(' ')? + start;
+    stdout[start..end].parse().ok()
+}
+
+fn publish_allowlist_count() -> Result<usize> {
+    let workspace_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../Cargo.toml");
+    let cargo_toml = std::fs::read_to_string(&workspace_manifest)?;
+    let value: toml::Value = toml::from_str(&cargo_toml)?;
+
+    let count = value
+        .get("workspace")
+        .and_then(|v| v.get("metadata"))
+        .and_then(|v| v.get("publish"))
+        .and_then(|v| v.get("allow"))
+        .and_then(toml::Value::as_array)
+        .map(std::vec::Vec::len)
+        .ok_or_else(|| {
+            color_eyre::eyre::eyre!(
+                "missing [workspace.metadata.publish.allow] in {}",
+                workspace_manifest.display()
+            )
+        })?;
+
+    Ok(count)
 }
 
 // =============================================================================

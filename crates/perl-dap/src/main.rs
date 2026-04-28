@@ -5,11 +5,11 @@
 
 use clap::Parser;
 use perl_dap::{DapConfig, DapMode, DapServer};
-use perl_lsp_launcher::{init_logging, log_server_startup};
+use perl_lsp_rs_core::runtime::launcher::{init_logging, log_server_startup};
 
 const DEFAULT_DAP_PORT: u16 = 13_603;
 
-fn resolve_socket_port(args: &perl_lsp_launcher::TransportArgs) -> Option<u16> {
+fn resolve_socket_port(args: &perl_lsp_rs_core::runtime::launcher::TransportArgs) -> Option<u16> {
     if args.socket || args.port.is_some() {
         Some(args.port.unwrap_or(DEFAULT_DAP_PORT))
     } else {
@@ -22,7 +22,7 @@ fn resolve_socket_port(args: &perl_lsp_launcher::TransportArgs) -> Option<u16> {
 #[command(name = "perl-dap", version, about, long_about = None)]
 struct Args {
     #[command(flatten)]
-    transport: perl_lsp_launcher::TransportArgs,
+    transport: perl_lsp_rs_core::runtime::launcher::TransportArgs,
 
     /// Use bridge mode (proxy to Perl::LanguageServer)
     #[arg(long)]
@@ -65,22 +65,33 @@ mod tests {
 
     #[test]
     fn socket_mode_uses_dap_default_port() {
-        let args = perl_lsp_launcher::TransportArgs { stdio: false, socket: true, port: None };
+        let args = perl_lsp_rs_core::runtime::launcher::TransportArgs {
+            stdio: false,
+            socket: true,
+            port: None,
+        };
 
         assert_eq!(resolve_socket_port(&args), Some(DEFAULT_DAP_PORT));
     }
 
     #[test]
     fn explicit_socket_port_is_preserved() {
-        let args =
-            perl_lsp_launcher::TransportArgs { stdio: false, socket: true, port: Some(9_999) };
+        let args = perl_lsp_rs_core::runtime::launcher::TransportArgs {
+            stdio: false,
+            socket: true,
+            port: Some(9_999),
+        };
 
         assert_eq!(resolve_socket_port(&args), Some(9_999));
     }
 
     #[test]
     fn stdio_mode_does_not_resolve_a_socket_port() {
-        let args = perl_lsp_launcher::TransportArgs { stdio: true, socket: false, port: None };
+        let args = perl_lsp_rs_core::runtime::launcher::TransportArgs {
+            stdio: true,
+            socket: false,
+            port: None,
+        };
 
         assert_eq!(resolve_socket_port(&args), None);
     }

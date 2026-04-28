@@ -28,6 +28,43 @@ just ci-gate
 - **Nix** (recommended) for a fully reproducible dev environment — `nix develop` drops you into a shell with all tools present
 - **just** — task runner used for all build/test/lint commands (`cargo install just` or via Nix)
 
+### First-Time Setup Checklist
+
+Run through these five steps once after cloning. Each step has a clear success signal — if you see something different, check the note below it.
+
+**1. Clone and enter the repository**
+```bash
+git clone https://github.com/EffortlessMetrics/perl-lsp.git
+cd perl-lsp
+```
+
+**2. Enter the dev environment**
+```bash
+nix develop          # Recommended: pins Rust 1.92 + all tools
+# No Nix? Install rustup and then: cargo install just
+```
+Success: your shell prompt changes (or you see the nix shellHook banner listing available commands).
+
+**3. Verify the environment**
+```bash
+just doctor
+```
+Success: every line shows ✅. If you see ❌, the output explains what's missing and how to install it. ⚠️ lines are optional tools — safe to skip for basic contribution work.
+
+**4. Validate everything compiles and tests pass**
+```bash
+just pr-fast         # ~1-2 min
+```
+Success: ends with `PR-fast gate complete` and no `FAILED` lines.
+
+**5. Install the pre-push git hook**
+```bash
+bash scripts/install-githooks.sh
+```
+Success: prints `Installed pre-push hook`. The hook runs `just pr-fast` automatically before every `git push`.
+
+Once all five steps succeed, you're ready to make changes.
+
 ### Setup
 
 ```bash
@@ -45,6 +82,26 @@ Install the pre-push git hook so the gate runs automatically before every push:
 ```bash
 bash scripts/install-githooks.sh
 ```
+
+### Codex Desktop workflow (agent contributors)
+
+If you are contributing from the Codex desktop app, use this repo-specific startup
+sequence to match CI and avoid platform gotchas:
+
+1. Open the repository root as the workspace.
+2. Run checks through a POSIX shell (`bash`) even on Windows.
+3. Prefer the fast gate while iterating, then run the full local gate before PR.
+
+```bash
+# Fast inner-loop validation
+just pr-fast
+
+# Canonical pre-PR gate (matches merge expectations)
+nix develop -c just ci-gate
+```
+
+If your desktop environment does not use Nix, run `just ci-gate` directly.
+For stale toolchains or workspace drift, run `just doctor`.
 
 ### Build and Test
 
@@ -66,7 +123,7 @@ The workspace contains many crates organized into families. Key crates:
 | Crate | Purpose |
 |-------|---------|
 | `perl-parser` | Main parser (v3 recursive descent) |
-| `perl-lsp` | LSP server binary |
+| `perl-lsp-rs` | LSP server binary |
 | `perl-dap` | Debug Adapter Protocol server |
 | `perl-lexer` | Context-aware tokenizer |
 
@@ -281,7 +338,7 @@ cargo nextest run                              # Fast parallel runner
 For LSP tests, control threading to avoid flaky results:
 
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 See [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) for the full command catalog.
@@ -300,6 +357,19 @@ If a breaking change is necessary:
 3. Coordinate with maintainers
 
 See [STABILITY.md](docs/reference/STABILITY.md) for our API stability policy.
+
+### Public API Surface Ratchet
+
+The five user-facing facade crates (`perl-lsp-rs`, `perl-parser`, `perl-uri`, `perl-dap`, `perllsp`) have their public API surface locked in text baselines at `.ci/public-api-baselines/`. The nightly CI job fails if the surface changes without a baseline update.
+
+When you intentionally add or remove items from a facade crate's public API:
+
+1. Run `just public-api-update` to regenerate all 5 baselines.
+2. Include the updated `.ci/public-api-baselines/*.txt` files in your PR.
+3. In your PR description, describe what changed and why.
+4. Add the `ci:public-api` label to trigger the surface check in CI.
+
+The check uses `cargo public-api -p <crate> --simplified` (omits blanket-impl noise).
 
 ## Release Workflow
 

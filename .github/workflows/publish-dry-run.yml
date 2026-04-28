@@ -22,6 +22,7 @@ on:
       - '.github/workflows/publish-dry-run.yml'
       - 'scripts/cargo-package-workspace-dry-run.sh'
       - 'scripts/publish-topo.py'
+      - 'xtask/src/tasks/publish_manifest_check.rs'
   workflow_dispatch: {}
 
 concurrency:
@@ -58,16 +59,8 @@ jobs:
       - name: Run publish-topo unit tests
         run: python3 scripts/tests/test-publish-topo.py -v
 
-      - name: Check allowlist drift (metadata vs hand-maintained list)
-        run: |
-          # Verify that [workspace.metadata.publish.allow] in root Cargo.toml
-          # matches the set of crates that are publishable according to cargo
-          # metadata (i.e. no crate has publish = false).
-          # Fails loudly with a diff if any publishable crate is missing from
-          # the allowlist, or if the allowlist contains a crate with
-          # publish = false.
-          cargo metadata --format-version=1 --no-deps \
-            | python3 scripts/publish-topo.py --check-drift
+      - name: Check allowlist drift (manifest check)
+        run: cargo xtask publish-manifest-check
 
       - name: Compute topological publish order
         id: topo

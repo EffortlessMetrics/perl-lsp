@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **First-run error messaging now surfaces to users instead of silent logging** — When
+  workspace root is not detected (e.g., opening a single file without opening a folder),
+  perl-lsp now sends a `window/showMessage` notification with actionable guidance:
+  "perl-lsp: workspace root not detected — module resolution disabled. To enable: open
+  the project folder in your editor (File > Open Folder) rather than individual files.
+  This warning appears once per server session." Previously this was logged to the server
+  log only and users saw nothing. The warning flag is stored as an `Arc<AtomicBool>` on
+  `LspServer`, so each server session shows the warning independently — in multi-root or
+  multi-server workspace configurations, each `LspServer` instance tracks its own shown
+  state rather than sharing a process-level `Once`. (#4178)
+
+### Internal
+
+- **`cargo xtask published-crate-count`** — new ratchet gate that monitors the
+  count of entries in `[workspace.metadata.publish.allow]` and prevents accidental
+  regression during the microcrate collapse (ADR-0041). Fails if the count exceeds
+  the baseline in `xtask/published-crate-baseline.txt`; auto-tightens the baseline
+  when count decreases. Run via `just ci-published-crate-count` or directly as
+  `cargo xtask published-crate-count`. (#4416)
+
 ## [0.12.4] - 2026-04-12
 
 Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.4)
@@ -196,6 +218,11 @@ Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://g
 
 ### Fixed
 
+- **Parser error recovery and symbol extraction under partial `Error` nodes**
+  — unclosed block recovery landed in `perl-parser-core` (PR #4079) and
+  symbol extraction now descends into partial `Error` nodes (PR #4071),
+  closing issue [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499).
+
 - **Navigation: inherited and role methods in goto-def, hover, and
   completion** — BFS traversal now chains `model.roles` alongside
   `model.parents` in `inherited_method_definition_location`; hover
@@ -266,7 +293,7 @@ Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://g
 
 - **Xtask `features verify` repaired** — catalog test paths are now
   resolved from repo root, the advertised-vs-caps snapshot is read from
-  `crates/perl-lsp/tests/snapshots/...`, the two-document Insta snapshot
+  `crates/perl-lsp-rs/tests/snapshots/...`, the two-document Insta snapshot
   format is parsed correctly, and the verifier compares against the
   capability-backed advertised LSP subset (#4033).
 
@@ -342,7 +369,7 @@ Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://g
 - **`cargo xtask check-test-wiring` CLI command wired** — PR #4119 added the
   `check_test_wiring` module but omitted the `use` import in `main.rs`; the
   subcommand was returning "unrecognized subcommand". Now fully wired; also fixes
-  one genuine orphan discovered by the guard: `crates/perl-lsp/tests/fixtures/integration_example.rs`.
+  one genuine orphan discovered by the guard: `crates/perl-lsp-rs/tests/fixtures/integration_example.rs`.
   (#4151)
 
 - **Cross-file `use constant` and parenthesized import lists** — `find_import_source()`
@@ -648,7 +675,7 @@ Release notes: [v0.12.3](docs/releases/v0.12.3.md) · [GitHub Release](https://g
   at the first `add_labels` call.
 
 - **`features.toml` dead test paths repaired**: 43 dead test paths corrected to
-  match the current `crates/perl-lsp/tests/` layout; the
+  match the current `crates/perl-lsp-rs/tests/` layout; the
   `experimental.perlInlineCompletionStream` feature row added (shipped in v0.12.2).
   (#3222, #3251)
 

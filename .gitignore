@@ -42,6 +42,8 @@ scripts/__pycache__/
 /.claude/agents/
 # Worktrees used by Claude agent isolation — ephemeral, never committed.
 /.claude/worktrees/
+# Codex worktree metadata — ephemeral agent artifacts, never committed.
+/.codex-worktrees/
 
 # Swarm ops — ignore the entire directory (contains repo mirror artifacts),
 # but force-track the specific knowledge files we need.
@@ -227,3 +229,5 @@ docs/assets/recordings/*.webm
 # The README.md in that directory is tracked; the generated Perl files are not.
 test_corpus/workspaces/xlarge/lib/
 test_corpus/workspaces/xlarge/bin/
+# Runtime scheduler lock file — ephemeral, never committed.
+/.claude/scheduled_tasks.lock

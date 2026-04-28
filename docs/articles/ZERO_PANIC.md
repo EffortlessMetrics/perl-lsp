@@ -180,7 +180,7 @@ correct behavior.
 
 The CLAUDE.md policy notes a single exemption:
 
-> Exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp/src/util/uri.rs`
+> Exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp-rs/src/util/uri.rs`
 
 This file originally contained URI parsing logic where an `expect()` was
 deemed justified -- a case where the invariant was guaranteed by the type

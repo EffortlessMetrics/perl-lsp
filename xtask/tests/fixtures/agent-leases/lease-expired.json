@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "issued_at": "2024-01-01T00:00:00Z",
+  "task_id": "task-6853",
+  "snapshot_id": "snap-001",
+  "lane": "ci-modernization",
+  "pr": 6853,
+  "head_sha": "abc123",
+  "base_sha": "def456",
+  "canonical_state": "open",
+  "allowed_mutations": ["comment_upsert"],
+  "forbidden_mutations": ["label_mutation"],
+  "required_output_schema": ".ci/receipts/schemas/agent-receipt.schema.json",
+  "expires_at": "2020-01-01T00:00:00Z"
+}

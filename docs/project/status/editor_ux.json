@@ -1,7 +1,27 @@
 {
+  "confidence_signals": [
+    {
+      "name": "manual_editor_smoke",
+      "owner": "perl-lsp-ux-tests",
+      "state": "tracked",
+      "workflow_count": 22
+    },
+    {
+      "name": "first_five_minutes_harness",
+      "owner": "perl-lsp-ux-tests",
+      "state": "tracked",
+      "workflow_count": 21
+    },
+    {
+      "name": "issue_burndown_regression_guard",
+      "owner": "perl-lsp-ux-tests",
+      "state": "tracked",
+      "workflow_count": 13
+    }
+  ],
   "harness": {
     "crate": "crates/perl-lsp-ux-tests",
-    "scenario_count": 17,
+    "scenario_count": 23,
     "scenario_files": [
       "crates/perl-lsp-ux-tests/tests/ux_scenario_01_simple_file.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_02_missing_perltidy.rs",
@@ -19,7 +39,13 @@
       "crates/perl-lsp-ux-tests/tests/ux_scenario_14_inc_conformance.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_15_workspace_symbols.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_16_workspace_folder_removal.rs",
-      "crates/perl-lsp-ux-tests/tests/ux_scenario_17_deleted_file_churn.rs"
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_17_deleted_file_churn.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_18_diagnostics_after_edit.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_18_goto_declaration.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_18_real_repo_perf.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_19_workspace_folder_addition.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_22_template_language_mode.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_23_rename_workflow.rs"
     ]
   },
   "integration_points": {

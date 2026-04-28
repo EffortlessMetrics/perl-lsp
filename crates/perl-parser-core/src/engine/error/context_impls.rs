@@ -1,8 +1,7 @@
 use crate::engine::parser_context::ParserContext;
+use crate::syntax::error::recovery::{ErrorRecovery, ParseError, RecoveryResult, SyncPoint};
+use crate::syntax::error::{BudgetTracker, ParseBudget};
 use perl_ast_v2::{Node, NodeKind};
-use perl_error::BudgetTracker;
-use perl_error::ParseBudget;
-use perl_error::recovery::{ErrorRecovery, ParseError, RecoveryResult, SyncPoint};
 use perl_lexer::TokenType;
 use perl_position_tracking::Range;
 

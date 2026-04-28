@@ -24,6 +24,7 @@ doctest = false
 
 [dependencies]
 perl-parser-core = { workspace = true }
+perl-module = { workspace = true }
 perl-workspace = { workspace = true }
 perl-symbol = { workspace = true }
 regex.workspace = true
@@ -32,10 +33,11 @@ tracing.workspace = true
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
+perl-test-generators = { path = "../perl-test-generators" }
+proptest = { workspace = true }
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true
-

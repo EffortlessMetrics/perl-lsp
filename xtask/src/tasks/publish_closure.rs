@@ -16,7 +16,7 @@
 //!    a `publish = false` workspace member as a violation.
 //! 5. Exit non-zero if any violations were found.
 
-use crate::utils::run_cargo_metadata;
+use crate::utils::{WorkspacePublishMeta, run_cargo_metadata};
 use color_eyre::eyre::{Result, bail, eyre};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -40,16 +40,6 @@ struct FullPackage {
     id: String,
     /// `None` means "publish everywhere"; `Some([])` means `publish = false`.
     publish: Option<Vec<String>>,
-}
-
-#[derive(Deserialize)]
-struct WorkspacePublishMeta {
-    publish: Option<AllowList>,
-}
-
-#[derive(Deserialize)]
-struct AllowList {
-    allow: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]

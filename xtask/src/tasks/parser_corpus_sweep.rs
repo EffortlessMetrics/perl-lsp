@@ -7,7 +7,9 @@
 
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
-use perl_parser::{Node, NodeKind, Parser};
+#[cfg(test)]
+use perl_parser::{Node, NodeKind};
+use perl_parser::{ParseError, Parser, RecoverySalvageClass, RecoverySalvageProfile};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -159,13 +161,78 @@ pub struct SweepReport {
     pub files_unreadable: usize,
     pub clean_files: usize,
     pub files_with_errors: usize,
+    #[serde(default)]
+    pub total_dirty_files: usize,
+    #[serde(default)]
+    pub files_with_structured_recovery_only: usize,
+    #[serde(default)]
+    pub files_with_error_nodes: usize,
+    #[serde(default)]
+    pub files_with_catastrophic_parse_failure: usize,
     pub total_error_nodes: usize,
+    #[serde(default)]
+    pub recovered_node_count: usize,
+    #[serde(default)]
+    pub first_unrecovered_error_node_buckets: BTreeMap<String, usize>,
     pub first_error_buckets: BTreeMap<String, usize>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub files_by_bucket: BTreeMap<String, Vec<String>>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub file_results: Vec<FileResult>,
     pub elapsed_secs: f64,
+    /// Phase-timing breakdown of the sweep (discovery / IO / parse / total).
+    ///
+    /// Introduced in schema 1.3.0. Absent in older receipts; deserializes as None.
+    /// See `PhaseTimings` for the semantics of each field.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub phase_timings: Option<PhaseTimings>,
+    /// Median error-node density across dirty files, in errors per 1k LOC.
+    ///
+    /// Introduced in schema 1.3.0. `None` when no dirty files have a recorded
+    /// line count (older verbose=false receipts, or empty corpora).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub median_error_density_per_1k_loc: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub recovery_salvage_rate: Option<f64>,
+    /// Top slowest files by parse duration (always captured, regardless of verbose mode).
+    ///
+    /// Introduced in schema 1.3.0. Always present when phase timings are
+    /// present; empty when no per-file timings were recorded.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub slowest_files: Vec<SlowestFileEntry>,
+}
+
+/// Phase-timing breakdown of a corpus sweep in milliseconds.
+///
+/// Fields:
+/// - `discovery_ms`: time spent walking the corpus / resolving the manifest.
+/// - `file_io_ms`: cumulative wall time spent reading file contents from disk.
+/// - `parse_ms`: cumulative wall time spent inside `Parser::parse()`
+///   (lex + parse combined; lex-only separation is a future extension —
+///   tracked by #4063 as a TODO pending `perl-lexer` instrumentation).
+/// - `total_ms`: total wall time of the sweep from start to report assembly.
+///
+/// Times are wall-clock milliseconds; `file_io_ms + parse_ms` can exceed
+/// `total_ms - discovery_ms` if the sweep is ever parallelized (currently
+/// it is not), but equals it under the current sequential implementation.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct PhaseTimings {
+    pub discovery_ms: u64,
+    pub file_io_ms: u64,
+    pub parse_ms: u64,
+    pub total_ms: u64,
+}
+
+/// Compact slowest-file entry suitable for the receipt and for later analysis.
+///
+/// Does not duplicate the full `FileResult`; captures just what is needed
+/// for a top-N latency report so that receipts stay small even with tens of
+/// thousands of files.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SlowestFileEntry {
+    pub path: String,
+    pub parse_duration_ms: u64,
+    pub line_count: usize,
 }
 
 fn default_corpus_profile() -> String {
@@ -195,6 +262,20 @@ pub struct FileResult {
     pub error_node_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub first_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub recovered_count: Option<usize>,
+    /// Wall time spent parsing this file, in milliseconds.
+    ///
+    /// Introduced in schema 1.3.0. Absent for `status == "unreadable"`
+    /// (no parse attempted) and for receipts predating the schema bump.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub parse_duration_ms: Option<u64>,
+    /// Number of lines in the source file (counted from file contents).
+    ///
+    /// Introduced in schema 1.3.0. Absent for `status == "unreadable"` and
+    /// for receipts predating the schema bump.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub line_count: Option<usize>,
 }
 
 /// A single ratchet violation
@@ -246,6 +327,7 @@ fn get_perl_version() -> String {
 }
 
 /// Summary of Error nodes found in an AST.
+#[cfg(test)]
 struct ErrorSummary {
     /// Total count of NodeKind::Error nodes in the tree
     count: usize,
@@ -258,6 +340,7 @@ struct ErrorSummary {
 /// Counts all `NodeKind::Error` nodes and captures the raw message from
 /// the earliest error by byte offset. Uses `for_each_child` to traverse
 /// the full tree including `partial` subtrees of Error nodes.
+#[cfg(test)]
 fn collect_error_summary(root: &Node) -> ErrorSummary {
     let mut count = 0usize;
     let mut first_start = usize::MAX;
@@ -266,6 +349,7 @@ fn collect_error_summary(root: &Node) -> ErrorSummary {
     ErrorSummary { count, first_message }
 }
 
+#[cfg(test)]
 fn walk_errors(
     node: &Node,
     count: &mut usize,
@@ -503,6 +587,72 @@ pub fn enforce_strict_clean(report: &SweepReport) -> Vec<RatchetViolation> {
     violations
 }
 
+/// Cap on the size of `SweepReport::slowest_files`.
+///
+/// Twenty matches pyright's "longest ten files" display at 2x for slightly
+/// better coverage, and keeps the receipt small (~1 KB for the slowest list
+/// even in the CPAN top-1000 sweep).
+const SLOWEST_FILES_LIMIT: usize = 20;
+
+/// Per-file measurement retained in memory during the sweep. Not serialized
+/// directly; used to derive `SweepReport::slowest_files` and
+/// `SweepReport::median_error_density_per_1k_loc`.
+#[derive(Debug, Clone)]
+struct FileMeasurement {
+    path: String,
+    parse_duration_ms: u64,
+    line_count: usize,
+    error_node_count: usize,
+}
+
+/// Select the top `limit` slowest files by parse duration (descending).
+///
+/// Ties are broken by path for determinism so repeated runs over the same
+/// corpus produce identical receipts. Returns an empty vec when
+/// `measurements` is empty.
+fn top_n_slowest(measurements: &[FileMeasurement], limit: usize) -> Vec<SlowestFileEntry> {
+    let mut sorted: Vec<&FileMeasurement> = measurements.iter().collect();
+    sorted.sort_by(|a, b| {
+        b.parse_duration_ms.cmp(&a.parse_duration_ms).then_with(|| a.path.cmp(&b.path))
+    });
+    sorted
+        .into_iter()
+        .take(limit)
+        .map(|m| SlowestFileEntry {
+            path: m.path.clone(),
+            parse_duration_ms: m.parse_duration_ms,
+            line_count: m.line_count,
+        })
+        .collect()
+}
+
+/// Median error-node density (errors per 1k LOC) across dirty files.
+///
+/// Considers only files with `error_node_count > 0` and `line_count > 0`.
+/// Returns `None` when no such files exist (e.g., a fully clean corpus or
+/// a run where line counts are unavailable). Clean files would skew the
+/// median toward zero and hide the per-file severity signal, so they are
+/// intentionally excluded.
+fn compute_median_error_density(measurements: &[FileMeasurement]) -> Option<f64> {
+    let mut densities: Vec<f64> = measurements
+        .iter()
+        .filter(|m| m.error_node_count > 0 && m.line_count > 0)
+        .map(|m| (m.error_node_count as f64 / m.line_count as f64) * 1000.0)
+        .collect();
+
+    if densities.is_empty() {
+        return None;
+    }
+    densities.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let mid = densities.len() / 2;
+    let median = if densities.len().is_multiple_of(2) {
+        (densities[mid - 1] + densities[mid]) / 2.0
+    } else {
+        densities[mid]
+    };
+    Some(median)
+}
+
 /// Run the corpus sweep with the given configuration
 pub fn run(config: SweepConfig) -> Result<()> {
     let start_time = Instant::now();
@@ -512,11 +662,13 @@ pub fn run(config: SweepConfig) -> Result<()> {
         if config.manifest_path.is_some() { "common".to_string() } else { "system".to_string() };
     let corpus_profile = config.corpus_profile.clone().unwrap_or(default_profile);
 
+    let discovery_start = Instant::now();
     let pm_files = if let Some(ref manifest) = config.manifest_path {
         resolve_manifest_modules(manifest, &config.manifest_perl5lib, 6)?
     } else {
         discover_pm_files(&config.corpus_roots)
     };
+    let discovery_ms = discovery_start.elapsed().as_millis() as u64;
 
     let use_manifest = config.manifest_path.is_some();
     if pm_files.is_empty() {
@@ -548,10 +700,27 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let mut files_unreadable = 0usize;
     let mut clean_files = 0usize;
     let mut files_with_errors = 0usize;
+    let mut total_dirty_files = 0usize;
+    let mut files_with_structured_recovery_only = 0usize;
+    let mut files_with_error_nodes = 0usize;
+    let mut files_with_catastrophic_parse_failure = 0usize;
     let mut total_error_nodes = 0usize;
+    let mut recovered_node_count = 0usize;
+    let mut first_unrecovered_error_node_buckets: BTreeMap<String, usize> = BTreeMap::new();
     let mut first_error_buckets: BTreeMap<String, usize> = BTreeMap::new();
     let mut files_by_bucket: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut file_results: Vec<FileResult> = Vec::new();
+
+    // Phase-timing accumulators (nanoseconds to avoid rounding when summing
+    // many small per-file durations; converted to ms once at the end).
+    let mut file_io_ns: u128 = 0;
+    let mut parse_ns: u128 = 0;
+
+    // Per-file measurements used to build the slowest-file report and to
+    // compute median error density per 1k LOC. Kept in memory always (not
+    // gated by verbose) so receipts can include the derived aggregates
+    // without paying the verbose-serialization cost.
+    let mut measurements: Vec<FileMeasurement> = Vec::with_capacity(pm_files.len());
 
     for path in &pm_files {
         total_files += 1;
@@ -560,7 +729,11 @@ pub fn run(config: SweepConfig) -> Result<()> {
             path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
         );
 
-        let source = match fs::read_to_string(path) {
+        let io_start = Instant::now();
+        let read_result = fs::read_to_string(path);
+        file_io_ns += io_start.elapsed().as_nanos();
+
+        let source = match read_result {
             Ok(s) => s,
             Err(_) => {
                 files_unreadable += 1;
@@ -570,6 +743,9 @@ pub fn run(config: SweepConfig) -> Result<()> {
                         status: "unreadable".to_string(),
                         error_node_count: 0,
                         first_error: None,
+                        recovered_count: None,
+                        parse_duration_ms: None,
+                        line_count: None,
                     });
                 }
                 progress.inc(1);
@@ -577,57 +753,118 @@ pub fn run(config: SweepConfig) -> Result<()> {
             }
         };
 
-        // Parse
+        let line_count = source.lines().count();
+
+        // Parse — wall-time the parse call itself (post-read).
+        let parse_start = Instant::now();
         let mut parser = Parser::new(&source);
-        let ast = match parser.parse() {
+        let parse_result = parser.parse();
+        let parse_elapsed = parse_start.elapsed();
+        parse_ns += parse_elapsed.as_nanos();
+        let parse_duration_ms = parse_elapsed.as_millis() as u64;
+
+        let ast = match parse_result {
             Ok(ast) => ast,
             Err(_) => {
-                // Catastrophic failure (recursion limit etc.) — count as error
+                // Catastrophic failure (recursion limit etc.) — separate from AST ERROR nodes.
                 files_with_errors += 1;
-                total_error_nodes += 1;
-                let bucket = "catastrophic_parse_failure".to_string();
+                total_dirty_files += 1;
+                files_with_catastrophic_parse_failure += 1;
+                measurements.push(FileMeasurement {
+                    path: portable_path.clone(),
+                    parse_duration_ms,
+                    line_count,
+                    error_node_count: 0,
+                });
+                if config.verbose {
+                    file_results.push(FileResult {
+                        path: portable_path.clone(),
+                        status: "catastrophic".to_string(),
+                        error_node_count: 0,
+                        first_error: None,
+                        recovered_count: Some(0),
+                        parse_duration_ms: Some(parse_duration_ms),
+                        line_count: Some(line_count),
+                    });
+                }
+                progress.inc(1);
+                continue;
+            }
+        };
+
+        let errors: Vec<ParseError> = parser.errors().to_vec();
+        let salvage = RecoverySalvageProfile::from_parse(&ast, &errors, false);
+
+        measurements.push(FileMeasurement {
+            path: portable_path.clone(),
+            parse_duration_ms,
+            line_count,
+            error_node_count: salvage.error_node_count,
+        });
+
+        recovered_node_count = recovered_node_count.saturating_add(salvage.recovered_count);
+        match salvage.class {
+            RecoverySalvageClass::Clean => {
+                clean_files += 1;
+                if config.verbose {
+                    file_results.push(FileResult {
+                        path: portable_path.clone(),
+                        status: "clean".to_string(),
+                        error_node_count: 0,
+                        first_error: None,
+                        recovered_count: Some(0),
+                        parse_duration_ms: Some(parse_duration_ms),
+                        line_count: Some(line_count),
+                    });
+                }
+            }
+            RecoverySalvageClass::StructuredRecoveryOnly => {
+                files_with_errors += 1;
+                total_dirty_files += 1;
+                files_with_structured_recovery_only += 1;
+                if config.verbose {
+                    file_results.push(FileResult {
+                        path: portable_path.clone(),
+                        status: "recovered".to_string(),
+                        error_node_count: 0,
+                        first_error: None,
+                        recovered_count: Some(salvage.recovered_count),
+                        parse_duration_ms: Some(parse_duration_ms),
+                        line_count: Some(line_count),
+                    });
+                }
+            }
+            RecoverySalvageClass::ErrorNodesPresent => {
+                files_with_errors += 1;
+                total_dirty_files += 1;
+                files_with_error_nodes += 1;
+                total_error_nodes = total_error_nodes.saturating_add(salvage.error_node_count);
+                let first = salvage.first_unrecovered_error_node.as_deref().unwrap_or("unknown");
+                let bucket = normalize_error_bucket(first);
+                *first_unrecovered_error_node_buckets.entry(bucket.clone()).or_default() += 1;
                 *first_error_buckets.entry(bucket.clone()).or_default() += 1;
                 files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
                 if config.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
                         status: "errors".to_string(),
-                        error_node_count: 1,
+                        error_node_count: salvage.error_node_count,
                         first_error: Some(bucket),
+                        recovered_count: Some(salvage.recovered_count),
+                        parse_duration_ms: Some(parse_duration_ms),
+                        line_count: Some(line_count),
                     });
                 }
-                progress.inc(1);
-                continue;
             }
-        };
-
-        // Count ERROR nodes via AST walk
-        let summary = collect_error_summary(&ast);
-
-        if summary.count == 0 {
-            clean_files += 1;
-            if config.verbose {
-                file_results.push(FileResult {
-                    path: portable_path.clone(),
-                    status: "clean".to_string(),
-                    error_node_count: 0,
-                    first_error: None,
-                });
-            }
-        } else {
-            files_with_errors += 1;
-            total_error_nodes += summary.count;
-            let first = summary.first_message.as_deref().unwrap_or("unknown");
-            let bucket = normalize_error_bucket(first);
-            *first_error_buckets.entry(bucket.clone()).or_default() += 1;
-            files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
-            if config.verbose {
-                file_results.push(FileResult {
-                    path: portable_path,
-                    status: "errors".to_string(),
-                    error_node_count: summary.count,
-                    first_error: Some(bucket),
-                });
+            RecoverySalvageClass::CatastrophicFailure => {
+                // This arm is unreachable in this branch: `from_parse` is always
+                // called with `catastrophic=false` here.  True catastrophic failures
+                // are handled above via the `Err(_)` arm which calls `continue`.
+                // Keeping the arm to satisfy the exhaustive match; clippy will flag
+                // it as unreachable if the enum ever gains a structural invariant.
+                files_with_errors += 1;
+                total_dirty_files += 1;
+                files_with_catastrophic_parse_failure += 1;
             }
         }
 
@@ -639,8 +876,22 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let elapsed = start_time.elapsed();
     let commit = get_git_commit();
 
+    let phase_timings = PhaseTimings {
+        discovery_ms,
+        file_io_ms: (file_io_ns / 1_000_000) as u64,
+        parse_ms: (parse_ns / 1_000_000) as u64,
+        total_ms: elapsed.as_millis() as u64,
+    };
+    let median_error_density_per_1k_loc = compute_median_error_density(&measurements);
+    let recovery_salvage_rate = if total_dirty_files == 0 {
+        None
+    } else {
+        Some(files_with_structured_recovery_only as f64 / total_dirty_files as f64)
+    };
+    let slowest_files = top_n_slowest(&measurements, SLOWEST_FILES_LIMIT);
+
     let report = SweepReport {
-        schema_version: "1.2.0".to_string(),
+        schema_version: "1.3.0".to_string(),
         commit,
         timestamp: chrono::Utc::now().to_rfc3339(),
         corpus_profile: corpus_profile.clone(),
@@ -655,11 +906,21 @@ pub fn run(config: SweepConfig) -> Result<()> {
         files_unreadable,
         clean_files,
         files_with_errors,
+        total_dirty_files,
+        files_with_structured_recovery_only,
+        files_with_error_nodes,
+        files_with_catastrophic_parse_failure,
         total_error_nodes,
+        recovered_node_count,
+        first_unrecovered_error_node_buckets,
         first_error_buckets,
         files_by_bucket,
         file_results: if config.verbose { file_results } else { Vec::new() },
         elapsed_secs: elapsed.as_secs_f64(),
+        phase_timings: Some(phase_timings),
+        median_error_density_per_1k_loc,
+        recovery_salvage_rate,
+        slowest_files,
     };
 
     // Print summary
@@ -764,8 +1025,7 @@ pub fn enforce_ratchet(report: &SweepReport, baseline: &SweepReport) -> Vec<Ratc
     let mut violations = Vec::new();
 
     // 1. Crash count must be 0
-    let crash_count =
-        report.first_error_buckets.get("catastrophic_parse_failure").copied().unwrap_or(0);
+    let crash_count = report.files_with_catastrophic_parse_failure;
     if crash_count > 0 {
         violations.push(RatchetViolation {
             metric: "crash_count".to_string(),
@@ -783,12 +1043,22 @@ pub fn enforce_ratchet(report: &SweepReport, baseline: &SweepReport) -> Vec<Ratc
         });
     }
 
-    // 3. Clean-file count must not decrease
-    if report.clean_files < baseline.clean_files {
+    // 3. Clean-rate must not decrease.
+    //
+    // Compare ratios rather than absolute clean-file counts so the ratchet
+    // remains meaningful when corpus inventory size differs between runners
+    // (for example, distro package layout drift or optional roots missing).
+    //
+    // Use a small epsilon to prevent spurious failures from floating-point
+    // rounding when both sides are computed from the same integer division
+    // but stored at different precision (e.g. if a future schema stores a
+    // pre-computed float in the baseline).  Consistent with the epsilon guard
+    // used in corpus_audit.rs for the same class of comparisons.
+    if clean_rate(report) + 1e-9 < clean_rate(baseline) {
         violations.push(RatchetViolation {
-            metric: "clean_files".to_string(),
-            baseline_value: baseline.clean_files.to_string(),
-            current_value: report.clean_files.to_string(),
+            metric: "clean_rate".to_string(),
+            baseline_value: format!("{:.6}", clean_rate(baseline)),
+            current_value: format!("{:.6}", clean_rate(report)),
         });
     }
 
@@ -814,6 +1084,13 @@ pub fn enforce_ratchet(report: &SweepReport, baseline: &SweepReport) -> Vec<Ratc
     }
 
     violations
+}
+
+fn clean_rate(report: &SweepReport) -> f64 {
+    if report.total_files == 0 {
+        return 1.0;
+    }
+    report.clean_files as f64 / report.total_files as f64
 }
 
 /// Discover all .pm files under the given roots
@@ -877,20 +1154,73 @@ fn get_git_commit() -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-/// Print a summary of the sweep results
-fn print_summary(report: &SweepReport) {
+/// Print a summary of the sweep results.
+///
+/// Always emits the headline counters and first-error buckets. When the
+/// receipt carries the optional schema-1.3.0 fields (phase timings, median
+/// error density, slowest-file list, per-file measurements) they are
+/// rendered as additional sections.
+pub fn print_summary(report: &SweepReport) {
     let clean_pct = 100.0 * report.clean_files as f64 / report.total_files.max(1) as f64;
     println!("\n=== Parser Corpus Sweep Results ===");
     println!("Total files:       {}", report.total_files);
     println!("Unreadable:        {}", report.files_unreadable);
     println!("Clean (no errors): {} ({:.1}%)", report.clean_files, clean_pct);
+    println!("Dirty files:       {}", report.total_dirty_files);
     println!("With errors:       {}", report.files_with_errors);
+    println!("  - Structured recovery only: {}", report.files_with_structured_recovery_only);
+    println!("  - With ERROR nodes:         {}", report.files_with_error_nodes);
+    println!("  - Catastrophic parse fail:  {}", report.files_with_catastrophic_parse_failure);
+    println!("Recovered nodes:   {}", report.recovered_node_count);
     println!("Total ERROR nodes: {}", report.total_error_nodes);
     println!("Elapsed:           {:.1}s", report.elapsed_secs);
 
-    if !report.first_error_buckets.is_empty() {
-        println!("\n--- First-error buckets (top 20) ---");
-        let mut sorted: Vec<_> = report.first_error_buckets.iter().collect();
+    if let Some(ref timings) = report.phase_timings {
+        println!("\n--- Phase timings ---");
+        println!("  Discovery:   {:>7} ms", timings.discovery_ms);
+        println!("  File I/O:    {:>7} ms", timings.file_io_ms);
+        println!("  Parse:       {:>7} ms", timings.parse_ms);
+        println!("  Total:       {:>7} ms", timings.total_ms);
+    }
+
+    if let Some(density) = report.median_error_density_per_1k_loc {
+        println!("\nMedian error density (dirty files): {density:.2} errors / 1k LOC");
+    }
+    if let Some(salvage_rate) = report.recovery_salvage_rate {
+        println!("Recovery salvage rate: {:.1}%", salvage_rate * 100.0);
+    }
+
+    if !report.slowest_files.is_empty() {
+        println!("\n--- Top {} slowest files by parse time ---", report.slowest_files.len());
+        for entry in &report.slowest_files {
+            println!(
+                "  {:>5} ms  ({:>6} LOC)  {}",
+                entry.parse_duration_ms, entry.line_count, entry.path,
+            );
+        }
+    }
+
+    if !report.file_results.is_empty() {
+        // Verbose mode only: emit a top-20-by-error-count report drawn
+        // from file_results (the only place error counts are retained
+        // per file outside the run-time measurements buffer).
+        let mut by_errors: Vec<&FileResult> =
+            report.file_results.iter().filter(|r| r.error_node_count > 0).collect();
+        if !by_errors.is_empty() {
+            by_errors.sort_by(|a, b| {
+                b.error_node_count.cmp(&a.error_node_count).then_with(|| a.path.cmp(&b.path))
+            });
+            let limit = SLOWEST_FILES_LIMIT.min(by_errors.len());
+            println!("\n--- Top {limit} files by error-node count ---");
+            for entry in by_errors.iter().take(limit) {
+                println!("  {:>5} errors  {}", entry.error_node_count, entry.path);
+            }
+        }
+    }
+
+    if !report.first_unrecovered_error_node_buckets.is_empty() {
+        println!("\n--- First unrecovered ERROR-node buckets (top 20) ---");
+        let mut sorted: Vec<_> = report.first_unrecovered_error_node_buckets.iter().collect();
         sorted.sort_by(|a, b| b.1.cmp(a.1));
         for (i, (bucket, count)) in sorted.iter().enumerate() {
             if i >= 20 {
@@ -928,11 +1258,21 @@ mod tests {
             files_unreadable,
             clean_files,
             files_with_errors,
+            total_dirty_files: files_with_errors,
+            files_with_structured_recovery_only: 0,
+            files_with_error_nodes: files_with_errors,
+            files_with_catastrophic_parse_failure: 0,
             total_error_nodes,
+            recovered_node_count: 0,
+            first_unrecovered_error_node_buckets: first_error_buckets.clone(),
             first_error_buckets,
             files_by_bucket: BTreeMap::new(),
             file_results: vec![],
             elapsed_secs: 1.0,
+            phase_timings: None,
+            median_error_density_per_1k_loc: None,
+            recovery_salvage_rate: None,
+            slowest_files: vec![],
         }
     }
 
@@ -1206,7 +1546,7 @@ mod tests {
             test_report(80, 18, 25, 2, BTreeMap::from([("unclosed_brace".to_string(), 10)]));
 
         let report = SweepReport {
-            clean_files: 75,       // decreased (violation)
+            clean_files: 75,       // decreased clean-rate (violation)
             total_error_nodes: 30, // increased (violation)
             files_unreadable: 3,   // increased (violation)
             ..baseline.clone()
@@ -1217,7 +1557,7 @@ mod tests {
 
         let metrics: Vec<&str> = violations.iter().map(|v| v.metric.as_str()).collect();
         assert!(metrics.contains(&"files_unreadable"));
-        assert!(metrics.contains(&"clean_files"));
+        assert!(metrics.contains(&"clean_rate"));
         assert!(metrics.contains(&"total_error_nodes"));
     }
 
@@ -1251,10 +1591,7 @@ mod tests {
     fn test_enforce_ratchet_crash_count() {
         let baseline = test_report(80, 20, 20, 0, BTreeMap::new());
 
-        let report = SweepReport {
-            first_error_buckets: BTreeMap::from([("catastrophic_parse_failure".to_string(), 2)]),
-            ..baseline.clone()
-        };
+        let report = SweepReport { files_with_catastrophic_parse_failure: 2, ..baseline.clone() };
 
         let violations = enforce_ratchet(&report, &baseline);
         let crash_violation = violations.iter().find(|v| v.metric == "crash_count");
@@ -1638,6 +1975,38 @@ mod tests {
     // ── enforce_ratchet edge cases ─────────────────────────────────────
 
     #[test]
+    fn test_enforce_ratchet_clean_rate_equal_no_violation() {
+        // Same counts on both sides → rates are identical → no violation.
+        let baseline = test_report(80, 18, 25, 2, BTreeMap::new());
+        // report is a clone: clean_rate(report) == clean_rate(baseline) exactly
+        let report = baseline.clone();
+        let violations = enforce_ratchet(&report, &baseline);
+        assert!(violations.is_empty(), "Equal clean-rate must not trigger a violation");
+    }
+
+    #[test]
+    fn test_enforce_ratchet_clean_rate_epsilon_no_false_positive() {
+        // If the rates differ by less than 1e-9 (pure floating-point rounding),
+        // the epsilon guard must suppress the violation.
+        // We cannot manufacture a sub-epsilon diff via integer division, but we
+        // can verify the guard itself by checking that the comparison threshold
+        // is strictly less than: clean_rate(report) + 1e-9 < clean_rate(baseline).
+        // Concretely: 8000/10000 == 8001/10001 rounds to 0.8000 at 6 decimal places;
+        // confirm neither fires (improvement direction).
+        let baseline = test_report(8000, 2000, 0, 0, BTreeMap::new()); // rate=0.8
+        let report = SweepReport {
+            clean_files: 8001,
+            // total_files inherited from baseline = 10000; rate = 8001/10000 = 0.8001 > 0.8
+            ..baseline.clone()
+        };
+        let violations = enforce_ratchet(&report, &baseline);
+        assert!(
+            !violations.iter().any(|v| v.metric == "clean_rate"),
+            "Marginal improvement must not trigger clean_rate violation"
+        );
+    }
+
+    #[test]
     fn test_enforce_ratchet_improvement_no_violations() {
         let baseline =
             test_report(80, 20, 30, 2, BTreeMap::from([("unclosed_brace".to_string(), 10)]));
@@ -1758,5 +2127,217 @@ mod tests {
     fn test_portable_report_path_preserves_external_paths() {
         let path = PathBuf::from("/usr/share/perl/Foo.pm");
         assert_eq!(portable_report_path(&path), "/usr/share/perl/Foo.pm");
+    }
+
+    // ── schema 1.3.0: phase timings + slowest-files + median density ───
+
+    fn measurement(path: &str, parse_ms: u64, lines: usize, errors: usize) -> FileMeasurement {
+        FileMeasurement {
+            path: path.to_string(),
+            parse_duration_ms: parse_ms,
+            line_count: lines,
+            error_node_count: errors,
+        }
+    }
+
+    #[test]
+    fn test_top_n_slowest_empty_input() {
+        let slowest = top_n_slowest(&[], 5);
+        assert!(slowest.is_empty());
+    }
+
+    #[test]
+    fn test_top_n_slowest_sorts_descending() {
+        let measurements = vec![
+            measurement("a.pm", 10, 100, 0),
+            measurement("b.pm", 50, 200, 0),
+            measurement("c.pm", 30, 150, 0),
+        ];
+        let slowest = top_n_slowest(&measurements, 10);
+        assert_eq!(slowest.len(), 3);
+        assert_eq!(slowest[0].path, "b.pm");
+        assert_eq!(slowest[0].parse_duration_ms, 50);
+        assert_eq!(slowest[1].path, "c.pm");
+        assert_eq!(slowest[2].path, "a.pm");
+    }
+
+    #[test]
+    fn test_top_n_slowest_honors_limit() {
+        let measurements = vec![
+            measurement("a.pm", 10, 50, 0),
+            measurement("b.pm", 20, 50, 0),
+            measurement("c.pm", 30, 50, 0),
+        ];
+        let slowest = top_n_slowest(&measurements, 2);
+        assert_eq!(slowest.len(), 2);
+        assert_eq!(slowest[0].path, "c.pm");
+        assert_eq!(slowest[1].path, "b.pm");
+    }
+
+    #[test]
+    fn test_top_n_slowest_ties_broken_by_path_deterministically() {
+        // Two files with identical parse times must sort by path ascending
+        // so repeated runs produce identical receipts.
+        let measurements = vec![
+            measurement("zeta.pm", 10, 50, 0),
+            measurement("alpha.pm", 10, 50, 0),
+            measurement("mu.pm", 10, 50, 0),
+        ];
+        let slowest = top_n_slowest(&measurements, 10);
+        assert_eq!(slowest[0].path, "alpha.pm");
+        assert_eq!(slowest[1].path, "mu.pm");
+        assert_eq!(slowest[2].path, "zeta.pm");
+    }
+
+    #[test]
+    fn test_compute_median_error_density_empty() {
+        assert!(compute_median_error_density(&[]).is_none());
+    }
+
+    #[test]
+    fn test_compute_median_error_density_all_clean() {
+        // Clean files must be excluded so a fully clean corpus returns None.
+        let measurements = vec![measurement("a.pm", 1, 100, 0), measurement("b.pm", 1, 200, 0)];
+        assert!(compute_median_error_density(&measurements).is_none());
+    }
+
+    #[test]
+    fn test_compute_median_error_density_ignores_zero_lines() {
+        // Division-by-zero guard: a dirty file with no recorded line count
+        // must not poison the median.
+        let measurements = vec![
+            measurement("empty.pm", 1, 0, 5),
+            measurement("good.pm", 1, 100, 10), // 100.0 per 1k LOC
+        ];
+        let density = compute_median_error_density(&measurements).expect("some");
+        assert!((density - 100.0).abs() < 1e-6, "expected 100.0, got {density}");
+    }
+
+    #[test]
+    fn test_compute_median_error_density_odd_count() {
+        let measurements = vec![
+            measurement("a.pm", 1, 100, 1),  //  10.0
+            measurement("b.pm", 1, 1000, 5), //   5.0
+            measurement("c.pm", 1, 100, 5),  //  50.0
+        ];
+        let density = compute_median_error_density(&measurements).expect("some");
+        assert!((density - 10.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_compute_median_error_density_even_count_averages() {
+        let measurements = vec![
+            measurement("a.pm", 1, 1000, 10), // 10.0
+            measurement("b.pm", 1, 1000, 20), // 20.0
+        ];
+        // median of [10.0, 20.0] = 15.0
+        let density = compute_median_error_density(&measurements).expect("some");
+        assert!((density - 15.0).abs() < 1e-6, "expected 15.0, got {density}");
+    }
+
+    #[test]
+    fn test_sweep_report_schema_1_3_0_roundtrip() {
+        // New optional fields roundtrip correctly and are emitted with
+        // expected JSON keys.
+        let report = SweepReport {
+            phase_timings: Some(PhaseTimings {
+                discovery_ms: 12,
+                file_io_ms: 34,
+                parse_ms: 56,
+                total_ms: 102,
+            }),
+            median_error_density_per_1k_loc: Some(4.5),
+            slowest_files: vec![SlowestFileEntry {
+                path: "slow.pm".to_string(),
+                parse_duration_ms: 9,
+                line_count: 400,
+            }],
+            ..test_report(5, 1, 2, 0, BTreeMap::new())
+        };
+
+        let json = serde_json::to_string(&report).expect("serialize");
+        assert!(json.contains("\"phase_timings\""), "phase_timings key missing");
+        assert!(json.contains("\"discovery_ms\":12"), "discovery_ms value missing");
+        assert!(
+            json.contains("\"median_error_density_per_1k_loc\":4.5"),
+            "median density key missing"
+        );
+        assert!(json.contains("\"slowest_files\""), "slowest_files key missing");
+
+        let back: SweepReport = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.phase_timings, report.phase_timings);
+        assert_eq!(back.median_error_density_per_1k_loc, report.median_error_density_per_1k_loc);
+        assert_eq!(back.slowest_files, report.slowest_files);
+    }
+
+    #[test]
+    fn test_sweep_report_old_schema_deserializes_with_none_fields() {
+        // schema 1.2.0 JSON (no phase_timings / median / slowest_files)
+        // must deserialize cleanly with None / empty defaults.
+        let old_json = r#"{
+            "schema_version": "1.2.0",
+            "commit": "abc",
+            "timestamp": "2026-04-09T00:00:00Z",
+            "corpus_profile": "system",
+            "corpus_roots": ["/usr/share/perl"],
+            "resolved_roots_count": 1,
+            "perl_version": "5.38",
+            "total_files": 10,
+            "files_unreadable": 0,
+            "clean_files": 10,
+            "files_with_errors": 0,
+            "total_error_nodes": 0,
+            "first_error_buckets": {},
+            "elapsed_secs": 1.0
+        }"#;
+        let report: SweepReport = serde_json::from_str(old_json).expect("deserialize");
+        assert!(report.phase_timings.is_none());
+        assert!(report.median_error_density_per_1k_loc.is_none());
+        assert!(report.slowest_files.is_empty());
+    }
+
+    #[test]
+    fn test_file_result_old_schema_deserializes_without_new_fields() {
+        // Per-file entries predating 1.3.0 lack parse_duration_ms / line_count;
+        // those must default to None without a deserialization error.
+        let old_json = r#"{
+            "path": "Foo.pm",
+            "status": "clean",
+            "error_node_count": 0
+        }"#;
+        let result: FileResult = serde_json::from_str(old_json).expect("deserialize");
+        assert_eq!(result.path, "Foo.pm");
+        assert!(result.parse_duration_ms.is_none());
+        assert!(result.line_count.is_none());
+    }
+
+    #[test]
+    fn test_print_summary_with_phase_timings_does_not_panic() {
+        // Smoke test: print_summary must tolerate the new optional fields
+        // (populated) without panicking.
+        let report = SweepReport {
+            phase_timings: Some(PhaseTimings {
+                discovery_ms: 5,
+                file_io_ms: 10,
+                parse_ms: 20,
+                total_ms: 40,
+            }),
+            median_error_density_per_1k_loc: Some(2.5),
+            slowest_files: vec![SlowestFileEntry {
+                path: "slow.pm".to_string(),
+                parse_duration_ms: 15,
+                line_count: 250,
+            }],
+            ..test_report(5, 1, 2, 0, BTreeMap::from([("unclosed_brace".to_string(), 1)]))
+        };
+        print_summary(&report);
+    }
+
+    #[test]
+    fn test_print_summary_without_phase_timings_does_not_panic() {
+        // Smoke test for the old-schema path: no timings, no density, no
+        // slowest list — summary must still render headline counters.
+        let report = test_report(5, 1, 2, 0, BTreeMap::new());
+        print_summary(&report);
     }
 }

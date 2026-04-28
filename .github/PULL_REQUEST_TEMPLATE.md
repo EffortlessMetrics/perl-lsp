@@ -1,3 +1,12 @@
+<!--
+PR title convention: end with a real issue ref, e.g.
+  fix(crate): description (#NNNN)
+
+Replace NNNN with the tracking issue number this PR addresses.
+The validate-title CI check enforces this format — placeholder refs
+like (#0000) or (#9999) will fail CI.
+-->
+
 ## Summary
 <!-- What changed and why. Link the issue: Fixes #NNN -->
 

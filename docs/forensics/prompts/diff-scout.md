@@ -149,9 +149,9 @@ m0n1o2p docs: update test threading guidance
 </commit_history>
 
 <file_histogram>
- crates/perl-lsp/src/connection.rs | 145 ++++++++++++++++++++
- crates/perl-lsp/src/server.rs     |  32 ++---
- crates/perl-lsp/tests/harness.rs  |  89 +++++++++++++
+ crates/perl-lsp-rs/src/connection.rs | 145 ++++++++++++++++++++
+ crates/perl-lsp-rs/src/server.rs     |  32 ++---
+ crates/perl-lsp-rs/tests/harness.rs  |  89 +++++++++++++
  docs/LSP_TESTING.md               |  25 ++++
  4 files changed, 272 insertions(+), 19 deletions(-)
 </file_histogram>
@@ -166,15 +166,15 @@ timestamp: 2025-01-07T12:00:00Z
 coverage: github_only
 
 review_map:
-  - path: crates/perl-lsp/src/connection.rs
+  - path: crates/perl-lsp-rs/src/connection.rs
     delta: +145/-0
     category: logic
     risk: high
-  - path: crates/perl-lsp/src/server.rs
+  - path: crates/perl-lsp-rs/src/server.rs
     delta: +13/-19
     category: logic
     risk: medium
-  - path: crates/perl-lsp/tests/harness.rs
+  - path: crates/perl-lsp-rs/tests/harness.rs
     delta: +89/-0
     category: test
     risk: medium
@@ -184,10 +184,10 @@ review_map:
     risk: low
 
 hotspots:
-  - path: crates/perl-lsp/src/connection.rs
+  - path: crates/perl-lsp-rs/src/connection.rs
     reason: New file with significant logic, connection state management is security-sensitive
     lines: "1-145"
-  - path: crates/perl-lsp/src/server.rs
+  - path: crates/perl-lsp-rs/src/server.rs
     reason: Modifications to server shutdown logic, error handling critical path
     lines: "78-110"
 
@@ -208,7 +208,7 @@ findings:
     category: large_change
     summary: New connection.rs file adds 145 lines of state management logic
     evidence:
-      - anchor: crates/perl-lsp/src/connection.rs:1-145
+      - anchor: crates/perl-lsp-rs/src/connection.rs:1-145
         content: "New file with ConnectionState enum and tracking"
     recommendation: Ensure comprehensive test coverage for new state machine
     confidence: high

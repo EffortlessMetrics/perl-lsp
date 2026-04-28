@@ -638,7 +638,7 @@ which wasted CI cycles:
 
 Agent tools (Write, Edit) resolve absolute paths to the main repository checkout, not
 to the agent's worktree. An agent in worktree `agent-abc123` that writes to
-`/home/user/repo/crates/perl-lsp/src/lib.rs` writes to the main checkout's version
+`/home/user/repo/crates/perl-lsp-rs/src/lib.rs` writes to the main checkout's version
 of that file, not its worktree's version.
 
 This was discovered in Era 7 s2 when multiple agents were inadvertently editing the

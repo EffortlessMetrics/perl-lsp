@@ -1208,7 +1208,7 @@ sub render_value {
 
 #### Task 3.5: LSP Non-Regression (AC17)
 **Duration**: 0.5 weeks
-**Files Created**: `crates/perl-lsp/tests/lsp_dap_non_regression.rs`
+**Files Created**: `crates/perl-lsp-rs/tests/lsp_dap_non_regression.rs`
 
 **Requirements**:
 - 100% LSP test pass rate with DAP active

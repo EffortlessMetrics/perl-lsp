@@ -1,0 +1,11 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_capability_snapshot_test.rs
+assertion_line: 93
+expression: "&triggers"
+---
+- $
+- "@"
+- "%"
+- ">"
+- ":"
+- "-"

@@ -77,12 +77,13 @@ fn parse_context_non_numeric_line_returns_none() {
 
 #[test]
 fn parse_context_extra_whitespace_around_valid_format() {
+    use perl_tdd_support::must_some;
     let parser = PerlStackParser::new();
-    // Leading/trailing whitespace around valid context line
-    // The regex anchors to start of string so leading whitespace should fail
-    let result = parser.parse_context("  main::(file.pm):42:");
-    // Leading whitespace causes the anchored regex to not match
-    assert!(result.is_none());
+    // Leading/trailing whitespace around valid context line should be ignored.
+    let (func, file, line) = must_some(parser.parse_context("  main::(file.pm):42:   "));
+    assert_eq!(func, "main");
+    assert_eq!(file, "file.pm");
+    assert_eq!(line, 42);
 }
 
 #[test]
@@ -97,11 +98,12 @@ fn parse_context_valid_format_recognized() {
 
 #[test]
 fn parse_context_with_path_containing_spaces() {
+    use perl_tdd_support::must_some;
     let parser = PerlStackParser::new();
-    // Paths with spaces may or may not match depending on regex
-    let result = parser.parse_context("main::(my file.pm):10:");
-    // The regex uses [^:)\\s]+ for file2, so spaces will break the match
-    assert!(result.is_none());
+    let (func, file, line) = must_some(parser.parse_context("main::(my file.pm):10:"));
+    assert_eq!(func, "main");
+    assert_eq!(file, "my file.pm");
+    assert_eq!(line, 10);
 }
 
 #[test]
@@ -530,19 +532,10 @@ fn classify_all_mixed_with_include_external_true() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-fn looks_like_frame_perl_comments_are_false_positive() {
-    // Perl comments starting with # trigger the starts_with('#') heuristic.
-    // This is a known false positive: looks_like_frame is a quick pre-filter,
-    // and the actual parse_frame() correctly rejects these.
-    assert!(PerlStackParser::looks_like_frame("# This is a comment"));
-    assert!(PerlStackParser::looks_like_frame("# TODO: fix this later"));
-    assert!(PerlStackParser::looks_like_frame("## Section header"));
-
-    // But parse_frame correctly rejects them
-    let mut parser = PerlStackParser::new();
-    assert!(parser.parse_frame("# This is a comment", 0).is_none());
-    assert!(parser.parse_frame("# TODO: fix this later", 0).is_none());
-    assert!(parser.parse_frame("## Section header", 0).is_none());
+fn looks_like_frame_perl_comments_are_negative() {
+    assert!(!PerlStackParser::looks_like_frame("# This is a comment"));
+    assert!(!PerlStackParser::looks_like_frame("# TODO: fix this later"));
+    assert!(!PerlStackParser::looks_like_frame("## Section header"));
 }
 
 #[test]
@@ -610,9 +603,9 @@ fn looks_like_frame_positive_verbose_format() {
 
 #[test]
 fn looks_like_frame_hash_only_is_positive() {
-    // A bare "#" with any content triggers the starts_with('#') check
+    // Hash-prefix frames must start with a numeric frame index.
     assert!(PerlStackParser::looks_like_frame("#0"));
-    assert!(PerlStackParser::looks_like_frame("#anything"));
+    assert!(!PerlStackParser::looks_like_frame("#anything"));
 }
 
 #[test]
@@ -624,26 +617,12 @@ fn looks_like_frame_false_positive_awareness() {
     assert!(PerlStackParser::looks_like_frame(ambiguous));
 }
 
-// Note: The looks_like_frame() heuristic also matches lines starting with '#'.
-// Perl comments start with '#', so they produce false positives.
-// This is a known limitation: looks_like_frame is a quick pre-filter,
-// not a definitive parser. The actual parse_frame() call rejects these.
+// `looks_like_frame` avoids hash-comment false positives while still allowing
+// numbered hash-prefix frames like `#0`.
 #[test]
-fn looks_like_frame_comment_false_positive_rejected_by_parse_frame() {
-    // A comment starting with # will pass looks_like_frame but fail parse_frame
+fn looks_like_frame_comment_is_rejected_before_parse() {
     let comment = "# This is a perl comment";
-    // looks_like_frame triggers on '#' prefix (known false positive)
-    let looks_like = PerlStackParser::looks_like_frame(comment);
-    // But parse_frame correctly rejects it
-    let mut parser = PerlStackParser::new();
-    let parsed = parser.parse_frame(comment, 0);
-    // The comment is rejected by the actual parser even if the heuristic said yes
-    if looks_like {
-        assert!(
-            parsed.is_none(),
-            "parse_frame should reject comments even if looks_like_frame says true"
-        );
-    }
+    assert!(!PerlStackParser::looks_like_frame(comment));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
