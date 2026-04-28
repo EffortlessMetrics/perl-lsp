@@ -11,7 +11,7 @@
 use parking_lot::Mutex;
 use perl_lsp::state::WorkspaceConfig;
 use perl_lsp::{JsonRpcRequest, LspServer};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::io::Write;
 use std::sync::Arc;
 
@@ -209,8 +209,8 @@ fn initialize_with_legacy_root_path_fallback() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-fn initialize_with_legacy_root_path_sets_workspace_folder_path(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn initialize_with_legacy_root_path_sets_workspace_folder_path()
+-> Result<(), Box<dyn std::error::Error>> {
     let (server, _buffer) = create_test_server();
 
     let result = send_request(
