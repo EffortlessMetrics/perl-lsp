@@ -575,11 +575,35 @@ mod tests {
 
     #[test]
     fn initialize_with_workspace_folders_sets_root_path_from_first_folder() {
+        use std::path::Path;
+
         let server = LspServer::new();
+
+        // Create platform-appropriate URIs for workspace folders using Url::from_file_path
+        #[cfg(windows)]
+        let (primary_uri, secondary_uri) = {
+            let primary = Path::new("C:\\tmp\\primary");
+            let secondary = Path::new("C:\\tmp\\secondary");
+            (
+                url::Url::from_file_path(primary).unwrap().to_string(),
+                url::Url::from_file_path(secondary).unwrap().to_string(),
+            )
+        };
+
+        #[cfg(not(windows))]
+        let (primary_uri, secondary_uri) = {
+            let primary_path = Path::new("/tmp/primary");
+            let secondary_path = Path::new("/tmp/secondary");
+            (
+                url::Url::from_file_path(primary_path).unwrap().to_string(),
+                url::Url::from_file_path(secondary_path).unwrap().to_string(),
+            )
+        };
+
         let params = json!({
             "workspaceFolders": [
-                { "uri": "file:///primary", "name": "primary" },
-                { "uri": "file:///secondary", "name": "secondary" }
+                { "uri": primary_uri, "name": "primary" },
+                { "uri": secondary_uri, "name": "secondary" }
             ],
             "capabilities": {}
         });
@@ -590,7 +614,8 @@ mod tests {
         let root_path = server.root_path.lock();
         assert!(
             root_path.as_ref().is_some_and(|path| path.ends_with("primary")),
-            "root path should come from first workspace folder"
+            "root path should come from first workspace folder. Got: {:?}",
+            root_path
         );
     }
 
