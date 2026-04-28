@@ -28,7 +28,7 @@ perllsp --info
 | Trae (ByteDance) | install the VS Code-compatible extension or set command to `perllsp --stdio` | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Vim | use `vim-lsp` or `coc.nvim` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
-| Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
+| Emacs | prefer Eglot on Emacs 29+ or use `lsp-mode`; register `perllsp --stdio` for `perl-mode`, `cperl-mode`, and optional `perl-ts-mode` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | install Sublime's `LSP` package and add `perllsp --stdio` in `LanguageServers.sublime-settings` | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
@@ -70,8 +70,11 @@ require("lspconfig").perl_lsp.setup({
 
 ### Emacs
 
-Use `lsp-mode` or `eglot` with the same `perllsp --stdio` command. The
-editor-specific guide has the full snippets for both.
+For Emacs 29+, prefer `eglot` and register `perllsp --stdio` for `perl-mode`
+and `cperl-mode` (plus `perl-ts-mode` only if that package is installed). If
+you prefer `lsp-mode`, register a custom client with language ID `perl`. See
+[docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) for full setup,
+verification, and troubleshooting details.
 
 ### Vim
 
