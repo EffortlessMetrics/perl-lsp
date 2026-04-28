@@ -119,9 +119,9 @@ fn scenario_10_definition_same_file_call_site_resolves() -> Result<()> {
     }
     // And at least one location must point back to greet.pl — otherwise the
     // server resolved the call to some unrelated file (real regression).
-    let points_to_source = definitions.iter().any(|entry| {
-        entry_uri(entry).map(|uri| uri.ends_with("greet.pl")).unwrap_or(false)
-    });
+    let points_to_source = definitions
+        .iter()
+        .any(|entry| entry_uri(entry).map(|uri| uri.ends_with("greet.pl")).unwrap_or(false));
     assert!(
         points_to_source,
         "expected at least one definition result to point back to greet.pl, got: {definitions:?}"
