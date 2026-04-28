@@ -605,6 +605,25 @@ NO_COLOR=1 perllsp --stdio
 
 ---
 
+## OpenAI Codex app
+
+Codex app is not a documented generic LSP client. Do not configure
+`perllsp --stdio` as a Codex MCP server; `perllsp` speaks LSP, not MCP.
+
+Use Codex app to run non-editor checks:
+
+```bash
+perllsp --check path/to/file.pl
+perllsp --check-project .
+perllsp --info
+```
+
+For live editor LSP features while using Codex, install the OpenAI Codex IDE
+Extension and the `EffortlessMetrics.perl-lsp-rs` extension in a VS
+Code-compatible editor.
+
+---
+
 ## VS Code Extension Settings
 
 Settings specific to the VS Code extension (`vscode-extension/package.json`).
@@ -615,7 +634,7 @@ behaviour such as binary management and feature toggles.
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perl-lsp` binary. Empty = auto-download. |
+| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perllsp` binary. Empty = auto-download. |
 | `perl-lsp.autoDownload` | `boolean` | `true` | Download the binary automatically if not found locally. |
 | `perl-lsp.downloadBaseUrl` | `string` | `""` | Override the GitHub releases base URL for internal mirrors. |
 | `perl-lsp.channel` | `"latest"\|"stable"\|"tag"` | `"latest"` | Release channel to track. |

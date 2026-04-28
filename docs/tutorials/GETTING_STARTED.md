@@ -16,12 +16,13 @@ just editor-specific setup and feature discovery.
 
 ## What is a Language Server?
 
-A **language server** is a program that runs alongside your editor and gives it deep understanding of your code. Instead of each editor re-implementing features like "go to definition" or "show all references," the [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) defines a standard way for any editor to talk to a language-specific backend. `perllsp` is the native Perl 5 language server CLI from the perl-lsp project: it parses your code, builds an index of symbols, and responds to editor requests over JSON-RPC -- so you get IDE-grade navigation, completion, diagnostics, and refactoring in VS Code, Neovim, Emacs, Helix, Codex Desktop, or any other LSP-capable editor. No Perl runtime is required; the server is a single native binary.
+A **language server** is a program that runs alongside your editor and gives it deep understanding of your code. Instead of each editor re-implementing features like "go to definition" or "show all references," the [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) defines a standard way for any editor to talk to a language-specific backend. `perllsp` is the native Perl 5 language server CLI from the perl-lsp project: it parses your code, builds an index of symbols, and responds to editor requests over JSON-RPC -- so you get IDE-grade navigation, completion, diagnostics, and refactoring in VS Code, Neovim, Emacs, Helix, and other LSP-capable editors. The OpenAI Codex app can run `perllsp` checks from commands/actions, but is not documented as a generic editor LSP client. No Perl runtime is required; the server is a single native binary.
 
 ## Prerequisites
 
 - **Rust 1.92+** (for building from source)
-- **A supported editor**: VS Code, Amazon Kiro, Neovim, Emacs, Helix, Codex Desktop, or Sublime Text
+- **A supported editor**: VS Code, Amazon Kiro, Neovim, Emacs, Helix, or Sublime Text
+- **Optional**: OpenAI Codex app for running `perllsp --check` / `--check-project` workflows
 
 ## Installation
 

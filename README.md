@@ -34,7 +34,7 @@ code --install-extension effortlessmetrics.perl-lsp-rs
 
 The extension auto-downloads the matching `perllsp` binary for your platform.
 
-**Codex Desktop** — add a custom Perl language server command that runs `perllsp --stdio` (guide: [docs/EDITORS/CODEX_DESKTOP_SETUP.md](docs/EDITORS/CODEX_DESKTOP_SETUP.md)).
+**Codex app** — run `perllsp` as a project validation command (guide: [docs/EDITORS/CODEX_APP_SETUP.md](docs/EDITORS/CODEX_APP_SETUP.md)).
 
 **Other editors** — download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), add it to your `PATH`, then point your LSP client at it:
 

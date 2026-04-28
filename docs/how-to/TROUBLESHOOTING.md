@@ -94,6 +94,34 @@ If the editor is using a helper extension or plugin, check its own logs too.
 - Check whether the current file actually has a Perl mode or file type.
 - Inspect the LSP log for capability negotiation or request errors.
 
+## OpenAI Codex app
+
+Codex app can run `perllsp` as a command-line validation tool, but it is not a
+documented generic LSP client.
+
+1. Confirm the binary works:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+2. Check a file or project:
+
+   ```bash
+   perllsp --check path/to/file.pl
+   perllsp --check-project .
+   ```
+
+3. If Codex cannot find the binary, use an absolute path in a Codex project
+   action or fix the shell environment used by Codex.
+4. Do not test with raw `perllsp --stdio` unless an LSP client is attached.
+   Stdio mode waits for framed LSP input.
+5. For live hover, definition, references, rename, completion, and squiggle
+   diagnostics, use an editor LSP client such as VS Code with
+   `EffortlessMetrics.perl-lsp-rs`.
+
 ## DAP Or Debugging Issues
 
 If you are debugging with `perl-dap`, check the DAP guide:
