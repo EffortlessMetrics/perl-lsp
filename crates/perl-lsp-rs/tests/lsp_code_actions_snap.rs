@@ -34,13 +34,11 @@ fn normalize_actions(response: Value) -> Result<Value, Box<dyn std::error::Error
     normalized.sort_by(|left, right| {
         let left_kind = left.get("kind").and_then(Value::as_str).unwrap_or("");
         let right_kind = right.get("kind").and_then(Value::as_str).unwrap_or("");
-        left_kind
-            .cmp(right_kind)
-            .then_with(|| {
-                let left_title = left.get("title").and_then(Value::as_str).unwrap_or("");
-                let right_title = right.get("title").and_then(Value::as_str).unwrap_or("");
-                left_title.cmp(right_title)
-            })
+        left_kind.cmp(right_kind).then_with(|| {
+            let left_title = left.get("title").and_then(Value::as_str).unwrap_or("");
+            let right_title = right.get("title").and_then(Value::as_str).unwrap_or("");
+            left_title.cmp(right_title)
+        })
     });
 
     Ok(Value::Array(normalized))
