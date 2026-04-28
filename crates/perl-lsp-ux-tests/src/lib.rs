@@ -51,7 +51,7 @@ pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
 pub use env::{PathGuard, RestrictedPath};
-pub use scorecard::{aggregate_editor_ux_scorecard, EditorUxScorecard, ScenarioScore};
+pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
 pub use workspace::FakeWorkspace;
 
 use anyhow::{Context, Result, anyhow};
@@ -894,11 +894,7 @@ impl FormatResult {
 
     /// Extract the error message string if this is an error.
     pub fn error_message(&self) -> Option<&str> {
-        if let Self::Error(v) = self {
-            v["message"].as_str()
-        } else {
-            None
-        }
+        if let Self::Error(v) = self { v["message"].as_str() } else { None }
     }
 
     /// True if there are text edits.
