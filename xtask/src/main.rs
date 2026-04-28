@@ -12,6 +12,7 @@ mod types;
 mod utils;
 use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
+use tasks::gate_policy::GatePolicyCommand;
 use tasks::gates::{GateTier, OutputFormat as GatesOutputFormat};
 use tasks::methodology_gate::MethodologyOutputFormat;
 use tasks::metrics;
@@ -966,6 +967,12 @@ enum Commands {
     GateReceipts {
         #[command(subcommand)]
         command: GateReceiptsCommand,
+    },
+
+    /// Inspect and validate effective gate policy profiles.
+    GatePolicy {
+        #[command(subcommand)]
+        command: GatePolicyCommand,
     },
 
     /// Show technical debt report from debt ledger
@@ -2185,6 +2192,7 @@ fn main() -> Result<()> {
                     .map_err(|error| eyre!(error.to_string()))
             }
         },
+        Commands::GatePolicy { command } => gate_policy::run(command),
         Commands::MethodologyGate { fixture, pr, receipt, dry_run, enforce, format } => {
             methodology_gate::run(methodology_gate::MethodologyGateConfig {
                 fixture,
