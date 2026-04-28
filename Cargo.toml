@@ -129,6 +129,7 @@ allow = [
     "perl-workspace",
     "perl-semantic-analyzer",
     "perl-diagnostics",
+    "perl-dependency-metadata",
     # (perl-lsp-diagnostics absorbed into perl-lsp-rs-core::providers::diagnostics — Wave G1b)
     # (perl-lsp-text-utils absorbed into perl-lsp-rs-core::runtime::text_utils — Wave G2)
     # (perl-lsp-rename absorbed into perl-lsp-rs-core::providers::rename — Wave G1b)
