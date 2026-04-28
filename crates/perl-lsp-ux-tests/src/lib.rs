@@ -45,11 +45,13 @@
 )]
 
 pub mod client;
+pub mod diagnostics;
 pub mod env;
 pub mod scorecard;
 pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
+pub use diagnostics::DiagnosticsTracker;
 pub use env::{PathGuard, RestrictedPath};
 pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
 pub use workspace::FakeWorkspace;
@@ -535,6 +537,31 @@ impl UxHarness {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         Vec::new()
+    }
+
+    /// Wait for diagnostics to become empty for a file (cleared UX state).
+    ///
+    /// Returns `true` if an explicit `textDocument/publishDiagnostics` with an
+    /// **empty** diagnostics array arrives within `timeout`, or if the latest
+    /// buffered notification for that URI already has an empty array.
+    ///
+    /// Returns `false` on timeout.  Note that if the server clears diagnostics
+    /// silently (no explicit notification) this method will timeout and return
+    /// `false`.  In that case prefer checking that no *new* non-empty
+    /// notifications arrive within the deadline instead.
+    pub fn wait_for_no_diagnostics(
+        &self,
+        relative_path: &str,
+        timeout: std::time::Duration,
+    ) -> bool {
+        let uri = self.workspace.uri(relative_path);
+        DiagnosticsTracker::wait_for_uri_matching(
+            || self.client.peek_events(),
+            &uri,
+            timeout,
+            |diagnostics| diagnostics.is_empty(),
+        )
+        .is_some()
     }
 
     /// Request go-to-definition.
