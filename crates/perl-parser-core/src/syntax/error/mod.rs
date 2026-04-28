@@ -542,6 +542,86 @@ pub struct ParseOutput {
     pub recovered_count: usize,
 }
 
+/// Closeout classification for a parsed file.
+///
+/// Used by corpus-level reporting to distinguish successful structured
+/// recovery from unrecovered parser damage and catastrophic failures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecoverySalvageClass {
+    /// No diagnostics and no `ERROR` AST nodes.
+    Clean,
+    /// Only structured recovery diagnostics were emitted; no `ERROR` nodes.
+    StructuredRecoveryOnly,
+    /// Parse produced one or more `ERROR` AST nodes.
+    ErrorNodesPresent,
+    /// Parse failed catastrophically (`parse()` returned `Err`).
+    CatastrophicFailure,
+}
+
+/// Per-file recovery/salvage summary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecoverySalvageProfile {
+    /// Whether this parse was a catastrophic failure.
+    pub catastrophic: bool,
+    /// Number of `ParseError::Recovered` diagnostics observed.
+    pub recovered_count: usize,
+    /// Number of `NodeKind::Error` nodes observed in the AST.
+    pub error_node_count: usize,
+    /// Message from the earliest unrecovered `ERROR` node, if any.
+    pub first_unrecovered_error_node: Option<String>,
+    /// Coarse classification used by corpus closeout reports.
+    pub class: RecoverySalvageClass,
+}
+
+impl RecoverySalvageProfile {
+    /// Build a recovery/salvage profile for one parsed file.
+    pub fn from_parse(ast: &Node, diagnostics: &[ParseError], catastrophic: bool) -> Self {
+        let mut error_node_count = 0usize;
+        let mut first_start = usize::MAX;
+        let mut first_unrecovered_error_node: Option<String> = None;
+
+        fn walk(
+            node: &Node,
+            error_node_count: &mut usize,
+            first_start: &mut usize,
+            first_unrecovered_error_node: &mut Option<String>,
+        ) {
+            if let perl_ast::NodeKind::Error { message, .. } = &node.kind {
+                *error_node_count = error_node_count.saturating_add(1);
+                if node.location.start < *first_start {
+                    *first_start = node.location.start;
+                    *first_unrecovered_error_node = Some(message.clone());
+                }
+            }
+            node.for_each_child(|child| {
+                walk(child, error_node_count, first_start, first_unrecovered_error_node);
+            });
+        }
+        walk(ast, &mut error_node_count, &mut first_start, &mut first_unrecovered_error_node);
+
+        let recovered_count =
+            diagnostics.iter().filter(|e| matches!(e, ParseError::Recovered { .. })).count();
+
+        let class = if catastrophic {
+            RecoverySalvageClass::CatastrophicFailure
+        } else if error_node_count > 0 {
+            RecoverySalvageClass::ErrorNodesPresent
+        } else if recovered_count > 0 {
+            RecoverySalvageClass::StructuredRecoveryOnly
+        } else {
+            RecoverySalvageClass::Clean
+        };
+
+        Self {
+            catastrophic,
+            recovered_count,
+            error_node_count,
+            first_unrecovered_error_node,
+            class,
+        }
+    }
+}
+
 impl ParseOutput {
     /// Create a successful parse output with no errors.
     pub fn success(ast: Node) -> Self {

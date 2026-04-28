@@ -31,6 +31,12 @@ pub struct RegexValidator {
     max_unicode_properties: usize,
 }
 
+impl Default for RegexValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RegexValidator {
     /// Create a new validator with default safety limits
     pub fn new() -> Self {
@@ -49,40 +55,49 @@ impl RegexValidator {
 
     /// Check if the pattern contains embedded code constructs (?{...}) or (??{...})
     pub fn detects_code_execution(&self, pattern: &str) -> bool {
-        let mut chars = pattern.char_indices().peekable();
-        while let Some((_, ch)) = chars.next() {
-            if ch == '\\' {
-                chars.next(); // skip escaped
+        let bytes = pattern.as_bytes();
+        let mut i = 0;
+        let len = bytes.len();
+        while i < len {
+            let ch = bytes[i];
+            if ch == b'\\' {
+                i += 2; // skip escaped
                 continue;
             }
-            if ch == '[' {
+            if ch == b'[' {
                 // Skip character class content so literals like [(?{] are not
                 // misclassified as embedded code execution.
-                while let Some((_, class_ch)) = chars.next() {
-                    if class_ch == '\\' {
-                        chars.next(); // skip escaped char inside class
-                    } else if class_ch == ']' {
+                i += 1;
+                while i < len {
+                    let class_ch = bytes[i];
+                    if class_ch == b'\\' {
+                        i += 2; // skip escaped char inside class
+                    } else if class_ch == b']' {
+                        i += 1;
                         break;
+                    } else {
+                        i += 1;
                     }
                 }
                 continue;
             }
-            if ch == '(' {
-                if let Some((_, '?')) = chars.peek() {
-                    chars.next(); // consume ?
+            if ch == b'(' {
+                if i + 1 < len && bytes[i + 1] == b'?' {
+                    i += 2; // consume '(' and '?'
                     // Check for { or ?{
-                    if let Some((_, next)) = chars.peek() {
-                        if *next == '{' {
+                    if i < len {
+                        if bytes[i] == b'{' {
                             return true; // (?{
-                        } else if *next == '?' {
-                            chars.next(); // consume second ?
-                            if let Some((_, '{')) = chars.peek() {
+                        } else if bytes[i] == b'?' {
+                            if i + 1 < len && bytes[i + 1] == b'{' {
                                 return true; // (??{
                             }
                         }
                     }
+                    continue;
                 }
             }
+            i += 1;
         }
         false
     }
@@ -96,36 +111,45 @@ impl RegexValidator {
         // Real implementation would need a full regex parser, but this heuristic
         // covers common cases like (a+)+
 
-        let mut chars = pattern.char_indices().peekable();
+        let bytes = pattern.as_bytes();
+        let mut i = 0;
+        let len = bytes.len();
         let mut group_stack = Vec::new();
 
         // Track the last significant character index and its type
         // Type: 0=other, 1=quantifier, 2=group_end
         let mut last_type = 0;
 
-        while let Some((_, ch)) = chars.next() {
+        while i < len {
+            let ch = bytes[i];
             match ch {
-                '\\' => {
-                    chars.next(); // skip escaped
+                b'\\' => {
+                    i += 2; // skip escaped
                     last_type = 0;
+                    continue;
                 }
-                '(' => {
+                b'(' => {
                     // Check if non-capturing or other special group
-                    if let Some((_, '?')) = chars.peek() {
-                        chars.next(); // consume '?'
+                    if i + 1 < len && bytes[i + 1] == b'?' {
+                        i += 2; // consume '(' and '?'
                         // Skip group-type specifier so it doesn't reach the
                         // quantifier match arm (mirrors check_complexity logic)
-                        if matches!(
-                            chars.peek(),
-                            Some((_, ':' | '=' | '!' | '<' | '>' | '|' | 'P' | '#'))
-                        ) {
-                            chars.next();
+                        if i < len
+                            && matches!(
+                                bytes[i],
+                                b':' | b'=' | b'!' | b'<' | b'>' | b'|' | b'P' | b'#'
+                            )
+                        {
+                            i += 1;
                         }
+                    } else {
+                        i += 1;
                     }
                     group_stack.push(false); // false = no quantifier inside yet
                     last_type = 0;
+                    continue;
                 }
-                ')' => {
+                b')' => {
                     if let Some(has_quantifier) = group_stack.pop() {
                         if has_quantifier {
                             last_type = 2; // group end with internal quantifier
@@ -134,15 +158,22 @@ impl RegexValidator {
                         }
                     }
                 }
-                '+' | '*' | '?' | '{' => {
+                b'+' | b'*' | b'?' | b'{' => {
                     // If we just closed a group that had a quantifier inside,
                     // and now we see another quantifier, that's a nested quantifier!
                     if last_type == 2 {
                         // Check if it's really a quantifier or literal {
-                        if ch == '{' {
+                        if ch == b'{' {
                             // Only count as quantifier if it looks like {n} or {n,m}.
-                            if Self::is_brace_quantifier(&mut chars) {
+                            let mut peek_i = i + 1;
+                            if Self::is_brace_quantifier(bytes, &mut peek_i) {
                                 return true;
+                            } else {
+                                // Important fix: If it's not a brace quantifier, do NOT
+                                // advance i using peek_i. It's just a literal '{'
+                                last_type = 0;
+                                i += 1;
+                                continue;
                             }
                         } else {
                             return true;
@@ -159,39 +190,32 @@ impl RegexValidator {
                     last_type = 0;
                 }
             }
+            i += 1;
         }
         false
     }
 
-    fn is_brace_quantifier(chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>) -> bool {
+    fn is_brace_quantifier(bytes: &[u8], i: &mut usize) -> bool {
         // Require at least one digit after '{'
-        let mut saw_digit = false;
-        while let Some((_, next)) = chars.peek() {
-            if next.is_ascii_digit() {
-                saw_digit = true;
-                chars.next();
+        let mut has_digit = false;
+        let mut has_comma = false;
+        let len = bytes.len();
+
+        while *i < len {
+            let ch = bytes[*i];
+            *i += 1;
+            if ch.is_ascii_digit() {
+                has_digit = true;
+            } else if ch == b',' && !has_comma {
+                has_comma = true;
+            } else if ch == b'}' && has_digit {
+                return true;
             } else {
                 break;
             }
         }
 
-        if !saw_digit {
-            return false;
-        }
-
-        // Optional range suffix: {n,m}
-        if let Some((_, ',')) = chars.peek() {
-            chars.next();
-            while let Some((_, next)) = chars.peek() {
-                if next.is_ascii_digit() {
-                    chars.next();
-                } else {
-                    break;
-                }
-            }
-        }
-
-        matches!(chars.peek(), Some((_, '}')))
+        false // Should have returned true at '}' if valid
     }
 
     fn check_complexity(&self, pattern: &str, start_pos: usize) -> Result<(), RegexError> {
@@ -201,62 +225,84 @@ impl RegexValidator {
         // check can invoke detect_nested_quantifiers() directly and surface the result
         // as a non-fatal diagnostic.
 
-        let mut chars = pattern.char_indices().peekable();
+        let bytes = pattern.as_bytes();
+        let mut i = 0;
+        let len = bytes.len();
+
         // Stack stores the type of the current group
         let mut stack: Vec<GroupType> = Vec::new();
         let mut unicode_property_count = 0;
 
-        while let Some((idx, ch)) = chars.next() {
+        while i < len {
+            let ch = bytes[i];
             match ch {
-                '\\' => {
+                b'\\' => {
                     // Check for escaped character
-                    if let Some((_, next_char)) = chars.peek() {
+                    if i + 1 < len {
+                        let next_char = bytes[i + 1];
                         match next_char {
-                            'p' | 'P' => {
+                            b'p' | b'P' => {
                                 // Unicode property start \p or \P
                                 // We consume the 'p'/'P'
-                                chars.next();
+                                i += 2;
 
                                 // Check if it's followed by {
-                                if let Some((_, '{')) = chars.peek() {
+                                if i < len && bytes[i] == b'{' {
                                     unicode_property_count += 1;
                                     if unicode_property_count > self.max_unicode_properties {
                                         return Err(RegexError::syntax(
                                             "Too many Unicode properties in regex (max 50)",
-                                            start_pos + idx,
+                                            start_pos + i - 2, // approximate original idx
                                         ));
                                     }
                                 }
+                                continue;
                             }
                             _ => {
                                 // Just skip other escaped chars
-                                chars.next();
+                                i += 2;
+                                continue;
                             }
                         }
                     }
                 }
-                '(' => {
+                b'[' => {
+                    // Need to skip character classes
+                    i += 1;
+                    while i < len {
+                        if bytes[i] == b'\\' {
+                            i += 2;
+                        } else if bytes[i] == b']' {
+                            break;
+                        } else {
+                            i += 1;
+                        }
+                    }
+                }
+                b'(' => {
                     let mut group_type = GroupType::Normal;
 
                     // Check for extension syntax (?...)
-                    if let Some((_, '?')) = chars.peek() {
-                        chars.next(); // consume ?
+                    if i + 1 < len && bytes[i + 1] == b'?' {
+                        i += 2; // consume '(' and '?'
 
                         // Check for < (lookbehind or named capture)
-                        if let Some((_, '<')) = chars.peek() {
-                            chars.next(); // consume <
+                        if i < len && bytes[i] == b'<' {
+                            i += 1; // consume <
 
                             // Check for = or ! (lookbehind)
-                            if matches!(chars.peek(), Some((_, '=')) | Some((_, '!'))) {
-                                chars.next(); // consume = or !
+                            if i < len && (bytes[i] == b'=' || bytes[i] == b'!') {
+                                i += 1; // consume = or !
                                 group_type = GroupType::Lookbehind;
                             }
                             // Otherwise it's likely a named capture (?<name>...) or condition (?<...)
                             // which we treat as a normal group
-                        } else if let Some((_, '|')) = chars.peek() {
-                            chars.next(); // consume |
+                        } else if i < len && bytes[i] == b'|' {
+                            i += 1; // consume |
                             group_type = GroupType::BranchReset { branch_count: 1 };
                         }
+                    } else {
+                        i += 1;
                     }
 
                     match group_type {
@@ -267,7 +313,7 @@ impl RegexValidator {
                             if lookbehind_depth >= self.max_nesting {
                                 return Err(RegexError::syntax(
                                     "Regex lookbehind nesting too deep",
-                                    start_pos + idx,
+                                    start_pos + i - 1, // rough idx
                                 ));
                             }
                         }
@@ -281,15 +327,16 @@ impl RegexValidator {
                                 // Use same nesting limit for now
                                 return Err(RegexError::syntax(
                                     "Regex branch reset nesting too deep",
-                                    start_pos + idx,
+                                    start_pos + i - 1,
                                 ));
                             }
                         }
                         _ => {}
                     }
                     stack.push(group_type);
+                    continue;
                 }
-                '|' => {
+                b'|' => {
                     // Check if we are in a branch reset group
                     if let Some(GroupType::BranchReset { branch_count }) = stack.last_mut() {
                         *branch_count += 1;
@@ -297,27 +344,18 @@ impl RegexValidator {
                             // Max 50 branches
                             return Err(RegexError::syntax(
                                 "Too many branches in branch reset group (max 50)",
-                                start_pos + idx,
+                                start_pos + i,
                             ));
                         }
                     }
                 }
-                ')' => {
+                b')' => {
+                    // Pop group from stack
                     stack.pop();
-                }
-                '[' => {
-                    // Skip character class [ ... ]
-                    // Need to handle escaping inside []
-                    while let Some((_, c)) = chars.next() {
-                        if c == '\\' {
-                            chars.next();
-                        } else if c == ']' {
-                            break;
-                        }
-                    }
                 }
                 _ => {}
             }
+            i += 1;
         }
 
         Ok(())
@@ -330,17 +368,9 @@ enum GroupType {
     BranchReset { branch_count: usize },
 }
 
-impl Default for RegexValidator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+/// A named capture group extracted from a regex pattern.
 
-/// A named capture group extracted from a Perl regex pattern.
-///
-/// Named captures use the `(?<name>...)` syntax introduced in Perl 5.10.
-/// Captured text is accessible via `$+{name}` or `$1`, `$2`, ... by index.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CaptureGroup {
     /// The capture group name from `(?<name>...)`.
     pub name: String,
@@ -371,24 +401,24 @@ impl RegexAnalyzer {
     pub fn extract_named_captures(pattern: &str) -> Vec<CaptureGroup> {
         let mut result = Vec::new();
         let mut capture_index = 0usize;
-        let chars: Vec<char> = pattern.chars().collect();
-        let len = chars.len();
+        let bytes = pattern.as_bytes();
+        let len = bytes.len();
         let mut i = 0;
 
         while i < len {
             // Skip escaped characters.
-            if chars[i] == '\\' {
+            if bytes[i] == b'\\' {
                 i += 2;
                 continue;
             }
 
             // Skip character classes [...] entirely.
-            if chars[i] == '[' {
+            if bytes[i] == b'[' {
                 i += 1;
                 while i < len {
-                    if chars[i] == '\\' {
+                    if bytes[i] == b'\\' {
                         i += 2;
-                    } else if chars[i] == ']' {
+                    } else if bytes[i] == b']' {
                         i += 1;
                         break;
                     } else {
@@ -398,24 +428,24 @@ impl RegexAnalyzer {
                 continue;
             }
 
-            if chars[i] == '(' {
+            if bytes[i] == b'(' {
                 i += 1;
 
                 // Determine the group kind.
-                if i < len && chars[i] == '?' {
+                if i < len && bytes[i] == b'?' {
                     i += 1; // consume '?'
 
-                    if i < len && chars[i] == '<' {
+                    if i < len && bytes[i] == b'<' {
                         i += 1; // consume '<'
 
                         // Lookbehind: (?<= or (?<!  — not a capture.
-                        if i < len && (chars[i] == '=' || chars[i] == '!') {
+                        if i < len && (bytes[i] == b'=' || bytes[i] == b'!') {
                             i += 1;
                             continue;
                         }
 
                         if let Some((name, next_pos)) =
-                            parse_named_capture_name_from(&chars, i, '>')
+                            parse_named_capture_name_from(bytes, i, b'>')
                         {
                             capture_index += 1;
                             i = next_pos;
@@ -424,16 +454,16 @@ impl RegexAnalyzer {
                             let pattern_start = i;
                             let mut depth = 1usize;
                             while i < len && depth > 0 {
-                                if chars[i] == '\\' {
+                                if bytes[i] == b'\\' {
                                     i += 2;
                                     continue;
                                 }
-                                if chars[i] == '[' {
+                                if bytes[i] == b'[' {
                                     i += 1;
                                     while i < len {
-                                        if chars[i] == '\\' {
+                                        if bytes[i] == b'\\' {
                                             i += 2;
-                                        } else if chars[i] == ']' {
+                                        } else if bytes[i] == b']' {
                                             i += 1;
                                             break;
                                         } else {
@@ -442,16 +472,19 @@ impl RegexAnalyzer {
                                     }
                                     continue;
                                 }
-                                if chars[i] == '(' {
+                                if bytes[i] == b'(' {
                                     depth += 1;
-                                } else if chars[i] == ')' {
+                                } else if bytes[i] == b')' {
                                     depth -= 1;
                                 }
                                 i += 1;
                             }
                             // The ')' was consumed above; sub-pattern ends before it.
                             let sub: String = if i > 0 && pattern_start < i - 1 {
-                                chars[pattern_start..i - 1].iter().collect()
+                                // Since we parsed byte by byte matching ASCII mostly,
+                                // the slice boundaries should be valid UTF-8.
+                                // If not, String::from_utf8_lossy covers it safely.
+                                String::from_utf8_lossy(&bytes[pattern_start..i - 1]).into_owned()
                             } else {
                                 String::new()
                             };
@@ -459,9 +492,9 @@ impl RegexAnalyzer {
                             result.push(CaptureGroup { name, index: capture_index, pattern: sub });
                             continue;
                         }
-                    } else if i < len && chars[i] == '\'' {
+                    } else if i < len && bytes[i] == b'\'' {
                         if let Some((name, next_pos)) =
-                            parse_named_capture_name(&chars, i, '\'', '\'')
+                            parse_named_capture_name(bytes, i, b'\'', b'\'')
                         {
                             capture_index += 1;
                             i = next_pos;
@@ -470,16 +503,16 @@ impl RegexAnalyzer {
                             let pattern_start = i;
                             let mut depth = 1usize;
                             while i < len && depth > 0 {
-                                if chars[i] == '\\' {
+                                if bytes[i] == b'\\' {
                                     i += 2;
                                     continue;
                                 }
-                                if chars[i] == '[' {
+                                if bytes[i] == b'[' {
                                     i += 1;
                                     while i < len {
-                                        if chars[i] == '\\' {
+                                        if bytes[i] == b'\\' {
                                             i += 2;
-                                        } else if chars[i] == ']' {
+                                        } else if bytes[i] == b']' {
                                             i += 1;
                                             break;
                                         } else {
@@ -488,16 +521,16 @@ impl RegexAnalyzer {
                                     }
                                     continue;
                                 }
-                                if chars[i] == '(' {
+                                if bytes[i] == b'(' {
                                     depth += 1;
-                                } else if chars[i] == ')' {
+                                } else if bytes[i] == b')' {
                                     depth -= 1;
                                 }
                                 i += 1;
                             }
                             // The ')' was consumed above; sub-pattern ends before it.
                             let sub: String = if i > 0 && pattern_start < i - 1 {
-                                chars[pattern_start..i - 1].iter().collect()
+                                String::from_utf8_lossy(&bytes[pattern_start..i - 1]).into_owned()
                             } else {
                                 String::new()
                             };
@@ -505,7 +538,8 @@ impl RegexAnalyzer {
                             result.push(CaptureGroup { name, index: capture_index, pattern: sub });
                             continue;
                         }
-                    } else if i < len && matches!(chars[i], ':' | '=' | '!' | '>' | '|' | 'P' | '#')
+                    } else if i < len
+                        && matches!(bytes[i], b':' | b'=' | b'!' | b'>' | b'|' | b'P' | b'#')
                     {
                         // Non-capturing group: (?:...), (?=...), (?!...), (?|...), etc.
                         // Does not increment capture_index; just move on (fall through to
@@ -530,7 +564,10 @@ impl RegexAnalyzer {
     /// Generate hover text for a Perl regex pattern and its modifiers.
     ///
     /// Summarises the named capture groups and explains the meaning of each
-    /// modifier flag (`i`, `m`, `s`, `x`, `g`).
+    /// modifier flag (`i`, `m`, `s`, `x`, `g`, `a`, `d`, `l`, `u`, `n`,
+    /// `p`, `r`, `c`, `o`, `e`). Repeated modifiers are deduplicated.
+    /// Unknown modifier flags are collected and appended as
+    /// `Unknown modifiers: \`…\`` at the end of the hover text.
     ///
     /// # Example
     /// ```
@@ -561,17 +598,21 @@ impl RegexAnalyzer {
         }
 
         // Modifier explanations.
-        let modifier_notes: Vec<&str> = modifiers
-            .chars()
-            .filter_map(|m| match m {
-                'i' => Some("case-insensitive matching"),
-                'm' => Some("multiline mode: ^ and $ match line boundaries"),
-                's' => Some("single-line mode: dot matches newline"),
-                'x' => Some("extended mode: whitespace and comments allowed"),
-                'g' => Some("global: match all occurrences"),
-                _ => None,
-            })
-            .collect();
+        let mut seen_modifiers: Vec<char> = Vec::new();
+        let mut modifier_notes: Vec<&str> = Vec::new();
+        let mut unknown_modifiers: Vec<char> = Vec::new();
+        for modifier in modifiers.chars() {
+            if seen_modifiers.contains(&modifier) {
+                continue;
+            }
+            seen_modifiers.push(modifier);
+            match describe_modifier(modifier) {
+                Some(description) => modifier_notes.push(description),
+                None => {
+                    unknown_modifiers.push(modifier);
+                }
+            }
+        }
 
         if !modifier_notes.is_empty() {
             parts.push("Modifiers:".to_string());
@@ -580,52 +621,78 @@ impl RegexAnalyzer {
             }
         }
 
+        if !unknown_modifiers.is_empty() {
+            let unknown: String = unknown_modifiers.into_iter().collect();
+            parts.push(format!("Unknown modifiers: `{unknown}`"));
+        }
+
         parts.join("\n")
     }
 }
 
+fn describe_modifier(modifier: char) -> Option<&'static str> {
+    match modifier {
+        'i' => Some("case-insensitive matching"),
+        'm' => Some("multiline mode: ^ and $ match line boundaries"),
+        's' => Some("single-line mode: dot matches newline"),
+        'x' => Some("extended mode: whitespace and comments allowed"),
+        'g' => Some("global: match all occurrences"),
+        'a' => Some("ASCII-safe character classes"),
+        'd' => Some("native platform character set semantics"),
+        'l' => Some("locale-dependent character semantics"),
+        'u' => Some("Unicode character semantics"),
+        'n' => Some("non-capturing by default for unnamed groups"),
+        'p' => Some("preserve string for ${^PREMATCH}, ${^MATCH}, ${^POSTMATCH}"),
+        'r' => Some("non-destructive substitution result"),
+        'c' => Some("keep current match position for /g scans"),
+        'o' => Some("compile pattern only once"),
+        'e' => Some("evaluate replacement as code in substitutions"),
+        _ => None,
+    }
+}
+
 fn parse_named_capture_name(
-    chars: &[char],
+    bytes: &[u8],
     pos: usize,
-    open_delim: char,
-    close_delim: char,
+    open_delim: u8,
+    close_delim: u8,
 ) -> Option<(String, usize)> {
-    if pos >= chars.len() || chars[pos] != open_delim {
+    if pos >= bytes.len() || bytes[pos] != open_delim {
         return None;
     }
 
     let mut i = pos + 1;
     let name_start = i;
-    while i < chars.len() && chars[i] != close_delim {
+    while i < bytes.len() && bytes[i] != close_delim {
         i += 1;
     }
 
-    if i == name_start || i >= chars.len() {
+    if i == name_start || i >= bytes.len() {
         return None;
     }
 
-    let name: String = chars[name_start..i].iter().collect();
+    let name = String::from_utf8_lossy(&bytes[name_start..i]).into_owned();
     Some((name, i + 1))
 }
 
 fn parse_named_capture_name_from(
-    chars: &[char],
+    bytes: &[u8],
     start: usize,
-    close_delim: char,
+    close_delim: u8,
 ) -> Option<(String, usize)> {
-    if start >= chars.len() {
+    if start >= bytes.len() {
         return None;
     }
 
     let mut i = start;
-    while i < chars.len() && chars[i] != close_delim {
+    while i < bytes.len() && bytes[i] != close_delim {
         i += 1;
     }
 
-    if i == start || i >= chars.len() {
+    if i == start || i >= bytes.len() {
         return None;
     }
 
-    let name: String = chars[start..i].iter().collect();
+    let name = String::from_utf8_lossy(&bytes[start..i]).into_owned();
     Some((name, i + 1))
 }

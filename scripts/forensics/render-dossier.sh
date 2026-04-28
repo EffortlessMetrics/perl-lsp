@@ -110,6 +110,39 @@ current_date() {
     date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
 
+# Compute elapsed hours between two ISO8601 timestamps.
+# Returns empty string if timestamps are missing or unparsable.
+hours_between_iso() {
+    local start="$1"
+    local end="$2"
+
+    if [[ -z "$start" || -z "$end" || "$start" == "null" || "$end" == "null" ]]; then
+        echo ""
+        return
+    fi
+
+    python3 - "$start" "$end" <<'PY'
+import datetime
+import sys
+
+start = sys.argv[1].replace("Z", "+00:00")
+end = sys.argv[2].replace("Z", "+00:00")
+
+try:
+    start_dt = datetime.datetime.fromisoformat(start)
+    end_dt = datetime.datetime.fromisoformat(end)
+except ValueError:
+    print("")
+    sys.exit(0)
+
+delta_hours = (end_dt - start_dt).total_seconds() / 3600
+if delta_hours < 0:
+    print("")
+else:
+    print(f"{delta_hours:.1f}")
+PY
+}
+
 # Slugify a string for exhibit ID
 slugify() {
     echo "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g' | sed -E 's/^-|-$//g'
@@ -249,15 +282,51 @@ fi
 
 # Extract temporal data if available
 if [[ "$HAS_TEMPORAL" == "true" ]]; then
-    SESSION_COUNT=$(yaml_get "$TEMPORAL_FILE" '.sessions.count')
-    PATTERN=$(yaml_get "$TEMPORAL_FILE" '.convergence.pattern')
-    STABILIZATION=$(yaml_get "$TEMPORAL_FILE" '.convergence.stabilization_commit')
-    WALL_CLOCK=$(yaml_get "$TEMPORAL_FILE" '.timeline.wall_clock_hours')
+    # Support current temporal schema emitted by temporal-analysis.sh:
+    # - sessions: [ ... ]
+    # - stabilization.inflection_commit
+    # - oscillations.potential_reverts
+    # Keep compatibility with older field names as fallback.
+    SESSION_COUNT=$(yaml_get "$TEMPORAL_FILE" '.sessions | length')
+    [[ -z "$SESSION_COUNT" ]] && SESSION_COUNT=$(yaml_get "$TEMPORAL_FILE" '.sessions.count')
+
+    GRIND_SESSION_COUNT=$(yaml_get "$TEMPORAL_FILE" '.sessions | map(select(.is_grind == true)) | length')
+    [[ -z "$GRIND_SESSION_COUNT" ]] && GRIND_SESSION_COUNT="0"
+
+    POTENTIAL_REVERT_COUNT=$(yaml_get "$TEMPORAL_FILE" '.oscillations.potential_reverts | length')
+    [[ -z "$POTENTIAL_REVERT_COUNT" ]] && POTENTIAL_REVERT_COUNT="0"
+
+    STABILIZATION=$(yaml_get "$TEMPORAL_FILE" '.stabilization.inflection_commit')
+    [[ -z "$STABILIZATION" ]] && STABILIZATION=$(yaml_get "$TEMPORAL_FILE" '.convergence.stabilization_commit')
+    [[ -z "$STABILIZATION" || "$STABILIZATION" == "null" ]] && STABILIZATION="none"
+
+    if [[ "$SESSION_COUNT" =~ ^[0-9]+$ ]]; then
+        if [[ "$SESSION_COUNT" -le 1 ]]; then
+            PATTERN="single-session"
+        elif [[ "$POTENTIAL_REVERT_COUNT" -gt 0 ]]; then
+            PATTERN="oscillatory"
+        elif [[ "$GRIND_SESSION_COUNT" -gt 0 ]]; then
+            PATTERN="grind-then-stabilize"
+        else
+            PATTERN="multi-session"
+        fi
+    else
+        PATTERN="<unknown - run temporal-analysis.sh>"
+    fi
+
+    # Traditional cycle-time metric: PR create -> merge elapsed wall-clock.
+    WALL_CLOCK=$(hours_between_iso "$CREATED_AT" "$MERGED_AT")
+    [[ -z "$WALL_CLOCK" ]] && WALL_CLOCK="<unknown>"
 else
     SESSION_COUNT="<unknown>"
     PATTERN="<unknown - run temporal-analysis.sh>"
     STABILIZATION="<unknown>"
     WALL_CLOCK="<unknown>"
+fi
+
+CYCLE_TIME_HOURS=$(hours_between_iso "$CREATED_AT" "$MERGED_AT")
+if [[ -z "$CYCLE_TIME_HOURS" ]]; then
+    CYCLE_TIME_HOURS="<unknown>"
 fi
 
 # Generate exhibit ID from title
@@ -487,6 +556,7 @@ EOF
     cat <<EOF
 | CI | <Zm> | estimated | low | local gate |
 | LLM | ~<N> units | estimated | medium | <iteration count> |
+| Cycle time | ${CYCLE_TIME_HOURS}h | measured | high | PR \`created_at\` → \`merged_at\` |
 
 **Coverage**: \`$COVERAGE\`
 
