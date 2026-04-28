@@ -615,7 +615,7 @@ behaviour such as binary management and feature toggles.
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perl-lsp` binary. Empty = auto-download. |
+| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perllsp` binary. Empty = auto-download. |
 | `perl-lsp.autoDownload` | `boolean` | `true` | Download the binary automatically if not found locally. |
 | `perl-lsp.downloadBaseUrl` | `string` | `""` | Override the GitHub releases base URL for internal mirrors. |
 | `perl-lsp.channel` | `"latest"\|"stable"\|"tag"` | `"latest"` | Release channel to track. |
@@ -646,6 +646,44 @@ behaviour such as binary management and feature toggles.
 | `perl-lsp.includePaths` | `string[]` | `["lib", "local/lib/perl5"]` | Additional module search paths (merged with server-side `perl.workspace.includePaths`). |
 | `perl-lsp.perltidyConfig` | `string` | `""` | Path to a `.perltidyrc` configuration file. Empty = use Perl::Tidy defaults. |
 | `perl-lsp.featureProfile` | `string` | `"auto"` | Feature profile passed to the server at startup (see [Feature Profiles](#feature-profiles)). |
+
+### Amazon Kiro
+
+Kiro IDE uses VS Code-compatible extensions from OpenVSX. Prefer the
+`EffortlessMetrics.perl-lsp-rs` extension. For manual binary management:
+
+```json
+{
+  "perl-lsp.serverPath": "/absolute/path/to/perllsp",
+  "perl-lsp.autoDownload": false
+}
+```
+
+Kiro CLI uses workspace-scoped LSP configuration. Run `/code init`, then edit
+the generated LSP config file:
+
+```json
+{
+  "languages": {
+    "perl": {
+      "name": "perl-lsp",
+      "command": "perllsp",
+      "args": ["--stdio"],
+      "file_extensions": ["pl", "PL", "pm", "t", "psgi", "cgi", "fcgi", "xs", "xsi"],
+      "project_patterns": [".perl-lsp.toml", "Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
+      "multi_workspace": false,
+      "initialization_options": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"],
+            "useSystemInc": false
+          }
+        }
+      }
+    }
+  }
+}
+```
 
 ---
 

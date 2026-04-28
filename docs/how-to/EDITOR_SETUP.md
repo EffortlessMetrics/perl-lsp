@@ -31,7 +31,7 @@ perllsp --health
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
-| Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
+| Amazon Kiro | use the OpenVSX `EffortlessMetrics.perl-lsp-rs` extension in Kiro IDE; for Kiro CLI, configure a workspace custom LSP that launches `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
 | Codex CLI | connect an MCP LSP bridge to `perllsp --stdio` | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
 | Codex Desktop | add a custom Perl server command `perllsp --stdio` | [docs/EDITORS/CODEX_DESKTOP_SETUP.md](../EDITORS/CODEX_DESKTOP_SETUP.md) |
@@ -119,8 +119,41 @@ Register a client with `command: ["perllsp", "--stdio"]`, use a selector such as
 
 ### Amazon Kiro
 
-Register a Perl language-server client that launches `perllsp --stdio`, then
-restart the client after changing workspace settings or include paths.
+For Kiro IDE, install the OpenVSX extension:
+
+```text
+EffortlessMetrics.perl-lsp-rs
+```
+
+The extension can auto-download `perllsp`. For offline or pinned deployments,
+set:
+
+```json
+{
+  "perl-lsp.serverPath": "/absolute/path/to/perllsp",
+  "perl-lsp.autoDownload": false
+}
+```
+
+For Kiro CLI, run `/code init` in the project root and edit the generated LSP
+configuration to launch:
+
+```json
+{
+  "languages": {
+    "perl": {
+      "name": "perl-lsp",
+      "command": "perllsp",
+      "args": ["--stdio"],
+      "file_extensions": ["pl", "PL", "pm", "t", "psgi"],
+      "project_patterns": [".perl-lsp.toml", "Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"]
+    }
+  }
+}
+```
+
+Kiro CLI Perl support is a custom-LSP path, so verify diagnostics, hover,
+definition, references, and rename in your installed Kiro CLI version.
 
 ### Claude Code
 
