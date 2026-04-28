@@ -874,7 +874,13 @@ pub fn measure_manifest(
     }
     progress.finish_and_clear();
 
-    let elapsed = start_time.elapsed();
+    let measurement_elapsed = start_time.elapsed();
+    // Fold discovery time back in so that `elapsed_secs` and `total_ms` cover the
+    // full wall time from before discovery to report assembly, matching the
+    // `PhaseTimings::total_ms` doc contract ("total wall time of the sweep from
+    // start to report assembly").
+    let total_ms = discovery_ms.saturating_add(measurement_elapsed.as_millis() as u64);
+    let elapsed_secs = (discovery_ms as f64 / 1000.0) + measurement_elapsed.as_secs_f64();
     SweepReport {
         schema_version: "1.3.0".to_string(),
         commit: get_git_commit(),
@@ -905,12 +911,12 @@ pub fn measure_manifest(
         first_error_buckets,
         files_by_bucket,
         file_results: if options.verbose { file_results } else { Vec::new() },
-        elapsed_secs: elapsed.as_secs_f64(),
+        elapsed_secs,
         phase_timings: Some(PhaseTimings {
             discovery_ms,
             file_io_ms: (file_io_ns / 1_000_000) as u64,
             parse_ms: (parse_ns / 1_000_000) as u64,
-            total_ms: elapsed.as_millis() as u64,
+            total_ms,
         }),
         median_error_density_per_1k_loc: compute_median_error_density(&measurements),
         recovery_salvage_rate: if total_dirty_files == 0 {
@@ -2426,12 +2432,30 @@ mod tests {
             resolved_roots: vec![dir.clone()],
             verbose: false,
         };
-        let report = measure_manifest(&[file], &options, None, 0);
+        let discovery_ms = 42u64;
+        let report = measure_manifest(&[file], &options, None, discovery_ms);
         assert_eq!(report.total_files, 1);
         assert_eq!(report.clean_files, 1);
         assert_eq!(report.files_with_errors, 0);
         assert_eq!(report.file_results.len(), 0);
         assert!(report.phase_timings.is_some());
+
+        // Timing-contract assertions: elapsed_secs and total_ms must include
+        // discovery time, not just measurement time (PhaseTimings doc contract).
+        let timings = report.phase_timings.as_ref().expect("phase_timings present");
+        assert_eq!(timings.discovery_ms, discovery_ms, "discovery_ms should be preserved");
+        assert!(
+            timings.total_ms >= discovery_ms,
+            "total_ms ({}) must be >= discovery_ms ({})",
+            timings.total_ms,
+            discovery_ms
+        );
+        assert!(
+            report.elapsed_secs >= discovery_ms as f64 / 1000.0,
+            "elapsed_secs ({}) must be >= discovery_ms/1000 ({})",
+            report.elapsed_secs,
+            discovery_ms as f64 / 1000.0
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
