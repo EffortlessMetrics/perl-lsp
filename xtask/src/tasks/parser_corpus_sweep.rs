@@ -140,6 +140,31 @@ pub struct SweepConfig {
     pub receipt: bool,
 }
 
+/// Manifest-backed corpus selection.
+#[derive(Debug, Clone)]
+pub struct CorpusManifest {
+    pub path: PathBuf,
+    pub min_resolved: usize,
+}
+
+/// Sweep corpus source classification used by parser ratchet orchestration.
+#[derive(Debug, Clone)]
+pub enum CorpusSource {
+    RepoOwned,
+    CiBoxSystemPerl,
+    CpanTopN,
+}
+
+/// In-memory measurement options for composing higher-level workflows.
+#[derive(Debug, Clone)]
+pub struct MeasureOptions {
+    pub corpus_profile: String,
+    pub source: CorpusSource,
+    pub base_roots: Vec<PathBuf>,
+    pub resolved_roots: Vec<PathBuf>,
+    pub verbose: bool,
+}
+
 /// Overall sweep report (serialized to JSON)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SweepReport {
@@ -469,9 +494,27 @@ pub fn resolve_manifest_modules(
     Ok(resolved)
 }
 
+/// Discover parser corpus files from a strict manifest.
+pub fn discover_manifest(
+    manifest: &CorpusManifest,
+    perl5lib_paths: &[PathBuf],
+) -> Result<Vec<PathBuf>> {
+    resolve_manifest_modules(&manifest.path, perl5lib_paths, manifest.min_resolved)
+}
+
 fn resolve_module_in_roots(module: &str, roots: &[PathBuf]) -> Option<PathBuf> {
     let relative = PathBuf::from(format!("{}.pm", module.replace("::", "/")));
     roots.iter().map(|root| root.join(&relative)).find(|candidate| candidate.exists())
+}
+
+/// Discover parser corpus files from repository-owned roots.
+pub fn discover_repo_corpus(roots: &[PathBuf]) -> Vec<PathBuf> {
+    discover_pm_files(roots)
+}
+
+/// Discover CI-box system Perl scan roots.
+pub fn discover_system_perl(base_roots: &[PathBuf]) -> Vec<PathBuf> {
+    resolve_corpus_roots(base_roots)
 }
 
 fn resolve_manifest_module_path(path: &str) -> Option<PathBuf> {
@@ -653,41 +696,17 @@ fn compute_median_error_density(measurements: &[FileMeasurement]) -> Option<f64>
     Some(median)
 }
 
-/// Run the corpus sweep with the given configuration
-pub fn run(config: SweepConfig) -> Result<()> {
+/// Measure parser behavior for a discovered manifest/corpus file list.
+pub fn measure_manifest(
+    pm_files: &[PathBuf],
+    options: &MeasureOptions,
+    manifest_path: Option<&Path>,
+    discovery_ms: u64,
+) -> SweepReport {
     let start_time = Instant::now();
+    let use_manifest = manifest_path.is_some();
+    let _source = &options.source;
 
-    // Determine corpus profile and file list
-    let default_profile =
-        if config.manifest_path.is_some() { "common".to_string() } else { "system".to_string() };
-    let corpus_profile = config.corpus_profile.clone().unwrap_or(default_profile);
-
-    let discovery_start = Instant::now();
-    let pm_files = if let Some(ref manifest) = config.manifest_path {
-        resolve_manifest_modules(manifest, &config.manifest_perl5lib, 6)?
-    } else {
-        discover_pm_files(&config.corpus_roots)
-    };
-    let discovery_ms = discovery_start.elapsed().as_millis() as u64;
-
-    let use_manifest = config.manifest_path.is_some();
-    if pm_files.is_empty() {
-        if use_manifest {
-            println!("No modules resolved from manifest.");
-        } else {
-            println!("No .pm files found in specified roots.");
-            println!("Searched: {:?}", config.corpus_roots);
-        }
-        return Ok(());
-    }
-
-    if use_manifest {
-        println!("Resolved {} modules from manifest", pm_files.len());
-    } else {
-        println!("Found {} .pm files across {} roots", pm_files.len(), config.corpus_roots.len());
-    }
-
-    // Parse each file
     let progress = ProgressBar::new(pm_files.len() as u64);
     progress.set_style(
         ProgressStyle::default_bar()
@@ -710,19 +729,11 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let mut first_error_buckets: BTreeMap<String, usize> = BTreeMap::new();
     let mut files_by_bucket: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut file_results: Vec<FileResult> = Vec::new();
-
-    // Phase-timing accumulators (nanoseconds to avoid rounding when summing
-    // many small per-file durations; converted to ms once at the end).
     let mut file_io_ns: u128 = 0;
     let mut parse_ns: u128 = 0;
-
-    // Per-file measurements used to build the slowest-file report and to
-    // compute median error density per 1k LOC. Kept in memory always (not
-    // gated by verbose) so receipts can include the derived aggregates
-    // without paying the verbose-serialization cost.
     let mut measurements: Vec<FileMeasurement> = Vec::with_capacity(pm_files.len());
 
-    for path in &pm_files {
+    for path in pm_files {
         total_files += 1;
         let portable_path = portable_report_path(path);
         progress.set_message(
@@ -737,7 +748,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
             Ok(s) => s,
             Err(_) => {
                 files_unreadable += 1;
-                if config.verbose {
+                if options.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
                         status: "unreadable".to_string(),
@@ -754,8 +765,6 @@ pub fn run(config: SweepConfig) -> Result<()> {
         };
 
         let line_count = source.lines().count();
-
-        // Parse — wall-time the parse call itself (post-read).
         let parse_start = Instant::now();
         let mut parser = Parser::new(&source);
         let parse_result = parser.parse();
@@ -766,7 +775,6 @@ pub fn run(config: SweepConfig) -> Result<()> {
         let ast = match parse_result {
             Ok(ast) => ast,
             Err(_) => {
-                // Catastrophic failure (recursion limit etc.) — separate from AST ERROR nodes.
                 files_with_errors += 1;
                 total_dirty_files += 1;
                 files_with_catastrophic_parse_failure += 1;
@@ -776,7 +784,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                     line_count,
                     error_node_count: 0,
                 });
-                if config.verbose {
+                if options.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
                         status: "catastrophic".to_string(),
@@ -794,7 +802,6 @@ pub fn run(config: SweepConfig) -> Result<()> {
 
         let errors: Vec<ParseError> = parser.errors().to_vec();
         let salvage = RecoverySalvageProfile::from_parse(&ast, &errors, false);
-
         measurements.push(FileMeasurement {
             path: portable_path.clone(),
             parse_duration_ms,
@@ -806,7 +813,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
         match salvage.class {
             RecoverySalvageClass::Clean => {
                 clean_files += 1;
-                if config.verbose {
+                if options.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
                         status: "clean".to_string(),
@@ -822,7 +829,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 files_with_errors += 1;
                 total_dirty_files += 1;
                 files_with_structured_recovery_only += 1;
-                if config.verbose {
+                if options.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
                         status: "recovered".to_string(),
@@ -844,7 +851,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 *first_unrecovered_error_node_buckets.entry(bucket.clone()).or_default() += 1;
                 *first_error_buckets.entry(bucket.clone()).or_default() += 1;
                 files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
-                if config.verbose {
+                if options.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
                         status: "errors".to_string(),
@@ -857,11 +864,6 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 }
             }
             RecoverySalvageClass::CatastrophicFailure => {
-                // This arm is unreachable in this branch: `from_parse` is always
-                // called with `catastrophic=false` here.  True catastrophic failures
-                // are handled above via the `Err(_)` arm which calls `continue`.
-                // Keeping the arm to satisfy the exhaustive match; clippy will flag
-                // it as unreachable if the enum ever gains a structural invariant.
                 files_with_errors += 1;
                 total_dirty_files += 1;
                 files_with_catastrophic_parse_failure += 1;
@@ -870,37 +872,30 @@ pub fn run(config: SweepConfig) -> Result<()> {
 
         progress.inc(1);
     }
-
     progress.finish_and_clear();
 
-    let elapsed = start_time.elapsed();
-    let commit = get_git_commit();
-
-    let phase_timings = PhaseTimings {
-        discovery_ms,
-        file_io_ms: (file_io_ns / 1_000_000) as u64,
-        parse_ms: (parse_ns / 1_000_000) as u64,
-        total_ms: elapsed.as_millis() as u64,
-    };
-    let median_error_density_per_1k_loc = compute_median_error_density(&measurements);
-    let recovery_salvage_rate = if total_dirty_files == 0 {
-        None
-    } else {
-        Some(files_with_structured_recovery_only as f64 / total_dirty_files as f64)
-    };
-    let slowest_files = top_n_slowest(&measurements, SLOWEST_FILES_LIMIT);
-
-    let report = SweepReport {
+    let measurement_elapsed = start_time.elapsed();
+    // Fold discovery time back in so that `elapsed_secs` and `total_ms` cover the
+    // full wall time from before discovery to report assembly, matching the
+    // `PhaseTimings::total_ms` doc contract ("total wall time of the sweep from
+    // start to report assembly").
+    let total_ms = discovery_ms.saturating_add(measurement_elapsed.as_millis() as u64);
+    let elapsed_secs = (discovery_ms as f64 / 1000.0) + measurement_elapsed.as_secs_f64();
+    SweepReport {
         schema_version: "1.3.0".to_string(),
-        commit,
+        commit: get_git_commit(),
         timestamp: chrono::Utc::now().to_rfc3339(),
-        corpus_profile: corpus_profile.clone(),
+        corpus_profile: options.corpus_profile.clone(),
         corpus_roots: if use_manifest {
-            vec![config.manifest_path.as_ref().map(|p| portable_report_path(p)).unwrap_or_default()]
+            vec![manifest_path.map_or_else(String::new, portable_report_path)]
         } else {
-            config.base_roots.iter().map(|p| portable_report_path(p)).collect()
+            options.base_roots.iter().map(|p| portable_report_path(p)).collect()
         },
-        resolved_roots_count: if use_manifest { pm_files.len() } else { config.corpus_roots.len() },
+        resolved_roots_count: if use_manifest {
+            pm_files.len()
+        } else {
+            options.resolved_roots.len()
+        },
         perl_version: get_perl_version(),
         total_files,
         files_unreadable,
@@ -915,13 +910,84 @@ pub fn run(config: SweepConfig) -> Result<()> {
         first_unrecovered_error_node_buckets,
         first_error_buckets,
         files_by_bucket,
-        file_results: if config.verbose { file_results } else { Vec::new() },
-        elapsed_secs: elapsed.as_secs_f64(),
-        phase_timings: Some(phase_timings),
-        median_error_density_per_1k_loc,
-        recovery_salvage_rate,
-        slowest_files,
+        file_results: if options.verbose { file_results } else { Vec::new() },
+        elapsed_secs,
+        phase_timings: Some(PhaseTimings {
+            discovery_ms,
+            file_io_ms: (file_io_ns / 1_000_000) as u64,
+            parse_ms: (parse_ns / 1_000_000) as u64,
+            total_ms,
+        }),
+        median_error_density_per_1k_loc: compute_median_error_density(&measurements),
+        recovery_salvage_rate: if total_dirty_files == 0 {
+            None
+        } else {
+            Some(files_with_structured_recovery_only as f64 / total_dirty_files as f64)
+        },
+        slowest_files: top_n_slowest(&measurements, SLOWEST_FILES_LIMIT),
+    }
+}
+
+/// Run the corpus sweep with the given configuration
+pub fn run(config: SweepConfig) -> Result<()> {
+    // Determine corpus profile and file list
+    let default_profile =
+        if config.manifest_path.is_some() { "common".to_string() } else { "system".to_string() };
+    let corpus_profile = config.corpus_profile.clone().unwrap_or(default_profile);
+
+    let resolved_roots = if config.corpus_roots.is_empty() {
+        discover_system_perl(&config.base_roots)
+    } else {
+        config.corpus_roots.clone()
     };
+    let discovery_start = Instant::now();
+    let pm_files = if let Some(ref manifest) = config.manifest_path {
+        discover_manifest(
+            &CorpusManifest { path: manifest.clone(), min_resolved: 6 },
+            &config.manifest_perl5lib,
+        )?
+    } else {
+        discover_repo_corpus(&resolved_roots)
+    };
+    let discovery_ms = discovery_start.elapsed().as_millis() as u64;
+
+    let use_manifest = config.manifest_path.is_some();
+    if pm_files.is_empty() {
+        if use_manifest {
+            println!("No modules resolved from manifest.");
+        } else {
+            println!("No .pm files found in specified roots.");
+            println!("Searched: {:?}", resolved_roots);
+        }
+        return Ok(());
+    }
+
+    if use_manifest {
+        println!("Resolved {} modules from manifest", pm_files.len());
+    } else {
+        println!("Found {} .pm files across {} roots", pm_files.len(), resolved_roots.len());
+    }
+
+    let source = if use_manifest {
+        CorpusSource::RepoOwned
+    } else if corpus_profile.starts_with("cpan") {
+        CorpusSource::CpanTopN
+    } else {
+        CorpusSource::CiBoxSystemPerl
+    };
+    let measure_options = MeasureOptions {
+        corpus_profile: corpus_profile.clone(),
+        source,
+        base_roots: config.base_roots.clone(),
+        resolved_roots,
+        verbose: config.verbose,
+    };
+    let report = measure_manifest(
+        &pm_files,
+        &measure_options,
+        config.manifest_path.as_deref(),
+        discovery_ms,
+    );
 
     // Print summary
     print_summary(&report);
@@ -938,12 +1004,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
 
     // Write receipt if requested
     if config.receipt {
-        let receipt_path = receipt_path_for_profile(&corpus_profile);
-        if let Some(parent) = receipt_path.parent() {
-            fs::create_dir_all(parent).context("Failed to create receipt directory")?;
-        }
-        let json = serde_json::to_string_pretty(&report).context("Failed to serialize receipt")?;
-        fs::write(&receipt_path, json).context("Failed to write receipt file")?;
+        let receipt_path = write_sweep_receipt(&corpus_profile, &report)?;
         eprintln!("Receipt written to: {}", receipt_path.display());
     }
 
@@ -997,7 +1058,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
         }
 
         if config.enforce {
-            let violations = enforce_ratchet(&report, &baseline);
+            let violations = compare_reports(&report, &baseline);
             if !violations.is_empty() {
                 println!("\n--- Ratchet violations ---");
                 for v in &violations {
@@ -1084,6 +1145,22 @@ pub fn enforce_ratchet(report: &SweepReport, baseline: &SweepReport) -> Vec<Ratc
     }
 
     violations
+}
+
+/// Compare current and baseline sweep reports using existing ratchet semantics.
+pub fn compare_reports(report: &SweepReport, baseline: &SweepReport) -> Vec<RatchetViolation> {
+    enforce_ratchet(report, baseline)
+}
+
+/// Write a sweep receipt using the existing on-disk receipt naming convention.
+pub fn write_sweep_receipt(profile: &str, report: &SweepReport) -> Result<PathBuf> {
+    let receipt_path = receipt_path_for_profile(profile);
+    if let Some(parent) = receipt_path.parent() {
+        fs::create_dir_all(parent).context("Failed to create receipt directory")?;
+    }
+    let json = serde_json::to_string_pretty(report).context("Failed to serialize receipt")?;
+    fs::write(&receipt_path, json).context("Failed to write receipt file")?;
+    Ok(receipt_path)
 }
 
 fn clean_rate(report: &SweepReport) -> f64 {
@@ -2339,5 +2416,47 @@ mod tests {
         // slowest list — summary must still render headline counters.
         let report = test_report(5, 1, 2, 0, BTreeMap::new());
         print_summary(&report);
+    }
+
+    #[test]
+    fn test_measure_manifest_produces_report_in_memory() {
+        let dir = std::env::temp_dir().join("test_measure_manifest_in_memory");
+        let _ = fs::create_dir_all(&dir);
+        let file = dir.join("Sample.pm");
+        fs::write(&file, "package Sample;\n1;\n").expect("write module");
+
+        let options = MeasureOptions {
+            corpus_profile: "common".to_string(),
+            source: CorpusSource::RepoOwned,
+            base_roots: vec![dir.clone()],
+            resolved_roots: vec![dir.clone()],
+            verbose: false,
+        };
+        let discovery_ms = 42u64;
+        let report = measure_manifest(&[file], &options, None, discovery_ms);
+        assert_eq!(report.total_files, 1);
+        assert_eq!(report.clean_files, 1);
+        assert_eq!(report.files_with_errors, 0);
+        assert_eq!(report.file_results.len(), 0);
+        assert!(report.phase_timings.is_some());
+
+        // Timing-contract assertions: elapsed_secs and total_ms must include
+        // discovery time, not just measurement time (PhaseTimings doc contract).
+        let timings = report.phase_timings.as_ref().expect("phase_timings present");
+        assert_eq!(timings.discovery_ms, discovery_ms, "discovery_ms should be preserved");
+        assert!(
+            timings.total_ms >= discovery_ms,
+            "total_ms ({}) must be >= discovery_ms ({})",
+            timings.total_ms,
+            discovery_ms
+        );
+        assert!(
+            report.elapsed_secs >= discovery_ms as f64 / 1000.0,
+            "elapsed_secs ({}) must be >= discovery_ms/1000 ({})",
+            report.elapsed_secs,
+            discovery_ms as f64 / 1000.0
+        );
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
