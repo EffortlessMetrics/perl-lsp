@@ -34,17 +34,52 @@ code --install-extension effortlessmetrics.perl-lsp-rs
 
 The extension auto-downloads the matching `perllsp` binary for your platform.
 
+**Codex Desktop** — add a custom Perl language server command that runs `perllsp --stdio` (guide: [docs/EDITORS/CODEX_DESKTOP_SETUP.md](docs/EDITORS/CODEX_DESKTOP_SETUP.md)).
+
 **Other editors** — download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), add it to your `PATH`, then point your LSP client at it:
 
 ```lua
 -- Neovim (nvim-lspconfig)
-require('lspconfig').perl_ls.setup { cmd = { "perllsp", "--stdio" } }
+local capabilities = vim.lsp.protocol.make_client_capabilities()
+local ok_cmp, cmp_lsp = pcall(require, "cmp_nvim_lsp")
+if ok_cmp then
+  capabilities = cmp_lsp.default_capabilities(capabilities)
+end
+
+require("lspconfig").perl_lsp.setup({
+  cmd = { "perllsp", "--stdio" },
+  capabilities = capabilities,
+})
 ```
 
 ```elisp
-;; Emacs (eglot)
+;; Emacs (eglot) — perl-ts-mode is a third-party package, omit if not installed
 (add-to-list 'eglot-server-programs
-             '((perl-mode cperl-mode) . ("perllsp" "--stdio")))
+             '((perl-mode cperl-mode perl-ts-mode) . ("perllsp" "--stdio")))
+```
+
+```toml
+# Helix (~/.config/helix/languages.toml)
+[[language]]
+name = "perl"
+language-servers = ["perllsp"]
+
+[language-server.perllsp]
+command = "perllsp"
+args = ["--stdio"]
+```
+
+```json
+// Sublime Text LSP package settings
+{
+  "clients": {
+    "perllsp": {
+      "enabled": true,
+      "command": ["perllsp", "--stdio"],
+      "selector": "source.perl"
+    }
+  }
+}
 ```
 
 ```text
@@ -59,6 +94,7 @@ perllsp --health
 ```
 
 For a full walkthrough, see [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md).
+For editor-specific setup (Neovim, Emacs, Helix, Sublime), see [docs/specs/PACKAGING_INSTALL_SPEC.md](docs/specs/PACKAGING_INSTALL_SPEC.md).
 
 > **Note:** Do not use `cargo install perl-lsp` — that name is owned by an unrelated project on crates.io. Use `cargo install --path crates/perllsp` to build from source.
 
@@ -130,7 +166,7 @@ See [docs/README.md](docs/README.md) for the full crate map and design notes.
 
 ## Contributing
 
-**New contributor?** Start with [docs/contributing/FIRST_PR.md](docs/contributing/FIRST_PR.md) — clone to PR in five minutes.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. AI implementation agents (Codex, Claude Code, Jules, Roo Code, Gemini CLI) should read [AGENTS.md](AGENTS.md) first. Gemini CLI users should also read [GEMINI.md](GEMINI.md).
 
 ```bash
 cargo test --workspace --lib
@@ -144,8 +180,6 @@ Find beginner-friendly issues:
 ```bash
 gh issue list --label "good-first-issue" --state open
 ```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. If you are an AI implementation agent (Codex, Jules), read [AGENTS.md](AGENTS.md) first.
 
 ## Status
 
@@ -163,13 +197,13 @@ The project tracks a few distinct metrics that are easy to conflate. Each one sc
 | Parser corpus — project corpus | 100.0% (91 / 91) | Deterministic regression baseline that must stay clean | Same |
 | End-to-end UX confidence | *qualitative* | Currently covered by manual editor smoke workflows, the `perl-lsp-ux-tests` first-5-minutes harness, and open-issue burn-down — not a published number | Anything about parser breadth, protocol catalog size, or capability count |
 
-The last row is the important one: *none* of the automated metrics above measure whether a real editing session feels good. That's validated through workflow smoke tests, the `perl-lsp-ux-tests` harness, and the list of known gaps below, not by a dashboard.
+None of the automated metrics measure whether a real editing session feels good. That is validated through workflow smoke tests, the `perl-lsp-ux-tests` harness, and the list of known gaps below.
 
 Live numbers live in [docs/project/status/parser.md](docs/project/status/parser.md); this table may lag a merge cycle.
 
 ### Known gaps toward solid UX
 
-The table below is the honest state of v0.13.0 rough edges. None block basic use; all affect realistic workflows.
+The honest state of v0.13.0 rough edges. None block basic use; all affect realistic workflows.
 
 #### Must land for v0.13.0
 
@@ -179,15 +213,15 @@ The table below is the honest state of v0.13.0 rough edges. None block basic use
 
 - **Dynamic require / literal import** — `require Module; Module->import('sym')` with static string names: goto-def on the bareword should resolve to the definition site; `@ISA` / `use parent` / `use base` chains and `use Module qw(...)` list imports already work; this is the remaining slice of the import visibility lane ([#3476](https://github.com/EffortlessMetrics/perl-lsp/issues/3476), tracked by umbrella [#4246](https://github.com/EffortlessMetrics/perl-lsp/issues/4246))
 
-#### Deferred to v0.14.0
-
-- **Dynamic workspace configuration** — per-folder `.perl-lsp.toml` is the supported v0.13 mechanism; fully dynamic per-folder scoping via the `workspace/configuration` reverse-request flow is deferred ([#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515))
-
 #### What shipped this cycle (v0.12.x)
 
-These items were rough edges in the previous list and have since landed:
+Previously listed as rough edges, now landed:
 
-- Parser error recovery: unclosed block recovery ([PR #4079](https://github.com/EffortlessMetrics/perl-lsp/pull/4079)), symbol extractor descends into partial `Error` nodes ([PR #4071](https://github.com/EffortlessMetrics/perl-lsp/pull/4071)) — [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499) closed
+- Dynamic workspace configuration via the `workspace/configuration`
+  reverse-request flow is now implemented and merged over per-folder
+  `.perl-lsp.toml` base config ([#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515))
+
+- Parser error recovery: unclosed block recovery ([PR #4079](https://github.com/EffortlessMetrics/perl-lsp/pull/4079)), symbol extractor descends into partial `Error` nodes ([PR #4071](https://github.com/EffortlessMetrics/perl-lsp/pull/4071)) — [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499) closed (docs(readme): mark dynamic workspace config as shipped (#3515))
 - Import list bareword resolution for `use Module qw(...)` and tag imports — [#3472](https://github.com/EffortlessMetrics/perl-lsp/issues/3472) closed
 - `use constant` symbols tracked in visible symbol table — [#3475](https://github.com/EffortlessMetrics/perl-lsp/issues/3475) closed
 - Pragma tracker: `use if`, feature bundles, eval/sub-scoped pragma leakage (PRs #4050, #4038, #4052), conservative `eval STRING` handling (PR #4052) — [#3489 Improve](https://github.com/EffortlessMetrics/perl-lsp/issues/3489)

@@ -17,11 +17,13 @@ fn empty_args_returns_empty_vec() {
 }
 
 #[test]
-fn single_empty_string_arg_passes_through() {
-    // An empty string contains no spaces, so it should pass through unchanged.
+fn single_empty_string_arg_is_quoted_to_preserve_emptiness() {
     let args = vec![String::new()];
     let result = format_command_args(&args);
-    assert_eq!(result, vec![""]);
+    #[cfg(windows)]
+    assert_eq!(result, vec!["\"\""]);
+    #[cfg(not(windows))]
+    assert_eq!(result, vec!["''"]);
 }
 
 #[test]
@@ -211,11 +213,29 @@ mod unix_quoting {
     }
 
     #[test]
-    fn newline_without_space_passes_through() {
-        // Newlines alone don't trigger quoting.
+    fn newline_without_space_is_quoted() {
+        // Newline is whitespace and must be quoted to avoid shell token splitting.
         let args = vec!["line1\nline2".to_string()];
         let result = format_command_args(&args);
-        assert_eq!(result[0], "line1\nline2");
+        assert_eq!(result[0], "'line1\nline2'");
+    }
+
+    #[test]
+    fn tab_without_space_is_quoted() {
+        // Tab is whitespace (char::is_whitespace) and must be quoted so the shell
+        // does not split it into a separate token.
+        let args = vec!["col1\tcol2".to_string()];
+        let result = format_command_args(&args);
+        assert_eq!(result[0], "'col1\tcol2'");
+    }
+
+    #[test]
+    fn carriage_return_without_space_is_quoted() {
+        // CR is whitespace (char::is_whitespace) — relevant for CRLF-encoded args
+        // on Windows-origin input. Must be quoted like any other whitespace.
+        let args = vec!["win\rarg".to_string()];
+        let result = format_command_args(&args);
+        assert_eq!(result[0], "'win\rarg'");
     }
 }
 

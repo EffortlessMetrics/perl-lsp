@@ -14,6 +14,8 @@ use perl_workspace::workspace_index::{
     SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex, WorkspaceSymbol,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// Add workspace symbol completions for functions and variables
@@ -150,7 +152,7 @@ pub fn add_workspace_symbol_completions(
                     filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
-                    commit_characters: None,
+                    commit_characters: Some(vec![":".to_string(), ";".to_string()]),
                 });
             }
             WsSymbolKind::Constant => {
@@ -230,6 +232,88 @@ fn module_sort_tier(name: &str) -> &'static str {
     }
 }
 
+const MAX_MODULE_SCAN_ROOTS: usize = 16;
+const MAX_MODULES_PER_SCAN: usize = 512;
+const MAX_SCAN_DEPTH: usize = 8;
+
+/// Convert a module file path under `root` to a Perl module name.
+///
+/// Example: `lib/File/Spec.pm` under `lib` => `File::Spec`.
+pub fn path_to_module_name(root: &Path, file_path: &Path) -> Option<String> {
+    let rel = file_path.strip_prefix(root).ok()?;
+    if rel.extension().and_then(|ext| ext.to_str()) != Some("pm") {
+        return None;
+    }
+
+    let stem = rel.with_extension("");
+    let mut parts: Vec<String> = Vec::new();
+    for component in stem.components() {
+        let part = component.as_os_str().to_str()?;
+        if part.is_empty() {
+            continue;
+        }
+        parts.push(part.to_string());
+    }
+
+    if parts.is_empty() { None } else { Some(parts.join("::")) }
+}
+
+/// Recursively scan a directory for `.pm` files and return module names.
+pub fn scan_directory_for_modules(root: &Path, prefix: &str) -> Vec<String> {
+    let mut modules = Vec::new();
+    if !root.is_dir() {
+        return modules;
+    }
+
+    let mut queue: VecDeque<(PathBuf, usize)> = VecDeque::from([(root.to_path_buf(), 0usize)]);
+    while let Some((dir, depth)) = queue.pop_front() {
+        if modules.len() >= MAX_MODULES_PER_SCAN {
+            break;
+        }
+
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            if modules.len() >= MAX_MODULES_PER_SCAN {
+                break;
+            }
+
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            let path = entry.path();
+
+            if file_type.is_dir() {
+                // Use path.is_symlink() rather than file_type.is_symlink() because
+                // DirEntry::file_type() returns the entry's own type: on Unix a
+                // symlinked directory has is_symlink()=true AND is_dir()=false,
+                // so the file_type.is_symlink() guard inside is_dir() would be
+                // dead code. path.is_symlink() correctly detects symlinks via lstat.
+                if depth < MAX_SCAN_DEPTH && !path.is_symlink() {
+                    queue.push_back((path, depth + 1));
+                }
+                continue;
+            }
+
+            if !file_type.is_file() {
+                continue;
+            }
+
+            let Some(module_name) = path_to_module_name(root, &path) else {
+                continue;
+            };
+
+            if prefix.is_empty() || module_name.starts_with(prefix) {
+                modules.push(module_name);
+            }
+        }
+    }
+
+    modules
+}
+
 /// Add module name completions for `use` and `require` statements.
 ///
 /// When the cursor is after `use ` or `require `, suggests package names from the
@@ -240,54 +324,81 @@ pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    include_paths: &[PathBuf],
+    system_inc_paths: &[PathBuf],
+    include_system_inc: bool,
 ) {
-    let Some(index) = workspace_index else {
-        return;
-    };
-
-    if !index.has_symbols() {
-        return;
-    }
-
     let mut seen: HashSet<String> = HashSet::new();
 
-    // Search for package symbols matching the prefix
-    let all_symbols = if context.prefix.is_empty() {
-        index.all_symbols()
-    } else {
-        index.find_symbols(&context.prefix)
+    if let Some(index) = workspace_index
+        && index.has_symbols()
+    {
+        // Search for package symbols matching the prefix
+        let all_symbols = if context.prefix.is_empty() {
+            index.all_symbols()
+        } else {
+            index.find_symbols(&context.prefix)
+        };
+
+        for symbol in all_symbols {
+            if symbol.kind != WsSymbolKind::Package {
+                continue;
+            }
+
+            // Match against the module name prefix
+            if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
+                continue;
+            }
+
+            if !seen.insert(symbol.name.clone()) {
+                continue;
+            }
+
+            let name = &symbol.name;
+            completions.push(CompletionItem {
+                label: name.clone(),
+                kind: CompletionItemKind::Module,
+                detail: Some("module".to_string()),
+                documentation: symbol
+                    .documentation
+                    .clone()
+                    .or_else(|| Some(format!("Package `{name}`"))),
+                insert_text: Some(name.clone()),
+                sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
+                filter_text: Some(name.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+            });
+        }
+    }
+
+    let mut add_external_modules = |roots: &[PathBuf], detail: &str| {
+        for root in roots.iter().take(MAX_MODULE_SCAN_ROOTS) {
+            for name in scan_directory_for_modules(root, &context.prefix) {
+                if !seen.insert(name.clone()) {
+                    continue;
+                }
+
+                completions.push(CompletionItem {
+                    label: name.clone(),
+                    kind: CompletionItemKind::Module,
+                    detail: Some(detail.to_string()),
+                    documentation: Some(format!("Package `{name}`")),
+                    insert_text: Some(name.clone()),
+                    sort_text: Some(format!("2{}_{name}", module_sort_tier(&name))),
+                    filter_text: Some(name),
+                    additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
+                    commit_characters: Some(vec![":".to_string(), ";".to_string()]),
+                });
+            }
+        }
     };
 
-    for symbol in all_symbols {
-        if symbol.kind != WsSymbolKind::Package {
-            continue;
-        }
-
-        // Match against the module name prefix
-        if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
-            continue;
-        }
-
-        if !seen.insert(symbol.name.clone()) {
-            continue;
-        }
-
-        let name = &symbol.name;
-        completions.push(CompletionItem {
-            label: name.clone(),
-            kind: CompletionItemKind::Module,
-            detail: Some("module".to_string()),
-            documentation: symbol
-                .documentation
-                .clone()
-                .or_else(|| Some(format!("Package `{name}`"))),
-            insert_text: Some(name.clone()),
-            sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
-            filter_text: Some(name.clone()),
-            additional_edits: vec![],
-            text_edit_range: Some((context.prefix_start, context.position)),
-            commit_characters: None,
-        });
+    add_external_modules(include_paths, "external module");
+    if include_system_inc {
+        add_external_modules(system_inc_paths, "system module");
     }
 }
 
