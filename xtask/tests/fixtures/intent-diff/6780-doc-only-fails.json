@@ -1,0 +1,12 @@
+{
+  "title": "fix(vscode): repair VS Code activation",
+  "body": "Fixes #6747",
+  "changed_files": [
+    "docs/ci/vscode-activation-notes.md"
+  ],
+  "evidence": {
+    "test_updated": false,
+    "behavior_receipt": false,
+    "override_approved": false
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "task_id": "task-6853",
+  "snapshot_id": "snap-001",
+  "head_sha": "abc123",
+  "lease_path": "",
+  "required_output_schema": ".ci/receipts/schemas/agent-receipt.schema.json",
+  "received_at": "2026-01-01T00:00:00Z",
+  "idempotency_key": "task-6853-comment-upsert",
+  "mutation": "label_mutation",
+  "status": "ok"
+}

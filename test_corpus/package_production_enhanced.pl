@@ -406,7 +406,7 @@ package Singleton::Manager {
         return new('Singleton::Manager');
     }
     
-    def increment_counter {
+    sub increment_counter {
         my ($self) = @_;
         $self->{counter}++;
         return $self->{counter};

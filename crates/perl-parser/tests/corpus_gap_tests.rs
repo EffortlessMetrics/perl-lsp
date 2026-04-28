@@ -108,6 +108,11 @@ mod corpus_gap_tests {
     }
 
     #[test]
+    fn test_end_section() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("end_section.pl")
+    }
+
+    #[test]
     fn test_packages_versions() -> Result<(), Box<dyn std::error::Error>> {
         test_corpus_file("packages_versions.pl")
     }
@@ -142,6 +147,11 @@ mod corpus_gap_tests {
         test_corpus_file("regex_timeout_hardening.pl")
     }
 
+    #[test]
+    fn test_parser_stress_cases() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("parser_stress_cases.pl")
+    }
+
     /// Regression: anonymous sub as expression initializer (`my $c = sub { 1 };`)
     /// must produce a subroutine node inside the initializer (locks down peek_second() fix).
     #[test]
@@ -156,6 +166,24 @@ mod corpus_gap_tests {
             sexp.contains("subroutine") || sexp.contains("anonymous_sub") || sexp.contains("sub"),
             "expected subroutine/anonymous_sub/sub node in initializer, got: {sexp}"
         );
+        Ok(())
+    }
+
+    /// Regression: `local($ENV{PATH})` inside call args should parse as a
+    /// local declaration argument (not an ERROR-producing list declaration).
+    #[test]
+    fn test_local_parenthesized_lvalue_in_call_args() -> Result<(), Box<dyn std::error::Error>> {
+        let input = "foo(local($ENV{PATH}) = '/tmp/bin', $next);";
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for local(...) call arg, got: {sexp}"
+        );
+        assert!(sexp.contains("local"), "expected local declaration in AST, got: {sexp}");
+        assert!(sexp.contains("PATH"), "expected PATH key in AST, got: {sexp}");
         Ok(())
     }
 

@@ -18,6 +18,8 @@ import {
   HealthCheckResult,
   HealthCheckStatus,
   selectWindowsCommandCandidate,
+  resolveUnixShellInvocationFallback,
+  toPosixShellCommand,
   classifyStartupFailure,
 } from '../onboarding';
 
@@ -163,6 +165,58 @@ describe('selectWindowsCommandCandidate', () => {
 
   test('returns null for empty where output', () => {
     expect(selectWindowsCommandCandidate(' \r\n \r\n')).toBeNull();
+  });
+});
+
+describe('toPosixShellCommand', () => {
+  test('quotes command and arguments for safe shell execution', () => {
+    const command = toPosixShellCommand(
+      'perl',
+      ['-e', "print q{can't fail}"],
+    );
+
+    expect(command).toBe("'perl' '-e' 'print q{can'\\''t fail}'");
+  });
+});
+
+describe('resolveUnixShellInvocationFallback', () => {
+  const originalPlatform = process.platform;
+  const originalShell = process.env.SHELL;
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform });
+    if (originalShell === undefined) {
+      delete process.env.SHELL;
+    } else {
+      process.env.SHELL = originalShell;
+    }
+  });
+
+  test('returns shell fallback invocation on unix ENOENT errors', () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+    process.env.SHELL = '/bin/zsh';
+
+    const fallback = resolveUnixShellInvocationFallback(
+      { command: 'perl', args: ['-e', 'print $]'] },
+      { code: 'ENOENT' },
+    );
+
+    expect(fallback).toEqual({
+      command: '/bin/zsh',
+      args: ['-lc', "'perl' '-e' 'print $]'"],
+    });
+  });
+
+  test('returns null when no shell is available', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    delete process.env.SHELL;
+
+    const fallback = resolveUnixShellInvocationFallback(
+      { command: 'perl', args: ['-e', 'print $]'] },
+      { code: 'ENOENT' },
+    );
+
+    expect(fallback).toBeNull();
   });
 });
 

@@ -5,6 +5,13 @@
 
 use super::super::*;
 use crate::protocol::{req_range, req_uri};
+use std::sync::LazyLock;
+
+static GLOBAL_VAR_ASSIGNMENT_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| match regex::Regex::new(r"(?m)^(\$|\@|\%)[a-zA-Z_]\w*\s*=") {
+        Ok(re) => re,
+        Err(err) => unreachable!("GLOBAL_VAR_ASSIGNMENT_RE is a known-good static pattern: {err}"),
+    });
 
 fn requested_code_action_kinds(params: &Value) -> Vec<&str> {
     params
@@ -635,19 +642,16 @@ impl LspServer {
             }));
 
             // Check for global variables that could use 'my' declarations
-            let global_var_pattern = regex::Regex::new(r"(?m)^(\$|\@|\%)[a-zA-Z_]\w*\s*=").ok();
-            if let Some(re) = global_var_pattern {
-                if re.is_match(&doc.text) {
-                    code_actions.push(json!({
-                        "title": "Convert globals to 'my' declarations",
-                        "kind": "refactor.rewrite",
-                        "command": {
-                            "title": "Convert to my declarations",
-                            "command": "perl.convertToMyDeclarations",
-                            "arguments": [json!({ "uri": uri })]
-                        }
-                    }));
-                }
+            if GLOBAL_VAR_ASSIGNMENT_RE.is_match(&doc.text) {
+                code_actions.push(json!({
+                    "title": "Convert globals to 'my' declarations",
+                    "kind": "refactor.rewrite",
+                    "command": {
+                        "title": "Convert to my declarations",
+                        "command": "perl.convertToMyDeclarations",
+                        "arguments": [json!({ "uri": uri })]
+                    }
+                }));
             }
 
             retain_requested_code_action_kinds(&mut code_actions, &requested_kinds);
