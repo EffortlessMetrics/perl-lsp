@@ -17,6 +17,7 @@ Verify the install before debugging editor settings:
 ```bash
 perllsp --version
 perllsp --health
+perllsp --info
 ```
 
 ## Pick Your Editor
@@ -30,7 +31,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
-| Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Sublime Text | install Sublime's `LSP` package and add `perllsp --stdio` in `LanguageServers.sublime-settings` | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
 | Codex CLI | connect an MCP LSP bridge to `perllsp --stdio` | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
@@ -113,9 +114,21 @@ See [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) for full setup details.
 
 ### Sublime Text
 
-Register a client with `command: ["perllsp", "--stdio"]`, use a selector such as
-`source.perl | text.perl`, and set `syntaxes` to Perl/Pod syntax files so `.pm`,
-`.pl`, `.t`, and Pod buffers consistently attach to the server.
+Install the `LSP` package, then open `Preferences: LSP Server Configurations`
+and add:
+
+```json
+{
+  "perl-lsp": {
+    "enabled": true,
+    "command": ["perllsp", "--stdio"],
+    "selector": "source.perl"
+  }
+}
+```
+
+For project-specific server settings, prefer `.perl-lsp.toml` or add
+`initialization_options` under the `perl-lsp` server configuration.
 
 ### Amazon Kiro
 
