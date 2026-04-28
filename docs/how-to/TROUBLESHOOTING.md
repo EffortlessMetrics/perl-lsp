@@ -39,6 +39,50 @@ problem is usually in editor integration, workspace roots, or a stale cache.
 
 If the editor is using a helper extension or plugin, check its own logs too.
 
+
+## Emacs Does Not Start `perllsp`
+
+1. Confirm Emacs can find the binary:
+
+   ```elisp
+   M-: (executable-find "perllsp")
+   ```
+
+2. Confirm the file is in a Perl major mode:
+
+   ```elisp
+   M-: major-mode
+   ```
+
+   Expected: `perl-mode`, `cperl-mode`, or an installed `perl-ts-mode`.
+
+3. Confirm the server works outside Emacs:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   perllsp --check path/to/file.pl
+   ```
+
+4. For Eglot, inspect:
+
+   ```elisp
+   M-: (eglot-managed-p)
+   M-x eglot-events-buffer
+   M-x eglot-stderr-buffer
+   ```
+
+5. For `lsp-mode`, inspect:
+
+   ```elisp
+   M-x lsp-describe-session
+   M-x lsp-workspace-show-log
+   ```
+
+6. Do not test stdio mode with raw JSON. LSP stdio traffic requires
+   `Content-Length` framing.
+
 ## Sublime Text Does Not Start `perllsp`
 
 1. Confirm `perllsp` works outside Sublime:
