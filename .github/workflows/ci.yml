@@ -9,15 +9,16 @@ on:
   pull_request:
     branches: [ main, master ]
     types: [opened, synchronize, reopened, labeled, ready_for_review, converted_to_draft]
+  merge_group: {}
   push:
     branches: [ main, master ]
   workflow_dispatch: {}
 
-# Coalesce-queue-tail: let the running CI complete; skip superseded SHAs at a
-# preflight gate instead of cancelling in-flight work mid-run.
+# Cancel in-progress runs for PR events on new pushes; let push/merge_group runs complete.
+# The preflight SHA-staleness check provides additional skip logic for superseded SHAs.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: write
@@ -88,8 +89,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
-          # Fetch enough history so ci-scope can diff against origin/master.
-          # 0 = full history; balances correctness vs. clone cost.
+          # Fetch full history so ci-scope can diff against origin/master (auto-detection
+          # resolves this first in the fallback chain). 0 = full history.
           fetch-depth: 0
 
       - name: Install Rust toolchain

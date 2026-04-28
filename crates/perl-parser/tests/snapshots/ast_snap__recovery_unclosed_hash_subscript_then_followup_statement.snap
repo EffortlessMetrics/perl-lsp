@@ -2,4 +2,4 @@
 source: crates/perl-parser/tests/ast_snap.rs
 expression: "parse_sexp(\"my $x = $h{foo;\\nmy $y = 2;\")"
 ---
-(source_file (ERROR "expected \'}\', found \';\' at position 14") (my_declaration (variable $ y)(number 2)))
+(source_file (my_declaration (variable $ x)(binary_{} (variable $ h) (identifier foo))) (my_declaration (variable $ y)(number 2)))

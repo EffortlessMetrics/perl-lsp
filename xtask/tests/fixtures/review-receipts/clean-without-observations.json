@@ -1,0 +1,17 @@
+{
+  "kind": "review",
+  "producer": "review-bot",
+  "pr": 6853,
+  "head_sha": "3333333333333333333333333333333333333333",
+  "base_sha": "4444444444444444444444444444444444444444",
+  "verdict": "clean",
+  "material_observations": [],
+  "negative_checks": [
+    "No unauthorized file rewrites detected"
+  ],
+  "blockers": [],
+  "next_routes": [
+    "signoff_clean"
+  ],
+  "supersedes": null
+}
