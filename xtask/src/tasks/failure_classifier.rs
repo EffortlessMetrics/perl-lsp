@@ -197,10 +197,10 @@ fn classify(input: &SnapshotInput) -> FailureReceipt {
 
     let mut affected_prs =
         if input.affected_prs.is_empty() { Vec::new() } else { input.affected_prs.clone() };
-    if let Some(number) = input.pr.number {
-        if !affected_prs.contains(&number) {
-            affected_prs.push(number);
-        }
+    if let Some(number) = input.pr.number
+        && !affected_prs.contains(&number)
+    {
+        affected_prs.push(number);
     }
 
     // verdict: "fail" when the failure is PR-owned (action required on PR);
@@ -255,10 +255,8 @@ fn is_infra_failure(input: &SnapshotInput, failing: &[&CheckInput], signature: &
 
     let signatures = failing.iter().filter_map(|check| check_signature(check)).collect::<Vec<_>>();
 
-    let inferred = signatures.iter().any(|value| contains_infra_pattern(value))
-        || all_artifacts.iter().any(|value| contains_infra_pattern(value));
-
-    inferred
+    signatures.iter().any(|value| contains_infra_pattern(value))
+        || all_artifacts.iter().any(|value| contains_infra_pattern(value))
 }
 
 fn contains_infra_pattern(value: &str) -> bool {
