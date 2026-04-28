@@ -231,6 +231,31 @@ mod tests {
     }
 
     #[test]
+    fn string_form_uri_passes_through_without_normalization() {
+        // Value::String arm passes the string through as-is, matching the behavior
+        // of the Value::Object{"uri": ...} arm which also does not normalize.
+        let entries = vec![json!("file:///a/b/c"), json!("file:///C:/Users/foo")];
+        let uris = extract_workspace_folder_uris(&entries);
+        assert_eq!(uris, vec!["file:///a/b/c", "file:///C:/Users/foo"]);
+    }
+
+    #[test]
+    fn non_file_and_non_object_entries_are_dropped() {
+        // Null, arrays, booleans, and numbers should all be silently skipped.
+        let entries = vec![json!(null), json!(42), json!(true), json!([])];
+        let uris = extract_workspace_folder_uris(&entries);
+        assert!(uris.is_empty(), "expected empty result, got {uris:?}");
+    }
+
+    #[test]
+    fn object_uri_key_takes_precedence_over_path_key() {
+        // When an object contains both "uri" and "path", "uri" wins.
+        let entries = vec![json!({"uri": "file:///from-uri", "path": "/from-path"})];
+        let uris = extract_workspace_folder_uris(&entries);
+        assert_eq!(uris, vec!["file:///from-uri"]);
+    }
+
+    #[test]
     fn extracts_workspace_change_entries() {
         let change = extract_workspace_folder_change(&json!({
             "added": [{"uri": "file:///add"}],
