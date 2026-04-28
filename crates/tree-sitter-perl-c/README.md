@@ -57,15 +57,15 @@ fn main() {
 }
 ```
 
-For repeated parsing, reuse a configured parser:
+For repeated parsing, reuse a configured parser with the helper APIs:
 
 ```rust
-use tree_sitter_perl_c::try_create_parser;
+use tree_sitter_perl_c::{parse_perl_code_with_parser, try_create_parser};
 
 let mut parser = try_create_parser().unwrap();
 
 for snippet in &["my $x = 1;", "print $x;"] {
-    let tree = parser.parse(snippet, None).unwrap();
+    let tree = parse_perl_code_with_parser(&mut parser, snippet).unwrap();
     assert!(!tree.root_node().has_error());
 }
 ```
@@ -78,14 +78,59 @@ for snippet in &["my $x = 1;", "print $x;"] {
 | `try_create_parser()` | Creates a `tree_sitter::Parser` (returns `Result`) |
 | `create_parser()` | Creates a parser, silently ignoring language-set errors |
 | `parse_perl_bytes(code)` | Parses raw bytes (including non-UTF-8 Perl source) |
+| `parse_perl_bytes_with_parser(parser, code)` | Parses raw bytes with a caller-provided configured parser |
 | `parse_perl_code(code)` | Parses a `&str` into a `tree_sitter::Tree` |
+| `parse_perl_code_with_parser(parser, code)` | Parses a `&str` with a caller-provided configured parser |
 | `parse_perl_file(path)` | Reads and parses a file (non-UTF-8 safe) |
 | `get_scanner_config()` | Returns `"c-scanner"` |
 
 ## Binaries
 
-- `parse_c` — parse a Perl file and exit with 0 (success) or 1 (error)
+- `parse_c` — parse a Perl file using the byte-oriented API (non-UTF-8 safe), then:
+  - exits `0` when the parse tree has no error nodes
+  - exits `1` when reading/parsing fails or the tree contains syntax errors
+  - supports triage flags:
+    - `--root-kind` to print the root node kind
+    - `--has-error` to print `true`/`false` for parse errors
+    - `--sexp` to print the full tree-sitter s-expression
 - `bench_parser_c` — parse a Perl file and print timing (requires `--features test-utils`)
+
+Examples:
+
+```bash
+# Basic parse check (succeeds only when there are no parse errors)
+cargo run -p tree-sitter-perl-c --bin parse_c -- fixtures/sample.pl
+
+# Triage output for debugging parser behavior
+cargo run -p tree-sitter-perl-c --bin parse_c -- --root-kind --has-error --sexp fixtures/sample.pl
+```
+
+## Snapshot provenance and refresh
+
+Snapshot provenance and the refresh workflow are tracked in
+[`UPSTREAM_SNAPSHOT.md`](UPSTREAM_SNAPSHOT.md).
+
+That document records:
+
+- upstream repository/reference
+- generator version used for `parser.c`
+- file fingerprints for auditability
+- the exact local refresh + validation checklist
+
+## Vendored files vs local wrapper code
+
+**Vendored from upstream snapshot (`c-src/`):**
+
+- `parser.c`, `scanner.c`
+- `bsearch.h`, `tsp_unicode.h`
+- `tree_sitter/{parser.h,array.h,alloc.h}`
+
+**Maintained locally in this crate:**
+
+- `src/lib.rs` (Rust FFI wrapper + helpers)
+- `build.rs` (C compilation/link wiring)
+- `tests/` and `src/bin/` (integration and sanity tooling)
+- crate docs (`README.md`, `ROADMAP.md`, `UPSTREAM_SNAPSHOT.md`)
 
 ## Build Requirements
 

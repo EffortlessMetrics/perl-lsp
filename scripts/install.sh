@@ -7,6 +7,7 @@
 # Or with options via environment variables:
 #   VERSION=v0.12.0 INSTALL_DIR=/usr/local/bin bash scripts/install.sh
 #   PREFER_GNU=1 bash scripts/install.sh   # prefer glibc over musl on Linux
+#   BUILD_FROM_SOURCE=1 bash scripts/install.sh   # force cargo build/install
 #
 # Supported platforms:
 #   Linux x86_64 (musl/gnu), Linux aarch64 (musl/gnu), macOS x86_64, macOS aarch64
@@ -17,10 +18,13 @@ BIN_NAME="perllsp"
 DAP_BIN_NAME="perl-dap"
 VERSION="${VERSION:-latest}"
 PREFER_GNU="${PREFER_GNU:-0}"
+BUILD_FROM_SOURCE="${BUILD_FROM_SOURCE:-0}"
 
 # Determine install directory: user-local by default, system-wide if explicitly set
 if [ -z "${INSTALL_DIR:-}" ]; then
-    if [ -w /usr/local/bin ] 2>/dev/null; then
+    if [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux/files/usr/bin" ]; then
+        INSTALL_DIR="/data/data/com.termux/files/usr/bin"
+    elif [ -w /usr/local/bin ] 2>/dev/null; then
         INSTALL_DIR="/usr/local/bin"
     else
         INSTALL_DIR="$HOME/.local/bin"
@@ -48,16 +52,26 @@ need_cmd() {
 # ── Platform detection ─────────────────────────────────────────────────────────
 
 detect_platform() {
-    local _os _arch _libc
+    local _os _arch _libc _termux
 
     _os="$(uname -s)"
     _arch="$(uname -m)"
+    _termux=0
+    SOURCE_TARGET=""
+    INSTALL_MODE="release"
+
+    if [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux/files/usr/bin" ]; then
+        _termux=1
+    fi
 
     case "$_os" in
         Linux)
             _os="linux"
-            # Prefer musl (static, works everywhere) unless caller overrides.
-            if [ "$PREFER_GNU" = "1" ]; then
+            # Termux uses Android's bionic libc. Prefer static musl binaries there.
+            # For other Linux environments, prefer musl unless caller overrides.
+            if [ "$_termux" = "1" ]; then
+                _libc="musl"
+            elif [ "$PREFER_GNU" = "1" ]; then
                 _libc="gnu"
             else
                 _libc="musl"
@@ -77,18 +91,51 @@ detect_platform() {
     esac
 
     case "$_arch" in
-        x86_64|amd64)   _arch="x86_64" ;;
-        aarch64|arm64)  _arch="aarch64" ;;
-        *)              err "unsupported architecture: $_arch" ;;
+        x86_64|amd64|x64) _arch="x86_64" ;;
+        aarch64|arm64)    _arch="aarch64" ;;
+        armv8l|armv7l|armv7*|armhf)
+            if [ "$_os" = "linux" ]; then
+                _arch="armv7"
+                SOURCE_TARGET="armv7-unknown-linux-gnueabihf"
+                INSTALL_MODE="source"
+            else
+                err "unsupported architecture: $_arch"
+            fi
+            ;;
+        armv6l|armv6*|arm)
+            if [ "$_os" = "linux" ]; then
+                _arch="armv6"
+                SOURCE_TARGET="arm-unknown-linux-gnueabihf"
+                INSTALL_MODE="source"
+            else
+                err "unsupported architecture: $_arch"
+            fi
+            ;;
+        *) err "unsupported architecture: $_arch" ;;
     esac
 
-    if [ "$_os" = "linux" ]; then
-        TARGET="${_arch}-unknown-linux-${_libc}"
-    else
-        TARGET="${_arch}-apple-darwin"
+    if [ "$BUILD_FROM_SOURCE" = "1" ]; then
+        INSTALL_MODE="source"
     fi
 
-    info "platform: $_os $_arch (target: $TARGET)"
+    if [ "$INSTALL_MODE" = "release" ]; then
+        if [ "$_os" = "linux" ]; then
+            TARGET="${_arch}-unknown-linux-${_libc}"
+        else
+            TARGET="${_arch}-apple-darwin"
+        fi
+        info "platform: $_os $_arch (target: $TARGET)"
+        if [ "$_termux" = "1" ]; then
+            info "termux environment detected; using musl release artifacts for compatibility"
+        fi
+    else
+        TARGET="${SOURCE_TARGET:-}"
+        if [ -n "$TARGET" ]; then
+            info "platform: $_os $_arch (source build target: $TARGET)"
+        else
+            info "platform: $_os $_arch (source build mode)"
+        fi
+    fi
 }
 
 # ── Version resolution ─────────────────────────────────────────────────────────
@@ -129,10 +176,6 @@ download_and_verify() {
 
     ASSET_URL="${_base_url}/${_asset}"
     CHECKSUM_URL="${_base_url}/SHA256SUMS"
-
-    TMPDIR="$(mktemp -d)"
-    # shellcheck disable=SC2064
-    trap "rm -rf '$TMPDIR'" EXIT
 
     local _archive="${TMPDIR}/${_asset}"
 
@@ -193,6 +236,22 @@ extract_archive() {
         err "expected directory not found after extraction: $EXTRACT_DIR
 The release archive may have an unexpected layout."
     fi
+}
+
+# ── Source build ───────────────────────────────────────────────────────────────
+
+build_from_source() {
+    need_cmd cargo
+    need_cmd rustup
+
+    local _cargo_target
+    _cargo_target="${TARGET:-$(rustc -vV | awk -F': ' '/host:/ {print $2}')}"
+
+    info "building from source for target: $_cargo_target"
+    rustup target add "$_cargo_target"
+    cargo install perllsp --locked --target "$_cargo_target" --root "$TMPDIR/install-root"
+
+    EXTRACT_DIR="${TMPDIR}/install-root/bin"
 }
 
 # ── Install ────────────────────────────────────────────────────────────────────
@@ -275,8 +334,16 @@ main() {
 
     detect_platform
     resolve_version
-    download_and_verify
-    extract_archive
+    TMPDIR="$(mktemp -d)"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$TMPDIR'" EXIT
+
+    if [ "$INSTALL_MODE" = "release" ]; then
+        download_and_verify
+        extract_archive
+    else
+        build_from_source
+    fi
     install_binaries
     verify_install
     check_path
@@ -286,7 +353,7 @@ main() {
     say ""
     say "Get started:"
     say "  VS Code:  install the Perl LSP extension from the marketplace"
-    say "  Neovim:   add perllsp to your LSP config"
+    say "  Vim/Neovim: add perllsp to your LSP config"
     say "  Other:    configure to use '${INSTALL_DIR}/${BIN_NAME} --stdio'"
     say ""
     say "Docs: https://github.com/$REPO"

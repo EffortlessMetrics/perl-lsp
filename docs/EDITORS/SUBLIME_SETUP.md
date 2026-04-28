@@ -1,144 +1,101 @@
 # Sublime Text Setup Guide for perl-lsp
 
-This comprehensive guide helps you set up and configure the Perl Language Server in Sublime Text.
-
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Basic Setup](#basic-setup)
-- [Configuration](#configuration)
-- [Features](#features)
-- [Keybindings](#keybindings)
-- [Troubleshooting](#troubleshooting)
-- [Advanced Configuration](#advanced-configuration)
-
----
+Use this guide to run `perllsp` in Sublime Text through the Sublime Text `LSP`
+package.
 
 ## Prerequisites
 
-### Required
+- Sublime Text 4
+- Package Control, unless installing packages manually
+- Sublime Text `LSP` package
+- `perllsp` installed and available on your `PATH`
+- a Perl project opened as a Sublime project or folder
 
-- **Sublime Text** version 4 or later
-- **Package Control** (for installing plugins)
-- **perl-lsp** server installed (see [Installation](#installation))
+Optional:
 
-### Optional but Recommended
+- Perl, for running project code, tests, and system `@INC` probing
+- `perltidy`, for formatting
+- `perlcritic`, only if Perl::Critic diagnostics are enabled
 
-- **LSP** package (LSP client)
-- **LSP-pyright** or similar LSP package
-- **Perl** 5.10 or later (for syntax validation)
-- **perltidy** (for code formatting)
-- **perlcritic** (for linting)
+Verify `perllsp` before changing Sublime settings:
 
----
-
-## Installation
-
-### Install Package Control
-
-If you don't have Package Control installed:
-
-1. Open Sublime Text
-2. Press `Ctrl+`` (or `Cmd+`` on macOS) to open the console
-3. Paste the following command and press Enter:
-
-```python
-import urllib.request,os,hashlib; h = '6f4c264a24d933ce70df5dedcf1dcaee' + 'ebe013ee18cced0ef93d5f746d80ef60'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'https://packagecontrol.io/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by)
+```bash
+perllsp --version
+perllsp --health
+perllsp --info
 ```
 
-4. Restart Sublime Text
+## Install the Sublime LSP Package
 
-### Install the Server
+Install Package Control first:
 
-Choose one of the following methods:
+1. Open the Command Palette with `Ctrl+Shift+P` or `Cmd+Shift+P`.
+2. Run `Install Package Control`.
 
-#### Option 1: Install from crates.io (Recommended)
+Then install Sublime's LSP client:
+
+1. Open the Command Palette.
+2. Run `Package Control: Install Package`.
+3. Select `LSP`.
+
+## Install `perllsp`
+
+### Cargo
 
 ```bash
 cargo install perllsp
 ```
 
-#### Option 2: Download Pre-built Binary
-
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases):
+### Homebrew
 
 ```bash
-# Linux (x86_64)
-curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-linux-x86_64.tar.gz
-tar xzf perl-lsp-linux-x86_64.tar.gz
-sudo mv perl-lsp /usr/local/bin/
-
-# macOS (Apple Silicon)
-curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-darwin-aarch64.tar.gz
-tar xzf perl-lsp-darwin-aarch64.tar.gz
-sudo mv perl-lsp /usr/local/bin/
+brew install perl-lsp
 ```
 
-#### Option 3: Build from Source
+### From Source
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
-cargo install perllsp
+cargo install --path crates/perllsp --locked
 ```
 
-### Verify Installation
+### Prebuilt Binary
 
-```bash
-# Check version
-perllsp --version
+Download the archive for your platform from GitHub Releases, extract it, and put
+the `perllsp` binary on your `PATH`.
 
-# Quick health check
-perllsp --health
-# Should output: ok 0.10.0
+Release assets use the `perllsp-<version>-<target>` naming pattern. Check the
+release page before copying a version number.
+
+## Configure Sublime LSP
+
+Open:
+
+```text
+Preferences > Package Settings > LSP > Server Configurations
 ```
 
----
+or run this from the Command Palette:
 
-## Basic Setup
+```text
+Preferences: LSP Server Configurations
+```
 
-### Install LSP Package
-
-1. Open Sublime Text
-2. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS)
-3. Type "Package Control: Install Package"
-4. Press Enter
-5. Search for "LSP"
-6. Press Enter to install
-
-### Configure perl-lsp
-
-1. Open Sublime Text
-2. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS)
-3. Type "Preferences: LSP Settings"
-4. Press Enter
-5. Add the following configuration:
+Add:
 
 ```json
 {
-  "clients": {
-    "perl-lsp": {
-      "enabled": true,
-      "command": ["perl-lsp", "--stdio"],
-      "selector": "source.perl",
-      "initializationOptions": {
-        "perl": {
-          "workspace": {
-            "includePaths": ["lib", ".", "local/lib/perl5"],
-            "useSystemInc": false,
-            "resolutionTimeout": 50
-          },
-          "inlayHints": {
-            "enabled": true,
-            "parameterHints": true,
-            "typeHints": true
-          },
-          "limits": {
-            "workspaceSymbolCap": 200,
-            "referencesCap": 500,
-            "completionCap": 100
-          }
+  "perl-lsp": {
+    "enabled": true,
+    "command": ["perllsp", "--stdio"],
+    "selector": "source.perl",
+    "initialization_options": {
+      "perl": {
+        "workspace": {
+          "includePaths": ["lib", ".", "local/lib/perl5"],
+          "useSystemInc": false,
+          "resolutionTimeout": 50
         }
       }
     }
@@ -146,97 +103,27 @@ perllsp --health
 }
 ```
 
-### Verify Setup
+The key is `initialization_options` in Sublime LSP settings. The server-side LSP
+protocol field is called `initializationOptions`, but Sublime's configuration
+uses snake_case.
 
-1. Restart Sublime Text
-2. Open a `.pl` or `.pm` file
-3. Check if LSP is attached:
-   - Open Command Palette: `Ctrl+Shift+P` (or `Cmd+Shift+P`)
-   - Type "LSP: Enable Language Server"
-   - Look for perl-lsp in the list
+## Optional: Project-Specific Settings
 
----
-
-## Configuration
-
-### Full Configuration
-
-Open LSP settings (`Preferences: LSP Settings`) and add:
-
-```json
-{
-  "clients": {
-    "perl-lsp": {
-      "enabled": true,
-      "command": ["perl-lsp", "--stdio"],
-      "selector": "source.perl",
-      "priority": 1,
-      "initializationOptions": {
-        "perl": {
-          "workspace": {
-            "includePaths": ["lib", ".", "local/lib/perl5", "vendor/lib"],
-            "useSystemInc": false,
-            "resolutionTimeout": 50
-          },
-          "inlayHints": {
-            "enabled": true,
-            "parameterHints": true,
-            "typeHints": true,
-            "chainedHints": false,
-            "maxLength": 30
-          },
-          "testRunner": {
-            "enabled": true,
-            "command": "perl",
-            "args": [],
-            "timeout": 60000
-          },
-          "limits": {
-            "workspaceSymbolCap": 200,
-            "referencesCap": 500,
-            "completionCap": 100,
-            "astCacheMaxEntries": 100,
-            "maxIndexedFiles": 10000,
-            "maxTotalSymbols": 500000,
-            "workspaceScanDeadlineMs": 30000,
-            "referenceSearchDeadlineMs": 2000
-          }
-        }
-      },
-      "settings": {
-        "LSP-lsp-perl-lsp.log_stderr": true,
-        "LSP-lsp-perl-lsp.log_stdout": true
-      },
-      "env": {
-        "PERL5LIB": "${folder}/lib",
-        "PERL_MB_OPT": "--install_base ${folder}/local"
-      }
-    }
-  },
-  "log_server": [
-    "perl-lsp"
-  ]
-}
-```
-
-### Project-Specific Configuration
-
-Create `.sublime-project` file in your project root:
+Prefer `.perl-lsp.toml` for settings shared across all editors. Use a
+`.sublime-project` override only for Sublime-specific behavior.
 
 ```json
 {
   "folders": [
-    {
-      "path": "."
-    }
+    { "path": "." }
   ],
   "settings": {
     "LSP": {
       "perl-lsp": {
-        "initializationOptions": {
+        "initialization_options": {
           "perl": {
             "workspace": {
-              "includePaths": ["lib", "local/lib/perl5", "vendor/lib"]
+              "includePaths": ["lib", ".", "local/lib/perl5", "vendor/lib"]
             }
           }
         }
@@ -246,377 +133,33 @@ Create `.sublime-project` file in your project root:
 }
 ```
 
----
+## Optional: Inlay Hints
 
-## Features
+`perllsp` can provide inlay hints, but Sublime LSP does not display them by
+default. Enable display in:
 
-### Syntax Diagnostics
-
-Real-time syntax error detection and reporting:
-
-```perl
-# Errors are highlighted as you type
-my $x = 1
-# Missing semicolon - error shown immediately
+```text
+Preferences > Package Settings > LSP > Settings
 ```
-
-View diagnostics:
-- Errors are shown in the gutter
-- Hover over error markers for details
-- View all diagnostics: `Ctrl+Shift+P` → "LSP: Diagnostics"
-
-### Go to Definition
-
-Navigate to symbol definitions:
-
-- **Keybinding**: `F12`
-- **Command**: `Ctrl+Shift+P` → "LSP: Go to Definition"
-
-```perl
-use MyModule;
-
-MyModule::some_function();
-# ^ F12 here jumps to the definition
-```
-
-### Find References
-
-Find all usages of a symbol:
-
-- **Keybinding**: `Shift+F12`
-- **Command**: `Ctrl+Shift+P` → "LSP: Find References"
-
-```perl
-sub my_function {
-    return 42;
-}
-
-# ^ Find references here shows all calls to my_function
-```
-
-### Hover Information
-
-View documentation and type information:
-
-- **Keybinding**: `Ctrl+I` (or hover with mouse)
-- **Command**: `Ctrl+Shift+P` → "LSP: Hover"
-
-### Code Completion
-
-Intelligent code completion:
-
-- **Keybinding**: `Ctrl+Space` (or type to trigger)
-- **Command**: `Ctrl+Shift+P` → "LSP: Complete"
-
-```perl
-use MyModule;
-
-MyModule::  # Type here for completion
-```
-
-### Document Symbols
-
-Navigate symbols in the current file:
-
-- **Command**: `Ctrl+Shift+P` → "LSP: Document Symbols"
-
-### Workspace Symbols
-
-Search symbols across the entire workspace:
-
-- **Command**: `Ctrl+Shift+P` → "LSP: Workspace Symbols"
-
-### Rename Symbol
-
-Rename symbols across the workspace:
-
-- **Keybinding**: `F2`
-- **Command**: `Ctrl+Shift+P` → "LSP: Rename"
-
-### Formatting
-
-Format Perl code using perltidy:
-
-- **Keybinding**: `Ctrl+Shift+F`
-- **Command**: `Ctrl+Shift+P` → "LSP: Format Document"
-
-### Code Actions
-
-Quick fixes and refactorings:
-
-- **Command**: `Ctrl+Shift+P` → "LSP: Code Actions"
-
-Available actions:
-- Extract variable
-- Extract subroutine
-- Optimize imports
-- Add missing pragmas
-
-### Inlay Hints
-
-Inline type and parameter hints:
-
-```perl
-sub my_function($name, $count) {
-    return "Hello, $name x$count";
-}
-
-my_function("World", 5);
-# ^ Shows: my_function(/* name: */ "World", /* count: */ 5)
-```
-
-Enable inlay hints:
-- **Command**: `Ctrl+Shift+P` → "LSP: Toggle Inlay Hints"
-
----
-
-## Keybindings
-
-### Default LSP Keybindings
-
-| Action | Windows/Linux | macOS | Command |
-|--------|---------------|-------|---------|
-| Go to Definition | `F12` | `F12` | LSP: Go to Definition |
-| Find References | `Shift+F12` | `Shift+F12` | LSP: Find References |
-| Rename Symbol | `F2` | `F2` | LSP: Rename |
-| Format Document | `Ctrl+Shift+F` | `Cmd+Shift+F` | LSP: Format Document |
-| Hover | `Ctrl+I` | `Ctrl+I` | LSP: Hover |
-| Completion | `Ctrl+Space` | `Ctrl+Space` | LSP: Complete |
-| Code Actions | - | - | LSP: Code Actions |
-| Document Symbols | - | - | LSP: Document Symbols |
-| Workspace Symbols | - | - | LSP: Workspace Symbols |
-| Diagnostics | - | - | LSP: Diagnostics |
-
-### Custom Keybindings
-
-To customize keybindings, edit `Preferences: Key Bindings`:
-
-```json
-[
-  {
-    "keys": ["ctrl+shift+r"],
-    "command": "lsp_rename",
-    "context": [
-      { "key": "lsp.client_name", "operator": "equal", "operand": "perl-lsp" }
-    ]
-  },
-  {
-    "keys": ["ctrl+shift+f"],
-    "command": "lsp_format_document",
-    "context": [
-      { "key": "lsp.client_name", "operator": "equal", "operand": "perl-lsp" }
-    ]
-  },
-  {
-    "keys": ["ctrl+shift+a"],
-    "command": "lsp_code_actions",
-    "context": [
-      { "key": "lsp.client_name", "operator": "equal", "operand": "perl-lsp" }
-    ]
-  },
-  {
-    "keys": ["ctrl+shift+d"],
-    "command": "lsp_diagnostics",
-    "context": [
-      { "key": "lsp.client_name", "operator": "equal", "operand": "perl-lsp" }
-    ]
-  }
-]
-```
-
----
-
-## Troubleshooting
-
-### Server Not Starting
-
-**Symptoms**: No diagnostics, no completion, error in console
-
-**Solutions**:
-
-1. **Verify binary is in PATH**:
-   - Open terminal
-   - Run: `which perl-lsp`
-   - Should output: `/usr/local/bin/perl-lsp` or similar
-
-2. **Check LSP status**:
-   - Open Command Palette: `Ctrl+Shift+P`
-   - Type "LSP: Status"
-   - Look for perl-lsp in the list
-
-3. **Check logs**:
-   - Open Command Palette: `Ctrl+Shift+P`
-   - Type "LSP: Toggle Log Panel"
-   - Look for error messages
-
-4. **Test server manually**:
-   ```bash
-   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perllsp --stdio
-   ```
-
-### No Diagnostics
-
-**Symptoms**: No errors shown for invalid code
-
-**Solutions**:
-
-1. **Check file type**:
-   - Look at the bottom-right corner
-   - Should show "Perl" as the language
-
-2. **Set file type manually**:
-   - Open Command Palette: `Ctrl+Shift+P`
-   - Type "Set Syntax: Perl"
-
-3. **Verify diagnostics enabled**:
-   - Open Command Palette: `Ctrl+Shift+P`
-   - Type "LSP: Diagnostics"
-
-### Slow Performance
-
-**Symptoms**: Lag when typing, slow completions
-
-**Solutions**:
-
-1. **Reduce result caps**:
-   ```json
-   {
-     "clients": {
-       "perl-lsp": {
-         "initializationOptions": {
-           "perl": {
-             "limits": {
-               "workspaceSymbolCap": 100,
-               "referencesCap": 200,
-               "completionCap": 50
-             }
-           }
-         }
-       }
-     }
-   }
-   ```
-
-2. **Disable system @INC**:
-   ```json
-   {
-     "clients": {
-       "perl-lsp": {
-         "initializationOptions": {
-           "perl": {
-             "workspace": {
-               "useSystemInc": false
-             }
-           }
-         }
-       }
-     }
-   }
-   ```
-
-3. **Reduce resolution timeout**:
-   ```json
-   {
-     "clients": {
-       "perl-lsp": {
-         "initializationOptions": {
-           "perl": {
-             "workspace": {
-               "resolutionTimeout": 25
-             }
-           }
-         }
-       }
-     }
-   }
-   ```
-
-### Module Resolution Issues
-
-**Symptoms**: Can't find modules, go-to-definition fails
-
-**Solutions**:
-
-1. **Check include paths**:
-   ```json
-   {
-     "clients": {
-       "perl-lsp": {
-         "initializationOptions": {
-           "perl": {
-             "workspace": {
-               "includePaths": ["lib", ".", "local/lib/perl5", "vendor/lib"]
-             }
-           }
-         }
-       }
-     }
-   }
-   ```
-
-2. **Verify module exists**:
-   ```bash
-   perl -e 'use Module::Name;'
-   ```
-
-3. **Check workspace root**:
-   - Open Command Palette: `Ctrl+Shift+P`
-   - Type "LSP: Status"
-
-### Formatting Not Working
-
-**Symptoms**: Format command does nothing or errors
-
-**Solutions**:
-
-1. **Install perltidy**:
-   ```bash
-   # macOS
-   brew install perltidy
-
-   # Ubuntu/Debian
-   sudo apt-get install perltidy
-
-   # CentOS/RHEL
-   sudo yum install perl-Perl-Tidy
-   ```
-
-2. **Check perltidy works**:
-   ```bash
-   perltidy --version
-   ```
-
-3. **Verify formatting enabled**:
-   - Open Command Palette: `Ctrl+Shift+P`
-   - Type "LSP: Format Document"
-
----
-
-## Advanced Configuration
-
-### Multi-Root Workspace
-
-For workspaces with multiple folders, create a `.sublime-workspace` file:
 
 ```json
 {
-  "folders": [
-    {
-      "path": "./project1"
-    },
-    {
-      "path": "./project2"
-    }
-  ],
-  "settings": {
-    "LSP": {
-      "perl-lsp": {
-        "initializationOptions": {
-          "perl": {
-            "workspace": {
-              "includePaths": ["lib", "local/lib/perl5"]
-            }
-          }
+  "show_inlay_hints": true
+}
+```
+
+Optional server-side override:
+
+```json
+{
+  "perl-lsp": {
+    "initialization_options": {
+      "perl": {
+        "inlayHints": {
+          "enabled": true,
+          "parameterHints": true,
+          "typeHints": true,
+          "maxLength": 30
         }
       }
     }
@@ -624,170 +167,70 @@ For workspaces with multiple folders, create a `.sublime-workspace` file:
 }
 ```
 
-### Environment Variables
+## Optional: Logging
 
-Set environment variables for the LSP server:
+For client/server protocol logs, run:
+
+```text
+LSP: Toggle Log Panel
+```
+
+For extra LSP package debug output, add this to `Preferences: LSP Settings`:
 
 ```json
 {
-  "clients": {
-    "perl-lsp": {
-      "env": {
-        "PERL5LIB": "${folder}/lib",
-        "PERL_MB_OPT": "--install_base ${folder}/local",
-        "PATH": "${env:PATH}:/usr/local/bin"
-      }
-    }
+  "log_debug": true,
+  "log_server": ["panel"]
+}
+```
+
+For server-side `perllsp` logs, launch with `--log`:
+
+```json
+{
+  "perl-lsp": {
+    "enabled": true,
+    "command": ["perllsp", "--stdio", "--log"],
+    "selector": "source.perl"
   }
 }
 ```
 
-### Custom Formatter
+## Verify It Is Running
 
-Use a custom formatter instead of perltidy:
+1. Open a Perl file such as `script/app.pl`, `lib/My/Module.pm`, or `t/basic.t`.
+2. Confirm Sublime shows the syntax as Perl.
+3. Confirm `perl-lsp` appears in the left side of the status bar.
+4. Introduce a temporary syntax error.
+5. Confirm diagnostics appear.
+6. Remove the syntax error.
 
-```json
-{
-  "clients": {
-    "perl-lsp": {
-      "command": ["custom-formatter", "--lsp"],
-      "selector": "source.perl"
-    }
-  }
-}
+Useful commands:
+
+```text
+LSP: Troubleshoot Server
+LSP: Toggle Log Panel
+LSP: Restart Server
 ```
 
-### Debug Adapter Protocol (DAP)
+If the server does not start, run:
 
-Enable debugging support:
-
-```json
-{
-  "clients": {
-    "perl-lsp": {
-      "initializationOptions": {
-        "perl": {
-          "debugAdapter": {
-            "enabled": true,
-            "port": 9257
-          }
-        }
-      }
-    }
-  }
-}
+```text
+Tools > Developer > Show Scope Name
 ```
 
-See [DAP User Guide](../tutorials/DAP_USER_GUIDE.md) for more details.
+The root scope should match the configured selector, usually `source.perl`.
 
-### Performance Tuning
+## Recommended Keybindings
 
-For large workspaces, adjust performance settings:
+Many Sublime LSP commands are intentionally unbound by default. Add only the
+bindings you want in:
 
-```json
-{
-  "clients": {
-    "perl-lsp": {
-      "initializationOptions": {
-        "perl": {
-          "limits": {
-            "workspaceSymbolCap": 100,
-            "referencesCap": 200,
-            "completionCap": 50,
-            "astCacheMaxEntries": 50,
-            "maxIndexedFiles": 5000,
-            "maxTotalSymbols": 250000,
-            "workspaceScanDeadlineMs": 20000,
-            "referenceSearchDeadlineMs": 1500
-          },
-          "workspace": {
-            "resolutionTimeout": 25
-          }
-        }
-      }
-    }
-  }
-}
+```text
+Preferences: Key Bindings
 ```
 
-### Logging Configuration
-
-Enable detailed logging for troubleshooting:
-
-```json
-{
-  "clients": {
-    "perl-lsp": {
-      "settings": {
-        "LSP-lsp-perl-lsp.log_stderr": true,
-        "LSP-lsp-perl-lsp.log_stdout": true
-      }
-    }
-  },
-  "log_server": ["perl-lsp"]
-}
-```
-
----
-
-## Complete Example Configuration
-
-### LSP Settings (`Preferences: LSP Settings`)
-
-```json
-{
-  "clients": {
-    "perl-lsp": {
-      "enabled": true,
-      "command": ["perl-lsp", "--stdio"],
-      "selector": "source.perl",
-      "priority": 1,
-      "initializationOptions": {
-        "perl": {
-          "workspace": {
-            "includePaths": ["lib", ".", "local/lib/perl5", "vendor/lib"],
-            "useSystemInc": false,
-            "resolutionTimeout": 50
-          },
-          "inlayHints": {
-            "enabled": true,
-            "parameterHints": true,
-            "typeHints": true,
-            "maxLength": 30
-          },
-          "testRunner": {
-            "enabled": true,
-            "command": "perl",
-            "args": [],
-            "timeout": 60000
-          },
-          "limits": {
-            "workspaceSymbolCap": 200,
-            "referencesCap": 500,
-            "completionCap": 100,
-            "astCacheMaxEntries": 100,
-            "maxIndexedFiles": 10000,
-            "maxTotalSymbols": 500000,
-            "workspaceScanDeadlineMs": 30000,
-            "referenceSearchDeadlineMs": 2000
-          }
-        }
-      },
-      "settings": {
-        "LSP-lsp-perl-lsp.log_stderr": true,
-        "LSP-lsp-perl-lsp.log_stdout": true
-      },
-      "env": {
-        "PERL5LIB": "${folder}/lib",
-        "PERL_MB_OPT": "--install_base ${folder}/local"
-      }
-    }
-  },
-  "log_server": ["perl-lsp"]
-}
-```
-
-### Key Bindings (`Preferences: Key Bindings`)
+Example:
 
 ```json
 [
@@ -795,72 +238,124 @@ Enable detailed logging for troubleshooting:
     "keys": ["f12"],
     "command": "lsp_symbol_definition",
     "context": [
-      { "key": "lsp.client_name", "operator": "equal", "operand": "perl-lsp" }
+      { "key": "lsp.session_with_capability", "operator": "equal", "operand": "definitionProvider" },
+      { "key": "selector", "operator": "equal", "operand": "source.perl" }
     ]
   },
   {
     "keys": ["shift+f12"],
     "command": "lsp_symbol_references",
     "context": [
-      { "key": "lsp.client_name", "operator": "equal", "operand": "perl-lsp" }
+      { "key": "lsp.session_with_capability", "operator": "equal", "operand": "referencesProvider" },
+      { "key": "selector", "operator": "equal", "operand": "source.perl" }
     ]
   },
   {
     "keys": ["f2"],
-    "command": "lsp_rename",
+    "command": "lsp_symbol_rename",
     "context": [
-      { "key": "lsp.client_name", "operator": "equal", "operand": "perl-lsp" }
+      { "key": "lsp.session_with_capability", "operator": "equal", "operand": "renameProvider" },
+      { "key": "selector", "operator": "equal", "operand": "source.perl" }
     ]
   },
   {
-    "keys": ["ctrl+shift+f"],
-    "command": "lsp_format_document",
-    "context": [
-      { "key": "lsp.client_name", "operator": "equal", "operand": "perl-lsp" }
-    ]
-  },
-  {
-    "keys": ["ctrl+i"],
-    "command": "lsp_hover",
-    "context": [
-      { "key": "lsp.client_name", "operator": "equal", "operand": "perl-lsp" }
-    ]
-  },
-  {
-    "keys": ["ctrl+shift+a"],
+    "keys": ["ctrl+."],
     "command": "lsp_code_actions",
     "context": [
-      { "key": "lsp.client_name", "operator": "equal", "operand": "perl-lsp" }
+      { "key": "lsp.session_with_capability", "operator": "equal", "operand": "codeActionProvider" },
+      { "key": "selector", "operator": "equal", "operand": "source.perl" }
     ]
   },
   {
-    "keys": ["ctrl+shift+d"],
-    "command": "lsp_diagnostics",
+    "keys": ["ctrl+alt+m"],
+    "command": "lsp_show_diagnostics_panel",
     "context": [
-      { "key": "lsp.client_name", "operator": "equal", "operand": "perl-lsp" }
+      { "key": "selector", "operator": "equal", "operand": "source.perl" }
     ]
   }
 ]
 ```
 
-### Project Settings (`.sublime-project`)
+Other useful commands from the Command Palette:
+
+```text
+LSP: Format Document
+LSP: Hover
+LSP: Restart Server
+LSP: Toggle Inlay Hints
+```
+
+## Troubleshooting
+
+### Sublime cannot find `perllsp`
+
+Check from a shell:
+
+```bash
+command -v perllsp
+perllsp --version
+perllsp --health
+perllsp --info
+```
+
+On Windows PowerShell:
+
+```powershell
+where perllsp
+perllsp --version
+perllsp --health
+perllsp --info
+```
+
+Sublime Text may see a different `PATH` than your terminal. Use an absolute path
+in the server command if needed:
 
 ```json
 {
-  "folders": [
-    {
-      "path": "."
-    }
-  ],
-  "settings": {
-    "LSP": {
-      "perl-lsp": {
-        "initializationOptions": {
-          "perl": {
-            "workspace": {
-              "includePaths": ["lib", "local/lib/perl5", "vendor/lib"]
-            }
-          }
+  "perl-lsp": {
+    "enabled": true,
+    "command": ["/absolute/path/to/perllsp", "--stdio"],
+    "selector": "source.perl"
+  }
+}
+```
+
+### Server does not start for Perl files
+
+- Confirm the file syntax is Perl.
+- Run `Tools > Developer > Show Scope Name`.
+- Confirm the root scope matches `selector`, usually `source.perl`.
+- Confirm `perl-lsp` is enabled globally or in the project.
+- Run `LSP: Troubleshoot Server`.
+
+### No diagnostics
+
+- Confirm `perl-lsp` appears in the status bar.
+- Run `LSP: Toggle Log Panel`.
+- Run a manual check outside Sublime:
+
+  ```bash
+  perllsp --check path/to/file.pl
+  ```
+
+### Module resolution issues
+
+Prefer `.perl-lsp.toml` for shared project include paths:
+
+```toml
+[perl]
+include_paths = ["lib", "local/lib/perl5", "vendor/lib"]
+```
+
+Or pass Sublime-specific initialization options:
+
+```json
+{
+  "perl-lsp": {
+    "initialization_options": {
+      "perl": {
+        "workspace": {
+          "includePaths": ["lib", ".", "local/lib/perl5", "vendor/lib"]
         }
       }
     }
@@ -868,13 +363,33 @@ Enable detailed logging for troubleshooting:
 }
 ```
 
----
+### Formatting does not work
 
-## See Also
+Install `perltidy` and confirm it is available:
 
-- [Getting Started](../tutorials/GETTING_STARTED.md) - Quick start guide
-- [Configuration Reference](../reference/CONFIG.md) - Complete configuration options
-- [Troubleshooting Guide](../how-to/TROUBLESHOOTING.md) - Common issues and solutions
-- [Performance Tuning](../how-to/PERFORMANCE_TUNING.md) - Performance optimization guide
-- [Editor Setup](../how-to/EDITOR_SETUP.md) - Other editor configurations
-- [LSP Package Documentation](https://packagecontrol.io/packages/LSP)
+```bash
+perltidy --version
+```
+
+Then run:
+
+```text
+LSP: Format Document
+```
+
+### `perllsp --stdio` appears to hang
+
+That is expected. In stdio mode, `perllsp` waits for LSP input from the editor.
+Use these commands for manual checks instead:
+
+```bash
+perllsp --health
+perllsp --info
+perllsp --check path/to/file.pl
+```
+
+For server-side behavior and configuration details, see:
+
+- [Configuration Reference](../reference/CONFIG.md)
+- [Troubleshooting Guide](../how-to/TROUBLESHOOTING.md)
+- [Editor Setup](../how-to/EDITOR_SETUP.md)
