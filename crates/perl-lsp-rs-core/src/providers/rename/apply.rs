@@ -214,7 +214,6 @@ mod tests {
         Ok(())
     }
 
-
     // ============ Green TDD Edge Case Tests - Part 1 ============
     // These tests verify boundary conditions and error paths
 
@@ -288,7 +287,13 @@ mod tests {
             rename_in_strings: true,
             validate_new_name: true,
         };
-        let edits = find_occurrences_in_text("x", "y", SymbolKind::Variable(VarKind::Scalar), &options, source);
+        let edits = find_occurrences_in_text(
+            "x",
+            "y",
+            SymbolKind::Variable(VarKind::Scalar),
+            &options,
+            source,
+        );
         assert_eq!(edits.len(), 0);
         Ok(())
     }
@@ -301,7 +306,13 @@ mod tests {
             rename_in_strings: false,
             validate_new_name: true,
         };
-        let edits = find_occurrences_in_text("var", "renamed_var", SymbolKind::Variable(VarKind::Scalar), &options, source);
+        let edits = find_occurrences_in_text(
+            "var",
+            "renamed_var",
+            SymbolKind::Variable(VarKind::Scalar),
+            &options,
+            source,
+        );
         assert_eq!(edits.len(), 1);
         assert_eq!(edits[0].new_text, "renamed_var");
         Ok(())
@@ -315,7 +326,13 @@ mod tests {
             rename_in_strings: true,
             validate_new_name: true,
         };
-        let edits = find_occurrences_in_text("var", "new_var", SymbolKind::Variable(VarKind::Scalar), &options, source);
+        let edits = find_occurrences_in_text(
+            "var",
+            "new_var",
+            SymbolKind::Variable(VarKind::Scalar),
+            &options,
+            source,
+        );
         assert_eq!(edits.len(), 1);
         assert_eq!(edits[0].new_text, "new_var");
         Ok(())
@@ -368,14 +385,8 @@ mod tests {
     #[test]
     fn apply_rename_edits_two_separated_edits() -> Result<(), Box<dyn Error>> {
         let edits = vec![
-            TextEdit {
-                location: SourceLocation { start: 0, end: 1 },
-                new_text: "X".to_string(),
-            },
-            TextEdit {
-                location: SourceLocation { start: 2, end: 3 },
-                new_text: "Y".to_string(),
-            },
+            TextEdit { location: SourceLocation { start: 0, end: 1 }, new_text: "X".to_string() },
+            TextEdit { location: SourceLocation { start: 2, end: 3 }, new_text: "Y".to_string() },
         ];
         let result = apply_rename_edits("abcd", &edits);
         assert_eq!(result, "XbYd");
@@ -423,7 +434,13 @@ mod tests {
             rename_in_strings: false,
             validate_new_name: true,
         };
-        let edits = find_occurrences_in_text("x", "y", SymbolKind::Variable(VarKind::Scalar), &options, source);
+        let edits = find_occurrences_in_text(
+            "x",
+            "y",
+            SymbolKind::Variable(VarKind::Scalar),
+            &options,
+            source,
+        );
         assert_eq!(edits.len(), 0);
         Ok(())
     }
