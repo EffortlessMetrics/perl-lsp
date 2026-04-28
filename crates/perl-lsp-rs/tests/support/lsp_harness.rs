@@ -702,6 +702,37 @@ impl LspHarness {
         }
     }
 
+    /// Wait for an ordered `$/progress` lifecycle for a token.
+    ///
+    /// This helper is intended for UX-style tests where we want to assert the
+    /// observable progress contract from the client's perspective.
+    ///
+    /// Example sequence: `["begin", "end"]` or `["begin", "report", "end"]`.
+    pub fn wait_for_progress_sequence(
+        &mut self,
+        token: &str,
+        sequence: &[&str],
+        timeout: Duration,
+    ) -> Result<Vec<Value>, String> {
+        let start = Instant::now();
+        let mut events = Vec::with_capacity(sequence.len());
+
+        for expected_kind in sequence {
+            let remaining = timeout.saturating_sub(start.elapsed());
+            if remaining.is_zero() {
+                return Err(format!(
+                    "$/progress sequence {:?} for token '{token}' timed out after {timeout:?}",
+                    sequence
+                ));
+            }
+
+            let event = self.wait_for_progress_kind(token, expected_kind, remaining)?;
+            events.push(event);
+        }
+
+        Ok(events)
+    }
+
     /// Drain server-initiated requests from the buffer.
     ///
     /// Server-to-client requests (e.g., `window/workDoneProgress/create`) are
