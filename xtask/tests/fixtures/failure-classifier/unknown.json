@@ -1,0 +1,24 @@
+{
+  "pr": {
+    "number": 7005,
+    "head_sha": "pr-head-555",
+    "master_sha": "master-eee",
+    "behind_master": false
+  },
+  "pr_checks": [
+    {
+      "name": "ci / test",
+      "signature": "ci / test: parser panic",
+      "sha": "old-sha-444",
+      "conclusion": "failure"
+    }
+  ],
+  "master_checks": [
+    {
+      "name": "ci / test",
+      "signature": "ci / test: parser panic",
+      "sha": "master-eee",
+      "conclusion": "success"
+    }
+  ]
+}

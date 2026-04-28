@@ -2450,6 +2450,39 @@ $"#;
     }
 
     #[test]
+    fn test_variable_completion_prefers_nearest_parent_scope_over_name_order() {
+        let code = concat!(
+            "{\n",
+            "    my $v_a = 1;\n",
+            "    {\n",
+            "        my $v_z = 2;\n",
+            "        {\n",
+            "            $v_\n",
+            "        }\n",
+            "    }\n",
+            "}\n"
+        );
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+        // Use rfind to locate the standalone $v_ completion trigger (the LAST $v_ in
+        // the source), not the first occurrence which is inside $v_a or $v_z.
+        let trigger_pos = must_some(code.rfind("$v_")) + 3;
+        let completions = provider.get_completions(code, trigger_pos);
+
+        let v_a_idx =
+            must_some(completions.iter().position(|completion| completion.label == "$v_a"));
+        let v_z_idx =
+            must_some(completions.iter().position(|completion| completion.label == "$v_z"));
+
+        assert!(
+            v_z_idx < v_a_idx,
+            "expected one-hop parent variable ($v_z) to rank before two-hop parent ($v_a); indices: v_z={v_z_idx}, v_a={v_a_idx}"
+        );
+    }
+
+    #[test]
     fn test_package_member_completion() {
         // Create workspace index with a module exporting a function
         let index = Arc::new(WorkspaceIndex::new());

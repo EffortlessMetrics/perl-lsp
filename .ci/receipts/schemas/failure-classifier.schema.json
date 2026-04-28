@@ -16,7 +16,7 @@
             "infra_failure",
             "stale_base",
             "master_red",
-            "skipped",
+            "flaky",
             "unknown"
           ]
         }
