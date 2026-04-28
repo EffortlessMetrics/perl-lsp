@@ -1194,4 +1194,28 @@ mod tests {
         assert!(result.is_err(), "inverted range should return an error");
         assert!(matches!(result, Err(ParseError::SyntaxError { location: 5, .. })));
     }
+
+    #[test]
+    fn test_apply_edit_accepts_insert_into_empty_source() {
+        // Edge: apply_edit on a never-parsed parser (source = "").
+        // start=0, end=0 is a valid insert-at-start-of-empty-document.
+        // LSP clients can send an initial edit before a parse has occurred.
+        let mut parser = CheckpointedIncrementalParser::new();
+
+        let edit =
+            SimpleEdit { start: 0, end: 0, new_text: "my $x = 1;\n".to_string() };
+        let result = parser.apply_edit(&edit);
+        assert!(result.is_ok(), "insert into empty source should succeed: {result:?}");
+    }
+
+    #[test]
+    fn test_apply_edit_rejects_nonzero_range_on_empty_source() {
+        // Edge: end > 0 on an empty source must be rejected as out-of-bounds.
+        let mut parser = CheckpointedIncrementalParser::new();
+
+        let edit = SimpleEdit { start: 0, end: 1, new_text: "x".to_string() };
+        let result = parser.apply_edit(&edit);
+        assert!(result.is_err(), "end=1 on empty source should be rejected");
+        assert!(matches!(result, Err(ParseError::SyntaxError { location: 1, .. })));
+    }
 }
