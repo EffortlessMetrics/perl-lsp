@@ -8,9 +8,9 @@
 | Target | Coverage | Notes | Source |
 | --- | --- | --- | --- |
 <!-- BEGIN: PARSER_TRACKING_TABLE -->
-| **Ubuntu system Perl** | 97.1% clean (`6890/7095`) / n/a salvage | Compatibility baseline; Perl `5.038002`, `48` unreadable, `0` recovery-only, `0` ERROR-node files, `0` catastrophic, baseline `2026-04-09` | `.ci/parser-corpus-baseline.json` |
+| **Ubuntu system Perl** | 94.5% clean (`2825/2990`) / n/a salvage | Compatibility baseline; Perl `5.038002`, `42` unreadable, `0` recovery-only, `0` ERROR-node files, `0` catastrophic, baseline `2026-04-24` | `.ci/parser-corpus-baseline.json` |
 | **CPAN top 1000** | 95.3% clean (`8931/9372`) / n/a salvage | Ecosystem breadth baseline; `6` unreadable, `0` recovery-only, `0` ERROR-node files, `0` catastrophic, cached downloads in `target/cpan-corpus/.cpanm`, baseline `2026-04-09` | `.ci/cpan-corpus-baseline.json` |
-| **Project corpus** | 100.0% clean (`93/93`) | Deterministic regression baseline; `71` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
+| **Project corpus** | 100.0% clean (`95/95`) | Deterministic regression baseline; `73` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
 <!-- END: PARSER_TRACKING_TABLE -->
 
 ## Parser Scorecard
@@ -49,4 +49,11 @@
 <!-- END: PARSER_METRICS_BULLETS -->
 
 <!-- BEGIN: TOKEN_HEALTH_TABLE -->
+| **TokenKind variants** | 132 | enum size in `perl-token` | `crates/perl-token/src/lib.rs` |
+| **Token metadata coverage** | 132/132 (PASS) | `display_name()` mappings for all variants | `crates/perl-token/src/lib.rs` + `.ci/metrics/baselines/token.json` |
+| **Category partition** | PASS (132 tokens partitioned across canonical groups) | keywords/operators/delimiters/literals/identifiers/special | `crates/perl-token/src/lib.rs` |
+| **Display-name coverage** | 132/132 | user-facing token labels present | `crates/perl-token/src/lib.rs` |
+| **Lexer/parser conformance** | PASS (lexer + parser-core both consume shared `perl-token`) | integration through shared token crate | `crates/perl-lexer/Cargo.toml` + `crates/perl-parser-core/Cargo.toml` |
+| **Token perf (p50/p95)** | UNVERIFIED (token scorecard missing key metrics) | key token operations benchmark health | `docs/project/status/token_performance_scorecard.json` |
+| **Runtime dependencies** | 0 | non-dev deps in `perl-token` | `crates/perl-token/Cargo.toml` |
 <!-- END: TOKEN_HEALTH_TABLE -->
