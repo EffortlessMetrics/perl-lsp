@@ -387,6 +387,17 @@ impl LspHarness {
         self.send_request_with_timeout(request, timeout)
     }
 
+    /// Request `textDocument/completion` at the provided LSP position.
+    pub fn completion_at(&mut self, uri: &str, line: u32, character: u32) -> Result<Value, String> {
+        self.request(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
     /// Send a didSave notification
     pub fn did_save(&mut self, uri: &str) -> Result<(), String> {
         self.notify(
