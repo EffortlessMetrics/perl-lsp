@@ -497,6 +497,26 @@
         "manual_editor_smoke",
         "issue_burndown_regression_guard"
       ]
+    },
+    {
+      "id": "incremental_text_sync_recovery",
+      "scenario_file": "ux_scenario_19_incremental_text_sync.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "fix a parse error in an open file and verify didChange recovery keeps diagnostics and hover healthy",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "parse-like diagnostics clear after didChange full-text fix",
+        "hover remains responsive after sync recovery"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
     }
   ]
 }
