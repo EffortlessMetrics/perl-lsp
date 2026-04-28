@@ -304,6 +304,31 @@ impl UxHarness {
         self.completion(&cursor.relative_path, cursor.line, cursor.character)
     }
 
+    /// Request completion and collect best-effort labels for UX assertions.
+    ///
+    /// Label extraction order per completion item:
+    /// 1. `label` (preferred by spec)
+    /// 2. `insertText` (fallback for legacy payloads)
+    /// 3. `filterText` (last-resort fallback)
+    pub fn completion_labels(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Vec<String>> {
+        let items = self.completion(relative_path, line, character)?;
+        Ok(items
+            .iter()
+            .filter_map(|item| {
+                item.get("label")
+                    .and_then(Value::as_str)
+                    .or_else(|| item.get("insertText").and_then(Value::as_str))
+                    .or_else(|| item.get("filterText").and_then(Value::as_str))
+                    .map(str::to_string)
+            })
+            .collect())
+    }
+
     /// Request document formatting.
     ///
     /// Returns the list of text edits, or `Err` if the server crashed / returned
