@@ -306,6 +306,25 @@ pub struct EnvironmentInfo {
     pub nix_shell: Option<bool>,
 }
 
+/// First failing test extracted from `cargo test` output.
+///
+/// Populated only when a `cargo test`-class gate exits non-zero.
+/// Used by followers and curators to repair without re-running gates locally.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct FirstFailure {
+    /// Full test path, e.g. `module::submod::tests::test_name`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test: Option<String>,
+    /// Panic location as `file:line`, e.g. `src/lib.rs:42`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub site: Option<String>,
+    /// Panic / assertion message (first non-empty line after the `panicked at` line)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    /// Process exit code
+    pub exit_code: i32,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GateResult {
     pub gate_name: String,
@@ -325,6 +344,9 @@ pub struct GateResult {
     pub metrics: Option<GateMetrics>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artifacts: Option<Vec<String>>,
+    /// First failing test details for `cargo test`-class gates that exit non-zero.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub first_failure: Option<FirstFailure>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -818,10 +840,31 @@ fn failure_guidance(results: &[GateResult]) -> (Vec<AgentFailure>, Vec<String>) 
     let failures: Vec<AgentFailure> = results
         .iter()
         .filter(|result| is_blocking_gate_status(&result.status) && result.required.unwrap_or(true))
-        .map(|result| AgentFailure {
-            lane: result.gate_name.clone(),
-            summary: format!("Gate '{}' ended with status '{}'", result.gate_name, result.status),
-            repro: format!("{} # gate={}", result.command, result.gate_name),
+        .map(|result| {
+            let base_summary =
+                format!("Gate '{}' ended with status '{}'", result.gate_name, result.status);
+            // Augment summary with first_failure details when available
+            let summary = match &result.first_failure {
+                Some(ff) => {
+                    let mut parts = vec![base_summary];
+                    if let Some(test) = &ff.test {
+                        parts.push(format!("  test:  {}", test));
+                    }
+                    if let Some(site) = &ff.site {
+                        parts.push(format!("  site:  {}", site));
+                    }
+                    if let Some(msg) = &ff.message {
+                        parts.push(format!("  msg:   {}", msg));
+                    }
+                    parts.join("\n")
+                }
+                None => base_summary,
+            };
+            AgentFailure {
+                lane: result.gate_name.clone(),
+                summary,
+                repro: format!("{} # gate={}", result.command, result.gate_name),
+            }
         })
         .collect();
     let next_actions = if failures.is_empty() {
@@ -946,6 +989,7 @@ fn run_single_gate(
             log_path: None,
             metrics: None,
             artifacts: None,
+            first_failure: None,
         });
     }
 
@@ -997,6 +1041,13 @@ fn run_single_gate(
                 None
             };
 
+            // For failing cargo test gates, extract the first failure details
+            let first_failure = if status == "fail" && is_cargo_test_command(command) {
+                parse_first_failure(&stdout, exit_code)
+            } else {
+                None
+            };
+
             Ok(GateResult {
                 gate_name: gate.name.clone(),
                 tier: gate.tier.clone(),
@@ -1013,6 +1064,7 @@ fn run_single_gate(
                 } else {
                     Some(gate.artifacts.clone())
                 },
+                first_failure,
             })
         }
         Err(e) => {
@@ -1029,6 +1081,7 @@ fn run_single_gate(
                 log_path: None,
                 metrics: None,
                 artifacts: None,
+                first_failure: None,
             })
         }
     }
@@ -1065,6 +1118,7 @@ fn run_internal_xtask_gate(
         log_path: Some(format!("logs/{}.log", gate.name)),
         metrics: None,
         artifacts: if gate.artifacts.is_empty() { None } else { Some(gate.artifacts.clone()) },
+        first_failure: None,
     })
 }
 
@@ -1262,6 +1316,155 @@ fn extract_number(line: &str, suffix: &str) -> Option<u32> {
     })
 }
 
+/// Parse the first failing test name, panic site, and message from `cargo test` stdout.
+///
+/// Returns `None` only if the output contains no recognisable failure markers (e.g. a
+/// pure compilation error with no test output).  All three sub-fields (`test`, `site`,
+/// `message`) are individually optional because any one may be absent in edge cases.
+///
+/// # Patterns detected
+///
+/// * Test name — `test <path> ... FAILED` or `---- <path> stdout ----`
+/// * Panic site — `panicked at '<file>:<line>:<col>:'` (Rust <1.73 style) or
+///   `panicked at <file>:<line>:<col>:` (Rust ≥1.73 style)
+/// * Message — the first non-empty line that follows the `panicked at` line
+pub fn parse_first_failure(output: &str, exit_code: i32) -> Option<FirstFailure> {
+    let mut test_name: Option<String> = None;
+    let mut site: Option<String> = None;
+    let mut message: Option<String> = None;
+
+    let lines: Vec<&str> = output.lines().collect();
+
+    // --- Pass 1: find the first "test ... FAILED" line ---
+    // Cargo test emits either:
+    //   test module::path::test_name ... FAILED
+    // or (for individual test stdout sections):
+    //   ---- module::path::test_name stdout ----
+    for line in &lines {
+        let trimmed = line.trim();
+        // "test <path> ... FAILED"
+        if trimmed.starts_with("test ") && trimmed.ends_with("... FAILED") {
+            let inner = trimmed
+                .strip_prefix("test ")
+                .and_then(|s| s.strip_suffix("... FAILED"))
+                .map(str::trim);
+            if let Some(name) = inner
+                && !name.is_empty()
+            {
+                test_name = Some(name.to_string());
+                break;
+            }
+        }
+        // "---- <path> stdout ----"
+        if test_name.is_none() && trimmed.starts_with("---- ") && trimmed.ends_with(" stdout ----")
+        {
+            let inner = trimmed
+                .strip_prefix("---- ")
+                .and_then(|s| s.strip_suffix(" stdout ----"))
+                .map(str::trim);
+            if let Some(name) = inner
+                && !name.is_empty()
+            {
+                test_name = Some(name.to_string());
+                // don't break — keep looking for a "... FAILED" line to prefer
+            }
+        }
+    }
+
+    // --- Pass 2: find the first "panicked at" line and the message line after it ---
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+
+        // Rust ≥1.73: `panicked at src/lib.rs:42:5:`
+        // Rust <1.73:  `panicked at 'message', src/lib.rs:42:5`
+        //
+        // The line may be prefixed with thread info:
+        //   `thread 'test::name' panicked at src/lib.rs:42:5:`
+        // or may start directly with `panicked at`:
+        //   `panicked at src/lib.rs:42:5:`
+        //
+        // We find the `panicked at ` substring anywhere in the line.
+        if let Some(panic_pos) = trimmed.find("panicked at ") {
+            let rest = &trimmed[panic_pos + "panicked at ".len()..];
+
+            // Try new-style first (Rust ≥1.73), then fall back to old-style (Rust <1.73)
+            let parsed_site =
+                parse_panic_site_new_style(rest).or_else(|| parse_panic_site_old_style(rest));
+
+            site = parsed_site;
+
+            // The message is the next non-empty line
+            message = lines[idx + 1..]
+                .iter()
+                .find(|l| !l.trim().is_empty())
+                .map(|l| l.trim().to_string());
+
+            break;
+        }
+    }
+
+    // Only return Some if we found at least one piece of useful info
+    if test_name.is_some() || site.is_some() {
+        Some(FirstFailure { test: test_name, site, message, exit_code })
+    } else {
+        None
+    }
+}
+
+/// Parse a Rust ≥1.73 panic site: `src/lib.rs:42:5:` → `src/lib.rs:42`
+fn parse_panic_site_new_style(rest: &str) -> Option<String> {
+    // Strip trailing colon if present
+    let rest = rest.trim_end_matches(':');
+    // Format is typically: path/to/file.rs:LINE:COL
+    // Split by ':' and find the first pure-integer segment, treating everything before as path.
+    let parts: Vec<&str> = rest.splitn(4, ':').collect();
+    // We need at least path:line
+    match parts.len() {
+        2.. => {
+            // Detect Windows drive letter: single alpha char
+            let (path_part, line_part) = if parts[0].len() == 1
+                && parts[0].chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+                && parts.len() >= 3
+            {
+                // Windows path: C:\path\file.rs  -> parts = ["C", "\\path\\file.rs", "LINE", ...]
+                (format!("{}:{}", parts[0], parts[1]), parts[2])
+            } else {
+                (parts[0].to_string(), parts[1])
+            };
+            // line_part must be a valid integer
+            if line_part.parse::<u64>().is_ok() && !path_part.is_empty() {
+                return Some(format!("{}:{}", path_part, line_part));
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Parse a Rust <1.73 panic site: `'assertion failed', src/lib.rs:42:5` → `src/lib.rs:42`
+fn parse_panic_site_old_style(rest: &str) -> Option<String> {
+    // Format: `'<message>', <path>:<line>:<col>`
+    // Find the last `', ` to split message from location
+    let loc_start = rest.rfind("', ").map(|i| i + 3)?;
+    let loc = &rest[loc_start..];
+    // Now parse loc as new-style
+    parse_panic_site_new_style(loc)
+}
+
+/// Check whether a gate command is a `cargo test`-class command.
+///
+/// Returns `true` for commands whose first word-token is `cargo` and second is `test`,
+/// ignoring leading whitespace and path prefixes.  This covers:
+/// - `cargo test ...`
+/// - `cargo test -p foo ...`
+pub fn is_cargo_test_command(command: &str) -> bool {
+    let mut tokens = command.split_whitespace();
+    let first = tokens.next().unwrap_or("");
+    // Allow for path-prefixed cargo (e.g. `/usr/local/bin/cargo`)
+    let is_cargo = first == "cargo" || first.ends_with("/cargo") || first.ends_with("\\cargo");
+    is_cargo && tokens.next().is_some_and(|t| t == "test")
+}
+
 /// Output results in the requested format
 fn output_results(receipt: &Receipt, config: &GateRunnerConfig) -> Result<()> {
     match config.output_format {
@@ -1336,8 +1539,33 @@ fn output_human(receipt: &Receipt) -> Result<()> {
     {
         writeln!(term)?;
         writeln!(term, "{}", red.apply_to("Blocking failures:"))?;
-        for gate in failures {
-            writeln!(term, "  - {}", gate)?;
+        // Build a lookup from gate name to GateResult so we can print first_failure details
+        let gate_by_name: HashMap<&str, &GateResult> =
+            receipt.gates.iter().map(|g| (g.gate_name.as_str(), g)).collect();
+        for gate_name in failures {
+            let exit_code_str = gate_by_name
+                .get(gate_name.as_str())
+                .and_then(|g| g.exit_code)
+                .map(|c| format!(" (exit {})", c))
+                .unwrap_or_default();
+            writeln!(term, "  - {}{}", gate_name, exit_code_str)?;
+            // Print first_failure details if available
+            if let Some(ff) =
+                gate_by_name.get(gate_name.as_str()).and_then(|g| g.first_failure.as_ref())
+            {
+                if let Some(ref test) = ff.test {
+                    writeln!(term, "      test:   {}", test)?;
+                }
+                if let Some(ref site) = ff.site {
+                    writeln!(term, "      site:   {}", site)?;
+                }
+                if let Some(ref msg) = ff.message {
+                    writeln!(term, "      msg:    {}", msg)?;
+                }
+                if let Some(gate) = gate_by_name.get(gate_name.as_str()) {
+                    writeln!(term, "      repro:  {}", gate.command)?;
+                }
+            }
         }
     }
 
@@ -1653,8 +1881,9 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
 #[cfg(test)]
 mod tests {
     use super::{
-        DiffResult, GateMetrics, GateResult, MetricChange, Receipt, blocking_failure_gate_names,
-        compare_receipts, determine_overall_status, failure_guidance, is_blocking_gate_status,
+        DiffResult, FirstFailure, GateMetrics, GateResult, MetricChange, Receipt,
+        blocking_failure_gate_names, compare_receipts, determine_overall_status, failure_guidance,
+        is_blocking_gate_status, is_cargo_test_command, parse_first_failure,
     };
 
     fn gate_result(name: &str, status: &str, required: bool) -> GateResult {
@@ -1670,6 +1899,7 @@ mod tests {
             log_path: None,
             metrics: None,
             artifacts: None,
+            first_failure: None,
         }
     }
 
@@ -1901,6 +2131,7 @@ mod tests {
             log_path: None,
             metrics: Some(metrics),
             artifacts: None,
+            first_failure: None,
         });
         receipt
     }
@@ -1968,5 +2199,232 @@ mod tests {
         assert_eq!(warning_change.delta_percent, 100.0);
         assert!(!warning_change.delta_percent.is_nan());
         assert!(!warning_change.delta_percent.is_infinite());
+    }
+
+    // ==========================================================================
+    // Tests for parse_first_failure and is_cargo_test_command
+    // ==========================================================================
+
+    /// Fixture: realistic cargo test output for a failing test (Rust ≥1.73 style).
+    /// Based on the evidence from issue #7031 investigation.
+    const CARGO_TEST_FAILURE_NEW_STYLE: &str = r#"
+running 4 tests
+test refactor::refactoring::tests::validation_tests::test_cleanup_preserves_required ... ok
+test refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count ... FAILED
+test refactor::refactoring::tests::validation_tests::test_basic_refactoring ... ok
+test refactor::refactoring::tests::validation_tests::test_empty_input ... ok
+
+failures:
+
+---- refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count stdout ----
+thread 'refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count' panicked at crates/perl-parser/src/refactor/refactoring.rs:2859:9:
+assertion `left == right` failed
+  left: 0
+  right: 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+failures:
+    refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+"#;
+
+    /// Fixture: Rust <1.73 style panic output (quoted message before location).
+    const CARGO_TEST_FAILURE_OLD_STYLE: &str = r#"
+running 2 tests
+test module::tests::test_something ... ok
+test module::tests::test_other ... FAILED
+
+failures:
+
+---- module::tests::test_other stdout ----
+thread 'module::tests::test_other' panicked at 'assertion failed: x == y', src/module.rs:42:5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+failures:
+    module::tests::test_other
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+"#;
+
+    /// Fixture: output with no test failure markers (compile error only).
+    const COMPILE_ERROR_OUTPUT: &str = r#"
+error[E0308]: mismatched types
+ --> src/lib.rs:10:5
+  |
+10 |     42
+   |     ^^ expected `()`, found integer
+
+error: aborting due to previous error
+"#;
+
+    #[test]
+    fn parse_first_failure_extracts_test_name_site_and_message_new_style() {
+        let ff = parse_first_failure(CARGO_TEST_FAILURE_NEW_STYLE, 101)
+            .expect("should find failure in new-style output");
+
+        assert_eq!(
+            ff.test.as_deref(),
+            Some(
+                "refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count"
+            ),
+            "test name should be the first FAILED test"
+        );
+        assert_eq!(
+            ff.site.as_deref(),
+            Some("crates/perl-parser/src/refactor/refactoring.rs:2859"),
+            "site should be file:line (no column)"
+        );
+        // The message is the first non-empty line after `panicked at`
+        assert_eq!(
+            ff.message.as_deref(),
+            Some("assertion `left == right` failed"),
+            "message should be the line immediately after panicked at"
+        );
+        assert_eq!(ff.exit_code, 101);
+    }
+
+    #[test]
+    fn parse_first_failure_extracts_site_old_style() {
+        let ff = parse_first_failure(CARGO_TEST_FAILURE_OLD_STYLE, 101)
+            .expect("should find failure in old-style output");
+
+        assert_eq!(
+            ff.test.as_deref(),
+            Some("module::tests::test_other"),
+            "test name should come from the FAILED line"
+        );
+        assert_eq!(
+            ff.site.as_deref(),
+            Some("src/module.rs:42"),
+            "site should be extracted from old-style quoted panic location"
+        );
+    }
+
+    #[test]
+    fn parse_first_failure_returns_none_for_compile_error_only() {
+        // No test failure markers — should return None since nothing useful to extract
+        let result = parse_first_failure(COMPILE_ERROR_OUTPUT, 101);
+        assert!(
+            result.is_none(),
+            "compile-only errors with no test failure markers should yield None"
+        );
+    }
+
+    #[test]
+    fn parse_first_failure_returns_none_for_empty_output() {
+        let result = parse_first_failure("", 101);
+        assert!(result.is_none(), "empty output should yield None");
+    }
+
+    #[test]
+    fn parse_first_failure_exit_code_is_preserved() {
+        let ff = parse_first_failure(CARGO_TEST_FAILURE_NEW_STYLE, 42)
+            .expect("should find failure markers");
+        assert_eq!(ff.exit_code, 42, "exit_code should match what was passed in");
+    }
+
+    #[test]
+    fn parse_first_failure_prefers_failed_line_over_stdout_section() {
+        // When both `... FAILED` and `---- ... stdout ----` are present,
+        // the test name from `... FAILED` should win (it appears first).
+        let ff =
+            parse_first_failure(CARGO_TEST_FAILURE_NEW_STYLE, 101).expect("should find failure");
+        // The `... FAILED` line should be chosen
+        assert_eq!(
+            ff.test.as_deref(),
+            Some(
+                "refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count"
+            )
+        );
+    }
+
+    #[test]
+    fn parse_first_failure_roundtrips_through_first_failure_struct() {
+        // Verify that FirstFailure serializes and deserializes without loss.
+        let ff = FirstFailure {
+            test: Some("my::test::path".to_string()),
+            site: Some("src/lib.rs:10".to_string()),
+            message: Some("assertion failed".to_string()),
+            exit_code: 101,
+        };
+        let json = serde_json::to_string(&ff).expect("should serialize");
+        let roundtripped: FirstFailure = serde_json::from_str(&json).expect("should deserialize");
+        assert_eq!(ff, roundtripped);
+    }
+
+    #[test]
+    fn first_failure_skips_serializing_none_fields() {
+        // None fields should be omitted from JSON (skip_serializing_if = "Option::is_none")
+        let ff = FirstFailure { test: None, site: None, message: None, exit_code: 1 };
+        let json = serde_json::to_string(&ff).expect("should serialize");
+        assert!(!json.contains("\"test\""), "None test field should be omitted from JSON");
+        assert!(!json.contains("\"site\""), "None site field should be omitted from JSON");
+        assert!(!json.contains("\"message\""), "None message field should be omitted from JSON");
+        assert!(json.contains("\"exit_code\""), "exit_code is always present");
+    }
+
+    #[test]
+    fn is_cargo_test_command_matches_standard_forms() {
+        assert!(is_cargo_test_command("cargo test"), "bare cargo test");
+        assert!(is_cargo_test_command("cargo test -p perl-parser --lib"), "with flags");
+        assert!(is_cargo_test_command("cargo test --workspace"), "workspace flag");
+        assert!(is_cargo_test_command("/usr/local/bin/cargo test"), "absolute path cargo");
+    }
+
+    #[test]
+    fn is_cargo_test_command_rejects_non_test_commands() {
+        assert!(!is_cargo_test_command("cargo clippy"), "clippy is not test");
+        assert!(!is_cargo_test_command("cargo build"), "build is not test");
+        assert!(!is_cargo_test_command("cargo check"), "check is not test");
+        assert!(!is_cargo_test_command("cargo xtask fmt --check"), "xtask fmt is not test");
+        assert!(!is_cargo_test_command("true"), "bare true is not test");
+        assert!(!is_cargo_test_command(""), "empty string is not test");
+    }
+
+    #[test]
+    fn gate_result_first_failure_field_roundtrips_in_json() {
+        // Verify that GateResult with first_failure serializes / deserializes correctly,
+        // and that old receipts (without first_failure) still deserialize (backward compat).
+        let result = GateResult {
+            gate_name: "unit_core".to_string(),
+            tier: "pr_fast".to_string(),
+            status: "fail".to_string(),
+            required: Some(true),
+            duration_ms: 1000,
+            command: "cargo test -p perl-parser --lib".to_string(),
+            exit_code: Some(101),
+            output_summary: None,
+            log_path: None,
+            metrics: None,
+            artifacts: None,
+            first_failure: Some(FirstFailure {
+                test: Some("parser::tests::test_foo".to_string()),
+                site: Some("src/lib.rs:99".to_string()),
+                message: Some("assertion failed".to_string()),
+                exit_code: 101,
+            }),
+        };
+        let json = serde_json::to_string(&result).expect("should serialize");
+        let roundtripped: GateResult = serde_json::from_str(&json).expect("should deserialize");
+        let ff = roundtripped.first_failure.expect("first_failure should be Some after roundtrip");
+        assert_eq!(ff.test.as_deref(), Some("parser::tests::test_foo"));
+        assert_eq!(ff.site.as_deref(), Some("src/lib.rs:99"));
+        assert_eq!(ff.exit_code, 101);
+    }
+
+    #[test]
+    fn gate_result_without_first_failure_deserializes_for_backward_compat() {
+        // Old receipts (before this feature) won't have `first_failure` in JSON.
+        // Deserialization must succeed and produce None.
+        let json = r#"{
+            "gate_name": "unit_core",
+            "tier": "pr_fast",
+            "status": "fail",
+            "duration_ms": 500,
+            "command": "cargo test -p perl-parser"
+        }"#;
+        let result: GateResult = serde_json::from_str(json).expect("backward compat deserialize");
+        assert!(result.first_failure.is_none(), "first_failure must be None when absent from JSON");
     }
 }
