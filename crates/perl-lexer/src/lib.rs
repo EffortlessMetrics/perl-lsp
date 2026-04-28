@@ -3320,6 +3320,7 @@ impl<'a> PerlLexer<'a> {
         self.advance(); // Skip opening /
 
         let mut regex_parse_steps: usize = 0;
+        let mut in_character_class = false;
 
         while let Some(ch) = self.current_char() {
             regex_parse_steps += 1;
@@ -3350,7 +3351,7 @@ impl<'a> PerlLexer<'a> {
             }
 
             match ch {
-                '/' => {
+                '/' if !in_character_class => {
                     self.advance();
                     // Parse flags - include all alphanumeric for proper validation in parser (MUT_005 fix)
                     while let Some(ch) = self.current_char() {
@@ -3377,6 +3378,14 @@ impl<'a> PerlLexer<'a> {
                     if self.current_char().is_some() {
                         self.advance();
                     }
+                }
+                '[' => {
+                    in_character_class = true;
+                    self.advance();
+                }
+                ']' if in_character_class => {
+                    in_character_class = false;
+                    self.advance();
                 }
                 _ => self.advance(),
             }
