@@ -701,6 +701,12 @@ enum Commands {
         output: PathBuf,
     },
 
+    /// Produce parser-ratchet receipts and scaffolding artifacts.
+    ParserRatchet {
+        #[command(subcommand)]
+        command: ParserRatchetCommand,
+    },
+
     /// Run three-way parser comparison
     #[cfg(feature = "parser-tasks")]
     CompareThree {
@@ -1381,6 +1387,35 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum ParserRatchetCommand {
+    /// Run parser-ratchet and emit a receipt.
+    Run {
+        /// Execution profile for this run.
+        #[arg(long, value_enum)]
+        profile: ParserRatchetProfileArg,
+        /// Explicit base revision (branch names are not inferred).
+        #[arg(long)]
+        base: String,
+        /// Explicit head revision (supports detached HEAD).
+        #[arg(long)]
+        head: String,
+        /// Output path for parser-ratchet receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+        /// Force selected=true while keeping scaffold-only behavior.
+        #[arg(long)]
+        force_selected: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum ParserRatchetProfileArg {
+    Pr,
+    Nightly,
+    Release,
+}
+
+#[derive(Subcommand)]
 enum GateReceiptsCommand {
     /// List registered receipt schemas.
     List {
@@ -1882,6 +1917,27 @@ fn main() -> Result<()> {
             })
         }
         Commands::ParserMatrix { report, output } => parser_matrix::run_with_paths(report, output),
+        Commands::ParserRatchet { command } => match command {
+            ParserRatchetCommand::Run { profile, base, head, receipt, force_selected } => {
+                let profile = match profile {
+                    ParserRatchetProfileArg::Pr => parser_ratchet::ParserRatchetProfile::Pr,
+                    ParserRatchetProfileArg::Nightly => {
+                        parser_ratchet::ParserRatchetProfile::Nightly
+                    }
+                    ParserRatchetProfileArg::Release => {
+                        parser_ratchet::ParserRatchetProfile::Release
+                    }
+                };
+                parser_ratchet::run(parser_ratchet::ParserRatchetRunConfig {
+                    profile,
+                    base,
+                    head,
+                    receipt,
+                    force_selected,
+                })
+                .map_err(|error| eyre!(error.to_string()))
+            }
+        },
         #[cfg(feature = "parser-tasks")]
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
