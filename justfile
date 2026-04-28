@@ -349,6 +349,9 @@ fuzz-bounded:
     @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
     @cargo +nightly fuzz run utf16_roundtrip -- -max_total_time=60 || echo "  UTF-16 roundtrip fuzzing complete"
     @cargo +nightly fuzz run unicode_positions -- -max_total_time=60 || echo "  Unicode positions fuzzing complete"
+    @cargo +nightly fuzz run lexer_tokenization -- -max_total_time=60 || echo "  Lexer tokenization fuzzing complete"
+    @cargo +nightly fuzz run dap_eval_validator -- -max_total_time=60 || echo "  DAP eval validator fuzzing complete"
+    @cargo +nightly fuzz run dap_stack_parser -- -max_total_time=60 || echo "  DAP stack parser fuzzing complete"
     @echo "✅ Fuzz testing complete"
 
 # `bench` is the canonical benchmark target; keep this as a compatibility alias.
@@ -357,6 +360,33 @@ benchmarks: bench
 # ============================================================================
 # CI Aliases and Convenience Targets
 # ============================================================================
+
+# Print the decision tree for which command to run and when
+quick-ref:
+    @echo ""
+    @echo "  perl-lsp development quick reference"
+    @echo "  ====================================="
+    @echo ""
+    @echo "  WHEN                          COMMAND                          TIME"
+    @echo "  Every change / before push    just pr-fast                     ~1-2 min"
+    @echo "  Before merge to master        nix develop -c just ci-gate      ~3-5 min"
+    @echo "  New machine / after clone     just doctor                      ~10 sec"
+    @echo "  One-off lint check            just check                       ~30 sec"
+    @echo "  Reformat all code             cargo xtask fmt                  ~20 sec"
+    @echo "  Run tests only                cargo test --workspace --lib     ~1 min"
+    @echo "  Nightly / mutation / fuzz     just ci-full                     ~15-30 min"
+    @echo ""
+    @echo "  TIP: install the pre-push hook so pr-fast runs automatically:"
+    @echo "       bash scripts/install-githooks.sh"
+    @echo ""
+
+# Lint all crates — treated as errors, same as CI (alias for cargo clippy)
+check:
+    cargo clippy --workspace -- -D warnings
+
+# Auto-fix clippy warnings where possible
+fix:
+    cargo clippy --workspace --fix --allow-dirty
 
 # Canonical local merge gate via Nix (use before merge, not as the push hook)
 ci-local:
@@ -381,6 +411,34 @@ doctor-env:
 
 # Short alias for the developer environment quick check
 devex: doctor-env
+
+# Print recent commits from the best available remote base ref.
+# Renamed from agent-preflight to avoid collision with `scripts/agent-preflight.sh`
+# (the real safety-check script invoked by the /agent-preflight command skill).
+# Ref-selection order mirrors devex-targeted: origin/HEAD > origin/main >
+# origin/master > local main > local master > HEAD (fallback, shows local branch).
+agent-context-log:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ref=""
+    # origin/HEAD is the most authoritative canonical remote default — check first.
+    if git symbolic-ref --quiet --short refs/remotes/origin/HEAD >/dev/null 2>&1; then
+        ref="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD)"
+    elif git rev-parse --verify --quiet origin/main >/dev/null; then
+        ref="origin/main"
+    elif git rev-parse --verify --quiet origin/master >/dev/null; then
+        ref="origin/master"
+    elif git rev-parse --verify --quiet main >/dev/null; then
+        ref="main"
+    elif git rev-parse --verify --quiet master >/dev/null; then
+        ref="master"
+    else
+        # HEAD fallback: shows the local branch — useful as last resort but
+        # agents should note this reflects their own branch, not remote master.
+        ref="HEAD"
+    fi
+    echo "Showing last 20 commits from: $ref"
+    git log "$ref" --oneline -20
 
 # One-command pre-flight before pushing a branch:
 # 1) repair/report workspace state issues, then 2) run the fast PR gate.
@@ -714,6 +772,40 @@ devex-targeted base='' mode='all':
     fi
     echo "Running targeted checks (base=$base, mode={{mode}})..."
     cargo xtask targeted-checks --base "$base" --mode "{{mode}}"
+
+# Show recent upstream commits using an auto-detected base ref.
+# Helpful in detached or minimal-clone environments where origin/master may not exist.
+upstream-log count='20' base='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    base="{{base}}"
+    count="{{count}}"
+    if ! [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
+        echo "ERROR: count must be a positive integer (received: $count)"
+        exit 1
+    fi
+    if [ -z "$base" ]; then
+        base=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet origin/main >/dev/null; then
+        base="origin/main"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet origin/master >/dev/null; then
+        base="origin/master"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet main >/dev/null; then
+        base="main"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet master >/dev/null; then
+        base="master"
+    fi
+    if [ -z "$base" ]; then
+        echo "ERROR: Could not auto-detect base ref."
+        echo "Hint: run 'just upstream-log <count> <base-ref>' (example: just upstream-log 20 origin/master)."
+        exit 1
+    fi
+    echo "Showing last $count commits from $base"
+    git log "$base" --oneline -n "$count"
 
 # Tool availability check (basic tools for PR-fast)
 [private]
