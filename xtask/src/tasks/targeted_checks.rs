@@ -49,10 +49,7 @@ fn resolve_base_ref(base: &str) -> Result<String> {
             .context("Failed to run git rev-parse")?;
         if verify.status.success() {
             if base != "auto" && candidate != base {
-                eprintln!(
-                    "Warning: Base ref '{}' not found; using fallback '{}'",
-                    base, candidate
-                );
+                eprintln!("Warning: Base ref '{}' not found; using fallback '{}'", base, candidate);
             }
             return Ok(candidate);
         }

@@ -765,10 +765,7 @@ fn resolve_base_ref(base: &str, root: &Path) -> Result<String> {
     for candidate in candidates {
         if git_ref_exists(&candidate, root)? {
             if base != "auto" && candidate != base {
-                eprintln!(
-                    "Warning: base ref '{}' not found; using fallback '{}'",
-                    base, candidate
-                );
+                eprintln!("Warning: base ref '{}' not found; using fallback '{}'", base, candidate);
             }
             return Ok(candidate);
         }
