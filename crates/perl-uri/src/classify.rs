@@ -11,8 +11,22 @@ use url::Url;
 ///
 /// This function handles platform-specific differences to ensure consistent
 /// lookups across different systems, particularly for Windows drive letters.
+///
+/// In addition to standard canonical `file:///C:/...` URIs, this also handles
+/// legacy forms emitted by Notepad++ and similar editors:
+/// - `file://C:\path\file.pl` (two slashes, backslashes)
+/// - `C:\path\file.pl` (bare Windows path, no scheme)
+///
+/// Both forms are converted to `file:///c:/path/file.pl`.
 #[must_use]
 pub fn uri_key(uri: &str) -> String {
+    // Try to normalize legacy Windows path forms before URL parsing, since
+    // `file://C:\...` and `C:\...` are not valid URLs and fall through to the
+    // else branch as-is without this pre-pass.
+    if let Some(normalized) = normalize_legacy_windows_uri(uri) {
+        return normalized;
+    }
+
     if let Ok(parsed) = Url::parse(uri) {
         let mut value = parsed.as_str().to_string();
 
@@ -37,6 +51,66 @@ pub fn uri_key(uri: &str) -> String {
     } else {
         uri.to_string()
     }
+}
+
+/// Normalize legacy Windows URI forms to canonical `file:///c:/...` keys.
+///
+/// Handles:
+/// - `file://C:\path\file.pl` → `file:///c:/path/file.pl`  (two-slash form)
+/// - `C:\path\file.pl`        → `file:///c:/path/file.pl`  (bare path form)
+///
+/// Returns `None` for any URI that is not one of these legacy forms.
+fn normalize_legacy_windows_uri(uri: &str) -> Option<String> {
+    let trimmed = uri.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Strip the optional `file://` prefix (two slashes — not three).
+    // A three-slash `file:///` form is already canonical and must not match here.
+    let path = if let Some(rest) = trimmed.strip_prefix("file://") {
+        // Make sure we are not accidentally handling `file:///...` (three slashes).
+        // After stripping `file://`, a canonical URI starts with `/` followed by
+        // another `/` (the empty authority makes a third slash), so we skip it.
+        if rest.starts_with('/') {
+            return None;
+        }
+        rest
+    } else {
+        trimmed
+    };
+
+    normalize_windows_path_to_key(path)
+}
+
+/// Convert a Windows-style path string (with or without a drive letter) into a
+/// canonical `file:///c:/...` key.  Returns `None` if `path` does not look like
+/// a Windows path (i.e. does not start with `<letter>:`).
+fn normalize_windows_path_to_key(path: &str) -> Option<String> {
+    // Strip any leading slashes (e.g. from a `file://` prefix that had an extra `/`).
+    let path = path.trim_start_matches('/');
+
+    // Must be at least `X:\` or `X:/` to be a Windows path.
+    if path.len() < 3 {
+        return None;
+    }
+
+    let bytes = path.as_bytes();
+    if !bytes[0].is_ascii_alphabetic() || bytes[1] != b':' {
+        return None;
+    }
+
+    // Replace backslashes with forward slashes.
+    let mut normalized = path.replace('\\', "/");
+
+    // Ensure there is a separator after the drive colon: `C:foo` → `C:/foo`.
+    if normalized.as_bytes().get(2) != Some(&b'/') {
+        normalized.insert(2, '/');
+    }
+
+    // Lowercase the drive letter.
+    let drive = normalized[0..1].to_ascii_lowercase();
+    Some(format!("file:///{drive}{}", &normalized[1..]))
 }
 
 /// Check if a URI uses the `file://` scheme.
@@ -102,6 +176,38 @@ mod tests {
     #[test]
     fn preserves_invalid_uri_values() {
         assert_eq!(uri_key("not-a-uri"), "not-a-uri");
+    }
+
+    #[test]
+    fn normalizes_legacy_notepadpp_file_uri_two_slashes() {
+        // Notepad++ LSP client emits `file://C:\...` (two slashes, backslashes).
+        assert_eq!(uri_key(r"file://C:\Users\dev\example.pl"), "file:///c:/Users/dev/example.pl");
+        assert_eq!(
+            uri_key(r"file://D:\projects\MyApp\script.pl"),
+            "file:///d:/projects/MyApp/script.pl"
+        );
+    }
+
+    #[test]
+    fn normalizes_bare_windows_path() {
+        // Some editors send a bare `C:\...` path with no scheme at all.
+        assert_eq!(uri_key(r"C:\Users\dev\plain_path.pl"), "file:///c:/Users/dev/plain_path.pl");
+        assert_eq!(uri_key(r"c:\users\dev\lowercase.pl"), "file:///c:/users/dev/lowercase.pl");
+    }
+
+    #[test]
+    fn canonical_file_uri_three_slashes_unchanged_by_legacy_pass() {
+        // Canonical `file:///c:/...` must NOT be double-processed by the legacy pass.
+        assert_eq!(uri_key("file:///c:/Users/dev/example.pl"), "file:///c:/Users/dev/example.pl");
+        assert_eq!(uri_key("file:///C:/Users/dev/example.pl"), "file:///c:/Users/dev/example.pl");
+    }
+
+    #[test]
+    fn linux_paths_not_treated_as_windows() {
+        // Linux absolute paths like `/home/user/file.pl` must not be misidentified
+        // as Windows paths (index-1 byte is not `:`).
+        assert_eq!(uri_key("/home/user/file.pl"), "/home/user/file.pl");
+        assert_eq!(uri_key("file:///home/user/file.pl"), "file:///home/user/file.pl");
     }
 
     #[test]
