@@ -576,7 +576,7 @@ autocmd User lsp_setup call lsp#register_server({
       \ })
 ```
 
-#### Vim with coc.nvim
+#### coc.nvim (`coc-settings.json`)
 
 ```json
 {
@@ -597,6 +597,8 @@ autocmd User lsp_setup call lsp#register_server({
   }
 }
 ```
+
+coc.nvim uses Vim/Neovim filetypes, so Perl buffers must have `filetype=perl`.
 
 ## Environment Variables
 
