@@ -65,6 +65,9 @@ impl Policy for RequireUseWarnings {
 /// Prohibit bareword filehandles in `open`.
 struct ProhibitBarewordFileHandles;
 
+/// Prohibit string-based eval
+struct ProhibitStringyEval;
+
 impl Policy for ProhibitBarewordFileHandles {
     fn name(&self) -> &str {
         "InputOutput::ProhibitBarewordFileHandles"
@@ -89,6 +92,33 @@ impl Policy for ProhibitBarewordFileHandles {
     }
 }
 
+impl Policy for ProhibitStringyEval {
+    fn name(&self) -> &str {
+        "BuiltinFunctions::ProhibitStringyEval"
+    }
+
+    fn severity(&self) -> Severity {
+        Severity::Cruel
+    }
+
+    fn analyze(&self, _ast: &Node, content: &str) -> Vec<Violation> {
+        if !has_stringy_eval(content) {
+            return Vec::new();
+        }
+
+        vec![Violation {
+            policy: self.name().to_string(),
+            description: "Code uses string eval".to_string(),
+            explanation:
+                "String eval executes dynamically generated code and is difficult to analyze safely"
+                    .to_string(),
+            severity: self.severity(),
+            range: insertion_range(),
+            file: String::new(),
+        }]
+    }
+}
+
 impl Default for BuiltInAnalyzer {
     fn default() -> Self {
         Self {
@@ -96,6 +126,7 @@ impl Default for BuiltInAnalyzer {
                 Box::new(RequireUseStrict),
                 Box::new(RequireUseWarnings),
                 Box::new(ProhibitBarewordFileHandles),
+                Box::new(ProhibitStringyEval),
             ],
         }
     }
@@ -225,6 +256,42 @@ fn skip_ascii_whitespace(bytes: &[u8], mut cursor: usize) -> usize {
     cursor
 }
 
+fn has_stringy_eval(content: &str) -> bool {
+    content.lines().any(is_stringy_eval_line)
+}
+
+fn is_stringy_eval_line(line: &str) -> bool {
+    let code_portion = line.split('#').next().unwrap_or_default();
+    let mut search = code_portion;
+    while let Some(eval_pos) = search.find("eval") {
+        // Word boundary: char before must not be alphanumeric or '_'
+        let before_ok = eval_pos == 0
+            || !search[..eval_pos]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
+        let rest = &search[eval_pos + 4..];
+        // Word boundary: char after must not be alphanumeric or '_'
+        let after_ok = rest.chars().next().is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '_'));
+        if before_ok && after_ok {
+            let after_eval = rest.trim_start();
+            // String eval: literal strings (eval "..." / eval '...')
+            // or variable expressions (eval $code / eval @args / eval \$ref)
+            let is_literal_string = after_eval.starts_with('"') || after_eval.starts_with('\'');
+            let is_variable = after_eval.starts_with('$')
+                || after_eval.starts_with('@')
+                || after_eval.starts_with('%')
+                || after_eval.starts_with('\\');
+            if is_literal_string || is_variable {
+                return true;
+            }
+        }
+        // Advance past this non-matching occurrence
+        search = &search[eval_pos + 4..];
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::BuiltInAnalyzer;
@@ -261,6 +328,81 @@ mod tests {
             .iter()
             .any(|violation| violation.policy == "InputOutput::ProhibitBarewordFileHandles");
         assert!(!has_bareword_violation, "lexical filehandles should not be flagged");
+        Ok(())
+    }
+
+    #[test]
+    fn reports_stringy_eval_violation() -> TestResult {
+        let source = r#"
+use strict;
+use warnings;
+my $src = '$x = 1;';
+eval "$src";
+"#;
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(
+            violations.iter().any(|v| v.policy == "BuiltinFunctions::ProhibitStringyEval"),
+            "expected ProhibitStringyEval violation for eval \"...\""
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ignores_block_eval() -> TestResult {
+        let source = r#"
+use strict;
+use warnings;
+eval { my $x = 1; };
+"#;
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(
+            !violations.iter().any(|v| v.policy == "BuiltinFunctions::ProhibitStringyEval"),
+            "block eval should not be flagged as stringy eval"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn reports_stringy_eval_variable() -> TestResult {
+        // eval $var is the most common real-world stringy eval pattern and must be caught.
+        let source = r#"
+use strict;
+use warnings;
+my $code = 'print "hello\n"';
+eval $code;
+"#;
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(
+            violations.iter().any(|v| v.policy == "BuiltinFunctions::ProhibitStringyEval"),
+            "expected ProhibitStringyEval violation for eval $var pattern"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn reports_stringy_eval_single_quote() -> TestResult {
+        let source = "use strict;\nuse warnings;\neval 'print 1';\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(
+            violations.iter().any(|v| v.policy == "BuiltinFunctions::ProhibitStringyEval"),
+            "expected ProhibitStringyEval violation for eval '...'"
+        );
         Ok(())
     }
 }

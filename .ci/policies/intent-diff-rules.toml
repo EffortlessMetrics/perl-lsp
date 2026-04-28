@@ -1,0 +1,19 @@
+[defaults]
+# Rule 1: title/body claims a code fix but diff is docs-only.
+docs_only_code_fix = "fail"
+# Rule 3: scaffold/partial PRs should not auto-close issues.
+scaffold_closeout = "fail"
+# Rule 4: docs-titled PRs that touch production code are suspicious but can be advisory.
+docs_claim_code_change = "warn"
+
+[issues."6747"]
+expected_paths = [
+  "vscode-extension/package.json",
+  "crates/perl-lsp-rs/tests/",
+]
+
+[components.vscode_activation]
+expected_paths = [
+  "vscode-extension/package.json",
+  "crates/perl-lsp-rs/tests/",
+]

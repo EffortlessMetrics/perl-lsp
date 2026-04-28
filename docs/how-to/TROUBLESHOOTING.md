@@ -66,6 +66,40 @@ If the editor is using a helper extension or plugin, check its own logs too.
 - Check whether the current file actually has a Perl mode or file type.
 - Inspect the LSP log for capability negotiation or request errors.
 
+## Neovim Does Not Start `perllsp`
+
+1. Confirm the binary works outside Neovim:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+2. Confirm the buffer filetype in Neovim:
+
+   ```vim
+   :set filetype?
+   ```
+
+   It must be `perl`.
+
+3. Confirm the LSP config is enabled:
+
+   ```vim
+   :checkhealth vim.lsp
+   ```
+
+4. For Neovim 0.11+, make sure config name and enable name match:
+
+   ```lua
+   vim.lsp.config('perllsp', { cmd = { 'perllsp', '--stdio' } })
+   vim.lsp.enable('perllsp')
+   ```
+
+5. Use `perllsp --check path/to/file.pl` for manual diagnostics.
+   Do not test stdio mode by piping unframed JSON.
+
 ## DAP Or Debugging Issues
 
 If you are debugging with `perl-dap`, check the DAP guide:

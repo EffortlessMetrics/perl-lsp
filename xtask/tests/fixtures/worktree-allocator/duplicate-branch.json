@@ -1,0 +1,15 @@
+{
+  "leases": [
+    {
+      "worktree_id": "wt-pr-101-1700000000",
+      "path": "/tmp/.claude/worktrees/agent-wt-pr-101-1700000000",
+      "task_id": "task-101",
+      "pr": 101,
+      "branch": "agent/pr-101",
+      "base_sha": "0123456789abcdef0123456789abcdef01234567",
+      "owner": "agent-a",
+      "lease_expiry": "2026-04-30T00:00:00Z",
+      "last_heartbeat": "2026-04-29T23:55:00Z"
+    }
+  ]
+}

@@ -470,8 +470,41 @@ impl<'a> Parser<'a> {
         let declarator_token = self.consume_token()?;
         let declarator = declarator_token.text.to_string();
 
+        // `local(...)` can contain arbitrary lvalue expressions (e.g. local($ENV{PATH})).
+        // Only use the single-lvalue path when the content is a complex lvalue
+        // (the token after the first variable sigil is a subscript operator like `{`, `[`, `->`)
+        // so that plain-variable lists like `local($x, $y)` fall through to the
+        // VariableListDeclaration path which correctly handles the comma-separated form.
+        let local_has_complex_lvalue = declarator == "local"
+            && self.peek_kind() == Some(TokenKind::LeftParen)
+            && matches!(
+                self.tokens.peek_third().ok().map(|t| t.kind),
+                Some(TokenKind::LeftBrace | TokenKind::LeftBracket | TokenKind::Arrow)
+            );
+        if local_has_complex_lvalue {
+            self.consume_token()?; // consume (
+            let variable = self.parse_assignment()?;
+            self.expect_closing_delimiter(TokenKind::RightParen)?;
+
+            let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
+                self.tokens.next()?; // consume =
+                Some(Box::new(self.parse_assignment()?))
+            } else {
+                None
+            };
+
+            let end = self.previous_position();
+            Ok(Node::new(
+                NodeKind::VariableDeclaration {
+                    declarator,
+                    variable: Box::new(variable),
+                    attributes: Vec::new(),
+                    initializer,
+                },
+                SourceLocation { start, end },
+            ))
         // Check if we have a list declaration like `my ($x, $y)`
-        if self.peek_kind() == Some(TokenKind::LeftParen) {
+        } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.consume_token()?; // consume (
 
             let mut variables = Vec::new();

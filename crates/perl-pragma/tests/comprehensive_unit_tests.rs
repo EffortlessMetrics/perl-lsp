@@ -1226,6 +1226,36 @@ fn no_warnings_with_category_disables_only_that_category() -> Result<(), Box<dyn
 }
 
 #[test]
+fn duplicate_no_warnings_category_does_not_create_extra_entry()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 12),
+        no_node("warnings", &["'deprecated'"], 13, 36),
+        no_node("warnings", &["'deprecated'"], 37, 60),
+    ]);
+
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 2, "duplicate category disable should not add a redundant map entry");
+    Ok(())
+}
+
+#[test]
+fn no_warnings_empty_string_category_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    // `no warnings ''` after quote-stripping yields an empty category name.
+    // Error-recovery AST nodes can produce this.  The empty string must not be
+    // pushed into disabled_warning_categories, and no map entry should be emitted
+    // because the state did not change.
+    let ast = program(vec![use_node("warnings", &[], 0, 12), no_node("warnings", &["''"], 13, 28)]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 1, "empty-string category should not create a map entry");
+    assert!(
+        map[0].1.disabled_warning_categories.is_empty(),
+        "empty-string category must not enter the disabled list"
+    );
+    Ok(())
+}
+
+#[test]
 fn no_warnings_bare_disables_all_warnings() -> Result<(), Box<dyn std::error::Error>> {
     // `no warnings;` (no args) must still disable the global warnings flag.
     let ast = program(vec![use_node("warnings", &[], 0, 15), no_node("warnings", &[], 16, 28)]);
