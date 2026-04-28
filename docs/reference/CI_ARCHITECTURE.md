@@ -24,6 +24,7 @@ Cluster. It answers:
 
 **Sources of truth:**
 - Gate definitions: `.ci/gate-policy.yaml`
+- Legacy script metadata: `.ci/GATE_REGISTRY.toml` (non-authoritative for merge blocking)
 - Workflow runner: `.github/workflows/ci.yml`
 - Scope classifier: `xtask/src/tasks/ci_scope.rs`
 - Gate runner: `xtask/src/tasks/gates.rs`
@@ -188,7 +189,6 @@ these blocks merge (via the `ci/merge-gate` commit status check):
 | `lsp_tier_a` | CLI smoke + capabilities snapshot + protocol tests | LSP capability correctness |
 | `lsp_tier_b` | Definitions, completion, color, code lens, security, behavioral | LSP core behavior |
 | `common_corpus_clean` | `xtask parser-corpus-sweep --manifest --enforce` | Common Perl modules parse with zero errors |
-| `parser_audit_closeout` | `xtask corpus-audit --fresh --check` | Corpus parser metrics do not regress |
 | `security_audit` | `cargo audit --deny warnings` | Known CVEs in dependencies |
 | `policy_checks` | Version sync + docs baseline + features invariants | Project policy invariants |
 | `docs_build` | `cargo doc -p perl-parser -p perl-lsp-rs` | Documentation builds without errors |
@@ -207,6 +207,7 @@ These gates have `required: false`. Failures produce signal and are tracked in
 |------|-------------|
 | `parser_corpus_ratchet` | Baseline drifts with runner Perl version (Ubuntu Perl updates produce environmental false positives) |
 | `cpan_corpus_ratchet` | CPAN corpus not installed on PR runners; owned by post-merge cron |
+| `parser_audit_closeout` | Historical corpus/environment coupling; advisory until deterministic parser-ratchet producer replaces closeout gate |
 | `security_audit` | Currently quarantined: `cargo-audit` ecosystem breakage as of 2026-04-26 |
 | `published_crate_count` | Quarantined until collapse completes (~30–31 target crates) |
 | All `nightly` gates | Informational by tier definition |

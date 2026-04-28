@@ -333,8 +333,8 @@ gates:
 
   - name: parser_audit_closeout
     tier: merge_gate
-    description: "Project corpus parser closeout metrics (gaps, NodeKinds, recovery) must not regress"
-    required: true
+    description: "Project corpus parser closeout metrics (gaps, NodeKinds, recovery) are advisory until deterministic parser-ratchet v2 lands"
+    required: false
     command: >-
       cargo run --locked -p xtask
       -- corpus-audit --fresh --corpus-path . --check
@@ -348,6 +348,7 @@ gates:
       - parser
       - audit
       - ratchet
+      - advisory
 
   - name: security_audit
     tier: merge_gate

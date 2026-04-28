@@ -12,6 +12,7 @@ mod types;
 mod utils;
 use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
+use tasks::gate_policy::GatePolicyCommand;
 use tasks::gates::{GateTier, OutputFormat as GatesOutputFormat};
 use tasks::methodology_gate::MethodologyOutputFormat;
 use tasks::metrics;
@@ -1162,6 +1163,12 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Inspect and validate effective gate policy profiles.
+    GatePolicy {
+        #[command(subcommand)]
+        command: GatePolicyCommand,
+    },
+
     /// Detect contradictory PR label states and emit a methodology receipt.
     MethodologyGate {
         /// Fixture JSON file (local snapshot or GitHub event payload).
@@ -2107,6 +2114,7 @@ fn main() -> Result<()> {
             parallel,
             verbose,
         }),
+        Commands::GatePolicy { command } => gate_policy::run(command),
         Commands::GateReceipts { command } => match command {
             GateReceiptsCommand::List { format } => {
                 gate_receipts::list(convert_gate_receipts_format(format))
