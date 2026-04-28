@@ -64,8 +64,8 @@ fn hash_literal_with_comma_pairs_stays_hash_literal() -> Result<(), Box<dyn std:
 }
 
 #[test]
-fn parenthesized_chained_fat_arrow_preserves_autoquoted_chain() -> Result<(), Box<dyn std::error::Error>>
-{
+fn parenthesized_chained_fat_arrow_preserves_autoquoted_chain()
+-> Result<(), Box<dyn std::error::Error>> {
     let initializer = parse_single_initializer("my $h = (foo => bar => 1);")?;
 
     if let NodeKind::ArrayLiteral { elements } = initializer.kind {
