@@ -34,7 +34,7 @@ perllsp --info
 | Sublime Text | install Sublime's `LSP` package and add `perllsp --stdio` in `LanguageServers.sublime-settings` | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
-| Codex CLI | connect an MCP LSP bridge to `perllsp --stdio` | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
+| Codex CLI | configure an MCP bridge such as `lsp-mcp`; the bridge exposes tools to Codex and launches `perllsp --stdio` internally | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
 | Codex Desktop | add a custom Perl server command `perllsp --stdio` | [docs/EDITORS/CODEX_DESKTOP_SETUP.md](../EDITORS/CODEX_DESKTOP_SETUP.md) |
 | OpenCode | configure `perllsp --stdio` as a custom LSP in `opencode.json`; diagnostics work by default, direct LSP operations are experimental | [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) |
 
@@ -143,10 +143,29 @@ using `command: "perllsp"` and `args: ["--stdio"]`.
 
 ### Codex CLI
 
-Configure an MCP LSP bridge that launches `perllsp --stdio`, then verify the
-bridge appears in Codex via `/mcp`. See
-[docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) for a full
-example config and troubleshooting flow.
+Codex CLI uses MCP tools rather than direct LSP server registration. Configure an
+LSP-to-MCP bridge such as `lsp-mcp`, then point Codex at the bridge:
+
+```toml
+[mcp_servers.perl_lsp]
+command = "lsp-mcp"
+args = ["--config", "/absolute/path/to/project/lsp-mcp.toml", "--workspace", "/absolute/path/to/project"]
+cwd = "/absolute/path/to/project"
+```
+
+Example `lsp-mcp.toml`:
+
+```toml
+[[servers]]
+name = "perl"
+command = ["perllsp", "--stdio"]
+extensions = [".pl", ".PL", ".pm", ".t", ".pod", ".psgi", ".cgi", ".fcgi", ".xs", ".xsi"]
+root_markers = [".perl-lsp.toml", "Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"]
+language_id = "perl"
+```
+
+Do not register `perllsp --stdio` directly as an MCP server; it speaks LSP, not
+MCP.
 
 ### OpenCode
 
