@@ -192,7 +192,9 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
                     }
                     // Perl::Critic policy aliases for two-arg open.
-                    "InputOutput::RequireBriefOpen" | "InputOutput::RequireThreeArgOpen" => {
+                    "InputOutput::ProhibitTwoArgOpen"
+                    | "InputOutput::RequireBriefOpen"
+                    | "InputOutput::RequireThreeArgOpen" => {
                         actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
                     }
                     // Perl::Critic policies for missing strict/warnings.
