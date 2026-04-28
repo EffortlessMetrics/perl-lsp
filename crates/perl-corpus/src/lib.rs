@@ -274,6 +274,10 @@ pub use inventory::{
     CorpusInventory, InventoryIds, InventoryTags, inventory_from_corpus_dir,
     inventory_json_from_corpus_dir,
 };
+pub use inventory::{
+    CorpusInventory, InventoryIds, InventoryMarkers, InventoryTags, build_inventory,
+    build_inventory_from_paths, generator_families, inventory_from_sections,
+};
 use meta::Section;
 use regex::Regex;
 pub use sidecar::{
