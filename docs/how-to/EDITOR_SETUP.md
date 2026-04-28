@@ -31,7 +31,7 @@ perllsp --health
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
-| Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
+| Amazon Kiro | use OpenVSX `EffortlessMetrics.perl-lsp-rs` in Kiro IDE; for Kiro CLI configure custom LSP `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
 | Codex CLI | connect an MCP LSP bridge to `perllsp --stdio` | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
 | Codex Desktop | add a custom Perl server command `perllsp --stdio` | [docs/EDITORS/CODEX_DESKTOP_SETUP.md](../EDITORS/CODEX_DESKTOP_SETUP.md) |
@@ -119,8 +119,12 @@ Register a client with `command: ["perllsp", "--stdio"]`, use a selector such as
 
 ### Amazon Kiro
 
-Register a Perl language-server client that launches `perllsp --stdio`, then
-restart the client after changing workspace settings or include paths.
+For Kiro IDE, install OpenVSX extension `EffortlessMetrics.perl-lsp-rs`. The
+extension can auto-download `perllsp`; set `perl-lsp.serverPath` only for
+manual or pinned binaries.
+
+For Kiro CLI, run `/code init` in the project root and edit the generated LSP
+config to launch `perllsp --stdio` for Perl file extensions.
 
 ### Claude Code
 

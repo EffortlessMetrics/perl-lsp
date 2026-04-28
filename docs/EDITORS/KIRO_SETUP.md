@@ -1,73 +1,176 @@
 # Amazon Kiro Setup Guide for perl-lsp
 
-This guide gives you a reliable setup path for using `perllsp` in Amazon Kiro.
+This guide covers using `perl-lsp` with Amazon Kiro.
+
+Kiro has two setup paths:
+
+- **Kiro IDE**: use the OpenVSX extension `EffortlessMetrics.perl-lsp-rs`
+- **Kiro CLI**: configure a custom workspace LSP that runs `perllsp --stdio`
 
 ## Prerequisites
 
-- Amazon Kiro installed
-- `perllsp` installed and available on `PATH`
-- A Perl workspace opened in Kiro
+### Kiro IDE
 
-Verify the server first:
+- Kiro IDE installed
+- Perl workspace open in Kiro
+- `EffortlessMetrics.perl-lsp-rs` installed from OpenVSX
+
+The extension can auto-download `perllsp`. Manual `perllsp` installation is
+mainly for offline, mirrored, or pinned-binary environments.
+
+### Kiro CLI
+
+- Kiro CLI installed
+- `perllsp` installed and visible to the shell that launches Kiro CLI
+- Project opened from repository root
+
+Verify manual server installation when using CLI custom LSP:
 
 ```bash
 perllsp --version
 perllsp --health
+perllsp --info
 ```
 
-## Kiro IDE (Desktop)
+## Kiro IDE Setup
 
-Kiro IDE is built on VS Code's open-source foundation and uses the OpenVSX
-extension registry. Install the Perl LSP extension from the Extensions panel:
+Kiro uses OpenVSX-compatible extensions. Install:
 
-- Search for `perl-lsp` in Kiro's Extensions panel
-- Extension ID: `EffortlessMetrics.perl-lsp-rs`
+```text
+EffortlessMetrics.perl-lsp-rs
+```
 
-If the extension is not available in OpenVSX, download the `.vsix` from
-[GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and
-install it via "Install from VSIX..." in the Extensions panel menu.
+From Kiro:
 
-## Kiro CLI
+1. Open Extensions.
+2. Search for `perl-lsp` or `EffortlessMetrics.perl-lsp-rs`.
+3. Install the extension.
+4. Open `.pl`, `.pm`, or `.t` files and verify Perl language mode is active.
 
-If you use the Kiro command-line interface, add a custom language server entry
-in `.kiro/settings/lsp.json` at your project root:
+## Optional: Manual Binary Path (Kiro IDE)
+
+Use this only when extension-managed download is blocked or you need a pinned
+binary.
+
+```json
+{
+  "perl-lsp.serverPath": "/absolute/path/to/perllsp",
+  "perl-lsp.autoDownload": false
+}
+```
+
+## Recommended Kiro IDE Settings
+
+```json
+{
+  "perl-lsp.autoDownload": true,
+  "perl-lsp.trace.server": "off",
+  "perl-lsp.enableDiagnostics": true,
+  "perl-lsp.enableSemanticTokens": true,
+  "perl-lsp.enableFormatting": true,
+  "perl-lsp.formatOnSave": false,
+  "perl-lsp.includePaths": ["lib", ".", "local/lib/perl5"]
+}
+```
+
+For protocol debugging only:
+
+```json
+{
+  "perl-lsp.trace.server": "messages"
+}
+```
+
+## Kiro CLI Setup
+
+Run in your project root:
+
+```text
+/code init
+```
+
+Then edit the LSP config file created by Kiro.
+
+Kiro docs currently describe this as project-root `lsp.json`. Some Kiro CLI
+builds and examples reference `.kiro/settings/lsp.json`. Use the path your
+installed Kiro CLI creates.
+
+Add or merge:
 
 ```json
 {
   "languages": {
     "perl": {
-      "name": "perllsp",
+      "name": "perl-lsp",
       "command": "perllsp",
       "args": ["--stdio"],
-      "file_extensions": ["pl", "pm", "t", "psgi"],
-      "project_patterns": [".perl-lsp.toml", "Makefile.PL", "Build.PL"],
-      "multi_workspace": false
+      "file_extensions": ["pl", "PL", "pm", "t", "psgi", "cgi", "fcgi", "xs", "xsi"],
+      "project_patterns": [".perl-lsp.toml", "Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
+      "exclude_patterns": ["**/.git/**", "**/local/**", "**/blib/**", "**/node_modules/**"],
+      "multi_workspace": false,
+      "request_timeout_secs": 60,
+      "initialization_options": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"],
+            "useSystemInc": false,
+            "resolutionTimeout": 50
+          }
+        }
+      }
     }
   }
 }
 ```
 
-Run `/code init` in the project root first if the `.kiro/settings/` directory
-does not exist, then restart the Kiro CLI to load the new configuration.
+Refresh servers and inspect status/logs:
 
-## Recommended Workspace Settings
+```text
+/code init -f
+/code status
+/code logs
+/code logs -l DEBUG -n 100
+```
 
-- Keep your project root open as the workspace root.
-- Add include/library paths in project settings when your code uses nonstandard
-  module locations.
-- Restart the language server after changing server path or arguments.
+## Kiro CLI Caveat: Perl Is Custom
 
-## Troubleshooting
+Kiro CLI's built-in language list does not currently include Perl. Treat custom
+Perl LSP support as version-dependent and verify behavior in your installed
+Kiro CLI build.
 
-1. **Server does not start**
-   - Run `perllsp --health` in an external shell.
-   - Confirm Kiro inherits the same `PATH` as your shell.
-2. **No diagnostics or completions**
-   - Confirm the file is recognized as Perl.
-   - Confirm the LSP client is attached to the current buffer/file.
-3. **Definitions/references incomplete**
-   - Open the repository root, not a nested subfolder.
-   - Ensure local library paths are configured in project settings.
+If diagnostics work but hover, references, definition, completion, or rename do
+not, that may be a Kiro CLI custom-LSP limitation rather than a `perllsp`
+server issue.
 
-For cross-editor fallback patterns, see [Editor Setup](../how-to/EDITOR_SETUP.md)
-and [Troubleshooting](../how-to/TROUBLESHOOTING.md).
+## Verification Checklist
+
+### Kiro IDE
+
+1. Open the project root.
+2. Open a Perl file (`.pl`, `.pm`, `.t`).
+3. Introduce a temporary syntax error.
+4. Confirm diagnostics appear.
+5. Remove the test syntax error.
+
+### Kiro CLI
+
+After `/code init`, ask for LSP-backed info and verify logs/status:
+
+```text
+Get diagnostics for lib/My/Module.pm
+Find references of My::Module::some_function
+What symbols are in lib/My/Module.pm?
+What's the hover documentation for My::Module::some_function?
+```
+
+Also verify server behavior directly:
+
+```bash
+perllsp --check path/to/file.pl
+```
+
+## See Also
+
+- [Editor Setup](../how-to/EDITOR_SETUP.md)
+- [Configuration](../reference/CONFIG.md)
+- [Troubleshooting](../how-to/TROUBLESHOOTING.md)
