@@ -100,10 +100,8 @@ mod tests {
     /// already satisfies the predicate — no polling delay.
     #[test]
     fn wait_for_uri_matching_returns_on_immediate_match() {
-        let events = vec![LspEvent::Diagnostics {
-            uri: "file:///a.pl".to_string(),
-            diagnostics: vec![],
-        }];
+        let events =
+            vec![LspEvent::Diagnostics { uri: "file:///a.pl".to_string(), diagnostics: vec![] }];
         let result = DiagnosticsTracker::wait_for_uri_matching(
             || events.clone(),
             "file:///a.pl",
@@ -149,10 +147,7 @@ mod tests {
                 } else {
                     vec![] // cleared on third call
                 };
-                vec![LspEvent::Diagnostics {
-                    uri: "file:///a.pl".to_string(),
-                    diagnostics: diags,
-                }]
+                vec![LspEvent::Diagnostics { uri: "file:///a.pl".to_string(), diagnostics: diags }]
             },
             "file:///a.pl",
             Duration::from_secs(5),
