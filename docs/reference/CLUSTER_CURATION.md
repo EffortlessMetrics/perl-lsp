@@ -10,7 +10,7 @@ planning artifacts, Factory Droid, Aider, Claude Code).
 `docs/articles/BROAD_SCOPE_LAYER_DIVERSITY.md`,
 `docs/articles/CODEX_HALLUCINATION_TRIAGE.md`  
 **Cross-references:** #7073 (salvage-classify skill), #7061 (typed routing labels),
-`docs/articles/OCTOPUS_CLUSTER.md` (ensemble vocabulary)
+`docs/articles/FOUR_WAY_ENSEMBLE_PATTERN.md` (ensemble vocabulary and Monte Carlo framing)
 
 ---
 
