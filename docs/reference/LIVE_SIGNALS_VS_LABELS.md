@@ -1,5 +1,7 @@
 # Live Signals vs Label Signals
 
+> For the umbrella concept — what an Octopus Cluster is, how the reconciler fits in, and the vocabulary these docs share — see [OCTOPUS_CLUSTER.md](OCTOPUS_CLUSTER.md).
+
 ## Principle
 
 Where ground truth exists as a queryable live signal, the live signal is authoritative. Labels are bookkeeping for agent activity, not state machines that compete with live truth.
