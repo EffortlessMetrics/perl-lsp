@@ -382,6 +382,31 @@ impl UxHarness {
         }
     }
 
+    /// Poll `workspace/symbol` until `predicate` returns true or `timeout`
+    /// elapses.
+    ///
+    /// Returns the last observed symbol list in both success and timeout paths.
+    pub fn wait_for_workspace_symbols(
+        &self,
+        query: &str,
+        timeout: Duration,
+        poll_interval: Duration,
+        mut predicate: impl FnMut(&[Value]) -> bool,
+    ) -> Result<Vec<Value>> {
+        let deadline = std::time::Instant::now() + timeout;
+        let mut latest = Vec::new();
+
+        while std::time::Instant::now() < deadline {
+            latest = self.workspace_symbols(query)?;
+            if predicate(&latest) {
+                return Ok(latest);
+            }
+            std::thread::sleep(poll_interval);
+        }
+
+        Ok(latest)
+    }
+
     /// Notify the server that workspace folders changed.
     ///
     /// Each tuple is `(relative_path, name)` and is resolved relative to the
