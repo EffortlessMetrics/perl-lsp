@@ -35,7 +35,8 @@ perllsp --info
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
 | Codex CLI | connect an MCP LSP bridge to `perllsp --stdio` | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
-| Codex Desktop | add a custom Perl server command `perllsp --stdio` | [docs/EDITORS/CODEX_DESKTOP_SETUP.md](../EDITORS/CODEX_DESKTOP_SETUP.md) |
+| Codex app | run `perllsp --check` / `--check-project` via Codex terminal or project actions | [docs/EDITORS/CODEX_APP_SETUP.md](../EDITORS/CODEX_APP_SETUP.md) |
+| Codex IDE Extension | use Codex in a VS Code-compatible editor alongside `EffortlessMetrics.perl-lsp-rs` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
 | OpenCode | configure a custom `perl-lsp` server in `opencode.json` | [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) |
 
 ## Minimal Configurations
@@ -163,7 +164,29 @@ and `.t`. See [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) for
   [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for the next steps.
 
 
-### Codex Desktop
+### OpenAI Codex app
 
-Configure a custom Perl language server process that runs `perllsp --stdio`.
-See the dedicated guide for the exact fields and verification steps.
+Codex app can run `perllsp` checks from the integrated terminal or project
+actions:
+
+```bash
+perllsp --check-project .
+perllsp --check path/to/file.pl
+```
+
+Codex app does not currently document a generic custom-LSP registration flow.
+For live editor features such as hover, go-to-definition, references, rename,
+and squiggle diagnostics, use a real editor LSP client.
+
+### Codex IDE Extension
+
+When using Codex in VS Code, Cursor, Windsurf, or another VS Code-compatible
+editor, install both:
+
+```text
+OpenAI Codex IDE Extension
+EffortlessMetrics.perl-lsp-rs
+```
+
+The Codex extension provides the coding-agent sidebar. The Perl LSP extension
+starts `perllsp` and provides editor LSP features.
