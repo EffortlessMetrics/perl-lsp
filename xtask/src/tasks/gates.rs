@@ -841,9 +841,12 @@ fn failure_guidance(results: &[GateResult]) -> (Vec<AgentFailure>, Vec<String>) 
 }
 
 fn is_latest_commit(root: &Path) -> bool {
+    // In detached HEAD (PR runs), @{upstream} fails with "HEAD does not point to a branch".
+    // Suppress stderr so that message does not leak into CI output.
     let upstream =
         match cmd("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
             .dir(root)
+            .stderr_null()
             .read()
         {
             Ok(value) => value.trim().to_string(),
@@ -892,7 +895,10 @@ fn select_scope_base(root: &Path) -> String {
     let mut candidates: Vec<String> = env_candidates.into_iter().flatten().collect();
     candidates.extend(["origin/master", "master", "HEAD~1"].into_iter().map(str::to_string));
     for candidate in candidates {
-        let exists = cmd("git", ["rev-parse", "--verify", &candidate]).dir(root).run().is_ok();
+        // Suppress stderr: in shallow clones "HEAD~1" does not exist and git prints
+        // "fatal: Needed a single revision" to stderr, polluting CI output.
+        let exists =
+            cmd("git", ["rev-parse", "--verify", &candidate]).dir(root).stderr_null().run().is_ok();
         if exists {
             return candidate;
         }
@@ -1074,11 +1080,20 @@ fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
     let git_sha_short =
         if git_sha.len() >= 7 { git_sha[..7].to_string() } else { "UNVERIF".to_string() };
 
-    let git_branch = cmd!("git", "rev-parse", "--abbrev-ref", "HEAD")
-        .read()
-        .unwrap_or_else(|_| "unknown".to_string())
-        .trim()
-        .to_string();
+    // In a detached HEAD (GitHub Actions PR runs check out by SHA), `git rev-parse
+    // --abbrev-ref HEAD` returns the literal string "HEAD" rather than a branch name.
+    // Prefer the CI environment variable that carries the real source branch name.
+    let git_branch = std::env::var("GITHUB_HEAD_REF")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| std::env::var("GITHUB_REF_NAME").ok().filter(|s| !s.is_empty()))
+        .unwrap_or_else(|| {
+            cmd!("git", "rev-parse", "--abbrev-ref", "HEAD")
+                .read()
+                .unwrap_or_else(|_| "unknown".to_string())
+                .trim()
+                .to_string()
+        });
 
     let git_dirty =
         cmd!("git", "status", "--porcelain").read().map(|s| !s.trim().is_empty()).unwrap_or(false);
