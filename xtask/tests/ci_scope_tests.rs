@@ -66,6 +66,11 @@ fn test_ci_scope_json_output_is_valid_schema_v2() -> Result<()> {
     assert!(parsed["platform_overrides"].is_object(), "platform_overrides must be object");
     assert!(parsed["selected_lanes"].is_array(), "selected_lanes must be array");
     assert!(parsed["selected_heavy_lanes"].is_array(), "selected_heavy_lanes must be array");
+    assert!(parsed["lanes"].is_object(), "lanes must be object");
+    assert!(
+        parsed["lanes"]["parser_ratchet"].is_object(),
+        "lanes.parser_ratchet must be an object"
+    );
     assert!(parsed["explanations"].is_object(), "explanations must be object");
     Ok(())
 }
