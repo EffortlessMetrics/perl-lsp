@@ -1202,8 +1202,7 @@ mod tests {
         // LSP clients can send an initial edit before a parse has occurred.
         let mut parser = CheckpointedIncrementalParser::new();
 
-        let edit =
-            SimpleEdit { start: 0, end: 0, new_text: "my $x = 1;\n".to_string() };
+        let edit = SimpleEdit { start: 0, end: 0, new_text: "my $x = 1;\n".to_string() };
         let result = parser.apply_edit(&edit);
         assert!(result.is_ok(), "insert into empty source should succeed: {result:?}");
     }
