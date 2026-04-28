@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.github.io/perl-lsp/schemas/label-projection.schema.json",
+  "title": "LabelProjectionReceipt",
+  "type": "object",
+  "required": ["dry_run", "verdict", "projections"],
+  "properties": {
+    "dry_run": { "type": "boolean" },
+    "verdict": { "type": "string" },
+    "projections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "state",
+          "current_labels",
+          "projected_apply",
+          "projected_remove",
+          "skipped",
+          "reason",
+          "dry_run",
+          "verdict"
+        ],
+        "properties": {
+          "pr_number": { "type": ["integer", "null"], "minimum": 1 },
+          "state": { "type": "string" },
+          "current_labels": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "projected_apply": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "projected_remove": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "skipped": { "type": "boolean" },
+          "reason": { "type": "string" },
+          "dry_run": { "type": "boolean" },
+          "verdict": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

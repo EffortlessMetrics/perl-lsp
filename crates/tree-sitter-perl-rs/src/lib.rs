@@ -52,8 +52,11 @@
     clippy::missing_panics_doc
 )]
 
-use perl_ast::Node as AstNode;
+use perl_ast::{Node as AstNode, NodeKind};
+use perl_module::parse_module_import_head;
 use perl_parser_core::Parser as CoreParser;
+use perl_pragma::{PragmaState, PragmaTracker};
+use perl_semantic_analyzer::semantic::SemanticModel;
 
 /// Re-export of Edit type for tree-sitter-compatible incremental parsing.
 ///
@@ -210,6 +213,44 @@ pub struct Tree {
     pending_edits: Vec<InputEdit>,
 }
 
+/// Experimental semantic overlay query handle.
+///
+/// This API is intentionally limited while the facade integration is in development.
+/// Query capabilities will expand over time.
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+pub struct SemanticOverlay<'tree> {
+    tree: &'tree Tree,
+}
+
+/// Symbol definition returned by [`SemanticOverlay`] queries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct OverlayDefinition {
+    /// Symbol name as written in source.
+    pub name: String,
+    /// Package-qualified symbol name.
+    pub qualified_name: String,
+    /// Symbol kind label (debug string form).
+    pub kind: String,
+    /// Definition span start byte (inclusive).
+    pub start_byte: usize,
+    /// Definition span end byte (exclusive).
+    pub end_byte: usize,
+}
+
+/// Import statement visible at a specific source offset.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct VisibleImport {
+    /// Imported module token (`Foo::Bar`, `strict`, etc.).
+    pub module: String,
+    /// Statement start byte (inclusive).
+    pub statement_start_byte: usize,
+    /// Statement end byte (exclusive).
+    pub statement_end_byte: usize,
+}
+
 impl Tree {
     /// Returns the root node of the syntax tree.
     pub fn root_node(&self) -> Node<'_> {
@@ -239,6 +280,54 @@ impl Tree {
     /// `tree.root_node().walk()`.
     pub fn walk(&self) -> TreeCursor<'_> {
         self.root_node().walk()
+    }
+
+    /// Returns the experimental semantic overlay query handle for this tree.
+    pub fn semantic_overlay(&self) -> SemanticOverlay<'_> {
+        SemanticOverlay { tree: self }
+    }
+}
+
+impl<'tree> SemanticOverlay<'tree> {
+    /// Resolve a symbol definition at a byte offset in the source.
+    pub fn definition_at_offset(&self, offset: usize) -> Option<OverlayDefinition> {
+        let model = SemanticModel::build(&self.tree.root, self.tree.source());
+        model.definition_at(offset).map(|symbol| OverlayDefinition {
+            name: symbol.name.clone(),
+            qualified_name: symbol.qualified_name.clone(),
+            kind: format!("{:?}", symbol.kind),
+            start_byte: symbol.location.start,
+            end_byte: symbol.location.end,
+        })
+    }
+
+    /// Resolve a symbol definition for the given node span.
+    ///
+    /// Uses the node start byte as the query point.
+    pub fn definition_for_node(&self, node: &Node<'_>) -> Option<OverlayDefinition> {
+        self.definition_at_offset(node.start_byte())
+    }
+
+    /// Returns the list of `use`-import modules visible at `offset`.
+    ///
+    /// Visibility is currently lexical-by-position: this returns `use` statements
+    /// with starts less than or equal to `offset`.
+    pub fn visible_imports_at_offset(&self, offset: usize) -> Vec<VisibleImport> {
+        let mut imports = Vec::new();
+        collect_visible_use_imports(&self.tree.root, self.tree.source(), offset, &mut imports);
+        let mut deduped = Vec::new();
+        for import in imports {
+            if !deduped.iter().any(|existing: &VisibleImport| existing.module == import.module) {
+                deduped.push(import);
+            }
+        }
+        deduped
+    }
+
+    /// Returns the effective pragma state at a byte offset.
+    pub fn pragma_state_at_offset(&self, offset: usize) -> PragmaState {
+        let pragma_map = PragmaTracker::build(&self.tree.root);
+        PragmaTracker::state_for_offset(&pragma_map, offset)
     }
 }
 
@@ -436,6 +525,18 @@ impl<'tree> TreeCursor<'tree> {
         true
     }
 
+    /// Moves to the last child of the current node.
+    ///
+    /// Returns `true` when movement succeeds, `false` when the node has no children.
+    pub fn goto_last_child(&mut self) -> bool {
+        let child_count = self.current_ast_node().children().len();
+        if child_count == 0 {
+            return false;
+        }
+        self.path.push(child_count - 1);
+        true
+    }
+
     /// Moves to the next sibling of the current node.
     ///
     /// Returns `true` on success. Returns `false` if the cursor is at root or if
@@ -455,6 +556,25 @@ impl<'tree> TreeCursor<'tree> {
 
         let last_pos = self.path.len() - 1;
         self.path[last_pos] = next;
+        true
+    }
+
+    /// Moves to the previous sibling of the current node.
+    ///
+    /// Returns `true` on success. Returns `false` if the cursor is at root or if
+    /// there is no previous sibling.
+    pub fn goto_previous_sibling(&mut self) -> bool {
+        if self.path.is_empty() {
+            return false;
+        }
+
+        let current_index = self.path[self.path.len() - 1];
+        if current_index == 0 {
+            return false;
+        }
+
+        let last_pos = self.path.len() - 1;
+        self.path[last_pos] = current_index - 1;
         true
     }
 
@@ -512,6 +632,33 @@ fn ast_child_at(node: &AstNode, index: usize) -> Option<&AstNode> {
         idx += 1;
     });
     found
+}
+
+fn collect_visible_use_imports(
+    node: &AstNode,
+    source: &str,
+    offset: usize,
+    out: &mut Vec<VisibleImport>,
+) {
+    // Only attempt import extraction on Use AST nodes. Container nodes (Program,
+    // Block, Subroutine, etc.) span large source ranges that may accidentally start
+    // with a `use` token, producing imports with incorrect statement byte ranges.
+    // Use nodes have no children (for_each_child is a no-op), so they are visited
+    // exactly once per tree traversal — no inner dedup needed.
+    if matches!(node.kind, NodeKind::Use { .. }) && node.location.start <= offset {
+        let start = node.location.start.min(source.len());
+        let end = node.location.end.min(source.len());
+        let statement_text = &source[start..end];
+        if let Some(import_head) = parse_module_import_head(statement_text) {
+            out.push(VisibleImport {
+                module: import_head.token.to_string(),
+                statement_start_byte: start,
+                statement_end_byte: end,
+            });
+        }
+    }
+
+    node.for_each_child(|child| collect_visible_use_imports(child, source, offset, out));
 }
 
 // Invariant: TreeCursor path is constructed by the traversal that just yielded this
@@ -931,6 +1078,33 @@ mod tests {
         assert!(cursor.goto_first_child(), "root should still have a child");
         cursor.reset();
         assert_eq!(cursor.node().grammar_kind(), "source_file");
+    }
+
+    #[test]
+    fn test_tree_cursor_last_child_and_previous_sibling_behavior() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $a = 1; my $b = 2;"));
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+
+        assert!(cursor.goto_last_child(), "root should have a last child");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+        assert!(cursor.goto_previous_sibling(), "last child should have a previous sibling");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+        assert!(!cursor.goto_previous_sibling(), "first sibling should not have previous sibling");
+    }
+
+    #[test]
+    fn test_tree_cursor_last_child_returns_false_for_leaf() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $x = 42;"));
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+
+        assert!(cursor.goto_first_child(), "root should have a child");
+        assert!(cursor.goto_first_child(), "my_declaration should have a child");
+        let at_leaf = !cursor.goto_last_child();
+        assert!(at_leaf, "leaf nodes should not have a last child");
     }
 
     #[test]

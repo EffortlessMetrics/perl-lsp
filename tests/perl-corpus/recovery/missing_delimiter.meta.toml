@@ -1,0 +1,17 @@
+[concept]
+id = "parser.recovery.missing_delimiter"
+tier = "pr"
+
+[expect]
+panic = false
+timeout = false
+mode = "expected_error"
+
+[metrics]
+max_error_nodes = 2
+must_emit_node_kinds = ["Expr"]
+
+[snapshots]
+tokens = false
+ast = true
+spans = true

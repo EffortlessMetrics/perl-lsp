@@ -456,6 +456,88 @@
         "manual_editor_smoke",
         "issue_burndown_regression_guard"
       ]
+    },
+    {
+      "id": "workspace_folder_addition_freshness",
+      "scenario_file": "ux_scenario_19_workspace_folder_addition.rs",
+      "subsystem_owner": "workspace_indexing",
+      "ci_tier": "pr",
+      "user_journey": "add a workspace folder after initialize and re-run workspace symbol search",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "multi_root_workspace_navigation_success_rate"
+      ],
+      "expected_outcomes": [
+        "added folder symbols appear in search results without restart"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "live_edit_feedback_loop",
+      "scenario_file": "ux_scenario_24_live_edit_feedback.rs",
+      "subsystem_owner": "text_sync",
+      "ci_tier": "pr",
+      "user_journey": "fix an undeclared variable during active editing and confirm diagnostics and navigation update",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
+      ],
+      "expected_outcomes": [
+        "undeclared variable diagnostic appears before edit",
+        "go-to-definition remains responsive after didChange"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "completion_core",
+      "scenario_file": "ux_scenario_19_completion_core.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "request completion for builtins and in-file symbols in a representative editor session",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "completion request returns without JSON-RPC errors",
+        "completion items include user-visible labels",
+        "builtin completion includes print for pri prefix"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "diagnostics_lifecycle_editing",
+      "scenario_file": "ux_scenario_19_diagnostics_lifecycle.rs",
+      "subsystem_owner": "diagnostics",
+      "ci_tier": "pr",
+      "user_journey": "introduce a syntax error then fix it and verify publishDiagnostics clears",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "broken content yields diagnostics",
+        "fixed content clears diagnostics for the same document"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
     }
   ]
 }

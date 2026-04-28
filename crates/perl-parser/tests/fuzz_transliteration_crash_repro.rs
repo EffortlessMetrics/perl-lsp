@@ -1,4 +1,4 @@
-/// Minimal regression suite for transliteration parsing bug discovered in fuzz testing.
+//! Minimal reproduction cases for transliteration parsing issues discovered in fuzzing.
 use perl_parser::quote_parser::extract_transliteration_parts;
 
 #[test]
@@ -17,6 +17,8 @@ fn fuzz_transliteration_regression_suite() {
         ("tr/a/b/d", ("a", "b", "d")),
         ("y/x/y/g", ("x", "y", "")),
         ("tr{abc}{xyz}d", ("abc", "xyz", "d")),
+        ("tr{abc}/xyz/s", ("abc", "xyz", "s")),
+        ("tr a/b/", ("", "", "")),
         ("tr   /ab/cd/", ("ab", "cd", "")),
     ];
 

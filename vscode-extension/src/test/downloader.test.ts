@@ -74,10 +74,14 @@ describe('BinaryDownloader.getPlatformTarget', () => {
     expect(target).toMatch(/(apple-darwin|unknown-linux|pc-windows)/);
   });
 
-  test('detects Android/Termux and returns android target triple', () => {
-    process.env.TERMUX_VERSION = '0.118.0';
+  test('uses linux-android target in Termux environments', () => {
+    if (process.platform !== 'linux') {
+      return;
+    }
+
+    jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(true);
     const target = getPlatformTarget(downloader);
-    expect(target).toMatch(/linux-android/);
+    expect(target).toMatch(/-linux-android$/);
   });
 });
 
@@ -879,22 +883,18 @@ describe('ensureBinary error classification', () => {
     expect(call[0]).toMatch(/perl-lsp\.serverPath/);
   });
 
-  test('android/termux no-binary error includes android guidance', async () => {
-    const termuxVersionBackup = process.env.TERMUX_VERSION;
-    try {
-      process.env.TERMUX_VERSION = '0.118.0';
-      setupDownloadError('No binary found for platform: aarch64-linux-android. Available assets: perllsp-x86_64-unknown-linux-gnu.tar.gz');
-      const vscode = require('vscode');
-      vscode.window.showErrorMessage.mockResolvedValue(undefined);
+  test('termux platform mismatch shows Termux-specific source-build guidance', async () => {
+    setupDownloadError('No binary found for platform: aarch64-linux-android. Available assets: perllsp-x86_64-unknown-linux-gnu.tar.gz');
+    jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(true);
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
 
-      await downloader.ensureBinary();
+    await downloader.ensureBinary();
 
-      const call = vscode.window.showErrorMessage.mock.calls[0];
-      expect(call[0]).toMatch(/android environment detected/i);
-      expect(call[0]).toMatch(/termux|build from source|serverPath/i);
-    } finally {
-      process.env.TERMUX_VERSION = termuxVersionBackup;
-    }
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/Termux|Android/i);
+    expect(call[0]).toMatch(/pkg install rust/i);
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
   });
 
   test('HTTP 403 rate limit shows GitHub rate limit guidance', async () => {

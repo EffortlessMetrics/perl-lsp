@@ -1,7 +1,7 @@
 //! Export symbol extraction for Exporter-based Perl modules
 //!
 //! This module provides functionality to extract export information from Perl modules
-//! that use the Exporter framework. It detects three inheritance patterns and parses
+//! that use the Exporter framework. It detects four inheritance patterns and parses
 //! the `@EXPORT`, `@EXPORT_OK`, and `%EXPORT_TAGS` arrays.
 //!
 //! # Exporter Detection Patterns
@@ -9,8 +9,10 @@
 //! A module is considered an Exporter if it matches any of:
 //! - `use Exporter;` (Use node with module="Exporter" and empty args — bare form)
 //! - `use Exporter 'import';` (Use node with module="Exporter" and args containing "import")
-//! - `use parent 'Exporter';` (Use node with module="parent" and args containing "Exporter")
+//! - `use parent 'Exporter';` or `use parent qw(Exporter);` (Use node with module="parent")
+//! - `use base 'Exporter';` or `use base qw(Exporter);` (Use node with module="base")
 //! - `our @ISA = qw(Exporter);` (VariableDeclaration with @ISA array containing "Exporter")
+//! - `@ISA = qw(Exporter);` (bare Assignment with @ISA array containing "Exporter")
 //!
 //! # Export Array Format
 //!
@@ -20,6 +22,9 @@
 //! - `@EXPORT = qw<foo bar>` — angle brackets
 //! - `@EXPORT = qw/foo bar/` — slashes
 //! - `@EXPORT = qw|foo bar|` — pipes
+//!
+//! Both `our @EXPORT = ...` (VariableDeclaration) and bare `@EXPORT = ...` (Assignment)
+//! forms are extracted.
 
 use crate::ast::{Node, NodeKind};
 use std::collections::{HashMap, HashSet};
@@ -38,18 +43,20 @@ pub struct ExportInfo {
 /// Detection method for Exporter inheritance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExporterDetector {
-    /// Detected via `use Exporter 'import';`
+    /// Detected via `use Exporter;` or `use Exporter 'import';`
     UseExporterImport,
-    /// Detected via `use parent 'Exporter';`
+    /// Detected via `use parent 'Exporter';` or `use parent qw(Exporter ...)`
     UseParentExporter,
-    /// Detected via `our @ISA = qw(Exporter);`
+    /// Detected via `use base 'Exporter';` or `use base qw(Exporter ...)`
+    UseBaseExporter,
+    /// Detected via `our @ISA = qw(Exporter ...);` or bare `@ISA = qw(Exporter ...);`
     OurIsaExporter,
 }
 
 /// Export symbol extractor for Exporter-based Perl modules.
 ///
 /// This extractor walks the AST to:
-/// 1. Detect if a module uses Exporter (via one of three patterns)
+/// 1. Detect if a module uses Exporter (via one of four patterns)
 /// 2. Parse `@EXPORT`, `@EXPORT_OK`, and `%EXPORT_TAGS` assignments
 pub struct ExportSymbolExtractor;
 
@@ -72,10 +79,11 @@ impl ExportSymbolExtractor {
 
     /// Detect if the AST represents an Exporter-based module.
     ///
-    /// Checks for three patterns:
-    /// 1. `use Exporter 'import';`
-    /// 2. `use parent 'Exporter';`
-    /// 3. `our @ISA = qw(Exporter);`
+    /// Checks for four patterns:
+    /// 1. `use Exporter;` or `use Exporter 'import';`
+    /// 2. `use parent 'Exporter';` or `use parent qw(Exporter ...)`
+    /// 3. `use base 'Exporter';` or `use base qw(Exporter ...)`
+    /// 4. `our @ISA = qw(Exporter ...);` or bare `@ISA = qw(Exporter ...);`
     fn detect_exporter_inheritance(ast: &Node) -> Option<ExporterDetector> {
         Self::walk_for_exporter_detection(ast)
     }
@@ -100,24 +108,37 @@ impl ExportSymbolExtractor {
                     return Some(ExporterDetector::UseExporterImport);
                 }
             }
-            // Pattern 2: `use parent 'Exporter';`
+            // Pattern 2: `use parent 'Exporter';` or `use parent qw(Exporter ...)`
+            //
+            // The parser stores qw-lists as a single normalised string like `"qw(Exporter)"`,
+            // so we must check both single-quoted strings and the qw-expanded form.
             NodeKind::Use { module, args, .. } if module == "parent" => {
-                // Check if 'Exporter' is in the arguments (args may contain quoted strings)
-                if args.iter().any(|arg| {
-                    let arg_stripped = arg.trim_matches('\'');
-                    arg_stripped == "Exporter" || arg == "Exporter"
-                }) {
+                if args.iter().any(Self::arg_contains_exporter) {
                     return Some(ExporterDetector::UseParentExporter);
                 }
             }
-            // Pattern 3: `our @ISA = qw(Exporter);`
+            // Pattern 3: `use base 'Exporter';` or `use base qw(Exporter ...)`
+            //
+            // `use base` is the older form of `use parent` and is still widely used in
+            // legacy CPAN code. The same qw-normalisation applies.
+            NodeKind::Use { module, args, .. } if module == "base" => {
+                if args.iter().any(Self::arg_contains_exporter) {
+                    return Some(ExporterDetector::UseBaseExporter);
+                }
+            }
+            // Pattern 4a: `our @ISA = qw(Exporter ...);` (declared form)
             NodeKind::VariableDeclaration { variable, initializer: Some(init), .. } => {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
-                    if sigil == "@" && name == "ISA" {
-                        // init is &Box<Node>, pass directly (auto-deref to &Node)
-                        if Self::initializer_contains_exporter(init) {
-                            return Some(ExporterDetector::OurIsaExporter);
-                        }
+                    if sigil == "@" && name == "ISA" && Self::initializer_contains_exporter(init) {
+                        return Some(ExporterDetector::OurIsaExporter);
+                    }
+                }
+            }
+            // Pattern 4b: `@ISA = qw(Exporter ...);` (bare assignment without `our`)
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                if let NodeKind::Variable { sigil, name } = &lhs.kind {
+                    if sigil == "@" && name == "ISA" && Self::initializer_contains_exporter(rhs) {
+                        return Some(ExporterDetector::OurIsaExporter);
                     }
                 }
             }
@@ -134,6 +155,38 @@ impl ExportSymbolExtractor {
         }
 
         None
+    }
+
+    /// Check whether a single `Use` argument string contains `Exporter`.
+    ///
+    /// The parser normalises `qw(Foo Bar)` forms to the string `"qw(Foo Bar)"`.
+    /// Single-quoted module names arrive as `"'Exporter'"`.
+    fn arg_contains_exporter(arg: &String) -> bool {
+        let arg = arg.trim();
+        // Single- or double-quoted: 'Exporter' or "Exporter"
+        if arg.trim_matches('\'').trim_matches('"') == "Exporter" {
+            return true;
+        }
+        // qw(...) normalised form: "qw(Exporter)" or "qw(SomeBase Exporter OtherBase)"
+        if arg.starts_with("qw") {
+            // Find the content between the outer delimiters
+            let open_pos = arg.find(|c: char| !c.is_alphanumeric()).unwrap_or(arg.len());
+            let close = match arg[open_pos..].chars().next() {
+                Some('(') => ')',
+                Some('{') => '}',
+                Some('[') => ']',
+                Some('<') => '>',
+                Some(c) => c,
+                None => return false,
+            };
+            if let (Some(start), Some(end)) =
+                (arg[open_pos..].find(|c: char| !c.is_whitespace()), arg.rfind(close))
+            {
+                let content = &arg[open_pos + start + 1..end];
+                return content.split_whitespace().any(|w| w == "Exporter");
+            }
+        }
+        false
     }
 
     /// Check if an initializer node contains 'Exporter'.
@@ -169,12 +222,12 @@ impl ExportSymbolExtractor {
     /// future pattern-specific extraction logic without changing the interface.
     fn walk_and_extract_exports(ast: &Node, _detector: &ExporterDetector, info: &mut ExportInfo) {
         match &ast.kind {
+            // `our @EXPORT = qw(...)` (declared form)
             NodeKind::VariableDeclaration { variable, initializer: Some(init), .. } => {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     if sigil == "@" {
                         match name.as_str() {
                             "EXPORT" => {
-                                // init is &Box<Node>, auto-derefs to &Node
                                 let symbols = Self::parse_qw_array(init);
                                 info.default_export.extend(symbols);
                             }
@@ -192,6 +245,29 @@ impl ExportSymbolExtractor {
 
                 // Continue walking for nested declarations
                 Self::walk_and_extract_exports(init, _detector, info);
+            }
+            // `@EXPORT = qw(...)` (bare assignment without `our`)
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                if let NodeKind::Variable { sigil, name } = &lhs.kind {
+                    if sigil == "@" {
+                        match name.as_str() {
+                            "EXPORT" => {
+                                let symbols = Self::parse_qw_array(rhs);
+                                info.default_export.extend(symbols);
+                            }
+                            "EXPORT_OK" => {
+                                let symbols = Self::parse_qw_array(rhs);
+                                info.optional_export.extend(symbols);
+                            }
+                            _ => {}
+                        }
+                    } else if sigil == "%" && name == "EXPORT_TAGS" {
+                        let tags = Self::parse_export_tags(rhs);
+                        info.export_tags.extend(tags);
+                    }
+                }
+                // Walk into rhs for nested assignments
+                Self::walk_and_extract_exports(rhs, _detector, info);
             }
             _ => {
                 // Walk children
@@ -282,19 +358,13 @@ impl ExportSymbolExtractor {
         match &node.kind {
             // HashLiteral: `{ key => value, ... }`
             NodeKind::HashLiteral { pairs } => {
-                let mut i = 0;
-                while i < pairs.len() {
-                    let (key_node, value_node) = &pairs[i];
-
-                    // Get the tag name from the key
+                for (key_node, value_node) in pairs {
                     if let Some(tag_name) = Self::extract_string_value(key_node) {
-                        // The value should be an ArrayLiteral containing symbol names
                         let symbols = Self::parse_qw_array(value_node);
                         if !symbols.is_empty() {
                             tags.insert(tag_name, symbols);
                         }
                     }
-                    i += 1;
                 }
             }
             // If it's not a HashLiteral, try to walk children to find hash pairs
@@ -310,17 +380,13 @@ impl ExportSymbolExtractor {
     fn walk_and_extract_export_tags(node: &Node, tags: &mut HashMap<String, Vec<String>>) {
         match &node.kind {
             NodeKind::HashLiteral { pairs } => {
-                let mut i = 0;
-                while i < pairs.len() {
-                    let (key_node, value_node) = &pairs[i];
-
+                for (key_node, value_node) in pairs {
                     if let Some(tag_name) = Self::extract_string_value(key_node) {
                         let symbols = Self::parse_qw_array(value_node);
                         if !symbols.is_empty() {
                             tags.insert(tag_name, symbols);
                         }
                     }
-                    i += 1;
                 }
             }
             _ => {
@@ -344,72 +410,12 @@ impl ExportSymbolExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::NodeKind;
     use crate::Parser;
 
     fn parse_and_extract(code: &str) -> Option<ExportInfo> {
         let mut parser = Parser::new(code);
         let ast = parser.parse().ok()?;
         ExportSymbolExtractor::extract(&ast)
-    }
-
-    #[test]
-    fn debug_ast_structure() {
-        let code = r#"
-package MyModule;
-use Exporter 'import';
-our %EXPORT_TAGS = (
-    tag1 => [qw(tag_a tag_b)],
-);
-1;
-"#;
-        let mut parser = Parser::new(code);
-        let ast = parser.parse().expect("parse should succeed");
-
-        // Walk and print node kinds
-        fn walk(node: &crate::Node, depth: usize) {
-            let indent = "  ".repeat(depth);
-            eprintln!("{}{:?}", indent, node.kind.kind_name());
-            // Print details for key node types
-            match &node.kind {
-                NodeKind::VariableDeclaration { variable, initializer, .. } => {
-                    if let NodeKind::Variable { sigil, name } = &variable.kind {
-                        eprintln!("{}  variable: {}{}", indent, sigil, name);
-                    }
-                    if let Some(init) = initializer {
-                        eprintln!("{}  initializer: {:?}", indent, init.kind.kind_name());
-                    }
-                }
-                NodeKind::HashLiteral { pairs } => {
-                    eprintln!("{}  HashLiteral with {} pairs", indent, pairs.len());
-                    for (i, (k, v)) in pairs.iter().enumerate() {
-                        eprintln!(
-                            "{}    pair[{}]: key_kind={:?}, value_kind={:?}",
-                            indent,
-                            i,
-                            k.kind.kind_name(),
-                            v.kind.kind_name()
-                        );
-                    }
-                }
-                NodeKind::ArrayLiteral { elements } => {
-                    eprintln!("{}  ArrayLiteral with {} elements", indent, elements.len());
-                }
-                _ => {}
-            }
-            for child in node.children() {
-                walk(child, depth + 1);
-            }
-        }
-        walk(&ast, 0);
-
-        // Now try extraction
-        let info = ExportSymbolExtractor::extract(&ast);
-        eprintln!("Export info: {:?}", info);
-        assert!(info.is_some());
-        let info = info.unwrap();
-        eprintln!("export_tags: {:?}", info.export_tags);
-        assert_eq!(info.export_tags.len(), 1);
     }
 
     #[test]
@@ -442,6 +448,50 @@ our @EXPORT = qw(default_func);
     }
 
     #[test]
+    fn test_detect_use_parent_exporter_qw_form() {
+        // `use parent qw(Exporter)` is common; the parser normalises qw to "qw(Exporter)".
+        let code = r#"
+package MyModule;
+use parent qw(Exporter);
+our @EXPORT = qw(qw_parent_func);
+1;
+"#;
+        let info = parse_and_extract(code);
+        assert!(info.is_some(), "Should detect `use parent qw(Exporter)` as Exporter-based");
+        let info = info.unwrap();
+        assert!(info.default_export.contains("qw_parent_func"));
+    }
+
+    #[test]
+    fn test_detect_use_base_exporter() {
+        // `use base` is the older equivalent of `use parent`.
+        let code = r#"
+package Legacy;
+use base 'Exporter';
+our @EXPORT = qw(legacy_func);
+1;
+"#;
+        let info = parse_and_extract(code);
+        assert!(info.is_some(), "Should detect `use base 'Exporter'` as Exporter-based");
+        let info = info.unwrap();
+        assert!(info.default_export.contains("legacy_func"));
+    }
+
+    #[test]
+    fn test_detect_use_base_exporter_qw_form() {
+        let code = r#"
+package Legacy;
+use base qw(Exporter SomeOtherBase);
+our @EXPORT = qw(base_qw_func);
+1;
+"#;
+        let info = parse_and_extract(code);
+        assert!(info.is_some(), "Should detect `use base qw(Exporter ...)` as Exporter-based");
+        let info = info.unwrap();
+        assert!(info.default_export.contains("base_qw_func"));
+    }
+
+    #[test]
     fn test_detect_our_isa_exporter() {
         let code = r#"
 package MyClass;
@@ -453,6 +503,24 @@ our @EXPORT = qw(inherited_func);
         assert!(info.is_some(), "Should detect @ISA Exporter");
         let info = info.unwrap();
         assert!(info.default_export.contains("inherited_func"));
+    }
+
+    #[test]
+    fn test_detect_bare_isa_assignment() {
+        // `@ISA = qw(Exporter)` without `our` is common in older Perl code.
+        let code = r#"
+package OldStyle;
+@ISA = qw(Exporter);
+@EXPORT = qw(old_func);
+1;
+"#;
+        let info = parse_and_extract(code);
+        assert!(info.is_some(), "Should detect bare `@ISA = qw(Exporter)` form");
+        let info = info.unwrap();
+        assert!(
+            info.default_export.contains("old_func"),
+            "Should extract @EXPORT from bare assignment form"
+        );
     }
 
     #[test]
@@ -495,16 +563,18 @@ our %EXPORT_TAGS = (
 
     #[test]
     fn test_no_exporter_no_extraction() {
+        // Without any Exporter inheritance pattern, the extractor must return None.
+        // A bare @EXPORT without use Exporter / use parent / @ISA is not enough.
         let code = r#"
 package MyModule;
 our @EXPORT = qw(not_exported);
 1;
 "#;
         let info = parse_and_extract(code);
-        // Without Exporter inheritance, no export info should be extracted
-        // because we don't want false positives
         assert!(
-            info.is_none() || info.as_ref().map(|i| i.default_export.is_empty()).unwrap_or(false)
+            info.is_none(),
+            "Should return None when no Exporter inheritance is detected, got {:?}",
+            info
         );
     }
 
@@ -565,5 +635,20 @@ our @EXPORT = qw(legacy_func);
             info.default_export.contains("legacy_func"),
             "Should extract @EXPORT symbols from bare use Exporter; module"
         );
+    }
+
+    #[test]
+    fn test_isa_with_multiple_parents_includes_exporter() {
+        // When Exporter is one of multiple @ISA entries it must still be detected.
+        let code = r#"
+package Multi;
+our @ISA = qw(SomeBase Exporter OtherBase);
+our @EXPORT = qw(multi_func);
+1;
+"#;
+        let info = parse_and_extract(code);
+        assert!(info.is_some(), "Should detect Exporter even when mixed with other @ISA parents");
+        let info = info.unwrap();
+        assert!(info.default_export.contains("multi_func"));
     }
 }

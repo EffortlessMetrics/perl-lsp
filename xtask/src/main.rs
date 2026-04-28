@@ -12,11 +12,15 @@ mod types;
 mod utils;
 use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
-use tasks::gates::{GateTier, OutputFormat};
+use tasks::gate_policy::GatePolicyCommand;
+use tasks::gates::{GateTier, OutputFormat as GatesOutputFormat};
+use tasks::methodology_gate::MethodologyOutputFormat;
 use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
 use tasks::ux_scorecard::UxScorecardFormat;
+use tasks::workflow_trigger_lint::WorkflowTriggerLintFormat;
+use tasks::worktree_allocator::AgentWorktreeCommand;
 use tasks::*;
 use types::TestSuite;
 #[cfg(any(feature = "legacy", feature = "parser-tasks"))]
@@ -349,6 +353,36 @@ enum Commands {
     /// Audit CI workflows for PR-safety and spend-risk controls.
     CiAuditWorkflows,
 
+    /// Lint GitHub workflow security policy invariants.
+    WorkflowPolicyLint {
+        /// Write a JSON receipt artifact for CI consumption.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Lint a single workflow fixture instead of repository workflows.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+
+    /// Lint required workflow triggers against policy.
+    WorkflowTriggerLint {
+        /// Policy TOML path listing conventional required checks.
+        #[arg(long)]
+        policy: Option<PathBuf>,
+
+        /// Optional receipt output path (JSON).
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Validate a single workflow fixture file instead of policy workflows.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Output format.
+        #[arg(long, value_enum, default_value = "text")]
+        format: WorkflowTriggerLintFormat,
+    },
+
     /// Measure CI lane runtimes and emit timing artifacts.
     CiMeasure,
 
@@ -477,6 +511,12 @@ enum Commands {
         /// Apply label updates instead of dry run.
         #[arg(long)]
         apply: bool,
+    },
+
+    /// Queue automation commands.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
     },
 
     /// Generate bindings
@@ -825,6 +865,32 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Compare parser corpus metrics between base and candidate commits.
+    ParserRatchet {
+        /// Profile in .ci/parser-ratchet/profiles/<profile>.toml
+        #[arg(long)]
+        profile: Option<String>,
+
+        /// Base commit SHA for comparison mode.
+        #[arg(long)]
+        base: Option<String>,
+
+        /// Candidate commit SHA for comparison mode.
+        #[arg(long)]
+        head: Option<String>,
+
+        /// Manifest path used for both base and candidate sweeps.
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+
+        /// Receipt path to write comparator result JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        #[command(subcommand)]
+        command: Option<ParserRatchetCommand>,
+    },
+
     /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
     CpanCorpus {
         #[command(subcommand)]
@@ -853,6 +919,41 @@ enum Commands {
         test_threads: u32,
     },
 
+    /// Aggregate CI subreceipt fragments into one stable final receipt.
+    AggregateReceipts {
+        /// Stable final check name.
+        #[arg(long)]
+        check: String,
+        /// Input directory containing subreceipt JSON files.
+        #[arg(long)]
+        inputs: PathBuf,
+        /// Output path for aggregate receipt JSON.
+        #[arg(long)]
+        output: PathBuf,
+        /// Allow required lanes to no-op without failing the final check.
+        #[arg(long, default_value_t = true)]
+        allow_noop: bool,
+    },
+
+    /// Compute final pass/fail outcome from an aggregate receipt.
+    FinalizeCheck {
+        /// Path to aggregate receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+        /// Allow required lanes to no-op without failing the final check.
+        #[arg(long, default_value_t = true)]
+        allow_noop: bool,
+        /// Treat advisory warnings/failures as fatal.
+        #[arg(long, default_value_t = false)]
+        fail_on_advisory: bool,
+    },
+
+    /// Emit, verify, and reconcile SHA-bound merge-readiness receipts.
+    MergeReady {
+        #[command(subcommand)]
+        command: MergeReadyCommand,
+    },
+
     /// Track ignored tests and enforce gate policy
     IgnoredTests {
         /// Write current counts back to baseline
@@ -864,6 +965,18 @@ enum Commands {
         /// Print detailed per-category breakdown
         #[arg(long, short)]
         verbose: bool,
+    },
+
+    /// Manage gate receipt schema registry and validate receipt payloads.
+    GateReceipts {
+        #[command(subcommand)]
+        command: GateReceiptsCommand,
+    },
+
+    /// Inspect and validate effective gate policy profiles.
+    GatePolicy {
+        #[command(subcommand)]
+        command: GatePolicyCommand,
     },
 
     /// Show technical debt report from debt ledger
@@ -895,10 +1008,37 @@ enum Commands {
     /// Check invariants in features.toml
     DocClaims,
 
+    /// Validate PR intent/title/body against changed paths and closeout evidence.
+    IntentDiffGate {
+        /// Pull request number to inspect via `gh pr view`.
+        #[arg(long)]
+        pr: Option<u64>,
+
+        /// Load PR metadata from a local JSON fixture file.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Output receipt path (default: target/receipts/intent-diff-gate.json).
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+
     /// Manage feature catalog and LSP compliance
     Features {
         #[command(subcommand)]
         command: FeaturesCommand,
+    },
+
+    /// Agent lease + receipt primitives for disconnected orchestration.
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
+
+    /// Classify failed CI receipts into typed fix-forward playbooks.
+    FixForward {
+        #[command(subcommand)]
+        command: FixForwardCommand,
     },
 
     /// Update derived metrics in docs/project/status/ subsystem files.
@@ -1032,7 +1172,7 @@ enum Commands {
 
         /// Output format (default: human)
         #[arg(long, short, value_enum, default_value = "human")]
-        format: OutputFormat,
+        format: GatesOutputFormat,
 
         /// Emit receipt JSON (also writes to target/receipts/receipt.json)
         #[arg(long, short)]
@@ -1057,6 +1197,33 @@ enum Commands {
         /// Verbose output (include quarantined gates)
         #[arg(long, short)]
         verbose: bool,
+    },
+
+    /// Detect contradictory PR label states and emit a methodology receipt.
+    MethodologyGate {
+        /// Fixture JSON file (local snapshot or GitHub event payload).
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Pull request number to inspect via gh CLI.
+        #[arg(long)]
+        pr: Option<u64>,
+
+        /// Path to output receipt JSON.
+        #[arg(long, default_value = "target/receipts/methodology-gate.json")]
+        receipt: PathBuf,
+
+        /// Do not write receipt to disk.
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Enforce mode: contradictory states fail the command.
+        #[arg(long)]
+        enforce: bool,
+
+        /// Output format.
+        #[arg(long, value_enum, default_value = "human")]
+        format: MethodologyOutputFormat,
     },
 
     /// Verify hook scripts are executable.
@@ -1151,6 +1318,168 @@ enum Commands {
         baseline: PathBuf,
         /// Current receipt JSON path.
         current: PathBuf,
+    },
+
+    /// Validate generated-file ownership and associated receipts.
+    GeneratedFiles {
+        #[command(subcommand)]
+        command: GeneratedFilesCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum GeneratedFilesCommand {
+    /// List generated-file ownership rules.
+    List {
+        /// Optional fixture JSON for deterministic tests.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+    /// Check changed generated files for matching generator receipts.
+    Check {
+        /// Path where generated-file receipt JSON is written.
+        #[arg(long, default_value = "target/receipts/generated-files.json")]
+        receipt: PathBuf,
+        /// Optional fixture JSON for deterministic tests.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+        /// Path(s) to generator receipt JSON artifacts.
+        #[arg(long = "generator-receipt")]
+        generator_receipt: Vec<PathBuf>,
+        /// Explicit override for manual edits in this run.
+        #[arg(long)]
+        allow_manual_edits: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ParserRatchetCommand {
+    /// Compare precomputed base/head metric receipts.
+    Compare {
+        #[arg(long)]
+        base_metrics: PathBuf,
+        #[arg(long)]
+        head_metrics: PathBuf,
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum MergeReadyCommand {
+    /// Emit a merge-readiness receipt for a PR.
+    Emit {
+        /// Pull request number.
+        #[arg(long)]
+        pr: u64,
+        /// Output path for receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+    /// Verify receipt freshness and verdict.
+    Verify {
+        /// Pull request number (advisory context).
+        #[arg(long)]
+        pr: Option<u64>,
+        /// Verify a fixture file instead of the default receipt path.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+    /// Reconcile merge-ready label state from receipts.
+    Reconcile {
+        /// Apply changes (default is advisory dry-run).
+        #[arg(long)]
+        apply: bool,
+        /// Force dry-run mode.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Scan all open PRs and resolve label contradictions queue-wide.
+    ///
+    /// Uses live CI state for ci-green/needs-ci-fix decisions, and
+    /// "later-applied wins" timeline logic for other contradiction pairs.
+    /// Apply mode is the default; pass --dry-run for advisory mode.
+    ReconcileQueue {
+        /// Apply label changes (default when neither flag given).
+        #[arg(long)]
+        apply: bool,
+        /// Dry-run: report what would change without applying.
+        #[arg(long, conflicts_with = "apply")]
+        dry_run: bool,
+        /// Limit to a single PR number (useful for testing).
+        #[arg(long)]
+        pr: Option<u64>,
+        /// Output path for the queue-reconcile.json receipt.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum FixForwardCommand {
+    /// Classify a failing receipt into a typed fix-forward playbook.
+    Classify {
+        /// Path to a CI receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+
+        /// Output path for fix-forward receipt JSON.
+        #[arg(long)]
+        output: PathBuf,
+    },
+
+    /// List configured fix-forward playbooks.
+    ListPlaybooks,
+}
+
+#[derive(Subcommand)]
+enum AgentCommand {
+    /// Lease lifecycle commands.
+    Lease {
+        #[command(subcommand)]
+        command: AgentLeaseCommand,
+    },
+    /// Receipt commands.
+    Receipt {
+        #[command(subcommand)]
+        command: AgentReceiptCommand,
+    },
+    /// Manage leased local worktrees for agent orchestration.
+    Worktree {
+        #[command(subcommand)]
+        command: AgentWorktreeCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentLeaseCommand {
+    /// Acquire a lease from a typed task JSON.
+    Acquire {
+        /// Path to task JSON.
+        #[arg(long)]
+        task: PathBuf,
+        /// Path to write lease JSON.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Verify lease against current snapshot state.
+    Verify {
+        /// Path to lease JSON.
+        #[arg(long)]
+        lease: PathBuf,
+        /// Path to current snapshot JSON.
+        #[arg(long)]
+        current: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentReceiptCommand {
+    /// Validate a receipt against its lease and mutation rules.
+    Validate {
+        /// Path to receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
     },
 }
 
@@ -1301,6 +1630,86 @@ enum MetricsCommand {
         #[arg(long)]
         input: Option<PathBuf>,
     },
+}
+
+#[derive(Subcommand)]
+enum QueueCommand {
+    /// Capture the open PR queue into a stable JSON snapshot document.
+    Snapshot {
+        /// Output file for the generated snapshot JSON.
+        #[arg(long)]
+        out: PathBuf,
+
+        /// Optional fixture JSON to parse instead of live GitHub data.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+
+    /// Classify master queue health into GREEN/PENDING/RED modes.
+    Health {
+        /// Output path for queue-health receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Fixture JSON input for deterministic health classification.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+
+    /// Project labels from canonical queue state (dry-run default).
+    ProjectLabels {
+        /// Path to queue-state receipt JSON.
+        #[arg(long)]
+        state: PathBuf,
+
+        /// Explicit dry-run mode (default when --apply is not present).
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Apply projected labels through GitHub API.
+        #[arg(long)]
+        apply: bool,
+
+        /// Optional projection receipt output (used in dry-run mode).
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Projection rule config TOML path.
+        #[arg(long, default_value = ".ci/state/label-projection.toml")]
+        config: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum GateReceiptsCommand {
+    /// List registered receipt schemas.
+    List {
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+    /// Validate a single receipt JSON file.
+    Validate {
+        /// Path to receipt JSON file.
+        path: PathBuf,
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+    /// Validate all receipt JSON files under a directory.
+    ValidateAll {
+        /// Root directory containing receipt JSON files.
+        dir: PathBuf,
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum GateReceiptsFormat {
+    Human,
+    Json,
 }
 
 #[derive(ValueEnum, Clone)]
@@ -1454,6 +1863,15 @@ fn main() -> Result<()> {
         }
         Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
         Commands::CiAuditWorkflows => ci_audit_workflows::run(),
+        Commands::WorkflowPolicyLint { receipt, fixture } => {
+            workflow_policy_lint::run(workflow_policy_lint::WorkflowPolicyLintConfig {
+                receipt,
+                fixture,
+            })
+        }
+        Commands::WorkflowTriggerLint { policy, receipt, fixture, format } => {
+            workflow_trigger_lint::run(policy, receipt, fixture, format)
+        }
         Commands::CiMeasure => ci_measure::run(),
         Commands::CiCostMonitor { days, json } => ci_metrics::run_cost_monitor(days, json),
         Commands::CiBaseline { branch, days, limit, output } => {
@@ -1477,6 +1895,21 @@ fn main() -> Result<()> {
         Commands::GhLabels => github::run_labels(),
         Commands::GhTriage { limit } => github::run_issues_needing_triage(limit),
         Commands::GhBackfillPrefixedLabels { apply } => github::run_backfill_prefixed_labels(apply),
+        Commands::Queue { command } => match command {
+            QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
+            QueueCommand::Health { receipt, fixture } => {
+                queue_health::run(queue_health::QueueHealthArgs { receipt, fixture })
+            }
+            QueueCommand::ProjectLabels { state, dry_run, apply, receipt, config } => {
+                label_projector::run_project_labels(label_projector::LabelProjectorArgs {
+                    state,
+                    dry_run,
+                    apply,
+                    receipt,
+                    config,
+                })
+            }
+        },
         Commands::CorpusAudit { corpus_path, output, check, fresh } => {
             corpus_audit::run(corpus_audit::AuditConfig {
                 corpus_path,
@@ -1571,6 +2004,31 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Commands::ParserRatchet { profile, base, head, manifest, receipt, command } => {
+            match command {
+                Some(ParserRatchetCommand::Compare { base_metrics, head_metrics, receipt }) => {
+                    parser_ratchet_compare::run_compare(parser_ratchet_compare::CompareConfig {
+                        base_metrics,
+                        head_metrics,
+                        receipt,
+                    })
+                }
+                None => {
+                    let profile = profile.ok_or_else(|| eyre!("--profile is required"))?;
+                    let base_sha = base.ok_or_else(|| eyre!("--base is required"))?;
+                    let head_sha = head.ok_or_else(|| eyre!("--head is required"))?;
+                    let manifest = manifest.ok_or_else(|| eyre!("--manifest is required"))?;
+                    let receipt = receipt.ok_or_else(|| eyre!("--receipt is required"))?;
+                    parser_ratchet::run(parser_ratchet::ParserRatchetConfig {
+                        profile,
+                        base_sha,
+                        head_sha,
+                        manifest,
+                        receipt,
+                    })
+                }
+            }
+        }
         Commands::Receipts { tests_only, docs_only, output_dir, test_threads } => {
             receipts::run(receipts::ReceiptsConfig {
                 tests_only,
@@ -1579,6 +2037,34 @@ fn main() -> Result<()> {
                 test_threads,
             })
         }
+        Commands::AggregateReceipts { check, inputs, output, allow_noop } => {
+            aggregate_receipts::run(aggregate_receipts::AggregateReceiptsConfig {
+                check,
+                inputs,
+                output,
+                allow_noop,
+            })
+        }
+        Commands::FinalizeCheck { receipt, allow_noop, fail_on_advisory } => {
+            finalize_check::run(finalize_check::FinalizeCheckConfig {
+                receipt,
+                allow_noop,
+                fail_on_advisory,
+            })
+        }
+        Commands::MergeReady { command } => match command {
+            MergeReadyCommand::Emit { pr, receipt } => merge_ready::emit(pr, receipt),
+            MergeReadyCommand::Verify { pr, fixture } => merge_ready::verify(pr, fixture),
+            MergeReadyCommand::Reconcile { apply, dry_run } => {
+                let run_dry = !apply || dry_run;
+                merge_ready::reconcile(run_dry)
+            }
+            MergeReadyCommand::ReconcileQueue { apply: _, dry_run, pr, receipt } => {
+                // Apply is the default. Only switch to dry-run when --dry-run is explicitly passed.
+                let do_apply = !dry_run;
+                queue_reconciler::reconcile_queue(do_apply, pr, receipt)
+            }
+        },
         Commands::IgnoredTests { update, check, verbose } => {
             ignored_tests::run(update, check, verbose)
         }
@@ -1592,11 +2078,32 @@ fn main() -> Result<()> {
             })
         }
         Commands::DocClaims => doc_claims::run(),
+        Commands::IntentDiffGate { pr, fixture, receipt } => {
+            intent_diff_gate::run(intent_diff_gate::IntentDiffGateConfig { pr, fixture, receipt })
+        }
         Commands::Features { command } => match command {
             FeaturesCommand::SyncDocs => features::sync_docs(),
             FeaturesCommand::Verify => features::verify(),
             FeaturesCommand::Invariants => features::invariants(),
             FeaturesCommand::Report => features::report(),
+        },
+        Commands::Agent { command } => match command {
+            AgentCommand::Lease { command } => match command {
+                AgentLeaseCommand::Acquire { task, out } => agent_lease::acquire(&task, &out),
+                AgentLeaseCommand::Verify { lease, current } => {
+                    agent_lease::verify(&lease, &current)
+                }
+            },
+            AgentCommand::Receipt { command } => match command {
+                AgentReceiptCommand::Validate { receipt } => agent_receipt::validate(&receipt),
+            },
+            AgentCommand::Worktree { command } => worktree_allocator::run(command),
+        },
+        Commands::FixForward { command } => match command {
+            FixForwardCommand::Classify { receipt, output } => {
+                fix_forward::classify(receipt, output)
+            }
+            FixForwardCommand::ListPlaybooks => fix_forward::list_playbooks(),
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
@@ -1663,6 +2170,31 @@ fn main() -> Result<()> {
             parallel,
             verbose,
         }),
+        Commands::GateReceipts { command } => match command {
+            GateReceiptsCommand::List { format } => {
+                gate_receipts::list(convert_gate_receipts_format(format))
+                    .map_err(|error| eyre!(error.to_string()))
+            }
+            GateReceiptsCommand::Validate { path, format } => {
+                gate_receipts::validate(&path, convert_gate_receipts_format(format))
+                    .map_err(|error| eyre!(error.to_string()))
+            }
+            GateReceiptsCommand::ValidateAll { dir, format } => {
+                gate_receipts::validate_all(&dir, convert_gate_receipts_format(format))
+                    .map_err(|error| eyre!(error.to_string()))
+            }
+        },
+        Commands::GatePolicy { command } => gate_policy::run(command),
+        Commands::MethodologyGate { fixture, pr, receipt, dry_run, enforce, format } => {
+            methodology_gate::run(methodology_gate::MethodologyGateConfig {
+                fixture,
+                pr,
+                receipt,
+                dry_run,
+                enforce,
+                format,
+            })
+        }
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
         Commands::ResolvePackageName { crate_dir } => {
             // Use the current working directory as workspace root so this subcommand
@@ -1686,6 +2218,15 @@ fn main() -> Result<()> {
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }
+        Commands::GeneratedFiles { command } => match command {
+            GeneratedFilesCommand::List { fixture } => generated_files::list(fixture),
+            GeneratedFilesCommand::Check {
+                receipt,
+                fixture,
+                generator_receipt,
+                allow_manual_edits,
+            } => generated_files::check(receipt, fixture, generator_receipt, allow_manual_edits),
+        },
     }
 }
 
@@ -1698,5 +2239,12 @@ fn print_top_level_commands() {
 
     for command_name in command_names {
         println!("{command_name}");
+    }
+}
+
+fn convert_gate_receipts_format(format: GateReceiptsFormat) -> gate_receipts::OutputFormat {
+    match format {
+        GateReceiptsFormat::Human => gate_receipts::OutputFormat::Human,
+        GateReceiptsFormat::Json => gate_receipts::OutputFormat::Json,
     }
 }

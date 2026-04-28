@@ -5,7 +5,7 @@ import { execFile } from 'child_process';
 import { LanguageClient, TransportKind, Trace } from 'vscode-languageclient/node';
 import type { LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
-import { activateDebugger, rewriteDebugTestLensCommand } from './debugAdapter';
+import { activateDebugger, rewriteTestLensCommand, parseDebugTestLaunchTarget } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
 import { OnboardingManager } from './onboarding';
 import { WhatsNewManager } from './whatsNew';
@@ -344,15 +344,27 @@ export async function activate(context: vscode.ExtensionContext) {
         await vscode.commands.executeCommand('editor.action.organizeImports');
     });
 
-    const runTestsCommand = vscode.commands.registerCommand('perl-lsp.runTests', async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor || editor.document.languageId !== 'perl') {
-            vscode.window.showErrorMessage('No active Perl file to test');
-            return;
+    const runTestsCommand = vscode.commands.registerCommand('perl-lsp.runTests', async (test?: unknown) => {
+        let targetUri: vscode.Uri | undefined;
+
+        if (test) {
+            const target = parseDebugTestLaunchTarget(test);
+            if (target && target.program) {
+                targetUri = vscode.Uri.file(target.program);
+            }
+        }
+
+        if (!targetUri) {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor || editor.document.languageId !== 'perl') {
+                vscode.window.showErrorMessage('No active Perl file to test');
+                return;
+            }
+            targetUri = editor.document.uri;
         }
 
         // Restrict to test files (.t, .pl) - .pm files are modules, not test scripts
-        const filePath = editor.document.uri.fsPath;
+        const filePath = targetUri.fsPath;
         if (!filePath.endsWith('.t') && !filePath.endsWith('.pl')) {
             vscode.window.showWarningMessage('Run Tests is only available for .t and .pl files');
             return;
@@ -370,7 +382,7 @@ export async function activate(context: vscode.ExtensionContext) {
             }
 
             try {
-                await testAdapter.runFileTests(editor.document.uri);
+                await testAdapter.runFileTests(targetUri);
             } finally {
                 // Restore original state
                 if (statusBarItem && originalText) {
@@ -1191,11 +1203,11 @@ function createLanguageClient(serverPath: string): LanguageClient {
         middleware: {
             provideCodeLenses: async (document, token, next) => {
                 const lenses = await next(document, token);
-                return lenses?.map(rewriteDebugTestLensCommand);
+                return lenses?.map(rewriteTestLensCommand);
             },
             resolveCodeLens: async (codeLens, token, next) => {
                 const resolved = await next(codeLens, token);
-                return rewriteDebugTestLensCommand(resolved ?? codeLens);
+                return rewriteTestLensCommand(resolved ?? codeLens);
             },
             provideDocumentFormattingEdits: async (document, options, token, next) => {
                 try {
@@ -1580,10 +1592,39 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
         return;
     }
 
+    const isWithinBasePath = (basePath: string, targetPath: string): boolean => {
+        const relative = path.relative(basePath, targetPath);
+        return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+    };
+
+    const hasSafeExistingAncestor = (workspaceRealPath: string, candidatePath: string): boolean => {
+        let current = candidatePath;
+        while (!fs.existsSync(current)) {
+            const parent = path.dirname(current);
+            if (parent === current) {
+                return false;
+            }
+            current = parent;
+        }
+
+        try {
+            const ancestorRealPath = fs.realpathSync(current);
+            return isWithinBasePath(workspaceRealPath, ancestorRealPath);
+        } catch {
+            return false;
+        }
+    };
+
     for (const folder of workspaceFolders) {
         const cacheKey = `perl-lsp.includePathsWarning.${encodeURIComponent(folder.uri.toString())}`;
         const config = vscode.workspace.getConfiguration('perl-lsp', folder.uri);
         const includePaths: string[] = config.get('includePaths', ['lib', 'local/lib/perl5']);
+        let workspaceRealPath: string;
+        try {
+            workspaceRealPath = fs.realpathSync(folder.uri.fsPath);
+        } catch {
+            continue;
+        }
         const missingPaths = includePaths.filter(includePath => {
             const resolved = path.resolve(folder.uri.fsPath, includePath);
             return !fs.existsSync(resolved);
@@ -1615,7 +1656,11 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
             }
             const resolved = path.resolve(folder.uri.fsPath, includePath);
             const relative = path.relative(folder.uri.fsPath, resolved);
-            return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+            if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+                return false;
+            }
+
+            return hasSafeExistingAncestor(workspaceRealPath, resolved);
         });
         const actions = ['Open Settings'];
         if (creatablePaths.length > 0) {
@@ -1636,7 +1681,7 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
             const createdPaths: string[] = [];
             for (const includePath of creatablePaths) {
                 const resolved = path.resolve(folder.uri.fsPath, includePath);
-                if (!fs.existsSync(resolved)) {
+                if (!fs.existsSync(resolved) && hasSafeExistingAncestor(workspaceRealPath, resolved)) {
                     fs.mkdirSync(resolved, { recursive: true });
                     createdPaths.push(includePath);
                 }
