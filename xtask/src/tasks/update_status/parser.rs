@@ -429,15 +429,13 @@ mod tests {
 
             let begin_count = parser_status.match_indices(&begin_marker).count();
             assert_eq!(
-                begin_count,
-                1,
+                begin_count, 1,
                 "missing or duplicate marker in {target_file}: expected BEGIN marker exactly once: `{begin_marker}`; found {begin_count}"
             );
 
             let end_count = parser_status.match_indices(&end_marker).count();
             assert_eq!(
-                end_count,
-                1,
+                end_count, 1,
                 "missing or duplicate marker in {target_file}: expected END marker exactly once: `{end_marker}`; found {end_count}"
             );
         }
