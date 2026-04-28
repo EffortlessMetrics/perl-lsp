@@ -1,0 +1,309 @@
+# Durable concept registry seeds for perl-corpus.
+
+[[concepts]]
+id = "parser.package.declaration"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["declaration"]
+[concepts.fixtures]
+floors = ["test_corpus/packages_versions.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.sub.named"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["declaration"]
+[concepts.fixtures]
+floors = ["test_corpus/modern_perl_features.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.sub.anonymous"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["closures"]
+[concepts.fixtures]
+floors = ["test_corpus/expressions_and_refs.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.sub.signature"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["signatures"]
+[concepts.fixtures]
+floors = ["test_corpus/signatures_parameters_production_enhanced.pl"]
+variants = ["test_corpus/signatures_prototypes.pl"]
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.variable.my_our_local_state"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["variables"]
+[concepts.fixtures]
+floors = ["test_corpus/basic_constructs.pl"]
+variants = ["test_corpus/variable_list_declaration_comprehensive.pl"]
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.expression.fat_arrow"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["expressions"]
+[concepts.fixtures]
+floors = ["test_corpus/expressions_and_refs.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.expression.range"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["expressions"]
+[concepts.fixtures]
+floors = ["test_corpus/ternary_expressions_comprehensive.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.expression.word_operators"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["expressions"]
+[concepts.fixtures]
+floors = ["test_corpus/basic_constructs.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.hash.array_literals"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["literals"]
+[concepts.fixtures]
+floors = ["test_corpus/expressions_and_refs.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.method_call.arrow"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["method_call"]
+[concepts.fixtures]
+floors = ["test_corpus/clean_class_method.pl"]
+variants = ["test_corpus/gold/completion_method_arrow/fixture.pl"]
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.indirect_object_call"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["ambiguity", "calls"]
+[concepts.fixtures]
+floors = ["test_corpus/edge_cases/ambiguous_syntax_scenarios.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.control_flow.given_when"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["control_flow"]
+[concepts.fixtures]
+floors = ["test_corpus/given_when.pl"]
+variants = ["test_corpus/given_when_default_production_enhanced.pl"]
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.control_flow.try_catch"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["control_flow"]
+[concepts.fixtures]
+floors = ["test_corpus/try_catch.pl"]
+variants = ["test_corpus/try_catch_production_enhanced.pl"]
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.io.open_modes"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["io"]
+[concepts.fixtures]
+floors = ["test_corpus/open_modes_comprehensive.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true

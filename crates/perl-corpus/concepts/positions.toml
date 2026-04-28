@@ -1,0 +1,133 @@
+# Durable concept registry seeds for perl-corpus.
+
+[[concepts]]
+id = "position.byte_span.basic"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-position-tracking", "perl-parser"]
+risk_tags = ["positions"]
+[concepts.fixtures]
+floors = ["test_corpus/basic_constructs.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "position.utf16.non_ascii"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-position-tracking", "perl-parser"]
+risk_tags = ["positions", "unicode"]
+[concepts.fixtures]
+floors = ["test_corpus/edge_cases/unicode_encoding_edge_cases.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "position.crlf.line_index"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-position-tracking", "perl-line-index"]
+risk_tags = ["positions", "crlf"]
+[concepts.fixtures]
+floors = []
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "position.heredoc.body_span"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-position-tracking", "perl-parser"]
+risk_tags = ["positions", "heredoc"]
+[concepts.fixtures]
+floors = ["test_corpus/heredoc_depth.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "position.regex.capture_groups"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-position-tracking", "perl-parser"]
+risk_tags = ["positions", "regex"]
+[concepts.fixtures]
+floors = ["test_corpus/advanced_regex.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "position.package_block_boundaries"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-position-tracking", "perl-parser"]
+risk_tags = ["positions", "declaration"]
+[concepts.fixtures]
+floors = ["test_corpus/packages_versions.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true

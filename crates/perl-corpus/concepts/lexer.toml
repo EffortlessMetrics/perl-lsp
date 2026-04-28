@@ -1,0 +1,177 @@
+# Durable concept registry seeds for perl-corpus.
+
+[[concepts]]
+id = "lexer.regex.literal_vs_division"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-lexer"]
+risk_tags = ["ambiguity", "regex"]
+[concepts.fixtures]
+floors = ["test_corpus/advanced_regex.pl"]
+variants = ["test_corpus/edge_cases/ambiguous_syntax_scenarios.pl"]
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = true
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "lexer.regex.substitution_delimiters"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-lexer"]
+risk_tags = ["regex", "delimiter"]
+[concepts.fixtures]
+floors = ["test_corpus/advanced_regex.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = true
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "lexer.quote_like.q_braces"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-lexer"]
+risk_tags = ["quote_like"]
+[concepts.fixtures]
+floors = ["test_corpus/string_ops_edge_cases.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = true
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "lexer.quote_like.qq_parens"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-lexer"]
+risk_tags = ["quote_like"]
+[concepts.fixtures]
+floors = ["test_corpus/string_ops_edge_cases.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = true
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "lexer.quote_like.qw_words"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-lexer"]
+risk_tags = ["quote_like", "lists"]
+[concepts.fixtures]
+floors = ["test_corpus/string_ops_edge_cases.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = true
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "lexer.heredoc.basic"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-lexer"]
+risk_tags = ["heredoc"]
+[concepts.fixtures]
+floors = ["test_corpus/heredoc_depth.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = true
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "lexer.heredoc.indented"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-lexer"]
+risk_tags = ["heredoc"]
+[concepts.fixtures]
+floors = ["test_corpus/heredoc_depth.pl"]
+variants = ["test_corpus/edge_cases/unicode_encoding_edge_cases.pl"]
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = true
+ast = false
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "lexer.data_section.double_underscore_data"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-lexer"]
+risk_tags = ["data_section"]
+[concepts.fixtures]
+floors = ["test_corpus/basic_constructs.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = true
+ast = false
+spans = false
+[concepts.run]
+pr = true
+nightly = true
+release = true

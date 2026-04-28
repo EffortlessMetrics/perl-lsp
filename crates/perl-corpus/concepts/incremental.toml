@@ -1,0 +1,133 @@
+# Durable concept registry seeds for perl-corpus.
+
+[[concepts]]
+id = "incremental.edit_inside_expression"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-incremental-parsing", "perl-parser"]
+risk_tags = ["incremental", "expressions"]
+[concepts.fixtures]
+floors = ["test_corpus/expressions_and_refs.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "incremental.edit_shifts_following_nodes"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-incremental-parsing", "perl-parser"]
+risk_tags = ["incremental", "positions"]
+[concepts.fixtures]
+floors = ["test_corpus/parser_stress_cases.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "incremental.edit_signature_parameter"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-incremental-parsing", "perl-parser"]
+risk_tags = ["incremental", "signatures"]
+[concepts.fixtures]
+floors = ["test_corpus/signatures_parameters_production_enhanced.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "incremental.edit_method_chain"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-incremental-parsing", "perl-parser"]
+risk_tags = ["incremental", "method_call"]
+[concepts.fixtures]
+floors = ["test_corpus/clean_class_method.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "incremental.edit_regex_delimiter"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-incremental-parsing", "perl-lexer"]
+risk_tags = ["incremental", "regex"]
+[concepts.fixtures]
+floors = ["test_corpus/advanced_regex.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = true
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "incremental.edit_heredoc_anchor"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-incremental-parsing", "perl-lexer"]
+risk_tags = ["incremental", "heredoc"]
+[concepts.fixtures]
+floors = ["test_corpus/heredoc_depth.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "parse"
+[concepts.snapshots]
+tokens = true
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true

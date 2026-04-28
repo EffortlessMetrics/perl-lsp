@@ -221,6 +221,7 @@
 
 pub mod cases;
 pub mod codegen;
+pub mod concepts;
 pub mod continue_redo;
 pub mod files;
 pub mod format_statements;
@@ -240,6 +241,10 @@ pub use cases::{
 pub use codegen::{
     CodegenOptions, StatementKind, generate_perl_code, generate_perl_code_with_options,
     generate_perl_code_with_seed, generate_perl_code_with_statements,
+};
+pub use concepts::{
+    ConceptMode, ConceptRegistry, ConceptRow, ConceptStatus, load_concept_registry,
+    load_concept_registry_from_dir,
 };
 pub use continue_redo::{
     ContinueRedoCase, cases_by_tag as continue_redo_cases_by_tag, continue_redo_cases,

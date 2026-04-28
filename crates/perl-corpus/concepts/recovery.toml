@@ -1,0 +1,155 @@
+# Durable concept registry seeds for perl-corpus.
+
+[[concepts]]
+id = "parser.recovery.missing_closing_brace"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["recovery"]
+[concepts.fixtures]
+floors = ["test_corpus/edge_cases/error_recovery_edge_cases.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "recover"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.recovery.missing_paren"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["recovery"]
+[concepts.fixtures]
+floors = ["test_corpus/edge_cases/error_recovery_edge_cases.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "recover"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.recovery.unclosed_quote"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["recovery", "quote_like"]
+[concepts.fixtures]
+floors = ["test_corpus/edge_cases/error_recovery_edge_cases.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "recover"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.recovery.malformed_signature"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["recovery", "signatures"]
+[concepts.fixtures]
+floors = ["test_corpus/edge_cases/error_recovery_edge_cases.pl"]
+variants = ["test_corpus/signatures_prototypes.pl"]
+[concepts.expect]
+panic = false
+timeout = false
+mode = "recover"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.recovery.bad_heredoc_terminator"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser", "perl-lexer"]
+risk_tags = ["recovery", "heredoc"]
+[concepts.fixtures]
+floors = ["test_corpus/heredoc_depth.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "recover"
+[concepts.snapshots]
+tokens = true
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.recovery.unexpected_fat_arrow_rhs"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["recovery", "expressions"]
+[concepts.fixtures]
+floors = ["test_corpus/edge_cases/error_recovery_edge_cases.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "recover"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true
+
+[[concepts]]
+id = "parser.recovery.missing_statement_terminator"
+status = "seeded"
+[concepts.scope]
+crates = ["perl-parser"]
+risk_tags = ["recovery"]
+[concepts.fixtures]
+floors = ["test_corpus/edge_cases/error_recovery_edge_cases.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "recover"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = true
+nightly = true
+release = true

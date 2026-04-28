@@ -1,0 +1,133 @@
+# Durable concept registry seeds for perl-corpus.
+
+[[concepts]]
+id = "tree_sitter.parity.package_decl"
+status = "seeded"
+[concepts.scope]
+crates = ["tree-sitter-perl-rs", "perl-parser"]
+risk_tags = ["tree_sitter", "parity"]
+[concepts.fixtures]
+floors = ["test_corpus/packages_versions.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "compare"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = false
+nightly = true
+release = true
+
+[[concepts]]
+id = "tree_sitter.parity.sub_decl"
+status = "seeded"
+[concepts.scope]
+crates = ["tree-sitter-perl-rs", "perl-parser"]
+risk_tags = ["tree_sitter", "parity"]
+[concepts.fixtures]
+floors = ["test_corpus/modern_perl_features.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "compare"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = false
+nightly = true
+release = true
+
+[[concepts]]
+id = "tree_sitter.parity.method_call_arrow"
+status = "seeded"
+[concepts.scope]
+crates = ["tree-sitter-perl-rs", "perl-parser"]
+risk_tags = ["tree_sitter", "parity"]
+[concepts.fixtures]
+floors = ["test_corpus/clean_class_method.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "compare"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = false
+nightly = true
+release = true
+
+[[concepts]]
+id = "tree_sitter.parity.heredoc"
+status = "seeded"
+[concepts.scope]
+crates = ["tree-sitter-perl-rs", "perl-parser"]
+risk_tags = ["tree_sitter", "parity", "heredoc"]
+[concepts.fixtures]
+floors = ["test_corpus/heredoc_depth.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "compare"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = false
+nightly = true
+release = true
+
+[[concepts]]
+id = "tree_sitter.parity.regex_substitution"
+status = "seeded"
+[concepts.scope]
+crates = ["tree-sitter-perl-rs", "perl-parser"]
+risk_tags = ["tree_sitter", "parity", "regex"]
+[concepts.fixtures]
+floors = ["test_corpus/advanced_regex.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "compare"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = false
+nightly = true
+release = true
+
+[[concepts]]
+id = "tree_sitter.parity.given_when"
+status = "seeded"
+[concepts.scope]
+crates = ["tree-sitter-perl-rs", "perl-parser"]
+risk_tags = ["tree_sitter", "parity"]
+[concepts.fixtures]
+floors = ["test_corpus/given_when.pl"]
+variants = []
+[concepts.expect]
+panic = false
+timeout = false
+mode = "compare"
+[concepts.snapshots]
+tokens = false
+ast = true
+spans = true
+[concepts.run]
+pr = false
+nightly = true
+release = true
