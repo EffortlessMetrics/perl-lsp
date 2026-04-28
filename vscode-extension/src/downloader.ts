@@ -117,10 +117,17 @@ export class BinaryDownloader {
                 // Architecture or OS not supported by the release
                 const platformMatch = /platform:\s*([^\s.]+)/.exec(errorMsg);
                 const platformStr = platformMatch ? platformMatch[1] : 'your platform';
-                message =
-                    `perl-lsp: No pre-built binary for ${platformStr}. ` +
-                    'Build from source or download a compatible binary manually. ' +
-                    manualInstallNote;
+                if (this.isTermuxEnvironment() || platformStr.includes('linux-android')) {
+                    message =
+                        `perl-lsp: No pre-built binary for ${platformStr} (Termux/Android). ` +
+                        'Install from source in Termux (for example: pkg install rust && cargo install --locked --path crates/perllsp), then configure perl-lsp.serverPath. ' +
+                        manualInstallNote;
+                } else {
+                    message =
+                        `perl-lsp: No pre-built binary for ${platformStr}. ` +
+                        'Build from source or download a compatible binary manually. ' +
+                        manualInstallNote;
+                }
                 buttons = ['Install Manually'];
             } else if (errorMsg.includes('HTTP 403')) {
                 // GitHub rate limit or auth failure
@@ -579,7 +586,23 @@ export class BinaryDownloader {
         if (platform === 'darwin') {
             return arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
         } else if (platform === 'linux') {
+            // Check Termux first: isTermuxEnvironment() is the authoritative Termux
+            // detector.  isAndroidEnvironment() also matches TERMUX_VERSION and would
+            // shadow this branch if checked first, routing to the old arch-map path
+            // instead of the uniform `${archPrefix}-linux-android` form.
             const archPrefix = arch === 'arm64' ? 'aarch64' : 'x86_64';
+            if (this.isTermuxEnvironment()) {
+                return `${archPrefix}-linux-android`;
+            }
+            if (this.isAndroidEnvironment()) {
+                const androidArchMap: Record<string, string> = {
+                    arm64: 'aarch64-linux-android',
+                    x64: 'x86_64-linux-android',
+                    ia32: 'i686-linux-android',
+                    arm: 'armv7-linux-androideabi'
+                };
+                return androidArchMap[arch] ?? `${arch}-linux-android`;
+            }
             const libc = this.detectMusl() ? 'musl' : 'gnu';
             return `${archPrefix}-unknown-linux-${libc}`;
         } else if (platform === 'win32') {
@@ -603,6 +626,19 @@ export class BinaryDownloader {
         
         return `${rustArch}-${rustPlatform}`;
     }
+
+    private isAndroidEnvironment(): boolean {
+        if (process.platform !== 'linux') {
+            return false;
+        }
+
+        return (
+            typeof process.env.ANDROID_ROOT === 'string' ||
+            typeof process.env.ANDROID_DATA === 'string' ||
+            typeof process.env.TERMUX_VERSION === 'string' ||
+            os.release().toLowerCase().includes('android')
+        );
+    }
     
     private detectMusl(): boolean {
         // Check for Alpine or musl
@@ -619,6 +655,14 @@ export class BinaryDownloader {
         ];
         
         return muslLibs.some(lib => fs.existsSync(lib));
+    }
+
+    private isTermuxEnvironment(): boolean {
+        return Boolean(
+            process.env.TERMUX_VERSION ||
+            process.env.PREFIX?.includes('/com.termux/') ||
+            fs.existsSync('/data/data/com.termux/files/usr')
+        );
     }
     
     private getLocalBinaryPath(): string {

@@ -445,45 +445,34 @@ fn measure_workspace_symbol(fixture: &ProjectFixture, entry_content: &str) -> Ve
     samples
 }
 
-/// Build a synthetic ~5000-line Catalyst-style controller source.
-fn build_large_catalyst_controller() -> String {
-    let mut source = String::from(
-        "package MyApp::Controller::Big;\n\
-use strict;\n\
-use warnings;\n\
-use parent 'Catalyst::Controller';\n\
-\n\
-",
+/// Build a synthetic Catalyst-style app with at least `target_lines` lines.
+fn synthetic_catalyst_app(target_lines: usize) -> String {
+    let mut content = String::from(
+        "package MyApp;\n\
+         use strict;\n\
+         use warnings;\n\
+         use Catalyst qw/-Debug ConfigLoader Static::Simple/;\n\
+         extends 'Catalyst';\n\n",
     );
 
-    // 250 actions × 20 lines ≈ 5000 lines plus header/footer.
-    for idx in 0..250 {
-        source.push_str(&format!(
-            "sub action_{idx} :Path('/action/{idx}') Args(0) {{\n\
-    my ($self, $c) = @_;\n\
-    my $acc = 0;\n\
-    $acc += 1;\n\
-    $acc += 2;\n\
-    $acc += 3;\n\
-    $acc += 4;\n\
-    $acc += 5;\n\
-    $acc += 6;\n\
-    $acc += 7;\n\
-    $acc += 8;\n\
-    $acc += 9;\n\
-    $acc += 10;\n\
-    $acc += 11;\n\
-    $acc += 12;\n\
-    $acc += 13;\n\
-    $acc += 14;\n\
-    $c->stash(action => '{idx}', sum => $acc);\n\
-}}\n\
-\n"
-        ));
+    let mut line_count = content.lines().count();
+    let mut i = 0usize;
+    while line_count < target_lines.saturating_sub(2) {
+        let block = format!(
+            "sub action_{i} : Path('/route_{i}') Args(1) {{\n\
+             \x20\x20my ($self, $c, $arg) = @_;\n\
+             \x20\x20my $value = $c->req->params->{{value}} // $arg;\n\
+             \x20\x20$c->stash->{{result}} = uc($value);\n\
+             \x20\x20$c->response->body($c->stash->{{result}});\n\
+             }}\n\n"
+        );
+        line_count += block.lines().count();
+        content.push_str(&block);
+        i += 1;
     }
 
-    source.push_str("1;\n");
-    source
+    content.push_str("__PACKAGE__->setup();\n1;\n");
+    content
 }
 
 // ---- JSON output --------------------------------------------------------------
@@ -779,43 +768,47 @@ fn real_project_latency_full_suite() {
     eprintln!("\nBaseline written to {OUTPUT_PATH}");
 }
 
-/// Real-repo perf gate: first diagnostics for a 5000+ line Catalyst app should
-/// arrive within 5 seconds.
+/// User-facing SLO guard:
+/// first publishDiagnostics for a 5,000-line Catalyst app should arrive in <5s.
+///
+/// Run with:
+/// ```bash
+/// cargo test -p perl-lsp-rs --test real_project_latency first_diagnostics_5000_line_catalyst -- --include-ignored --nocapture
+/// ```
 #[test]
-#[ignore = "nightly only — performance assertion on representative large file"]
-fn real_project_first_diagnostics_catalyst_5000_lines_under_5s() {
-    let root = workspace_root();
-    let file_path = root.join("test_corpus/real_projects/catalyst_skeleton/lib/BigController.pm");
-    let uri = file_uri(&file_path);
-    let source = build_large_catalyst_controller();
-    let source_line_count = source.lines().count();
-    assert!(source_line_count >= 5000, "expected >=5000 lines, got {source_line_count}");
+#[ignore = "nightly/perf lane — synthetic 5k-line fixture and wall-clock budget"]
+fn first_diagnostics_5000_line_catalyst() -> Result<(), Box<dyn std::error::Error>> {
+    let app = synthetic_catalyst_app(5000);
+    let lines = app.lines().count();
+    assert!(lines >= 5000, "Synthetic Catalyst fixture must be >=5000 lines, got {lines}");
 
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis();
+    let temp_path = std::env::temp_dir().join(format!("perl_lsp_real_perf_{unique}.pm"));
+    fs::write(&temp_path, &app)?;
+
+    let uri = file_uri(&temp_path);
     let server = start_lsp_server();
     initialize_lsp(&server);
 
     let start = Instant::now();
-    open_document(&server, &uri, &source);
-    let maybe_diag = common::read_notification_method(
+    open_document(&server, &uri, &app);
+
+    let notification = common::read_notification_method(
         &server,
         "textDocument/publishDiagnostics",
-        Duration::from_secs(5),
+        Duration::from_secs(6),
     );
-    let elapsed = start.elapsed();
+    let elapsed = start.elapsed().as_millis() as u64;
+
+    let _ = fs::remove_file(&temp_path);
 
     assert!(
-        maybe_diag.is_some(),
-        "did not receive publishDiagnostics within 5s for {source_line_count}-line Catalyst source"
+        notification.is_some(),
+        "No publishDiagnostics received within 6s for 5000-line Catalyst app (elapsed={elapsed}ms)"
     );
     assert!(
-        elapsed <= Duration::from_secs(5),
-        "first diagnostics took {:?} for {source_line_count}-line Catalyst source (target <5s)",
-        elapsed
+        elapsed < 5000,
+        "SLO breach: first diagnostics took {elapsed}ms for 5000-line Catalyst app (target <5000ms)"
     );
-
-    eprintln!(
-        "real_project_first_diagnostics_catalyst_5000_lines_under_5s: {} ms ({} lines)",
-        elapsed.as_millis(),
-        source_line_count
-    );
+    Ok(())
 }

@@ -1,0 +1,10 @@
+{
+  "name": "lint",
+  "selected": true,
+  "required": true,
+  "verdict": "pass",
+  "classification": "unknown",
+  "repro": {
+    "command": "cargo clippy --workspace"
+  }
+}

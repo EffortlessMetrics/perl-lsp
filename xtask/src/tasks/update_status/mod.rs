@@ -25,10 +25,13 @@ use regex::Regex;
 use crate::utils::project_root;
 
 mod dap;
+mod editor_ux;
+mod flaky;
 mod lsp;
 mod parser;
 mod quality;
 mod tests;
+mod token;
 mod workspace;
 
 // ---------------------------------------------------------------------------
@@ -87,6 +90,30 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
     let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
     combined.push_str(&String::from_utf8_lossy(&output.stderr));
     combined
+}
+
+/// Like `run_cmd` but merges stderr into stdout via shell `2>&1`.
+///
+/// Essential for `cargo test -- --list`: cargo writes crate headers to stderr and test
+/// names to stdout, so without `2>&1` the parser sees all names before all headers and
+/// can never associate a name with its crate.  Single-quote-escapes each argument to
+/// avoid shell injection while preserving flags like `--`.
+fn run_cmd_merged(root: &Path, args: &[&str], timeout: Duration) -> String {
+    let _ = timeout;
+    if args.is_empty() {
+        return String::new();
+    }
+    let shell_args: Vec<String> =
+        args.iter().map(|&a| format!("'{}'", a.replace('\'', "'\\''"))).collect();
+    let shell_cmd = format!("{} 2>&1", shell_args.join(" "));
+    #[cfg(unix)]
+    let result = Command::new("sh").arg("-c").arg(&shell_cmd).current_dir(root).output();
+    #[cfg(not(unix))]
+    let result = Command::new("cmd").args(["/C", &shell_cmd]).current_dir(root).output();
+    match result {
+        Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
+        Err(_) => String::new(),
+    }
 }
 
 /// Replace content between `begin_marker\n...\nend_marker` (inclusive of markers).
@@ -220,7 +247,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
         let ux_path = root.join("docs/project/status/editor_ux.json");
         let original_ux = fs::read_to_string(&ux_path).unwrap_or_default();
-        let updated_ux = quality::generate_editor_ux_receipt(&root)?;
+        let updated_ux = editor_ux::generate_editor_ux_receipt(&root)?;
         if updated_ux != original_ux {
             files_to_update.push(("docs/project/status/editor_ux.json", ux_path, updated_ux));
         }
@@ -233,7 +260,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         let dap_path = root.join("docs/project/status/dap.md");
         let original_dap =
             fs::read_to_string(&dap_path).context("reading docs/project/status/dap.md")?;
-        let updated_dap = dap::generate_dap_status(&dap_counts, &original_dap)?;
+        let updated_dap = dap::generate_dap_status(&root, &dap_counts, &original_dap)?;
         if updated_dap != original_dap {
             files_to_update.push(("docs/project/status/dap.md", dap_path, updated_dap));
         }
