@@ -512,7 +512,7 @@ decrease them for resource-constrained environments.
 
 ## CLI Flags
 
-Flags passed when launching the `perl-lsp` binary. Source:
+Flags passed when launching the `perllsp` executable. Source:
 `crates/perl-lsp-launcher/src/lib.rs`.
 
 ### Server mode
@@ -559,7 +559,7 @@ perllsp --completion bash >> ~/.bashrc  # install bash completions
 
 ## Environment Variables
 
-Environment variables read at startup by the `perl-lsp` binary. Source:
+Environment variables read at startup by the `perllsp` executable. Source:
 `crates/perl-lsp-launcher/src/lib.rs`.
 
 ### `PERL_LSP_LOG`
@@ -611,11 +611,15 @@ Settings specific to the VS Code extension (`vscode-extension/package.json`).
 These are separate from the LSP workspace settings above and control extension
 behaviour such as binary management and feature toggles.
 
+The VS Code extension uses the `perl-lsp.*` namespace. Server-side workspace
+settings use the `perl.*` namespace and may be forwarded via initialization
+options or client-specific configuration mechanisms.
+
 ### Binary management
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perl-lsp` binary. Empty = auto-download. |
+| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perllsp` executable. Empty = auto-download. |
 | `perl-lsp.autoDownload` | `boolean` | `true` | Download the binary automatically if not found locally. |
 | `perl-lsp.downloadBaseUrl` | `string` | `""` | Override the GitHub releases base URL for internal mirrors. |
 | `perl-lsp.channel` | `"latest"\|"stable"\|"tag"` | `"latest"` | Release channel to track. |
@@ -857,11 +861,40 @@ inlayHints.enabled = true
 #### Emacs (eglot)
 
 ```elisp
-(setq-default eglot-workspace-configuration
-  '((perl
-     (workspace
-      (includePaths . ["lib" "." "local/lib/perl5"])
-      (useSystemInc . :json-false)))))
+(use-package eglot
+  :ensure nil
+  :hook ((perl-mode . eglot-ensure)
+         (cperl-mode . eglot-ensure))
+  :config
+  (add-to-list 'eglot-server-programs
+               '(((perl-mode :language-id "perl")
+                  (cperl-mode :language-id "perl"))
+                 . ("perllsp" "--stdio"
+                    :initializationOptions
+                    (:perl
+                     (:workspace
+                      (:includePaths ["lib" "." "local/lib/perl5"]
+                       :useSystemInc :json-false)))))))
+```
+
+#### Emacs (`lsp-mode`)
+
+```elisp
+(use-package lsp-mode
+  :commands (lsp lsp-deferred)
+  :hook ((perl-mode . lsp-deferred)
+         (cperl-mode . lsp-deferred))
+  :config
+  (add-to-list 'lsp-language-id-configuration '(perl-mode . "perl"))
+  (add-to-list 'lsp-language-id-configuration '(cperl-mode . "perl"))
+
+  (lsp-register-client
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection '("perllsp" "--stdio"))
+    :activation-fn (lsp-activate-on "perl")
+    :major-modes '(perl-mode cperl-mode)
+    :priority 1
+    :server-id 'perllsp)))
 ```
 
 #### Sublime Text (LSP package)
@@ -885,8 +918,32 @@ Open `Preferences: LSP Server Configurations` and add:
 }
 ```
 
-Sublime LSP uses `initialization_options`; the LSP protocol field is named
-`initializationOptions`.
+#### OpenCode (`opencode.json`)
+
+OpenCode configures custom LSP servers through the `lsp` block. The `command`
+array launches the server, `extensions` controls activation, and
+`initialization` is sent as LSP initialization options.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "perl-lsp": {
+      "command": ["perllsp", "--stdio"],
+      "extensions": [".pl", ".PL", ".pm", ".t", ".pod", ".psgi", ".cgi", ".fcgi", ".xs", ".xsi"],
+      "initialization": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+For settings shared across editors, prefer `.perl-lsp.toml`.
 
 #### Claude Code (plugin `.lsp.json`)
 
