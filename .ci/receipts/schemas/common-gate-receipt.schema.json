@@ -6,7 +6,12 @@
   "required": ["check", "schema_version", "event", "verdict"],
   "properties": {
     "check": { "type": "string" },
-    "schema_version": { "type": "string" },
+    "schema_version": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "integer", "minimum": 1 }
+      ]
+    },
     "event": {
       "type": "string",
       "enum": ["pull_request", "merge_group", "push", "local"]
@@ -21,7 +26,15 @@
     "head_sha": { "type": "string" },
     "candidate_sha": { "type": "string" },
     "selected": { "type": "boolean" },
-    "selection_reason": { "type": "string" },
+    "selection_reason": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      ]
+    },
     "classification": {
       "type": "string",
       "enum": [

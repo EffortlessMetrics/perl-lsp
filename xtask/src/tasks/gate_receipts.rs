@@ -213,6 +213,19 @@ fn validate_common_fields(receipt: &Value, errors: &mut Vec<String>) {
             errors.push(format!("missing required field: {field}"));
             continue;
         }
+        if *field == "schema_version" {
+            let is_string_or_integer = match value {
+                Some(Value::String(_)) => true,
+                Some(Value::Number(number)) => number.as_u64().is_some(),
+                _ => false,
+            };
+            if !is_string_or_integer {
+                errors.push(
+                    "field 'schema_version' must be a string or positive integer".to_string(),
+                );
+            }
+            continue;
+        }
         if value.and_then(Value::as_str).is_none() {
             errors.push(format!("field '{field}' must be a string"));
         }

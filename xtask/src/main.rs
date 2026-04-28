@@ -860,6 +860,12 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Emit scaffold parser-ratchet receipts.
+    ParserRatchet {
+        #[command(subcommand)]
+        command: ParserRatchetCommand,
+    },
+
     /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
     CpanCorpus {
         #[command(subcommand)]
@@ -1378,6 +1384,39 @@ enum CpanCorpusCommand {
         #[arg(long)]
         install_dir: Option<PathBuf>,
     },
+}
+
+#[derive(Subcommand)]
+enum ParserRatchetCommand {
+    /// Run parser-ratchet scaffold flow and emit a stable receipt.
+    Run {
+        /// Execution profile.
+        #[arg(long, value_enum)]
+        profile: ParserRatchetProfile,
+
+        /// Explicit base revision (required).
+        #[arg(long)]
+        base: String,
+
+        /// Explicit head revision (required).
+        #[arg(long)]
+        head: String,
+
+        /// Path to output receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+
+        /// Force selected=true while remaining scaffold-only.
+        #[arg(long)]
+        force_selected: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum ParserRatchetProfile {
+    Pr,
+    Nightly,
+    Release,
 }
 
 #[derive(Subcommand)]
@@ -1929,6 +1968,23 @@ fn main() -> Result<()> {
                 receipt,
             })
         }
+        Commands::ParserRatchet { command } => match command {
+            ParserRatchetCommand::Run { profile, base, head, receipt, force_selected } => {
+                let profile = match profile {
+                    ParserRatchetProfile::Pr => parser_ratchet::ParserRatchetProfile::Pr,
+                    ParserRatchetProfile::Nightly => parser_ratchet::ParserRatchetProfile::Nightly,
+                    ParserRatchetProfile::Release => parser_ratchet::ParserRatchetProfile::Release,
+                };
+
+                parser_ratchet::run(parser_ratchet::ParserRatchetRunArgs {
+                    profile,
+                    base,
+                    head,
+                    receipt,
+                    force_selected,
+                })
+            }
+        },
         Commands::CpanCorpus { command } => {
             let mut config = cpan_corpus::CpanCorpusConfig::default();
             match command {
