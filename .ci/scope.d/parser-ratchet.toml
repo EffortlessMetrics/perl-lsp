@@ -1,0 +1,63 @@
+# Parser Ratchet scope-selection policy.
+#
+# Scope selection only: this policy decides whether parser-ratchet work should
+# run for a change. It does not run parser corpus, compare baselines, or
+# evaluate comparator behavior.
+
+version = 1
+selector = "parser-ratchet"
+always_report = true
+
+[decision]
+selected_key = "selected"
+selection_reason_key = "selection_reason"
+not_selected_reason_key = "reason"
+
+[policy]
+# Cargo.lock changes should only select when parser-relevant dependencies moved.
+# The downstream selector should evaluate this with dependency-awareness.
+cargo_lock_requires_parser_relevant_deps = true
+
+# Any path match selects parser-ratchet.
+path_globs = [
+  "crates/perl-parser/**",
+  "crates/perl-parser-core/**",
+  "crates/perl-lexer/**",
+  "crates/perl-token/**",
+  "crates/tree-sitter-perl-rs/**",
+  "crates/tree-sitter-perl-c/**",
+  "xtask/src/tasks/*parser*",
+  "xtask/src/tasks/*corpus*",
+  "xtask/src/tasks/ci_scope.rs",
+  "xtask/src/tasks/gates.rs",
+  "xtask/src/tasks/ratchet*.rs",
+  ".ci/scope.d/**",
+  ".ci/gates.d/**",
+  ".ci/parser-ratchet/**",
+  ".github/workflows/**",
+  "tests/parser/**",
+  "tests/perl-corpus/**",
+  "Cargo.lock",
+]
+
+# Risk tags that force parser-ratchet selection.
+risk_tags = [
+  "parser",
+  "lexer",
+  "token",
+  "corpus",
+  "incremental",
+  "tree-sitter",
+  "parser-recovery",
+  "parser-accuracy",
+]
+
+# Examples that should not select parser-ratchet unless policy/path/risk-tag
+# conditions above match.
+non_parser_examples = [
+  "docs-only non-parser docs",
+  "VS Code extension-only unless workflow/scope affects parser gate",
+  "DAP-only",
+  "editor docs",
+  "forensics docs",
+]

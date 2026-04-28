@@ -1254,6 +1254,7 @@ fn no_warnings_empty_string_category_is_ignored() -> Result<(), Box<dyn std::err
     );
     Ok(())
 }
+
 #[test]
 fn no_warnings_bare_disables_all_warnings() -> Result<(), Box<dyn std::error::Error>> {
     // `no warnings;` (no args) must still disable the global warnings flag.

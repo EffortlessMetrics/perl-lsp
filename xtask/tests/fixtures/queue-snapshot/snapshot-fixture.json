@@ -1,0 +1,25 @@
+{
+  "snapshot_id": "gh-snapshot-2026-04-26T18:40:00Z",
+  "captured_at": "2026-04-26T18:40:00Z",
+  "repository": "EffortlessMetrics/perl-lsp",
+  "default_branch": "master",
+  "master_sha": "deadbeef",
+  "ruleset_summary": {},
+  "prs": [
+    {
+      "number": 1,
+      "title": "Green PR",
+      "head_sha": "aaa",
+      "base_sha": "bbb",
+      "is_draft": false,
+      "merge_state_status": "CLEAN",
+      "labels": ["merge-ready"],
+      "status_check_rollup": [{"name": "ci", "state": "SUCCESS"}],
+      "updated_at": "2026-04-26T18:38:00Z",
+      "author": "agent",
+      "review_decision": "APPROVED"
+    }
+  ],
+  "buckets": {},
+  "leases": []
+}
