@@ -27,8 +27,8 @@ perllsp --info
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
 | Trae (ByteDance) | install the VS Code-compatible `EffortlessMetrics.perl-lsp-rs` extension; use `perl-lsp.serverPath` only for manual/offline `perllsp` deployments | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
-| Vim | use `vim-lsp` or `coc.nvim` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
-| Emacs | use Eglot on Emacs 29+ or `lsp-mode`; register `perllsp --stdio` for `perl-mode`, `cperl-mode`, and optionally `perl-ts-mode` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
+| Vim | use `vim-lsp` or `coc.nvim` with `perllsp --stdio`; coc.nvim requires Vim 9 + Node.js | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
+| Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | install Sublime's `LSP` package and add `perllsp --stdio` in `LanguageServers.sublime-settings` | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
@@ -92,9 +92,25 @@ The editor-specific guide has full snippets for both clients plus troubleshootin
 
 ### Vim
 
-Use either `vim-lsp` (native LSP in Vim) or `coc.nvim` (Node-based client),
-both configured to launch `perllsp --stdio`. See
-[docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) for complete examples.
+Use either `vim-lsp` or `coc.nvim`.
+
+For `vim-lsp`:
+
+```vim
+if executable('perllsp')
+  autocmd User lsp_setup call lsp#register_server({
+        \ 'name': 'perl-lsp',
+        \ 'cmd': {server_info -> ['perllsp', '--stdio']},
+        \ 'allowlist': ['perl'],
+        \ })
+endif
+```
+
+For `coc.nvim`, configure `languageserver.perl-lsp` in `coc-settings.json` with
+`"command": "perllsp"`, `"args": ["--stdio"]`, and `"filetypes": ["perl"]`.
+
+See [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) for root detection,
+buffer-local mappings, and troubleshooting.
 
 ### Helix
 

@@ -138,14 +138,14 @@ If the editor is using a helper extension or plugin, check its own logs too.
 - Close unrelated files and trim the workspace to the project root.
 - Disable any editor-side preview features that trigger extra refreshes.
 - Compare behavior with a fresh shell session so stale environment state does
-  not hide the problem.
+   not hide the problem.
 
 ## Module Resolution Problems
 
 - Confirm the module lives under the workspace or configured include paths.
 - Open the project root that contains the module tree, not just a subdirectory.
-- If you are using vendored or local libraries, make sure the editor config
-  points at them explicitly.
+- If you are using vendored or local libraries, make sure that editor config
+   points at them explicitly.
 
 ## Formatting Or Code Actions Are Missing
 
@@ -202,6 +202,48 @@ If the editor is using a helper extension or plugin, check its own logs too.
    }
    ```
 
+## Vim-specific Startup Checks
+
+### Vim does not start `perllsp`
+
+1. Confirm Vim can see the binary:
+
+   ```vim
+   :echo executable('perllsp')
+   ```
+
+2. Confirm the buffer filetype:
+
+   ```vim
+   :set filetype?
+   ```
+
+   It must be `perl`.
+
+3. For `vim-lsp`, inspect:
+
+   ```vim
+   :LspStatus
+   :LspDocumentDiagnostics
+   ```
+
+4. For `coc.nvim`, inspect:
+
+   ```vim
+   :CocInfo
+   :CocOpenLog
+   :CocCommand document.echoFiletype
+   :CocCommand workspace.showOutput
+   ```
+
+5. Check the server outside Vim:
+
+   ```bash
+   perllsp --health
+   perllsp --info
+   perllsp --check path/to/file.pl
+   ```
+
 ## DAP Or Debugging Issues
 
 If you are debugging with `perl-dap`, check the DAP guide:
@@ -213,7 +255,7 @@ Report an issue when you can include:
 
 - `perllsp --version`
 - `perllsp --health`
-- the editor name and version
+- editor name and version
 - the workspace layout
 - the smallest code sample that reproduces the problem
 
