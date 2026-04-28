@@ -589,7 +589,13 @@ autocmd User lsp_setup call lsp#register_server({
       "settings": {
         "perl": {
           "workspace": {
-            "includePaths": ["lib", ".", "local/lib/perl5"]
+            "includePaths": ["lib", ".", "local/lib/perl5"],
+            "useSystemInc": false
+          },
+          "inlayHints": {
+            "enabled": true,
+            "parameterHints": true,
+            "typeHints": true
           }
         }
       }
@@ -597,6 +603,8 @@ autocmd User lsp_setup call lsp#register_server({
   }
 }
 ```
+
+coc.nvim uses Vim/Neovim filetypes, so Perl buffers must have `filetype=perl`.
 
 ## Environment Variables
 
