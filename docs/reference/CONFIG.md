@@ -512,7 +512,7 @@ decrease them for resource-constrained environments.
 
 ## CLI Flags
 
-Flags passed when launching the `perl-lsp` binary. Source:
+Flags passed when launching the `perllsp` binary. Source:
 `crates/perl-lsp-launcher/src/lib.rs`.
 
 ### Server mode
@@ -559,7 +559,7 @@ perllsp --completion bash >> ~/.bashrc  # install bash completions
 
 ## Environment Variables
 
-Environment variables read at startup by the `perl-lsp` binary. Source:
+Environment variables read at startup by the `perllsp` binary. Source:
 `crates/perl-lsp-launcher/src/lib.rs`.
 
 ### `PERL_LSP_LOG`
@@ -912,6 +912,23 @@ Sublime LSP uses `initialization_options`; the LSP protocol field is named
   }
 }
 ```
+
+#### OpenAI Codex app
+
+Codex app is not a documented generic LSP client. Do not configure
+`perllsp --stdio` as a Codex MCP server; `perllsp` speaks LSP, not MCP.
+
+Use Codex app to run non-editor checks:
+
+```bash
+perllsp --check path/to/file.pl
+perllsp --check-project .
+perllsp --info
+```
+
+For live editor LSP features while using Codex, install the OpenAI Codex IDE
+Extension and the `EffortlessMetrics.perl-lsp-rs` extension in a VS
+Code-compatible editor.
 
 ---
 
