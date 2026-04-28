@@ -228,6 +228,7 @@ pub mod r#gen;
 pub mod glob_expressions;
 pub mod gold;
 pub mod index;
+pub mod inventory;
 pub mod lint;
 pub mod meta;
 pub mod tie_interface;
@@ -256,6 +257,7 @@ pub use format_statements::{
 pub use glob_expressions::{
     GlobExpressionCase, GlobExpressionGenerator, find_glob_case, glob_expression_cases,
 };
+pub use inventory::{CorpusInventory, InventoryIds, InventoryTags, inventory_from_corpus_dir, inventory_json_from_corpus_dir};
 pub use gold::{
     CompletionAssertion, CompletionAssertionKind, CompletionGoldExpected, CompletionGoldFixture,
     GoldAssertion, GoldExpected, GoldFixture, GotoAssertion, GotoAssertionKind, GotoGoldExpected,
