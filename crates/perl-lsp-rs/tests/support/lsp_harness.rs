@@ -387,6 +387,17 @@ impl LspHarness {
         self.send_request_with_timeout(request, timeout)
     }
 
+    /// Request `textDocument/completion` at the provided LSP position.
+    pub fn completion_at(&mut self, uri: &str, line: u32, character: u32) -> Result<Value, String> {
+        self.request(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
     /// Send a didSave notification
     pub fn did_save(&mut self, uri: &str) -> Result<(), String> {
         self.notify(
@@ -700,6 +711,37 @@ impl LspHarness {
             let mut guard = self.output_buffer.lock();
             self.output_signal.wait_for(&mut guard, remaining.min(Duration::from_millis(50)));
         }
+    }
+
+    /// Wait for an ordered `$/progress` lifecycle for a token.
+    ///
+    /// This helper is intended for UX-style tests where we want to assert the
+    /// observable progress contract from the client's perspective.
+    ///
+    /// Example sequence: `["begin", "end"]` or `["begin", "report", "end"]`.
+    pub fn wait_for_progress_sequence(
+        &mut self,
+        token: &str,
+        sequence: &[&str],
+        timeout: Duration,
+    ) -> Result<Vec<Value>, String> {
+        let start = Instant::now();
+        let mut events = Vec::with_capacity(sequence.len());
+
+        for expected_kind in sequence {
+            let remaining = timeout.saturating_sub(start.elapsed());
+            if remaining.is_zero() {
+                return Err(format!(
+                    "$/progress sequence {:?} for token '{token}' timed out after {timeout:?}",
+                    sequence
+                ));
+            }
+
+            let event = self.wait_for_progress_kind(token, expected_kind, remaining)?;
+            events.push(event);
+        }
+
+        Ok(events)
     }
 
     /// Drain server-initiated requests from the buffer.

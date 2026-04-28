@@ -382,6 +382,31 @@ impl UxHarness {
         }
     }
 
+    /// Poll `workspace/symbol` until `predicate` returns true or `timeout`
+    /// elapses.
+    ///
+    /// Returns the last observed symbol list in both success and timeout paths.
+    pub fn wait_for_workspace_symbols(
+        &self,
+        query: &str,
+        timeout: Duration,
+        poll_interval: Duration,
+        mut predicate: impl FnMut(&[Value]) -> bool,
+    ) -> Result<Vec<Value>> {
+        let deadline = std::time::Instant::now() + timeout;
+        let mut latest = Vec::new();
+
+        while std::time::Instant::now() < deadline {
+            latest = self.workspace_symbols(query)?;
+            if predicate(&latest) {
+                return Ok(latest);
+            }
+            std::thread::sleep(poll_interval);
+        }
+
+        Ok(latest)
+    }
+
     /// Notify the server that workspace folders changed.
     ///
     /// Each tuple is `(relative_path, name)` and is resolved relative to the
@@ -542,6 +567,37 @@ impl UxHarness {
     /// Request go-to-definition at a canonical cursor position.
     pub fn definition_at(&self, cursor: &CursorPosition) -> Result<Vec<Value>> {
         self.definition(&cursor.relative_path, cursor.line, cursor.character)
+    }
+
+    /// Request go-to-definition and optionally retry to absorb asynchronous indexing delays.
+    ///
+    /// Returns immediately when the first non-empty response is observed, or after
+    /// `attempts` tries (minimum 1). This keeps UX scenarios deterministic without
+    /// forcing each test to hand-roll sleep/retry loops.
+    pub fn definition_with_retry(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+        attempts: usize,
+        pause: Duration,
+    ) -> Result<Vec<Value>> {
+        let mut last = Vec::new();
+        let max_attempts = attempts.max(1);
+
+        for idx in 0..max_attempts {
+            let current = self.definition(relative_path, line, character)?;
+            if !current.is_empty() {
+                return Ok(current);
+            }
+
+            last = current;
+            if idx + 1 < max_attempts {
+                std::thread::sleep(pause);
+            }
+        }
+
+        Ok(last)
     }
 
     /// Request references (`textDocument/references`) at a cursor position.

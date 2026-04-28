@@ -26,12 +26,13 @@ perllsp --health
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
 | Trae (ByteDance) | install the VS Code-compatible extension or set command to `perllsp --stdio` | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
 | Neovim | define a custom `perllsp` config with `vim.lsp.config()` and enable via `vim.lsp.enable()` (legacy `nvim-lspconfig` supported for older Neovim) | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
-| Vim | use `vim-lsp` or `coc.nvim` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
+| Vim | use `vim-lsp` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
+| coc.nvim | configure `languageserver.perl-lsp` in `coc-settings.json` to launch `perllsp --stdio`; works in Neovim and Vim when the buffer filetype is `perl` | [docs/EDITORS/COC_NEOVIM_SETUP.md](../EDITORS/COC_NEOVIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
-| Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
+| Amazon Kiro | use OpenVSX `EffortlessMetrics.perl-lsp-rs` in Kiro IDE; for Kiro CLI configure custom LSP `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
 | Codex CLI | configure an MCP bridge such as `lsp-mcp`; the bridge exposes tools to Codex and launches `perllsp --stdio` internally | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
 | Codex Desktop | add a custom Perl server command `perllsp --stdio` | [docs/EDITORS/CODEX_DESKTOP_SETUP.md](../EDITORS/CODEX_DESKTOP_SETUP.md) |
@@ -86,9 +87,46 @@ editor-specific guide has the full snippets for both.
 
 ### Vim
 
-Use either `vim-lsp` (native LSP in Vim) or `coc.nvim` (Node-based client),
-both configured to launch `perllsp --stdio`. See
+Use `vim-lsp` configured to launch `perllsp --stdio`. See
 [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) for complete examples.
+
+### coc.nvim
+
+Open coc.nvim settings:
+
+```vim
+:CocConfig
+```
+
+Add:
+
+```json
+{
+  "languageserver": {
+    "perl-lsp": {
+      "command": "perllsp",
+      "args": ["--stdio"],
+      "filetypes": ["perl"],
+      "rootPatterns": [".perl-lsp.toml", "Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
+      "settings": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Check the active filetype with:
+
+```vim
+:CocCommand document.echoFiletype
+```
+
+It must be `perl`.
 
 ### Helix
 
@@ -131,8 +169,11 @@ Register a client with `command: ["perllsp", "--stdio"]`, use a selector such as
 
 ### Amazon Kiro
 
-Register a Perl language-server client that launches `perllsp --stdio`, then
-restart the client after changing workspace settings or include paths.
+For Kiro IDE, install the OpenVSX extension `EffortlessMetrics.perl-lsp-rs`.
+The extension can auto-download `perllsp`. For Kiro CLI, run `/code init` in
+the project root and edit the generated LSP configuration so Perl launches with
+`perllsp --stdio`. Verify diagnostics, hover, definition, references, and rename
+in your installed Kiro CLI build because Perl uses the custom-LSP path there.
 
 ### Claude Code
 

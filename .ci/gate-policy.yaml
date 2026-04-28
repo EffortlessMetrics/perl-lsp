@@ -333,7 +333,10 @@ gates:
 
   - name: parser_audit_closeout
     tier: merge_gate
-    description: "Project corpus parser closeout metrics (gaps, NodeKinds, recovery) must not regress"
+    # Deterministic/scoped rationale for required=true:
+    # - Evaluates repository-local corpus files only (`--corpus-path .`), not host CPAN/system trees.
+    # - Uses a fresh in-process run (`--fresh`) to avoid stale machine-local cache baselines.
+    description: "Project corpus parser closeout metrics (repo-scoped, deterministic run) must not regress"
     required: true
     command: >-
       cargo run --locked -p xtask

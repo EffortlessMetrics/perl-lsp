@@ -1,0 +1,5 @@
+{
+  "pr_number": 101,
+  "state": "NEEDS_BUILDER_FIX",
+  "current_labels": ["review-reviewed", "ci-green", "merge-ready", "size:M"]
+}

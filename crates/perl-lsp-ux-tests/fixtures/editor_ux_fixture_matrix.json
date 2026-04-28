@@ -462,14 +462,15 @@
       "scenario_file": "ux_scenario_19_workspace_folder_addition.rs",
       "subsystem_owner": "workspace_indexing",
       "ci_tier": "pr",
-      "user_journey": "add a workspace folder after initialize and re-run workspace symbol search",
+      "user_journey": "add a workspace folder at runtime and verify workspace symbols refresh with new root metadata",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
         "multi_root_workspace_navigation_success_rate"
       ],
       "expected_outcomes": [
-        "added folder symbols appear in search results without restart"
+        "newly added folder symbols appear in workspace/symbol results",
+        "results remain disambiguated by workspaceFolderUri"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
@@ -491,6 +492,26 @@
       "expected_outcomes": [
         "undeclared variable diagnostic appears before edit",
         "go-to-definition remains responsive after didChange"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "incremental_text_sync_recovery",
+      "scenario_file": "ux_scenario_19_incremental_text_sync.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "fix a parse error in an open file and verify didChange recovery keeps diagnostics and hover healthy",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "parse-like diagnostics clear after didChange full-text fix",
+        "hover remains responsive after sync recovery"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",
