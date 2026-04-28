@@ -28,7 +28,7 @@ perllsp --info
 | Trae (ByteDance) | install the VS Code-compatible extension or set command to `perllsp --stdio` | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Vim | use `vim-lsp` or `coc.nvim` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
-| Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
+| Emacs | use Eglot on Emacs 29+ or `lsp-mode`; register `perllsp --stdio` for `perl-mode`, `cperl-mode`, and optionally `perl-ts-mode` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | install Sublime's `LSP` package and add `perllsp --stdio` in `LanguageServers.sublime-settings` | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
@@ -36,7 +36,7 @@ perllsp --info
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
 | Codex CLI | connect an MCP LSP bridge to `perllsp --stdio` | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
 | Codex Desktop | add a custom Perl server command `perllsp --stdio` | [docs/EDITORS/CODEX_DESKTOP_SETUP.md](../EDITORS/CODEX_DESKTOP_SETUP.md) |
-| OpenCode | configure a custom `perl-lsp` server in `opencode.json` | [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) |
+| OpenCode | configure `perllsp --stdio` as a custom LSP in `opencode.json`; diagnostics work by default, direct LSP operations are experimental | [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -70,8 +70,9 @@ require("lspconfig").perl_lsp.setup({
 
 ### Emacs
 
-Use `lsp-mode` or `eglot` with the same `perllsp --stdio` command. The
-editor-specific guide has the full snippets for both.
+For Emacs 29+, prefer Eglot; `lsp-mode` remains a supported alternative.
+Register `perllsp --stdio` for `perl-mode`, `cperl-mode`, and optionally `perl-ts-mode`.
+The editor-specific guide has full snippets for both clients plus troubleshooting examples.
 
 ### Vim
 
@@ -149,9 +150,27 @@ example config and troubleshooting flow.
 
 ### OpenCode
 
-Create or update `opencode.json` and register a custom LSP server with
-`"command": ["perllsp", "--stdio"]` and Perl extensions like `.pl`, `.pm`,
-and `.t`. See [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) for a full example.
+Create or update `opencode.json` or `opencode.jsonc` and register a custom LSP
+server:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "perl-lsp": {
+      "command": ["perllsp", "--stdio"],
+      "extensions": [".pl", ".PL", ".pm", ".t", ".pod", ".psgi", ".cgi", ".fcgi", ".xs", ".xsi"]
+    }
+  }
+}
+```
+
+OpenCode uses LSP diagnostics by default. For direct hover, definition,
+references, and symbol operations, enable OpenCode's experimental LSP tool with
+`OPENCODE_EXPERIMENTAL_LSP_TOOL=true` and allow the `lsp` permission.
+
+See [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) for a full
+example.
 
 ## When Setup Fails
 
