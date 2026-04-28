@@ -2156,7 +2156,12 @@ fn main() -> Result<()> {
                 fixture,
                 generator_receipt,
                 allow_manual_edits,
-            } => tasks::generated_files::check(receipt, fixture, generator_receipt, allow_manual_edits),
+            } => tasks::generated_files::check(
+                receipt,
+                fixture,
+                generator_receipt,
+                allow_manual_edits,
+            ),
         },
         Commands::ParserRatchet { profile, base, receipt } => {
             tasks::parser_ratchet::run(tasks::parser_ratchet::ParserRatchetArgs {
