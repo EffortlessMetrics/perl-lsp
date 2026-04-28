@@ -4,6 +4,8 @@
 
 ## Orchestration Model
 
+> For the design rationale and direction behind this orchestration model, see [docs/reference/ORCHESTRATION_DOCTRINE.md](docs/reference/ORCHESTRATION_DOCTRINE.md).
+
 The orchestrator routes work to agents, never writes code directly.
 
 ### Pipeline: Scout → Accuracy-Scout → Plan-Review → Build → Review → Green → Merge → Wisdom
@@ -53,7 +55,7 @@ Every change flows through this pipeline. Each stage is a cheap pass that catche
 
 ### Pipeline State Labels
 
-Labels are the authoritative state for every issue and PR. The orchestrator reads them; agents write them.
+Labels are the authoritative state for every issue and PR. The orchestrator reads them; agents write them. For the principle distinguishing live-truth labels (CI, mergeability) from authoritative-only labels (signoffs, routing), see [docs/reference/LIVE_SIGNALS_VS_LABELS.md](docs/reference/LIVE_SIGNALS_VS_LABELS.md).
 
 **Sign-off labels** (`<agent>-reviewed` = agent completed its pass):
 
