@@ -33,6 +33,17 @@ pub(super) struct ParserMetrics {
     pub token_metrics: TokenHealthMetrics,
 }
 
+#[cfg(test)]
+const PARSER_STATUS_MARKERS: &[&str] = &[
+    "PARSER_TRACKING_TABLE",
+    "PARSER_PERFORMANCE_TABLE",
+    "PARSER_METRICS_BULLETS",
+    "TOKEN_HEALTH_TABLE",
+    "PARSER_NODEKIND_ROW",
+    "PARSER_RELIABILITY_ROW",
+    "PARSER_STRICT_CLEAN_ROW",
+];
+
 #[derive(Debug, Clone, Deserialize)]
 pub(super) struct ParserPerformanceScorecard {
     generated_at_epoch_s: u64,
@@ -403,6 +414,34 @@ mod tests {
         let root = crate::utils::project_root()?;
         let sections = count_corpus_sections(&root);
         assert!(sections > 0, "expected nonzero corpus sections");
+        Ok(())
+    }
+
+    #[test]
+    fn test_parser_status_marker_contract() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let target_file = "docs/project/status/parser.md";
+        let parser_status = std::fs::read_to_string(root.join(target_file))?;
+
+        for marker in PARSER_STATUS_MARKERS {
+            let begin_marker = format!("<!-- BEGIN: {marker} -->");
+            let end_marker = format!("<!-- END: {marker} -->");
+
+            let begin_count = parser_status.match_indices(&begin_marker).count();
+            assert_eq!(
+                begin_count,
+                1,
+                "missing or duplicate marker in {target_file}: expected BEGIN marker exactly once: `{begin_marker}`; found {begin_count}"
+            );
+
+            let end_count = parser_status.match_indices(&end_marker).count();
+            assert_eq!(
+                end_count,
+                1,
+                "missing or duplicate marker in {target_file}: expected END marker exactly once: `{end_marker}`; found {end_count}"
+            );
+        }
+
         Ok(())
     }
 
