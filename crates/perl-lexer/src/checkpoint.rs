@@ -415,7 +415,8 @@ mod tests {
     }
 
     #[test]
-    fn test_checkpoint_cache_add_replaces_same_position() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    fn test_checkpoint_cache_add_replaces_same_position()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
         let mut cache = CheckpointCache::new(5);
 
         let mut first = LexerCheckpoint::at_position(10);
