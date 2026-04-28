@@ -557,6 +557,47 @@ perllsp --completion bash >> ~/.bashrc  # install bash completions
 
 ---
 
+### Vim Client Examples
+
+#### Vim with vim-lsp
+
+```vim
+autocmd User lsp_setup call lsp#register_server({
+      \ 'name': 'perl-lsp',
+      \ 'cmd': {server_info -> ['perllsp', '--stdio']},
+      \ 'allowlist': ['perl'],
+      \ 'workspace_config': {
+      \   'perl': {
+      \     'workspace': {
+      \       'includePaths': ['lib', '.', 'local/lib/perl5']
+      \     }
+      \   }
+      \ },
+      \ })
+```
+
+#### Vim with coc.nvim
+
+```json
+{
+  "languageserver": {
+    "perl-lsp": {
+      "command": "perllsp",
+      "args": ["--stdio"],
+      "filetypes": ["perl"],
+      "rootPatterns": [".perl-lsp.toml", "Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
+      "settings": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
 ## Environment Variables
 
 Environment variables read at startup by the `perllsp` executable. Source:
