@@ -12,7 +12,7 @@ documentation = "https://docs.rs/perl-corpus"
 homepage.workspace = true
 keywords = ["perl", "corpus", "proptest", "testing", "parser"]
 categories = ["development-tools", "development-tools::testing"]
-include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
+include = ["src/**", "concepts/**", "README.md", "LICENSE*", "Cargo.toml"]
 
 [lib]
 name = "perl_corpus"
@@ -34,6 +34,7 @@ chrono = "0.4.42"
 proptest.workspace = true
 rand = "0.10.1"
 tracing.workspace = true
+toml = "0.9.8"
 
 [dev-dependencies]
 proptest.workspace = true
