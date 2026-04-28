@@ -100,6 +100,43 @@ If the editor is using a helper extension or plugin, check its own logs too.
 5. Use `perllsp --check path/to/file.pl` for manual diagnostics.
    Do not test stdio mode by piping unframed JSON.
 
+## coc.nvim Does Not Start `perllsp`
+
+1. Confirm coc.nvim is running:
+
+   ```vim
+   :CocInfo
+   ```
+
+2. Confirm the filetype:
+
+   ```vim
+   :set filetype?
+   :CocCommand document.echoFiletype
+   ```
+
+   It must be `perl`.
+
+3. Confirm `perllsp` works outside Neovim:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   perllsp --check path/to/file.pl
+   ```
+
+4. Inspect logs:
+
+   ```vim
+   :CocOpenLog
+   :CocCommand workspace.showOutput
+   ```
+
+5. If `perllsp` is not found, use an absolute `languageserver.perl-lsp.command` path.
+
+6. Do not test stdio mode with raw JSON. LSP stdio traffic requires `Content-Length` framing.
+
 ## DAP Or Debugging Issues
 
 If you are debugging with `perl-dap`, check the DAP guide:
