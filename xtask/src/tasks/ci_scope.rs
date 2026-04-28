@@ -57,6 +57,14 @@ pub struct HeavyLaneEntry {
     pub reason: String,
 }
 
+/// Decision envelope for lane-specific selectors.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LaneDecision {
+    pub selected: bool,
+    pub profile: String,
+    pub reasons: Vec<String>,
+}
+
 /// Platform override flags.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlatformOverrides {
@@ -78,6 +86,8 @@ pub struct ScopeOutput {
     pub platform_overrides: PlatformOverrides,
     pub selected_lanes: Vec<LaneEntry>,
     pub selected_heavy_lanes: Vec<HeavyLaneEntry>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub lanes: BTreeMap<String, LaneDecision>,
     pub explanations: BTreeMap<String, String>,
 }
 
@@ -160,6 +170,60 @@ fn is_docs_as_code_file(file: &str) -> bool {
         && !is_ci_config_file(file)
 }
 
+const PARSER_RATCHET_PATH_PREFIXES: &[&str] = &[
+    "crates/perl-token/",
+    "crates/perl-lexer/",
+    "crates/perl-parser-core/",
+    "crates/perl-parser/",
+    "crates/perl-position-tracking/",
+    "crates/perl-line-index/",
+    "crates/tree-sitter-perl-rs/",
+    "crates/tree-sitter-perl-c/",
+    "crates/perl-corpus/",
+    "tests/parser/",
+    "tests/perl-corpus/",
+    ".ci/scope.d/",
+    ".ci/gates.d/",
+    ".github/workflows/",
+];
+
+const PARSER_RATCHET_EXACT_PATHS: &[&str] = &[
+    ".ci/common-corpus-manifest.txt",
+    "xtask/src/tasks/ci_scope.rs",
+    "xtask/src/tasks/gates.rs",
+    ".ci/gate-policy.yaml",
+    ".ci/GATE_REGISTRY.toml",
+    "Cargo.toml",
+    "Cargo.lock",
+];
+
+fn parser_ratchet_decision(files: &[String], risk_tags: &[String]) -> LaneDecision {
+    let mut reasons = Vec::new();
+
+    for file in files {
+        let is_parser_status_doc = file.starts_with("docs/project/status/parser");
+        let is_parser_task_file = file.starts_with("xtask/src/tasks/")
+            && (file.contains("parser") || file.contains("corpus") || file.contains("ratchet"));
+        let is_parser_path =
+            PARSER_RATCHET_PATH_PREFIXES.iter().any(|prefix| file.starts_with(prefix))
+                || PARSER_RATCHET_EXACT_PATHS.contains(&file.as_str())
+                || is_parser_status_doc
+                || is_parser_task_file;
+        if is_parser_path {
+            reasons.push(format!("changed_path:{file}"));
+        }
+    }
+
+    if risk_tags
+        .iter()
+        .any(|tag| tag == RISK_TAG_PARSER_RECOVERY || tag == RISK_TAG_PARSER_RECOVERY_ALT)
+    {
+        reasons.push(format!("risk_tag:{RISK_TAG_PARSER_RECOVERY_ALT}"));
+    }
+
+    LaneDecision { selected: !reasons.is_empty(), profile: "pr".to_string(), reasons }
+}
+
 // ---------------------------------------------------------------------------
 // Risk tag detection
 // ---------------------------------------------------------------------------
@@ -167,6 +231,7 @@ fn is_docs_as_code_file(file: &str) -> bool {
 /// Risk tag constants.
 pub const RISK_TAG_CONCURRENCY: &str = "concurrency";
 pub const RISK_TAG_PARSER_RECOVERY: &str = "parser_recovery";
+pub const RISK_TAG_PARSER_RECOVERY_ALT: &str = "parser-recovery";
 pub const RISK_TAG_OFFSET_MATH: &str = "offset_math";
 pub const RISK_TAG_PATH_NORMALIZATION: &str = "path_normalization";
 pub const RISK_TAG_PERF_HOT_PATH: &str = "perf_hot_path";
@@ -515,6 +580,8 @@ pub fn classify_files(
 
     // Empty diff or prose-only → empty output (no lanes)
     if files.is_empty() || diff_class == "prose_only" {
+        let parser_ratchet = parser_ratchet_decision(files, &[]);
+        let lanes_v2 = BTreeMap::from([(String::from("parser_ratchet"), parser_ratchet)]);
         return Ok(ScopeOutput {
             schema_version: 2,
             base: String::new(),
@@ -528,6 +595,7 @@ pub fn classify_files(
             platform_overrides: PlatformOverrides::default(),
             selected_lanes: vec![],
             selected_heavy_lanes: vec![],
+            lanes: lanes_v2,
             explanations: BTreeMap::new(),
         });
     }
@@ -635,6 +703,8 @@ pub fn classify_files(
 
     // mutation_diff default lane for code changes
     let heavy_lanes = heavy_lanes_from_risk_tags(&risk_tags, &direct_crates);
+    let parser_ratchet = parser_ratchet_decision(files, &risk_tags);
+    let lanes_v2 = BTreeMap::from([(String::from("parser_ratchet"), parser_ratchet)]);
 
     // Platform overrides (currently static — can be extended)
     let platform_overrides = PlatformOverrides { windows_runner: false };
@@ -652,6 +722,7 @@ pub fn classify_files(
         platform_overrides,
         selected_lanes: lanes,
         selected_heavy_lanes: heavy_lanes,
+        lanes: lanes_v2,
         explanations,
     })
 }
@@ -1132,6 +1203,64 @@ mod tests {
         let output = classify_files(&files, &metadata, "/workspace")?;
         assert_eq!(output.diff_class, "prose_only");
         assert!(output.selected_lanes.is_empty(), "docs-only should have no lanes");
+        Ok(())
+    }
+
+    #[test]
+    fn test_parser_ratchet_selected_for_parser_path() -> Result<()> {
+        let metadata = fake_metadata(&[("perl-parser-core", "crates/perl-parser-core")]);
+        let files = vec!["crates/perl-parser-core/src/recovery.rs".to_string()];
+        let output = classify_files(&files, &metadata, "/workspace")?;
+        let decision = output
+            .lanes
+            .get("parser_ratchet")
+            .ok_or_else(|| eyre!("missing parser_ratchet lane"))?;
+        assert!(decision.selected, "parser path should select parser ratchet");
+        assert_eq!(decision.profile, "pr");
+        assert!(
+            decision
+                .reasons
+                .iter()
+                .any(|reason| reason == "changed_path:crates/perl-parser-core/src/recovery.rs"),
+            "expected changed path reason, got: {:?}",
+            decision.reasons
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parser_ratchet_not_selected_for_unrelated_docs_only() -> Result<()> {
+        let metadata = fake_metadata(&[("perl-parser", "crates/perl-parser")]);
+        let files = vec!["docs/ci/LOCAL_CI_PROTOCOL.md".to_string()];
+        let output = classify_files(&files, &metadata, "/workspace")?;
+        assert_eq!(output.diff_class, "prose_only");
+        let decision = output
+            .lanes
+            .get("parser_ratchet")
+            .ok_or_else(|| eyre!("missing parser_ratchet lane"))?;
+        assert!(!decision.selected, "unrelated docs-only change should not select parser ratchet");
+        assert!(decision.reasons.is_empty(), "unexpected reasons: {:?}", decision.reasons);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parser_ratchet_selected_for_control_plane_change() -> Result<()> {
+        let metadata = fake_metadata(&[("perl-parser", "crates/perl-parser")]);
+        let files = vec!["xtask/src/tasks/ci_scope.rs".to_string()];
+        let output = classify_files(&files, &metadata, "/workspace")?;
+        let decision = output
+            .lanes
+            .get("parser_ratchet")
+            .ok_or_else(|| eyre!("missing parser_ratchet lane"))?;
+        assert!(decision.selected, "ci-scope change should select parser ratchet");
+        assert!(
+            decision
+                .reasons
+                .iter()
+                .any(|reason| reason == "changed_path:xtask/src/tasks/ci_scope.rs"),
+            "expected control-plane changed-path reason, got: {:?}",
+            decision.reasons
+        );
         Ok(())
     }
 
