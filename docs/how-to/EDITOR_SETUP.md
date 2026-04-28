@@ -25,7 +25,7 @@ perllsp --health
 | --- | --- | --- |
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
 | Trae (ByteDance) | install the VS Code-compatible extension or set command to `perllsp --stdio` | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
-| Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
+| Neovim | define a custom `perllsp` LSP config with `vim.lsp.config()` and enable it with `vim.lsp.enable()`; legacy `nvim-lspconfig` setup is available for older Neovim | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Vim | use `vim-lsp` or `coc.nvim` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
@@ -53,19 +53,40 @@ panel, or configure a generic language server command as `perllsp --stdio`.
 
 ### Neovim
 
-```lua
-local capabilities = vim.lsp.protocol.make_client_capabilities()
-local ok_cmp, cmp_lsp = pcall(require, "cmp_nvim_lsp")
-if ok_cmp then
-  capabilities = cmp_lsp.default_capabilities(capabilities)
-end
+For Neovim 0.11+, define a custom server config and enable it:
 
-require("lspconfig").perl_lsp.setup({
-  cmd = { "perllsp", "--stdio" },
-  filetypes = { "perl" },
-  capabilities = capabilities,
+```lua
+vim.lsp.config('perllsp', {
+  cmd = { 'perllsp', '--stdio' },
+  filetypes = { 'perl' },
+  root_markers = {
+    '.perl-lsp.toml',
+    'Makefile.PL',
+    'Build.PL',
+    'cpanfile',
+    'dist.ini',
+    '.git',
+  },
+  init_options = {
+    perl = {
+      workspace = {
+        includePaths = { 'lib', '.', 'local/lib/perl5' },
+      },
+    },
+  },
 })
+
+vim.lsp.enable('perllsp')
 ```
+
+Check setup with:
+
+```vim
+:checkhealth vim.lsp
+```
+
+See [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) for filetype
+rules, keymaps, completion, inlay hints, and troubleshooting.
 
 ### Emacs
 

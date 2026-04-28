@@ -17,19 +17,27 @@ problem is usually in editor integration, workspace roots, or a stale cache.
 
 ## The Server Will Not Start
 
-1. Run the server in the foreground:
+1. Use manual checks first:
 
    ```bash
-   perllsp --stdio
+   perllsp --version
+   perllsp --health
+   perllsp --info
    ```
 
-2. Turn on logging and read stderr:
+2. Validate a file directly:
+
+   ```bash
+   perllsp --check path/to/file.pl
+   ```
+
+3. If you need transport-level debugging, turn on logging and read stderr:
 
    ```bash
    RUST_LOG=perl_lsp=debug perllsp --stdio
    ```
 
-3. Check the editor's LSP log panel or buffer.
+4. Check the editor's LSP log panel or buffer.
 
 ## The Editor Connects, But Nothing Happens
 
@@ -38,6 +46,40 @@ problem is usually in editor integration, workspace roots, or a stale cache.
 - Confirm the editor command really starts `perllsp --stdio`.
 
 If the editor is using a helper extension or plugin, check its own logs too.
+
+## Neovim does not start `perllsp`
+
+1. Confirm the binary works outside Neovim:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+2. Confirm the buffer filetype:
+
+   ```vim
+   :set filetype?
+   ```
+
+   It must be `perl`.
+
+3. Confirm the LSP config is enabled:
+
+   ```vim
+   :checkhealth vim.lsp
+   ```
+
+4. If using Neovim 0.11+, confirm the config is named and enabled consistently:
+
+   ```lua
+   vim.lsp.config('perllsp', { cmd = { 'perllsp', '--stdio' } })
+   vim.lsp.enable('perllsp')
+   ```
+
+5. Use `perllsp --check path/to/file.pl` for manual diagnostics. Do not test
+   stdio mode with unframed raw JSON.
 
 ## Diagnostics Or Completions Are Missing
 
