@@ -559,8 +559,7 @@ $var;
     /// `main`-package symbols fall through gracefully (empty edits) rather than
     /// returning a hard error, allowing the LSP handler to do same-file rename.
     #[test]
-    fn rename_main_package_sub_returns_empty_not_error()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn rename_main_package_sub_returns_empty_not_error() -> Result<(), Box<dyn std::error::Error>> {
         let idx = WorkspaceIndex::new();
 
         // No package declaration → everything is in `main`.

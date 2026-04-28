@@ -36,7 +36,7 @@ perllsp --info
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
 | Codex CLI | connect an MCP LSP bridge to `perllsp --stdio` | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
 | Codex Desktop | add a custom Perl server command `perllsp --stdio` | [docs/EDITORS/CODEX_DESKTOP_SETUP.md](../EDITORS/CODEX_DESKTOP_SETUP.md) |
-| OpenCode | configure a custom `perl-lsp` server in `opencode.json` | [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) |
+| OpenCode | configure `perllsp --stdio` as a custom LSP in `opencode.json`; diagnostics work by default, direct LSP operations are experimental | [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -150,9 +150,27 @@ example config and troubleshooting flow.
 
 ### OpenCode
 
-Create or update `opencode.json` and register a custom LSP server with
-`"command": ["perllsp", "--stdio"]` and Perl extensions like `.pl`, `.pm`,
-and `.t`. See [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) for a full example.
+Create or update `opencode.json` or `opencode.jsonc` and register a custom LSP
+server:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "perl-lsp": {
+      "command": ["perllsp", "--stdio"],
+      "extensions": [".pl", ".PL", ".pm", ".t", ".pod", ".psgi", ".cgi", ".fcgi", ".xs", ".xsi"]
+    }
+  }
+}
+```
+
+OpenCode uses LSP diagnostics by default. For direct hover, definition,
+references, and symbol operations, enable OpenCode's experimental LSP tool with
+`OPENCODE_EXPERIMENTAL_LSP_TOOL=true` and allow the `lsp` permission.
+
+See [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) for a full
+example.
 
 ## When Setup Fails
 
