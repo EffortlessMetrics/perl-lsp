@@ -971,6 +971,14 @@ gates-json tier='merge-gate':
 gates-list:
     @cargo xtask gates --list
 
+# Validate gate-policy invariants and registry alignment.
+gate-policy-check:
+    @cargo xtask gate-policy check
+
+# Print effective gates for a policy profile (pr, merge, nightly, release).
+gate-policy-effective profile='pr':
+    @cargo xtask gate-policy effective --profile {{profile}}
+
 # Run old shell-based gate runner (deprecated, kept for compatibility)
 gates-legacy:
     @echo "🧾 Running legacy gate runner..."
