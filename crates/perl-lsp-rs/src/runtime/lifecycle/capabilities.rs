@@ -6,6 +6,15 @@ use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
 use serde_json::{Value, json};
 
+fn is_opencode_client(params: &Value) -> bool {
+    params
+        .get("clientInfo")
+        .and_then(|info| info.get("name"))
+        .and_then(|name| name.as_str())
+        .map(|name| name.to_ascii_lowercase().contains("opencode"))
+        .unwrap_or(false)
+}
+
 impl LspServer {
     /// Handle initialize request
     pub(crate) fn handle_initialize(
@@ -197,17 +206,27 @@ impl LspServer {
                 }
             } // caps lock released here
 
-            // Check if client supports pull diagnostics
+            // Check if client supports pull diagnostics.
+            //
+            // OpenCode currently relies on push diagnostics (publishDiagnostics)
+            // even when it advertises textDocument.diagnostic capability.
+            // Treat it as push-only to avoid suppressing diagnostics.
+            let is_opencode = is_opencode_client(params);
             let supports_pull = params
                 .get("capabilities")
                 .and_then(|c| c.get("textDocument"))
                 .and_then(|td| td.get("diagnostic"))
                 .is_some();
 
-            if supports_pull {
+            if supports_pull && !is_opencode {
                 self.client_supports_pull_diags.store(true, Ordering::Relaxed);
                 tracing::debug!(
                     "Client supports pull diagnostics - suppressing automatic publishing"
+                );
+            } else if supports_pull && is_opencode {
+                tracing::debug!(
+                    "OpenCode client detected - keeping push diagnostics enabled despite \
+                     textDocument.diagnostic capability"
                 );
             }
 
@@ -291,12 +310,18 @@ impl LspServer {
         let profile = self.feature_profile();
         let mut build_flags = profile.runtime_flags(has_perltidy);
 
-        // Read user-disabled features from initializationOptions
+        // Read user-disabled features from initializationOptions.
+        //
+        // Supported shapes:
+        //   1) { "disabledFeatures": [...] }
+        //   2) { "perl-lsp": { "disabledFeatures": [...] } }
+        //   3) { "perl_lsp": { "disabledFeatures": [...] } }
+        //
+        // Some generic LSP clients namespace server settings under the server id,
+        // while others pass options at the top level.
         if let Some(init_opts) = params.as_ref().and_then(|p| p.get("initializationOptions")) {
-            if let Some(disabled) = init_opts.get("disabledFeatures").and_then(|v| v.as_array()) {
-                for id in disabled.iter().filter_map(|v| v.as_str()) {
-                    apply_disabled_feature_id(&mut build_flags, id);
-                }
+            for id in disabled_feature_ids_from_init_options(init_opts) {
+                apply_disabled_feature_id(&mut build_flags, id);
             }
         }
 
@@ -442,13 +467,52 @@ pub(crate) fn apply_disabled_feature_id(
     }
 }
 
+fn disabled_feature_ids_from_init_options(init_opts: &Value) -> Vec<&str> {
+    let top_level = init_opts.get("disabledFeatures").and_then(Value::as_array);
+    let namespaced_hyphen =
+        init_opts.get("perl-lsp").and_then(|v| v.get("disabledFeatures")).and_then(Value::as_array);
+    let namespaced_underscore =
+        init_opts.get("perl_lsp").and_then(|v| v.get("disabledFeatures")).and_then(Value::as_array);
+
+    top_level
+        .into_iter()
+        .chain(namespaced_hyphen)
+        .chain(namespaced_underscore)
+        .flat_map(|entries| entries.iter())
+        .filter_map(Value::as_str)
+        .collect()
+}
+
+#[cfg(test)]
+mod init_options_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn disabled_feature_ids_reads_top_level_and_namespaced_options() {
+        let init_opts = json!({
+            "disabledFeatures": ["lsp.hover", true, 42],
+            "perl-lsp": {
+                "disabledFeatures": ["lsp.completion", null]
+            },
+            "perl_lsp": {
+                "disabledFeatures": ["lsp.semantic_tokens"]
+            }
+        });
+
+        let ids = disabled_feature_ids_from_init_options(&init_opts);
+        assert_eq!(ids, vec!["lsp.hover", "lsp.completion", "lsp.semantic_tokens"]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::apply_disabled_feature_id;
+    use super::{apply_disabled_feature_id, is_opencode_client};
     use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
     use perl_workspace::folder::root_path_to_file_uri;
     use serde_json::json;
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn apply_disabled_feature_id_zeros_correct_field() {
@@ -660,6 +724,60 @@ mod tests {
         assert_eq!(
             folders[0].uri, "file:///explicit-workspace",
             "cwd fallback must not override an explicitly provided rootUri"
+        );
+    }
+
+    #[test]
+    fn opencode_client_detection_is_case_insensitive() {
+        let params = json!({
+            "clientInfo": {
+                "name": "OpenCode"
+            }
+        });
+        assert!(is_opencode_client(&params));
+    }
+
+    #[test]
+    fn initialize_keeps_push_diagnostics_for_opencode() {
+        let server = LspServer::new();
+        let params = json!({
+            "clientInfo": {
+                "name": "opencode"
+            },
+            "capabilities": {
+                "textDocument": {
+                    "diagnostic": {}
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            !server.client_supports_pull_diags.load(Ordering::Relaxed),
+            "opencode should keep push diagnostics enabled"
+        );
+    }
+
+    #[test]
+    fn initialize_enables_pull_diagnostics_for_non_opencode_clients() {
+        let server = LspServer::new();
+        let params = json!({
+            "clientInfo": {
+                "name": "vscode"
+            },
+            "capabilities": {
+                "textDocument": {
+                    "diagnostic": {}
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            server.client_supports_pull_diags.load(Ordering::Relaxed),
+            "non-opencode clients with textDocument.diagnostic should enable pull diagnostics"
         );
     }
 }

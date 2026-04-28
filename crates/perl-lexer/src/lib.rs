@@ -1481,7 +1481,10 @@ impl<'a> PerlLexer<'a> {
             match byte {
                 b'0'..=b'9' | b'_' => self.position += 1,
                 b'e' | b'E' => {
-                    // Handle scientific notation
+                    // Handle scientific notation.
+                    // Save the position of 'e'/'E' so we can backtrack here if
+                    // no digits follow the exponent marker (with or without sign).
+                    let e_pos = self.position;
                     self.advance();
                     if self.position < self.input_bytes.len() {
                         let next = self.input_bytes[self.position];
@@ -1504,9 +1507,13 @@ impl<'a> PerlLexer<'a> {
                         }
                     }
 
-                    // No digits after exponent marker, rewind so caller treats `e` as separate token.
+                    // No digits after exponent marker — backtrack to just before
+                    // 'e'/'E' so the caller sees it as a separate token.
+                    // Using e_pos (not exponent_start-1) avoids including 'e' in
+                    // the number slice when a sign character was consumed.
                     if !saw_digit {
-                        self.position = exponent_start.saturating_sub(1);
+                        let _ = exponent_start; // mark as intentionally unused
+                        self.position = e_pos;
                     }
                     break;
                 }
@@ -1615,10 +1622,14 @@ impl<'a> PerlLexer<'a> {
                         // This is a dereference, don't consume the brace
                         let text = &self.input[start..self.position];
                         self.mode = LexerMode::ExpectOperator;
-                        // A bare sigil token used for dereference (`${...}`, `@{...}`,
-                        // `%{...}`) must still allow the following `{` to be treated as
-                        // the dereference opener, not a block opener.
-                        self.after_var_subscript = matches!(sigil, '$' | '@' | '%');
+                        // A standalone sigil token before `{` starts a dereference
+                        // sequence (e.g. `${$ref}` / `@{$aref}` / `%{$href}` / `&{$cref}`).
+                        // Mark it as subscript-capable so `{` increments brace depth
+                        // and the closing `}` can enable chained `{...}` subscripts.
+                        // (Broader form than master's `$|@|%` filter — `*` is already
+                        // excluded by the `is_deref` guard above and `&` deref also
+                        // benefits from chained-subscript handling.)
+                        self.after_var_subscript = true;
 
                         return Some(Token {
                             token_type: TokenType::Identifier(Arc::from(text)),
@@ -1695,8 +1706,8 @@ impl<'a> PerlLexer<'a> {
                             self.position = start + 1; // Just past the sigil
                             let text = &self.input[start..self.position];
                             self.mode = LexerMode::ExpectOperator;
-                            // Preserve `{` as dereference opener for $, @, % sigils.
-                            self.after_var_subscript = matches!(sigil, '$' | '@' | '%');
+                            // Same as above: sigil-only token means a dereference opener.
+                            self.after_var_subscript = true;
 
                             return Some(Token {
                                 token_type: TokenType::Identifier(Arc::from(text)),
@@ -1929,16 +1940,8 @@ impl<'a> PerlLexer<'a> {
             }
         }
 
-        // Require at least one dot segment to distinguish from a bare `v5` identifier.
-        // A bare `v` followed by digits but no dots (like `v5`) could be a variable
-        // name in some contexts. However, Perl treats `v5` as a v-string too, so we
-        // require the minimum: `v` + digits (which Perl interprets as chr(5)).
-        // But to avoid breaking existing identifier parsing for things like subroutine
-        // names that happen to match `v\d+`, we require at least one dot.
+        // `v5` (no dots) is a valid Perl v-string meaning chr(5).
         let text = &self.input[start..pos];
-        if !text.contains('.') {
-            return None;
-        }
 
         self.position = pos;
         self.mode = LexerMode::ExpectOperator;
@@ -2969,16 +2972,7 @@ impl<'a> PerlLexer<'a> {
             last_pos = self.position;
         }
 
-        // Unterminated string - return error token consuming rest of input
-        let end = self.input.len();
-        self.position = end;
-
-        Some(Token {
-            token_type: TokenType::Error(Arc::from("unterminated string")),
-            text: Arc::from(&self.input[start..end]),
-            start,
-            end,
-        })
+        Some(self.unterminated_string_error(start))
     }
 
     fn parse_single_quoted_string(&mut self, start: usize) -> Option<Token> {
@@ -3016,16 +3010,7 @@ impl<'a> PerlLexer<'a> {
             last_pos = self.position;
         }
 
-        // Unterminated string - return error token consuming rest of input
-        let end = self.input.len();
-        self.position = end;
-
-        Some(Token {
-            token_type: TokenType::Error(Arc::from("unterminated string")),
-            text: Arc::from(&self.input[start..end]),
-            start,
-            end,
-        })
+        Some(self.unterminated_string_error(start))
     }
 
     fn parse_backtick_string(&mut self, start: usize) -> Option<Token> {
@@ -3063,21 +3048,26 @@ impl<'a> PerlLexer<'a> {
             last_pos = self.position;
         }
 
-        // Unterminated string - return error token consuming rest of input
-        let end = self.input.len();
-        self.position = end;
-
-        Some(Token {
-            token_type: TokenType::Error(Arc::from("unterminated string")),
-            text: Arc::from(&self.input[start..end]),
-            start,
-            end,
-        })
+        Some(self.unterminated_string_error(start))
     }
 
     fn parse_q_string(&mut self, _start: usize) -> Option<Token> {
         // Simplified q-string parsing
         None
+    }
+
+    #[inline]
+    fn unterminated_string_error(&mut self, start: usize) -> Token {
+        // Consume to EOF so the caller receives a single terminal error token.
+        let end = self.input.len();
+        self.position = end;
+
+        Token {
+            token_type: TokenType::Error(Arc::from("unterminated string")),
+            text: Arc::from(&self.input[start..end]),
+            start,
+            end,
+        }
     }
 
     fn parse_substitution(&mut self, start: usize) -> Option<Token> {
@@ -3760,6 +3750,52 @@ mod tests {
             !token_texts.iter().any(|t| t == "documentation"),
             "POD body should be consumed, not emitted as a token; got: {:?}",
             token_texts
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_exponent_sign_no_digits_plus() -> TestResult {
+        // .5e+x — 'e' is not a valid exponent (no digits follow), so the number
+        // token must be ".5" only.  The 'e' becomes a separate identifier token.
+        // Regression: old code produced Number(".5e") by backtracking to the sign
+        // character instead of to the 'e' itself.
+        let mut lexer = PerlLexer::new(".5e+x");
+        let tok1 = lexer.next_token().ok_or("expected first token")?;
+        assert!(
+            matches!(&tok1.token_type, TokenType::Number(n) if n.as_ref() == ".5"),
+            "expected Number(\".5\") but got {:?}",
+            tok1.token_type
+        );
+        // The 'e' must NOT be swallowed into the number token.
+        let tok2 = lexer.next_token().ok_or("expected second token")?;
+        assert!(
+            !matches!(&tok2.token_type, TokenType::Number(_)),
+            "number token must not include 'e'; second token should not be a Number, got {:?}",
+            tok2.token_type
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_exponent_sign_no_digits_minus() -> TestResult {
+        // 1.5e-y — 'e' is not a valid exponent (no digits follow), so the number
+        // token must be "1.5" only.  The 'e' becomes a separate identifier token.
+        // Regression: old code produced Number("1.5e") by backtracking to the '-'
+        // character instead of to the 'e' itself.
+        let mut lexer = PerlLexer::new("1.5e-y");
+        let tok1 = lexer.next_token().ok_or("expected first token")?;
+        assert!(
+            matches!(&tok1.token_type, TokenType::Number(n) if n.as_ref() == "1.5"),
+            "expected Number(\"1.5\") but got {:?}",
+            tok1.token_type
+        );
+        // The 'e' must NOT be swallowed into the number token.
+        let tok2 = lexer.next_token().ok_or("expected second token")?;
+        assert!(
+            !matches!(&tok2.token_type, TokenType::Number(_)),
+            "number token must not include 'e'; second token should not be a Number, got {:?}",
+            tok2.token_type
         );
         Ok(())
     }

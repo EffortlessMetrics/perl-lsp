@@ -82,9 +82,6 @@ pub struct WorkspaceRenameConfig {
 
     /// Validate syntax after each file edit (default: true)
     pub validate_syntax: bool,
-
-    /// Follow symbolic links (default: false, security)
-    pub follow_symlinks: bool,
 }
 
 impl Default for WorkspaceRenameConfig {
@@ -98,7 +95,6 @@ impl Default for WorkspaceRenameConfig {
             max_files: 0,
             report_progress: true,
             validate_syntax: true,
-            follow_symlinks: false,
         }
     }
 }
@@ -854,7 +850,6 @@ mod tests {
         assert_eq!(config.max_files, 0);
         assert!(config.report_progress);
         assert!(config.validate_syntax);
-        assert!(!config.follow_symlinks);
     }
 
     #[test]
