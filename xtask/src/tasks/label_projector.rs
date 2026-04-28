@@ -93,13 +93,18 @@ pub fn run_project_labels(args: LabelProjectorArgs) -> Result<()> {
         if args.apply && !projection.skipped {
             match projection.pr_number {
                 Some(pr_number) => {
-                    apply_projection(pr_number, &projection.projected_apply, &projection.projected_remove)?;
+                    apply_projection(
+                        pr_number,
+                        &projection.projected_apply,
+                        &projection.projected_remove,
+                    )?;
                     projection.reason = "labels reconciled".to_string();
                     projection.verdict = "applied".to_string();
                 }
                 None => {
                     projection.skipped = true;
-                    projection.reason = "apply mode requires pr_number in state receipt".to_string();
+                    projection.reason =
+                        "apply mode requires pr_number in state receipt".to_string();
                     projection.verdict = "skipped".to_string();
                 }
             }
@@ -187,7 +192,11 @@ fn extract_entries(state_value: &Value) -> Result<Vec<QueueStateEntry>> {
     )
 }
 
-fn project_entry(entry: QueueStateEntry, config: &ProjectionConfig, dry_run: bool) -> LabelProjectionEntry {
+fn project_entry(
+    entry: QueueStateEntry,
+    config: &ProjectionConfig,
+    dry_run: bool,
+) -> LabelProjectionEntry {
     let state = entry.state;
     let current_labels = entry.current_labels;
 

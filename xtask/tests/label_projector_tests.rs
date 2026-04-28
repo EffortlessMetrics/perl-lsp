@@ -46,7 +46,8 @@ fn dry_run_needs_builder_fix_projects_expected_add_remove() -> Result<()> {
 fn dry_run_merge_ready_without_receipt_is_skipped() -> Result<()> {
     let tmp = tempdir()?;
     let receipt = tmp.path().join("label-projection.json");
-    let state = repo_root().join("xtask/tests/fixtures/label-projector/merge-ready-missing-receipt.json");
+    let state =
+        repo_root().join("xtask/tests/fixtures/label-projector/merge-ready-missing-receipt.json");
 
     let mut cmd = cargo_bin_cmd!("xtask");
     let output = cmd
