@@ -598,6 +598,9 @@ autocmd User lsp_setup call lsp#register_server({
 }
 ```
 
+coc.nvim uses Vim/Neovim filetypes, so Perl buffers must report `filetype=perl`
+before this language server starts.
+
 ## Environment Variables
 
 Environment variables read at startup by the `perllsp` executable. Source:
