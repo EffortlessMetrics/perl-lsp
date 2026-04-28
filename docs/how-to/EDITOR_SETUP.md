@@ -163,11 +163,6 @@ See [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) for full setup details.
 
 ### Sublime Text
 
-<<<<<<< HEAD
-Register a client with `command: ["perllsp", "--stdio"]`, use a selector such as
-`source.perl | text.perl`, and set `syntaxes` to Perl/Pod syntax files so `.pm`,
-`.pl`, `.t`, and Pod buffers consistently attach to the server.
-=======
 Install the `LSP` package, then open `Preferences: LSP Server Configurations`
 and add:
 
@@ -183,7 +178,6 @@ and add:
 
 For project-specific server settings, use `.perl-lsp.toml` or add Sublime
 `initialization_options` under the `perl-lsp` server configuration.
->>>>>>> e3c70ae4e (docs(sublime): modernize setup and config guidance (#0000))
 
 ### Amazon Kiro
 
