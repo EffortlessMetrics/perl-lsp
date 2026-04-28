@@ -140,6 +140,32 @@ pub struct SweepConfig {
     pub receipt: bool,
 }
 
+// Intentionally exported for upcoming parser-ratchet orchestration integration.
+#[allow(dead_code)]
+/// Canonical corpus-source selector for parser-corpus measurements.
+#[derive(Debug, Clone)]
+pub enum CorpusSource {
+    RepoOwned,
+    CiBoxSystemPerl,
+    CpanTopN,
+}
+
+/// Manifest-driven corpus definition.
+#[derive(Debug, Clone)]
+pub struct CorpusManifest {
+    pub path: PathBuf,
+    pub perl5lib: Vec<PathBuf>,
+    pub min_resolved: usize,
+}
+
+/// In-memory measurement options.
+#[derive(Debug, Clone)]
+pub struct MeasureOptions {
+    pub corpus_profile: String,
+    pub base_roots: Vec<PathBuf>,
+    pub verbose: bool,
+}
+
 /// Overall sweep report (serialized to JSON)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SweepReport {
@@ -286,6 +312,13 @@ pub struct RatchetViolation {
     pub current_value: String,
 }
 
+/// Pairwise comparison outcome between current and baseline reports.
+#[derive(Debug, Clone)]
+pub struct ReportComparison {
+    pub clean_delta: i64,
+    pub ratchet_violations: Vec<RatchetViolation>,
+}
+
 /// Default high-level corpus root directories for system Perl
 pub fn default_base_roots() -> Vec<PathBuf> {
     vec![
@@ -313,6 +346,17 @@ pub fn resolve_corpus_roots(base_roots: &[PathBuf]) -> Vec<PathBuf> {
         }
     }
     if roots.is_empty() { base_roots.to_vec() } else { roots }
+}
+
+/// Intentionally exported for upcoming parser-ratchet orchestration integration.
+#[allow(dead_code)]
+/// Resolve a source selector into the same default corpus roots currently used by the CLI.
+pub fn discover_system_perl(source: CorpusSource) -> Vec<PathBuf> {
+    match source {
+        CorpusSource::RepoOwned | CorpusSource::CiBoxSystemPerl | CorpusSource::CpanTopN => {
+            resolve_corpus_roots(&default_base_roots())
+        }
+    }
 }
 
 /// Get the Perl version from the system `perl` binary
@@ -383,6 +427,11 @@ pub fn parse_manifest(manifest_path: &Path) -> Result<Vec<String>> {
         modules.push(trimmed.to_string());
     }
     Ok(modules)
+}
+
+/// Discover manifest module paths.
+pub fn discover_manifest(manifest: &CorpusManifest) -> Result<Vec<PathBuf>> {
+    resolve_manifest_modules(&manifest.path, &manifest.perl5lib, manifest.min_resolved)
 }
 
 /// Resolve module names to file paths via a single `perl` invocation.
@@ -653,39 +702,14 @@ fn compute_median_error_density(measurements: &[FileMeasurement]) -> Option<f64>
     Some(median)
 }
 
-/// Run the corpus sweep with the given configuration
-pub fn run(config: SweepConfig) -> Result<()> {
+fn measure_paths(
+    pm_files: &[PathBuf],
+    options: &MeasureOptions,
+    use_manifest: bool,
+    resolved_roots_count: usize,
+    discovery_ms: u64,
+) -> SweepReport {
     let start_time = Instant::now();
-
-    // Determine corpus profile and file list
-    let default_profile =
-        if config.manifest_path.is_some() { "common".to_string() } else { "system".to_string() };
-    let corpus_profile = config.corpus_profile.clone().unwrap_or(default_profile);
-
-    let discovery_start = Instant::now();
-    let pm_files = if let Some(ref manifest) = config.manifest_path {
-        resolve_manifest_modules(manifest, &config.manifest_perl5lib, 6)?
-    } else {
-        discover_pm_files(&config.corpus_roots)
-    };
-    let discovery_ms = discovery_start.elapsed().as_millis() as u64;
-
-    let use_manifest = config.manifest_path.is_some();
-    if pm_files.is_empty() {
-        if use_manifest {
-            println!("No modules resolved from manifest.");
-        } else {
-            println!("No .pm files found in specified roots.");
-            println!("Searched: {:?}", config.corpus_roots);
-        }
-        return Ok(());
-    }
-
-    if use_manifest {
-        println!("Resolved {} modules from manifest", pm_files.len());
-    } else {
-        println!("Found {} .pm files across {} roots", pm_files.len(), config.corpus_roots.len());
-    }
 
     // Parse each file
     let progress = ProgressBar::new(pm_files.len() as u64);
@@ -722,7 +746,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
     // without paying the verbose-serialization cost.
     let mut measurements: Vec<FileMeasurement> = Vec::with_capacity(pm_files.len());
 
-    for path in &pm_files {
+    for path in pm_files {
         total_files += 1;
         let portable_path = portable_report_path(path);
         progress.set_message(
@@ -737,7 +761,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
             Ok(s) => s,
             Err(_) => {
                 files_unreadable += 1;
-                if config.verbose {
+                if options.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
                         status: "unreadable".to_string(),
@@ -776,7 +800,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                     line_count,
                     error_node_count: 0,
                 });
-                if config.verbose {
+                if options.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
                         status: "catastrophic".to_string(),
@@ -806,7 +830,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
         match salvage.class {
             RecoverySalvageClass::Clean => {
                 clean_files += 1;
-                if config.verbose {
+                if options.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
                         status: "clean".to_string(),
@@ -822,7 +846,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 files_with_errors += 1;
                 total_dirty_files += 1;
                 files_with_structured_recovery_only += 1;
-                if config.verbose {
+                if options.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
                         status: "recovered".to_string(),
@@ -844,7 +868,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 *first_unrecovered_error_node_buckets.entry(bucket.clone()).or_default() += 1;
                 *first_error_buckets.entry(bucket.clone()).or_default() += 1;
                 files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
-                if config.verbose {
+                if options.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
                         status: "errors".to_string(),
@@ -890,17 +914,13 @@ pub fn run(config: SweepConfig) -> Result<()> {
     };
     let slowest_files = top_n_slowest(&measurements, SLOWEST_FILES_LIMIT);
 
-    let report = SweepReport {
+    SweepReport {
         schema_version: "1.3.0".to_string(),
         commit,
         timestamp: chrono::Utc::now().to_rfc3339(),
-        corpus_profile: corpus_profile.clone(),
-        corpus_roots: if use_manifest {
-            vec![config.manifest_path.as_ref().map(|p| portable_report_path(p)).unwrap_or_default()]
-        } else {
-            config.base_roots.iter().map(|p| portable_report_path(p)).collect()
-        },
-        resolved_roots_count: if use_manifest { pm_files.len() } else { config.corpus_roots.len() },
+        corpus_profile: options.corpus_profile.clone(),
+        corpus_roots: options.base_roots.iter().map(|p| portable_report_path(p)).collect(),
+        resolved_roots_count: if use_manifest { pm_files.len() } else { resolved_roots_count },
         perl_version: get_perl_version(),
         total_files,
         files_unreadable,
@@ -915,18 +935,101 @@ pub fn run(config: SweepConfig) -> Result<()> {
         first_unrecovered_error_node_buckets,
         first_error_buckets,
         files_by_bucket,
-        file_results: if config.verbose { file_results } else { Vec::new() },
+        file_results: if options.verbose { file_results } else { Vec::new() },
         elapsed_secs: elapsed.as_secs_f64(),
         phase_timings: Some(phase_timings),
         median_error_density_per_1k_loc,
         recovery_salvage_rate,
         slowest_files,
+    }
+}
+
+/// Measure a manifest corpus and return a report in memory.
+pub fn measure_manifest(
+    manifest: &CorpusManifest,
+    options: &MeasureOptions,
+) -> Result<SweepReport> {
+    let discovery_start = Instant::now();
+    let pm_files = discover_manifest(manifest)?;
+    let discovery_ms = discovery_start.elapsed().as_millis() as u64;
+    Ok(measure_paths(&pm_files, options, true, pm_files.len(), discovery_ms))
+}
+
+/// Measure a corpus discovered from roots and return a report in memory.
+pub fn measure_corpus(roots: &[PathBuf], options: &MeasureOptions) -> SweepReport {
+    let discovery_start = Instant::now();
+    let pm_files = discover_repo_corpus(roots);
+    let discovery_ms = discovery_start.elapsed().as_millis() as u64;
+    measure_paths(&pm_files, options, false, roots.len(), discovery_ms)
+}
+
+pub fn write_sweep_receipt(report: &SweepReport, profile: &str) -> Result<PathBuf> {
+    let receipt_path = receipt_path_for_profile(profile);
+    if let Some(parent) = receipt_path.parent() {
+        fs::create_dir_all(parent).context("Failed to create receipt directory")?;
+    }
+    let json = serde_json::to_string_pretty(report).context("Failed to serialize receipt")?;
+    fs::write(&receipt_path, json).context("Failed to write receipt file")?;
+    Ok(receipt_path)
+}
+
+pub fn compare_reports(report: &SweepReport, baseline: &SweepReport) -> ReportComparison {
+    ReportComparison {
+        clean_delta: report.clean_files as i64 - baseline.clean_files as i64,
+        ratchet_violations: enforce_ratchet(report, baseline),
+    }
+}
+
+/// Run the corpus sweep with the given configuration
+pub fn run(config: SweepConfig) -> Result<()> {
+    let default_profile =
+        if config.manifest_path.is_some() { "common".to_string() } else { "system".to_string() };
+    let corpus_profile = config.corpus_profile.clone().unwrap_or(default_profile);
+    let use_manifest = config.manifest_path.is_some();
+
+    let report = if let Some(ref manifest_path) = config.manifest_path {
+        let manifest = CorpusManifest {
+            path: manifest_path.clone(),
+            perl5lib: config.manifest_perl5lib.clone(),
+            min_resolved: 6,
+        };
+        let options = MeasureOptions {
+            corpus_profile: corpus_profile.clone(),
+            base_roots: vec![manifest_path.clone()],
+            verbose: config.verbose,
+        };
+        measure_manifest(&manifest, &options)?
+    } else {
+        let options = MeasureOptions {
+            corpus_profile: corpus_profile.clone(),
+            base_roots: config.base_roots.clone(),
+            verbose: config.verbose,
+        };
+        measure_corpus(&config.corpus_roots, &options)
     };
 
-    // Print summary
+    if report.total_files == 0 {
+        if use_manifest {
+            println!("No modules resolved from manifest.");
+        } else {
+            println!("No .pm files found in specified roots.");
+            println!("Searched: {:?}", config.corpus_roots);
+        }
+        return Ok(());
+    }
+
+    if use_manifest {
+        println!("Resolved {} modules from manifest", report.total_files);
+    } else {
+        println!(
+            "Found {} .pm files across {} roots",
+            report.total_files,
+            config.corpus_roots.len()
+        );
+    }
+
     print_summary(&report);
 
-    // Write output if requested
     if let Some(ref output_path) = config.output_path {
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent).context("Failed to create output directory")?;
@@ -936,18 +1039,11 @@ pub fn run(config: SweepConfig) -> Result<()> {
         println!("\nReport written to: {}", output_path.display());
     }
 
-    // Write receipt if requested
     if config.receipt {
-        let receipt_path = receipt_path_for_profile(&corpus_profile);
-        if let Some(parent) = receipt_path.parent() {
-            fs::create_dir_all(parent).context("Failed to create receipt directory")?;
-        }
-        let json = serde_json::to_string_pretty(&report).context("Failed to serialize receipt")?;
-        fs::write(&receipt_path, json).context("Failed to write receipt file")?;
+        let receipt_path = write_sweep_receipt(&report, &corpus_profile)?;
         eprintln!("Receipt written to: {}", receipt_path.display());
     }
 
-    // Enforcement: strict clean for manifest mode, ratchet for system mode
     if use_manifest && config.enforce {
         let violations = enforce_strict_clean(&report);
         if !violations.is_empty() {
@@ -966,12 +1062,12 @@ pub fn run(config: SweepConfig) -> Result<()> {
         println!("Strict clean: all {} files parse without errors", report.total_files);
     }
 
-    // Baseline comparison and ratchet enforcement (system mode)
     if let Some(ref baseline_path) = config.baseline_path {
         let baseline_json =
             fs::read_to_string(baseline_path).context("Failed to read baseline file")?;
         let baseline: SweepReport =
             serde_json::from_str(&baseline_json).context("Failed to parse baseline JSON")?;
+        let comparison = compare_reports(&report, &baseline);
 
         println!("\n--- Baseline comparison ---");
         println!(
@@ -987,7 +1083,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
             100.0 * report.clean_files as f64 / report.total_files.max(1) as f64,
         );
 
-        let delta = report.clean_files as i64 - baseline.clean_files as i64;
+        let delta = comparison.clean_delta;
         if delta > 0 {
             println!("Result: +{delta} clean files (improvement)");
         } else if delta < 0 {
@@ -997,7 +1093,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
         }
 
         if config.enforce {
-            let violations = enforce_ratchet(&report, &baseline);
+            let violations = comparison.ratchet_violations;
             if !violations.is_empty() {
                 println!("\n--- Ratchet violations ---");
                 for v in &violations {
@@ -1109,6 +1205,11 @@ fn discover_pm_files(roots: &[PathBuf]) -> Vec<PathBuf> {
     }
     files.sort();
     files
+}
+
+/// Discover repository-owned corpus files from configured roots.
+pub fn discover_repo_corpus(roots: &[PathBuf]) -> Vec<PathBuf> {
+    discover_pm_files(roots)
 }
 
 /// Normalize error messages into semantic buckets.
@@ -1680,6 +1781,27 @@ mod tests {
             .expect("write manifest");
         let modules = parse_manifest(&manifest).expect("parse manifest");
         assert_eq!(modules, vec!["Exporter", "Carp", "File::Find"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_measure_corpus_produces_report_in_memory() {
+        let dir = std::env::temp_dir().join("test_measure_corpus_report_in_memory");
+        let _ = fs::create_dir_all(&dir);
+        let module = dir.join("Local.pm");
+        fs::write(&module, "package Local;\nsub ok { 1 }\n1;\n").expect("write module");
+
+        let options = MeasureOptions {
+            corpus_profile: "repo".to_string(),
+            base_roots: vec![dir.clone()],
+            verbose: false,
+        };
+        let report = measure_corpus(std::slice::from_ref(&dir), &options);
+        assert_eq!(report.corpus_profile, "repo");
+        assert_eq!(report.total_files, 1);
+        assert_eq!(report.clean_files, 1);
+        assert_eq!(report.files_with_errors, 0);
+
         let _ = fs::remove_dir_all(&dir);
     }
 
