@@ -129,9 +129,7 @@ impl ExportSymbolExtractor {
             // Pattern 4a: `our @ISA = qw(Exporter ...);` (declared form)
             NodeKind::VariableDeclaration { variable, initializer: Some(init), .. } => {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
-                    if sigil == "@" && name == "ISA"
-                        && Self::initializer_contains_exporter(init)
-                    {
+                    if sigil == "@" && name == "ISA" && Self::initializer_contains_exporter(init) {
                         return Some(ExporterDetector::OurIsaExporter);
                     }
                 }
@@ -139,9 +137,7 @@ impl ExportSymbolExtractor {
             // Pattern 4b: `@ISA = qw(Exporter ...);` (bare assignment without `our`)
             NodeKind::Assignment { lhs, rhs, .. } => {
                 if let NodeKind::Variable { sigil, name } = &lhs.kind {
-                    if sigil == "@" && name == "ISA"
-                        && Self::initializer_contains_exporter(rhs)
-                    {
+                    if sigil == "@" && name == "ISA" && Self::initializer_contains_exporter(rhs) {
                         return Some(ExporterDetector::OurIsaExporter);
                     }
                 }
@@ -183,10 +179,9 @@ impl ExportSymbolExtractor {
                 Some(c) => c,
                 None => return false,
             };
-            if let (Some(start), Some(end)) = (
-                arg[open_pos..].find(|c: char| !c.is_whitespace()),
-                arg.rfind(close),
-            ) {
+            if let (Some(start), Some(end)) =
+                (arg[open_pos..].find(|c: char| !c.is_whitespace()), arg.rfind(close))
+            {
                 let content = &arg[open_pos + start + 1..end];
                 return content.split_whitespace().any(|w| w == "Exporter");
             }
@@ -491,10 +486,7 @@ our @EXPORT = qw(base_qw_func);
 1;
 "#;
         let info = parse_and_extract(code);
-        assert!(
-            info.is_some(),
-            "Should detect `use base qw(Exporter ...)` as Exporter-based"
-        );
+        assert!(info.is_some(), "Should detect `use base qw(Exporter ...)` as Exporter-based");
         let info = info.unwrap();
         assert!(info.default_export.contains("base_qw_func"));
     }
@@ -655,10 +647,7 @@ our @EXPORT = qw(multi_func);
 1;
 "#;
         let info = parse_and_extract(code);
-        assert!(
-            info.is_some(),
-            "Should detect Exporter even when mixed with other @ISA parents"
-        );
+        assert!(info.is_some(), "Should detect Exporter even when mixed with other @ISA parents");
         let info = info.unwrap();
         assert!(info.default_export.contains("multi_func"));
     }
