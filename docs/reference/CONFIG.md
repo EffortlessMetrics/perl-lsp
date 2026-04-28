@@ -512,7 +512,7 @@ decrease them for resource-constrained environments.
 
 ## CLI Flags
 
-Flags passed when launching the `perl-lsp` binary. Source:
+Flags passed when launching the `perllsp` binary. Source:
 `crates/perl-lsp-launcher/src/lib.rs`.
 
 ### Server mode
@@ -559,7 +559,7 @@ perllsp --completion bash >> ~/.bashrc  # install bash completions
 
 ## Environment Variables
 
-Environment variables read at startup by the `perl-lsp` binary. Source:
+Environment variables read at startup by the `perllsp` binary. Source:
 `crates/perl-lsp-launcher/src/lib.rs`.
 
 ### `PERL_LSP_LOG`
@@ -615,7 +615,7 @@ behaviour such as binary management and feature toggles.
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perl-lsp` binary. Empty = auto-download. |
+| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perllsp` binary. Empty = auto-download. |
 | `perl-lsp.autoDownload` | `boolean` | `true` | Download the binary automatically if not found locally. |
 | `perl-lsp.downloadBaseUrl` | `string` | `""` | Override the GitHub releases base URL for internal mirrors. |
 | `perl-lsp.channel` | `"latest"\|"stable"\|"tag"` | `"latest"` | Release channel to track. |
@@ -857,11 +857,40 @@ inlayHints.enabled = true
 #### Emacs (eglot)
 
 ```elisp
-(setq-default eglot-workspace-configuration
-  '((perl
-     (workspace
-      (includePaths . ["lib" "." "local/lib/perl5"])
-      (useSystemInc . :json-false)))))
+(use-package eglot
+  :ensure nil
+  :hook ((perl-mode . eglot-ensure)
+         (cperl-mode . eglot-ensure))
+  :config
+  (add-to-list 'eglot-server-programs
+               '(((perl-mode :language-id "perl")
+                  (cperl-mode :language-id "perl"))
+                 . ("perllsp" "--stdio"
+                    :initializationOptions
+                    (:perl
+                     (:workspace
+                      (:includePaths ["lib" "." "local/lib/perl5"]
+                       :useSystemInc :json-false)))))))
+```
+
+#### Emacs (`lsp-mode`)
+
+```elisp
+(use-package lsp-mode
+  :commands (lsp lsp-deferred)
+  :hook ((perl-mode . lsp-deferred)
+         (cperl-mode . lsp-deferred))
+  :config
+  (add-to-list 'lsp-language-id-configuration '(perl-mode . "perl"))
+  (add-to-list 'lsp-language-id-configuration '(cperl-mode . "perl"))
+
+  (lsp-register-client
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection '("perllsp" "--stdio"))
+    :activation-fn (lsp-activate-on "perl")
+    :major-modes '(perl-mode cperl-mode)
+    :priority 1
+    :server-id 'perllsp)))
 ```
 
 #### Sublime Text (LSP package)
