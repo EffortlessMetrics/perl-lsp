@@ -955,12 +955,6 @@ enum Commands {
         fail_on_advisory: bool,
     },
 
-    /// Emit, verify, and reconcile SHA-bound merge-readiness receipts.
-    MergeReady {
-        #[command(subcommand)]
-        command: MergeReadyCommand,
-    },
-
     /// Track ignored tests and enforce gate policy
     IgnoredTests {
         /// Write current counts back to baseline
@@ -1688,17 +1682,6 @@ enum QueueCommand {
 }
 
 #[derive(Subcommand)]
-enum MergeReadyCommand {
-    /// Reconcile merge-ready labels across the queue.
-    #[command(name = "reconcile-queue")]
-    ReconcileQueue {
-        /// Apply label changes (default: dry-run).
-        #[arg(long)]
-        apply: bool,
-    },
-}
-
-#[derive(Subcommand)]
 enum GateReceiptsCommand {
     /// List registered receipt schemas.
     List {
@@ -1926,11 +1909,6 @@ fn main() -> Result<()> {
                     receipt,
                     config,
                 })
-            }
-        },
-        Commands::MergeReady { command } => match command {
-            MergeReadyCommand::ReconcileQueue { apply } => {
-                queue_reconciler::reconcile_queue(apply, None, None)
             }
         },
         Commands::CorpusAudit { corpus_path, output, check, fresh } => {
