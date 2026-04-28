@@ -39,6 +39,34 @@ problem is usually in editor integration, workspace roots, or a stale cache.
 
 If the editor is using a helper extension or plugin, check its own logs too.
 
+## Sublime Text Does Not Start `perllsp`
+
+1. Confirm `perllsp` works outside Sublime:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+2. Confirm the `LSP` package is installed.
+3. Confirm `Preferences: LSP Server Configurations` contains:
+
+   ```json
+   {
+     "perl-lsp": {
+       "enabled": true,
+       "command": ["perllsp", "--stdio"],
+       "selector": "source.perl"
+     }
+   }
+   ```
+
+4. Run `Tools > Developer > Show Scope Name` in a Perl file and confirm the
+   root scope matches the configured selector.
+5. Run `LSP: Troubleshoot Server` and `LSP: Toggle Log Panel`.
+6. If Sublime cannot find `perllsp`, use an absolute path in `command`.
+
 ## Diagnostics Or Completions Are Missing
 
 - Re-check the install with `perllsp --health`.
