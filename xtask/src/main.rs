@@ -280,6 +280,21 @@ enum Commands {
         all: bool,
     },
 
+    /// Classify CI failures before routing labels/actions are applied.
+    FailureClassifier {
+        /// Queue snapshot JSON containing PR/master check context.
+        #[arg(long)]
+        snapshot: Option<PathBuf>,
+
+        /// Path to write failure-classifier receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Path to fixture JSON for testing classifier logic.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+
     /// Format code
     Fmt {
         /// Check formatting without making changes
@@ -1803,6 +1818,13 @@ fn main() -> Result<()> {
         ),
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
+        Commands::FailureClassifier { snapshot, receipt, fixture } => {
+            failure_classifier::run(failure_classifier::FailureClassifierConfig {
+                snapshot,
+                receipt,
+                fixture,
+            })
+        }
         Commands::Fmt { check, package } => fmt::run(check, package),
         #[cfg(feature = "legacy")]
         Commands::Corpus { path, scanner, diagnose, test } => {
