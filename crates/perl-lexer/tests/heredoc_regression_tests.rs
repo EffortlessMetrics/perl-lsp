@@ -1,4 +1,4 @@
-use perl_lexer::PerlLexer;
+use perl_lexer::{PerlLexer, TokenType};
 
 #[test]
 fn lexer_terminates_on_backtick_heredoc_with_cr() {
@@ -84,4 +84,33 @@ fn lexer_handles_malformed_heredoc_gracefully() {
         }
         assert!(token_count < 20, "Too many tokens, possible infinite loop");
     }
+}
+
+#[test]
+fn lexer_rejects_unterminated_backtick_heredoc_label() {
+    let input = "<<`EOF\rprint 1;\r";
+    let mut lx = PerlLexer::new(input);
+    let tokens = lx.collect_tokens();
+
+    let has_heredoc = tokens.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    assert!(!has_heredoc, "unterminated backtick label should not become heredoc");
+    assert!(tokens.iter().any(|t| matches!(t.token_type, TokenType::EOF)));
+}
+
+#[test]
+fn lexer_handles_data_markers_with_cr_line_endings() {
+    let input = "my $x = 1;\r__DATA__\rline one\rline two\r";
+    let mut lx = PerlLexer::new(input);
+    let tokens = lx.collect_tokens();
+
+    assert!(
+        tokens
+            .iter()
+            .any(|t| matches!(&t.token_type, TokenType::DataMarker(marker) if marker.as_ref() == "__DATA__")),
+        "expected __DATA__ marker in CR-delimited source"
+    );
+    assert!(
+        tokens.iter().any(|t| matches!(t.token_type, TokenType::DataBody(_))),
+        "expected data body after __DATA__ marker"
+    );
 }

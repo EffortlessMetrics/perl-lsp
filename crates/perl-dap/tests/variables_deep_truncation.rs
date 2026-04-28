@@ -71,6 +71,38 @@ mod deep_truncation_tests {
     }
 
     #[test]
+    fn test_500element_array_pagination_is_deterministic() {
+        let renderer = PerlVariableRenderer::new();
+        let elements: Vec<PerlValue> = (0..500).map(PerlValue::Integer).collect();
+        let value = PerlValue::Array(elements);
+
+        let first_page = renderer.render_children(&value, 100, 20);
+        let second_page = renderer.render_children(&value, 100, 20);
+
+        assert_eq!(first_page, second_page, "same page request should be stable across repeats");
+        assert_eq!(first_page.len(), 20);
+        assert_eq!(first_page[0].name, "[100]");
+        assert_eq!(first_page[19].name, "[119]");
+    }
+
+    #[test]
+    fn test_deep_hash_child_window_respects_start_and_count() {
+        let renderer = PerlVariableRenderer::new();
+        let value = PerlValue::Hash(vec![
+            ("k0".to_string(), PerlValue::Integer(0)),
+            ("k1".to_string(), PerlValue::Integer(1)),
+            ("k2".to_string(), PerlValue::Integer(2)),
+            ("k3".to_string(), PerlValue::Integer(3)),
+            ("k4".to_string(), PerlValue::Integer(4)),
+        ]);
+
+        let page = renderer.render_children(&value, 1, 2);
+        assert_eq!(page.len(), 2);
+        assert_eq!(page[0].name, "k1");
+        assert_eq!(page[1].name, "k2");
+    }
+
+    #[test]
     fn test_cyclic_reference_rendering() {
         let renderer = PerlVariableRenderer::new();
 

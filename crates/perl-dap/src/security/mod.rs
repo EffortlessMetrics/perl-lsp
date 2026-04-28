@@ -59,6 +59,9 @@ impl From<WorkspacePathError> for SecurityError {
             WorkspacePathError::PathOutsideWorkspace(message) => {
                 Self::PathOutsideWorkspace(message)
             }
+            WorkspacePathError::SymlinkOutsideWorkspace(message) => {
+                Self::SymlinkOutsideWorkspace(message)
+            }
             WorkspacePathError::InvalidPathCharacters => Self::InvalidPathCharacters,
         }
     }
