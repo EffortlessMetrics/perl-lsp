@@ -448,7 +448,10 @@ fn whitespace_only_include_paths_are_ignored() -> Result<(), Box<dyn std::error:
 
     match result {
         ModuleUriResolution::Resolved(uri) => {
-            assert!(uri.ends_with("lib/Trimmed.pm"), "resolved URI should end with expected module path, got: {uri}");
+            assert!(
+                uri.ends_with("lib/Trimmed.pm"),
+                "resolved URI should end with expected module path, got: {uri}"
+            );
         }
         other => return Err(format!("expected Resolved, got {other:?}").into()),
     }
