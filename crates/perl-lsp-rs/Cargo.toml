@@ -63,6 +63,7 @@ perl-pod = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-workspace = { workspace = true }
 perl-lexer = { workspace = true }
+perl-uri = { workspace = true }
 lsp-types.workspace = true
 serde = { workspace = true }
 serde_json.workspace = true

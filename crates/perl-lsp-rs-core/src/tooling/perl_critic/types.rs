@@ -88,6 +88,11 @@ pub struct CriticConfig {
     pub color: bool,
     /// Timeout in seconds for the perlcritic subprocess. Default: 30.
     pub timeout_secs: u64,
+    /// Maximum number of file results to keep in the violation cache. Default: 512.
+    ///
+    /// When the cache is full, the least-recently-used entry is evicted to make
+    /// room for the new result. Set to 0 to disable caching entirely.
+    pub max_cache_entries: usize,
 }
 
 impl Default for CriticConfig {
@@ -101,6 +106,7 @@ impl Default for CriticConfig {
             verbose: false,
             color: false,
             timeout_secs: 30,
+            max_cache_entries: 512,
         }
     }
 }

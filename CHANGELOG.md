@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **First-run error messaging now surfaces to users instead of silent logging** — When
+  workspace root is not detected (e.g., opening a single file without opening a folder),
+  perl-lsp now sends a `window/showMessage` notification with actionable guidance:
+  "perl-lsp: workspace root not detected — module resolution disabled. To enable: open
+  the project folder in your editor (File > Open Folder) rather than individual files.
+  This warning appears once per server session." Previously this was logged to the server
+  log only and users saw nothing. The warning flag is stored as an `Arc<AtomicBool>` on
+  `LspServer`, so each server session shows the warning independently — in multi-root or
+  multi-server workspace configurations, each `LspServer` instance tracks its own shown
+  state rather than sharing a process-level `Once`. (#4178)
+
 ### Internal
 
 - **`cargo xtask published-crate-count`** — new ratchet gate that monitors the
