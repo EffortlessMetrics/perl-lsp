@@ -223,6 +223,7 @@ pub mod cases;
 pub mod codegen;
 pub mod continue_redo;
 pub mod files;
+pub mod fixture_expectations;
 pub mod format_statements;
 pub mod r#gen;
 pub mod glob_expressions;
