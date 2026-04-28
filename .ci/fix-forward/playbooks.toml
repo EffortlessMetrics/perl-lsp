@@ -23,7 +23,7 @@ match_output_contains = ["stale base", "base branch moved", "rebase required"]
 [[playbooks]]
 kind = "GENERATED_DOC_REGEN"
 safe_auto_fix = false
-command = "cargo xtask status-docs"
+command = "cargo xtask update-status --write"
 match_gate_names = ["status-docs", "generated-docs", "docs-regen"]
 match_output_contains = ["generated docs", "status docs", "CURRENT_STATUS"]
 
