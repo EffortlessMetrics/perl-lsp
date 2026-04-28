@@ -1,0 +1,63 @@
+name: Workflow Trigger Lint
+
+on:
+  pull_request:
+    branches: [master]
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches: [master]
+
+concurrency:
+  group: workflow-trigger-lint-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Workflow Trigger Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: stable
+
+      - name: Run workflow trigger lint (advisory)
+        id: lint
+        shell: bash
+        run: |
+          set +e
+          cargo xtask workflow-trigger-lint \
+            --policy .ci/policies/required-checks.toml \
+            --receipt target/receipts/workflow-trigger-lint.json \
+            --format json
+          status=$?
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" -ne 0 ]; then
+            echo "Workflow trigger lint is currently advisory; violations are reported but do not fail this workflow." >&2
+          fi
+          exit 0
+
+      - name: Upload receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-trigger-lint-receipt
+          path: target/receipts/workflow-trigger-lint.json
+          if-no-files-found: warn
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ steps.lint.outputs.exit_code }}" = "0" ]; then
+            echo "## Workflow trigger lint passed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Workflow trigger lint (advisory) found violations" >> "$GITHUB_STEP_SUMMARY"
+            echo "Conventional required-check policy in .ci/policies/required-checks.toml is enforced in advisory mode until ruleset required checks are configured." >> "$GITHUB_STEP_SUMMARY"
+          fi

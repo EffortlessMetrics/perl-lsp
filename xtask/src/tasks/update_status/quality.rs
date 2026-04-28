@@ -1,16 +1,31 @@
 //! Quality subsystem status generator.
 //!
-//! Owns per-crate mutation and test counts, UX scenario receipt, and quality.md generation.
+//! Owns per-crate mutation and lib-test counts; delegates UX receipt generation
+//! to `editor_ux` and flaky-test tracking to `flaky`.
+
+// LazyLock<Regex> initializers use .expect() for known-good patterns — permitted by coding standards.
+#![allow(clippy::expect_used)]
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Duration;
 
-use color_eyre::eyre::{Context, Result};
-use serde::Deserialize;
+use color_eyre::eyre::Result;
+use regex::Regex;
 
-use super::{replace_block, run_cmd};
+use super::editor_ux::count_ux_scenarios;
+use super::flaky::{collect_flaky_test_summary, format_flaky_tests_section};
+use super::{replace_block, run_cmd_merged};
+
+static RUNNING_TEST_BINARY_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)")
+        .expect("running-test regex is valid")
+});
+
+static TEST_LIST_LINE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r":\s*test\s*$").expect("test-list-line regex is valid"));
 
 // ---------------------------------------------------------------------------
 // Metric collectors
@@ -34,10 +49,14 @@ pub(super) fn collect_per_crate_mutation(root: &Path) -> BTreeMap<String, usize>
     by_crate
 }
 
-/// Parse `cargo test --workspace --lib -- --list` output and return a map of
-/// crate-name → test count.
+/// Run `cargo test --workspace --lib -- --list` and return a map of crate-name → test count.
+///
+/// `cargo test -- --list` writes crate headers ("Running unittests …") to stderr and test
+/// names to stdout.  `run_cmd_merged` (shell `2>&1`) ensures headers appear immediately
+/// before the test names they introduce, so the parser correctly associates each name with
+/// its crate.
 pub(super) fn collect_per_crate_test_counts(root: &Path) -> BTreeMap<String, usize> {
-    let output = run_cmd(
+    let output = run_cmd_merged(
         root,
         &["cargo", "test", "--workspace", "--lib", "--exclude", "tree-sitter-perl", "--", "--list"],
         Duration::from_secs(180),
@@ -45,33 +64,27 @@ pub(super) fn collect_per_crate_test_counts(root: &Path) -> BTreeMap<String, usi
     if output.is_empty() {
         return BTreeMap::new();
     }
+    parse_per_crate_test_counts(&output)
+}
 
-    let running_re = regex::Regex::new(
-        r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)",
-    )
-    .ok();
-    let test_re = regex::Regex::new(r":\s*test\s*$").ok();
-
+fn parse_per_crate_test_counts(output: &str) -> BTreeMap<String, usize> {
     let mut by_crate: BTreeMap<String, usize> = BTreeMap::new();
     let mut current_crate: Option<String> = None;
-
     for line in output.lines() {
-        if let Some(caps) = running_re.as_ref().and_then(|r| r.captures(line)) {
-            let name = caps[1].replace('_', "-");
-            current_crate = Some(name);
+        if let Some(caps) = RUNNING_TEST_BINARY_RE.captures(line) {
+            current_crate = Some(caps[1].replace('_', "-"));
             continue;
         }
-        if let Some(re) = test_re.as_ref()
-            && re.is_match(line)
-            && let Some(ref crate_name) = current_crate
+        if TEST_LIST_LINE_RE.is_match(line)
+            && let Some(ref krate) = current_crate
         {
-            *by_crate.entry(crate_name.clone()).or_default() += 1;
+            *by_crate.entry(krate.clone()).or_default() += 1;
         }
     }
     by_crate
 }
 
-/// Format a combined per-crate markdown table showing mutation count and test count.
+/// Format a per-crate markdown table showing mutation count and test count.
 pub(super) fn format_crate_quality_table(
     mutation: &BTreeMap<String, usize>,
     tests: &BTreeMap<String, usize>,
@@ -83,85 +96,22 @@ pub(super) fn format_crate_quality_table(
     for k in tests.keys() {
         crates.insert(k.as_str());
     }
-
     if crates.is_empty() {
         return "| Crate | Mutants listed | Tests (lib) |\n\
                 |-------|---------------|-------------|\n\
                 | — | no data yet | no data yet |"
             .to_string();
     }
-
     let mut lines = vec![
         "| Crate | Mutants listed | Tests (lib) |".to_string(),
         "|-------|---------------|-------------|".to_string(),
     ];
-    for crate_name in crates {
-        let mutants = mutation.get(crate_name).map_or_else(|| "—".to_string(), |n| n.to_string());
-        let test_count = tests.get(crate_name).map_or_else(|| "—".to_string(), |n| n.to_string());
-        lines.push(format!("| {crate_name} | {mutants} | {test_count} |"));
+    for c in crates {
+        let m = mutation.get(c).map_or_else(|| "—".to_string(), |n| n.to_string());
+        let t = tests.get(c).map_or_else(|| "—".to_string(), |n| n.to_string());
+        lines.push(format!("| {c} | {m} | {t} |"));
     }
     lines.join("\n")
-}
-
-pub(super) fn collect_ux_scenario_files(root: &Path) -> Vec<String> {
-    let tests_dir = root.join("crates/perl-lsp-ux-tests/tests");
-    let Ok(entries) = fs::read_dir(tests_dir) else {
-        return Vec::new();
-    };
-
-    let mut files: Vec<String> = entries
-        .filter_map(Result::ok)
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .filter(|name| name.starts_with("ux_scenario_") && name.ends_with(".rs"))
-        .map(|name| format!("crates/perl-lsp-ux-tests/tests/{name}"))
-        .collect();
-    files.sort();
-    files
-}
-
-pub(super) fn count_ux_scenarios(root: &Path) -> usize {
-    collect_ux_scenario_files(root).len()
-}
-
-#[derive(Debug, Deserialize)]
-struct EditorUxFixtureMatrix {
-    workflows: Vec<EditorUxWorkflow>,
-}
-
-#[derive(Debug, Deserialize)]
-struct EditorUxWorkflow {
-    // ci_tier is present in the JSON but not used for signal counting;
-    // the fixture integrity test enforces that tags, not tier, are the source of truth.
-    #[allow(dead_code)]
-    ci_tier: String,
-    confidence_signals: Vec<String>,
-}
-
-pub(super) fn collect_editor_ux_confidence_counts(root: &Path) -> Result<BTreeMap<String, usize>> {
-    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
-    let matrix_raw = fs::read_to_string(&matrix_path)
-        .with_context(|| format!("reading {}", matrix_path.display()))?;
-    let matrix: EditorUxFixtureMatrix = serde_json::from_str(&matrix_raw)
-        .with_context(|| format!("parsing {}", matrix_path.display()))?;
-
-    // Count by reading the explicit confidence_signals tags on each workflow.
-    // This is the authoritative source — the fixture matrix integrity test enforces
-    // that every declared signal is exercised by at least one workflow, so any
-    // workflow added without the right tags will fail the matrix integrity test.
-    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-    for workflow in &matrix.workflows {
-        for signal in &workflow.confidence_signals {
-            *counts.entry(signal.clone()).or_insert(0) += 1;
-        }
-    }
-    // Ensure all three canonical signal keys are always present (even if zero),
-    // so callers can unwrap_or(0) without worrying about missing keys.
-    for signal in
-        &["first_five_minutes_harness", "manual_editor_smoke", "issue_burndown_regression_guard"]
-    {
-        counts.entry((*signal).to_string()).or_insert(0);
-    }
-    Ok(counts)
 }
 
 // ---------------------------------------------------------------------------
@@ -172,15 +122,15 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let flaky = collect_flaky_test_summary(root);
 
-    let has_mutation_data = !mutation_by_crate.is_empty();
-    let mutation_note = if has_mutation_data {
-        "per-crate data from `mutants.out/mutants.json` (written by nightly CI `cargo mutants` run)"
-    } else {
+    let mutation_note = if mutation_by_crate.is_empty() {
         "mutation data pending first nightly CI run — run `just mutation-subset` locally to populate"
+    } else {
+        "per-crate data from `mutants.out/mutants.json` (written by nightly CI `cargo mutants` run)"
     };
 
-    let bullets_content = format!(
+    let bullets = format!(
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
@@ -192,13 +142,14 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     );
 
     let crate_table = format_crate_quality_table(&mutation_by_crate, &tests_by_crate);
+    let flaky_section = format_flaky_tests_section(&flaky);
 
     let mut text = original.to_string();
     text = replace_block(
         &text,
         "<!-- BEGIN: QUALITY_METRICS_BULLETS -->",
         "<!-- END: QUALITY_METRICS_BULLETS -->",
-        &bullets_content,
+        &bullets,
     )?;
     text = replace_block(
         &text,
@@ -206,78 +157,13 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "<!-- END: QUALITY_CRATE_TABLE -->",
         &crate_table,
     )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: FLAKY_TESTS_SUMMARY -->",
+        "<!-- END: FLAKY_TESTS_SUMMARY -->",
+        &flaky_section,
+    )?;
     Ok(text)
-}
-
-pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
-    let scenario_files = collect_ux_scenario_files(root);
-    let scenario_count = scenario_files.len();
-    let confidence_counts = collect_editor_ux_confidence_counts(root)?;
-
-    let receipt = serde_json::json!({
-        "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
-        "scorecard": "editor_ux",
-        "harness": {
-            "crate": "crates/perl-lsp-ux-tests",
-            "scenario_count": scenario_count,
-            "scenario_files": scenario_files,
-        },
-        "top_line_metrics": [
-            {
-                "name": "workflow_pass_rate",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-            {
-                "name": "workflow_stability_rate",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-            {
-                "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-        ],
-        "confidence_signals": [
-            {
-                "name": "manual_editor_smoke",
-                "state": "tracked",
-                "owner": "perl-lsp-ux-tests",
-                "workflow_count": confidence_counts
-                    .get("manual_editor_smoke")
-                    .copied()
-                    .unwrap_or(0),
-            },
-            {
-                "name": "first_five_minutes_harness",
-                "state": "tracked",
-                "owner": "perl-lsp-ux-tests",
-                "workflow_count": confidence_counts
-                    .get("first_five_minutes_harness")
-                    .copied()
-                    .unwrap_or(0),
-            },
-            {
-                "name": "issue_burndown_regression_guard",
-                "state": "tracked",
-                "owner": "perl-lsp-ux-tests",
-                "workflow_count": confidence_counts
-                    .get("issue_burndown_regression_guard")
-                    .copied()
-                    .unwrap_or(0),
-            },
-        ],
-        "integration_points": {
-            "ci_lane": "just ux-tests",
-            "release_lane": "just ux-tests-full",
-            "status_update": "cargo xtask update-status --only quality",
-            "quality_surface": "docs/project/status/quality.md",
-        },
-    });
-
-    serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
 }
 
 // ---------------------------------------------------------------------------
@@ -287,7 +173,6 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use color_eyre::eyre::{Result, eyre};
 
     #[test]
     fn test_collect_per_crate_mutation_from_mock_file() -> Result<()> {
@@ -301,8 +186,8 @@ mod tests {
         ]"#;
         fs::write(out_dir.join("mutants.json"), json)?;
         let result = collect_per_crate_mutation(dir.path());
-        assert_eq!(result.get("perl-quote"), Some(&2), "expected 2 mutants for perl-quote");
-        assert_eq!(result.get("perl-parser"), Some(&1), "expected 1 mutant for perl-parser");
+        assert_eq!(result.get("perl-quote"), Some(&2));
+        assert_eq!(result.get("perl-parser"), Some(&1));
         Ok(())
     }
 
@@ -313,79 +198,30 @@ mod tests {
         let mut tests = BTreeMap::new();
         tests.insert("perl-quote".to_string(), 42);
         let table = format_crate_quality_table(&mutation, &tests);
-        assert!(table.contains("Crate"), "missing header");
-        assert!(table.contains("perl-quote"), "missing crate name");
-        assert!(table.contains("249"), "missing mutant count");
-        assert!(table.contains("42"), "missing test count");
+        assert!(
+            table.contains("Crate")
+                && table.contains("perl-quote")
+                && table.contains("249")
+                && table.contains("42")
+        );
     }
 
     #[test]
     fn test_format_crate_quality_table_empty_maps() {
         let table = format_crate_quality_table(&BTreeMap::new(), &BTreeMap::new());
-        assert!(table.contains("no data yet"), "expected 'no data yet' for empty maps");
+        assert!(table.contains("no data yet"));
     }
 
     #[test]
-    fn test_editor_ux_receipt_shape() -> Result<()> {
-        let root = crate::utils::project_root()?;
-        let receipt_raw = generate_editor_ux_receipt(&root)?;
-        let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
-        assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
-        assert_eq!(receipt["scorecard"], "editor_ux");
-        assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
-        assert_eq!(
-            receipt["harness"]["scenario_count"].as_u64(),
-            Some(count_ux_scenarios(&root) as u64)
-        );
-        let top_line_names = receipt["top_line_metrics"]
-            .as_array()
-            .ok_or_else(|| eyre!("top_line_metrics must be an array"))?
-            .iter()
-            .map(|row| row["name"].as_str().ok_or_else(|| eyre!("top_line metric name missing")))
-            .collect::<Result<std::collections::BTreeSet<_>>>()?;
-        assert_eq!(
-            top_line_names,
-            std::collections::BTreeSet::from([
-                "workflow_pass_rate",
-                "workflow_stability_rate",
-                "p95_time_to_first_useful_result_ms",
-            ])
-        );
-        assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
-        let confidence_signals = receipt["confidence_signals"]
-            .as_array()
-            .ok_or_else(|| eyre!("confidence_signals must be an array"))?;
-        let confidence_names: std::collections::BTreeSet<&str> = confidence_signals
-            .iter()
-            .map(|row| row["name"].as_str().ok_or_else(|| eyre!("confidence signal name missing")))
-            .collect::<Result<_>>()?;
-        assert_eq!(
-            confidence_names,
-            std::collections::BTreeSet::from([
-                "manual_editor_smoke",
-                "first_five_minutes_harness",
-                "issue_burndown_regression_guard",
-            ])
-        );
-        // Cross-check: receipt workflow_count values must match what
-        // collect_editor_ux_confidence_counts computes from the fixture tags.
-        // This catches stale hardcoded JSON and verifies the emit path uses
-        // the same source-of-truth function.
-        let live_counts = super::collect_editor_ux_confidence_counts(&root)?;
-        for row in confidence_signals {
-            let name = row["name"].as_str().ok_or_else(|| eyre!("name missing"))?;
-            let receipt_count = row["workflow_count"]
-                .as_u64()
-                .ok_or_else(|| eyre!("workflow_count missing for {name}"))?;
-            let live_count = *live_counts.get(name).unwrap_or(&0) as u64;
-            assert_eq!(
-                receipt_count, live_count,
-                "receipt workflow_count for `{name}` ({receipt_count}) diverges from \
-                 live fixture count ({live_count}) — re-run `cargo xtask update-status` to sync"
-            );
-            assert!(receipt_count > 0, "signal `{name}` has zero workflow coverage");
-        }
-        Ok(())
+    fn test_parse_per_crate_test_counts_parses_unix_and_windows_paths() {
+        let output = "Running unittests src/lib.rs \
+            (target/debug/deps/perl_parser_core-abc123)\n\
+            lexer_edge_case: test\nparser_smoke: test\n\
+            Running unittests src/lib.rs \
+            (target\\debug\\deps\\perl_workspace_index-123def)\n\
+            index_builds: test\n";
+        let counts = parse_per_crate_test_counts(output);
+        assert_eq!(counts.get("perl-parser-core"), Some(&2));
+        assert_eq!(counts.get("perl-workspace-index"), Some(&1));
     }
 }

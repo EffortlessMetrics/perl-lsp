@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/agent-task.schema.json",
+  "title": "AgentTask",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "snapshot_id",
+    "lane",
+    "pr",
+    "head_sha",
+    "base_sha",
+    "canonical_state",
+    "allowed_mutations",
+    "forbidden_mutations",
+    "required_output_schema",
+    "expires_at"
+  ],
+  "properties": {
+    "task_id": { "type": "string", "minLength": 1 },
+    "snapshot_id": { "type": "string", "minLength": 1 },
+    "lane": { "type": "string", "minLength": 1 },
+    "pr": { "type": "integer", "minimum": 1 },
+    "head_sha": { "type": "string", "minLength": 1 },
+    "base_sha": { "type": "string", "minLength": 1 },
+    "canonical_state": { "type": "string", "minLength": 1 },
+    "allowed_mutations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "forbidden_mutations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "required_output_schema": { "type": "string", "minLength": 1 },
+    "expires_at": { "type": "string", "format": "date-time" }
+  }
+}
