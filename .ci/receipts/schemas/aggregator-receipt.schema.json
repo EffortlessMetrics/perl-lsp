@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/schemas/aggregator-receipt.schema.json",
+  "title": "Aggregator Receipt",
+  "type": "object",
+  "required": [
+    "check",
+    "schema_version",
+    "event",
+    "verdict",
+    "classification",
+    "subreceipts",
+    "missing_receipts",
+    "repro"
+  ],
+  "properties": {
+    "check": { "type": "string" },
+    "schema_version": { "type": "string" },
+    "event": { "type": "string" },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail", "warn", "skipped"]
+    },
+    "classification": {
+      "type": "string",
+      "enum": [
+        "code_regression",
+        "infra_failure",
+        "stale_base",
+        "skipped",
+        "unknown"
+      ]
+    },
+    "subreceipts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "selected", "required", "verdict", "classification"],
+        "properties": {
+          "name": { "type": "string" },
+          "selected": { "type": "boolean" },
+          "required": { "type": "boolean" },
+          "verdict": {
+            "type": "string",
+            "enum": ["pass", "fail", "warn", "skipped"]
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "code_regression",
+              "infra_failure",
+              "stale_base",
+              "skipped",
+              "unknown"
+            ]
+          },
+          "repro": {
+            "type": ["object", "null"],
+            "properties": {
+              "command": { "type": "string" }
+            },
+            "required": ["command"],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "missing_receipts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "repro": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

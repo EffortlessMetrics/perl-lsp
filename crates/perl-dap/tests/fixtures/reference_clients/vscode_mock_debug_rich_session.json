@@ -1,0 +1,96 @@
+{
+  "client": "vscode-mock-debug",
+  "description": "Richer request/response protocol surface with sequencing and body-shape assertions",
+  "requests": [
+    {
+      "requestSeq": 101,
+      "command": "initialize",
+      "arguments": {
+        "clientID": "vscode",
+        "clientName": "Visual Studio Code",
+        "adapterID": "perl",
+        "pathFormat": "path",
+        "linesStartAt1": true,
+        "columnsStartAt1": true,
+        "supportsVariableType": true,
+        "supportsVariablePaging": true,
+        "locale": "en-US"
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": [
+        "supportsConfigurationDoneRequest",
+        "supportsSetVariable",
+        "supportsCompletionsRequest"
+      ],
+      "expectedEventsAfter": [
+        { "event": "initialized" }
+      ]
+    },
+    {
+      "requestSeq": 102,
+      "command": "launch",
+      "arguments": {
+        "program": "",
+        "args": [],
+        "stopOnEntry": false
+      },
+      "expectSuccess": false,
+      "requiredMessageContains": "No Perl script was specified"
+    },
+    {
+      "requestSeq": 103,
+      "command": "setBreakpoints",
+      "arguments": {
+        "source": {
+          "path": "${workspaceFolder}/tests/fixtures/hello.pl"
+        },
+        "breakpoints": [
+          { "line": 9 }
+        ]
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["breakpoints"]
+    },
+    {
+      "requestSeq": 104,
+      "command": "configurationDone",
+      "expectSuccess": true
+    },
+    {
+      "requestSeq": 105,
+      "command": "stackTrace",
+      "arguments": { "threadId": 1 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["stackFrames", "totalFrames"]
+    },
+    {
+      "requestSeq": 106,
+      "command": "scopes",
+      "arguments": { "frameId": 1 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["scopes"]
+    },
+    {
+      "requestSeq": 107,
+      "command": "variables",
+      "arguments": { "variablesReference": 1 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["variables"]
+    },
+    {
+      "requestSeq": 108,
+      "command": "evaluate",
+      "arguments": { "expression": "$greeting" },
+      "expectSuccess": false,
+      "requiredMessageContains": "No debugger session"
+    },
+    {
+      "requestSeq": 109,
+      "command": "disconnect",
+      "expectSuccess": true,
+      "expectedEventsAfter": [
+        { "event": "terminated" }
+      ]
+    }
+  ]
+}

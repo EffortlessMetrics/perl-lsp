@@ -176,7 +176,6 @@ fn has_allowed_extension(path: &Path, extensions: &[&str]) -> bool {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -289,6 +288,69 @@ mod tests {
 
         let expected = vec!["app.PsGi", "legacy.CgI", "mixed.Pm", "suite.T", "upper.PL"];
         assert_eq!(names, expected);
+
+        fs::remove_dir_all(&root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn corpus_paths_discover_prefers_env_root() -> Result<(), Box<dyn std::error::Error>> {
+        let root = temp_root("perl_corpus_env_root")?;
+        // SAFETY: This test sets and restores process environment state and does
+        // not spawn threads that read the same variable.
+        unsafe { env::set_var(CORPUS_ROOT_ENV, &root) };
+
+        let discovered = CorpusPaths::discover();
+        assert_eq!(discovered.root, root);
+        assert_eq!(discovered.test_corpus, discovered.root.join("test_corpus"));
+        assert_eq!(discovered.fuzz, discovered.root.join("crates/perl-corpus/fuzz"));
+
+        // SAFETY: This restores the environment variable set by this test.
+        unsafe { env::remove_var(CORPUS_ROOT_ENV) };
+        fs::remove_dir_all(&root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn get_all_test_files_is_sorted_and_deduplicated() -> Result<(), Box<dyn std::error::Error>> {
+        let root = temp_root("perl_corpus_all_files")?;
+        let test_dir = root.join("test_corpus");
+        let fuzz_dir = root.join("crates/perl-corpus/fuzz");
+        fs::create_dir_all(&test_dir)?;
+        fs::create_dir_all(&fuzz_dir)?;
+
+        let shared = test_dir.join("shared.pl");
+        fs::write(&shared, "print 1;\n")?;
+        fs::write(test_dir.join("zzz.pm"), "1;\n")?;
+        fs::write(fuzz_dir.join("aaa.pl"), "print 2;\n")?;
+
+        let paths = CorpusPaths::from_root(root.clone());
+        let mut all: Vec<PathBuf> =
+            get_corpus_files_from(&paths).into_iter().map(|file| file.path).collect();
+        all.sort();
+        all.dedup();
+
+        let mut from_api = {
+            // SAFETY: This test sets and restores process environment state and
+            // does not spawn threads that read the same variable.
+            unsafe { env::set_var(CORPUS_ROOT_ENV, &root) };
+            let files = get_all_test_files();
+            // SAFETY: This restores the environment variable set by this test.
+            unsafe { env::remove_var(CORPUS_ROOT_ENV) };
+            files
+        };
+        from_api.sort();
+        from_api.dedup();
+
+        assert_eq!(from_api, all);
+        assert_eq!(
+            from_api.first().and_then(|p| p.file_name()).and_then(|n| n.to_str()),
+            Some("aaa.pl")
+        );
+        assert_eq!(
+            from_api.last().and_then(|p| p.file_name()).and_then(|n| n.to_str()),
+            Some("zzz.pm")
+        );
 
         fs::remove_dir_all(&root)?;
         Ok(())
