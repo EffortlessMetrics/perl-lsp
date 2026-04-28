@@ -1,0 +1,29 @@
+version = 1
+source = "ruleset-conventional"
+
+[[check]]
+name = "CI Gate"
+workflow = ".github/workflows/ci.yml"
+required = true
+
+[[check]]
+name = "Parser Ratchet"
+workflow = ".github/workflows/parser-ratchet.yml"
+required = false
+
+[[check]]
+name = "Methodology Gate"
+workflow = ".github/workflows/methodology-gate.yml"
+required = false
+
+[[checks]]
+name = "PR Smoke"
+workflow = ".github/workflows/ci.yml"
+
+[[checks]]
+name = "UX Regression Tests"
+workflow = ".github/workflows/ux-regression-gate.yml"
+
+[[checks]]
+name = "Merge Gate"
+workflow = ".github/workflows/ci.yml"

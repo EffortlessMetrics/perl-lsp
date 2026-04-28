@@ -6,6 +6,15 @@ use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
 use serde_json::{Value, json};
 
+fn is_opencode_client(params: &Value) -> bool {
+    params
+        .get("clientInfo")
+        .and_then(|info| info.get("name"))
+        .and_then(|name| name.as_str())
+        .map(|name| name.to_ascii_lowercase().contains("opencode"))
+        .unwrap_or(false)
+}
+
 impl LspServer {
     /// Handle initialize request
     pub(crate) fn handle_initialize(
@@ -76,6 +85,12 @@ impl LspServer {
                     .get("capabilities")
                     .and_then(|c| c.get("workspace"))
                     .and_then(|w| w.get("configuration"))
+                    .and_then(|b| b.as_bool())
+                    .unwrap_or(false);
+                caps.workspace_folders_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("workspace"))
+                    .and_then(|w| w.get("workspaceFolders"))
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
@@ -191,17 +206,27 @@ impl LspServer {
                 }
             } // caps lock released here
 
-            // Check if client supports pull diagnostics
+            // Check if client supports pull diagnostics.
+            //
+            // OpenCode currently relies on push diagnostics (publishDiagnostics)
+            // even when it advertises textDocument.diagnostic capability.
+            // Treat it as push-only to avoid suppressing diagnostics.
+            let is_opencode = is_opencode_client(params);
             let supports_pull = params
                 .get("capabilities")
                 .and_then(|c| c.get("textDocument"))
                 .and_then(|td| td.get("diagnostic"))
                 .is_some();
 
-            if supports_pull {
+            if supports_pull && !is_opencode {
                 self.client_supports_pull_diags.store(true, Ordering::Relaxed);
                 tracing::debug!(
                     "Client supports pull diagnostics - suppressing automatic publishing"
+                );
+            } else if supports_pull && is_opencode {
+                tracing::debug!(
+                    "OpenCode client detected - keeping push diagnostics enabled despite \
+                     textDocument.diagnostic capability"
                 );
             }
 
@@ -245,6 +270,16 @@ impl LspServer {
                     root_uri.clone(),
                 ));
                 self.set_root_uri(&root_uri);
+            } else if let Ok(cwd) = std::env::current_dir() {
+                // Compatibility fallback for lightweight clients (for example Aider)
+                // that initialize without workspaceFolders/rootUri/rootPath.
+                let cwd_uri = root_path_to_file_uri(&cwd.to_string_lossy());
+                let mut folders = self.workspace_folders.lock();
+                folders.push(super::super::workspace_folder::WorkspaceFolderState::new(
+                    cwd_uri.clone(),
+                ));
+                self.set_root_uri(&cwd_uri);
+                tracing::debug!(cwd_uri, "Initialized with process current directory fallback");
             }
         }
 
@@ -267,7 +302,7 @@ impl LspServer {
 
         // TextDocumentSyncKind::Full (1): the server always reparses the full
         // document on every didChange notification.  Advertising Incremental (2)
-        // would be inaccurate — we do not maintain incremental AST state between
+        // would be inaccurate â€” we do not maintain incremental AST state between
         // edits; we rebuild the entire AST from the complete document text each time.
         let sync_kind = 1;
 
@@ -275,12 +310,18 @@ impl LspServer {
         let profile = self.feature_profile();
         let mut build_flags = profile.runtime_flags(has_perltidy);
 
-        // Read user-disabled features from initializationOptions
+        // Read user-disabled features from initializationOptions.
+        //
+        // Supported shapes:
+        //   1) { "disabledFeatures": [...] }
+        //   2) { "perl-lsp": { "disabledFeatures": [...] } }
+        //   3) { "perl_lsp": { "disabledFeatures": [...] } }
+        //
+        // Some generic LSP clients namespace server settings under the server id,
+        // while others pass options at the top level.
         if let Some(init_opts) = params.as_ref().and_then(|p| p.get("initializationOptions")) {
-            if let Some(disabled) = init_opts.get("disabledFeatures").and_then(|v| v.as_array()) {
-                for id in disabled.iter().filter_map(|v| v.as_str()) {
-                    apply_disabled_feature_id(&mut build_flags, id);
-                }
+            for id in disabled_feature_ids_from_init_options(init_opts) {
+                apply_disabled_feature_id(&mut build_flags, id);
             }
         }
 
@@ -316,10 +357,11 @@ impl LspServer {
         });
 
         // Workspace capabilities: folders, file operations, and content schemes
+        let workspace_folders_support = self.client_capabilities.lock().workspace_folders_support;
         capabilities["workspace"] = json!({
             "workspaceFolders": {
-                "supported": true,
-                "changeNotifications": true
+                "supported": workspace_folders_support,
+                "changeNotifications": workspace_folders_support
             },
             "fileOperations": {
                 "willCreate": { "filters": [
@@ -425,12 +467,52 @@ pub(crate) fn apply_disabled_feature_id(
     }
 }
 
+fn disabled_feature_ids_from_init_options(init_opts: &Value) -> Vec<&str> {
+    let top_level = init_opts.get("disabledFeatures").and_then(Value::as_array);
+    let namespaced_hyphen =
+        init_opts.get("perl-lsp").and_then(|v| v.get("disabledFeatures")).and_then(Value::as_array);
+    let namespaced_underscore =
+        init_opts.get("perl_lsp").and_then(|v| v.get("disabledFeatures")).and_then(Value::as_array);
+
+    top_level
+        .into_iter()
+        .chain(namespaced_hyphen)
+        .chain(namespaced_underscore)
+        .flat_map(|entries| entries.iter())
+        .filter_map(Value::as_str)
+        .collect()
+}
+
+#[cfg(test)]
+mod init_options_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn disabled_feature_ids_reads_top_level_and_namespaced_options() {
+        let init_opts = json!({
+            "disabledFeatures": ["lsp.hover", true, 42],
+            "perl-lsp": {
+                "disabledFeatures": ["lsp.completion", null]
+            },
+            "perl_lsp": {
+                "disabledFeatures": ["lsp.semantic_tokens"]
+            }
+        });
+
+        let ids = disabled_feature_ids_from_init_options(&init_opts);
+        assert_eq!(ids, vec!["lsp.hover", "lsp.completion", "lsp.semantic_tokens"]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::apply_disabled_feature_id;
+    use super::{apply_disabled_feature_id, is_opencode_client};
     use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
+    use perl_workspace::folder::root_path_to_file_uri;
     use serde_json::json;
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn apply_disabled_feature_id_zeros_correct_field() {
@@ -486,7 +568,7 @@ mod tests {
             assert!(
                 !still_all,
                 "feature ID '{id}' emitted by to_feature_ids() has no match arm in \
-                 apply_disabled_feature_id — add one to keep the two in sync"
+                 apply_disabled_feature_id â€” add one to keep the two in sync"
             );
         }
     }
@@ -518,7 +600,8 @@ mod tests {
         let params = json!({
             "capabilities": {
                 "workspace": {
-                    "configuration": true
+                    "configuration": true,
+                    "workspaceFolders": true
                 }
             }
         });
@@ -526,6 +609,39 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
+        assert!(server.client_capabilities.lock().workspace_folders_support);
+    }
+
+    #[test]
+    fn initialize_disables_workspace_folder_server_capability_when_client_lacks_support()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "workspace": {
+                    "workspaceFolders": false
+                }
+            }
+        });
+
+        let response =
+            server.handle_initialize(Some(params))?.ok_or("initialize should return payload")?;
+
+        let workspace_folders = response
+            .pointer("/capabilities/workspace/workspaceFolders/supported")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let change_notifications = response
+            .pointer("/capabilities/workspace/workspaceFolders/changeNotifications")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        assert!(!workspace_folders, "server must not advertise unsupported workspace folders");
+        assert!(
+            !change_notifications,
+            "server must not advertise workspace folder change notifications when unsupported"
+        );
+        Ok(())
     }
 
     #[test]
@@ -570,5 +686,98 @@ mod tests {
         let caps = server.client_capabilities.lock();
         assert!(caps.snippet_support);
         assert!(caps.completion_commit_characters_support);
+    }
+
+    #[test]
+    fn initialize_uses_current_directory_when_root_is_missing() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {}
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(folders.len(), 1, "missing roots should fall back to current directory");
+
+        let expected_uri =
+            std::env::current_dir().ok().map(|cwd| root_path_to_file_uri(&cwd.to_string_lossy()));
+        assert_eq!(
+            folders[0].uri,
+            expected_uri.unwrap_or_default(),
+            "workspace folder should match current directory fallback URI"
+        );
+    }
+
+    /// Guard: cwd fallback must NOT fire when a top-level rootUri is present.
+    #[test]
+    fn initialize_cwd_fallback_not_used_when_root_uri_present() {
+        let server = LspServer::new();
+        let params = json!({
+            "rootUri": "file:///explicit-workspace"
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(folders.len(), 1, "must create exactly one workspace folder from rootUri");
+        assert_eq!(
+            folders[0].uri, "file:///explicit-workspace",
+            "cwd fallback must not override an explicitly provided rootUri"
+        );
+    }
+
+    #[test]
+    fn opencode_client_detection_is_case_insensitive() {
+        let params = json!({
+            "clientInfo": {
+                "name": "OpenCode"
+            }
+        });
+        assert!(is_opencode_client(&params));
+    }
+
+    #[test]
+    fn initialize_keeps_push_diagnostics_for_opencode() {
+        let server = LspServer::new();
+        let params = json!({
+            "clientInfo": {
+                "name": "opencode"
+            },
+            "capabilities": {
+                "textDocument": {
+                    "diagnostic": {}
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            !server.client_supports_pull_diags.load(Ordering::Relaxed),
+            "opencode should keep push diagnostics enabled"
+        );
+    }
+
+    #[test]
+    fn initialize_enables_pull_diagnostics_for_non_opencode_clients() {
+        let server = LspServer::new();
+        let params = json!({
+            "clientInfo": {
+                "name": "vscode"
+            },
+            "capabilities": {
+                "textDocument": {
+                    "diagnostic": {}
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            server.client_supports_pull_diags.load(Ordering::Relaxed),
+            "non-opencode clients with textDocument.diagnostic should enable pull diagnostics"
+        );
     }
 }
