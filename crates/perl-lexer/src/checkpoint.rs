@@ -498,13 +498,16 @@ mod tests {
         let last = cache.find_after(25).ok_or("capacity-2 cache must keep last checkpoint")?;
         assert_eq!(last.position, 30, "last boundary checkpoint must be retained");
 
-        // Middle checkpoint (20) must have been evicted
-        // find_after(19) returns the first checkpoint >= 19; if 20 were present it would be 20,
-        // but only 30 remains, so we should get 30 (or None for find_before(21)).
+        // Middle checkpoint (20) must have been evicted.
+        // With [10, 30] in the cache, find_before(21) returns position 10 (the
+        // largest checkpoint whose position is <= 21).  If the eviction formula
+        // were broken and retained position 20 instead of 10, this would return
+        // 20, and the assertion below would fail.
         let mid = cache.find_before(21);
-        assert!(
-            mid.map_or(true, |cp| cp.position != 20),
-            "middle checkpoint (20) must be evicted when capacity=2 and total=3"
+        assert_eq!(
+            mid.map(|cp| cp.position),
+            Some(10),
+            "middle checkpoint (20) must be evicted; find_before(21) must return the first boundary (10)"
         );
         Ok(())
     }
