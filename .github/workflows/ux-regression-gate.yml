@@ -120,6 +120,14 @@ jobs:
           just ux-tests 2>&1 | tee /tmp/ux-test-output.txt
           exit ${PIPESTATUS[0]}
 
+      - name: Emit UX regression receipt
+        if: always() && steps.harness_check.outputs.harness_available == 'true'
+        run: |
+          cargo xtask ux-regression-receipt \
+            --input /tmp/ux-test-output.txt \
+            --receipt .ci/receipts/ux-regression.json \
+            --sha "${{ github.sha }}"
+
       - name: Parse and summarize UX test results
         if: always() && steps.harness_check.outputs.harness_available == 'true'
         run: |
@@ -222,6 +230,8 @@ jobs:
           summary_lines += [
               "",
               f"**Coverage metric**: {total} scenarios cover {covered_categories} categories of UX.",
+              "",
+              "UX receipt: `.ci/receipts/ux-regression.json`",
           ]
 
           pathlib.Path(summary_path).write_text("\n".join(summary_lines) + "\n", encoding="utf-8")

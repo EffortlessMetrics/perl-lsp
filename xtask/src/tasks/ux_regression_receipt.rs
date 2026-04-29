@@ -41,13 +41,15 @@ pub struct UxRegressionReceipt {
     schema_version: u32,
     measured_at: String,
     sha: String,
-    scenario: Option<String>,
+    workflow: Option<String>,
+    scenario_file: Option<String>,
     test: Option<String>,
     result: String,
     failure_class: FailureClass,
     panic_location: Option<String>,
     repro: Option<String>,
     first_failing_line: Option<String>,
+    route: String,
 }
 
 pub fn run(config: UxRegressionReceiptConfig) -> Result<()> {
@@ -78,32 +80,56 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
         lines.iter().find_map(|line| FAILED_TEST_RE.captures(line).map(|cap| cap[1].to_string()));
     let panic_location =
         lines.iter().find_map(|line| PANIC_RE.captures(line).map(|cap| cap[1].to_string()));
-    let scenario = test.as_ref().and_then(|name| scenario_from_test_name(name));
+    let scenario_file = test.as_ref().and_then(|name| scenario_from_test_name(name));
+    let workflow = scenario_file.as_ref().map(|name| workflow_from_scenario_file(name));
 
     let failure_class = infer_failure_class(raw);
+    let route = route_for_failure_class(&failure_class).to_string();
 
-    let repro = test.as_ref().map(|name| {
-        format!("cargo test -p perl-lsp-ux-tests {name} -- --test-threads=1 --nocapture")
-    });
+    let repro = test.as_ref().map(|name| format!("just ux-tests {name}"));
 
     UxRegressionReceipt {
         kind: "ux_regression_receipt",
         schema_version: 1,
         measured_at: Utc::now().to_rfc3339(),
         sha: sha.unwrap_or_else(|| "unknown".to_string()),
-        scenario,
+        workflow,
+        scenario_file,
         test,
         result: if raw.contains("test result: ok") { "pass" } else { "fail" }.to_string(),
         failure_class,
         panic_location,
         repro,
         first_failing_line: first_fail_line,
+        route,
     }
 }
 
 fn scenario_from_test_name(test: &str) -> Option<String> {
     let scenario = test.split("::").next()?;
     if scenario.starts_with("ux_scenario_") { Some(format!("{scenario}.rs")) } else { None }
+}
+
+
+fn workflow_from_scenario_file(scenario_file: &str) -> String {
+    scenario_file
+        .trim_end_matches(".rs")
+        .strip_prefix("ux_scenario_")
+        .map_or_else(|| scenario_file.to_string(), |name| name.to_string())
+}
+
+fn route_for_failure_class(failure_class: &FailureClass) -> &'static str {
+    match failure_class {
+        FailureClass::MatrixDrift => "needs-fixture-update",
+        FailureClass::BaselineDrift => "needs-baseline-update",
+        FailureClass::TestRace => "needs-test-fix",
+        FailureClass::NewTestBug => "needs-test-fix",
+        FailureClass::ProviderRegression => "needs-provider-fix",
+        FailureClass::ServerCrash => "needs-runtime-fix",
+        FailureClass::Timeout => "needs-timeout-triage",
+        FailureClass::Infra => "needs-infra-fix",
+        FailureClass::Unknown => "needs-investigation",
+    }
 }
 
 fn infer_failure_class(raw: &str) -> FailureClass {
@@ -139,9 +165,14 @@ mod tests {
         let receipt = classify(log, Some("abc123".to_string()));
         assert_eq!(receipt.sha, "abc123", "sha should match input");
         assert_eq!(
-            receipt.scenario.as_deref(),
+            receipt.scenario_file.as_deref(),
             Some("ux_scenario_19_diagnostics_lifecycle.rs"),
             "scenario should be extracted from test name"
+        );
+        assert_eq!(
+            receipt.workflow.as_deref(),
+            Some("19_diagnostics_lifecycle"),
+            "workflow should be derived from scenario file"
         );
         assert_eq!(
             receipt.test.as_deref(),
@@ -157,5 +188,6 @@ mod tests {
             Some("crates/perl-lsp-ux-tests/tests/ux_scenario_19_diagnostics_lifecycle.rs:102:5"),
             "panic_location should be extracted from panic line"
         );
+        assert_eq!(receipt.route, "needs-test-fix");
     }
 }
