@@ -42,29 +42,12 @@ _timed name cmd:
 # Tier: PR-fast (required for every PR iteration, must be fast ~1-2 min)
 pr-fast: _check-tools-basic
     #!/usr/bin/env bash
-    set -uo pipefail
-    echo "=============================================="
-    echo "  PR-FAST GATE (quick validation)"
-    echo "=============================================="
-    START=$(date +%s)
-    just _timed "check-conflict-markers" "just check-conflict-markers" && \
-    just _timed "fmt-check" "just fmt-check" && \
-    just _timed "release-history" "just ci-release-history" && \
-    just _timed "readme-heading-check" "just readme-heading-check" && \
-    just _timed "clippy-core" "just clippy-core" && \
-    just _timed "test-core" "just test-core" && \
-    just _timed "publish-closure" "just ci-publish-closure" && \
-    just _timed "publish-manifest-check" "just ci-publish-manifest-check" && \
-    just _timed "layer-check" "just ci-layer-check" && \
-    just _timed "published-crate-count" "just ci-published-crate-count" && \
-    just _timed "release-history-check" "just ci-release-history-check"
-    RC=$?
-    END=$(date +%s)
-    echo ""
-    echo "=============================================="
-    echo "  PR-fast gate complete (total: $((END - START))s)"
-    echo "=============================================="
-    exit $RC
+    set -euo pipefail
+    args=(--tier pr-fast --receipt)
+    if [ -n "${CI_SCOPE_BASE:-}" ]; then
+        args+=(--base "$CI_SCOPE_BASE")
+    fi
+    cargo xtask gates "${args[@]}"
 
 # Compile-only gate: catches integration-test/benchmark bit-rot and also
 # validates feature-gated code paths without incurring full test runtime.
@@ -77,7 +60,7 @@ check-all-targets:
     cargo check --workspace --all-targets --all-features --locked
     @echo "All targets compile clean."
 
-# Scan every tracked file for committed git conflict markers (<<<<<<< / >>>>>>> / =======).
+# Scan every tracked file for committed git conflict marker lines.
 # Catches accidental conflict-marker commits before they break compilation or CI.
 # Historically caused: broken reconciler (3 cron cycles, #6869), corrupted docs (#7042).
 # Cost: <1s. Zero false positives for lines starting with exactly 7 < / > chars or =======$

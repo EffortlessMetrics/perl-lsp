@@ -80,6 +80,7 @@ ropey = { version = "1.6.1" }
 tokio = { workspace = true }
 once_cell.workspace = true
 tracing.workspace = true
+which = "8.0.2"
 
 [build-dependencies]
 
@@ -126,7 +127,6 @@ tempfile.workspace = true
 proptest.workspace = true
 perl-tdd-support = { workspace = true }
 # Wave Final PR B: perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing
-which = "8.0.2"
 parking_lot.workspace = true
 criterion.workspace = true
 perl-corpus = { workspace = true }
