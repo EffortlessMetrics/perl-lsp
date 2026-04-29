@@ -43,9 +43,23 @@ fn config_with_profile_ignores_other_settings() {
     };
     let args = config.to_args();
 
-    // Only profile flag should be present; all others suppressed
+    // Only profile flag should be present from primary settings; all others suppressed
     assert_eq!(args.len(), 1);
     assert!(args[0].starts_with("--profile="));
+}
+
+#[test]
+fn config_with_profile_keeps_extra_args() {
+    let config = PerlTidyConfig {
+        profile: Some(".perltidyrc".to_string()),
+        extra_args: vec!["--check-syntax".to_string()],
+        ..PerlTidyConfig::default()
+    };
+    let args = config.to_args();
+
+    assert_eq!(args.len(), 2);
+    assert_eq!(args[0], "--profile=.perltidyrc");
+    assert_eq!(args[1], "--check-syntax");
 }
 
 #[test]
