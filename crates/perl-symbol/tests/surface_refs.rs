@@ -244,6 +244,97 @@ fn parser_sentinel_names_are_not_emitted_as_refs() -> Result<()> {
 }
 
 #[test]
+fn sub_definition_and_sub_call_are_not_typed_as_distinct_edges() -> Result<()> {
+    // Baseline for future typed reference edges: declaration sites are intentionally
+    // not emitted by `extract_symbol_refs`, while call sites are emitted as
+    // `SubroutineCall`.
+    let decl = Node::new(
+        NodeKind::Subroutine {
+            name: Some("foo".to_string()),
+            name_span: None,
+            prototype: None,
+            signature: None,
+            attributes: vec![],
+            body: Box::new(Node::new(NodeKind::Block { statements: vec![] }, loc(7, 12))),
+        },
+        loc(0, 12),
+    );
+    let call = Node::new(
+        NodeKind::FunctionCall { name: "foo".to_string(), args: vec![] },
+        loc(13, 18),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![decl, call] }, loc(0, 18));
+
+    let refs = extract_symbol_refs(&program);
+    assert_eq!(refs.len(), 1, "only call edges are represented today");
+    assert_eq!(refs[0].kind, SymbolRefKind::SubroutineCall);
+    assert_eq!(refs[0].name, "foo");
+    Ok(())
+}
+
+#[test]
+fn variable_reads_and_writes_collapse_to_variable_refs() -> Result<()> {
+    // Baseline for typed edges: current API cannot distinguish read vs write.
+    let lhs =
+        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() }, loc(0, 6));
+    let rhs =
+        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() }, loc(9, 15));
+    let assign = Node::new(
+        NodeKind::Assignment { lhs: Box::new(lhs), rhs: Box::new(rhs), op: "=".to_string() },
+        loc(0, 15),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![assign] }, loc(0, 15));
+
+    let refs = extract_symbol_refs(&program);
+    assert_eq!(refs.len(), 2);
+    assert!(refs.iter().all(|r| r.kind == SymbolRefKind::Variable(VarKind::Scalar)));
+    assert!(refs.iter().all(|r| r.name == "value"));
+    Ok(())
+}
+
+#[test]
+fn coderef_syntax_forms_are_intentionally_not_emitted_in_phase1() -> Result<()> {
+    // Covers `&foo`, `\\&foo`, and `goto &foo` style sigil usage: all are represented
+    // as `Variable` nodes with sigil `&` and intentionally excluded in phase-1.
+    let amp = Node::new(
+        NodeKind::Variable { sigil: "&".to_string(), name: "foo".to_string() },
+        loc(0, 4),
+    );
+    let backslash_amp = Node::new(
+        NodeKind::Variable { sigil: "&".to_string(), name: "foo".to_string() },
+        loc(5, 10),
+    );
+    let goto_amp = Node::new(
+        NodeKind::Variable { sigil: "&".to_string(), name: "foo".to_string() },
+        loc(11, 19),
+    );
+    let program = Node::new(
+        NodeKind::Program { statements: vec![amp, backslash_amp, goto_amp] },
+        loc(0, 19),
+    );
+
+    let refs = extract_symbol_refs(&program);
+    assert!(
+        refs.is_empty(),
+        "phase-1 SymbolRef extraction does not model coderef boundary edges"
+    );
+    Ok(())
+}
+
+#[test]
+fn typeglob_alias_boundary_is_not_typed_in_phase1() -> Result<()> {
+    let typeglob = Node::new(
+        NodeKind::Variable { sigil: "*".to_string(), name: "foo".to_string() },
+        loc(0, 4),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![typeglob] }, loc(0, 4));
+
+    let refs = extract_symbol_refs(&program);
+    assert!(refs.is_empty(), "typeglob aliases are a future typed-edge boundary");
+    Ok(())
+}
+
+#[test]
 fn signature_parameters_are_not_emitted_as_refs() -> Result<()> {
     // `sub foo($x, $y = $default, @rest)` — $x, $y, @rest are declaration sites;
     // only $default (the default-value expression) must be emitted as a ref.
