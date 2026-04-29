@@ -1,9 +1,18 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
 use chrono::Utc;
 use color_eyre::eyre::{Context, Result};
+use regex::Regex;
 use serde::Serialize;
+
+static FAILED_TEST_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"test\s+([^\s]+)\s+\.\.\.\s+FAILED").expect("failed test regex must compile")
+});
+static PANIC_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"panicked at .*?,\s+([^:]+:\d+:\d+)").expect("panic regex must compile")
+});
 
 #[derive(Debug, Clone)]
 pub struct UxRegressionReceiptConfig {
@@ -65,8 +74,10 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
     let lines: Vec<&str> = raw.lines().collect();
     let first_fail_line =
         lines.iter().find(|line| line.contains("FAILED")).map(|line| (*line).trim().to_string());
-    let test = lines.iter().find_map(|line| failed_test_name(line));
-    let panic_location = lines.iter().find_map(|line| panic_location(line));
+    let test =
+        lines.iter().find_map(|line| FAILED_TEST_RE.captures(line).map(|cap| cap[1].to_string()));
+    let panic_location =
+        lines.iter().find_map(|line| PANIC_RE.captures(line).map(|cap| cap[1].to_string()));
     let scenario = test.as_ref().and_then(|name| scenario_from_test_name(name));
 
     let failure_class = infer_failure_class(raw);
@@ -93,42 +104,6 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
 fn scenario_from_test_name(test: &str) -> Option<String> {
     let scenario = test.split("::").next()?;
     if scenario.starts_with("ux_scenario_") { Some(format!("{scenario}.rs")) } else { None }
-}
-
-fn failed_test_name(line: &str) -> Option<String> {
-    let line = line.trim();
-    let rest = line.strip_prefix("test ")?;
-    let (name, _) = rest.split_once(" ... FAILED")?;
-    Some(name.to_string())
-}
-
-fn panic_location(line: &str) -> Option<String> {
-    if !line.contains("panicked at") {
-        return None;
-    }
-
-    let (_, candidate) = line.rsplit_once(", ")?;
-    let candidate = candidate.trim();
-    if is_source_location(candidate) { Some(candidate.to_string()) } else { None }
-}
-
-fn is_source_location(candidate: &str) -> bool {
-    let mut pieces = candidate.rsplitn(3, ':');
-    let Some(column) = pieces.next() else {
-        return false;
-    };
-    let Some(line) = pieces.next() else {
-        return false;
-    };
-    let Some(path) = pieces.next() else {
-        return false;
-    };
-
-    !path.is_empty()
-        && !line.is_empty()
-        && !column.is_empty()
-        && line.bytes().all(|byte| byte.is_ascii_digit())
-        && column.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 fn infer_failure_class(raw: &str) -> FailureClass {
@@ -159,20 +134,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn classify_extracts_structured_fields() -> Result<()> {
+    fn classify_extracts_structured_fields() {
         let log = "running 1 test\ntest ux_scenario_19_diagnostics_lifecycle::scenario_19_diagnostics_clear_after_fix ... FAILED\nthread 'x' panicked at 'boom', crates/perl-lsp-ux-tests/tests/ux_scenario_19_diagnostics_lifecycle.rs:102:5\ntest result: FAILED. 0 passed; 1 failed";
         let receipt = classify(log, Some("abc123".to_string()));
-        assert_eq!(receipt.sha, "abc123");
-        assert_eq!(receipt.scenario.as_deref(), Some("ux_scenario_19_diagnostics_lifecycle.rs"));
+        assert_eq!(receipt.sha, "abc123", "sha should match input");
+        assert_eq!(
+            receipt.scenario.as_deref(),
+            Some("ux_scenario_19_diagnostics_lifecycle.rs"),
+            "scenario should be extracted from test name"
+        );
         assert_eq!(
             receipt.test.as_deref(),
-            Some("ux_scenario_19_diagnostics_lifecycle::scenario_19_diagnostics_clear_after_fix")
+            Some("ux_scenario_19_diagnostics_lifecycle::scenario_19_diagnostics_clear_after_fix"),
+            "test name should be extracted from log"
         );
-        assert!(matches!(receipt.failure_class, FailureClass::NewTestBug));
+        assert!(
+            matches!(receipt.failure_class, FailureClass::NewTestBug),
+            "failure_class should be NewTestBug for panicked test in ux_scenario"
+        );
         assert_eq!(
             receipt.panic_location.as_deref(),
-            Some("crates/perl-lsp-ux-tests/tests/ux_scenario_19_diagnostics_lifecycle.rs:102:5")
+            Some("crates/perl-lsp-ux-tests/tests/ux_scenario_19_diagnostics_lifecycle.rs:102:5"),
+            "panic_location should be extracted from panic line"
         );
-        Ok(())
     }
 }
