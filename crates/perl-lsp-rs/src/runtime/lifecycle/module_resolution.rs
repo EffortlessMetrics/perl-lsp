@@ -173,10 +173,19 @@ fn append_system_inc_paths(
         return;
     }
 
+    let mut seen: HashSet<String> = include_paths
+        .iter()
+        .map(|existing| normalized_inc_key(std::path::Path::new(existing)))
+        .collect();
+
     for path in config.get_system_inc() {
-        let as_string = path.to_string_lossy().to_string();
-        if !include_paths.iter().any(|existing| existing == &as_string) {
-            include_paths.push(as_string);
+        let normalized = normalized_inc_key(path);
+        if normalized == "." {
+            continue;
+        }
+
+        if seen.insert(normalized) {
+            include_paths.push(path.to_string_lossy().to_string());
         }
     }
 }
@@ -515,6 +524,41 @@ mod tests {
         assert_eq!(roots[0].source, "use-lib-lexical");
         assert_eq!(roots[1].source, "workspace-include-paths");
         assert_eq!(roots[2].source, "interpreter-startup-inc");
+    }
+
+    #[test]
+    fn append_system_inc_paths_skips_dot_and_dedupes_normalized_variants() -> TestResult {
+        let mut config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+        config.use_system_inc = true;
+        config.include_paths = vec!["lib".to_string()];
+
+        let temp = tempfile::tempdir()?;
+        let inc_path = temp.path().join("site_perl");
+        std::fs::create_dir_all(&inc_path)?;
+
+        let perl_path = std::env::var("PERL").unwrap_or_else(|_| "perl".to_string());
+        config.perl_path = Some(perl_path);
+        config.perl_args = vec![
+            "-I".to_string(),
+            ".".to_string(),
+            "-I".to_string(),
+            inc_path.to_string_lossy().to_string(),
+            "-I".to_string(),
+            format!("{}{}", inc_path.to_string_lossy(), std::path::MAIN_SEPARATOR),
+        ];
+
+        let mut include_paths = vec!["lib".to_string(), ".".to_string()];
+        append_system_inc_paths(&mut config, &mut include_paths);
+
+        let dot_count = include_paths.iter().filter(|path| path.as_str() == ".").count();
+        assert_eq!(dot_count, 1, "dot entry should not be duplicated from system @INC");
+
+        let inc_entries = include_paths
+            .iter()
+            .filter(|path| normalized_inc_key(std::path::Path::new(path)) == normalized_inc_key(&inc_path))
+            .count();
+        assert_eq!(inc_entries, 1, "normalized include path should be deduplicated");
+        Ok(())
     }
 
     #[test]
