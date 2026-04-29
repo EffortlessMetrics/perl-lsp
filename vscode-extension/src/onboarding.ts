@@ -263,7 +263,11 @@ export class OnboardingManager {
     }
 
     const primaryWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    return primaryWorkspace ? path.resolve(primaryWorkspace, profile) : profile;
+    // When no workspace folder is open we cannot resolve a relative path to a
+    // meaningful absolute location (CWD of the extension host is not the user's
+    // project directory).  Return `undefined` so the caller skips the existence
+    // check rather than silently probing the wrong location.
+    return primaryWorkspace ? path.resolve(primaryWorkspace, profile) : undefined;
   }
 
   /**
