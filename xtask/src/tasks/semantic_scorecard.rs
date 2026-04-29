@@ -1,5 +1,5 @@
 use crate::utils::project_root;
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -63,6 +63,7 @@ pub fn run(
     manifest: Option<PathBuf>,
     output: Option<PathBuf>,
     status_md: Option<PathBuf>,
+    check: bool,
 ) -> Result<()> {
     let root = project_root()?;
     let manifest_path =
@@ -73,12 +74,18 @@ pub fn run(
     let manifest = load_manifest(&manifest_path)?;
     let artifact = build_artifact(manifest);
 
-    write_json(&output_path, &artifact)?;
-    if let Some(parent) = status_path.parent() {
-        fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+    let json_payload = format!("{}\n", serde_json::to_string_pretty(&artifact)?);
+    let markdown_payload = render_status_markdown(&artifact);
+
+    if check {
+        verify_output(&output_path, &json_payload, "semantic scorecard JSON")?;
+        verify_output(&status_path, &markdown_payload, "semantic scorecard status markdown")?;
+        println!("semantic scorecard outputs are up-to-date");
+        return Ok(());
     }
-    fs::write(&status_path, render_status_markdown(&artifact))
-        .with_context(|| format!("writing {}", status_path.display()))?;
+
+    write_output(&output_path, &json_payload)?;
+    write_output(&status_path, &markdown_payload)?;
 
     println!("semantic scorecard updated: {}", output_path.display());
     println!("status page updated: {}", status_path.display());
@@ -113,12 +120,22 @@ fn build_artifact(manifest: SemanticManifest) -> Artifact {
     }
 }
 
-fn write_json(path: &Path, artifact: &Artifact) -> Result<()> {
+fn write_output(path: &Path, payload: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
     }
-    let payload = serde_json::to_string_pretty(artifact)?;
-    fs::write(path, format!("{payload}\n")).with_context(|| format!("writing {}", path.display()))
+    fs::write(path, payload).with_context(|| format!("writing {}", path.display()))
+}
+
+fn verify_output(path: &Path, expected: &str, label: &str) -> Result<()> {
+    let current = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    if current != expected {
+        bail!(
+            "{label} is stale at {}. Re-run `cargo xtask semantic-scorecard` and commit regenerated outputs.",
+            path.display()
+        );
+    }
+    Ok(())
 }
 
 fn render_status_markdown(artifact: &Artifact) -> String {
