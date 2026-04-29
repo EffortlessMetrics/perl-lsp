@@ -83,7 +83,27 @@ fn normalize_legacy_windows_uri(uri: &str) -> Option<String> {
         trimmed
     };
 
-    normalize_windows_path_to_key(path)
+    normalize_windows_path_to_key(path).or_else(|| normalize_unc_path_to_key(path))
+}
+
+/// Convert a UNC path into canonical `file://server/share/...` key.
+///
+/// Handles both bare UNC paths (e.g. `\\server\share\file.pl`) and
+/// legacy two-slash URI payloads (e.g. `file://\\server\share\file.pl`).
+fn normalize_unc_path_to_key(path: &str) -> Option<String> {
+    let without_prefix = path.strip_prefix(r"\\").or_else(|| path.strip_prefix("//"))?;
+    let replaced = without_prefix.replace('\\', "/");
+    let mut parts = replaced.split('/').filter(|segment| !segment.is_empty());
+
+    let server = parts.next()?;
+    let share = parts.next()?;
+    let rest = parts.collect::<Vec<_>>().join("/");
+
+    if rest.is_empty() {
+        Some(format!("file://{server}/{share}"))
+    } else {
+        Some(format!("file://{server}/{share}/{rest}"))
+    }
 }
 
 /// Convert a Windows-style path string (with or without a drive letter) into a
@@ -226,6 +246,18 @@ mod tests {
         // Canonical `file:///c:/...` must NOT be double-processed by the legacy pass.
         assert_eq!(uri_key("file:///c:/Users/dev/example.pl"), "file:///c:/Users/dev/example.pl");
         assert_eq!(uri_key("file:///C:/Users/dev/example.pl"), "file:///c:/Users/dev/example.pl");
+    }
+
+    #[test]
+    fn normalizes_legacy_unc_windows_path() {
+        assert_eq!(
+            uri_key(r"\\server\share\folder\file.pl"),
+            "file://server/share/folder/file.pl"
+        );
+        assert_eq!(
+            uri_key(r"file://\\server\share\folder\file.pl"),
+            "file://server/share/folder/file.pl"
+        );
     }
 
     #[test]
