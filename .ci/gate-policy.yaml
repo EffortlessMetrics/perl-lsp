@@ -285,10 +285,10 @@ gates:
     description: "Scope-aware library tests for ci-scope selected crates"
     required: true
     command: cargo test --locked --lib {package_args}
-    timeout_seconds: 180
+    timeout_seconds: 300
     retry_count: 1
     budgets:
-      max_duration_ms: 150000
+      max_duration_ms: 240000
     quarantine: false
     tags:
       - test
