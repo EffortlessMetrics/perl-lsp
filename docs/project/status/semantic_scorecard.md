@@ -35,4 +35,12 @@ Fixtures loaded: `12`
 | safe_delete_external_ref_detection | baseline_pending | n/a |
 | undefined_symbol_false_positive_rate | baseline_pending | n/a |
 
-Initial harness: metrics intentionally baseline_pending until semantic facts land.
+Initial harness: metrics intentionally baseline_pending while Wave 2 stays in adapter/index + shadow-compare mode.
+
+Wave 2 status snapshot:
+
+- Exact fact adapters are landed (`SymbolDecl -> EntityFact`, `SymbolRef -> OccurrenceFact`, `ExportInfo -> ExportSet`).
+- Fact shards are write-through in workspace storage.
+- Definition-candidate multimap and typed reference index are compatibility-only.
+- Provider cutover, rename/safe-delete cutover, and full type inference remain explicit non-goals.
+- Wave 3 migration target is `ImportSpec` + `visible_symbols_at` provider wiring.

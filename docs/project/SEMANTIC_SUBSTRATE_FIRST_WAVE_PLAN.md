@@ -94,6 +94,42 @@ rename_plan(entity, new_name)
 safe_delete_plan(entity)
 ```
 
+## Wave 2 (Adapter / Index Implementation Status)
+
+Status legend used below:
+
+- ✅ Landed and wired
+- 🟡 Landed behind compatibility/write-through rails
+- ⏳ Planned next in Wave 2
+
+### Exact facts emitted now
+
+- ✅ `SymbolDecl -> EntityFact` adapter is landed.
+- ✅ `SymbolRef -> OccurrenceFact` adapter is landed.
+- ✅ `ExportInfo -> ExportSet` adapter is landed.
+
+### Workspace / index rollout status
+
+- 🟡 `FileFactShard` write-through is active in the workspace store; existing read paths remain authoritative.
+- 🟡 Definition-candidate multimap is present behind compatibility APIs and is not yet provider-facing.
+- 🟡 Typed reference-edge global index is present behind compatibility APIs and is not yet provider-facing.
+
+### Shadow-compare / receipts / scorecards
+
+- 🟡 Workspace shadow-compare receipt shape is defined and available for migration validation.
+- 🟡 Semantic scorecard v1 harness is wired, with metrics still in `baseline_pending` while provider cutover remains deferred.
+
+### Explicit non-goals for this phase
+
+- No LSP provider cutover yet.
+- No rename/safe-delete cutover yet.
+- No full type inference rollout.
+
+### Remaining Wave 2→3 bridge work
+
+- ⏳ Validate `ImportSpec` extraction as the bridge into provider-visible symbol queries.
+- ⏳ Implement `visible_symbols_at(uri, pos, context)` as the explicit Wave 3 provider-entry contract.
+
 ## Wave 2 (After First-Wave Rails Land)
 
 1. `SymbolDecl -> EntityFact` adapter.
@@ -129,4 +165,3 @@ safe_delete_plan(entity)
 - Capability truth: `features.toml`
 - Evidence-backed status: `docs/project/CURRENT_STATUS.md`
 - Canonical planning: `docs/project/ROADMAP.md`
-

@@ -112,6 +112,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Workspace-wide rename slice: multi-root support shipped in 0.12.x (#3984); workspace-wide rename/module-move remains roughly 30% complete and only conditionally in scope pending #3522 verification
 - Coroutine support issue #3539 is re-scoped: defer hypothetical core syntax, split upstream-tracking from CPAN-library IDE support planning
 - Semantic substrate first-wave planning is documented as rails-first (facts schema, fixture banks, scorecards, migration contracts) in [SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md](SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md); provider cutover is explicitly deferred until Wave 2/3 foundations are proven
+- Wave 2 adapter/index reality check: exact fact adapters are landed, fact shards are write-through, and definition-candidate + typed-reference indexes remain compatibility-only (shadow-compare/scorecard stage) before `ImportSpec` + `visible_symbols_at` Wave 3 cutover.
 
 ### Next (v0.13.0 — public alpha announcement)
 
