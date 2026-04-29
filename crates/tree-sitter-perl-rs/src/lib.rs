@@ -1144,10 +1144,10 @@ mod tests {
 
         // Navigate to first statement
         assert!(cursor.goto_first_child());
-        let mut count = 1;
+        let mut _count = 1;
         // Keep advancing siblings until we can't
         while cursor.goto_next_sibling() {
-            count += 1;
+            _count += 1;
         }
         // After last goto_next_sibling returns false, cursor should still be valid
         // and still have a node (the last sibling).
