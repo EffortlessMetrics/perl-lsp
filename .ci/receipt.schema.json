@@ -473,6 +473,9 @@
         "suggested_next_actions": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "plan": {
+          "$ref": "#/$defs/agent_plan_receipt"
         }
       }
     },
@@ -481,10 +484,60 @@
       "required": ["direct_crates", "reverse_deps", "risk_tags"],
       "additionalProperties": false,
       "properties": {
+        "diff_class": { "type": "string" },
         "direct_crates": { "type": "array", "items": { "type": "string" } },
         "reverse_deps": { "type": "array", "items": { "type": "string" } },
+        "architecture_wideners": { "type": "array", "items": { "type": "string" } },
         "risk_tags": { "type": "array", "items": { "type": "string" } }
       }
+    },
+    "agent_plan_receipt": {
+      "type": "object",
+      "required": ["base", "scope_ok", "fallback_used", "package_args", "selected", "skipped"],
+      "additionalProperties": false,
+      "properties": {
+        "base": { "type": "string" },
+        "diff_class": { "type": "string" },
+        "scope_ok": { "type": "boolean" },
+        "fallback_used": { "type": "boolean" },
+        "fallback_reason": { "type": "string" },
+        "package_args": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "selected": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/agent_planned_gate" }
+        },
+        "skipped": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/agent_skipped_gate" }
+        }
+      }
+    },
+    "agent_planned_gate": {
+      "type": "object",
+      "required": ["name", "role", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "$ref": "#/$defs/gate_planning_role" },
+        "reason": { "type": "string" }
+      }
+    },
+    "agent_skipped_gate": {
+      "type": "object",
+      "required": ["name", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "$ref": "#/$defs/gate_planning_role" },
+        "reason": { "type": "string" }
+      }
+    },
+    "gate_planning_role": {
+      "type": "string",
+      "enum": ["always_on", "rust_scoped", "rust_fallback", "rust_package_scoped", "static"]
     },
     "agent_lane": {
       "type": "object",

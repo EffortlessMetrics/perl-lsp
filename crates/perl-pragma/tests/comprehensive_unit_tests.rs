@@ -243,25 +243,17 @@ fn use_strict_empty_qw_is_noop() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Perl allows `use strict 'refs vars'` (a single quoted string with
-/// space-separated categories), but `pragma_arg_items` does not split on
-/// spaces inside a plain quoted string — only `qw(...)` is split.
-/// This test documents the known limitation: the space-separated form is
-/// silently treated as an unrecognized category and ignored.
-/// Callers that need all three categories should use qw() or separate args.
+/// space-separated categories), and the tracker should split and honor both.
 #[test]
-fn use_strict_space_separated_in_single_string_is_not_parsed_known_limitation()
+fn use_strict_space_separated_in_single_string_enables_requested_categories()
 -> Result<(), Box<dyn std::error::Error>> {
-    // In real Perl: `use strict 'refs vars'` enables both refs and vars.
-    // Our pragma_arg_items strips quotes but does not split on whitespace
-    // for plain quoted strings, so the whole "refs vars" token is unrecognized.
+    // Single quoted string should be split into both categories.
     let ast = program(vec![use_node("strict", &["'refs vars'"], 0, 25)]);
     let map = PragmaTracker::build(&ast);
-    // No recognized category → no state change → no entry pushed.
-    // This is the known limitation: this form is silently ignored.
+    // Categories are recognized and applied.
     let state = if map.is_empty() { PragmaState::default() } else { map[0].1.clone() };
-    // Neither category is enabled; document the gap.
-    assert!(!state.strict_refs, "known limitation: 'refs vars' is not split by pragma_arg_items");
-    assert!(!state.strict_vars, "known limitation: 'refs vars' is not split by pragma_arg_items");
+    assert!(state.strict_refs, "'refs vars' should enable strict refs");
+    assert!(state.strict_vars, "'refs vars' should enable strict vars");
     Ok(())
 }
 
