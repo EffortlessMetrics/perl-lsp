@@ -8,6 +8,7 @@
  */
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { execFile } from 'child_process';
 import * as vscode from 'vscode';
 
@@ -221,12 +222,13 @@ export class OnboardingManager {
       };
     }
 
-    if (profile && !fs.existsSync(profile)) {
+    const resolvedProfile = this.resolvePerlcriticProfilePath(profile);
+    if (resolvedProfile && !fs.existsSync(resolvedProfile)) {
       return {
         label,
         ok: false,
         status: HealthCheckStatus.Warning,
-        detail: `Configured perlcritic profile was not found: ${profile}`,
+        detail: `Configured perlcritic profile was not found: ${resolvedProfile}`,
       };
     }
 
@@ -249,6 +251,19 @@ export class OnboardingManager {
           'Install via: cpanm Perl::Critic',
       };
     }
+  }
+
+  private resolvePerlcriticProfilePath(profile: string): string | undefined {
+    if (!profile) {
+      return undefined;
+    }
+
+    if (path.isAbsolute(profile)) {
+      return profile;
+    }
+
+    const primaryWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    return primaryWorkspace ? path.resolve(primaryWorkspace, profile) : profile;
   }
 
   /**
