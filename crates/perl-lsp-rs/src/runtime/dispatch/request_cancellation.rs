@@ -58,7 +58,8 @@ pub(super) fn register_request_cancellation(
     }
 
     let token = PerlLspCancellationToken::new(request_id.clone(), request.method.clone());
-    let cleanup_context = ProviderCleanupContext::new(request.method.clone(), request.params.clone());
+    let cleanup_context =
+        ProviderCleanupContext::new(request.method.clone(), request.params.clone());
 
     if let Err(e) = GLOBAL_CANCELLATION_REGISTRY.register_token(token) {
         tracing::trace!(error = %e, "cancellation: failed to register token");

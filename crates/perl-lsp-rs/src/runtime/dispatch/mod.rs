@@ -63,10 +63,7 @@ use request_cancellation::{
 impl LspServer {
     /// Handle a JSON-RPC request
     pub fn handle_request(&self, request: JsonRpcRequest) -> Option<JsonRpcResponse> {
-        let id = request
-            .id
-            .clone()
-            .and_then(|id| if id.is_null() { None } else { Some(id) });
+        let id = request.id.clone().and_then(|id| if id.is_null() { None } else { Some(id) });
         let should_respond = id.is_some();
 
         if handle_cancel_notification(self, &request) {
