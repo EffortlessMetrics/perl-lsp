@@ -30,7 +30,6 @@ mod tests {
             vec![path.clone()],
         ));
 
-        println!("test_rename DEBUG: result={:?}", result);
         assert!(result.success);
         assert_eq!(result.files_modified, 1);
         let new_code = must(std::fs::read_to_string(&path));
@@ -39,10 +38,12 @@ mod tests {
     }
 
     #[test]
-    fn test_package_scoped_rename_placeholder() {
-        // AC1: support Package scope (currently delegates to file-wide as foundation)
+    fn test_package_scoped_rename_limits_changes_to_target_package() {
+        // AC1: support Package scope by limiting changes to requested package only
         let mut file = must(tempfile::NamedTempFile::new());
-        let code = "package P; my $foo = 1;";
+        let code = "package P; my $foo = 1;
+package Q; my $foo = 2;
+";
         must(write!(file, "{}", code));
         let path = file.path().to_path_buf();
 
@@ -62,10 +63,11 @@ mod tests {
             vec![path.clone()],
         ));
 
-        println!("test_rename DEBUG: result={:?}", result);
         assert!(result.success);
         let new_code = must(std::fs::read_to_string(&path));
-        assert!(new_code.contains("$bar"));
+        assert!(new_code.contains("package P; my $bar = 1;"));
+        assert!(new_code.contains("package Q; my $foo = 2;"));
+        assert!(!new_code.contains("package Q; my $bar = 2;"));
     }
 
     #[test]

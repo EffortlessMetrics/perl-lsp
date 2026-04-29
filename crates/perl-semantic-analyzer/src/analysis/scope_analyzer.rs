@@ -1974,7 +1974,10 @@ fn collect_imported_barewords(ast: &Node) -> HashSet<String> {
         }
     }
 
-    fn visit(node: &Node, imported: &mut HashSet<String>) {
+    // `in_eval` — when true we are inside a runtime `eval { }` block and
+    // `require` statements are no longer static; skip the require+import
+    // suppression analysis for the current block.
+    fn visit(node: &Node, imported: &mut HashSet<String>, in_eval: bool) {
         if let NodeKind::Use { module, args, .. } = &node.kind {
             for arg in args {
                 if arg.starts_with("qw") {
@@ -1989,26 +1992,29 @@ fn collect_imported_barewords(ast: &Node) -> HashSet<String> {
                     push_symbol(imported, module, arg);
                 }
             }
-        } else if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind
-        {
-            let required_modules: HashSet<String> = statements
-                .iter()
-                .filter_map(|stmt| require_module_name(inner_node(stmt)))
-                .collect();
-            if !required_modules.is_empty() {
-                for stmt in statements {
-                    maybe_record_manual_imports(inner_node(stmt), &required_modules, imported);
+        } else if !in_eval {
+            if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind {
+                let required_modules: HashSet<String> = statements
+                    .iter()
+                    .filter_map(|stmt| require_module_name(inner_node(stmt)))
+                    .collect();
+                if !required_modules.is_empty() {
+                    for stmt in statements {
+                        maybe_record_manual_imports(inner_node(stmt), &required_modules, imported);
+                    }
                 }
             }
         }
 
+        // Propagate eval context: children of an Eval block are runtime.
+        let child_in_eval = in_eval || matches!(&node.kind, NodeKind::Eval { .. });
         for child in node.children() {
-            visit(child, imported);
+            visit(child, imported, child_in_eval);
         }
     }
 
     let mut imported = HashSet::new();
-    visit(ast, &mut imported);
+    visit(ast, &mut imported, false);
     imported
 }
 

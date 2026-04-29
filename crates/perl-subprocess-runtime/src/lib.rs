@@ -129,6 +129,8 @@ impl SubprocessRuntime for OsSubprocessRuntime {
         use std::io::Write;
         use std::process::{Command, Stdio};
 
+        validate_command_input(program, args)?;
+
         let (resolved_program, resolved_args) = resolve_command_invocation(program, args);
         let mut cmd = Command::new(&resolved_program);
         cmd.args(resolved_args.iter().map(String::as_str));
@@ -217,6 +219,20 @@ impl SubprocessRuntime for OsSubprocessRuntime {
             }
         }
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn validate_command_input(program: &str, args: &[&str]) -> Result<(), SubprocessError> {
+    if program.trim().is_empty() {
+        return Err(SubprocessError::new("program name must not be empty"));
+    }
+    if program.contains('\0') {
+        return Err(SubprocessError::new("program name must not contain NUL bytes"));
+    }
+    if args.iter().any(|arg| arg.contains('\0')) {
+        return Err(SubprocessError::new("arguments must not contain NUL bytes"));
+    }
+    Ok(())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -551,6 +567,32 @@ mod tests {
         let result = runtime.run_command("nonexistent_program_xyz", &[], None);
 
         assert!(result.is_err());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn test_os_runtime_rejects_empty_program_name() {
+        let runtime = OsSubprocessRuntime::new();
+        let result = runtime.run_command("   ", &["--version"], None);
+        assert!(result.is_err());
+        let err = result.expect_err("empty program name must be rejected");
+        assert!(err.message.contains("must not be empty"));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn test_os_runtime_rejects_nul_bytes_in_program_or_args() {
+        let runtime = OsSubprocessRuntime::new();
+
+        let bad_program = runtime.run_command("perl\0", &["--version"], None);
+        assert!(bad_program.is_err());
+        let bad_program_err = bad_program.expect_err("NUL in program must be rejected");
+        assert!(bad_program_err.message.contains("NUL"));
+
+        let bad_arg = runtime.run_command("perl", &["-e", "print \"ok\"\0"], None);
+        assert!(bad_arg.is_err());
+        let bad_arg_err = bad_arg.expect_err("NUL in arg must be rejected");
+        assert!(bad_arg_err.message.contains("NUL"));
     }
 
     #[cfg(windows)]
