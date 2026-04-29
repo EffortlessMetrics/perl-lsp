@@ -84,3 +84,38 @@ fn token_ref_is_empty_for_zero_length_span() -> TestResult {
     assert_eq!(borrowed.span(), (8, 8));
     Ok(())
 }
+
+
+#[test]
+fn token_ref_try_new_rejects_end_before_start() -> TestResult {
+    let err = TokenRef::try_new(TokenKind::Identifier, "name", 7, 3).expect_err(
+        "try_new should reject spans where end < start",
+    );
+    assert_eq!(
+        err,
+        perl_token::TokenSpanError::EndBeforeStart { start: 7, end: 3 }
+    );
+    Ok(())
+}
+
+#[test]
+fn token_ref_new_checked_rejects_empty_non_eof() -> TestResult {
+    let err = TokenRef::new_checked(TokenKind::Identifier, "", 4, 4)
+        .expect_err("new_checked should reject empty spans for non-EOF tokens");
+    assert_eq!(
+        err,
+        perl_token::TokenSpanError::EmptySpanNotAllowed {
+            kind: TokenKind::Identifier,
+            at: 4,
+        }
+    );
+    Ok(())
+}
+
+#[test]
+fn token_ref_new_checked_accepts_empty_eof() -> TestResult {
+    let token = TokenRef::new_checked(TokenKind::Eof, "", 9, 9)?;
+    assert!(token.is_empty());
+    assert_eq!(token.span(), (9, 9));
+    Ok(())
+}
