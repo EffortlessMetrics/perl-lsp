@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 
 macro_rules! id_newtype {
     ($name:ident) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+        #[derive(
+            Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+        )]
         pub struct $name(pub u64);
     };
 }
@@ -154,6 +156,30 @@ pub struct DiagnosticFact {
     pub confidence: Confidence,
 }
 
+/// Canonical export facts inferred for a Perl package.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportSet {
+    /// Package symbols exported by default (`@EXPORT`).
+    pub default_exports: Vec<String>,
+    /// Package symbols exported on request (`@EXPORT_OK`).
+    pub optional_exports: Vec<String>,
+    /// Named export groups (`%EXPORT_TAGS`).
+    pub tags: Vec<ExportTag>,
+    /// How this export set was inferred.
+    pub provenance: Provenance,
+    /// Confidence for the inferred export set.
+    pub confidence: Confidence,
+}
+
+/// Named `%EXPORT_TAGS` entry and its members.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportTag {
+    /// Tag name (for example `all` from `:all`).
+    pub name: String,
+    /// Symbols in this tag.
+    pub members: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,7 +257,10 @@ mod tests {
         let decoded: OccurrenceFact = serde_json::from_str(&serialized)?;
         assert_eq!(decoded, fact);
         // entity_id: None must serialize as JSON null, not be omitted.
-        assert!(serialized.contains("\"entity_id\":null"), "entity_id null must be explicit in JSON");
+        assert!(
+            serialized.contains("\"entity_id\":null"),
+            "entity_id null must be explicit in JSON"
+        );
         Ok(())
     }
 

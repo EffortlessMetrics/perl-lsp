@@ -259,10 +259,8 @@ fn sub_definition_and_sub_call_are_not_typed_as_distinct_edges() -> Result<()> {
         },
         loc(0, 12),
     );
-    let call = Node::new(
-        NodeKind::FunctionCall { name: "foo".to_string(), args: vec![] },
-        loc(13, 18),
-    );
+    let call =
+        Node::new(NodeKind::FunctionCall { name: "foo".to_string(), args: vec![] }, loc(13, 18));
     let program = Node::new(NodeKind::Program { statements: vec![decl, call] }, loc(0, 18));
 
     let refs = extract_symbol_refs(&program);
@@ -275,10 +273,14 @@ fn sub_definition_and_sub_call_are_not_typed_as_distinct_edges() -> Result<()> {
 #[test]
 fn variable_reads_and_writes_collapse_to_variable_refs() -> Result<()> {
     // Baseline for typed edges: current API cannot distinguish read vs write.
-    let lhs =
-        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() }, loc(0, 6));
-    let rhs =
-        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() }, loc(9, 15));
+    let lhs = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() },
+        loc(0, 6),
+    );
+    let rhs = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() },
+        loc(9, 15),
+    );
     let assign = Node::new(
         NodeKind::Assignment { lhs: Box::new(lhs), rhs: Box::new(rhs), op: "=".to_string() },
         loc(0, 15),
@@ -308,16 +310,11 @@ fn coderef_syntax_forms_are_intentionally_not_emitted_in_phase1() -> Result<()> 
         NodeKind::Variable { sigil: "&".to_string(), name: "foo".to_string() },
         loc(11, 19),
     );
-    let program = Node::new(
-        NodeKind::Program { statements: vec![amp, backslash_amp, goto_amp] },
-        loc(0, 19),
-    );
+    let program =
+        Node::new(NodeKind::Program { statements: vec![amp, backslash_amp, goto_amp] }, loc(0, 19));
 
     let refs = extract_symbol_refs(&program);
-    assert!(
-        refs.is_empty(),
-        "phase-1 SymbolRef extraction does not model coderef boundary edges"
-    );
+    assert!(refs.is_empty(), "phase-1 SymbolRef extraction does not model coderef boundary edges");
     Ok(())
 }
 
