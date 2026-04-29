@@ -243,7 +243,6 @@ fn test_empty_workspace_roots_enforces_cwd_boundary() -> Result<(), Box<dyn Erro
     Ok(())
 }
 
-
 #[cfg(unix)]
 #[test]
 fn test_command_exists_does_not_execute_path_hijacked_which() -> Result<(), Box<dyn Error>> {
