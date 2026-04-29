@@ -12,6 +12,7 @@ members = [
     "crates/perl-parser-core",
     "crates/perl-parser-pest",
     "crates/perl-semantic-analyzer",
+    "crates/perl-semantic-facts",
     "crates/perl-workspace-index",
     "crates/perl-refactoring",
     "crates/perl-incremental-parsing",
@@ -126,6 +127,7 @@ allow = [
     # (perl-path-normalize, perl-path-security, perl-text-line absorbed into perl-parser-core — Wave D)
     # Tier 3 — Analysis and indexing
     "perl-workspace",
+    "perl-semantic-facts",
     "perl-semantic-analyzer",
     "perl-diagnostics",
     # (perl-lsp-diagnostics absorbed into perl-lsp-rs-core::providers::diagnostics — Wave G1b)
@@ -291,6 +293,7 @@ perl-refactoring = { path = "crates/perl-refactoring", version = "0.12.4" }
 
 # Tier 4: Three-level dependencies
 perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer", version = "0.12.4" }
+perl-semantic-facts = { path = "crates/perl-semantic-facts", version = "0.12.4" }
 # (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
 
 # Tier 5: Application crates
