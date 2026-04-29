@@ -1,0 +1,42 @@
+[[playbooks]]
+kind = "FMT_ONLY"
+safe_auto_fix = true
+command = "cargo xtask fmt"
+branch_prefix = "fix-forward/fmt"
+match_gate_names = ["fmt"]
+match_output_contains = ["cargo fmt", "rustfmt"]
+
+[[playbooks]]
+kind = "TITLE_FIX"
+safe_auto_fix = true
+mutation = "github_pr_title_only"
+match_gate_names = ["validate-title", "title"]
+match_output_contains = ["validate-title", "title format", "(#NNNN)"]
+
+[[playbooks]]
+kind = "STALE_BASE_CASCADE"
+safe_auto_fix = false
+route = "cascade-update"
+match_gate_names = ["stale-base", "stale_base"]
+match_output_contains = ["stale base", "base branch moved", "rebase required"]
+
+[[playbooks]]
+kind = "GENERATED_DOC_REGEN"
+safe_auto_fix = false
+command = "cargo xtask update-status --write"
+match_gate_names = ["status-docs", "generated-docs", "docs-regen"]
+match_output_contains = ["generated docs", "status docs", "CURRENT_STATUS"]
+
+[[playbooks]]
+kind = "INFRA_ADVISORY_DEMOTION"
+safe_auto_fix = false
+route = "infra"
+match_gate_names = ["infra"]
+match_output_contains = ["infra advisory", "runner outage", "network flake"]
+
+[[playbooks]]
+kind = "PARSER_RATCHET_REGRESSION"
+safe_auto_fix = false
+route = "parser-builder"
+match_gate_names = ["parser-ratchet", "ratchet"]
+match_output_contains = ["parser ratchet", "ratchet regression"]

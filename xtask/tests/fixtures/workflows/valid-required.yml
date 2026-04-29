@@ -1,0 +1,19 @@
+name: Valid Required Workflow
+
+on:
+  pull_request:
+    branches: [master]
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches: [master]
+
+concurrency:
+  group: required-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok

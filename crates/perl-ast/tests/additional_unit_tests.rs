@@ -95,6 +95,18 @@ fn debug_output_for_unit_variants() {
     }
 }
 
+#[test]
+fn display_for_nodekind_uses_kind_name() {
+    let kind = NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() };
+    assert_eq!(kind.to_string(), "Variable");
+}
+
+#[test]
+fn display_for_node_uses_sexp() {
+    let node = Node::new(NodeKind::Number { value: "42".to_string() }, loc(0, 2));
+    assert_eq!(node.to_string(), node.to_sexp());
+}
+
 // ===========================================================================
 // 2. Clone / PartialEq on complex trees
 // ===========================================================================
@@ -1081,6 +1093,22 @@ fn children_of_ternary() {
         loc(0, 10),
     );
     assert_eq!(node.children().len(), 3);
+    assert_eq!(node.child_count(), 3);
+}
+
+#[test]
+fn child_count_matches_children_len_for_program() {
+    let node = Node::new(
+        NodeKind::Program { statements: vec![num_node("1"), num_node("2"), num_node("3")] },
+        loc(0, 20),
+    );
+    assert_eq!(node.child_count(), node.children().len());
+}
+
+#[test]
+fn child_count_is_zero_for_leaf_nodes() {
+    let leaf = num_node("42");
+    assert_eq!(leaf.child_count(), 0);
 }
 
 #[test]

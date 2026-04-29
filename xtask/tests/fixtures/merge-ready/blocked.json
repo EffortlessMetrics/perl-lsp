@@ -1,0 +1,14 @@
+{
+  "check": "merge-readiness",
+  "schema_version": 1,
+  "event": "pull_request",
+  "pr": 6859,
+  "head_sha": "$CURRENT_HEAD",
+  "base_sha": "$CURRENT_BASE",
+  "gate_graph_version": "$CURRENT_GATE_GRAPH",
+  "required_checks": ["Merge Gate", "PR Smoke", "UX Regression Tests"],
+  "review_evidence": ["reviewed-deep", "ci-green"],
+  "blocker_labels_absent": false,
+  "verdict": "blocked",
+  "expires_when": "on_new_commit_or_base_or_policy_change"
+}

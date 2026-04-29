@@ -544,7 +544,7 @@ mod tests {
     #[test]
     fn glob_case_lookup_by_id() {
         let case = find_glob_case("glob.function.basic");
-        must_some(case);
+        let _ = must_some(case);
         assert_eq!(must_some(case).id, "glob.function.basic");
     }
 
@@ -558,7 +558,7 @@ mod tests {
     #[test]
     fn glob_case_sample_by_tag_matches() {
         let case = GlobExpressionGenerator::sample_by_tag("diamond", 7);
-        must_some(case);
+        let _ = must_some(case);
         assert!(must_some(case).tags.contains(&"diamond"));
     }
 
@@ -613,7 +613,7 @@ mod tests {
     #[test]
     fn glob_generator_find_works() {
         let case = GlobExpressionGenerator::find("glob.diamond.variable");
-        must_some(case);
+        let _ = must_some(case);
         assert_eq!(must_some(case).id, "glob.diamond.variable");
     }
 }

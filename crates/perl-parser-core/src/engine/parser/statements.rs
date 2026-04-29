@@ -305,7 +305,16 @@ impl<'a> Parser<'a> {
                 let sub_node = self.parse_subroutine()?;
                 self.finish_subroutine_statement(sub_node)
             }
-            TokenKind::Class => self.parse_class(),
+            TokenKind::Class
+                if matches!(
+                    self.tokens.peek_second().map(|t| t.kind),
+                    Ok(TokenKind::Identifier)
+                        | Ok(TokenKind::DoubleColon)
+                        | Ok(TokenKind::Colon)
+                ) =>
+            {
+                self.parse_class()
+            }
             // `method NAME SIGNATURE BLOCK` is a Perl 5.38+ declaration.
             // Legacy code uses `method` as a function name; disambiguate by
             // checking the next token is an Identifier (the method name).
@@ -1064,7 +1073,52 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Check if we're at the start of a labeled statement (LABEL: ...)
+    /// Check if the token after `Identifier:` cannot start a Perl statement.
+    ///
+    /// Returns `true` when the token kind belongs to the set of tokens that are
+    /// exclusive to expression contexts and can never begin a statement:
+    ///
+    /// - `?` — ternary operator (requires a condition before it)
+    /// - `:` — ternary else-part (always follows the then-branch)
+    /// - `,` — comma separator (expression continuation)
+    /// - `=>` — fat arrow (hash key-value context)
+    /// - `)` / `]` / `}` — closing delimiters (orphan, not a statement)
+    /// - EOF — nothing follows the colon
+    ///
+    /// Notably absent: `TokenKind::Semicolon`.  In Perl, `LABEL: ;` is a valid
+    /// labeled empty-statement, so `;` as the third token must be allowed through
+    /// as a potential label start.
+    fn third_token_cannot_start_statement(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::Question      // ternary `?` operator
+            | TokenKind::Colon       // chained ternary else-part
+            | TokenKind::Comma      // expression continuation
+            | TokenKind::FatArrow   // hash key-value context
+            | TokenKind::RightParen // closing paren
+            | TokenKind::RightBracket // closing bracket
+            | TokenKind::RightBrace // orphan closing brace
+            | TokenKind::Eof        // end of input
+        )
+    }
+
+    /// Check if we're at the start of a labeled statement (`LABEL: ...`).
+    ///
+    /// Uses 3-token lookahead to distinguish label colons from ternary and
+    /// hash-constructor colons.  A valid label must be an `Identifier` followed
+    /// by a single `:` (not `::`) followed by a token that can start a statement.
+    ///
+    /// Valid patterns (returns `true`):
+    /// - `LABEL: { ... }` — labeled block
+    /// - `LABEL: while (...) { }` — labeled loop
+    /// - `LABEL: print ...` — labeled expression statement
+    /// - `LABEL: ;` — labeled empty statement
+    ///
+    /// Invalid patterns (returns `false`):
+    /// - `foo: ?` — ternary operator after colon
+    /// - `foo: :` — chained ternary else-part
+    /// - `foo: ,` — expression continuation
+    /// - `foo: =>` — fat-arrow hash context
     fn is_label_start(&mut self) -> bool {
         // We need an identifier followed by a colon
         if self.peek_kind() != Some(TokenKind::Identifier) {
@@ -1072,16 +1126,26 @@ impl<'a> Parser<'a> {
         }
 
         // Check if the second token is a colon
-        if let Ok(second_token) = self.tokens.peek_second() {
-            if second_token.kind == TokenKind::Colon {
-                // Qualified identifiers use `::` which tokenizes as
-                // DoubleColon, so `Identifier Colon` (single colon) is
-                // unambiguously a label — even for uppercase names like
-                // OUTER:, LOOP:, LINE: which are idiomatic Perl labels.
-                return true;
+        let Ok(second_token) = self.tokens.peek_second() else {
+            return false;
+        };
+        if second_token.kind != TokenKind::Colon {
+            return false;
+        }
+
+        // Check the 3rd token (token after the colon)
+        // If it can't start a statement, this is not a label
+        if let Ok(third_token) = self.tokens.peek_third() {
+            if Self::third_token_cannot_start_statement(third_token.kind) {
+                return false;
             }
         }
-        false
+
+        // Single colon (`:`, not `::`) unambiguously indicates a label in Perl.
+        // Qualified identifiers use `::` which tokenizes as DoubleColon, so
+        // `Identifier Colon` (single colon) is always a label — even for
+        // uppercase names like OUTER:, LOOP:, LINE: which are idiomatic Perl labels.
+        true
     }
 
     /// Parse a labeled statement (LABEL: statement)

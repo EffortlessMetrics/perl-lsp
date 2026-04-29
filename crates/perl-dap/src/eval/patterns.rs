@@ -123,7 +123,7 @@ pub const DANGEROUS_OPERATIONS: &[&str] = &[
 /// Assignment operators that indicate mutation
 pub const ASSIGNMENT_OPERATORS: &[&str] = &[
     "=", "+=", "-=", "*=", "/=", "%=", "**=", ".=", "&=", "|=", "^=", "<<=", ">>=", "&&=", "||=",
-    "//=",
+    "//=", "x=",
 ];
 
 /// Compiled regex for dangerous operations
@@ -141,6 +141,11 @@ pub static REGEX_MUTATION_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     // Match s, tr, y followed by a delimiter character (not alphanumeric/underscore/whitespace)
     Regex::new(r"\b(?:s|tr|y)[^\w\s]")
 });
+
+/// Compiled regex to tokenize operator runs so assignment operators can be
+/// identified without misclassifying comparisons (e.g. `==`, `!=`, `<=`, `>=`).
+pub static ASSIGNMENT_OP_TOKENS_RE: Lazy<Result<Regex, regex::Error>> =
+    Lazy::new(|| Regex::new(r"([!~^&|+\-*/%=<>]+)"));
 
 #[cfg(test)]
 mod tests {

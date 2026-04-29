@@ -96,7 +96,7 @@ fn scenario_13_returned_symbols_have_valid_shape() {
         // kind is required by the LSP spec (1-26 SymbolKind enum).
         if let Some(kind) = sym.get("kind") {
             let k = kind.as_u64().unwrap_or(0);
-            assert!(k >= 1 && k <= 26, "Symbol 'kind' must be 1-26, got: {}", k);
+            assert!((1..=26).contains(&k), "Symbol 'kind' must be 1-26, got: {}", k);
         }
         // DocumentSymbol has 'range'; SymbolInformation has 'location'.
         // Either is acceptable.

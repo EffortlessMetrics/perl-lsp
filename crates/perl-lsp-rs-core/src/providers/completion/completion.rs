@@ -1590,8 +1590,10 @@ impl CompletionProvider {
             let after_brace = &before[brace_pos + 1..];
             // Prefix is the alphanumeric+_ run from after `{` to position
             let non_ident = after_brace
-                .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-                .map(|p| p + 1)
+                .char_indices()
+                .rev()
+                .find(|(_, c)| !c.is_alphanumeric() && *c != '_')
+                .map(|(p, c)| p + c.len_utf8())
                 .unwrap_or(0);
             after_brace[non_ident..].to_string()
         };
@@ -1605,7 +1607,9 @@ impl CompletionProvider {
         }
 
         // Check for `->` immediately before the `{` (hashref deref — out of scope).
-        if brace_pos >= 2 && &source[brace_pos - 2..brace_pos] == "->" {
+        // Use byte comparison to avoid slicing at a non-char-boundary when a multi-byte
+        // character immediately precedes `{`.
+        if brace_pos >= 2 && source.as_bytes().get(brace_pos - 2..brace_pos) == Some(b"->") {
             return None;
         }
 
@@ -1618,8 +1622,10 @@ impl CompletionProvider {
         // Variable name ends right before the `{`, scan back for `$`.
         let var_end = before_brace.len();
         let var_name_start = before_brace
-            .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-            .map(|p| p + 1)
+            .char_indices()
+            .rev()
+            .find(|(_, c)| !c.is_alphanumeric() && *c != '_')
+            .map(|(p, c)| p + c.len_utf8())
             .unwrap_or(0);
         let var_name = &before_brace[var_name_start..var_end];
         if var_name.is_empty() {
@@ -2440,6 +2446,39 @@ $"#;
             "expected incomplete block variable to outrank parent variable, got block={:?} sub={:?}",
             block_item.sort_text,
             sub_item.sort_text
+        );
+    }
+
+    #[test]
+    fn test_variable_completion_prefers_nearest_parent_scope_over_name_order() {
+        let code = concat!(
+            "{\n",
+            "    my $v_a = 1;\n",
+            "    {\n",
+            "        my $v_z = 2;\n",
+            "        {\n",
+            "            $v_\n",
+            "        }\n",
+            "    }\n",
+            "}\n"
+        );
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+        // Use rfind to locate the standalone $v_ completion trigger (the LAST $v_ in
+        // the source), not the first occurrence which is inside $v_a or $v_z.
+        let trigger_pos = must_some(code.rfind("$v_")) + 3;
+        let completions = provider.get_completions(code, trigger_pos);
+
+        let v_a_idx =
+            must_some(completions.iter().position(|completion| completion.label == "$v_a"));
+        let v_z_idx =
+            must_some(completions.iter().position(|completion| completion.label == "$v_z"));
+
+        assert!(
+            v_z_idx < v_a_idx,
+            "expected one-hop parent variable ($v_z) to rank before two-hop parent ($v_a); indices: v_z={v_z_idx}, v_a={v_a_idx}"
         );
     }
 
@@ -4332,5 +4371,149 @@ sub run {
             "keys from %%other must not leak into %%config completions; got: {:?}",
             completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_unicode_non_ident_after_brace_no_panic() {
+        let source = "$config{☃ho";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_unicode_non_ident_before_var_no_panic() {
+        let source = "☃config{ho";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_unicode_before_brace_no_panic() {
+        // ☃ (3 bytes) immediately before `{` — previously caused a panic in the
+        // `->` check which sliced source[brace_pos-2..brace_pos] across a
+        // non-char-boundary.
+        let source = "$config☃{key";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        // ☃ is not a valid Perl identifier char so the variable name scan will not
+        // find a `$` sigil — result must be None without panicking.
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_4byte_emoji_in_key_no_panic() {
+        // 4-byte emoji (U+1F600) mid-key-prefix — exercises the char_indices rev path
+        // with a surrogate-range codepoint.
+        let source = "$config{\u{1F600}ho";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_ascii_regression() {
+        // Plain ASCII must still work correctly after the Unicode fixes.
+        let source = "$config{key";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        assert_eq!(result, Some(("config".to_string(), "key".to_string())));
+    }
+
+    #[test]
+    fn test_provider_captures_include_and_system_inc_paths() {
+        let code = "use My::Module;\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let include_paths = vec![PathBuf::from("/workspace/lib"), PathBuf::from("t/lib")];
+        let system_inc_paths = vec![PathBuf::from("/usr/lib/perl5")];
+
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            None,
+            include_paths.clone(),
+            system_inc_paths.clone(),
+            false,
+        );
+
+        assert_eq!(provider.include_paths, include_paths);
+        assert_eq!(provider.system_inc_paths, system_inc_paths);
+    }
+
+    #[test]
+    fn test_use_module_completion_unchanged_with_empty_inc_vectors()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyApp.pm")?;
+        index.index_file(module_uri, "package MyApp;\n1;\n".to_string())?;
+
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let baseline_provider =
+            CompletionProvider::new_with_index_and_source(&ast, code, Some(Arc::clone(&index)));
+        let baseline = baseline_provider.get_completions_with_path(code, code.len(), None);
+
+        let with_empty_inc = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            Vec::new(),
+            Vec::new(),
+            false,
+        );
+        let with_empty_inc_results =
+            with_empty_inc.get_completions_with_path(code, code.len(), None);
+
+        let baseline_labels: std::collections::HashSet<String> =
+            baseline.into_iter().map(|item| item.label).collect();
+        let with_empty_labels: std::collections::HashSet<String> =
+            with_empty_inc_results.into_iter().map(|item| item.label).collect();
+
+        assert_eq!(
+            baseline_labels, with_empty_labels,
+            "empty include paths must not change completion results in phase 1"
+        );
+        Ok(())
+    }
+
+    /// Phase 1 contract: non-empty inc_paths are stored but do NOT alter completions
+    /// (no filesystem scanning until phase 2). If this test breaks it means someone
+    /// started using the paths without adding scan logic — a regression, not a feature.
+    #[test]
+    fn test_non_empty_inc_paths_do_not_change_phase1_completions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyApp.pm")?;
+        index.index_file(module_uri, "package MyApp;\n1;\n".to_string())?;
+
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let baseline =
+            CompletionProvider::new_with_index_and_source(&ast, code, Some(Arc::clone(&index)))
+                .get_completions_with_path(code, code.len(), None);
+
+        // Non-empty inc paths: completions must still be identical to workspace-only baseline.
+        let with_inc = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            vec![PathBuf::from("/usr/local/lib/perl5"), PathBuf::from("t/lib")],
+            vec![PathBuf::from("/usr/lib/perl5/5.38")],
+            false,
+        )
+        .get_completions_with_path(code, code.len(), None);
+
+        let baseline_labels: std::collections::HashSet<String> =
+            baseline.into_iter().map(|item| item.label).collect();
+        let with_inc_labels: std::collections::HashSet<String> =
+            with_inc.into_iter().map(|item| item.label).collect();
+
+        assert_eq!(
+            baseline_labels, with_inc_labels,
+            "non-empty include paths must not change completions in phase 1 (no filesystem scanning yet)"
+        );
+        Ok(())
     }
 }
