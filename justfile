@@ -1799,6 +1799,26 @@ perf-baseline:
     @echo "Baseline complete. See docs/project/PERFORMANCE_BASELINES.md"
 
 # ============================================================================
+# Real-Workspace Baseline Measurement (Issue #7291)
+# ============================================================================
+
+# Run real-workspace LSP latency baseline for a given project and system.
+#
+# Usage:
+#   just real-workspace-baseline                             # defaults: mojolicious + auto-detected OS
+#   just real-workspace-baseline dancer2                     # specific project
+#   just real-workspace-baseline mojolicious linux           # project + system override
+#
+# Deliverables:
+#   - Captures p50/p95/p99 latencies for 5 LSP operations via the test harness
+#   - Writes raw JSON to .ci/metrics/real_project_latency.json
+#   - Generates a dated markdown doc in docs/forensics/
+#
+# Note: The test harness runs ignored tests so this takes ~60-120s.
+real-workspace-baseline project='mojolicious' system='':
+    @bash scripts/real-workspace-baseline.sh "{{project}}" "{{system}}"
+
+# ============================================================================
 # Code Coverage (Issue #276)
 # ============================================================================
 # Generate and analyze code coverage reports using cargo-llvm-cov.
