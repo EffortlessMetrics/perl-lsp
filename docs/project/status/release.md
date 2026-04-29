@@ -23,6 +23,30 @@
 - workspace version line is `v0.12.3`; `check-version-sync` still expects all 140 version sites to agree with it
 - crates.io intentionally remains on `v0.12.2` as of 2026-04-09, so docs and install guidance must keep that split explicit
 
+
+## Semantic Substrate Readiness for `v0.13.0`
+
+Status key: `Not started`, `Scaffolding`, `Fixture-backed`, `Measured`, `Release-ready`.
+
+| Criterion | Status | Evidence path |
+| --- | --- | --- |
+| Imported-symbol completion works | Scaffolding | `docs/project/SEMANTIC_FACT_SUBSTRATE.md` |
+| Export-tag completion works | Scaffolding | `docs/project/SEMANTIC_FACT_SUBSTRATE.md` |
+| Undefined-symbol false positives reduced | Scaffolding | `docs/project/SEMANTIC_FACT_SUBSTRATE.md` |
+| Goto-definition exact-hit fixtures pass | Scaffolding | `docs/project/SEMANTIC_FACT_SUBSTRATE.md` |
+| References distinguish definition/import/call kinds | Scaffolding | `docs/project/SEMANTIC_FACT_SUBSTRATE.md` |
+| Generated accessor fixtures pass | Scaffolding | `docs/project/SEMANTIC_FACT_SUBSTRATE.md` |
+| Inherited method fixtures pass | Scaffolding | `docs/project/SEMANTIC_FACT_SUBSTRATE.md` |
+| Dynamic-boundary policy is visible | Scaffolding | `docs/project/SEMANTIC_FACT_SUBSTRATE.md` (dynamic-boundary policy) |
+| Rename/safe-delete safety scorecard exists | Scaffolding | `docs/project/SEMANTIC_FACT_SUBSTRATE.md` (query API contract) |
+| Semantic query latency p95 tracked | Not started | scorecard harness pending in upcoming semantic fixtures wave |
+
+Notes:
+
+- This table is a readiness contract, not a claim that provider migration is complete.
+- Status should ratchet from `Scaffolding` -> `Fixture-backed` -> `Measured` as semantic fixture banks and scorecards land.
+- Keep metric definitions and receipts linked to canonical scorecard outputs when those fixtures are introduced.
+
 ## Component Summary
 
 | Component | Status | Notes |
@@ -60,4 +84,4 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ---
 
-*Last Updated: 2026-04-09*
+*Last Updated: 2026-04-29*
