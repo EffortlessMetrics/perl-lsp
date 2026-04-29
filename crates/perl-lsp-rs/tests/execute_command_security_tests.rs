@@ -243,6 +243,49 @@ fn test_empty_workspace_roots_enforces_cwd_boundary() -> Result<(), Box<dyn Erro
     Ok(())
 }
 
+
+#[cfg(unix)]
+#[test]
+fn test_command_exists_does_not_execute_path_hijacked_which() -> Result<(), Box<dyn Error>> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp_dir = TempDir::new()?;
+    let which_path = temp_dir.path().join("which");
+    let marker_path = temp_dir.path().join("which-executed.marker");
+
+    fs::write(
+        &which_path,
+        format!(
+            "#!/bin/sh
+printf 'executed' > '{}'
+exit 0
+",
+            marker_path.display()
+        ),
+    )?;
+    fs::set_permissions(&which_path, fs::Permissions::from_mode(0o755))?;
+
+    let original_path = std::env::var_os("PATH").unwrap_or_default();
+    let mut path_entries = vec![temp_dir.path().to_path_buf()];
+    path_entries.extend(std::env::split_paths(&original_path));
+    let joined_path = std::env::join_paths(path_entries)?;
+
+    // SAFETY: test-only PATH mutation; restored before returning.
+    unsafe {
+        std::env::set_var("PATH", &joined_path);
+    }
+    let _ = perl_lsp::execute_command::command_exists("perlcritic");
+    // SAFETY: restore process environment for test isolation.
+    unsafe {
+        std::env::set_var("PATH", original_path);
+    }
+
+    assert!(
+        !Path::new(&marker_path).exists(),
+        "security regression: command_exists executed a PATH-hijacked 'which' probe"
+    );
+    Ok(())
+}
 #[cfg(unix)]
 #[test]
 fn test_command_exists_does_not_execute_candidate_binary() -> Result<(), Box<dyn Error>> {
