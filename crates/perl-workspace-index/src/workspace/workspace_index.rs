@@ -67,6 +67,7 @@ use crate::document_store::{Document, DocumentStore};
 use crate::position::{Position, Range};
 use crate::workspace::monitoring::IndexInstrumentation;
 use parking_lot::RwLock;
+use perl_semantic_facts::{Confidence, OccurrenceKind, ReferenceEdge};
 use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -1053,8 +1054,14 @@ pub struct SymbolReference {
     pub uri: String,
     /// Line and character range of the reference
     pub range: Range,
-    /// How the symbol is being referenced (definition, usage, etc.)
-    pub kind: ReferenceKind,
+    /// Typed reference metadata preserved for global workspace index use.
+    pub edge: ReferenceEdge,
+}
+
+impl SymbolReference {
+    const fn kind(&self) -> ReferenceKind {
+        ReferenceKind::from_occurrence_kind(self.edge.kind)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1070,6 +1077,28 @@ pub enum ReferenceKind {
     Read,
     /// Variable write access (assignment target)
     Write,
+}
+
+impl ReferenceKind {
+    const fn to_occurrence_kind(self) -> OccurrenceKind {
+        match self {
+            Self::Definition => OccurrenceKind::Definition,
+            Self::Usage => OccurrenceKind::Reference,
+            Self::Import => OccurrenceKind::Import,
+            Self::Read => OccurrenceKind::Read,
+            Self::Write => OccurrenceKind::Write,
+        }
+    }
+
+    const fn from_occurrence_kind(kind: OccurrenceKind) -> Self {
+        match kind {
+            OccurrenceKind::Definition => Self::Definition,
+            OccurrenceKind::Import => Self::Import,
+            OccurrenceKind::Read => Self::Read,
+            OccurrenceKind::Write => Self::Write,
+            _ => Self::Usage,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -1134,7 +1163,7 @@ pub struct WorkspaceIndex {
     ///
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
     /// Provides O(1) lookup for `find_references()` instead of iterating all files.
-    global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
+    global_references: Arc<RwLock<HashMap<String, Vec<SymbolReference>>>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
     /// Workspace folder URIs for multi-root workspace support
@@ -1370,7 +1399,8 @@ impl WorkspaceIndex {
                         location.range.end.column,
                     );
                     if seen.insert(key) {
-                        locations.push(location.clone());
+                        locations
+                            .push(Location { uri: location.uri.clone(), range: location.range });
                     }
                 }
             }
@@ -1488,7 +1518,7 @@ impl WorkspaceIndex {
     /// Retains only entries whose URI does not match `file_uri`.
     /// Empty keys are removed to avoid unbounded map growth.
     fn remove_file_global_refs(
-        global_refs: &mut HashMap<String, Vec<Location>>,
+        global_refs: &mut HashMap<String, Vec<SymbolReference>>,
         file_index: &FileIndex,
         file_uri: &str,
     ) {
@@ -1610,7 +1640,7 @@ impl WorkspaceIndex {
                 for (name, refs) in &file_index.references {
                     let entry = global_refs.entry(name.clone()).or_default();
                     for reference in refs {
-                        entry.push(Location { uri: reference.uri.clone(), range: reference.range });
+                        entry.push(reference.clone());
                     }
                 }
             }
@@ -1926,10 +1956,7 @@ impl WorkspaceIndex {
                     for (name, refs) in &fi.references {
                         let entry = global_refs.entry(name.clone()).or_default();
                         for reference in refs {
-                            entry.push(Location {
-                                uri: reference.uri.clone(),
-                                range: reference.range,
-                            });
+                            entry.push(reference.clone());
                         }
                     }
                 }
@@ -2079,7 +2106,7 @@ impl WorkspaceIndex {
 
         for (_uri_key, file_index) in files.iter() {
             if let Some(refs) = file_index.references.get(symbol_name) {
-                for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
+                for r in refs.iter().filter(|r| r.kind() != ReferenceKind::Definition) {
                     seen.insert((
                         r.uri.clone(),
                         r.range.start.line,
@@ -2093,7 +2120,7 @@ impl WorkspaceIndex {
             if let Some(idx) = symbol_name.rfind("::") {
                 let bare_name = &symbol_name[idx + 2..];
                 if let Some(refs) = file_index.references.get(bare_name) {
-                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
+                    for r in refs.iter().filter(|r| r.kind() != ReferenceKind::Definition) {
                         seen.insert((
                             r.uri.clone(),
                             r.range.start.line,
@@ -2109,7 +2136,7 @@ impl WorkspaceIndex {
                         continue;
                     }
 
-                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
+                    for r in refs.iter().filter(|r| r.kind() != ReferenceKind::Definition) {
                         seen.insert((
                             r.uri.clone(),
                             r.range.start.line,
@@ -2661,7 +2688,7 @@ impl WorkspaceIndex {
                 // Check if this symbol has any references beyond its definition
                 let has_usage = files.values().any(|fi| {
                     if let Some(refs) = fi.references.get(&symbol.name) {
-                        refs.iter().any(|r| r.kind != ReferenceKind::Definition)
+                        refs.iter().any(|r| r.kind() != ReferenceKind::Definition)
                     } else {
                         false
                     }
@@ -2948,7 +2975,7 @@ impl IndexVisitor {
             file_index.references.entry(symbol_name).or_default().push(SymbolReference {
                 uri: self.uri.clone(),
                 range,
-                kind: ReferenceKind::Definition,
+                edge: ReferenceEdge::new(ReferenceKind::Definition.to_occurrence_kind(), Confidence::High),
             });
         }
     }
@@ -3005,7 +3032,7 @@ impl IndexVisitor {
                 file_index.references.entry(var_name).or_default().push(SymbolReference {
                     uri: self.uri.clone(),
                     range,
-                    kind: ReferenceKind::Read,
+                    edge: ReferenceEdge::new(ReferenceKind::Read.to_occurrence_kind(), Confidence::High),
                 });
             }
 
@@ -3048,7 +3075,7 @@ impl IndexVisitor {
                 file_index.references.entry(var_name).or_default().push(SymbolReference {
                     uri: self.uri.clone(),
                     range: self.node_to_range(node),
-                    kind: ReferenceKind::Read, // Default to read, would need context for write
+                    edge: ReferenceEdge::new(ReferenceKind::Read.to_occurrence_kind(), Confidence::High), // Default to read, would need context for write
                 });
             }
 
@@ -3072,13 +3099,13 @@ impl IndexVisitor {
                     SymbolReference {
                         uri: self.uri.clone(),
                         range: location,
-                        kind: ReferenceKind::Usage,
+                        edge: ReferenceEdge::new(ReferenceKind::Usage.to_occurrence_kind(), Confidence::High),
                     },
                 );
                 file_index.references.entry(qualified).or_default().push(SymbolReference {
                     uri: self.uri.clone(),
                     range: location,
-                    kind: ReferenceKind::Usage,
+                    edge: ReferenceEdge::new(ReferenceKind::Usage.to_occurrence_kind(), Confidence::High),
                 });
 
                 if name == "extends" || name == "with" {
@@ -3118,7 +3145,7 @@ impl IndexVisitor {
                 file_index.references.entry(module_name).or_default().push(SymbolReference {
                     uri: self.uri.clone(),
                     range: self.node_to_range(node),
-                    kind: ReferenceKind::Import,
+                    edge: ReferenceEdge::new(ReferenceKind::Import.to_occurrence_kind(), Confidence::High),
                 });
             }
 
@@ -3136,7 +3163,7 @@ impl IndexVisitor {
                             SymbolReference {
                                 uri: self.uri.clone(),
                                 range: self.node_to_range(lhs),
-                                kind: ReferenceKind::Read,
+                                edge: ReferenceEdge::new(ReferenceKind::Read.to_occurrence_kind(), Confidence::High),
                             },
                         );
                     }
@@ -3145,7 +3172,7 @@ impl IndexVisitor {
                     file_index.references.entry(var_name).or_default().push(SymbolReference {
                         uri: self.uri.clone(),
                         range: self.node_to_range(lhs),
-                        kind: ReferenceKind::Write,
+                        edge: ReferenceEdge::new(ReferenceKind::Write.to_occurrence_kind(), Confidence::High),
                     });
                 }
 
@@ -3206,7 +3233,7 @@ impl IndexVisitor {
                     file_index.references.entry(var_name).or_default().push(SymbolReference {
                         uri: self.uri.clone(),
                         range: self.node_to_range(variable),
-                        kind: ReferenceKind::Write,
+                        edge: ReferenceEdge::new(ReferenceKind::Write.to_occurrence_kind(), Confidence::High),
                     });
                 }
                 self.visit_node(variable, file_index);
@@ -3239,14 +3266,14 @@ impl IndexVisitor {
                         SymbolReference {
                             uri: self.uri.clone(),
                             range: location,
-                            kind: ReferenceKind::Usage,
+                            edge: ReferenceEdge::new(ReferenceKind::Usage.to_occurrence_kind(), Confidence::High),
                         },
                     );
                 }
                 file_index.references.entry(method.clone()).or_default().push(SymbolReference {
                     uri: self.uri.clone(),
                     range: location,
-                    kind: ReferenceKind::Usage,
+                    edge: ReferenceEdge::new(ReferenceKind::Usage.to_occurrence_kind(), Confidence::High),
                 });
 
                 if method == "import"
@@ -3256,7 +3283,7 @@ impl IndexVisitor {
                         file_index.references.entry(symbol).or_default().push(SymbolReference {
                             uri: self.uri.clone(),
                             range: self.node_to_range(node),
-                            kind: ReferenceKind::Import,
+                            edge: ReferenceEdge::new(ReferenceKind::Import.to_occurrence_kind(), Confidence::High),
                         });
                     }
                     file_index.dependencies.insert(normalize_dependency_module_name(module_name));
@@ -3316,14 +3343,14 @@ impl IndexVisitor {
                         SymbolReference {
                             uri: self.uri.clone(),
                             range: self.node_to_range(operand),
-                            kind: ReferenceKind::Read,
+                            edge: ReferenceEdge::new(ReferenceKind::Read.to_occurrence_kind(), Confidence::High),
                         },
                     );
 
                     file_index.references.entry(var_name).or_default().push(SymbolReference {
                         uri: self.uri.clone(),
                         range: self.node_to_range(operand),
-                        kind: ReferenceKind::Write,
+                        edge: ReferenceEdge::new(ReferenceKind::Write.to_occurrence_kind(), Confidence::High),
                     });
                 }
             }
