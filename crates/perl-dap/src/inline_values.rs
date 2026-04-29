@@ -18,12 +18,14 @@ static PERL_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
 
 /// Regex for braced Perl variables (`${name}`, `@{Pkg::arr}`, `%{cfg}`).
 static BRACED_PERL_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
-    Regex::new(r"([$@%])\{((?:::)?[A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*)\}").ok()
+    Regex::new(r"([$@%])\{((?:::)?[A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*)\}")
+        .ok()
 });
 
 /// Legacy regex for scalar-only matching (used by `DapDispatcher`).
-static SCALAR_VAR_RE: Lazy<Option<Regex>> =
-    Lazy::new(|| Regex::new(r"\$(?:::)?[A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*").ok());
+static SCALAR_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
+    Regex::new(r"\$(?:::)?[A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*").ok()
+});
 
 /// Special Perl variables that should not be shown inline.
 const SPECIAL_VARS: &[&str] = &[
