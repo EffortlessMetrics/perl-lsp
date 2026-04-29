@@ -18,6 +18,8 @@ use std::time::{Duration, Instant};
 use toml::Value as TomlValue;
 use walkdir::{DirEntry, WalkDir};
 
+mod doc_paths;
+
 const RED: &str = "\x1b[0;31m";
 const GREEN: &str = "\x1b[0;32m";
 const YELLOW: &str = "\x1b[0;33m";
@@ -202,7 +204,7 @@ fn run() -> Result<i32> {
     let repo_root = find_repo_root()?;
     let code = match cli.command {
         CliCommand::CheckDocPaths { docs_dir } => {
-            cmd_check_doc_paths(&repo_root, docs_dir.as_deref())?
+            doc_paths::cmd_check_doc_paths(&repo_root, docs_dir.as_deref())?
         }
         CliCommand::Preflight => cmd_preflight(&repo_root)?,
         CliCommand::TestCapped { cargo_args } => cmd_test_capped(&repo_root, &cargo_args)?,
@@ -2224,10 +2226,6 @@ fn path_has_component(path: &Path, target: &str) -> bool {
     path.components().any(|component| component.as_os_str() == OsStr::new(target))
 }
 
-fn is_text_file(path: &Path) -> bool {
-    fs::read_to_string(path).is_ok()
-}
-
 fn walk_entries(root: &Path) -> impl Iterator<Item = DirEntry> + '_ {
     WalkDir::new(root).follow_links(false).into_iter().filter_map(Result::ok)
 }
@@ -3314,82 +3312,6 @@ fn cmd_test_heredocs(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
-fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> {
-    let docs_dir = docs_dir.unwrap_or("docs");
-    let docs_path = if Path::new(docs_dir).is_absolute() {
-        PathBuf::from(docs_dir)
-    } else {
-        repo_root.join(docs_dir)
-    };
-    let home_user_path = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
-    let users_name_path = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
-
-    let mut hard_failures = Vec::new();
-    let mut warnings = Vec::new();
-
-    if !docs_path.is_dir() {
-        return Err(color_eyre::eyre::eyre!("Docs directory not found: {}", docs_path.display()));
-    }
-
-    for entry in walk_entries(&docs_path) {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let path = entry.path();
-        if !is_text_file(path) {
-            continue;
-        }
-        let rel = display_path(repo_root, path);
-        let contents = fs::read_to_string(path)?;
-        for (line_no, line) in contents.lines().enumerate() {
-            let number = line_no + 1;
-            if has_machine_specific_home_path(line, &home_user_path) {
-                hard_failures.push(format!("{rel}:{number}:{line}"));
-            }
-            if has_machine_specific_users_path(line, &users_name_path) {
-                warnings.push(format!("{rel}:{number}:{line}"));
-            }
-        }
-    }
-
-    if !warnings.is_empty() {
-        println!("⚠️  Found macOS user paths that may be machine-specific");
-        for hit in warnings {
-            println!("{hit}");
-        }
-        println!();
-    }
-
-    if hard_failures.is_empty() {
-        println!("✅ No machine-specific paths found in documentation");
-        return Ok(0);
-    }
-
-    println!("{RED}❌ Found machine-specific /home/ paths (not /home/user examples){NC}");
-    for hit in hard_failures {
-        println!("{hit}");
-    }
-    println!();
-    println!("Fix: Replace absolute paths with repo-relative paths or generic examples");
-    println!("  - Use relative paths: docs/file.md instead of /home/.../docs/file.md");
-    println!("  - Use generic examples: /home/user/project for user-facing docs");
-    Ok(1)
-}
-
-fn has_machine_specific_home_path(line: &str, home_user_path: &Regex) -> bool {
-    home_user_path.captures_iter(line).any(|captures| {
-        captures.get(1).is_some_and(|name| !name.as_str().eq_ignore_ascii_case("user"))
-    })
-}
-
-fn has_machine_specific_users_path(line: &str, users_name_path: &Regex) -> bool {
-    users_name_path.captures_iter(line).any(|captures| {
-        captures.get(1).is_some_and(|name| {
-            let value = name.as_str();
-            !(value.eq_ignore_ascii_case("name") || value.eq_ignore_ascii_case("user"))
-        })
-    })
-}
 
 fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
     let baseline_path = repo_root.join("ci").join("todo_baseline.txt");
@@ -5030,15 +4952,15 @@ mod tests {
     fn home_path_detection_only_allows_generic_user_examples() -> Result<()> {
         let home_user_path = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
 
-        assert!(!has_machine_specific_home_path(
+        assert!(!doc_paths::has_machine_specific_home_path(
             "Use /home/user/project as the example.",
             &home_user_path,
         ));
-        assert!(has_machine_specific_home_path(
+        assert!(doc_paths::has_machine_specific_home_path(
             "My path is /home/ubuntu/workspace/perl-lsp",
             &home_user_path,
         ));
-        assert!(has_machine_specific_home_path("Local path: /home/u/project", &home_user_path,));
+        assert!(doc_paths::has_machine_specific_home_path("Local path: /home/u/project", &home_user_path,));
 
         Ok(())
     }
@@ -5047,15 +4969,15 @@ mod tests {
     fn users_path_detection_only_allows_generic_name_examples() -> Result<()> {
         let users_name_path = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
 
-        assert!(!has_machine_specific_users_path(
+        assert!(!doc_paths::has_machine_specific_users_path(
             "Template: /Users/Name/project",
             &users_name_path,
         ));
-        assert!(!has_machine_specific_users_path(
+        assert!(!doc_paths::has_machine_specific_users_path(
             "Template: /Users/user/project",
             &users_name_path,
         ));
-        assert!(has_machine_specific_users_path(
+        assert!(doc_paths::has_machine_specific_users_path(
             "Personal path: /Users/alice/dev/perl-lsp",
             &users_name_path,
         ));
