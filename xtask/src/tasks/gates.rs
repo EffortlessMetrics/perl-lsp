@@ -26,7 +26,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
+use std::process::{Command, ExitStatus};
 use std::path::{Path, PathBuf};
+use std::thread;
 use std::time::Instant;
 
 use crate::tasks::ci_scope::{self, ScopeOutput};
@@ -1612,7 +1614,7 @@ fn run_single_gate(
     // Run through the platform shell because gate commands are policy strings.
     // Linux CI uses bash; Windows local runs use cmd.exe to keep `cargo`/`just`
     // lookup and simple command chaining available without requiring Git Bash.
-    let result = shell_command(command).stderr_to_stdout().stdout_capture().unchecked().run();
+    let result = run_shell_with_timeout(command, timeout_secs);
 
     let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -1626,8 +1628,7 @@ fn run_single_gate(
                 eprintln!("Warning: Failed to write log file: {}", e);
             }
 
-            // Check if timed out
-            let timed_out = duration_ms > (timeout_secs * 1000);
+            let timed_out = output.timed_out;
 
             let status = if timed_out {
                 "timeout".to_string()
@@ -1638,7 +1639,17 @@ fn run_single_gate(
             };
 
             // Extract output summary (last 10 lines or error message)
-            let output_summary = extract_output_summary(&stdout, 10);
+            let output_summary = if timed_out {
+                format!(
+                    "Gate '{}' timed out after {}s (command: {}). Last output:\n{}",
+                    gate.name,
+                    timeout_secs,
+                    command,
+                    extract_output_summary(&stdout, 10)
+                )
+            } else {
+                extract_output_summary(&stdout, 10)
+            };
 
             // Parse metrics if this is a test gate
             let metrics = if gate.tags.contains(&"test".to_string()) {
@@ -1693,14 +1704,52 @@ fn run_single_gate(
     }
 }
 
+struct TimedOutput {
+    status: ExitStatus,
+    stdout: Vec<u8>,
+    timed_out: bool,
+}
+
+fn run_shell_with_timeout(command: &str, timeout_secs: u64) -> Result<TimedOutput> {
+    let mut child = shell_process(command)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .with_context(|| format!("Failed to spawn shell command: {command}"))?;
+
+    let start = Instant::now();
+    let mut timed_out = false;
+    loop {
+        if child.try_wait().context("Failed to poll shell command status")?.is_some() {
+            break;
+        }
+        if start.elapsed().as_secs() >= timeout_secs {
+            timed_out = true;
+            let _ = child.kill();
+            break;
+        }
+        thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    let output = child
+        .wait_with_output()
+        .with_context(|| format!("Failed to collect shell command output: {command}"))?;
+
+    Ok(TimedOutput { status: output.status, stdout: output.stdout, timed_out })
+}
+
 #[cfg(windows)]
-fn shell_command(command: &str) -> duct::Expression {
-    cmd!("cmd", "/C", command)
+fn shell_process(command: &str) -> Command {
+    let mut cmd = Command::new("cmd");
+    cmd.arg("/C").arg(command);
+    cmd
 }
 
 #[cfg(not(windows))]
-fn shell_command(command: &str) -> duct::Expression {
-    cmd!("bash", "-lc", command)
+fn shell_process(command: &str) -> Command {
+    let mut cmd = Command::new("bash");
+    cmd.arg("-lc").arg(command);
+    cmd
 }
 
 fn run_internal_xtask_gate(
