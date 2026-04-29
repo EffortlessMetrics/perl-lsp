@@ -182,17 +182,13 @@ pub fn parse_perl_file<P: AsRef<Path>>(
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     let path = path.as_ref();
     let code = std::fs::read(path).map_err(|source| {
-        Box::new(ParsePerlFileError {
-            path: path.to_path_buf(),
-            source: Box::new(source),
-        }) as Box<dyn std::error::Error>
+        Box::new(ParsePerlFileError { path: path.to_path_buf(), source: Box::new(source) })
+            as Box<dyn std::error::Error>
     })?;
 
     parse_perl_bytes(&code).map_err(|source| {
-        Box::new(ParsePerlFileError {
-            path: path.to_path_buf(),
-            source,
-        }) as Box<dyn std::error::Error>
+        Box::new(ParsePerlFileError { path: path.to_path_buf(), source })
+            as Box<dyn std::error::Error>
     })
 }
 
