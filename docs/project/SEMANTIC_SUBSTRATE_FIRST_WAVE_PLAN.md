@@ -128,6 +128,49 @@ This section is the migration receipt for what has landed versus what remains st
 - No rename/safe-delete cutover yet.
 - No full type inference.
 
+## Wave 2 Execution Discipline (Curation + Test Floor)
+
+When duplicate Wave 2 candidates exist, run a curator pass before merging additional tracks.
+
+### Required Curator Output Shape
+
+```json
+{
+  "cluster": "typed_reference_index",
+  "keepers": [7348],
+  "close_as_superseded": [7362, 7363],
+  "port_from_losers": [
+    {
+      "from": 7363,
+      "detail": "count_usages test shape",
+      "to": 7348
+    }
+  ],
+  "review_notes": [
+    "verify ReferenceEdge shape lives in perl-semantic-facts"
+  ]
+}
+```
+
+### Parity Test Floor
+
+Before merging the workspace-facing boxes (4–7), fix and re-green the parity test floor:
+
+```bash
+cargo test -p perl-workspace surface_workspace_parity
+cargo test -p perl-workspace
+cargo check --workspace --all-targets
+```
+
+Interpret failures explicitly as one of: real regression, stale expected output, fixture drift, or documented legacy divergence.
+
+### Merge Train Discipline
+
+1. Merge boxes 1–3 (exact adapters) and verify workspace-wide checks.
+2. Merge one curated winner for each duplicate cluster (facts shard, typed refs, shadow receipts, scorecard rows).
+3. Re-check `perl-workspace` parity tests after each merge-train step.
+4. Close superseded PRs only after loser-test harvest is ported.
+
 ## Wave 3 (User-Visible Cutover Staging)
 
 1. `ImportSpec` extraction.
