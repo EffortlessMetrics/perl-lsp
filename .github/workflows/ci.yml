@@ -77,6 +77,32 @@ jobs:
             echo "::notice::Superseded by $LATEST — skipping remaining jobs to save cost"
           fi
 
+  # ── Conflict-marker guard: <1s, no toolchain needed ─────────────────
+  # Prevents committed conflict markers reaching master (see #7183).
+  # Two incidents on 2026-04-28 each cost 1-3h of orchestrator + builder time.
+  conflict-markers:
+    name: Conflict marker check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    needs: [draft-pr-check, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+      - name: Check for conflict markers
+        run: |
+          matches=$(git ls-files -z | xargs -0 grep -lP '^(<{7} |>{7} |={7}$)' 2>/dev/null || true)
+          if [ -n "$matches" ]; then
+            echo "❌ Conflict markers found in committed files:"
+            echo "$matches"
+            echo ""
+            echo "Run: grep -rn -P '^(<{7} |>{7} |={7}\$)' \$(git ls-files)"
+            echo "to locate exact lines, then resolve and re-commit."
+            exit 1
+          fi
+          echo "✅ No conflict markers found"
+
   # ── PR Smoke: fast feedback for every PR (~1-2 min) ──────────────────
   pr-smoke:
     name: PR Smoke (Fast Feedback)
@@ -234,7 +260,7 @@ jobs:
     name: CI Gate (Merge-Blocking)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: [draft-pr-check, pr-smoke, preflight-latest-check]
+    needs: [draft-pr-check, pr-smoke, conflict-markers, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     # Run on every PR push and on push to main/master
     # Earlier gating > label-gated gating (see #4675)

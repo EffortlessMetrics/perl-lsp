@@ -47,6 +47,7 @@ pr-fast: _check-tools-basic
     echo "  PR-FAST GATE (quick validation)"
     echo "=============================================="
     START=$(date +%s)
+    just _timed "check-conflict-markers" "just check-conflict-markers" && \
     just _timed "fmt-check" "just fmt-check" && \
     just _timed "release-history" "just ci-release-history" && \
     just _timed "readme-heading-check" "just readme-heading-check" && \
@@ -75,6 +76,25 @@ check-all-targets:
     @echo "Compiling all targets (all features) — deep verification check..."
     cargo check --workspace --all-targets --all-features --locked
     @echo "All targets compile clean."
+
+# Scan every tracked file for committed git conflict markers (<<<<<<< / >>>>>>> / =======).
+# Catches accidental conflict-marker commits before they break compilation or CI.
+# Historically caused: broken reconciler (3 cron cycles, #6869), corrupted docs (#7042).
+# Cost: <1s. Zero false positives for lines starting with exactly 7 < / > chars or =======$
+check-conflict-markers:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Search tracked files only; avoid binary files and .git
+    matches=$(git ls-files -z | xargs -0 grep -lP '^(<{7} |>{7} |={7}$)' 2>/dev/null || true)
+    if [ -n "$matches" ]; then
+        echo "❌ Conflict markers found in committed files:"
+        echo "$matches"
+        echo ""
+        echo "Run: grep -rn -P '^(<{7} |>{7} |={7}\$)' \$(git ls-files)"
+        echo "to locate exact lines, then resolve and re-commit."
+        exit 1
+    fi
+    echo "✅ No conflict markers found"
 
 # Fail if README.md has duplicate level-2 headings. Helps catch accidental
 # copy/paste doc drift that is otherwise easy to miss during review.
