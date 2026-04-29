@@ -387,6 +387,10 @@ fn add_disabled_warning_category(state: &mut PragmaState, category: &str) {
     state.disabled_warning_categories.push(category.to_string());
 }
 
+fn warning_categories_from_args(args: &[String]) -> impl Iterator<Item = String> + '_ {
+    args.iter().flat_map(|arg| pragma_arg_items(arg))
+}
+
 fn remove_builtin_imports(state: &mut PragmaState, args: &[String]) {
     if args.is_empty() {
         state.builtin_imports.clear();
@@ -804,9 +808,8 @@ impl PragmaTracker {
                                 current_state.warnings = false;
                                 current_state.disabled_warning_categories.clear();
                             } else {
-                                for arg in conditional_args {
-                                    let category = normalized_pragma_token(arg);
-                                    add_disabled_warning_category(current_state, category);
+                                for category in warning_categories_from_args(conditional_args) {
+                                    add_disabled_warning_category(current_state, &category);
                                 }
                             }
                             ranges.push((
@@ -902,11 +905,8 @@ impl PragmaTracker {
                             // `no warnings 'CATEGORY'` — disable only the named
                             // categories; the global flag stays true so that other
                             // categories remain active.
-                            for arg in args {
-                                // Strip any surrounding single or double quotes that
-                                // the parser may have left on the argument.
-                                let category = arg.trim_matches('\'').trim_matches('"');
-                                add_disabled_warning_category(current_state, category);
+                            for category in warning_categories_from_args(args) {
+                                add_disabled_warning_category(current_state, &category);
                             }
                         }
                         ranges
