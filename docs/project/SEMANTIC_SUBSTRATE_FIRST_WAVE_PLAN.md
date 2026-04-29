@@ -94,106 +94,42 @@ rename_plan(entity, new_name)
 safe_delete_plan(entity)
 ```
 
-## Wave 2 (Facts Become Real, Providers Stay Stable)
+## Wave 2 (After First-Wave Rails Land)
 
-Wave 2 is where semantic facts move from design to runtime substrate. The scope is intentionally below LSP provider cutover.
+1. `SymbolDecl -> EntityFact` adapter.
+2. `SymbolRef -> OccurrenceFact` adapter.
+3. `ExportInfo -> ExportSet` adapter.
+4. `FileFactShard` write-through in workspace store.
+5. Definition-candidate multimap behind compatibility APIs.
+6. Typed reference-edge global index behind compatibility APIs.
 
-### Wave 2 target state
+## Wave 2 Implementation Status (as of 2026-04-29)
 
-```text
-perl-symbol / exporter / workspace
-  → emit canonical facts
+This section is the migration receipt for what has landed versus what remains staged.
 
-perl-workspace
-  → stores fact shards
-  → builds typed definition/reference indexes
-  → keeps old public APIs working
-  → can compare old vs new query answers
-```
+### Landed now
 
-### Wave 2 boxes (8 parallel tracks)
+- **Exact facts emitted (neutral vocabulary is live):** `AnchorFact`, `EntityFact`, `OccurrenceFact`, `EdgeFact`, and `DiagnosticFact` exist in `perl-semantic-facts` with deterministic serde/roundtrip coverage.
+- **Fact shard write-through:** **not landed yet**; workspace continues to operate on legacy symbol/reference indexes as the source of truth.
+- **Definition candidate multimap:** **not landed yet**; compatibility APIs still resolve against existing per-file/global symbol tables.
+- **Typed reference index:** **not landed yet**; typed-reference behavior is currently constrained to fixture/regression banks rather than a provider-facing global index.
+- **Shadow-compare receipt:** **design/test rail only** in this wave; no provider cutover or production shadow-read gating is enabled.
+- **Scorecard v1:** fixture harness + baseline-pending semantic scorecard are landed; metric rows are intentionally `baseline_pending` until full adapter/index plumbing is wired.
 
-| Box | Purpose | Provider behavior change? |
-|---:|---|---|
-| 1 | `SymbolDecl -> EntityFact` adapter | No |
-| 2 | `SymbolRef -> OccurrenceFact` adapter | No |
-| 3 | `ExportInfo -> ExportSet` adapter | No |
-| 4 | `FileFactShard` write-through store in `perl-workspace` | No |
-| 5 | `DefinitionCandidate` multimap behind compatibility APIs | No (shadow-compatible) |
-| 6 | Typed `ReferenceEdge` global index behind compatibility APIs | No (shadow-compatible) |
-| 7 | Shadow-compare receipts for definition/reference queries | No |
-| 8 | Semantic scorecard v1: fact counts + fixture coverage | No |
+### Explicit non-goals for current Wave 2 state
 
-### Wave 2 merge order
+- No provider cutover yet.
+- No rename/safe-delete cutover yet.
+- No full type inference.
 
-Do not merge all boxes in numeric order:
+## Wave 3 (User-Visible Cutover Staging)
 
-1. Boxes 1–3 (exact adapters)
-2. Box 8 (scorecard v1, if adapter outputs are cleanly consumed)
-3. Box 4 (`FileFactShard` write-through)
-4. Boxes 5–6 (definition/reference indexes behind compatibility APIs)
-5. Box 7 (shadow-compare receipts)
+1. `ImportSpec` extraction.
+2. `VisibleSymbols` query implementation.
+3. Completion consumes `VisibleSymbols` behind a feature flag.
+4. Undefined diagnostics consume `VisibleSymbols` behind a feature flag.
 
-### Explicit Wave 2 non-goals
-
-- Completion migration
-- Undefined-symbol diagnostics migration
-- Rename/safe-delete migration
-- Full package graph
-- External `@INC`/CPAN indexing
-- On-disk semantic persistence
-
-### Wave 2 success criteria
-
-After Wave 2 lands, we should be able to say:
-
-```text
-Symbol declarations can become canonical entities.
-Symbol references can become canonical occurrences.
-Export analysis can become canonical export sets.
-Workspace can store per-file fact shards.
-Workspace can represent multiple definition candidates.
-Workspace can preserve typed references globally.
-Old and new query answers can be compared.
-Semantic scorecard can show fact coverage.
-```
-
-## Overall Path After Wave 2
-
-### Wave 3 (Imports and visibility become first-class)
-
-1. `ImportSpec` extraction for `use` forms.
-2. `require Module; Module->import(...)` extraction.
-3. Resolve `ExportSet` into `VisibleSymbols`.
-4. Add `visible_symbols_at(uri, offset)`.
-5. Add import/export coverage rows to semantic scorecards.
-6. Add completion shadow-compare using `VisibleSymbols`.
-7. Add undefined-symbol diagnostic shadow-compare.
-8. Add dynamic import boundary policy tests.
-
-### Wave 4 (Low-risk query consumer migration)
-
-- Migrate `goto-definition`, `find-references`, and `count-usages` to provider-facing semantic queries with compatibility wrappers and scorecard validation.
-
-### Wave 5 (First major UX cutover)
-
-- Migrate completion and undefined-symbol diagnostics onto confidence-aware semantic visibility, still behind staged rollout controls.
-
-### Wave 6 (Perl package graph and generated members)
-
-- Add inheritance/role/generated-member modeling and integrate with completion/navigation/diagnostics.
-
-### Wave 7 (Value-shape-lite for receiver-aware behavior)
-
-- Add lightweight receiver/value-shape inference to improve method candidates and ranking without full type inference.
-
-### Wave 8 (Refactor safety)
-
-- Build `rename_plan`/`safe_delete_plan` with dynamic-boundary awareness and explicit unsafe/ambiguous outcomes.
-
-### Wave 9 (Incremental invalidation + release proof)
-
-- Add per-file semantic fingerprints and invalidation rules, then prove quality/latency on representative real workspaces.
+Wave 3 should start by landing `ImportSpec` extraction and a concrete `visible_symbols_at(...)` query surface, then stage provider adoption behind feature flags.
 
 ## Out of Scope for First Wave
 
