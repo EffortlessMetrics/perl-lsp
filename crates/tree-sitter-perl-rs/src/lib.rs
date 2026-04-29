@@ -661,14 +661,19 @@ fn collect_visible_use_imports(
     node.for_each_child(|child| collect_visible_use_imports(child, source, offset, out));
 }
 
-// Invariant: TreeCursor path is constructed by the traversal that just yielded this
-// index, so child_at is guaranteed valid.
-#[allow(clippy::expect_used)]
+// Invariant: TreeCursor path is constructed by traversal methods in this type.
+// If a stale/invalid path somehow appears, return the last valid node instead
+// of panicking, preserving total API safety guarantees.
 fn resolve_path<'tree>(root: &'tree AstNode, path: &[usize]) -> &'tree AstNode {
     let mut current = root;
     for &index in path {
-        current = ast_child_at(current, index)
-            .expect("TreeCursor path must always reference a valid child");
+        match ast_child_at(current, index) {
+            Some(child) => current = child,
+            None => {
+                debug_assert!(false, "TreeCursor path must reference a valid child");
+                break;
+            }
+        }
     }
     current
 }
