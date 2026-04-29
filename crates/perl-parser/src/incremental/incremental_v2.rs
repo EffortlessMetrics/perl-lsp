@@ -501,12 +501,21 @@ impl IncrementalParserV2 {
 
     fn is_range_affected(&self, start: usize, end: usize) -> bool {
         self.edits_with_original_ranges().into_iter().any(|(edit_start, edit_end, _)| {
-            if edit_start == edit_end {
-                start <= edit_start && edit_start <= end
-            } else {
-                edit_start < end && edit_end > start
-            }
+            Self::edit_changes_content_range(edit_start, edit_end, start, end)
         })
+    }
+
+    fn edit_changes_content_range(
+        edit_start: usize,
+        edit_end: usize,
+        range_start: usize,
+        range_end: usize,
+    ) -> bool {
+        if edit_start == edit_end {
+            range_start < edit_start && edit_start < range_end
+        } else {
+            edit_start < range_end && edit_end > range_start
+        }
     }
 
     /// Check if the given range only contains whitespace or comments
@@ -969,7 +978,8 @@ impl IncrementalParserV2 {
         // edits that fall within the node's original range.
         let mut delta = 0;
         for (start, end, edit) in self.edits_with_original_ranges() {
-            if start >= node.location.start && end <= node.location.end {
+            if Self::edit_changes_content_range(start, end, node.location.start, node.location.end)
+            {
                 delta += edit.byte_shift();
             }
         }

@@ -1,5 +1,6 @@
 #![cfg(feature = "incremental")]
 
+use perl_parser::incremental_advanced_reuse::ReuseConfig;
 use perl_parser::incremental_v2::IncrementalParserV2;
 use perl_parser_core::{edit::Edit, error::ParseResult, parser::Parser, position::Position};
 
@@ -98,5 +99,29 @@ fn batch_multibyte_and_identifier_edits_keep_safe_shifted_reuse() -> ParseResult
     let source2 = "my $x = \"é\";\nmy $id = 22;";
     assert_incremental_matches_full(&mut parser, source2)?;
     assert!(parser.reused_nodes > 0);
+    Ok(())
+}
+
+#[test]
+fn boundary_insertion_before_string_keeps_literal_content() -> ParseResult<()> {
+    let mut parser = IncrementalParserV2::with_reuse_config(ReuseConfig {
+        min_confidence: 1.01,
+        ..ReuseConfig::default()
+    });
+    let source1 = "my $x =\"a\";";
+    parser.parse(source1)?;
+
+    parser.edit(Edit::new(
+        7,
+        7,
+        8,
+        Position::new(7, 1, 8),
+        Position::new(7, 1, 8),
+        Position::new(8, 1, 9),
+    ));
+
+    let source2 = "my $x = \"a\";";
+    assert_incremental_matches_full(&mut parser, source2)?;
+    assert!(!parser.used_advanced_reuse());
     Ok(())
 }
