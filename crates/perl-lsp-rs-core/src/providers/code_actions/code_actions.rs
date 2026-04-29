@@ -110,9 +110,8 @@ impl CodeActionsProvider {
         for diagnostic in diagnostics {
             let qf_diag = to_quick_fix_diagnostic(diagnostic);
             if let Some(code) = &diagnostic.code {
-                let policy_code = code
-                    .strip_prefix("Perl::Critic::Policy::")
-                    .unwrap_or(code.as_str());
+                let policy_code =
+                    code.strip_prefix("Perl::Critic::Policy::").unwrap_or(code.as_str());
 
                 match policy_code {
                     // PL103: Undefined/undeclared variable
@@ -173,7 +172,7 @@ impl CodeActionsProvider {
                     }
                     // parse-error-* subcodes (legacy subtype codes from error classifier)
                     c if c.starts_with("parse-error-") => {
-                        actions.extend(quick_fixes::fix_parse_error(&self.source, &qf_diag, code));
+                        actions.extend(quick_fixes::fix_parse_error(&self.source, &qf_diag, c));
                     }
                     // PL108: Unused parameter
                     c if c == DiagnosticCode::UnusedParameter.as_str() => {
@@ -508,7 +507,6 @@ mod tests {
         assert!(actions.iter().any(|a| a.title.contains("bareword filehandle")));
         assert!(actions.iter().any(|a| a.title.contains("three-argument open() for safety")));
     }
-
 
     #[test]
     fn test_fully_qualified_perlcritic_policy_aliases_produce_quick_fixes() {
