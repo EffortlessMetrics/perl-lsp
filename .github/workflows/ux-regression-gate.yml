@@ -10,7 +10,10 @@ name: UX Regression Gate
 on:
   pull_request:
     branches: [main, master]
-    types: [opened, synchronize, reopened, labeled]
+    # Deliberately exclude `labeled` / `unlabeled` — label application should not
+    # restart this workflow under `cancel-in-progress`, or operators lose active CI
+    # runs to label churn instead of code changes.
+    types: [opened, synchronize, reopened]
     paths:
       - 'crates/perl-lsp*/**'
       - 'crates/perl-dap*/**'

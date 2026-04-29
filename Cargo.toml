@@ -127,6 +127,7 @@ allow = [
     # (perl-path-normalize, perl-path-security, perl-text-line absorbed into perl-parser-core — Wave D)
     # Tier 3 — Analysis and indexing
     "perl-workspace",
+    "perl-semantic-facts",
     "perl-semantic-analyzer",
     "perl-diagnostics",
     # (perl-lsp-diagnostics absorbed into perl-lsp-rs-core::providers::diagnostics — Wave G1b)

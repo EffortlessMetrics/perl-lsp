@@ -240,7 +240,11 @@ baz();
 "#;
     for symbol in ["foo()", "bar()", "baz()"] {
         let pkg = parse_and_symbol_at(code, symbol);
-        assert_ne!(pkg.as_deref(), Some("MyLib"), "currently conservative: {symbol} should not be attributed via :all without export table");
+        assert_ne!(
+            pkg.as_deref(),
+            Some("MyLib"),
+            "currently conservative: {symbol} should not be attributed via :all without export table"
+        );
     }
 }
 
