@@ -134,7 +134,17 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
         }
 
         let text_to_format = lines[start_line..=end_line].join("\n");
-        let formatted = self.run_perltidy(&text_to_format, options)?;
+        let formatted = match self.run_perltidy(&text_to_format, options) {
+            Ok(formatted) => formatted,
+            Err(FormattingError::PerltidyNotFound(message)) => {
+                let rust_only_formatted = apply_lsp_whitespace_options(&text_to_format, options);
+                if rust_only_formatted == text_to_format {
+                    return Err(FormattingError::PerltidyNotFound(message));
+                }
+                rust_only_formatted
+            }
+            Err(other) => return Err(other),
+        };
 
         if formatted == text_to_format {
             return Ok(FormattedDocument { text: content.to_string(), edits: vec![] });
@@ -311,6 +321,46 @@ mod tests {
         let result = provider.format_document("my $x = 1;\n", &options);
         assert!(matches!(result, Err(FormattingError::PerltidyNotFound(_))));
     }
+
+    #[test]
+    fn format_range_uses_rust_whitespace_fallback_when_perltidy_missing() -> Result<()> {
+        let provider = FormattingProvider::new(MissingPerltidyRuntime);
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(true),
+            insert_final_newline: Some(false),
+            trim_final_newlines: Some(false),
+        };
+        let range = FormatRange::new(FormatPosition::new(1, 0), FormatPosition::new(1, 10));
+
+        let formatted = provider.format_range("line1
+my $x = 1;   
+line3
+", &range, &options)?;
+
+        assert_eq!(formatted.edits.len(), 1);
+        assert_eq!(formatted.edits[0].new_text, "my $x = 1;");
+        Ok(())
+    }
+
+    #[test]
+    fn format_range_keeps_perltidy_not_found_error_when_no_rust_fallback_changes() {
+        let provider = FormattingProvider::new(MissingPerltidyRuntime);
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: None,
+            insert_final_newline: None,
+            trim_final_newlines: None,
+        };
+        let range = FormatRange::new(FormatPosition::new(0, 0), FormatPosition::new(0, 10));
+
+        let result = provider.format_range("my $x = 1;
+", &range, &options);
+        assert!(matches!(result, Err(FormattingError::PerltidyNotFound(_))));
+    }
+
     #[test]
     fn apply_lsp_whitespace_options_trim_final_newlines_removes_all_trailing_newlines() {
         // Regression: previous implementation used `ends_with("\n\n")` which left
