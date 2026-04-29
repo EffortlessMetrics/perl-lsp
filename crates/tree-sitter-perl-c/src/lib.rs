@@ -155,10 +155,7 @@ impl PerlParser {
         &mut self,
         code: &[u8],
     ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-        match self.parser.parse(code, None) {
-            Some(tree) => Ok(tree),
-            None => Err("Failed to parse code".into()),
-        }
+        try_parse_with_parser(&mut self.parser, code).map_err(Into::into)
     }
 
     /// Parses Perl source text using this parser instance.
@@ -244,10 +241,7 @@ pub fn parse_perl_bytes_with_parser(
     parser: &mut Parser,
     code: &[u8],
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    match parser.parse(code, None) {
-        Some(tree) => Ok(tree),
-        None => Err("Failed to parse code".into()),
-    }
+    try_parse_with_parser(parser, code).map_err(Into::into)
 }
 
 /// Parses a Perl source string and returns the resulting [`tree_sitter::Tree`].
