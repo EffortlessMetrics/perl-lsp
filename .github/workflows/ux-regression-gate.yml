@@ -10,7 +10,9 @@ name: UX Regression Gate
 on:
   pull_request:
     branches: [main, master]
-    types: [opened, synchronize, reopened, labeled]
+    # Keep label churn from cancelling in-flight UX gate runs under cancel-in-progress.
+    # Mirrors the main CI cascade fix in .github/workflows/ci.yml.
+    types: [opened, synchronize, reopened]
     paths:
       - 'crates/perl-lsp*/**'
       - 'crates/perl-dap*/**'
