@@ -33,6 +33,8 @@ mod text_sync;
 mod window;
 mod workspace;
 mod workspace_folder;
+#[cfg(feature = "workspace")]
+mod workspace_progress;
 
 // Re-export protocol types for backward compatibility
 // Tests and external code import these from perl_lsp::

@@ -11,6 +11,10 @@
 use super::*;
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::workspace_progress::{
+    send_index_ready_notification, send_progress_begin, send_progress_create, send_progress_end,
+    send_progress_report,
+};
 use crate::state::workspace_symbol_cap;
 use perl_module::path::file_path_to_module_name;
 use perl_module::rename::{apply_module_rename_edits, plan_module_rename_edits};
@@ -48,88 +52,6 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
         return false;
     }
     is_skipped_dir_name(&entry.file_name().to_string_lossy())
-}
-
-#[cfg(feature = "workspace")]
-fn send_index_ready_notification(outbound: &super::outbound::OutboundSender, ready: bool) {
-    if let Err(e) = outbound.send_notification("perl-lsp/index-ready", json!({ "ready": ready })) {
-        tracing::warn!(error = %e, "Failed to send index-ready notification");
-    }
-}
-
-/// Token used for workspace indexing progress notifications.
-#[cfg(feature = "workspace")]
-const WORKSPACE_INDEX_PROGRESS_TOKEN: &str = "workspace-index";
-
-/// Send `window/workDoneProgress/create` to register the indexing token.
-///
-/// This is a fire-and-forget request — the client response is not awaited.
-/// Per LSP 3.15+ the server must create the token before sending `$/progress`.
-#[cfg(feature = "workspace")]
-fn send_progress_create(outbound: &super::outbound::OutboundSender, request_id: i64) {
-    if let Err(e) = outbound.send_request(
-        request_id,
-        "window/workDoneProgress/create",
-        json!({ "token": WORKSPACE_INDEX_PROGRESS_TOKEN }),
-    ) {
-        tracing::warn!(error = %e, "Failed to send workDoneProgress/create");
-    }
-}
-
-/// Send a `$/progress` begin notification for workspace indexing.
-#[cfg(feature = "workspace")]
-fn send_progress_begin(outbound: &super::outbound::OutboundSender) {
-    if let Err(e) = outbound.send_notification(
-        "$/progress",
-        json!({
-            "token": WORKSPACE_INDEX_PROGRESS_TOKEN,
-            "value": {
-                "kind": "begin",
-                "title": "Indexing workspace",
-                "cancellable": false,
-                "percentage": 0
-            }
-        }),
-    ) {
-        tracing::warn!(error = %e, "Failed to send progress begin");
-    }
-}
-
-/// Send a `$/progress` report notification for workspace indexing.
-#[cfg(feature = "workspace")]
-fn send_progress_report(outbound: &super::outbound::OutboundSender, indexed: usize, total: usize) {
-    let percentage = if total > 0 { (indexed * 100 / total).min(99) as u32 } else { 0 };
-    let message = format!("Indexed {} of {} files", indexed, total);
-    if let Err(e) = outbound.send_notification(
-        "$/progress",
-        json!({
-            "token": WORKSPACE_INDEX_PROGRESS_TOKEN,
-            "value": {
-                "kind": "report",
-                "message": message,
-                "percentage": percentage
-            }
-        }),
-    ) {
-        tracing::warn!(error = %e, "Failed to send progress report");
-    }
-}
-
-/// Send a `$/progress` end notification for workspace indexing.
-#[cfg(feature = "workspace")]
-fn send_progress_end(outbound: &super::outbound::OutboundSender, message: &str) {
-    if let Err(e) = outbound.send_notification(
-        "$/progress",
-        json!({
-            "token": WORKSPACE_INDEX_PROGRESS_TOKEN,
-            "value": {
-                "kind": "end",
-                "message": message
-            }
-        }),
-    ) {
-        tracing::warn!(error = %e, "Failed to send progress end");
-    }
 }
 
 /// Returns `true` when an I/O error represents a permission-denied condition.
