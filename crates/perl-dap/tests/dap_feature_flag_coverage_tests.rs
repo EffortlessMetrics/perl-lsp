@@ -380,14 +380,9 @@ fn test_feature_gate_dap_breakpoints_function() {
 #[test]
 fn test_capability_dap_breakpoints_function_initialize_response() -> TestResult {
     let body = get_initialize_body()?;
-    let supports = body
-        .get("supportsFunctionBreakpoints")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    assert!(
-        supports,
-        "supportsFunctionBreakpoints must be true in the initialize response"
-    );
+    let supports =
+        body.get("supportsFunctionBreakpoints").and_then(|v| v.as_bool()).unwrap_or(false);
+    assert!(supports, "supportsFunctionBreakpoints must be true in the initialize response");
     Ok(())
 }
 
