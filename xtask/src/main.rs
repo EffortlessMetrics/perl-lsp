@@ -299,6 +299,21 @@ enum Commands {
         fixture: Option<PathBuf>,
     },
 
+    /// Emit a structured receipt from UX regression test output logs.
+    UxRegressionReceipt {
+        /// Path to captured UX test output (e.g. /tmp/ux-test-output.txt).
+        #[arg(long)]
+        input: PathBuf,
+
+        /// Optional path to write JSON receipt output.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Optional commit SHA to embed in the receipt.
+        #[arg(long)]
+        sha: Option<String>,
+    },
+
     /// Format code
     Fmt {
         /// Check formatting without making changes
@@ -1843,6 +1858,13 @@ fn main() -> Result<()> {
                 snapshot,
                 receipt,
                 fixture,
+            })
+        }
+        Commands::UxRegressionReceipt { input, receipt, sha } => {
+            ux_regression_receipt::run(ux_regression_receipt::UxRegressionReceiptConfig {
+                input,
+                receipt,
+                sha,
             })
         }
         Commands::Fmt { check, package } => fmt::run(check, package),
