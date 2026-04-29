@@ -1384,6 +1384,22 @@ impl Node {
         });
         result
     }
+
+    /// Returns `true` when this node's source span contains `offset`.
+    ///
+    /// The start position is inclusive and the end position is exclusive.
+    #[inline]
+    pub fn contains_offset(&self, offset: usize) -> bool {
+        self.location.start <= offset && offset < self.location.end
+    }
+
+    /// Returns the byte length of this node's source span.
+    ///
+    /// Uses saturating subtraction so malformed spans never underflow.
+    #[inline]
+    pub fn span_len(&self) -> usize {
+        self.location.end.saturating_sub(self.location.start)
+    }
 }
 
 /// Comprehensive enumeration of all Perl language constructs supported by the parser.
@@ -1415,13 +1431,10 @@ impl Node {
 ///     loc,
 /// );
 ///
-/// match &node.kind {
-///     NodeKind::Variable { sigil, name } => {
-///         assert_eq!(sigil, "$");
-///         assert_eq!(name, "foo");
-///     }
-///     _ => panic!("expected Variable"),
-/// }
+/// assert!(matches!(
+///     &node.kind,
+///     NodeKind::Variable { sigil, name } if sigil == "$" && name == "foo"
+/// ));
 /// ```
 ///
 /// Use [`kind_name()`](NodeKind::kind_name) for debugging and diagnostics:
