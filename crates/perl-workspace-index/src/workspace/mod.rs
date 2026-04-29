@@ -23,6 +23,8 @@ pub mod memory;
 pub mod monitoring;
 /// High-level coordinator that integrates state transitions, SLOs, and limits.
 pub mod production_coordinator;
+/// Deterministic JSON receipts for semantic old-vs-new query shadow comparisons.
+pub mod query_shadow_receipt;
 /// Service-level objective types and trackers used by workspace operations.
 pub mod slo;
 /// State machine defining valid index lifecycle transitions and degraded states.
