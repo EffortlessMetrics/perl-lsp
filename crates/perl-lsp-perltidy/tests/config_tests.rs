@@ -21,19 +21,18 @@ fn pbp_preset_sets_best_practices_flag() {
 }
 
 #[test]
-fn config_with_profile_uses_only_profile_flag() {
+fn config_with_profile_includes_profile_flag() {
     let config = PerlTidyConfig {
         profile: Some("/home/user/.perltidyrc".to_string()),
         ..PerlTidyConfig::default()
     };
     let args = config.to_args();
 
-    assert_eq!(args.len(), 1);
-    assert_eq!(args[0], "--profile=/home/user/.perltidyrc");
+    assert_eq!(args, vec!["--profile=/home/user/.perltidyrc".to_string()]);
 }
 
 #[test]
-fn config_with_profile_ignores_other_settings() {
+fn config_with_profile_ignores_structured_style_settings() {
     let config = PerlTidyConfig {
         maximum_line_length: Some(120),
         indent_columns: Some(8),
@@ -43,9 +42,27 @@ fn config_with_profile_ignores_other_settings() {
     };
     let args = config.to_args();
 
-    // Only profile flag should be present; all others suppressed
+    // Structured settings are suppressed when a profile is provided.
     assert_eq!(args.len(), 1);
     assert!(args[0].starts_with("--profile="));
+}
+
+#[test]
+fn config_with_profile_preserves_extra_args() {
+    let config = PerlTidyConfig {
+        profile: Some(".perltidyrc".to_string()),
+        extra_args: vec!["--backup-and-modify-in-place".to_string()],
+        ..PerlTidyConfig::default()
+    };
+    let args = config.to_args();
+
+    assert_eq!(
+        args,
+        vec![
+            "--profile=.perltidyrc".to_string(),
+            "--backup-and-modify-in-place".to_string()
+        ]
+    );
 }
 
 #[test]
