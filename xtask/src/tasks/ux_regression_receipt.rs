@@ -13,6 +13,9 @@ static FAILED_TEST_RE: LazyLock<Regex> = LazyLock::new(|| {
 static PANIC_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"panicked at .*?,\s+([^:]+:\d+:\d+)").expect("panic regex must compile")
 });
+static WORKFLOW_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"ux_scenario_\d+_([a-z0-9_]+)").expect("workflow regex must compile")
+});
 
 #[derive(Debug, Clone)]
 pub struct UxRegressionReceiptConfig {
@@ -41,13 +44,16 @@ pub struct UxRegressionReceipt {
     schema_version: u32,
     measured_at: String,
     sha: String,
+    workflow: Option<String>,
     scenario: Option<String>,
+    scenario_file: Option<String>,
     test: Option<String>,
     result: String,
     failure_class: FailureClass,
     panic_location: Option<String>,
     repro: Option<String>,
     first_failing_line: Option<String>,
+    route: String,
 }
 
 pub fn run(config: UxRegressionReceiptConfig) -> Result<()> {
@@ -79,8 +85,10 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
     let panic_location =
         lines.iter().find_map(|line| PANIC_RE.captures(line).map(|cap| cap[1].to_string()));
     let scenario = test.as_ref().and_then(|name| scenario_from_test_name(name));
+    let workflow = scenario.as_deref().and_then(workflow_from_scenario_name);
 
     let failure_class = infer_failure_class(raw);
+    let route = route_for_failure(&failure_class);
 
     let repro = test.as_ref().map(|name| {
         format!("cargo test -p perl-lsp-ux-tests {name} -- --test-threads=1 --nocapture")
@@ -91,13 +99,16 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
         schema_version: 1,
         measured_at: Utc::now().to_rfc3339(),
         sha: sha.unwrap_or_else(|| "unknown".to_string()),
-        scenario,
+        workflow,
+        scenario: scenario.clone(),
+        scenario_file: scenario,
         test,
         result: if raw.contains("test result: ok") { "pass" } else { "fail" }.to_string(),
         failure_class,
         panic_location,
         repro,
         first_failing_line: first_fail_line,
+        route,
     }
 }
 
@@ -129,6 +140,23 @@ fn infer_failure_class(raw: &str) -> FailureClass {
     }
 }
 
+fn workflow_from_scenario_name(scenario: &str) -> Option<String> {
+    let stem = scenario.strip_suffix(".rs").unwrap_or(scenario);
+    let captures = WORKFLOW_RE.captures(stem)?;
+    Some(captures[1].to_string())
+}
+
+fn route_for_failure(failure_class: &FailureClass) -> String {
+    match failure_class {
+        FailureClass::MatrixDrift | FailureClass::BaselineDrift => "needs-fixture-update",
+        FailureClass::TestRace | FailureClass::NewTestBug => "needs-test-fix",
+        FailureClass::ProviderRegression => "needs-provider-fix",
+        FailureClass::ServerCrash | FailureClass::Timeout | FailureClass::Infra => "needs-infra",
+        FailureClass::Unknown => "needs-triage",
+    }
+    .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,6 +172,16 @@ mod tests {
             "scenario should be extracted from test name"
         );
         assert_eq!(
+            receipt.workflow.as_deref(),
+            Some("diagnostics_lifecycle"),
+            "workflow should be parsed from scenario name"
+        );
+        assert_eq!(
+            receipt.scenario_file.as_deref(),
+            Some("ux_scenario_19_diagnostics_lifecycle.rs"),
+            "scenario file should be present for direct routing"
+        );
+        assert_eq!(
             receipt.test.as_deref(),
             Some("ux_scenario_19_diagnostics_lifecycle::scenario_19_diagnostics_clear_after_fix"),
             "test name should be extracted from log"
@@ -157,5 +195,6 @@ mod tests {
             Some("crates/perl-lsp-ux-tests/tests/ux_scenario_19_diagnostics_lifecycle.rs:102:5"),
             "panic_location should be extracted from panic line"
         );
+        assert_eq!(receipt.route, "needs-test-fix", "route should classify flaky test failures");
     }
 }
