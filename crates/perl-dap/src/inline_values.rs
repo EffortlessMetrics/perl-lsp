@@ -313,7 +313,7 @@ fn collect_line_variables(line: &str, include_non_scalars: bool) -> Vec<(usize, 
     let base_re = if include_non_scalars { PERL_VAR_RE.as_ref() } else { SCALAR_VAR_RE.as_ref() };
     if let Some(re) = base_re {
         for cap in re.captures_iter(line) {
-            if let Some(m) = cap.get(0) {
+            if let Some(m) = cap.iter().flatten().next() {
                 matches.push((m.start(), m.end(), m.as_str().to_string()));
             }
         }
@@ -322,7 +322,7 @@ fn collect_line_variables(line: &str, include_non_scalars: bool) -> Vec<(usize, 
     if let Some(re) = BRACED_PERL_VAR_RE.as_ref() {
         for cap in re.captures_iter(line) {
             let (Some(full_match), Some(sigil_match), Some(name_match)) =
-                (cap.get(0), cap.get(1), cap.get(2))
+                (cap.iter().flatten().next(), cap.get(1), cap.get(2))
             else {
                 continue;
             };
