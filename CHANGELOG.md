@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Migration
+
+- **v0.13.0 migration guide published** — `docs/MIGRATION_v0.13.md` now contains the
+  complete retired→new import mapping for all ~100 crates absorbed across 10+ collapse
+  waves (Waves 1, A/2, B, C/3, D/4, E, F, G1, G2, G3, H, Final). Includes per-wave
+  breaking changes, feature flag consolidation table, compat alias removal schedule,
+  and published crate count progression (132 → 30). (#7292)
+
 ### Fixed
 
 - **First-run error messaging now surfaces to users instead of silent logging** — When
