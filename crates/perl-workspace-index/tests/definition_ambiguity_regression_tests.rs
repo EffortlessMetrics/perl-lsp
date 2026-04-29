@@ -16,12 +16,11 @@ fn same_bare_sub_name_in_two_packages_is_deterministic() -> Result<(), Box<dyn s
 
     let first = index.find_definition("collide").ok_or("definition should resolve")?;
     let second = index.find_definition("collide").ok_or("definition should resolve")?;
+    let candidates = index.definition_candidates("collide");
 
     assert_eq!(first.uri, second.uri, "bare lookup should be deterministic");
-    assert!(
-        first.uri == "file:///workspace/lib/Alpha.pm" || first.uri == "file:///workspace/lib/Beta.pm",
-        "current implementation returns a single winner; future candidate API should expose both"
-    );
+    assert_eq!(candidates.len(), 2, "both package candidates should be retained");
+    assert_eq!(candidates[0].location, first, "first candidate backs compatibility wrapper");
     Ok(())
 }
 
@@ -103,12 +102,11 @@ fn duplicate_qualified_name_across_files_remains_deterministic() -> Result<(), B
 
     let first = index.find_definition("Dupe::same").ok_or("definition should resolve")?;
     let second = index.find_definition("Dupe::same").ok_or("definition should resolve")?;
+    let candidates = index.definition_candidates("Dupe::same");
 
     assert_eq!(first.uri, second.uri, "lookup must be deterministic");
-    assert!(
-        first.uri == "file:///workspace/lib/DupeA.pm" || first.uri == "file:///workspace/lib/DupeB.pm",
-        "current implementation returns one deterministic winner; future candidate API should expose both"
-    );
+    assert_eq!(candidates.len(), 2, "both duplicate qualified candidates should be retained");
+    assert_eq!(candidates[0].location, first, "first candidate backs compatibility wrapper");
     Ok(())
 }
 
@@ -124,7 +122,9 @@ fn removing_one_duplicate_definition_removes_that_candidate() -> Result<(), Box<
     index.remove_file("file:///workspace/lib/DupeA.pm");
 
     let resolved = index.find_definition("Dupe::same").ok_or("definition should resolve")?;
+    let candidates = index.definition_candidates("Dupe::same");
     assert_eq!(resolved.uri, "file:///workspace/lib/DupeB.pm");
+    assert_eq!(candidates.len(), 1, "removed file must be cleaned from candidate map");
     Ok(())
 }
 
@@ -141,6 +141,8 @@ fn reindexing_one_file_does_not_leave_stale_duplicate_candidates() -> Result<(),
 
     assert!(index.find_definition("Dupe::renamed").is_some(), "new symbol should exist");
     let resolved = index.find_definition("Dupe::same").ok_or("remaining duplicate should resolve")?;
+    let candidates = index.definition_candidates("Dupe::same");
     assert_eq!(resolved.uri, "file:///workspace/lib/DupeB.pm");
+    assert_eq!(candidates.len(), 1, "reindexing must not leave stale candidates");
     Ok(())
 }

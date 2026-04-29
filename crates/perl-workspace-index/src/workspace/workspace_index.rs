@@ -991,6 +991,15 @@ pub struct Location {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ranked candidate definition for an indexed symbol key.
+pub struct DefinitionCandidate {
+    /// Stable lookup key this candidate was indexed under.
+    pub key: String,
+    /// Symbol definition location.
+    pub location: Location,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Stable symbol identity returned by cross-file reference queries.
 pub struct SymbolIdentity {
     /// Canonical stable key for the symbol (qualified when available).
@@ -1128,8 +1137,10 @@ pub struct FileIndex {
 pub struct WorkspaceIndex {
     /// Index data per file URI (normalized key -> data)
     files: Arc<RwLock<HashMap<String, FileIndex>>>,
-    /// Global symbol map (qualified name -> defining URI)
-    symbols: Arc<RwLock<HashMap<String, String>>>,
+    /// Qualified symbol map (`Pkg::name` -> ranked definition candidates)
+    qualified_symbols: Arc<RwLock<HashMap<String, Vec<DefinitionCandidate>>>>,
+    /// Bare symbol map (`name` -> ranked definition candidates)
+    bare_symbols: Arc<RwLock<HashMap<String, Vec<DefinitionCandidate>>>>,
     /// Global reference index (symbol name -> locations across all files)
     ///
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
@@ -1161,66 +1172,57 @@ impl WorkspaceIndex {
         });
     }
 
+    fn candidate_sort_key(candidate: &DefinitionCandidate) -> (&str, u32, u32, u32, u32, &str) {
+        let location = &candidate.location;
+        (
+            location.uri.as_str(),
+            location.range.start.line,
+            location.range.start.column,
+            location.range.end.line,
+            location.range.end.column,
+            candidate.key.as_str(),
+        )
+    }
+
     fn rebuild_symbol_cache(
         files: &HashMap<String, FileIndex>,
-        symbols: &mut HashMap<String, String>,
+        qualified_symbols: &mut HashMap<String, Vec<DefinitionCandidate>>,
+        bare_symbols: &mut HashMap<String, Vec<DefinitionCandidate>>,
     ) {
-        symbols.clear();
-
+        qualified_symbols.clear();
+        bare_symbols.clear();
         for file_index in files.values() {
             for symbol in &file_index.symbols {
-                if let Some(ref qname) = symbol.qualified_name {
-                    symbols.insert(qname.clone(), symbol.uri.clone());
+                let location = Location { uri: symbol.uri.clone(), range: symbol.range };
+                if let Some(qname) = symbol.qualified_name.clone() {
+                    qualified_symbols.entry(qname.clone()).or_default().push(DefinitionCandidate {
+                        key: qname,
+                        location: location.clone(),
+                    });
                 }
-                symbols.insert(symbol.name.clone(), symbol.uri.clone());
+                bare_symbols.entry(symbol.name.clone()).or_default().push(DefinitionCandidate {
+                    key: symbol.name.clone(),
+                    location,
+                });
             }
+        }
+        for candidates in qualified_symbols.values_mut() {
+            candidates.sort_by(|l, r| Self::candidate_sort_key(l).cmp(&Self::candidate_sort_key(r)));
+        }
+        for candidates in bare_symbols.values_mut() {
+            candidates.sort_by(|l, r| Self::candidate_sort_key(l).cmp(&Self::candidate_sort_key(r)));
         }
     }
 
-    /// Incrementally remove one file's symbols from the global cache,
-    /// re-inserting shadowed symbols from remaining files.
-    fn incremental_remove_symbols(
-        files: &HashMap<String, FileIndex>,
-        symbols: &mut HashMap<String, String>,
-        old_file_index: &FileIndex,
-    ) {
-        let mut affected_names: Vec<String> = Vec::new();
-        for sym in &old_file_index.symbols {
-            if let Some(ref qname) = sym.qualified_name {
-                if symbols.get(qname) == Some(&sym.uri) {
-                    symbols.remove(qname);
-                    affected_names.push(qname.clone());
-                }
-            }
-            if symbols.get(&sym.name) == Some(&sym.uri) {
-                symbols.remove(&sym.name);
-                affected_names.push(sym.name.clone());
-            }
-        }
-        if !affected_names.is_empty() {
-            for file_index in files.values() {
-                for sym in &file_index.symbols {
-                    if let Some(ref qname) = sym.qualified_name {
-                        if !symbols.contains_key(qname) && affected_names.contains(qname) {
-                            symbols.insert(qname.clone(), sym.uri.clone());
-                        }
-                    }
-                    if !symbols.contains_key(&sym.name) && affected_names.contains(&sym.name) {
-                        symbols.insert(sym.name.clone(), sym.uri.clone());
-                    }
-                }
-            }
-        }
-    }
-
-    /// Incrementally add one file's symbols to the global cache.
-    fn incremental_add_symbols(symbols: &mut HashMap<String, String>, file_index: &FileIndex) {
-        for sym in &file_index.symbols {
-            if let Some(ref qname) = sym.qualified_name {
-                symbols.insert(qname.clone(), sym.uri.clone());
-            }
-            symbols.insert(sym.name.clone(), sym.uri.clone());
-        }
+    fn find_definition_candidates_in_files(files: &HashMap<String, FileIndex>, symbol_name: &str) -> Vec<DefinitionCandidate> {
+        let mut qualified_symbols = HashMap::new();
+        let mut bare_symbols = HashMap::new();
+        Self::rebuild_symbol_cache(files, &mut qualified_symbols, &mut bare_symbols);
+        qualified_symbols
+            .get(symbol_name)
+            .or_else(|| bare_symbols.get(symbol_name))
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Determine the workspace folder URI for a given file URI.
@@ -1270,37 +1272,6 @@ impl WorkspaceIndex {
             }
         }
         best_match.cloned()
-    }
-
-    fn find_definition_in_files(
-        files: &HashMap<String, FileIndex>,
-        symbol_name: &str,
-        uri_filter: Option<&str>,
-    ) -> Option<(Location, String)> {
-        let mut candidates: Vec<(Location, String)> = Vec::new();
-        for file_index in files.values() {
-            if let Some(filter) = uri_filter
-                && file_index.symbols.first().is_some_and(|symbol| symbol.uri != filter)
-            {
-                continue;
-            }
-
-            for symbol in &file_index.symbols {
-                if symbol.name == symbol_name
-                    || symbol.qualified_name.as_deref() == Some(symbol_name)
-                {
-                    candidates.push((
-                        Location { uri: symbol.uri.clone(), range: symbol.range },
-                        symbol.uri.clone(),
-                    ));
-                }
-            }
-        }
-
-        candidates.sort_by(|left, right| {
-            Self::location_sort_key(&left.0).cmp(&Self::location_sort_key(&right.0))
-        });
-        candidates.into_iter().next()
     }
 
     fn find_symbol_by_definition(
@@ -1398,7 +1369,8 @@ impl WorkspaceIndex {
     pub fn new() -> Self {
         Self {
             files: Arc::new(RwLock::new(HashMap::new())),
-            symbols: Arc::new(RwLock::new(HashMap::new())),
+            qualified_symbols: Arc::new(RwLock::new(HashMap::new())),
+            bare_symbols: Arc::new(RwLock::new(HashMap::new())),
             global_references: Arc::new(RwLock::new(HashMap::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
@@ -1436,7 +1408,8 @@ impl WorkspaceIndex {
         let ref_cap = (sym_cap / 4).min(1_000_000);
         Self {
             files: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
-            symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
+            qualified_symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
+            bare_symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
@@ -1593,17 +1566,10 @@ impl WorkspaceIndex {
                 Self::remove_file_global_refs(&mut global_refs, old_index, &uri_str);
             }
 
-            // Incrementally remove old symbols before inserting new file
-            if let Some(old_index) = files.get(&key) {
-                let mut symbols = self.symbols.write();
-                Self::incremental_remove_symbols(&files, &mut symbols, old_index);
-                drop(symbols);
-            }
             files.insert(key.clone(), file_index);
-            let mut symbols = self.symbols.write();
-            if let Some(new_index) = files.get(&key) {
-                Self::incremental_add_symbols(&mut symbols, new_index);
-            }
+            let mut qualified_symbols = self.qualified_symbols.write();
+            let mut bare_symbols = self.bare_symbols.write();
+            Self::rebuild_symbol_cache(&files, &mut qualified_symbols, &mut bare_symbols);
 
             if let Some(file_index) = files.get(&key) {
                 let mut global_refs = self.global_references.write();
@@ -1647,21 +1613,9 @@ impl WorkspaceIndex {
         // Remove file index
         let mut files = self.files.write();
         if let Some(file_index) = files.remove(&key) {
-            // Incrementally remove symbols and re-insert any shadowed names.
-            let mut symbols = self.symbols.write();
-            Self::incremental_remove_symbols(&files, &mut symbols, &file_index);
-
-            // Defensive sweep: purge any remaining cache entries whose value
-            // points to this file's URI.  incremental_remove_symbols already
-            // handles known symbol names; this sweep catches any entries that
-            // were inserted via the find_definition fallback path using a key
-            // that differs from both sym.name and sym.qualified_name.
-            // Use the URI stored in the file_index itself (not the caller-supplied
-            // uri_str) so the comparison is always against the exact string that
-            // was stored during indexing.
-            if let Some(indexed_uri) = file_index.symbols.first().map(|s| s.uri.as_str()) {
-                symbols.retain(|_, v| v.as_str() != indexed_uri);
-            }
+            let mut qualified_symbols = self.qualified_symbols.write();
+            let mut bare_symbols = self.bare_symbols.write();
+            Self::rebuild_symbol_cache(&files, &mut qualified_symbols, &mut bare_symbols);
 
             // Remove from global reference index
             let mut global_refs = self.global_references.write();
@@ -1905,13 +1859,15 @@ impl WorkspaceIndex {
         // Phase 2: Bulk insert with single cache rebuild
         {
             let mut files = self.files.write();
-            let mut symbols = self.symbols.write();
+            let mut qualified_symbols = self.qualified_symbols.write();
+            let mut bare_symbols = self.bare_symbols.write();
             let mut global_refs = self.global_references.write();
 
             // Pre-allocate capacity for the incoming batch to avoid rehashing.
             // Each symbol is indexed under both its qualified name and bare name.
             files.reserve(parsed.len());
-            symbols.reserve(parsed.len().saturating_mul(20).saturating_mul(2));
+            qualified_symbols.reserve(parsed.len().saturating_mul(20));
+            bare_symbols.reserve(parsed.len().saturating_mul(20));
 
             for (key, uri_str, file_index) in parsed {
                 // Remove stale global references
@@ -1936,7 +1892,7 @@ impl WorkspaceIndex {
             }
 
             // Single rebuild at the end
-            Self::rebuild_symbol_cache(&files, &mut symbols);
+            Self::rebuild_symbol_cache(&files, &mut qualified_symbols, &mut bare_symbols);
         }
 
         errors
@@ -2148,29 +2104,22 @@ impl WorkspaceIndex {
     /// let _def = index.find_definition("MyPackage::example");
     /// ```
     pub fn find_definition(&self, symbol_name: &str) -> Option<Location> {
-        let cached_uri = {
-            let symbols = self.symbols.read();
-            symbols.get(symbol_name).cloned()
+        self.definition_candidates(symbol_name).into_iter().next().map(|c| c.location)
+    }
+
+    /// Return every ranked definition candidate for a symbol key.
+    pub fn definition_candidates(&self, symbol_name: &str) -> Vec<DefinitionCandidate> {
+        let from_cache = if symbol_name.contains("::") {
+            self.qualified_symbols.read().get(symbol_name).cloned()
+        } else {
+            self.bare_symbols.read().get(symbol_name).cloned()
         };
+        if let Some(candidates) = from_cache {
+            return candidates;
+        }
 
         let files = self.files.read();
-        if let Some(ref uri_str) = cached_uri
-            && let Some((location, _uri)) =
-                Self::find_definition_in_files(&files, symbol_name, Some(uri_str))
-        {
-            return Some(location);
-        }
-
-        let resolved = Self::find_definition_in_files(&files, symbol_name, None);
-        drop(files);
-
-        if let Some((location, uri)) = resolved {
-            let mut symbols = self.symbols.write();
-            symbols.insert(symbol_name.to_string(), uri);
-            return Some(location);
-        }
-
-        None
+        Self::find_definition_candidates_in_files(&files, symbol_name)
     }
 
     /// Get all symbols in the workspace
@@ -2201,7 +2150,8 @@ impl WorkspaceIndex {
     /// Clear all indexed files and symbols from the workspace.
     pub fn clear(&self) {
         self.files.write().clear();
-        self.symbols.write().clear();
+        self.qualified_symbols.write().clear();
+        self.bare_symbols.write().clear();
         self.global_references.write().clear();
     }
 
@@ -2261,7 +2211,8 @@ impl WorkspaceIndex {
         use std::mem::size_of;
 
         let files_guard = self.files.read();
-        let symbols_guard = self.symbols.read();
+        let qualified_symbols_guard = self.qualified_symbols.read();
+        let bare_symbols_guard = self.bare_symbols.read();
         let global_refs_guard = self.global_references.read();
 
         // --- files map ---
@@ -2298,8 +2249,15 @@ impl WorkspaceIndex {
 
         // --- global symbols map ---
         let mut symbols_bytes: usize = 0;
-        for (qname, uri) in symbols_guard.iter() {
-            symbols_bytes += qname.len() + uri.len();
+        for candidates in qualified_symbols_guard.values() {
+            for candidate in candidates {
+                symbols_bytes += candidate.key.len() + candidate.location.uri.len();
+            }
+        }
+        for candidates in bare_symbols_guard.values() {
+            for candidate in candidates {
+                symbols_bytes += candidate.key.len() + candidate.location.uri.len();
+            }
         }
 
         // --- global references map ---
