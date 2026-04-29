@@ -367,13 +367,4 @@ mod tests {
         assert!(err.to_string().contains("is stale"));
         Ok(())
     }
-
-    #[test]
-    fn verify_file_matches_detects_drift() -> Result<()> {
-        let tmp = tempfile::NamedTempFile::new()?;
-        fs::write(tmp.path(), "actual\n")?;
-        let err = verify_file_matches(tmp.path(), "expected\n").expect_err("must fail on drift");
-        assert!(err.to_string().contains("is stale"));
-        Ok(())
-    }
 }
