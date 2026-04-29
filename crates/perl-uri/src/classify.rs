@@ -48,7 +48,12 @@ pub fn uri_key(uri: &str) -> String {
             && rest.as_bytes()[0].is_ascii_alphabetic()
         {
             let separator = if rest.as_bytes()[1] == b'|' { ":" } else { &rest[1..2] };
-            return format!("file:///{}{}{}", rest[0..1].to_ascii_lowercase(), separator, &rest[2..]);
+            return format!(
+                "file:///{}{}{}",
+                rest[0..1].to_ascii_lowercase(),
+                separator,
+                &rest[2..]
+            );
         }
         value
     } else {
@@ -238,7 +243,10 @@ mod tests {
     #[test]
     fn normalizes_legacy_windows_drive_pipe_separator() {
         assert_eq!(uri_key("file:///C|/Users/dev/example.pl"), "file:///c:/Users/dev/example.pl");
-        assert_eq!(uri_key(r"file://D|\projects\MyApp\script.pl"), "file:///d:/projects/MyApp/script.pl");
+        assert_eq!(
+            uri_key(r"file://D|\projects\MyApp\script.pl"),
+            "file:///d:/projects/MyApp/script.pl"
+        );
     }
 
     #[test]
@@ -250,10 +258,7 @@ mod tests {
 
     #[test]
     fn normalizes_legacy_unc_windows_path() {
-        assert_eq!(
-            uri_key(r"\\server\share\folder\file.pl"),
-            "file://server/share/folder/file.pl"
-        );
+        assert_eq!(uri_key(r"\\server\share\folder\file.pl"), "file://server/share/folder/file.pl");
         assert_eq!(
             uri_key(r"file://\\server\share\folder\file.pl"),
             "file://server/share/folder/file.pl"

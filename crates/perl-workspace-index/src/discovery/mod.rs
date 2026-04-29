@@ -201,7 +201,8 @@ fn sort_paths_lexically(paths: &mut [PathBuf]) {
 }
 
 fn is_safe_relative_git_path(path: &Path) -> bool {
-    !path.is_absolute() && !path.components().any(|component| matches!(component, Component::ParentDir))
+    !path.is_absolute()
+        && !path.components().any(|component| matches!(component, Component::ParentDir))
 }
 
 fn log_discovery(result: &DiscoveryResult) {

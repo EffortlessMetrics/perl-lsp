@@ -254,10 +254,7 @@ fn test_command_exists_does_not_execute_candidate_binary() -> Result<(), Box<dyn
 
     fs::write(
         &script_path,
-        format!(
-            "#!/bin/sh\nprintf 'executed' > '{}'\nexit 0\n",
-            marker_path.display()
-        ),
+        format!("#!/bin/sh\nprintf 'executed' > '{}'\nexit 0\n", marker_path.display()),
     )?;
     fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755))?;
 

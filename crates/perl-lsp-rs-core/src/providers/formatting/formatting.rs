@@ -340,10 +340,14 @@ mod tests {
         };
         let range = FormatRange::new(FormatPosition::new(1, 0), FormatPosition::new(1, 10));
 
-        let formatted = provider.format_range("line1
+        let formatted = provider.format_range(
+            "line1
 my $x = 1;   
 line3
-", &range, &options)?;
+",
+            &range,
+            &options,
+        )?;
 
         assert_eq!(formatted.edits.len(), 1);
         assert_eq!(formatted.edits[0].new_text, "my $x = 1;");
@@ -387,8 +391,12 @@ line3
         };
         let range = FormatRange::new(FormatPosition::new(0, 0), FormatPosition::new(0, 10));
 
-        let result = provider.format_range("my $x = 1;
-", &range, &options);
+        let result = provider.format_range(
+            "my $x = 1;
+",
+            &range,
+            &options,
+        );
         assert!(matches!(result, Err(FormattingError::PerltidyNotFound(_))));
     }
 
