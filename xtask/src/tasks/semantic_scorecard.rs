@@ -33,7 +33,11 @@ struct SemanticManifest {
 #[derive(Debug, Deserialize)]
 struct FixtureCase {
     id: String,
+    /// Fixture family label (reserved for future grouping/filtering).
+    #[allow(dead_code)]
     family: String,
+    /// Relative path to the fixture file (reserved for future harness use).
+    #[allow(dead_code)]
     path: String,
 }
 
@@ -65,6 +69,9 @@ pub fn run(manifest: Option<PathBuf>, output: Option<PathBuf>, status_md: Option
     let artifact = build_artifact(manifest);
 
     write_json(&output_path, &artifact)?;
+    if let Some(parent) = status_path.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+    }
     fs::write(&status_path, render_status_markdown(&artifact))
         .with_context(|| format!("writing {}", status_path.display()))?;
 
@@ -135,8 +142,10 @@ fn render_status_markdown(artifact: &Artifact) -> String {
 mod tests {
     use super::*;
 
+    /// Verify build_artifact preserves insertion order of fixture IDs and emits
+    /// all expected metric rows as baseline_pending.
     #[test]
-    fn scorecard_is_deterministic() -> Result<()> {
+    fn build_artifact_preserves_fixture_order_and_emits_all_metrics() -> Result<()> {
         let manifest = SemanticManifest {
             fixture_family_version: 1,
             fixtures: vec![
@@ -145,12 +154,35 @@ mod tests {
             ],
         };
         let artifact = build_artifact(manifest);
+
+        // Fixture IDs are preserved in input order (sorting is load_manifest's job).
         assert_eq!(artifact.measured_at, "deterministic-fixture-baseline");
         assert_eq!(artifact.fixture_ids, vec!["b".to_string(), "a".to_string()]);
-        assert!(artifact.rows.values().all(|row| row.status == "baseline_pending"));
+        assert_eq!(artifact.fixture_count, 2);
+
+        // All 11 canonical metric rows must be present and set to baseline_pending.
+        assert_eq!(artifact.rows.len(), METRICS.len(), "row count must match METRICS constant");
+        for &metric_name in METRICS {
+            let row = artifact.rows.get(metric_name).unwrap_or_else(|| {
+                panic!("expected metric '{metric_name}' to be present in artifact rows")
+            });
+            assert_eq!(
+                row.status, "baseline_pending",
+                "metric '{metric_name}' should be baseline_pending"
+            );
+            assert!(row.value.is_none(), "metric '{metric_name}' value should be None at baseline");
+        }
+
+        // Rows are in alphabetical order (BTreeMap) — spot-check boundary keys.
+        let keys: Vec<&str> = artifact.rows.keys().map(String::as_str).collect();
+        assert_eq!(keys.first().copied(), Some("completion_top1"));
+        assert_eq!(keys.last().copied(), Some("undefined_symbol_false_positive_rate"));
+
         Ok(())
     }
 
+    /// Verify load_manifest sorts fixtures by id, making the pipeline deterministic
+    /// regardless of the order fixtures appear in the JSON file.
     #[test]
     fn manifest_load_sorts_fixtures() -> Result<()> {
         let tmp = tempfile::NamedTempFile::new()?;
@@ -161,6 +193,35 @@ mod tests {
         let parsed = load_manifest(tmp.path())?;
         assert_eq!(parsed.fixtures[0].id, "a");
         assert_eq!(parsed.fixtures[1].id, "z");
+        Ok(())
+    }
+
+    /// Verify that the full pipeline (load_manifest -> build_artifact) is stable
+    /// across two calls with the same manifest data in a different order: the
+    /// fixture IDs in the artifact must be identical both times.
+    #[test]
+    fn full_pipeline_is_stable_across_orderings() -> Result<()> {
+        let tmp_fwd = tempfile::NamedTempFile::new()?;
+        let tmp_rev = tempfile::NamedTempFile::new()?;
+        // Same two fixtures, different JSON order.
+        fs::write(
+            tmp_fwd.path(),
+            r#"{"fixture_family_version":1,"fixtures":[{"id":"alpha","family":"f","path":"a.pl"},{"id":"beta","family":"f","path":"b.pl"}]}"#,
+        )?;
+        fs::write(
+            tmp_rev.path(),
+            r#"{"fixture_family_version":1,"fixtures":[{"id":"beta","family":"f","path":"b.pl"},{"id":"alpha","family":"f","path":"a.pl"}]}"#,
+        )?;
+
+        let artifact_fwd = build_artifact(load_manifest(tmp_fwd.path())?);
+        let artifact_rev = build_artifact(load_manifest(tmp_rev.path())?);
+
+        // Both should produce the same sorted fixture list.
+        assert_eq!(
+            artifact_fwd.fixture_ids, artifact_rev.fixture_ids,
+            "fixture IDs must be identical regardless of input order"
+        );
+        assert_eq!(artifact_fwd.fixture_ids, vec!["alpha".to_string(), "beta".to_string()]);
         Ok(())
     }
 }
