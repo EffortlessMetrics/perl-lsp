@@ -276,10 +276,10 @@ impl ImportOptimizer {
     /// # Ok::<(), String>(())
     /// ```
     pub fn analyze_content(&self, content: &str) -> Result<ImportAnalysis, String> {
-
         let mut imports = Vec::new();
         for (idx, line) in content.lines().enumerate() {
-            if let Some(caps) = USE_STATEMENT_RE.as_ref().map_err(|e| e.to_string())?.captures(line) {
+            if let Some(caps) = USE_STATEMENT_RE.as_ref().map_err(|e| e.to_string())?.captures(line)
+            {
                 let module = caps[1].to_string();
                 let symbols_str = caps.get(2).map(|m| m.as_str()).unwrap_or("");
                 let symbols = if symbols_str.is_empty() {
@@ -324,7 +324,6 @@ impl ImportOptimizer {
                 "
 ",
             );
-
 
         // Determine unused symbols for each import entry
         let mut unused_imports = Vec::new();
@@ -386,7 +385,8 @@ impl ImportOptimizer {
 
                     // Special handling for Data::Dumper - check for Dumper function usage
                     if !is_used && imp.module == "Data::Dumper" {
-                        if DUMPER_RE.as_ref().map_err(|e| e.to_string())?.is_match(&non_use_content) {
+                        if DUMPER_RE.as_ref().map_err(|e| e.to_string())?.is_match(&non_use_content)
+                        {
                             is_used = true;
                         }
                     }
@@ -429,23 +429,18 @@ impl ImportOptimizer {
             imports.iter().map(|imp| imp.module.clone()).collect();
 
         // Strip strings and comments before scanning for Module::symbol patterns
-        let stripped = STRING_RE.as_ref().map_err(|e| e.to_string())?.replace_all(content, " ").to_string();
+        let stripped =
+            STRING_RE.as_ref().map_err(|e| e.to_string())?.replace_all(content, " ").to_string();
         let stripped = REGEX_LITERAL_RE
             .as_ref()
             .map_err(|e| e.to_string())?
             .replace_all(&stripped, " ")
             .to_string();
-        let stripped = COMMENT_RE
-            .as_ref()
-            .map_err(|e| e.to_string())?
-            .replace_all(&stripped, " ")
-            .to_string();
+        let stripped =
+            COMMENT_RE.as_ref().map_err(|e| e.to_string())?.replace_all(&stripped, " ").to_string();
 
         let mut usage_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        for caps in QUALIFIED_USAGE_RE
-            .as_ref()
-            .map_err(|e| e.to_string())?
-            .captures_iter(&stripped)
+        for caps in QUALIFIED_USAGE_RE.as_ref().map_err(|e| e.to_string())?.captures_iter(&stripped)
         {
             // Only process if both capture groups matched
             if let (Some(module_match), Some(symbol_match)) = (caps.get(1), caps.get(2)) {
