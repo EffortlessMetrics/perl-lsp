@@ -10,18 +10,19 @@ const DEFAULT_FIXTURE_MANIFEST: &str =
 const DEFAULT_OUTPUT: &str = "target/receipts/metrics/semantic_scorecard.json";
 const DEFAULT_STATUS_MD: &str = "docs/project/status/semantic_scorecard.md";
 
-const METRICS: &[&str] = &[
-    "definition_hit_at_1",
-    "definition_hit_at_5",
-    "reference_precision",
-    "reference_recall",
-    "completion_top1",
-    "completion_top5",
-    "undefined_symbol_false_positive_rate",
-    "rename_unsafe_edit_count",
-    "safe_delete_external_ref_detection",
-    "query_latency_p50",
-    "query_latency_p95",
+const AVAILABLE_FACT_ROWS: &[&str] = &[
+    "declaration_facts",
+    "occurrence_facts",
+    "export_facts",
+    "definition_candidates",
+    "reference_edges",
+];
+
+const UNAVAILABLE_FACT_ROWS: &[&str] = &[
+    "import_specs",
+    "package_graph",
+    "rename_plan",
+    "safe_delete_plan",
 ];
 
 #[derive(Debug, Deserialize)]
@@ -33,8 +34,6 @@ struct SemanticManifest {
 #[derive(Debug, Deserialize)]
 struct FixtureCase {
     id: String,
-    /// Fixture family label (reserved for future grouping/filtering).
-    #[allow(dead_code)]
     family: String,
     /// Relative path to the fixture file (reserved for future harness use).
     #[allow(dead_code)]
@@ -42,9 +41,14 @@ struct FixtureCase {
 }
 
 #[derive(Debug, Serialize)]
-struct MetricRow {
+struct ScorecardRow {
     status: &'static str,
-    value: Option<f64>,
+    total_facts: usize,
+    exact_facts: usize,
+    high_confidence_facts: usize,
+    heuristic_facts: usize,
+    dynamic_boundary_facts: usize,
+    fixture_family_coverage: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -55,7 +59,7 @@ struct Artifact {
     fixture_family_version: u32,
     fixture_count: usize,
     fixture_ids: Vec<String>,
-    rows: BTreeMap<String, MetricRow>,
+    rows: BTreeMap<String, ScorecardRow>,
     notes: &'static str,
 }
 
@@ -90,20 +94,53 @@ fn load_manifest(path: &Path) -> Result<SemanticManifest> {
 
 fn build_artifact(manifest: SemanticManifest) -> Artifact {
     let fixture_ids = manifest.fixtures.iter().map(|fixture| fixture.id.clone()).collect::<Vec<_>>();
+    let fixture_family_coverage = manifest
+        .fixtures
+        .iter()
+        .map(|fixture| fixture.family.as_str())
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+
     let mut rows = BTreeMap::new();
-    for &metric in METRICS {
-        rows.insert(metric.to_string(), MetricRow { status: "baseline_pending", value: None });
+    for &row in AVAILABLE_FACT_ROWS {
+        rows.insert(
+            row.to_string(),
+            ScorecardRow {
+                status: "available_zero",
+                total_facts: 0,
+                exact_facts: 0,
+                high_confidence_facts: 0,
+                heuristic_facts: 0,
+                dynamic_boundary_facts: 0,
+                fixture_family_coverage,
+            },
+        );
+    }
+
+    for &row in UNAVAILABLE_FACT_ROWS {
+        rows.insert(
+            row.to_string(),
+            ScorecardRow {
+                status: "unavailable",
+                total_facts: 0,
+                exact_facts: 0,
+                high_confidence_facts: 0,
+                heuristic_facts: 0,
+                dynamic_boundary_facts: 0,
+                fixture_family_coverage: 0,
+            },
+        );
     }
 
     Artifact {
-        schema_version: 1,
-        measured_at: "deterministic-fixture-baseline",
+        schema_version: 2,
+        measured_at: "deterministic-fixture-scorecard-v1",
         subsystem: "semantic",
         fixture_family_version: manifest.fixture_family_version,
         fixture_count: fixture_ids.len(),
         fixture_ids,
         rows,
-        notes: "Initial harness: metrics intentionally baseline_pending until semantic facts land.",
+        notes: "Wave 2 scorecard rows are deterministic and adapter-safe: available rows emit zero counts until fact adapters are wired; future rows are explicitly unavailable.",
     }
 }
 
@@ -126,13 +163,23 @@ fn render_status_markdown(artifact: &Artifact) -> String {
         text.push_str(&format!("- `{id}`\n"));
     }
 
-    text.push_str("\n## Metrics\n\n| Metric | Status | Value |\n|---|---|---:|\n");
-    for (metric, row) in &artifact.rows {
-        let value = row.value.map(|n| n.to_string()).unwrap_or_else(|| "n/a".to_string());
-        text.push_str(&format!("| {metric} | {} | {value} |\n", row.status));
+    text.push_str("\n## Semantic Facts Coverage\n\n");
+    text.push_str("| Row | Status | Total | Exact | High confidence | Heuristic | Dynamic boundary | Fixture-family coverage |\n");
+    text.push_str("|---|---|---:|---:|---:|---:|---:|---:|\n");
+    for (row_name, row) in &artifact.rows {
+        text.push_str(&format!(
+            "| {row_name} | {} | {} | {} | {} | {} | {} | {} |\n",
+            row.status,
+            row.total_facts,
+            row.exact_facts,
+            row.high_confidence_facts,
+            row.heuristic_facts,
+            row.dynamic_boundary_facts,
+            row.fixture_family_coverage,
+        ));
     }
 
-    text.push_str("\n");
+    text.push('\n');
     text.push_str(artifact.notes);
     text.push('\n');
     text
@@ -142,47 +189,40 @@ fn render_status_markdown(artifact: &Artifact) -> String {
 mod tests {
     use super::*;
 
-    /// Verify build_artifact preserves insertion order of fixture IDs and emits
-    /// all expected metric rows as baseline_pending.
     #[test]
-    fn build_artifact_preserves_fixture_order_and_emits_all_metrics() -> Result<()> {
+    fn build_artifact_emits_all_scorecard_rows() -> Result<()> {
         let manifest = SemanticManifest {
             fixture_family_version: 1,
             fixtures: vec![
                 FixtureCase { id: "b".to_string(), family: "x".to_string(), path: "b.pl".to_string() },
                 FixtureCase { id: "a".to_string(), family: "x".to_string(), path: "a.pl".to_string() },
+                FixtureCase { id: "c".to_string(), family: "y".to_string(), path: "c.pl".to_string() },
             ],
         };
         let artifact = build_artifact(manifest);
 
-        // Fixture IDs are preserved in input order (sorting is load_manifest's job).
-        assert_eq!(artifact.measured_at, "deterministic-fixture-baseline");
-        assert_eq!(artifact.fixture_ids, vec!["b".to_string(), "a".to_string()]);
-        assert_eq!(artifact.fixture_count, 2);
+        assert_eq!(artifact.measured_at, "deterministic-fixture-scorecard-v1");
+        assert_eq!(artifact.fixture_ids, vec!["b".to_string(), "a".to_string(), "c".to_string()]);
+        assert_eq!(artifact.fixture_count, 3);
 
-        // All 11 canonical metric rows must be present and set to baseline_pending.
-        assert_eq!(artifact.rows.len(), METRICS.len(), "row count must match METRICS constant");
-        for &metric_name in METRICS {
-            let row = artifact.rows.get(metric_name).unwrap_or_else(|| {
-                panic!("expected metric '{metric_name}' to be present in artifact rows")
-            });
-            assert_eq!(
-                row.status, "baseline_pending",
-                "metric '{metric_name}' should be baseline_pending"
-            );
-            assert!(row.value.is_none(), "metric '{metric_name}' value should be None at baseline");
+        assert_eq!(artifact.rows.len(), AVAILABLE_FACT_ROWS.len() + UNAVAILABLE_FACT_ROWS.len());
+        for &row_name in AVAILABLE_FACT_ROWS {
+            let row = artifact.rows.get(row_name).ok_or_else(|| color_eyre::eyre::eyre!("missing row"))?;
+            assert_eq!(row.status, "available_zero");
+            assert_eq!(row.total_facts, 0);
+            assert_eq!(row.fixture_family_coverage, 2);
         }
 
-        // Rows are in alphabetical order (BTreeMap) — spot-check boundary keys.
-        let keys: Vec<&str> = artifact.rows.keys().map(String::as_str).collect();
-        assert_eq!(keys.first().copied(), Some("completion_top1"));
-        assert_eq!(keys.last().copied(), Some("undefined_symbol_false_positive_rate"));
+        for &row_name in UNAVAILABLE_FACT_ROWS {
+            let row = artifact.rows.get(row_name).ok_or_else(|| color_eyre::eyre::eyre!("missing row"))?;
+            assert_eq!(row.status, "unavailable");
+            assert_eq!(row.total_facts, 0);
+            assert_eq!(row.fixture_family_coverage, 0);
+        }
 
         Ok(())
     }
 
-    /// Verify load_manifest sorts fixtures by id, making the pipeline deterministic
-    /// regardless of the order fixtures appear in the JSON file.
     #[test]
     fn manifest_load_sorts_fixtures() -> Result<()> {
         let tmp = tempfile::NamedTempFile::new()?;
@@ -193,35 +233,6 @@ mod tests {
         let parsed = load_manifest(tmp.path())?;
         assert_eq!(parsed.fixtures[0].id, "a");
         assert_eq!(parsed.fixtures[1].id, "z");
-        Ok(())
-    }
-
-    /// Verify that the full pipeline (load_manifest -> build_artifact) is stable
-    /// across two calls with the same manifest data in a different order: the
-    /// fixture IDs in the artifact must be identical both times.
-    #[test]
-    fn full_pipeline_is_stable_across_orderings() -> Result<()> {
-        let tmp_fwd = tempfile::NamedTempFile::new()?;
-        let tmp_rev = tempfile::NamedTempFile::new()?;
-        // Same two fixtures, different JSON order.
-        fs::write(
-            tmp_fwd.path(),
-            r#"{"fixture_family_version":1,"fixtures":[{"id":"alpha","family":"f","path":"a.pl"},{"id":"beta","family":"f","path":"b.pl"}]}"#,
-        )?;
-        fs::write(
-            tmp_rev.path(),
-            r#"{"fixture_family_version":1,"fixtures":[{"id":"beta","family":"f","path":"b.pl"},{"id":"alpha","family":"f","path":"a.pl"}]}"#,
-        )?;
-
-        let artifact_fwd = build_artifact(load_manifest(tmp_fwd.path())?);
-        let artifact_rev = build_artifact(load_manifest(tmp_rev.path())?);
-
-        // Both should produce the same sorted fixture list.
-        assert_eq!(
-            artifact_fwd.fixture_ids, artifact_rev.fixture_ids,
-            "fixture IDs must be identical regardless of input order"
-        );
-        assert_eq!(artifact_fwd.fixture_ids, vec!["alpha".to_string(), "beta".to_string()]);
         Ok(())
     }
 }

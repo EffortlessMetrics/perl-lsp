@@ -1,6 +1,6 @@
 # Semantic Scorecard
 
-Measured: `deterministic-fixture-baseline`  
+Measured: `deterministic-fixture-scorecard-v1`  
 Fixture family version: `1`  
 Fixtures loaded: `12`
 
@@ -19,20 +19,18 @@ Fixtures loaded: `12`
 - `same_bare_sub_two_packages`
 - `typeglob_alias`
 
-## Metrics
+## Semantic Facts Coverage
 
-| Metric | Status | Value |
-|---|---|---:|
-| completion_top1 | baseline_pending | n/a |
-| completion_top5 | baseline_pending | n/a |
-| definition_hit_at_1 | baseline_pending | n/a |
-| definition_hit_at_5 | baseline_pending | n/a |
-| query_latency_p50 | baseline_pending | n/a |
-| query_latency_p95 | baseline_pending | n/a |
-| reference_precision | baseline_pending | n/a |
-| reference_recall | baseline_pending | n/a |
-| rename_unsafe_edit_count | baseline_pending | n/a |
-| safe_delete_external_ref_detection | baseline_pending | n/a |
-| undefined_symbol_false_positive_rate | baseline_pending | n/a |
+| Row | Status | Total | Exact | High confidence | Heuristic | Dynamic boundary | Fixture-family coverage |
+|---|---|---:|---:|---:|---:|---:|---:|
+| declaration_facts | available_zero | 0 | 0 | 0 | 0 | 0 | 12 |
+| definition_candidates | available_zero | 0 | 0 | 0 | 0 | 0 | 12 |
+| export_facts | available_zero | 0 | 0 | 0 | 0 | 0 | 12 |
+| import_specs | unavailable | 0 | 0 | 0 | 0 | 0 | 0 |
+| occurrence_facts | available_zero | 0 | 0 | 0 | 0 | 0 | 12 |
+| package_graph | unavailable | 0 | 0 | 0 | 0 | 0 | 0 |
+| reference_edges | available_zero | 0 | 0 | 0 | 0 | 0 | 12 |
+| rename_plan | unavailable | 0 | 0 | 0 | 0 | 0 | 0 |
+| safe_delete_plan | unavailable | 0 | 0 | 0 | 0 | 0 | 0 |
 
-Initial harness: metrics intentionally baseline_pending until semantic facts land.
+Wave 2 scorecard rows are deterministic and adapter-safe: available rows emit zero counts until fact adapters are wired; future rows are explicitly unavailable.
