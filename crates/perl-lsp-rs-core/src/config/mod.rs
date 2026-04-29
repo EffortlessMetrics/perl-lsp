@@ -1195,10 +1195,8 @@ perltidy_extra_args = ["-noll"]
 
     #[test]
     fn parse_perl_inc_output_dedupes_and_drops_dot() {
-        let parsed = WorkspaceConfig::parse_perl_inc_output(
-            "lib\n.\nlib\n/usr/lib/perl5\n/usr/lib/perl5\n",
-        );
+        let parsed =
+            WorkspaceConfig::parse_perl_inc_output("lib\n.\nlib\n/usr/lib/perl5\n/usr/lib/perl5\n");
         assert_eq!(parsed, vec![PathBuf::from("lib"), PathBuf::from("/usr/lib/perl5")]);
     }
-
 }

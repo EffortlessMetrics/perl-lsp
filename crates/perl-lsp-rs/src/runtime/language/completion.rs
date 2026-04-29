@@ -1207,12 +1207,13 @@ mod tests {
             .with_effective_workspace_config(cfg),
         );
 
-        let (include_paths, system_inc_paths, include_system_inc) = server.module_completion_roots_for_doc(
-            "file:///tmp/outside_workspace.pl",
-            "use strict;",
-            0,
-            None,
-        );
+        let (include_paths, system_inc_paths, include_system_inc) = server
+            .module_completion_roots_for_doc(
+                "file:///tmp/outside_workspace.pl",
+                "use strict;",
+                0,
+                None,
+            );
 
         assert!(include_system_inc, "use_system_inc should be propagated");
         assert!(include_paths.is_empty(), "no configured include paths expected");

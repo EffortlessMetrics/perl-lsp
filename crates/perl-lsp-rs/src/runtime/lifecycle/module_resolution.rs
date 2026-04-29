@@ -555,7 +555,9 @@ mod tests {
 
         let inc_entries = include_paths
             .iter()
-            .filter(|path| normalized_inc_key(std::path::Path::new(path)) == normalized_inc_key(&inc_path))
+            .filter(|path| {
+                normalized_inc_key(std::path::Path::new(path)) == normalized_inc_key(&inc_path)
+            })
             .count();
         assert_eq!(inc_entries, 1, "normalized include path should be deduplicated");
         Ok(())
