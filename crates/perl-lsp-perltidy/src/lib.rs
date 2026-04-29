@@ -354,13 +354,15 @@ impl BuiltInFormatter {
     pub fn format(&self, code: &str) -> String {
         let mut result = String::new();
         let mut indent_level: i32 = 0;
+        let lines: Vec<&str> = code.lines().collect();
+        let had_trailing_newline = code.ends_with('\n');
         let indent_str = if self.config.tabs.unwrap_or(false) {
             "\t".to_string()
         } else {
             " ".repeat(self.config.indent_columns.unwrap_or(4) as usize)
         };
 
-        for line in code.lines() {
+        for (index, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
             let leading_closers = count_leading_closers(trimmed) as i32;
             indent_level = indent_level.saturating_sub(leading_closers);
@@ -371,7 +373,11 @@ impl BuiltInFormatter {
                 }
                 result.push_str(trimmed);
             }
-            result.push('\n');
+
+            let is_last_line = index + 1 == lines.len();
+            if !is_last_line || had_trailing_newline {
+                result.push('\n');
+            }
 
             // net_delimiter_delta counts all delimiters including leading closers.
             // We already decremented by leading_closers before printing, so add them

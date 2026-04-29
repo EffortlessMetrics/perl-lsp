@@ -264,6 +264,35 @@ fn builtin_formatter_handles_empty_input() {
 }
 
 #[test]
+fn builtin_formatter_preserves_missing_trailing_newline() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("if ($x) {\nprint $x;\n}");
+    assert_eq!(formatted, "if ($x) {\n    print $x;\n}");
+}
+
+#[test]
+fn builtin_formatter_preserves_trailing_newline_when_present() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("if ($x) {\nprint $x;\n}\n");
+    assert!(formatted.ends_with('\n'), "output must end with '\\n' when input does");
+}
+
+#[test]
+fn builtin_formatter_single_line_no_trailing_newline() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("print 1;");
+    assert_eq!(formatted, "print 1;");
+    assert!(!formatted.ends_with('\n'));
+}
+
+#[test]
+fn builtin_formatter_single_line_with_trailing_newline() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("print 1;\n");
+    assert_eq!(formatted, "print 1;\n");
+}
+
+#[test]
 fn builtin_formatter_closing_line_does_not_double_decrement() {
     // Regression: leading closers were subtracted before printing AND again by
     // net_delimiter_delta after printing, causing the next line to be under-indented.
