@@ -142,6 +142,22 @@ pub struct EdgeFact {
     pub confidence: Confidence,
 }
 
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportTag {
+    pub tag: String,
+    pub symbols: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportSet {
+    pub default_exports: Vec<String>,
+    pub optional_exports: Vec<String>,
+    pub tags: Vec<ExportTag>,
+    pub provenance: Provenance,
+    pub confidence: Confidence,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DiagnosticFact {
     pub id: DiagnosticId,
@@ -232,6 +248,26 @@ mod tests {
         assert_eq!(decoded, fact);
         // entity_id: None must serialize as JSON null, not be omitted.
         assert!(serialized.contains("\"entity_id\":null"), "entity_id null must be explicit in JSON");
+        Ok(())
+    }
+
+
+    #[test]
+    fn export_set_roundtrips_with_tags() -> Result<(), serde_json::Error> {
+        let set = ExportSet {
+            default_exports: vec!["foo".to_string()],
+            optional_exports: vec!["bar".to_string(), "baz".to_string()],
+            tags: vec![ExportTag {
+                tag: "all".to_string(),
+                symbols: vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
+            }],
+            provenance: Provenance::ImportExportInference,
+            confidence: Confidence::High,
+        };
+
+        let serialized = serde_json::to_string(&set)?;
+        let decoded: ExportSet = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, set);
         Ok(())
     }
 

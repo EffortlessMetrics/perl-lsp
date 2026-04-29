@@ -27,6 +27,7 @@
 //! forms are extracted.
 
 use crate::ast::{Node, NodeKind};
+use perl_semantic_facts::{Confidence, ExportSet, ExportTag, Provenance};
 use std::collections::{HashMap, HashSet};
 
 /// Information extracted from an Exporter-based module.
@@ -38,6 +39,45 @@ pub struct ExportInfo {
     pub optional_export: HashSet<String>,
     /// Tag-based exports via `%EXPORT_TAGS` (tag name -> symbols)
     pub export_tags: HashMap<String, Vec<String>>,
+}
+
+
+
+impl ExportInfo {
+    /// Convert extracted exporter data into canonical semantic export facts.
+    ///
+    /// This adapter is intentionally conservative: only statically recognized
+    /// `@EXPORT`, `@EXPORT_OK`, and `%EXPORT_TAGS` assignments are represented.
+    pub fn to_export_set(&self) -> ExportSet {
+        let mut default_exports: Vec<String> = self.default_export.iter().cloned().collect();
+        default_exports.sort();
+
+        let mut optional_exports: Vec<String> = self.optional_export.iter().cloned().collect();
+        optional_exports.sort();
+
+        let mut tags: Vec<ExportTag> = self
+            .export_tags
+            .iter()
+            .map(|(tag, symbols)| {
+                let mut symbols = symbols.clone();
+                symbols.sort();
+                symbols.dedup();
+                ExportTag {
+                    tag: tag.clone(),
+                    symbols,
+                }
+            })
+            .collect();
+        tags.sort_by(|a, b| a.tag.cmp(&b.tag));
+
+        ExportSet {
+            default_exports,
+            optional_exports,
+            tags,
+            provenance: Provenance::ImportExportInference,
+            confidence: Confidence::High,
+        }
+    }
 }
 
 /// Detection method for Exporter inheritance.
@@ -651,4 +691,50 @@ our @EXPORT = qw(multi_func);
         let info = info.unwrap();
         assert!(info.default_export.contains("multi_func"));
     }
+
+
+    #[test]
+    fn export_info_to_export_set_captures_default_optional_and_tags() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+package Demo;
+use Exporter 'import';
+our @EXPORT = qw(foo);
+our @EXPORT_OK = qw(bar baz);
+our %EXPORT_TAGS = (
+    all => [qw(foo bar baz)],
+);
+1;
+"#;
+        let info = parse_and_extract(code).ok_or("expected export info")?;
+        let export_set = info.to_export_set();
+
+        assert_eq!(export_set.default_exports, vec!["foo".to_string()]);
+        assert_eq!(export_set.optional_exports, vec!["bar".to_string(), "baz".to_string()]);
+        assert_eq!(export_set.tags.len(), 1);
+        assert_eq!(export_set.tags[0].tag, "all");
+        assert_eq!(
+            export_set.tags[0].symbols,
+            vec!["bar".to_string(), "baz".to_string(), "foo".to_string()]
+        );
+        assert_eq!(export_set.provenance, Provenance::ImportExportInference);
+        Ok(())
+    }
+
+    #[test]
+    fn export_info_to_export_set_supports_parent_exporter_inheritance() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+package ParentStyle;
+use parent 'Exporter';
+our @EXPORT = qw(alpha);
+1;
+"#;
+        let info = parse_and_extract(code).ok_or("expected export info")?;
+        let export_set = info.to_export_set();
+
+        assert_eq!(export_set.default_exports, vec!["alpha".to_string()]);
+        assert!(export_set.optional_exports.is_empty());
+        assert!(export_set.tags.is_empty());
+        Ok(())
+    }
+
 }
