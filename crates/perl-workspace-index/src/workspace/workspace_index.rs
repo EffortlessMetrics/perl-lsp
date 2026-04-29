@@ -4094,8 +4094,11 @@ my $var = 42;
         );
     }
 
-
-    fn reference_kinds_for(index: &WorkspaceIndex, uri: &str, symbol_name: &str) -> Vec<ReferenceKind> {
+    fn reference_kinds_for(
+        index: &WorkspaceIndex,
+        uri: &str,
+        symbol_name: &str,
+    ) -> Vec<ReferenceKind> {
         let files = index.files.read();
         let file = must_some(files.get(uri));
         file.references
@@ -4178,7 +4181,9 @@ has 'name' => (is => 'ro');
 
         let foo_kinds = reference_kinds_for(&index, uri, "foo");
         assert!(
-            foo_kinds.iter().all(|kind| matches!(kind, ReferenceKind::Definition | ReferenceKind::Usage)),
+            foo_kinds
+                .iter()
+                .all(|kind| matches!(kind, ReferenceKind::Definition | ReferenceKind::Usage)),
             r"dynamic call forms (&foo, \&foo, goto &foo) are currently flattened to Usage"
         );
 
