@@ -125,11 +125,11 @@ pub fn is_special_scheme(uri: &str) -> bool {
     if let Ok(url) = Url::parse(uri) {
         url.scheme() != "file"
     } else {
-        uri.starts_with("untitled:")
-            || uri.starts_with("git:")
-            || uri.starts_with("vscode-notebook:")
-            || uri.starts_with("vscode-notebook-cell:")
-            || uri.starts_with("vscode-vfs:")
+        uri.get(..9).is_some_and(|p| p.eq_ignore_ascii_case("untitled:"))
+            || uri.get(..4).is_some_and(|p| p.eq_ignore_ascii_case("git:"))
+            || uri.get(..17).is_some_and(|p| p.eq_ignore_ascii_case("vscode-notebook:"))
+            || uri.get(..22).is_some_and(|p| p.eq_ignore_ascii_case("vscode-notebook-cell:"))
+            || uri.get(..11).is_some_and(|p| p.eq_ignore_ascii_case("vscode-vfs:"))
     }
 }
 
@@ -237,6 +237,14 @@ mod tests {
         assert!(is_special_scheme("git:/foo/bar"));
         assert!(is_special_scheme("vscode-notebook-cell:/nb.ipynb#cell-id"));
         assert!(!is_special_scheme("file:///tmp/test.pl"));
+    }
+
+    #[test]
+    fn detects_special_schemes_case_insensitive_fallback() {
+        // Invalid URIs can still be recognized by prefix fallback, regardless of case.
+        assert!(is_special_scheme("UNTITLED:Untitled-1"));
+        assert!(is_special_scheme("GIT:relative/path"));
+        assert!(is_special_scheme("VSCODE-NOTEBOOK-CELL:bad uri"));
     }
 
     #[test]
