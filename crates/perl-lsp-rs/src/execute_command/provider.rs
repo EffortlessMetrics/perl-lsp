@@ -954,8 +954,8 @@ pub fn command_exists(command: &str) -> bool {
         cmd.arg(command);
         cmd
     } else {
-        let mut cmd = std::process::Command::new(command);
-        cmd.arg("--version");
+        let mut cmd = std::process::Command::new("which");
+        cmd.arg(command);
         cmd
     };
     crate::util::run_command_with_timeout(cmd, 2)
