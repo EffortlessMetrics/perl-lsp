@@ -155,10 +155,12 @@ impl PerlParser {
         &mut self,
         code: &[u8],
     ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-        match self.parser.parse(code, None) {
-            Some(tree) => Ok(tree),
-            None => Err("Failed to parse code".into()),
-        }
+        self.try_parse_bytes(code).map_err(Into::into)
+    }
+
+    /// Parses Perl source bytes using this parser instance with typed errors.
+    pub fn try_parse_bytes(&mut self, code: &[u8]) -> Result<tree_sitter::Tree, ParsePerlError> {
+        try_parse_with_parser(&mut self.parser, code)
     }
 
     /// Parses Perl source text using this parser instance.
@@ -166,7 +168,12 @@ impl PerlParser {
         &mut self,
         code: &str,
     ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-        self.parse_bytes(code.as_bytes())
+        self.try_parse_code(code).map_err(Into::into)
+    }
+
+    /// Parses Perl source text using this parser instance with typed errors.
+    pub fn try_parse_code(&mut self, code: &str) -> Result<tree_sitter::Tree, ParsePerlError> {
+        self.try_parse_bytes(code.as_bytes())
     }
 }
 
@@ -244,10 +251,18 @@ pub fn parse_perl_bytes_with_parser(
     parser: &mut Parser,
     code: &[u8],
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    match parser.parse(code, None) {
-        Some(tree) => Ok(tree),
-        None => Err("Failed to parse code".into()),
-    }
+    try_parse_perl_bytes_with_parser(parser, code).map_err(Into::into)
+}
+
+/// Parses Perl source bytes using a caller-provided configured [`tree_sitter::Parser`].
+///
+/// This typed variant allows callers to distinguish parse cancellation/timeouts
+/// (`None` from tree-sitter).
+pub fn try_parse_perl_bytes_with_parser(
+    parser: &mut Parser,
+    code: &[u8],
+) -> Result<tree_sitter::Tree, ParsePerlError> {
+    try_parse_with_parser(parser, code)
 }
 
 /// Parses a Perl source string and returns the resulting [`tree_sitter::Tree`].
@@ -290,7 +305,17 @@ pub fn parse_perl_code_with_parser(
     parser: &mut Parser,
     code: &str,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    parse_perl_bytes_with_parser(parser, code.as_bytes())
+    try_parse_perl_code_with_parser(parser, code).map_err(Into::into)
+}
+
+/// Parses a Perl source string using a caller-provided configured [`tree_sitter::Parser`].
+///
+/// This typed variant allows callers to inspect parse-`None` outcomes directly.
+pub fn try_parse_perl_code_with_parser(
+    parser: &mut Parser,
+    code: &str,
+) -> Result<tree_sitter::Tree, ParsePerlError> {
+    try_parse_perl_bytes_with_parser(parser, code.as_bytes())
 }
 
 /// Reads a file from `path` and parses it as Perl source.
@@ -389,6 +414,45 @@ mod tests {
         let second = parse_perl_code_with_parser(&mut parser, "print $name;")?;
         assert!(!second.root_node().has_error());
 
+        Ok(())
+    }
+
+
+    #[test]
+    fn test_typed_parse_bytes_with_reused_parser() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = try_create_parser()?;
+
+        let first = try_parse_perl_bytes_with_parser(&mut parser, b"my $x = 1;")?;
+        assert!(!first.root_node().has_error());
+
+        let second = try_parse_perl_bytes_with_parser(&mut parser, b"my $y = 2;")?;
+        assert!(!second.root_node().has_error());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_typed_parse_code_with_reused_parser() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = try_create_parser()?;
+
+        let first = try_parse_perl_code_with_parser(&mut parser, "my $name = 'Perl';")?;
+        assert!(!first.root_node().has_error());
+
+        let second = try_parse_perl_code_with_parser(&mut parser, "print $name;")?;
+        assert!(!second.root_node().has_error());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_typed_reusable_parser_methods() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = PerlParser::new()?;
+
+        let first = parser.try_parse_code("my $x = 1;")?;
+        let second = parser.try_parse_bytes(b"my $y = 2;")?;
+
+        assert!(!first.root_node().has_error());
+        assert!(!second.root_node().has_error());
         Ok(())
     }
 
