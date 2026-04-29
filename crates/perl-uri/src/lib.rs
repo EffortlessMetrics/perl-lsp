@@ -274,7 +274,17 @@ pub fn normalize_uri(uri: &str) -> String {
 
     // Try to parse as URL first
     if let Ok(url) = Url::parse(uri) {
-        // Already a valid URI, return as-is
+        // Canonicalize local file URIs through filesystem conversion so legacy
+        // forms like `file://C:/...` normalize to `file:///c:/...` on Windows
+        // and `file:///tmp/...` on Unix while preserving non-local authorities.
+        if url.scheme() == "file"
+            && let Some(fs_path) = uri_to_fs_path(uri)
+            && let Ok(normalized) = fs_path_to_uri(&fs_path)
+        {
+            return normalized;
+        }
+
+        // Already a valid non-file URI, return as-is.
         return url.to_string();
     }
 
@@ -403,6 +413,11 @@ mod tests {
         fn test_normalize_uri_valid() {
             let uri = normalize_uri("file:///tmp/test.pl");
             assert_eq!(uri, "file:///tmp/test.pl");
+        }
+
+        #[test]
+        fn test_normalize_uri_canonicalizes_localhost_authority() {
+            assert_eq!(normalize_uri("file://localhost/tmp/test.pl"), "file:///tmp/test.pl");
         }
 
         #[test]
