@@ -48,18 +48,9 @@ pub fn parse_perlcritic_line(line: &str) -> Option<ParsedCriticLine> {
     let mut numeric_idx = None;
     let max_start = parts.len().saturating_sub(4);
     for idx in 1..=max_start {
-        if parts
-            .get(idx)
-            .and_then(|v| v.trim().parse::<u32>().ok())
-            .is_some()
-            && parts
-                .get(idx + 1)
-                .and_then(|v| v.trim().parse::<u32>().ok())
-                .is_some()
-            && parts
-                .get(idx + 2)
-                .and_then(|v| v.trim().parse::<u8>().ok())
-                .is_some()
+        if parts.get(idx).and_then(|v| v.trim().parse::<u32>().ok()).is_some()
+            && parts.get(idx + 1).and_then(|v| v.trim().parse::<u32>().ok()).is_some()
+            && parts.get(idx + 2).and_then(|v| v.trim().parse::<u8>().ok()).is_some()
         {
             numeric_idx = Some(idx);
             break;
@@ -241,6 +232,23 @@ mod tests {
     fn parse_perlcritic_line_rejects_whitespace_only() {
         assert!(parse_perlcritic_line("   ").is_none());
         assert!(parse_perlcritic_line("\t\r").is_none());
+    }
+
+    /// Windows drive-letter paths contain a `:` after the drive letter.
+    /// The numeric-triplet scan skips `C:\...` as a non-numeric segment and
+    /// finds the real line/column/severity fields further in the string.
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn parse_perlcritic_line_handles_windows_drive_letter_path() {
+        let line =
+            r"C:\project\lib\Foo.pm:7:1:3:TestingAndDebugging::RequireUseStrict:missing strict";
+        let parsed = parse_perlcritic_line(line).expect("Windows drive-letter path must parse");
+        assert_eq!(parsed.file, r"C:\project\lib\Foo.pm");
+        assert_eq!(parsed.line, 7);
+        assert_eq!(parsed.column, 1);
+        assert_eq!(parsed.severity, 3);
+        assert_eq!(parsed.policy, "TestingAndDebugging::RequireUseStrict");
+        assert_eq!(parsed.message, "missing strict");
     }
 
     #[test]
