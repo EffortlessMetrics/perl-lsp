@@ -1,5 +1,5 @@
 use crate::utils::project_root;
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -63,6 +63,7 @@ pub fn run(
     manifest: Option<PathBuf>,
     output: Option<PathBuf>,
     status_md: Option<PathBuf>,
+    check: bool,
 ) -> Result<()> {
     let root = project_root()?;
     let manifest_path =
@@ -73,15 +74,18 @@ pub fn run(
     let manifest = load_manifest(&manifest_path)?;
     let artifact = build_artifact(manifest);
 
-    write_json(&output_path, &artifact)?;
-    if let Some(parent) = status_path.parent() {
-        fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+    let json_payload = render_json(&artifact)?;
+    let markdown_payload = render_status_markdown(&artifact);
+    if check {
+        verify_file_matches(&output_path, &json_payload, "scorecard artifact")?;
+        verify_file_matches(&status_path, &markdown_payload, "status markdown")?;
+        println!("semantic scorecard check passed");
+    } else {
+        write_text(&output_path, &json_payload)?;
+        write_text(&status_path, &markdown_payload)?;
+        println!("semantic scorecard updated: {}", output_path.display());
+        println!("status page updated: {}", status_path.display());
     }
-    fs::write(&status_path, render_status_markdown(&artifact))
-        .with_context(|| format!("writing {}", status_path.display()))?;
-
-    println!("semantic scorecard updated: {}", output_path.display());
-    println!("status page updated: {}", status_path.display());
     Ok(())
 }
 
@@ -113,12 +117,24 @@ fn build_artifact(manifest: SemanticManifest) -> Artifact {
     }
 }
 
-fn write_json(path: &Path, artifact: &Artifact) -> Result<()> {
+fn render_json(artifact: &Artifact) -> Result<String> {
+    let payload = serde_json::to_string_pretty(artifact)?;
+    Ok(format!("{payload}\n"))
+}
+
+fn write_text(path: &Path, payload: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
     }
-    let payload = serde_json::to_string_pretty(artifact)?;
-    fs::write(path, format!("{payload}\n")).with_context(|| format!("writing {}", path.display()))
+    fs::write(path, payload).with_context(|| format!("writing {}", path.display()))
+}
+
+fn verify_file_matches(path: &Path, expected: &str, label: &str) -> Result<()> {
+    let actual = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    if actual == expected {
+        return Ok(());
+    }
+    bail!("{label} is stale: {} (re-run `cargo xtask semantic-scorecard`)", path.display())
 }
 
 fn render_status_markdown(artifact: &Artifact) -> String {
