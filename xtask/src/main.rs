@@ -1142,7 +1142,6 @@ enum Commands {
         ratchet_check: bool,
     },
 
-
     /// Publish semantic fixture scorecard artifact/status.
     SemanticScorecard {
         /// Optional path to semantic fixture manifest JSON.
