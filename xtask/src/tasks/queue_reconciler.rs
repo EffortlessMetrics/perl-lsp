@@ -827,7 +827,10 @@ mod tests {
         let pr = make_pr(1, &[MERGE_READY, NEEDS_CI_FIX]);
         let c = detect_contradictions(&pr, &[], CiOutcome::Skipped);
         let strips: Vec<&str> = c.iter().map(|x| x.strip.as_str()).collect();
-        assert!(strips.contains(&NEEDS_CI_FIX), "should strip needs-ci-fix when all checks SKIPPED");
+        assert!(
+            strips.contains(&NEEDS_CI_FIX),
+            "should strip needs-ci-fix when all checks SKIPPED"
+        );
         assert!(
             !strips.contains(&MERGE_READY),
             "should NOT strip merge-ready when CI is SKIPPED (gate inapplicable)"
