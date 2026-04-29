@@ -142,6 +142,28 @@ pub struct EdgeFact {
     pub confidence: Confidence,
 }
 
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReferenceEdge {
+    pub kind: OccurrenceKind,
+    pub location: ReferenceLocation,
+    pub confidence: Confidence,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReferenceLocation {
+    pub uri: String,
+    pub span: ReferenceSpan,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReferenceSpan {
+    pub start_line: u32,
+    pub start_column: u32,
+    pub end_line: u32,
+    pub end_column: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DiagnosticFact {
     pub id: DiagnosticId,

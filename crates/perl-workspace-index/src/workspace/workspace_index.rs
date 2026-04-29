@@ -68,6 +68,7 @@ use crate::position::{Position, Range};
 use crate::workspace::monitoring::IndexInstrumentation;
 use parking_lot::RwLock;
 use perl_position_tracking::{WireLocation, WirePosition, WireRange};
+use perl_semantic_facts::{Confidence, OccurrenceKind, ReferenceEdge, ReferenceLocation, ReferenceSpan};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -1134,7 +1135,7 @@ pub struct WorkspaceIndex {
     ///
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
     /// Provides O(1) lookup for `find_references()` instead of iterating all files.
-    global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
+    global_references: Arc<RwLock<HashMap<String, Vec<ReferenceEdge>>>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
     /// Workspace folder URIs for multi-root workspace support
@@ -1345,32 +1346,29 @@ impl WorkspaceIndex {
     }
 
     fn collect_symbol_references(&self, symbol: &WorkspaceSymbol) -> Vec<Location> {
-        let mut names_to_query: Vec<&str> = Vec::new();
+        let mut names_to_query: Vec<(&str, bool)> = Vec::new();
         if let Some(qualified_name) = symbol.qualified_name.as_deref() {
-            names_to_query.push(qualified_name);
+            names_to_query.push((qualified_name, true));
             if self.has_unique_symbol_name_and_kind(symbol) {
-                names_to_query.push(symbol.name.as_str());
+                names_to_query.push((symbol.name.as_str(), false));
             }
         } else {
-            names_to_query.push(symbol.name.as_str());
+            names_to_query.push((symbol.name.as_str(), true));
         }
 
         let global_refs = self.global_references.read();
         let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
         let mut locations = Vec::new();
 
-        for symbol_name in names_to_query {
+        for (symbol_name, include_definitions) in names_to_query {
             if let Some(refs) = global_refs.get(symbol_name) {
-                for location in refs {
-                    let key = (
-                        location.uri.clone(),
-                        location.range.start.line,
-                        location.range.start.column,
-                        location.range.end.line,
-                        location.range.end.column,
-                    );
+                for edge in refs {
+                    if !include_definitions && edge.kind == OccurrenceKind::Definition {
+                        continue;
+                    }
+                    let key = Self::reference_edge_key(edge);
                     if seen.insert(key) {
-                        locations.push(location.clone());
+                        locations.push(Self::location_from_reference_edge(edge));
                     }
                 }
             }
@@ -1488,13 +1486,13 @@ impl WorkspaceIndex {
     /// Retains only entries whose URI does not match `file_uri`.
     /// Empty keys are removed to avoid unbounded map growth.
     fn remove_file_global_refs(
-        global_refs: &mut HashMap<String, Vec<Location>>,
+        global_refs: &mut HashMap<String, Vec<ReferenceEdge>>,
         file_index: &FileIndex,
         file_uri: &str,
     ) {
         for name in file_index.references.keys() {
             if let Some(locs) = global_refs.get_mut(name) {
-                locs.retain(|loc| loc.uri != file_uri);
+                locs.retain(|loc| loc.location.uri != file_uri);
                 if locs.is_empty() {
                     global_refs.remove(name);
                 }
@@ -1610,7 +1608,7 @@ impl WorkspaceIndex {
                 for (name, refs) in &file_index.references {
                     let entry = global_refs.entry(name.clone()).or_default();
                     for reference in refs {
-                        entry.push(Location { uri: reference.uri.clone(), range: reference.range });
+                        entry.push(Self::reference_edge_from_symbol_reference(reference));
                     }
                 }
             }
@@ -1926,10 +1924,7 @@ impl WorkspaceIndex {
                     for (name, refs) in &fi.references {
                         let entry = global_refs.entry(name.clone()).or_default();
                         for reference in refs {
-                            entry.push(Location {
-                                uri: reference.uri.clone(),
-                                range: reference.range,
-                            });
+                            entry.push(Self::reference_edge_from_symbol_reference(reference));
                         }
                     }
                 }
@@ -1977,15 +1972,9 @@ impl WorkspaceIndex {
         // O(1) lookup for exact symbol name
         if let Some(refs) = global_refs.get(symbol_name) {
             for loc in refs {
-                let key = (
-                    loc.uri.clone(),
-                    loc.range.start.line,
-                    loc.range.start.column,
-                    loc.range.end.line,
-                    loc.range.end.column,
-                );
+                let key = Self::reference_edge_key(loc);
                 if seen.insert(key) {
-                    locations.push(Location { uri: loc.uri.clone(), range: loc.range });
+                    locations.push(Self::location_from_reference_edge(loc));
                 }
             }
         }
@@ -1995,15 +1984,9 @@ impl WorkspaceIndex {
             let bare_name = &symbol_name[idx + 2..];
             if let Some(refs) = global_refs.get(bare_name) {
                 for loc in refs {
-                    let key = (
-                        loc.uri.clone(),
-                        loc.range.start.line,
-                        loc.range.start.column,
-                        loc.range.end.line,
-                        loc.range.end.column,
-                    );
+                    let key = Self::reference_edge_key(loc);
                     if seen.insert(key) {
-                        locations.push(Location { uri: loc.uri.clone(), range: loc.range });
+                        locations.push(Self::location_from_reference_edge(loc));
                     }
                 }
             }
@@ -2016,15 +1999,9 @@ impl WorkspaceIndex {
                 }
 
                 for loc in refs {
-                    let key = (
-                        loc.uri.clone(),
-                        loc.range.start.line,
-                        loc.range.start.column,
-                        loc.range.end.line,
-                        loc.range.end.column,
-                    );
+                    let key = Self::reference_edge_key(loc);
                     if seen.insert(key) {
-                        locations.push(Location { uri: loc.uri.clone(), range: loc.range });
+                        locations.push(Self::location_from_reference_edge(loc));
                     }
                 }
             }
@@ -2074,55 +2051,90 @@ impl WorkspaceIndex {
     /// returning only actual usage sites. This is used by code lens to show
     /// "N references" where N means call sites, not the definition itself.
     pub fn count_usages(&self, symbol_name: &str) -> usize {
-        let files = self.files.read();
+        let global_refs = self.global_references.read();
         let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
 
-        for (_uri_key, file_index) in files.iter() {
-            if let Some(refs) = file_index.references.get(symbol_name) {
-                for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
-                    seen.insert((
-                        r.uri.clone(),
-                        r.range.start.line,
-                        r.range.start.column,
-                        r.range.end.line,
-                        r.range.end.column,
-                    ));
+        let mut add_non_definition_edges = |refs: &[ReferenceEdge]| {
+            for edge in refs {
+                if edge.kind == OccurrenceKind::Definition {
+                    continue;
                 }
+                seen.insert(Self::reference_edge_key(edge));
             }
+        };
 
-            if let Some(idx) = symbol_name.rfind("::") {
-                let bare_name = &symbol_name[idx + 2..];
-                if let Some(refs) = file_index.references.get(bare_name) {
-                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
-                        seen.insert((
-                            r.uri.clone(),
-                            r.range.start.line,
-                            r.range.start.column,
-                            r.range.end.line,
-                            r.range.end.column,
-                        ));
-                    }
-                }
-            } else {
-                for (name, refs) in &file_index.references {
-                    if !Self::is_qualified_variant_of(name, symbol_name) {
-                        continue;
-                    }
+        if let Some(refs) = global_refs.get(symbol_name) {
+            add_non_definition_edges(refs);
+        }
 
-                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
-                        seen.insert((
-                            r.uri.clone(),
-                            r.range.start.line,
-                            r.range.start.column,
-                            r.range.end.line,
-                            r.range.end.column,
-                        ));
-                    }
+        if let Some(idx) = symbol_name.rfind("::") {
+            let bare_name = &symbol_name[idx + 2..];
+            if let Some(refs) = global_refs.get(bare_name) {
+                add_non_definition_edges(refs);
+            }
+        } else {
+            for (name, refs) in global_refs.iter() {
+                if Self::is_qualified_variant_of(name, symbol_name) {
+                    add_non_definition_edges(refs);
                 }
             }
         }
 
         seen.len()
+    }
+
+    fn occurrence_kind_from_reference_kind(kind: ReferenceKind) -> OccurrenceKind {
+        match kind {
+            ReferenceKind::Definition => OccurrenceKind::Definition,
+            ReferenceKind::Usage => OccurrenceKind::Reference,
+            ReferenceKind::Import => OccurrenceKind::Import,
+            ReferenceKind::Read => OccurrenceKind::Read,
+            ReferenceKind::Write => OccurrenceKind::Write,
+        }
+    }
+
+    fn reference_edge_from_symbol_reference(reference: &SymbolReference) -> ReferenceEdge {
+        ReferenceEdge {
+            kind: Self::occurrence_kind_from_reference_kind(reference.kind),
+            location: ReferenceLocation {
+                uri: reference.uri.clone(),
+                span: ReferenceSpan {
+                    start_line: reference.range.start.line,
+                    start_column: reference.range.start.column,
+                    end_line: reference.range.end.line,
+                    end_column: reference.range.end.column,
+                },
+            },
+            confidence: Confidence::High,
+        }
+    }
+
+    fn reference_edge_key(edge: &ReferenceEdge) -> (String, u32, u32, u32, u32) {
+        (
+            edge.location.uri.clone(),
+            edge.location.span.start_line,
+            edge.location.span.start_column,
+            edge.location.span.end_line,
+            edge.location.span.end_column,
+        )
+    }
+
+    fn location_from_reference_edge(edge: &ReferenceEdge) -> Location {
+        Location {
+            uri: edge.location.uri.clone(),
+            range: Range {
+                start: Position {
+                    byte: 0,
+                    line: edge.location.span.start_line,
+                    column: edge.location.span.start_column,
+                },
+                end: Position {
+                    byte: 0,
+                    line: edge.location.span.end_line,
+                    column: edge.location.span.end_column,
+                },
+            },
+        }
     }
 
     fn is_qualified_variant_of(candidate: &str, bare_symbol: &str) -> bool {

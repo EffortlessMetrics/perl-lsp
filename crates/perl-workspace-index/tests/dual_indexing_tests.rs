@@ -686,3 +686,45 @@ eval \"foo()\";
     );
     Ok(())
 }
+
+#[test]
+fn typed_refs_count_usages_excludes_definition() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/lib/Usage.pm")?;
+
+    index.index_file(
+        uri,
+        "package Usage;\nsub tracked { 1 }\ntracked();\ntracked();".to_string(),
+    )?;
+
+    assert_eq!(index.count_usages("Usage::tracked"), 2);
+    Ok(())
+}
+
+#[test]
+fn typed_refs_include_call_sites_for_find_references() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let def_uri = file_url("/lib/Calls.pm")?;
+    let call_uri = file_url("/app/main.pl")?;
+
+    index.index_file(def_uri, "package Calls;\nsub run { 1 }".to_string())?;
+    index.index_file(call_uri, "Calls::run();\nrun();".to_string())?;
+
+    let refs = index.find_references("Calls::run");
+    assert!(refs.len() >= 2, "expected both qualified and bare call references");
+    Ok(())
+}
+
+#[test]
+fn typed_refs_reindex_cleans_stale_entries() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/lib/Stale.pm")?;
+
+    index.index_file(uri.clone(), "package Stale;\nsub keep { 1 }\nkeep();".to_string())?;
+    assert!(!index.find_references("Stale::keep").is_empty());
+
+    index.remove_file_url(&uri);
+    assert!(index.find_references("Stale::keep").is_empty());
+    assert_eq!(index.count_usages("Stale::keep"), 0);
+    Ok(())
+}
