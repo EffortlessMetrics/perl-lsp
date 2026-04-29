@@ -121,13 +121,11 @@ jobs:
         if: always() && steps.harness_check.outputs.harness_available == 'true'
         run: |
           python3 - <<'PY'
-          import os, re, pathlib, sys
+          import json, os, re, pathlib
 
           output_file = pathlib.Path("/tmp/ux-test-output.txt")
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-
-          if not summary_path:
-              sys.exit(0)
+          receipt_path = pathlib.Path("target/receipts/ux-regression-receipt.json")
 
           lines = output_file.read_text(encoding="utf-8").splitlines() if output_file.exists() else []
 
@@ -221,7 +219,56 @@ jobs:
               f"**Coverage metric**: {total} scenarios cover {covered_categories} categories of UX.",
           ]
 
-          pathlib.Path(summary_path).write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+          if summary_path:
+              pathlib.Path(summary_path).write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+
+          def classify_failure(first_failure_line: str, panic_location: str) -> str:
+              text = f"{first_failure_line} {panic_location}".lower()
+              if "editor_ux_fixture_matrix" in text or "fixture matrix" in text:
+                  return "matrix_drift"
+              if "timed out" in text or "timeout" in text:
+                  return "timeout"
+              if "panicked at" in text and panic_location:
+                  return "new_test_bug"
+              if "connection reset" in text or "transport" in text:
+                  return "infra"
+              return "unknown"
+
+          first_failed_test = None
+          first_failed_scenario = None
+          first_failing_line = None
+          panic_location = None
+          panic_line_re = re.compile(r"panicked at .*?(?P<loc>[A-Za-z0-9_./\\-]+\\.rs:\\d+(?::\\d+)?)")
+          test_fail_re = re.compile(r"test (?P<name>\\S+) \\.\\.\\. FAILED")
+
+          for line in lines:
+              if first_failed_test is None:
+                  match = test_fail_re.search(line)
+                  if match:
+                      first_failed_test = match.group("name")
+                      first_failed_scenario = first_failed_test.split("::")[0]
+                      first_failing_line = line.strip()
+              if panic_location is None:
+                  panic_match = panic_line_re.search(line)
+                  if panic_match:
+                      panic_location = panic_match.group("loc")
+
+          receipt = {
+              "kind": "ux_regression_receipt",
+              "schema_version": 1,
+              "sha": os.environ.get("GITHUB_SHA", "unknown"),
+              "scenario": first_failed_scenario,
+              "test": first_failed_test,
+              "result": "fail" if fail_count > 0 else "pass",
+              "failure_class": classify_failure(first_failing_line or "", panic_location or ""),
+              "panic_location": panic_location,
+              "repro": "just ux-tests" if fail_count > 0 else None,
+              "first_failing_line": first_failing_line,
+          }
+
+          receipt_path.parent.mkdir(parents=True, exist_ok=True)
+          receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+          print(f"Wrote UX regression receipt: {receipt_path}")
 
           # Also print to stdout for CI logs
           print(f"\nUX Coverage: {total} scenarios across {covered_categories} categories")
