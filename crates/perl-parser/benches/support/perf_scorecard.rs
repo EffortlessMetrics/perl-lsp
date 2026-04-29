@@ -75,7 +75,7 @@ where
     // Using ceiling division avoids the off-by-one in the floor formula
     // ((n * 95) / 100) which returns the 100th-percentile sample for all
     // N <= 20.
-    let p95_idx = ((n * 95 + 99) / 100).saturating_sub(1).min(n.saturating_sub(1));
+    let p95_idx = (n * 95).div_ceil(100).saturating_sub(1).min(n.saturating_sub(1));
     let total: u128 = samples.iter().copied().sum();
 
     ScoreMetric {
@@ -110,7 +110,7 @@ fn now_epoch_seconds() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::sample_metric;
 
     /// Verify that `sample_metric` reports the correct median and p95 for a
     /// deterministic sequence.  We drive `run` with a counter so the elapsed
