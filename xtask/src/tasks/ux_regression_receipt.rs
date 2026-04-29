@@ -41,6 +41,8 @@ pub struct UxRegressionReceipt {
     schema_version: u32,
     measured_at: String,
     sha: String,
+    workflow: Option<String>,
+    scenario_file: Option<String>,
     scenario: Option<String>,
     test: Option<String>,
     result: String,
@@ -48,6 +50,7 @@ pub struct UxRegressionReceipt {
     panic_location: Option<String>,
     repro: Option<String>,
     first_failing_line: Option<String>,
+    route: String,
 }
 
 pub fn run(config: UxRegressionReceiptConfig) -> Result<()> {
@@ -79,6 +82,7 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
     let panic_location =
         lines.iter().find_map(|line| PANIC_RE.captures(line).map(|cap| cap[1].to_string()));
     let scenario = test.as_ref().and_then(|name| scenario_from_test_name(name));
+    let workflow = test.as_ref().and_then(|name| workflow_from_test_name(name));
 
     let failure_class = infer_failure_class(raw);
 
@@ -86,11 +90,15 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
         format!("cargo test -p perl-lsp-ux-tests {name} -- --test-threads=1 --nocapture")
     });
 
+    let route = route_for_class(&failure_class).to_string();
+
     UxRegressionReceipt {
         kind: "ux_regression_receipt",
         schema_version: 1,
         measured_at: Utc::now().to_rfc3339(),
         sha: sha.unwrap_or_else(|| "unknown".to_string()),
+        workflow,
+        scenario_file: scenario.clone(),
         scenario,
         test,
         result: if raw.contains("test result: ok") { "pass" } else { "fail" }.to_string(),
@@ -98,6 +106,7 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
         panic_location,
         repro,
         first_failing_line: first_fail_line,
+        route,
     }
 }
 
@@ -129,6 +138,21 @@ fn infer_failure_class(raw: &str) -> FailureClass {
     }
 }
 
+fn workflow_from_test_name(test: &str) -> Option<String> {
+    let workflow = test.split("::").nth(1)?;
+    if workflow.is_empty() { None } else { Some(workflow.to_string()) }
+}
+
+fn route_for_class(class: &FailureClass) -> &'static str {
+    match class {
+        FailureClass::MatrixDrift | FailureClass::BaselineDrift => "needs-fixture-fix",
+        FailureClass::TestRace | FailureClass::NewTestBug => "needs-test-fix",
+        FailureClass::ProviderRegression | FailureClass::ServerCrash => "needs-provider-fix",
+        FailureClass::Timeout | FailureClass::Infra => "needs-ci-fix",
+        FailureClass::Unknown => "needs-triage",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,6 +168,11 @@ mod tests {
             "scenario should be extracted from test name"
         );
         assert_eq!(
+            receipt.workflow.as_deref(),
+            Some("scenario_19_diagnostics_clear_after_fix"),
+            "workflow should map to test function name"
+        );
+        assert_eq!(
             receipt.test.as_deref(),
             Some("ux_scenario_19_diagnostics_lifecycle::scenario_19_diagnostics_clear_after_fix"),
             "test name should be extracted from log"
@@ -157,5 +186,6 @@ mod tests {
             Some("crates/perl-lsp-ux-tests/tests/ux_scenario_19_diagnostics_lifecycle.rs:102:5"),
             "panic_location should be extracted from panic line"
         );
+        assert_eq!(receipt.route, "needs-test-fix", "race/new test bug routes to test fix");
     }
 }
