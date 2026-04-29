@@ -80,7 +80,10 @@ fn adapter_snapshot_for_symbol_decl_projection() -> Result<(), serde_json::Error
 
     let facts = symbol_decls_to_semantic_facts(&decls, FileId(7));
     let json = serde_json::to_string_pretty(&facts)?;
-    assert!(json.contains("\"defines_edges\""), "serialized JSON should contain 'defines_edges' key");
+    assert!(
+        json.contains("\"defines_edges\""),
+        "serialized JSON should contain 'defines_edges' key"
+    );
     assert_eq!(facts.entities.len(), 8, "should have exactly 8 entities");
     assert_eq!(facts.defines_edges.len(), 7, "should have exactly 7 defines edges");
     assert!(facts.unsupported.is_empty(), "should have no unsupported declarations");

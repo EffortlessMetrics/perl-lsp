@@ -22,7 +22,10 @@ pub struct SymbolDeclSemanticFacts {
     pub unsupported: Vec<UnsupportedDeclFact>,
 }
 
-pub fn symbol_decls_to_semantic_facts(decls: &[SymbolDecl], file_id: FileId) -> SymbolDeclSemanticFacts {
+pub fn symbol_decls_to_semantic_facts(
+    decls: &[SymbolDecl],
+    file_id: FileId,
+) -> SymbolDeclSemanticFacts {
     let mut anchors = Vec::with_capacity(decls.len());
     let mut entities = Vec::with_capacity(decls.len());
     let mut unsupported = Vec::new();
@@ -42,7 +45,8 @@ pub fn symbol_decls_to_semantic_facts(decls: &[SymbolDecl], file_id: FileId) -> 
         };
 
         let anchor_span = decl.anchor_span.unwrap_or(decl.full_span);
-        let anchor_id = AnchorId(stable_id("anchor", &decl.qualified_name, anchor_span.0, anchor_span.1));
+        let anchor_id =
+            AnchorId(stable_id("anchor", &decl.qualified_name, anchor_span.0, anchor_span.1));
         anchors.push(AnchorFact {
             id: anchor_id,
             file_id,
@@ -53,12 +57,8 @@ pub fn symbol_decls_to_semantic_facts(decls: &[SymbolDecl], file_id: FileId) -> 
             confidence: Confidence::High,
         });
 
-        let entity_id = EntityId(stable_id(
-            "entity",
-            &decl.qualified_name,
-            decl.full_span.0,
-            decl.full_span.1,
-        ));
+        let entity_id =
+            EntityId(stable_id("entity", &decl.qualified_name, decl.full_span.0, decl.full_span.1));
         entity_by_name.insert(decl.qualified_name.clone(), entity_id);
         entities.push(EntityFact {
             id: entity_id,
@@ -81,12 +81,21 @@ pub fn symbol_decls_to_semantic_facts(decls: &[SymbolDecl], file_id: FileId) -> 
             continue;
         };
 
+        // Resolve the from-entity for this Defines edge.
+        //
+        // `container` is the *bare* enclosing package name (e.g. "Bar").
+        // `qualified_name` may be multi-level (e.g. "Foo::Bar::baz"), so we
+        // strip the last segment to obtain the qualified prefix ("Foo::Bar")
+        // and use that as the lookup key when it is a proper segment-boundary
+        // match for `container`.
+        //
+        // The check must be a *segment-boundary* match, not a raw byte-suffix
+        // match: "FooBar".ends_with("Bar") is true but "FooBar" != "Bar" and
+        // is not a qualified suffix "::Bar".
         let from_candidate = if let Some((prefix, _)) = decl.qualified_name.rsplit_once("::") {
-            if prefix.ends_with(container) {
-                prefix.to_string()
-            } else {
-                container.clone()
-            }
+            let is_segment_match =
+                prefix == container.as_str() || prefix.ends_with(&format!("::{container}"));
+            if is_segment_match { prefix.to_string() } else { container.clone() }
         } else {
             container.clone()
         };
@@ -100,7 +109,12 @@ pub fn symbol_decls_to_semantic_facts(decls: &[SymbolDecl], file_id: FileId) -> 
             continue;
         };
 
-        let edge_id = EdgeId(stable_id("defines", &decl.qualified_name, from_entity_id.0 as usize, to_entity_id.0 as usize));
+        let edge_id = EdgeId(stable_id(
+            "defines",
+            &decl.qualified_name,
+            from_entity_id.0 as usize,
+            to_entity_id.0 as usize,
+        ));
         defines_edges.push(EdgeFact {
             id: edge_id,
             kind: EdgeKind::Defines,
@@ -201,6 +215,77 @@ mod tests {
         assert!(actual.unsupported.is_empty());
     }
 
+    /// Regression test: container name that is a byte-suffix of a sibling
+    /// package name must NOT produce a wrong Defines edge.
+    ///
+    /// Before the fix, `prefix.ends_with(container)` matched "FooBar" against
+    /// container "Bar" and resolved to the wrong entity "FooBar" instead of
+    /// falling back to the bare container name "Bar".
+    #[test]
+    fn container_resolution_uses_segment_boundary_not_byte_suffix() {
+        // "FooBar" is a top-level package.
+        // "FooBar::baz" has container "Bar" — unusual but representable
+        // (imagine `package Bar { }` block inside a FooBar file context).
+        // The correct from-entity key is "Bar", not "FooBar".
+        let decls = vec![
+            SymbolDecl {
+                kind: SymbolKind::Package,
+                name: "FooBar".to_string(),
+                qualified_name: "FooBar".to_string(),
+                full_span: (0, 10),
+                anchor_span: None,
+                container: None,
+                declarator: None,
+            },
+            SymbolDecl {
+                kind: SymbolKind::Package,
+                name: "Bar".to_string(),
+                qualified_name: "Bar".to_string(),
+                full_span: (11, 20),
+                anchor_span: None,
+                container: None,
+                declarator: None,
+            },
+            SymbolDecl {
+                kind: SymbolKind::Subroutine,
+                name: "baz".to_string(),
+                qualified_name: "FooBar::baz".to_string(),
+                full_span: (21, 40),
+                anchor_span: Some((25, 28)),
+                // container is "Bar" (bare), not "FooBar"
+                container: Some("Bar".to_string()),
+                declarator: None,
+            },
+        ];
+
+        let facts = symbol_decls_to_semantic_facts(&decls, FileId(42));
+        // "Bar" is present in entity_by_name, so the edge should resolve to Bar.
+        // "FooBar" would be a wrong resolution.
+        assert_eq!(facts.defines_edges.len(), 1, "should have exactly one Defines edge");
+        let edge = &facts.defines_edges[0];
+        let bar_entity = facts
+            .entities
+            .iter()
+            .find(|e| e.canonical_name == "Bar")
+            .expect("Bar entity must exist");
+        assert_eq!(
+            edge.from_entity_id, bar_entity.id,
+            "Defines edge must point FROM Bar (not FooBar)"
+        );
+        let baz_entity = facts
+            .entities
+            .iter()
+            .find(|e| e.canonical_name == "FooBar::baz")
+            .expect("FooBar::baz entity must exist");
+        assert_eq!(edge.to_entity_id, baz_entity.id, "Defines edge must point TO FooBar::baz");
+        // No false unsupported reports — "Bar" container was found.
+        assert!(
+            facts.unsupported.is_empty(),
+            "unsupported should be empty; got: {:?}",
+            facts.unsupported
+        );
+    }
+
     #[test]
     fn unsupported_kinds_are_reported_explicitly() {
         let decls = vec![SymbolDecl {
@@ -218,6 +303,9 @@ mod tests {
         assert!(facts.entities.is_empty());
         assert!(facts.defines_edges.is_empty());
         assert_eq!(facts.unsupported.len(), 1);
-        assert_eq!(facts.unsupported[0].reason, "symbol kind is not yet representable as EntityFact");
+        assert_eq!(
+            facts.unsupported[0].reason,
+            "symbol kind is not yet representable as EntityFact"
+        );
     }
 }
