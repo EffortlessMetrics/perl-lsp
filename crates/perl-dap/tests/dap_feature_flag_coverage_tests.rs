@@ -1,7 +1,6 @@
 //! DAP Feature Flag Coverage Tests
 //!
-//! Explicit test coverage for 8 DAP features that previously had no dedicated
-//! feature-gate validation:
+//! Explicit test coverage for DAP features with dedicated feature-gate validation:
 //!
 //! - AC0: dap.core
 //! - AC1: dap.breakpoints.basic
@@ -11,13 +10,16 @@
 //! - AC5: dap.exceptions.die
 //! - AC6: dap.inline_values
 //! - AC7: dap.modules
+//! - AC8: dap.exceptions.warn
+//! - AC9: dap.watchpoints
+//! - AC10: dap.breakpoints.function (#5498)
 //!
 //! Each feature gets:
 //! 1. Feature gate test: `has_feature("dap.X")` returns true
 //! 2. Capability test: initialize response advertises the feature correctly
 //! 3. Functional test: feature-gated code path works when enabled
 //!
-//! Related issues: #2784, #435, #2783
+//! Related issues: #2784, #435, #2783, #5498
 
 use perl_dap::feature_catalog::has_feature;
 use perl_dap::{DapMessage, DebugAdapter};
@@ -995,15 +997,149 @@ fn test_functional_dap_watchpoints_data_breakpoint_roundtrip() -> TestResult {
 }
 
 // ---------------------------------------------------------------------------
+// AC10: dap.breakpoints.function
+// ---------------------------------------------------------------------------
+
+/// Feature gate: dap.breakpoints.function is registered in the catalog.
+#[test]
+fn test_feature_gate_dap_breakpoints_function() {
+    assert!(
+        has_feature("dap.breakpoints.function"),
+        "dap.breakpoints.function must be registered in the feature catalog"
+    );
+}
+
+/// Capability test: initialize advertises supportsFunctionBreakpoints when dap.core is enabled.
+///
+/// `supportsFunctionBreakpoints` is tied to core DAP support (process.rs:171) rather than
+/// to the `dap.breakpoints.function` feature flag directly, because function breakpoints
+/// are part of the baseline adapter capability set.
+#[test]
+fn test_capability_dap_breakpoints_function_initialize_response() -> TestResult {
+    let body = get_initialize_body()?;
+
+    let supports_fn_bp =
+        body.get("supportsFunctionBreakpoints").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    if has_feature("dap.core") {
+        assert!(
+            supports_fn_bp,
+            "supportsFunctionBreakpoints must be true when dap.core is enabled"
+        );
+    }
+    Ok(())
+}
+
+/// Functional test: setFunctionBreakpoints accepts a simple boolean-like condition string.
+///
+/// The DAP protocol accepts any string in the condition field; semantic evaluation
+/// is delegated to the Perl debugger at runtime. The adapter must not reject a
+/// well-formed function name just because the condition isn't syntactically validated.
+#[test]
+fn test_functional_dap_function_breakpoints_with_condition() -> TestResult {
+    if !has_feature("dap.breakpoints.function") {
+        return Ok(());
+    }
+
+    let mut adapter = initialize_adapter();
+    let args = json!({
+        "breakpoints": [{
+            "name": "main::test_func",
+            "condition": "$debug_flag"
+        }]
+    });
+    let response = adapter.handle_request(2, "setFunctionBreakpoints", Some(args));
+    let body = expect_success_body(response, "setFunctionBreakpoints")?;
+
+    let bps = body
+        .get("breakpoints")
+        .and_then(|v| v.as_array())
+        .ok_or("missing breakpoints array")?;
+    assert_eq!(bps.len(), 1, "setFunctionBreakpoints must return one record");
+    let verified = bps[0].get("verified").and_then(|v| v.as_bool()).unwrap_or(false);
+    assert!(verified, "breakpoint with valid name and condition must be verified");
+    Ok(())
+}
+
+/// Functional test: setFunctionBreakpoints accepts a scalar variable as condition.
+///
+/// Perl uses scalar truthiness for conditionals; `$count` is a valid condition
+/// that evaluates true when non-zero/non-empty. The protocol layer must not
+/// reject it — runtime truthiness is Perl's concern, not the adapter's.
+#[test]
+fn test_functional_dap_function_breakpoints_scalar_condition() -> TestResult {
+    if !has_feature("dap.breakpoints.function") {
+        return Ok(());
+    }
+
+    let mut adapter = initialize_adapter();
+    let args = json!({
+        "breakpoints": [{
+            "name": "My::Module::handler",
+            "condition": "$count"
+        }]
+    });
+    let response = adapter.handle_request(2, "setFunctionBreakpoints", Some(args));
+    let body = expect_success_body(response, "setFunctionBreakpoints")?;
+
+    let bps = body
+        .get("breakpoints")
+        .and_then(|v| v.as_array())
+        .ok_or("missing breakpoints array")?;
+    assert_eq!(bps.len(), 1, "setFunctionBreakpoints must return one record");
+    let verified = bps[0].get("verified").and_then(|v| v.as_bool()).unwrap_or(false);
+    assert!(
+        verified,
+        "breakpoint with scalar condition `$count` must be verified (protocol accepts; runtime evaluates Perl truthiness)"
+    );
+    Ok(())
+}
+
+/// Functional test: setFunctionBreakpoints accepts a compound boolean condition.
+///
+/// Compound conditions using `&&` and function calls like `defined()` are valid
+/// Perl boolean expressions. The adapter stores the condition string verbatim
+/// for the debugger to evaluate — no protocol-layer validation of expression form.
+#[test]
+fn test_functional_dap_function_breakpoints_complex_condition() -> TestResult {
+    if !has_feature("dap.breakpoints.function") {
+        return Ok(());
+    }
+
+    let mut adapter = initialize_adapter();
+    let args = json!({
+        "breakpoints": [{
+            "name": "process_request",
+            "condition": "defined($ENV{DEBUG}) && $ENV{DEBUG} > 0"
+        }]
+    });
+    let response = adapter.handle_request(2, "setFunctionBreakpoints", Some(args));
+    let body = expect_success_body(response, "setFunctionBreakpoints")?;
+
+    let bps = body
+        .get("breakpoints")
+        .and_then(|v| v.as_array())
+        .ok_or("missing breakpoints array")?;
+    assert_eq!(bps.len(), 1, "setFunctionBreakpoints must return one record");
+    let verified = bps[0].get("verified").and_then(|v| v.as_bool()).unwrap_or(false);
+    assert!(
+        verified,
+        "breakpoint with compound condition must be verified (adapter does not validate condition syntax)"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Cross-feature: feature catalog completeness
 // ---------------------------------------------------------------------------
 
-/// All 10 DAP features must be registered in the feature catalog.
+/// All 11 DAP features must be registered in the feature catalog.
 #[test]
 fn test_all_dap_features_registered_in_catalog() {
     let dap_features = [
         "dap.core",
         "dap.breakpoints.basic",
+        "dap.breakpoints.function",
         "dap.breakpoints.hit_condition",
         "dap.breakpoints.logpoints",
         "dap.completions",

@@ -635,7 +635,7 @@ area = "debug"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs", "crates/perl-dap/tests/dap_non_regression_tests.rs"]
+tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs", "crates/perl-dap/tests/dap_non_regression_tests.rs", "crates/perl-dap/tests/dap_feature_flag_coverage_tests.rs"]
 description = "Function breakpoints (setFunctionBreakpoints) by subroutine name"
 
 [[feature]]
