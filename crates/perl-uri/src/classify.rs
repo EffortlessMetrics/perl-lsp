@@ -42,10 +42,11 @@ pub fn uri_key(uri: &str) -> String {
 
         if let Some(rest) = value.strip_prefix("file:///")
             && rest.len() > 1
-            && rest.as_bytes()[1] == b':'
+            && (rest.as_bytes()[1] == b':' || rest.as_bytes()[1] == b'|')
             && rest.as_bytes()[0].is_ascii_alphabetic()
         {
-            return format!("file:///{}{}", rest[0..1].to_ascii_lowercase(), &rest[1..]);
+            let separator = if rest.as_bytes()[1] == b'|' { ":" } else { &rest[1..2] };
+            return format!("file:///{}{}{}", rest[0..1].to_ascii_lowercase(), separator, &rest[2..]);
         }
         value
     } else {
@@ -96,12 +97,17 @@ fn normalize_windows_path_to_key(path: &str) -> Option<String> {
     }
 
     let bytes = path.as_bytes();
-    if !bytes[0].is_ascii_alphabetic() || bytes[1] != b':' {
+    if !bytes[0].is_ascii_alphabetic() || (bytes[1] != b':' && bytes[1] != b'|') {
         return None;
     }
 
     // Replace backslashes with forward slashes.
     let mut normalized = path.replace('\\', "/");
+
+    // Convert legacy drive separators (`C|`) to `C:`.
+    if normalized.as_bytes().get(1) == Some(&b'|') {
+        normalized.replace_range(1..2, ":");
+    }
 
     // Ensure there is a separator after the drive colon: `C:foo` → `C:/foo`.
     if normalized.as_bytes().get(2) != Some(&b'/') {
@@ -205,6 +211,12 @@ mod tests {
             uri_key("file://D:/projects/MyApp/script.pl"),
             "file:///d:/projects/MyApp/script.pl"
         );
+    }
+
+    #[test]
+    fn normalizes_legacy_windows_drive_pipe_separator() {
+        assert_eq!(uri_key("file:///C|/Users/dev/example.pl"), "file:///c:/Users/dev/example.pl");
+        assert_eq!(uri_key(r"file://D|\projects\MyApp\script.pl"), "file:///d:/projects/MyApp/script.pl");
     }
 
     #[test]
