@@ -53,6 +53,15 @@ fn scenario_19_diagnostics_clear_after_fix() {
     );
 
     // Drain the event queue so post-fix checks only see new notifications.
+    //
+    // Two-pass flush: the stdout reader thread may still be delivering in-flight
+    // events from the broken-content analysis (async diagnostics pipeline).  A
+    // single drain races with those deliveries — the queue can appear empty, then
+    // the late events arrive and get misclassified as "post-fix".  Waiting a
+    // brief settle window (≥ one server round-trip) and draining again eliminates
+    // that window reliably.
+    harness.collect_notifications();
+    std::thread::sleep(Duration::from_millis(300));
     harness.collect_notifications();
 
     // When: the user fixes the file via a full-document didChange.
