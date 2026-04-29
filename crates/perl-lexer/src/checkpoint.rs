@@ -210,14 +210,12 @@ impl CheckpointCache {
 
         let position = checkpoint.position;
 
-        // Remove any existing checkpoint at this position
-        self.checkpoints.retain(|(pos, _)| *pos != position);
-
-        // Add the new checkpoint
-        self.checkpoints.push((position, checkpoint));
-
-        // Sort by position
-        self.checkpoints.sort_by_key(|(pos, _)| *pos);
+        // Maintain sorted order incrementally: replace existing entry at this
+        // position or insert at the correct sorted index.
+        match self.checkpoints.binary_search_by_key(&position, |(pos, _)| *pos) {
+            Ok(idx) => self.checkpoints[idx] = (position, checkpoint),
+            Err(idx) => self.checkpoints.insert(idx, (position, checkpoint)),
+        }
 
         // Trim to max size
         if self.checkpoints.len() > self.max_checkpoints {
@@ -413,6 +411,25 @@ mod tests {
         let cp = cache.find_before(5);
         assert!(cp.is_none(), "before first entry (5 < 10) should return None");
 
+        Ok(())
+    }
+
+
+    #[test]
+    fn test_checkpoint_cache_add_replaces_same_position() -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let mut cache = CheckpointCache::new(5);
+
+        let mut first = LexerCheckpoint::at_position(10);
+        first.mode = LexerMode::ExpectTerm;
+        cache.add(first);
+
+        let mut replacement = LexerCheckpoint::at_position(10);
+        replacement.mode = LexerMode::ExpectOperator;
+        cache.add(replacement);
+
+        assert_eq!(cache.checkpoints.len(), 1, "same-position checkpoint should replace in place");
+        let cp = cache.find_before(10).ok_or("expected checkpoint at position 10")?;
+        assert_eq!(cp.mode, LexerMode::ExpectOperator, "replacement checkpoint should win");
         Ok(())
     }
 
