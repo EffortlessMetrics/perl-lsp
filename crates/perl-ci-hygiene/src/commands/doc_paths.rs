@@ -12,18 +12,11 @@ pub(crate) fn check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Resul
     let users_name_path = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
 
     if !docs_path.is_dir() {
-        return Err(color_eyre::eyre::eyre!(
-            "Docs directory not found: {}",
-            docs_path.display()
-        ));
+        return Err(color_eyre::eyre::eyre!("Docs directory not found: {}", docs_path.display()));
     }
 
-    let (hard_failures, warnings) = scan_docs(
-        repo_root,
-        &docs_path,
-        &home_user_path,
-        &users_name_path,
-    )?;
+    let (hard_failures, warnings) =
+        scan_docs(repo_root, &docs_path, &home_user_path, &users_name_path)?;
 
     if !warnings.is_empty() {
         println!("⚠️  Found macOS user paths that may be machine-specific");
@@ -92,9 +85,7 @@ fn scan_docs(
 
 pub(crate) fn has_machine_specific_home_path(line: &str, home_user_path: &Regex) -> bool {
     home_user_path.captures_iter(line).any(|captures| {
-        captures
-            .get(1)
-            .is_some_and(|name| !name.as_str().eq_ignore_ascii_case("user"))
+        captures.get(1).is_some_and(|name| !name.as_str().eq_ignore_ascii_case("user"))
     })
 }
 
