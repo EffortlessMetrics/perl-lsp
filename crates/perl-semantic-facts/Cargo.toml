@@ -1,0 +1,28 @@
+[package]
+name = "perl-semantic-facts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-semantic-facts"
+description = "Neutral semantic fact vocabulary for Perl analysis layers"
+readme = "README.md"
+keywords = ["perl", "semantic", "facts", "analysis", "lsp"]
+categories = ["development-tools", "data-structures"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
