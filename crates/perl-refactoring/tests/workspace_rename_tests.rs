@@ -28,9 +28,8 @@ fn setup_workspace(
         std::fs::write(&path, content)?;
 
         // Index the file in the workspace index
-        let uri = Url::from_file_path(&path).map_err(|_| {
-            format!("failed to create file URL from path: {}", path.display())
-        })?;
+        let uri = Url::from_file_path(&path)
+            .map_err(|_| format!("failed to create file URL from path: {}", path.display()))?;
         index
             .index_file_str(uri.as_str(), content)
             .map_err(|e| format!("index_file_str failed: {}", e))?;
