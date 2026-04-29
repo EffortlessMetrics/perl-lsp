@@ -54,14 +54,20 @@ fn scenario_19_diagnostics_clear_after_fix() {
 
     // Drain the event queue so post-fix checks only see new notifications.
     //
-    // Two-pass flush: the stdout reader thread may still be delivering in-flight
-    // events from the broken-content analysis (async diagnostics pipeline).  A
-    // single drain races with those deliveries — the queue can appear empty, then
-    // the late events arrive and get misclassified as "post-fix".  Waiting a
-    // brief settle window (≥ one server round-trip) and draining again eliminates
-    // that window reliably.
+    // Three-pass flush: the stdout reader thread may still be delivering in-flight
+    // events from the broken-content analysis (async diagnostics pipeline).
+    // - First drain: remove any already-buffered events.
+    // - Settle window: wait for in-flight events from the server to arrive.
+    // - Second drain: remove events that arrived during the settle window.
+    // - Final drain immediately before didChange: close the race window between
+    //   the settle and the send.  Events that slip in during this last tiny gap
+    //   are cleared before we record the post-fix baseline.
     harness.collect_notifications();
     std::thread::sleep(Duration::from_millis(300));
+    harness.collect_notifications();
+
+    // Final drain immediately before the fix — eliminates events that snuck in
+    // between the settle drain and the didChange notification.
     harness.collect_notifications();
 
     // When: the user fixes the file via a full-document didChange.
@@ -70,13 +76,23 @@ fn scenario_19_diagnostics_clear_after_fix() {
     // Then: diagnostics eventually clear. Two acceptable outcomes:
     //   (a) Server sends explicit publishDiagnostics with empty array → cleared.
     //   (b) No new non-empty notification arrives within the grace period → also cleared.
+    //
+    // Important: we accumulate ONLY events that arrive after the final pre-fix drain
+    // by draining periodically and appending to a local list.  Using peek_notifications
+    // would re-read pre-fix events that raced into the queue between the drain and the
+    // didChange send, producing false failures when the server never sends an explicit
+    // empty clear for the fixed content.
     let uri = harness.workspace.uri("live.pl");
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
 
+    let mut post_fix_events: Vec<LspEvent> = Vec::new();
     let mut cleared = false;
+
     while std::time::Instant::now() < deadline {
-        let events = harness.peek_notifications();
-        let post_fix_diag_events: Vec<_> = events
+        // Drain any new events since the last iteration and append to our local list.
+        post_fix_events.extend(harness.collect_notifications());
+
+        let post_fix_diag_events: Vec<_> = post_fix_events
             .iter()
             .filter_map(|ev| match ev {
                 LspEvent::Diagnostics { uri: event_uri, diagnostics } if event_uri == &uri => {
@@ -98,10 +114,9 @@ fn scenario_19_diagnostics_clear_after_fix() {
         std::thread::sleep(Duration::from_millis(100));
     }
 
-    // Accept silence (no new non-empty notification) as "cleared" too.
+    // Accept silence (no new non-empty notification in our post-fix window) as "cleared" too.
     if !cleared {
-        let events = harness.peek_notifications();
-        let has_new_errors = events.iter().any(|ev| {
+        let has_new_errors = post_fix_events.iter().any(|ev| {
             matches!(ev, LspEvent::Diagnostics { uri: event_uri, diagnostics }
                 if event_uri == &uri && !diagnostics.is_empty())
         });
@@ -111,7 +126,7 @@ fn scenario_19_diagnostics_clear_after_fix() {
     assert!(
         cleared,
         "Expected diagnostics to clear (or no new errors) after fixing the file; events: {:?}",
-        harness.peek_notifications()
+        post_fix_events
     );
     harness.assert_no_crash();
 }
