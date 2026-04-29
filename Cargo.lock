@@ -1860,6 +1860,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-semantic-facts"
+version = "0.12.4"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "perl-subprocess-runtime"
 version = "0.12.4"
 dependencies = [

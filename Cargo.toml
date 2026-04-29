@@ -12,6 +12,7 @@ members = [
     "crates/perl-parser-core",
     "crates/perl-parser-pest",
     "crates/perl-semantic-analyzer",
+    "crates/perl-semantic-facts",
     "crates/perl-workspace-index",
     "crates/perl-refactoring",
     "crates/perl-incremental-parsing",
@@ -288,6 +289,7 @@ perl-diagnostics = { path = "crates/perl-diagnostics", version = "0.12.4" }
 perl-workspace = { path = "crates/perl-workspace-index", version = "0.12.4" }
 perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.12.4" }
 perl-refactoring = { path = "crates/perl-refactoring", version = "0.12.4" }
+perl-semantic-facts = { path = "crates/perl-semantic-facts", version = "0.12.4" }
 
 # Tier 4: Three-level dependencies
 perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer", version = "0.12.4" }
