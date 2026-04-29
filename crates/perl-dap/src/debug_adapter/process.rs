@@ -84,16 +84,20 @@ fn format_perl_spawn_error(perl_interpreter: &str, error: &std::io::Error) -> St
     if error.kind() == std::io::ErrorKind::NotFound {
         #[cfg(windows)]
         {
-            return format!("Perl executable ('{perl_interpreter}') is not available on PATH. Install Perl from \
+            return format!(
+                "Perl executable ('{perl_interpreter}') is not available on PATH. Install Perl from \
                     https://strawberryperl.com (or ActivePerl), then reload VS Code. \
-                    You can also set `perl-lsp.perl.path` or launch.json `perl` to a full Perl path.");
+                    You can also set `perl-lsp.perl.path` or launch.json `perl` to a full Perl path."
+            );
         }
         #[cfg(not(windows))]
         {
-            return format!("Perl executable ('{perl_interpreter}') is not available on PATH. Install Perl with your package manager \
+            return format!(
+                "Perl executable ('{perl_interpreter}') is not available on PATH. Install Perl with your package manager \
                     (for example `brew install perl`, `apt install perl`, or your distro equivalent), \
                     then reload VS Code. You can also set `perl-lsp.perl.path` or launch.json `perl` \
-                    to a full Perl path.");
+                    to a full Perl path."
+            );
         }
     }
 
@@ -243,7 +247,13 @@ impl DebugAdapter {
                 .unwrap_or_default();
 
             // Launch Perl debugger
-            match self.launch_debugger(program, perl_interpreter, perl_args, stop_on_entry, env_overrides) {
+            match self.launch_debugger(
+                program,
+                perl_interpreter,
+                perl_args,
+                stop_on_entry,
+                env_overrides,
+            ) {
                 Ok(thread_id) => {
                     // Send stopped event if stop on entry
                     if stop_on_entry {
@@ -1856,13 +1866,15 @@ mod tests {
         }
     }
 
-
     #[test]
     fn format_perl_spawn_error_includes_custom_interpreter_name() {
         let error = std::io::Error::new(std::io::ErrorKind::NotFound, "No such file or directory");
         let message = format_perl_spawn_error("/custom/perl", &error);
 
-        assert!(message.contains("/custom/perl"), "expected interpreter path in message, got: {message}");
+        assert!(
+            message.contains("/custom/perl"),
+            "expected interpreter path in message, got: {message}"
+        );
     }
     #[test]
     fn format_perl_spawn_error_for_missing_perl_is_actionable() {
