@@ -67,10 +67,11 @@ use crate::document_store::{Document, DocumentStore};
 use crate::position::{Position, Range};
 use crate::workspace::monitoring::IndexInstrumentation;
 use parking_lot::RwLock;
-use perl_semantic_facts::{
-    AnchorFact, AnchorId, Confidence, EdgeFact, EntityFact, EntityId, EntityKind, FileId, Provenance,
-};
 use perl_position_tracking::{WireLocation, WirePosition, WireRange};
+use perl_semantic_facts::{
+    AnchorFact, AnchorId, Confidence, EdgeFact, EntityFact, EntityId, EntityKind, FileId,
+    Provenance,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -2268,7 +2269,10 @@ impl WorkspaceIndex {
             entities.push(EntityFact {
                 id: EntityId((idx + 1) as u64),
                 kind: EntityKind::Unknown,
-                canonical_name: symbol.qualified_name.clone().unwrap_or_else(|| symbol.name.clone()),
+                canonical_name: symbol
+                    .qualified_name
+                    .clone()
+                    .unwrap_or_else(|| symbol.name.clone()),
                 anchor_id: Some(anchor_id),
                 scope_id: None,
                 provenance: Provenance::SearchFallback,
