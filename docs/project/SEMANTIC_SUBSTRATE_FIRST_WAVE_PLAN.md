@@ -1,132 +1,179 @@
-# Semantic Substrate First-Wave Plan (Rails Before Cutover)
+# Semantic Substrate Initiative Plan (Rails, Wave 2, and Migration Path)
 
-This document defines the first-wave execution plan for improving workspace-wide awareness and semantic analysis without cutting LSP providers over yet.
+This document captures the current execution plan for the semantic-substrate initiative:
+
+- what Wave 1 delivered,
+- what Wave 2 should deliver,
+- and how we sequence user-visible migrations afterward.
 
 ## Principle
 
-Produce the **most reviewable and tested complete slice** for each PR. Do not optimize for tiny diffs; optimize for reviewers proving correctness quickly.
+Produce the **most reviewable and tested complete slice** for each PR. Optimize for evidence density and correctness proof, not smallest diff.
 
-The dependency chain is:
+Core dependency chain:
 
 ```text
 facts schema
 → exact adapters
-→ workspace store
-→ query APIs
+→ workspace storage
+→ typed indexes + query compatibility
+→ shadow-compare receipts + scorecards
 → provider migration
 ```
 
-First wave focuses on preparing the rails:
+## Initiative Goal
 
-1. Canonical semantic vocabulary (facts, typed IDs, provenance, confidence).
-2. Fixture-heavy regression banks that lock down current behavior.
-3. Scorecards and migration contracts so follow-on implementation PRs are measurable.
+Stop carrying overlapping semantic truth in incompatible shapes across `perl-symbol`, `perl-workspace`, and `perl-semantic-analyzer`.
 
-## Box Overview
+Target architecture:
 
-| Box | Purpose | Merge Dependency |
-|---:|---|---|
-| 1 | Add `perl-semantic-facts` crate skeleton | Foundation; merge first if good |
-| 2 | Add semantic fixture / scorecard harness | Independent |
-| 3 | Add workspace definition ambiguity regression bank | Independent |
-| 4 | Add typed-reference regression bank | Independent |
-| 5 | Add import/export visibility regression bank | Independent |
-| 6 | Add `SymbolRef` phase-2 fixture bank | Independent |
-| 7 | Add package/class/role/generated-member fixture bank | Independent |
-| 8 | Add semantic-substrate architecture doc / query API contract | Independent |
-| 9 | Add workspace shadow-compare design stub | Independent (doc/test-only) |
-| 10 | Add release-readiness semantic scorecard integration | Independent |
+- one canonical typed fact substrate,
+- facts with anchors, occurrences, stable entities, typed edges, provenance, and confidence,
+- `perl-workspace` as a derived index/query layer rather than a semantic attic.
 
-## Suggested Merge Order
+## Wave 1 (Rails) — Delivered Scope
 
-1. Box 8 docs
-2. Box 2 scorecard harness
-3. Boxes 3–7 fixture banks
-4. Box 9 shadow-compare receipt shape
-5. Box 10 release-readiness integration
-6. Box 1 semantic-facts crate skeleton
+Wave 1 prepared foundations without provider cutover:
 
-This ordering reduces architecture ambiguity before load-bearing implementation work lands.
+1. Canonical semantic vocabulary (`perl-semantic-facts`).
+2. Fixture/regression banks for current behavior.
+3. Scorecard and contract scaffolding for measurable follow-on work.
+4. Query-contract and shadow-compare design rails.
 
-## Box 1 Contract: `perl-semantic-facts`
+## Wave 2 (Facts Become Real, No Provider Migration)
 
-`perl-semantic-facts` is a neutral vocabulary crate, not a parser, not a provider, and not workspace storage.
+Wave 2 must make facts flow through producers and workspace internals while preserving existing public behavior.
 
-### Core IDs
+### Target State After Wave 2
 
-- `FileId`
-- `ScopeId`
-- `EntityId`
-- `AnchorId`
-- `OccurrenceId`
-- `EdgeId`
-- `DiagnosticId`
+```text
+perl-symbol / exporter / workspace
+  → emit canonical facts
 
-### Core Fact Types
-
-- `AnchorFact`
-- `EntityFact`
-- `OccurrenceFact`
-- `EdgeFact`
-- `DiagnosticFact`
-
-### Core Enums
-
-- `EntityKind`
-- `OccurrenceKind`
-- `EdgeKind`
-- `Provenance`
-- `Confidence`
-
-The initial implementation should include deterministic serialization/roundtrip tests and crate docs clarifying scope boundaries.
-
-## Query API Contract (Targeted, Not Yet Fully Implemented)
-
-Future provider consumers should target query APIs rather than internal maps:
-
-```rust
-symbol_at(uri, pos)
-definitions(occurrence, policy)
-references(entity, scope, filter)
-visible_symbols_at(uri, pos, context)
-method_candidates(receiver, prefix)
-rename_plan(entity, new_name)
-safe_delete_plan(entity)
+perl-workspace
+  → stores fact shards
+  → builds typed definition/reference indexes
+  → keeps old public APIs working
+  → can compare old vs new query answers
 ```
 
-## Wave 2 (After First-Wave Rails Land)
+No completion migration yet. No diagnostics migration yet. No rename migration yet.
 
-1. `SymbolDecl -> EntityFact` adapter.
-2. `SymbolRef -> OccurrenceFact` adapter.
-3. `ExportInfo -> ExportSet` adapter.
-4. `FileFactShard` write-through in workspace store.
-5. Definition-candidate multimap behind compatibility APIs.
-6. Typed reference-edge global index behind compatibility APIs.
+### Wave 2 Boxes
 
-## Wave 3 (User-Visible Cutover Staging)
+| Box | Purpose | Provider behavior change? |
+|---:|---|---|
+| 1 | `SymbolDecl -> EntityFact` adapter | No |
+| 2 | `SymbolRef -> OccurrenceFact` adapter | No |
+| 3 | `ExportInfo -> ExportSet` adapter | No |
+| 4 | `FileFactShard` write-through store in `perl-workspace` | No |
+| 5 | `DefinitionCandidate` multimap behind compatibility APIs | No / shadow-only acceptable |
+| 6 | Typed `ReferenceEdge` global index behind compatibility APIs | No / shadow-only acceptable |
+| 7 | Shadow-compare receipts for definition/reference queries | No |
+| 8 | Semantic scorecard v1: fact counts + fixture coverage | No |
 
-1. `ImportSpec` extraction.
-2. `VisibleSymbols` query implementation.
-3. Completion consumes `VisibleSymbols` behind a feature flag.
-4. Undefined diagnostics consume `VisibleSymbols` behind a feature flag.
+### Merge Order for Wave 2
 
-## Out of Scope for First Wave
+Do not merge blindly in numeric order.
 
-- Full provider migration.
-- Broad rewrite of existing semantic producers.
-- Claiming implementation completeness before fixtures and scorecards prove behavior.
+```text
+1. Boxes 1–3: exact adapters
+2. Box 8: scorecard v1 (if consuming adapter outputs cleanly)
+3. Box 4: FileFactShard write-through
+4. Boxes 5–6: candidate/reference indexes
+5. Box 7: shadow compare receipts
+```
 
-## Verification Expectations by Box
+If Box 4 lands before 5/6 are ready, merge Box 4 first and rebase/cascade 5/6 on top.
 
-- Box 1: `cargo test -p perl-semantic-facts`, `cargo check --workspace --all-targets`
-- Box 2: `cargo test -p xtask`, `cargo xtask semantic-scorecard`, `cargo check --workspace --all-targets`
-- Boxes 3–7: crate-targeted test commands per fixture bank plus workspace check
-- Box 8/9/10: at minimum `cargo check --workspace --all-targets`
+### Wave 2 Completion Criteria
 
-## Canonical Inputs and Truth Sources
+Wave 2 is successful when:
 
-- Workspace/version truth: `Cargo.toml`
-- Capability truth: `features.toml`
-- Evidence-backed status: `docs/project/CURRENT_STATUS.md`
-- Canonical planning: `docs/project/ROADMAP.md`
+```text
+Symbol declarations can become canonical entities.
+Symbol references can become canonical occurrences.
+Exporter analysis can become canonical export sets.
+Workspace can store per-file fact shards.
+Workspace can represent multiple definition candidates.
+Workspace can preserve typed references globally.
+Old and new query answers can be compared.
+Semantic scorecard can show fact coverage.
+```
 
+## Path After Wave 2
+
+After Wave 2, facts are emitted, stored, indexed, and comparable. Then migrate consumers in risk-aware order.
+
+### Wave 3 — Imports and Visibility
+
+Build:
+
+- `ImportSpec` extraction,
+- `ImportExportIndex`,
+- `visible_symbols_at(uri, offset) -> Vec<VisibleSymbol>`.
+
+Why first: quickest user-visible semantic payoff and resolves completion/diagnostics/import contradictions.
+
+### Wave 4 — Low-Risk Query Consumer Migration
+
+Migrate first:
+
+- goto-definition,
+- find-references,
+- count-usages,
+- safe candidate ranking upgrades.
+
+Why before diagnostics/rename: navigation regressions are easier to validate and recover from.
+
+### Wave 5 — Completion + Undefined Diagnostics
+
+Move completion to visibility-aware graph first, then undefined diagnostics with confidence/provenance/dynamic-boundary awareness.
+
+### Wave 6 — Package Graph + Generated Members
+
+Add inheritance/role/generated-member modeling and wire into completion/navigation/diagnostics.
+
+### Wave 7 — Value-Shape Lite
+
+Add lightweight receiver shape (not full type inference) to improve method candidate ranking.
+
+### Wave 8 — Rename/Safe-Delete Plans
+
+Only after graph quality is proven by scorecards and shadow-compare evidence.
+
+### Wave 9 — Incremental Invalidation + Release Proof
+
+Harden performance/invalidation and publish quality scorecards against real workspace baselines.
+
+## Explicitly Out of Scope for Wave 2
+
+- Completion migration.
+- Undefined-symbol diagnostics migration.
+- Rename/safe-delete migration.
+- Full package graph.
+- Generated-member framework completeness (Moose/Moo/etc.).
+- External `@INC`/CPAN index.
+- On-disk semantic persistence.
+- Full type/value-shape inference.
+
+## Verification Expectations
+
+For implementation PRs in this initiative, prefer crate-scoped checks plus workspace compile checks:
+
+- `cargo test -p <crate>`
+- `cargo check --all-targets -p <crate>`
+- `cargo xtask fmt`
+- `cargo clippy -p <crate>`
+- `just pr-fast`
+
+Use shadow-compare receipts and scorecards as migration evidence before provider cutovers.
+
+## Canonical Truth Sources
+
+Before stating project counts, versions, or capability coverage, verify against:
+
+- `Cargo.toml` (workspace members/version)
+- `features.toml` (capability catalog)
+- `docs/project/CURRENT_STATUS.md` (evidence-backed metrics)
+- `docs/project/ROADMAP.md` (canonical roadmap)
