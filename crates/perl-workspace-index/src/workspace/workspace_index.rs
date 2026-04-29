@@ -1167,8 +1167,9 @@ impl WorkspaceIndex {
         });
     }
 
-    fn definition_candidate_sort_key(candidate: &DefinitionCandidate) -> (u8, &str, u32, u32, u32, u32)
-    {
+    fn definition_candidate_sort_key(
+        candidate: &DefinitionCandidate,
+    ) -> (u8, &str, u32, u32, u32, u32) {
         let rank = match candidate.kind {
             SymbolKind::Subroutine | SymbolKind::Method => 0,
             SymbolKind::Constant => 1,
@@ -1205,7 +1206,10 @@ impl WorkspaceIndex {
             }
         }
         for entries in symbols.values_mut() {
-            entries.sort_by(|left, right| Self::definition_candidate_sort_key(left).cmp(&Self::definition_candidate_sort_key(right)));
+            entries.sort_by(|left, right| {
+                Self::definition_candidate_sort_key(left)
+                    .cmp(&Self::definition_candidate_sort_key(right))
+            });
             entries.dedup();
         }
     }
@@ -1260,7 +1264,10 @@ impl WorkspaceIndex {
                 }
             }
             for entries in symbols.values_mut() {
-                entries.sort_by(|left, right| Self::definition_candidate_sort_key(left).cmp(&Self::definition_candidate_sort_key(right)));
+                entries.sort_by(|left, right| {
+                    Self::definition_candidate_sort_key(left)
+                        .cmp(&Self::definition_candidate_sort_key(right))
+                });
                 entries.dedup();
             }
         }
@@ -1284,7 +1291,10 @@ impl WorkspaceIndex {
             });
         }
         for entries in symbols.values_mut() {
-            entries.sort_by(|left, right| Self::definition_candidate_sort_key(left).cmp(&Self::definition_candidate_sort_key(right)));
+            entries.sort_by(|left, right| {
+                Self::definition_candidate_sort_key(left)
+                    .cmp(&Self::definition_candidate_sort_key(right))
+            });
             entries.dedup();
         }
     }
@@ -2232,7 +2242,10 @@ impl WorkspaceIndex {
                 kind: SymbolKind::Subroutine,
             });
             if let Some(candidates) = symbols.get_mut(symbol_name) {
-                candidates.sort_by(|left, right| Self::definition_candidate_sort_key(left).cmp(&Self::definition_candidate_sort_key(right)));
+                candidates.sort_by(|left, right| {
+                    Self::definition_candidate_sort_key(left)
+                        .cmp(&Self::definition_candidate_sort_key(right))
+                });
                 candidates.dedup();
             }
             return Some(location);
@@ -2245,7 +2258,9 @@ impl WorkspaceIndex {
         let symbols = self.symbols.read();
         symbols
             .get(symbol_name)
-            .map(|candidates| candidates.iter().map(|candidate| candidate.location.clone()).collect())
+            .map(|candidates| {
+                candidates.iter().map(|candidate| candidate.location.clone()).collect()
+            })
             .unwrap_or_default()
     }
 
@@ -5650,6 +5665,48 @@ helper_one();
 
         must(index.index_file(uri, "package A;\nsub foo { 2 }\n1;\n".to_string()));
         assert_eq!(index.definition_candidates("A::foo").len(), 1);
+    }
+
+    /// Verify that `incremental_remove_symbols` correctly retains candidates owned by
+    /// other files when the removed file had BOTH exclusively-owned names (triggering the
+    /// full-rebuild path) AND shared names. Before this fix, the full-rebuild path cleared
+    /// all candidates and relied on the subsequent rebuild to re-add shared ones — correct
+    /// in effect, but the test documents the expected observable behavior.
+    #[test]
+    fn test_definition_candidates_shared_symbol_survives_removal_of_sole_owner_of_other_symbol() {
+        let index = WorkspaceIndex::new();
+        let uri_a = must(url::Url::parse("file:///lib/A.pm"));
+        let uri_b = must(url::Url::parse("file:///lib/B.pm"));
+
+        // A defines both `unique_to_a` (no other file) and `shared` (also in B)
+        must(index.index_file(
+            uri_a.clone(),
+            "package A;\nsub unique_to_a { 1 }\nsub shared { 1 }\n1;\n".to_string(),
+        ));
+        must(index.index_file(uri_b.clone(), "package B;\nsub shared { 1 }\n1;\n".to_string()));
+
+        // Before removal: both shared candidates and unique_to_a are present
+        assert_eq!(index.definition_candidates("shared").len(), 2);
+        assert_eq!(index.definition_candidates("unique_to_a").len(), 1);
+
+        // Remove A — triggers the affected_names path for `unique_to_a`, but `shared`
+        // still has B's candidate.
+        index.remove_file(uri_a.as_str());
+
+        assert!(
+            index.definition_candidates("unique_to_a").is_empty(),
+            "unique_to_a should be gone after removing A"
+        );
+        assert_eq!(
+            index.definition_candidates("shared").len(),
+            1,
+            "shared should still have B's candidate after removing A"
+        );
+        assert_eq!(
+            index.definition_candidates("shared")[0].uri,
+            "file:///lib/B.pm",
+            "remaining shared candidate must be from B"
+        );
     }
 
     #[test]
