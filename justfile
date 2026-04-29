@@ -767,7 +767,7 @@ devex-targeted base='' mode='all':
     fi
     if [ -z "$base" ]; then
         echo "ERROR: Could not auto-detect base branch."
-        echo "Hint: run 'just devex-targeted <base-ref>' (example: origin/main)."
+        echo "Hint: run 'just devex-targeted <base-ref>' (examples: origin/main, origin/master, main, master)."
         exit 1
     fi
     echo "Running targeted checks (base=$base, mode={{mode}})..."
