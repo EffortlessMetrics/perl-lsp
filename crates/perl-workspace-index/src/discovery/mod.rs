@@ -423,6 +423,7 @@ mod tests {
         assert_eq!(excluded_count, 1);
     }
 
+    #[cfg(unix)]
     #[test]
     fn parse_git_output_excludes_absolute_paths() {
         let root = Path::new("/tmp/workspace");
