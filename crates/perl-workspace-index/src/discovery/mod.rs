@@ -424,6 +424,29 @@ mod tests {
     }
 
     #[test]
+    fn parse_git_output_excludes_absolute_paths() {
+        let root = Path::new("/tmp/workspace");
+        // git ls-files should never emit absolute paths, but defend against
+        // a corrupted or adversarial git output that attempts path escape.
+        let payload = b"/etc/passwd\0lib/ok.pm\0";
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(files, vec![root.join("lib/ok.pm")]);
+        assert_eq!(excluded_count, 1);
+    }
+
+    #[test]
+    fn parse_git_output_excludes_embedded_parent_directory_traversal() {
+        let root = Path::new("/tmp/workspace");
+        // Embedded `..` must be rejected even when not at the start of the path.
+        let payload = b"lib/../../etc/passwd\0lib/ok.pm\0";
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(files, vec![root.join("lib/ok.pm")]);
+        assert_eq!(excluded_count, 1);
+    }
+
+    #[test]
     fn parse_git_output_deduplicates_duplicate_entries() {
         let root = Path::new("/tmp/workspace");
         let payload = b"lib/Foo.pm\0lib/Foo.pm\0script.pl\0script.pl\0README.md\0";
