@@ -23,8 +23,8 @@ fn binary_available() -> bool {
     perl_lsp_ux_tests::resolve_binary().is_ok()
 }
 
-const BROKEN_SOURCE: &str = "use strict;\nmy $x = ;\n";
-const FIXED_SOURCE: &str = "use strict;\nmy $x = 1;\n";
+const BROKEN_SOURCE: &str = "use strict;\nuse warnings;\nmy $x = ;\n";
+const FIXED_SOURCE: &str = "use strict;\nuse warnings;\nmy $x = 1;\nprint $x;\n";
 
 /// Verifies the diagnostics edit lifecycle:
 ///   1. Broken content → diagnostics appear.
@@ -108,6 +108,10 @@ fn scenario_19_diagnostics_clear_after_fix() {
         cleared = !has_new_errors;
     }
 
-    assert!(cleared, "Expected diagnostics to clear (or no new errors) after fixing the file.");
+    assert!(
+        cleared,
+        "Expected diagnostics to clear (or no new errors) after fixing the file; events: {:?}",
+        harness.peek_notifications()
+    );
     harness.assert_no_crash();
 }
