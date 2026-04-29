@@ -137,7 +137,13 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
         let formatted = match self.run_perltidy(&text_to_format, options) {
             Ok(formatted) => formatted,
             Err(FormattingError::PerltidyNotFound(message)) => {
-                let rust_only_formatted = apply_lsp_whitespace_options(&text_to_format, options);
+                // `text_to_format` is a line-joined fragment (no surrounding newlines).
+                // `apply_lsp_whitespace_options` may append a trailing '\n' when
+                // `insert_final_newline` is true; strip it here so the LSP edit
+                // `new_text` does not inject an extra blank line into the document
+                // (the range replacement already sits between existing newlines).
+                let raw = apply_lsp_whitespace_options(&text_to_format, options);
+                let rust_only_formatted = raw.trim_end_matches('\n').to_string();
                 if rust_only_formatted == text_to_format {
                     return Err(FormattingError::PerltidyNotFound(message));
                 }
@@ -341,6 +347,31 @@ line3
 
         assert_eq!(formatted.edits.len(), 1);
         assert_eq!(formatted.edits[0].new_text, "my $x = 1;");
+        Ok(())
+    }
+
+    #[test]
+    fn format_range_fallback_does_not_inject_newline_when_insert_final_newline_set() -> Result<()> {
+        // Regression: apply_lsp_whitespace_options appends '\n' when insert_final_newline
+        // is true. For a range edit, new_text must not have a trailing newline because the
+        // replacement range already sits between existing document newlines.
+        let provider = FormattingProvider::new(MissingPerltidyRuntime);
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(true),
+            insert_final_newline: Some(true), // would normally append \n to fragment
+            trim_final_newlines: None,
+        };
+        let range = FormatRange::new(FormatPosition::new(1, 0), FormatPosition::new(1, 13));
+
+        let formatted = provider.format_range("line1\nmy $x = 1;   \nline3\n", &range, &options)?;
+
+        assert_eq!(formatted.edits.len(), 1);
+        // new_text must NOT end with '\n' — that would insert a spurious blank line
+        let new_text = &formatted.edits[0].new_text;
+        assert_eq!(new_text, "my $x = 1;");
+        assert!(!new_text.ends_with('\n'), "range edit new_text must not end with '\\n'");
         Ok(())
     }
 
