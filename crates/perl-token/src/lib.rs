@@ -783,6 +783,21 @@ impl TokenKind {
         matches!(self.category(), TokenCategory::Literal)
     }
 
+    /// Returns `true` if this token kind is a delimiter.
+    pub const fn is_delimiter(self) -> bool {
+        matches!(self.category(), TokenCategory::Delimiter)
+    }
+
+    /// Returns `true` if this token kind is an identifier or sigil.
+    pub const fn is_identifier(self) -> bool {
+        matches!(self.category(), TokenCategory::Identifier)
+    }
+
+    /// Returns `true` if this token kind is a special sentinel/recovery token.
+    pub const fn is_special(self) -> bool {
+        matches!(self.category(), TokenCategory::Special)
+    }
+
     /// Map a canonical keyword spelling to its [`TokenKind`].
     ///
     /// This mapping is case-sensitive and only recognizes canonical Perl
