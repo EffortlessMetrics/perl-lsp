@@ -286,12 +286,12 @@ impl CheckpointCache {
     /// // Find checkpoint at or after position 150
     /// let cp = cache.find_after(150);
     /// assert!(cp.is_some());
-    /// assert_eq!(cp.unwrap().position, 200);
+    /// assert!(matches!(cp, Some(found) if found.position == 200));
     ///
     /// // Find checkpoint at exact position
     /// let cp = cache.find_after(200);
     /// assert!(cp.is_some());
-    /// assert_eq!(cp.unwrap().position, 200);
+    /// assert!(matches!(cp, Some(found) if found.position == 200));
     ///
     /// // Position beyond last checkpoint returns None
     /// let cp = cache.find_after(400);
