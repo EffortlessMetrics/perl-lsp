@@ -36,3 +36,5 @@ Fixtures loaded: `12`
 | undefined_symbol_false_positive_rate | baseline_pending | n/a |
 
 Initial harness: metrics intentionally baseline_pending until semantic facts land.
+
+Verification note: treat `cargo test -p xtask semantic_scorecard`, `cargo xtask semantic-scorecard`, and `cargo xtask semantic-scorecard --check` as the targeted validation path while unrelated `xtask` tests remain noisy.
