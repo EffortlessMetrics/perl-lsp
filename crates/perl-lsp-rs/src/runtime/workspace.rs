@@ -62,7 +62,6 @@ fn send_index_ready_notification(outbound: &super::outbound::OutboundSender, rea
     }
 }
 
-
 /// Returns `true` when an I/O error represents a permission-denied condition.
 ///
 /// Covers both the portable `ErrorKind::PermissionDenied` and the Windows
@@ -82,7 +81,9 @@ fn is_permission_denied_error(e: &std::io::Error) -> bool {
 }
 
 #[cfg(feature = "workspace")]
-use progress::{send_progress_begin, send_progress_create, send_progress_end, send_progress_report};
+use progress::{
+    send_progress_begin, send_progress_create, send_progress_end, send_progress_report,
+};
 #[cfg(feature = "workspace")]
 use text_decode::read_text_with_encoding_fallback;
 
