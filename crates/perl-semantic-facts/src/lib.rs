@@ -8,6 +8,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod adapters;
+
 macro_rules! id_newtype {
     ($name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
