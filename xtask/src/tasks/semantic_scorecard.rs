@@ -10,18 +10,16 @@ const DEFAULT_FIXTURE_MANIFEST: &str =
 const DEFAULT_OUTPUT: &str = "target/receipts/metrics/semantic_scorecard.json";
 const DEFAULT_STATUS_MD: &str = "docs/project/status/semantic_scorecard.md";
 
-const METRICS: &[&str] = &[
-    "definition_hit_at_1",
-    "definition_hit_at_5",
-    "reference_precision",
-    "reference_recall",
-    "completion_top1",
-    "completion_top5",
-    "undefined_symbol_false_positive_rate",
-    "rename_unsafe_edit_count",
-    "safe_delete_external_ref_detection",
-    "query_latency_p50",
-    "query_latency_p95",
+const FEATURE_ROWS: &[(&str, bool)] = &[
+    ("declaration_facts", true),
+    ("occurrence_facts", true),
+    ("export_facts", true),
+    ("definition_candidates", true),
+    ("reference_edges", true),
+    ("import_specs", false),
+    ("package_graph", false),
+    ("rename_plan", false),
+    ("safe_delete_plan", false),
 ];
 
 #[derive(Debug, Deserialize)]
@@ -33,18 +31,26 @@ struct SemanticManifest {
 #[derive(Debug, Deserialize)]
 struct FixtureCase {
     id: String,
-    /// Fixture family label (reserved for future grouping/filtering).
-    #[allow(dead_code)]
     family: String,
-    /// Relative path to the fixture file (reserved for future harness use).
     #[allow(dead_code)]
     path: String,
 }
 
 #[derive(Debug, Serialize)]
-struct MetricRow {
+struct CoverageBreakdown {
+    exact_facts: usize,
+    high_confidence_facts: usize,
+    heuristic_facts: usize,
+    dynamic_boundary_facts: usize,
+}
+
+#[derive(Debug, Serialize)]
+struct ScorecardRow {
+    available: bool,
     status: &'static str,
-    value: Option<f64>,
+    fixture_family_coverage: BTreeMap<String, usize>,
+    total_facts: usize,
+    coverage: CoverageBreakdown,
 }
 
 #[derive(Debug, Serialize)]
@@ -55,13 +61,18 @@ struct Artifact {
     fixture_family_version: u32,
     fixture_count: usize,
     fixture_ids: Vec<String>,
-    rows: BTreeMap<String, MetricRow>,
+    rows: BTreeMap<String, ScorecardRow>,
     notes: &'static str,
 }
 
-pub fn run(manifest: Option<PathBuf>, output: Option<PathBuf>, status_md: Option<PathBuf>) -> Result<()> {
+pub fn run(
+    manifest: Option<PathBuf>,
+    output: Option<PathBuf>,
+    status_md: Option<PathBuf>,
+) -> Result<()> {
     let root = project_root()?;
-    let manifest_path = root.join(manifest.unwrap_or_else(|| PathBuf::from(DEFAULT_FIXTURE_MANIFEST)));
+    let manifest_path =
+        root.join(manifest.unwrap_or_else(|| PathBuf::from(DEFAULT_FIXTURE_MANIFEST)));
     let output_path = root.join(output.unwrap_or_else(|| PathBuf::from(DEFAULT_OUTPUT)));
     let status_path = root.join(status_md.unwrap_or_else(|| PathBuf::from(DEFAULT_STATUS_MD)));
 
@@ -89,10 +100,30 @@ fn load_manifest(path: &Path) -> Result<SemanticManifest> {
 }
 
 fn build_artifact(manifest: SemanticManifest) -> Artifact {
-    let fixture_ids = manifest.fixtures.iter().map(|fixture| fixture.id.clone()).collect::<Vec<_>>();
+    let fixture_ids =
+        manifest.fixtures.iter().map(|fixture| fixture.id.clone()).collect::<Vec<_>>();
+    let mut families = BTreeMap::<String, usize>::new();
+    for fixture in &manifest.fixtures {
+        *families.entry(fixture.family.clone()).or_default() += 1;
+    }
+
     let mut rows = BTreeMap::new();
-    for &metric in METRICS {
-        rows.insert(metric.to_string(), MetricRow { status: "baseline_pending", value: None });
+    for &(row_name, available) in FEATURE_ROWS {
+        rows.insert(
+            row_name.to_string(),
+            ScorecardRow {
+                available,
+                status: if available { "adapter_missing_or_empty" } else { "unavailable" },
+                fixture_family_coverage: if available { families.clone() } else { BTreeMap::new() },
+                total_facts: 0,
+                coverage: CoverageBreakdown {
+                    exact_facts: 0,
+                    high_confidence_facts: 0,
+                    heuristic_facts: 0,
+                    dynamic_boundary_facts: 0,
+                },
+            },
+        );
     }
 
     Artifact {
@@ -103,7 +134,7 @@ fn build_artifact(manifest: SemanticManifest) -> Artifact {
         fixture_count: fixture_ids.len(),
         fixture_ids,
         rows,
-        notes: "Initial harness: metrics intentionally baseline_pending until semantic facts land.",
+        notes: "Wave 2 scorecard shape is live. Rows remain deterministic when adapters are missing by emitting unavailable/empty counts.",
     }
 }
 
@@ -126,10 +157,36 @@ fn render_status_markdown(artifact: &Artifact) -> String {
         text.push_str(&format!("- `{id}`\n"));
     }
 
-    text.push_str("\n## Metrics\n\n| Metric | Status | Value |\n|---|---|---:|\n");
-    for (metric, row) in &artifact.rows {
-        let value = row.value.map(|n| n.to_string()).unwrap_or_else(|| "n/a".to_string());
-        text.push_str(&format!("| {metric} | {} | {value} |\n", row.status));
+    text.push_str(
+        "\n## Semantic Fact Coverage\n\n| Row | Availability | Status | Total facts | exact | high-confidence | heuristic | dynamic-boundary |\n|---|---|---|---:|---:|---:|---:|---:|\n",
+    );
+    for (row_name, row) in &artifact.rows {
+        let availability = if row.available { "available" } else { "unavailable" };
+        text.push_str(&format!(
+            "| {row_name} | {availability} | {} | {} | {} | {} | {} | {} |\n",
+            row.status,
+            row.total_facts,
+            row.coverage.exact_facts,
+            row.coverage.high_confidence_facts,
+            row.coverage.heuristic_facts,
+            row.coverage.dynamic_boundary_facts
+        ));
+    }
+
+    text.push_str("\n## Fixture-family coverage\n\n");
+    for (row_name, row) in &artifact.rows {
+        if !row.available {
+            continue;
+        }
+        text.push_str(&format!("### `{row_name}`\n"));
+        if row.fixture_family_coverage.is_empty() {
+            text.push_str("- no fixtures counted\n");
+        } else {
+            for (family, count) in &row.fixture_family_coverage {
+                text.push_str(&format!("- `{family}`: {count}\n"));
+            }
+        }
+        text.push('\n');
     }
 
     text.push_str("\n");
@@ -143,14 +200,22 @@ mod tests {
     use super::*;
 
     /// Verify build_artifact preserves insertion order of fixture IDs and emits
-    /// all expected metric rows as baseline_pending.
+    /// the semantic scorecard rows with deterministic empty counts.
     #[test]
     fn build_artifact_preserves_fixture_order_and_emits_all_metrics() -> Result<()> {
         let manifest = SemanticManifest {
             fixture_family_version: 1,
             fixtures: vec![
-                FixtureCase { id: "b".to_string(), family: "x".to_string(), path: "b.pl".to_string() },
-                FixtureCase { id: "a".to_string(), family: "x".to_string(), path: "a.pl".to_string() },
+                FixtureCase {
+                    id: "b".to_string(),
+                    family: "x".to_string(),
+                    path: "b.pl".to_string(),
+                },
+                FixtureCase {
+                    id: "a".to_string(),
+                    family: "x".to_string(),
+                    path: "a.pl".to_string(),
+                },
             ],
         };
         let artifact = build_artifact(manifest);
@@ -160,23 +225,24 @@ mod tests {
         assert_eq!(artifact.fixture_ids, vec!["b".to_string(), "a".to_string()]);
         assert_eq!(artifact.fixture_count, 2);
 
-        // All 11 canonical metric rows must be present and set to baseline_pending.
-        assert_eq!(artifact.rows.len(), METRICS.len(), "row count must match METRICS constant");
-        for &metric_name in METRICS {
-            let row = artifact.rows.get(metric_name).unwrap_or_else(|| {
-                panic!("expected metric '{metric_name}' to be present in artifact rows")
-            });
+        assert_eq!(artifact.rows.len(), FEATURE_ROWS.len(), "row count must match FEATURE_ROWS");
+        for &(row_name, available) in FEATURE_ROWS {
+            let row = artifact.rows.get(row_name).ok_or_else(|| {
+                color_eyre::eyre::eyre!("expected row '{row_name}' to be present")
+            })?;
+            assert_eq!(row.available, available, "availability mismatch for '{row_name}'");
             assert_eq!(
-                row.status, "baseline_pending",
-                "metric '{metric_name}' should be baseline_pending"
+                row.status,
+                if available { "adapter_missing_or_empty" } else { "unavailable" },
+                "unexpected status for '{row_name}'"
             );
-            assert!(row.value.is_none(), "metric '{metric_name}' value should be None at baseline");
+            assert_eq!(row.total_facts, 0, "row '{row_name}' should default to zero facts");
         }
 
         // Rows are in alphabetical order (BTreeMap) — spot-check boundary keys.
         let keys: Vec<&str> = artifact.rows.keys().map(String::as_str).collect();
-        assert_eq!(keys.first().copied(), Some("completion_top1"));
-        assert_eq!(keys.last().copied(), Some("undefined_symbol_false_positive_rate"));
+        assert_eq!(keys.first().copied(), Some("declaration_facts"));
+        assert_eq!(keys.last().copied(), Some("safe_delete_plan"));
 
         Ok(())
     }

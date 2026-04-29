@@ -19,20 +19,91 @@ Fixtures loaded: `12`
 - `same_bare_sub_two_packages`
 - `typeglob_alias`
 
-## Metrics
+## Semantic Fact Coverage
 
-| Metric | Status | Value |
-|---|---|---:|
-| completion_top1 | baseline_pending | n/a |
-| completion_top5 | baseline_pending | n/a |
-| definition_hit_at_1 | baseline_pending | n/a |
-| definition_hit_at_5 | baseline_pending | n/a |
-| query_latency_p50 | baseline_pending | n/a |
-| query_latency_p95 | baseline_pending | n/a |
-| reference_precision | baseline_pending | n/a |
-| reference_recall | baseline_pending | n/a |
-| rename_unsafe_edit_count | baseline_pending | n/a |
-| safe_delete_external_ref_detection | baseline_pending | n/a |
-| undefined_symbol_false_positive_rate | baseline_pending | n/a |
+| Row | Availability | Status | Total facts | exact | high-confidence | heuristic | dynamic-boundary |
+|---|---|---|---:|---:|---:|---:|---:|
+| declaration_facts | available | adapter_missing_or_empty | 0 | 0 | 0 | 0 | 0 |
+| definition_candidates | available | adapter_missing_or_empty | 0 | 0 | 0 | 0 | 0 |
+| export_facts | available | adapter_missing_or_empty | 0 | 0 | 0 | 0 | 0 |
+| import_specs | unavailable | unavailable | 0 | 0 | 0 | 0 | 0 |
+| occurrence_facts | available | adapter_missing_or_empty | 0 | 0 | 0 | 0 | 0 |
+| package_graph | unavailable | unavailable | 0 | 0 | 0 | 0 | 0 |
+| reference_edges | available | adapter_missing_or_empty | 0 | 0 | 0 | 0 | 0 |
+| rename_plan | unavailable | unavailable | 0 | 0 | 0 | 0 | 0 |
+| safe_delete_plan | unavailable | unavailable | 0 | 0 | 0 | 0 | 0 |
 
-Initial harness: metrics intentionally baseline_pending until semantic facts land.
+## Fixture-family coverage
+
+### `declaration_facts`
+- `AUTOLOAD dynamic boundary`: 1
+- `dynamic require boundary`: 1
+- `empty import suppression`: 1
+- `eval STRING dynamic boundary`: 1
+- `export tag expansion`: 1
+- `generated accessor`: 1
+- `imported function visibility`: 1
+- `inherited method`: 1
+- `qualified vs bare references`: 1
+- `role method`: 1
+- `same bare sub in two packages`: 1
+- `typeglob alias`: 1
+
+### `definition_candidates`
+- `AUTOLOAD dynamic boundary`: 1
+- `dynamic require boundary`: 1
+- `empty import suppression`: 1
+- `eval STRING dynamic boundary`: 1
+- `export tag expansion`: 1
+- `generated accessor`: 1
+- `imported function visibility`: 1
+- `inherited method`: 1
+- `qualified vs bare references`: 1
+- `role method`: 1
+- `same bare sub in two packages`: 1
+- `typeglob alias`: 1
+
+### `export_facts`
+- `AUTOLOAD dynamic boundary`: 1
+- `dynamic require boundary`: 1
+- `empty import suppression`: 1
+- `eval STRING dynamic boundary`: 1
+- `export tag expansion`: 1
+- `generated accessor`: 1
+- `imported function visibility`: 1
+- `inherited method`: 1
+- `qualified vs bare references`: 1
+- `role method`: 1
+- `same bare sub in two packages`: 1
+- `typeglob alias`: 1
+
+### `occurrence_facts`
+- `AUTOLOAD dynamic boundary`: 1
+- `dynamic require boundary`: 1
+- `empty import suppression`: 1
+- `eval STRING dynamic boundary`: 1
+- `export tag expansion`: 1
+- `generated accessor`: 1
+- `imported function visibility`: 1
+- `inherited method`: 1
+- `qualified vs bare references`: 1
+- `role method`: 1
+- `same bare sub in two packages`: 1
+- `typeglob alias`: 1
+
+### `reference_edges`
+- `AUTOLOAD dynamic boundary`: 1
+- `dynamic require boundary`: 1
+- `empty import suppression`: 1
+- `eval STRING dynamic boundary`: 1
+- `export tag expansion`: 1
+- `generated accessor`: 1
+- `imported function visibility`: 1
+- `inherited method`: 1
+- `qualified vs bare references`: 1
+- `role method`: 1
+- `same bare sub in two packages`: 1
+- `typeglob alias`: 1
+
+
+Wave 2 scorecard shape is live. Rows remain deterministic when adapters are missing by emitting unavailable/empty counts.
