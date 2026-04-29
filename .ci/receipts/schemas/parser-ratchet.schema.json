@@ -7,33 +7,61 @@
     { "$ref": "./common-gate-receipt.schema.json" },
     {
       "type": "object",
-      "required": ["check"],
+      "required": ["check", "metrics", "violations"],
       "properties": {
         "check": { "const": "parser-ratchet" },
+        "profile": { "type": "string" },
+        "selected": { "type": "string" },
+        "selection_reason": { "type": "string" },
+        "manifest_fingerprint": { "type": "string" },
         "metrics": {
           "type": "object",
+          "required": ["base", "head"],
           "properties": {
-            "baseline_clean_rate": { "type": "number" },
-            "current_clean_rate": { "type": "number" },
-            "error_nodes": { "type": "integer", "minimum": 0 }
-          },
-          "additionalProperties": true
+            "base": { "$ref": "#/definitions/metrics" },
+            "head": { "$ref": "#/definitions/metrics" }
+          }
         },
         "violations": {
           "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "metric": { "type": "string" },
-              "expected": {},
-              "actual": {}
-            },
-            "required": ["metric"],
-            "additionalProperties": true
-          }
-        }
+          "items": { "$ref": "#/definitions/violation" }
+        },
+        "ratchet_opportunity": { "type": "boolean" }
       },
       "additionalProperties": true
     }
-  ]
+  ],
+  "definitions": {
+    "metrics": {
+      "type": "object",
+      "required": [
+        "panic_count",
+        "timeout_count",
+        "clean_parse_rate",
+        "error_node_count",
+        "corpus_runtime_ms",
+        "scope"
+      ],
+      "properties": {
+        "panic_count": { "type": "integer", "minimum": 0 },
+        "timeout_count": { "type": "integer", "minimum": 0 },
+        "clean_parse_rate": { "type": "number" },
+        "error_node_count": { "type": "integer", "minimum": 0 },
+        "node_kind_seen_count": { "type": ["integer", "null"], "minimum": 0 },
+        "concept_floors": { "type": "object", "additionalProperties": { "type": "boolean" } },
+        "corpus_runtime_ms": { "type": "integer", "minimum": 0 },
+        "scope": { "type": "string" }
+      }
+    },
+    "violation": {
+      "type": "object",
+      "required": ["scope", "metric", "severity", "message"],
+      "properties": {
+        "scope": { "type": "string" },
+        "metric": { "type": "string" },
+        "severity": { "enum": ["error", "warn"] },
+        "message": { "type": "string" }
+      }
+    }
+  }
 }

@@ -1,6 +1,16 @@
 //! Transport layer: run (stdin/stdout), run_socket, run_with_io.
 
 use super::*;
+use std::sync::mpsc::TryRecvError;
+
+const EVENT_WRITE_BATCH_MAX: usize = 64;
+
+fn write_framed_payload<W: Write>(writer: &mut W, payload: &[u8]) -> io::Result<()> {
+    writer.write_all(b"Content-Length: ")?;
+    writer.write_all(payload.len().to_string().as_bytes())?;
+    writer.write_all(b"\r\n\r\n")?;
+    writer.write_all(payload)
+}
 
 impl DebugAdapter {
     /// Run the debug adapter server
@@ -39,22 +49,58 @@ impl DebugAdapter {
         self.event_sender = Some(tx.clone());
 
         thread::spawn(move || {
-            while let Ok(msg) = rx.recv() {
-                let framed = match serde_json::to_vec(&msg) {
-                    Ok(payload) => frame(&payload),
-                    Err(e) => {
-                        tracing::error!(error = %e, message = ?msg, "Failed to serialize DAP message");
-                        continue;
-                    }
-                };
+            while let Ok(first_msg) = rx.recv() {
+                let mut batch = Vec::with_capacity(EVENT_WRITE_BATCH_MAX);
+                batch.push(first_msg);
 
-                let mut writer = lock_or_recover(&event_writer, "event_writer");
-                if let Err(e) = writer.write_all(&framed) {
-                    tracing::error!(error = %e, "Failed to write DAP frame in event handler");
+                let mut disconnected = false;
+                while batch.len() < EVENT_WRITE_BATCH_MAX {
+                    match rx.try_recv() {
+                        Ok(msg) => batch.push(msg),
+                        Err(TryRecvError::Empty) => break,
+                        Err(TryRecvError::Disconnected) => {
+                            disconnected = true;
+                            break;
+                        }
+                    }
+                }
+
+                let mut payloads = Vec::with_capacity(batch.len());
+                for msg in batch {
+                    match serde_json::to_vec(&msg) {
+                        Ok(payload) => payloads.push(payload),
+                        Err(e) => {
+                            tracing::error!(
+                                error = %e,
+                                message = ?msg,
+                                "Failed to serialize DAP message"
+                            );
+                        }
+                    }
+                }
+
+                if payloads.is_empty() {
+                    if disconnected {
+                        break;
+                    }
                     continue;
                 }
-                if let Err(e) = writer.flush() {
+
+                let mut writer = lock_or_recover(&event_writer, "event_writer");
+                let mut write_failed = false;
+                for payload in &payloads {
+                    if let Err(e) = write_framed_payload(&mut *writer, payload) {
+                        tracing::error!(error = %e, "Failed to write DAP frame in event handler");
+                        write_failed = true;
+                        break;
+                    }
+                }
+                if !write_failed && let Err(e) = writer.flush() {
                     tracing::error!(error = %e, "Failed to flush DAP frame in event handler");
+                }
+
+                if disconnected {
+                    break;
                 }
             }
             tracing::debug!("Event handler thread terminating - channel closed");
@@ -103,9 +149,8 @@ impl DebugAdapter {
                     }
                 };
 
-                let framed = frame(&payload);
                 let mut writer = lock_or_recover(&shared_writer, "response_writer");
-                writer.write_all(&framed)?;
+                write_framed_payload(&mut *writer, &payload)?;
                 writer.flush()?;
 
                 // DAP requires this event only after initialize response is sent.

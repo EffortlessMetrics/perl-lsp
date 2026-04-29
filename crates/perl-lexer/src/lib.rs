@@ -141,8 +141,11 @@ use std::sync::{Arc, OnceLock};
 pub mod api;
 pub mod builtins;
 pub mod checkpoint;
+pub mod config;
 pub mod error;
+mod heredoc;
 pub mod keywords;
+pub mod limits;
 pub mod mode;
 mod quote_handler;
 pub mod token;
@@ -151,75 +154,19 @@ mod unicode;
 
 pub use api::*;
 pub use checkpoint::{CheckpointCache, Checkpointable, LexerCheckpoint};
+pub use config::LexerConfig;
 pub use error::{LexerError, Result};
+pub use limits::MAX_REGEX_PARSE_STEPS;
 pub use mode::LexerMode;
 pub use perl_position_tracking::Position;
 pub use token::{StringPart, Token, TokenType};
 
 use unicode::{is_perl_identifier_continue, is_perl_identifier_start};
 
-/// Specification for a pending heredoc
-#[derive(Clone)]
-struct HeredocSpec {
-    label: Arc<str>,
-    body_start: usize,  // byte offset where the body begins
-    allow_indent: bool, // true if we saw <<~ (Perl 5.26 indented heredocs)
-}
-
-// Budget limits to prevent hangs on pathological input
-// When these limits are exceeded, the lexer gracefully truncates the token
-// as UnknownRest, preserving all previously parsed symbols and allowing
-// continued analysis of the remainder. LSP clients may emit a soft diagnostic
-// about truncation but won't crash or hang.
-const MAX_REGEX_BYTES: usize = 64 * 1024; // 64KB max for regex patterns
-const MAX_HEREDOC_BYTES: usize = 256 * 1024; // 256KB max for heredoc bodies
-const MAX_DELIM_NEST: usize = 128; // Max nesting depth for delimiters
-const MAX_HEREDOC_DEPTH: usize = 100; // Max nesting depth for heredocs
-const HEREDOC_TIMEOUT_MS: u64 = 5000; // 5 seconds timeout for heredoc parsing
-
-/// Maximum scan iterations for a single regex literal.
-/// This is a lexer parse budget, not regex-engine backtracking detection.
-///
-/// When the lexer encounters a regex literal that requires more than this
-/// number of loop iterations, it
-/// will emit an UnknownRest token for graceful degradation rather than
-/// potentially hanging on pathological input.
-///
-/// The limit intentionally stays below `MAX_REGEX_BYTES` so this guard remains
-/// reachable before the byte budget for very large but still bounded literals.
-pub const MAX_REGEX_PARSE_STEPS: usize = 32 * 1024;
-
-/// Configuration options for the Perl lexer.
-///
-/// Controls interpolation handling, position tracking, and lookahead limits.
-/// Use [`Default::default`] for sensible defaults.
-///
-/// # Examples
-///
-/// ```rust
-/// use perl_lexer::LexerConfig;
-///
-/// let config = LexerConfig {
-///     parse_interpolation: true,
-///     track_positions: true,
-///     max_lookahead: 1024,
-/// };
-/// ```
-#[derive(Debug, Clone)]
-pub struct LexerConfig {
-    /// Enable interpolation parsing in strings.
-    pub parse_interpolation: bool,
-    /// Track token positions for error reporting.
-    pub track_positions: bool,
-    /// Maximum lookahead for disambiguation.
-    pub max_lookahead: usize,
-}
-
-impl Default for LexerConfig {
-    fn default() -> Self {
-        Self { parse_interpolation: true, track_positions: true, max_lookahead: 1024 }
-    }
-}
+use crate::heredoc::HeredocSpec;
+use crate::limits::{
+    HEREDOC_TIMEOUT_MS, MAX_DELIM_NEST, MAX_HEREDOC_BYTES, MAX_HEREDOC_DEPTH, MAX_REGEX_BYTES,
+};
 
 /// Context-aware Perl lexer that produces a token stream from source text.
 ///
@@ -3320,6 +3267,7 @@ impl<'a> PerlLexer<'a> {
         self.advance(); // Skip opening /
 
         let mut regex_parse_steps: usize = 0;
+        let mut in_character_class = false;
 
         while let Some(ch) = self.current_char() {
             regex_parse_steps += 1;
@@ -3350,7 +3298,7 @@ impl<'a> PerlLexer<'a> {
             }
 
             match ch {
-                '/' => {
+                '/' if !in_character_class => {
                     self.advance();
                     // Parse flags - include all alphanumeric for proper validation in parser (MUT_005 fix)
                     while let Some(ch) = self.current_char() {
@@ -3377,6 +3325,14 @@ impl<'a> PerlLexer<'a> {
                     if self.current_char().is_some() {
                         self.advance();
                     }
+                }
+                '[' => {
+                    in_character_class = true;
+                    self.advance();
+                }
+                ']' if in_character_class => {
+                    in_character_class = false;
+                    self.advance();
                 }
                 _ => self.advance(),
             }

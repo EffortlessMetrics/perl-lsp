@@ -1,0 +1,103 @@
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
+
+use serde::Deserialize;
+
+fn project_root() -> PathBuf {
+    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    dir.pop();
+    dir
+}
+
+#[derive(Debug, Deserialize)]
+struct GatePolicyDoc {
+    gates: Vec<PolicyGate>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PolicyGate {
+    name: String,
+    tier: String,
+    #[serde(default = "default_true")]
+    required: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct GateRegistryDoc {
+    gate: Vec<RegistryGate>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RegistryGate {
+    id: String,
+    #[serde(default)]
+    blocking: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+#[test]
+fn parser_corpus_pr_policy_is_unambiguous() -> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let policy_path = root.join(".ci/gate-policy.yaml");
+    let content = fs::read_to_string(policy_path)?;
+    let parsed: GatePolicyDoc = serde_yaml_ng::from_str(&content)?;
+
+    let gates: HashMap<_, _> =
+        parsed.gates.into_iter().map(|gate| (gate.name.clone(), gate)).collect();
+
+    let common = gates.get("common_corpus_clean").ok_or("missing common_corpus_clean gate")?;
+    let parser = gates.get("parser_corpus_ratchet").ok_or("missing parser_corpus_ratchet gate")?;
+    let cpan = gates.get("cpan_corpus_ratchet").ok_or("missing cpan_corpus_ratchet gate")?;
+
+    assert_eq!(common.tier, "merge_gate");
+    assert!(common.required, "common_corpus_clean must stay PR-blocking");
+
+    assert_eq!(parser.tier, "merge_gate");
+    assert!(!parser.required, "parser_corpus_ratchet must be advisory in PR merge-gate profile");
+
+    assert_eq!(cpan.tier, "merge_gate");
+    assert!(!cpan.required, "cpan_corpus_ratchet must never be PR-blocking");
+
+    Ok(())
+}
+
+#[test]
+fn gate_registry_alignment_prevents_stale_parser_wiring() -> Result<(), Box<dyn std::error::Error>>
+{
+    let root = project_root();
+
+    let policy: GatePolicyDoc =
+        serde_yaml_ng::from_str(&fs::read_to_string(root.join(".ci/gate-policy.yaml"))?)?;
+    let registry: GateRegistryDoc =
+        toml::from_str(&fs::read_to_string(root.join(".ci/GATE_REGISTRY.toml"))?)?;
+
+    let policy_by_name: HashMap<_, _> =
+        policy.gates.into_iter().map(|gate| (gate.name.clone(), gate.required)).collect();
+    let registry_by_id: HashMap<_, _> =
+        registry.gate.into_iter().map(|gate| (gate.id.clone(), gate.blocking)).collect();
+
+    let pairs = [
+        ("parser_corpus_ratchet", "parser-corpus-ratchet"),
+        ("cpan_corpus_ratchet", "cpan-corpus-ratchet"),
+        ("parser_audit_closeout", "parser-audit-closeout"),
+    ];
+
+    for (policy_name, registry_id) in pairs {
+        let required = policy_by_name
+            .get(policy_name)
+            .ok_or_else(|| format!("missing policy gate: {policy_name}"))?;
+        let blocking = registry_by_id
+            .get(registry_id)
+            .ok_or_else(|| format!("missing registry gate: {registry_id}"))?;
+        assert_eq!(
+            required, blocking,
+            "gate-policy and gate-registry must agree for {policy_name}/{registry_id}"
+        );
+    }
+
+    Ok(())
+}

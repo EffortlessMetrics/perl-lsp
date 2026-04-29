@@ -107,6 +107,10 @@ The key is `initialization_options` in Sublime LSP settings. The server-side LSP
 protocol field is called `initializationOptions`, but Sublime's configuration
 uses snake_case.
 
+If you use a third-party Perl syntax, open a Perl file and run
+`Tools > Developer > Show Scope Name`; update `selector` only if the root scope
+is different.
+
 ## Optional: Project-Specific Settings
 
 Prefer `.perl-lsp.toml` for settings shared across all editors. Use a

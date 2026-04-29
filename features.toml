@@ -15,7 +15,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_completion_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_completion_tests.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_19_completion_core.rs",
+]
 description = "Code completion with 150+ built-in functions, DBI type inference (db/st handle methods), Moo option-key completion, file-path completion, method completion from workspace symbols, auto-import suggestions, XS API completion, and test helper (Test::More) completions"
 
 [[feature]]
