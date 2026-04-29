@@ -589,7 +589,13 @@ autocmd User lsp_setup call lsp#register_server({
       "settings": {
         "perl": {
           "workspace": {
-            "includePaths": ["lib", ".", "local/lib/perl5"]
+            "includePaths": ["lib", ".", "local/lib/perl5"],
+            "useSystemInc": false
+          },
+          "inlayHints": {
+            "enabled": true,
+            "parameterHints": true,
+            "typeHints": true
           }
         }
       }
@@ -597,6 +603,8 @@ autocmd User lsp_setup call lsp#register_server({
   }
 }
 ```
+
+coc.nvim uses Vim/Neovim filetypes, so Perl buffers must have `filetype=perl`.
 
 ## Environment Variables
 
@@ -922,11 +930,25 @@ vim.lsp.enable('perllsp')
 
 #### Helix (`languages.toml`)
 
+Helix has built-in Perl language support, but its default Perl language server is
+`perlnavigator`. To use `perllsp`, define the server and attach it to the `perl`
+language:
+
 ```toml
-[language-server.perl-lsp.config.perl]
-workspace.includePaths = ["lib", ".", "local/lib/perl5"]
-workspace.useSystemInc = false
-inlayHints.enabled = true
+[language-server.perl-lsp]
+command = "perllsp"
+args = ["--stdio"]
+
+[[language]]
+name = "perl"
+language-servers = ["perl-lsp"]
+
+[language-server.perl-lsp.config.perl.workspace]
+includePaths = ["lib", ".", "local/lib/perl5"]
+useSystemInc = false
+
+[language-server.perl-lsp.config.perl.inlayHints]
+enabled = true
 ```
 
 #### Emacs (eglot)
@@ -1015,6 +1037,45 @@ array launches the server, `extensions` controls activation, and
 ```
 
 For settings shared across editors, prefer `.perl-lsp.toml`.
+
+#### Amazon Kiro
+
+Kiro IDE uses OpenVSX-compatible extensions. Prefer
+`EffortlessMetrics.perl-lsp-rs` and keep auto-download enabled unless you need
+pinned/offline binaries:
+
+```json
+{
+  "perl-lsp.serverPath": "/absolute/path/to/perllsp",
+  "perl-lsp.autoDownload": false
+}
+```
+
+Kiro CLI uses workspace-scoped LSP configuration. Run `/code init`, then edit
+the generated `lsp.json` (path varies by Kiro CLI build) and add a Perl entry:
+
+```json
+{
+  "languages": {
+    "perl": {
+      "name": "perl-lsp",
+      "command": "perllsp",
+      "args": ["--stdio"],
+      "file_extensions": ["pl", "PL", "pm", "t", "psgi", "cgi", "fcgi", "xs", "xsi"],
+      "project_patterns": [".perl-lsp.toml", "Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
+      "multi_workspace": false,
+      "initialization_options": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"],
+            "useSystemInc": false
+          }
+        }
+      }
+    }
+  }
+}
+```
 
 #### Claude Code (plugin `.lsp.json`)
 

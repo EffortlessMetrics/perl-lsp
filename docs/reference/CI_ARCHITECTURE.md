@@ -162,8 +162,10 @@ merge, and every subsequent PR compares regression-to-regression. This is the
 
 ## Section 2 — Gate Definitions and Policy
 
-All gate definitions live in `.ci/gate-policy.yaml`. The schema version is 1. The
-`xtask/src/tasks/gates.rs` runner reads this policy and executes gates, emitting receipts.
+All merge-gate decisions use `.ci/gate-policy.yaml` as the source of truth. The schema
+version is 1, and `xtask/src/tasks/gates.rs` reads this policy and executes gates.
+`.ci/GATE_REGISTRY.toml` is legacy/auxiliary metadata for scripts/receipt tooling and must
+remain aligned with gate-policy required/advisory semantics for overlapping gates.
 
 ### Tier Mapping
 

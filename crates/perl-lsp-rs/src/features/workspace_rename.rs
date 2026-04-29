@@ -183,8 +183,10 @@ fn is_ambiguous_sub_reference(
         return false;
     };
 
-    // Qualified calls (`Pkg::name` or `&Pkg::name`) are unambiguous.
-    if original.contains("::") || original.starts_with('&') {
+    // Only explicitly qualified calls (`Pkg::name` or `&Pkg::name`) are unambiguous.
+    // A bare `&name` call (without `::`) is still subject to package resolution and
+    // is just as ambiguous as `name()` when called from a different package.
+    if original.contains("::") {
         return false;
     }
 
@@ -551,6 +553,38 @@ $var;
         assert!(
             matches!(refusal, RenameRefusal::AmbiguousIdentity(_)),
             "expected AmbiguousIdentity refusal, got: {refusal:?}"
+        );
+
+        Ok(())
+    }
+
+    /// A bare `&name` call (without `::`) from a different package is still an
+    /// unqualified reference and must be refused, just like a bare `name()` call.
+    /// Only `&Pkg::name` (which contains `::`) is unambiguous.
+    #[test]
+    fn rename_refuses_ampersand_sigil_cross_package_call() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let idx = WorkspaceIndex::new();
+
+        let foo_text = "package Foo;\nsub process_data { return 1; }\n1;\n";
+        // Bar calls &process_data — still unqualified, still ambiguous.
+        let bar_text = "package Bar;\nsub run { return &process_data(); }\n1;\n";
+
+        index_text(&idx, "file:///Foo.pm", foo_text)?;
+        index_text(&idx, "file:///Bar.pm", bar_text)?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("Foo"),
+            name: Arc::from("process_data"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let refusal = build_rename_edit(&idx, &key, "process_records")
+            .expect_err("workspace rename should refuse ambiguous &name cross-package refs");
+        assert!(
+            matches!(refusal, RenameRefusal::AmbiguousIdentity(_)),
+            "expected AmbiguousIdentity refusal for &name cross-package call, got: {refusal:?}"
         );
 
         Ok(())

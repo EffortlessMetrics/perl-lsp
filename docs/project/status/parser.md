@@ -5,9 +5,8 @@
 
 ## Parser Coverage
 
-| Target | Coverage | Notes | Source |
-| --- | --- | --- |
-<!-- BEGIN: PARSER_TRACKING_TABLE -->
+| --- | --- | --- | --- |
+| <!-- BEGIN: PARSER_TRACKING_TABLE -->
 | **Ubuntu system Perl** | 94.5% clean (`2825/2990`) / n/a salvage | Compatibility baseline; Perl `5.038002`, `42` unreadable, `0` recovery-only, `0` ERROR-node files, `0` catastrophic, baseline `2026-04-24` | `.ci/parser-corpus-baseline.json` |
 | **CPAN top 1000** | 95.3% clean (`8931/9372`) / n/a salvage | Ecosystem breadth baseline; `6` unreadable, `0` recovery-only, `0` ERROR-node files, `0` catastrophic, cached downloads in `target/cpan-corpus/.cpanm`, baseline `2026-04-09` | `.ci/cpan-corpus-baseline.json` |
 | **Project corpus** | 100.0% clean (`95/95`) | Deterministic regression baseline; `73` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
@@ -40,6 +39,16 @@
 | **scope analysis** | p50 0.010 ms / p95 0.025 ms | mean 0.012 ms over 40 samples | `docs/project/status/parser_performance_scorecard.json` |
 <!-- END: PARSER_PERFORMANCE_TABLE -->
 
+## Parser Failure Worklist (Clustered)
+
+Failures in the system-Perl baseline grouped by cluster. Counts come from `first_error_buckets` in `.ci/parser-corpus-baseline.json`.
+
+| Cluster | Files |
+| --- | --- |
+<!-- BEGIN: PARSER_FAILURE_WORKLIST -->
+| (no receipt — run `just corpus-sweep-check` to generate) | 0 |
+<!-- END: PARSER_FAILURE_WORKLIST -->
+
 <!-- BEGIN: PARSER_METRICS_BULLETS -->
 - **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against repo-owned corpus.
 - **Strict promise lists**: `just common-corpus-check` and CPAN known-clean manifest inside `just cpan-corpus-check` pin subsets that must remain clean on top of broader baseline receipts.
@@ -54,5 +63,10 @@
 | **Category partition** | PASS (132 tokens partitioned across canonical groups) | keywords/operators/delimiters/literals/identifiers/special | `crates/perl-token/src/lib.rs` |
 | **Display-name coverage** | 132/132 | user-facing token labels present | `crates/perl-token/src/lib.rs` |
 | **Lexer/parser conformance** | PASS (lexer + parser-core both consume shared `perl-token`) | integration through shared token crate | `crates/perl-lexer/Cargo.toml` + `crates/perl-parser-core/Cargo.toml` |
+<<<<<<< HEAD
 --
+=======
+| **Token perf (p50/p95)** | UNVERIFIED (token scorecard missing key metrics) | key token operations benchmark health | `docs/project/status/token_performance_scorecard.json` |
+| **Runtime dependencies** | 0 | non-dev deps in `perl-token` | `crates/perl-token/Cargo.toml` |
+>>>>>>> origin/master
 <!-- END: TOKEN_HEALTH_TABLE -->

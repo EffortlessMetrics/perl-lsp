@@ -45,11 +45,13 @@
 )]
 
 pub mod client;
+pub mod diagnostics;
 pub mod env;
 pub mod scorecard;
 pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
+pub use diagnostics::DiagnosticsTracker;
 pub use env::{PathGuard, RestrictedPath};
 pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
 pub use workspace::FakeWorkspace;
@@ -304,6 +306,31 @@ impl UxHarness {
         self.completion(&cursor.relative_path, cursor.line, cursor.character)
     }
 
+    /// Request completion and collect best-effort labels for UX assertions.
+    ///
+    /// Label extraction order per completion item:
+    /// 1. `label` (preferred by spec)
+    /// 2. `insertText` (fallback for legacy payloads)
+    /// 3. `filterText` (last-resort fallback)
+    pub fn completion_labels(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Vec<String>> {
+        let items = self.completion(relative_path, line, character)?;
+        Ok(items
+            .iter()
+            .filter_map(|item| {
+                item.get("label")
+                    .and_then(Value::as_str)
+                    .or_else(|| item.get("insertText").and_then(Value::as_str))
+                    .or_else(|| item.get("filterText").and_then(Value::as_str))
+                    .map(str::to_string)
+            })
+            .collect())
+    }
+
     /// Request document formatting.
     ///
     /// Returns the list of text edits, or `Err` if the server crashed / returned
@@ -380,6 +407,31 @@ impl UxHarness {
                 }
             }
         }
+    }
+
+    /// Poll `workspace/symbol` until `predicate` returns true or `timeout`
+    /// elapses.
+    ///
+    /// Returns the last observed symbol list in both success and timeout paths.
+    pub fn wait_for_workspace_symbols(
+        &self,
+        query: &str,
+        timeout: Duration,
+        poll_interval: Duration,
+        mut predicate: impl FnMut(&[Value]) -> bool,
+    ) -> Result<Vec<Value>> {
+        let deadline = std::time::Instant::now() + timeout;
+        let mut latest = Vec::new();
+
+        while std::time::Instant::now() < deadline {
+            latest = self.workspace_symbols(query)?;
+            if predicate(&latest) {
+                return Ok(latest);
+            }
+            std::thread::sleep(poll_interval);
+        }
+
+        Ok(latest)
     }
 
     /// Notify the server that workspace folders changed.
@@ -510,6 +562,31 @@ impl UxHarness {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         Vec::new()
+    }
+
+    /// Wait for diagnostics to become empty for a file (cleared UX state).
+    ///
+    /// Returns `true` if an explicit `textDocument/publishDiagnostics` with an
+    /// **empty** diagnostics array arrives within `timeout`, or if the latest
+    /// buffered notification for that URI already has an empty array.
+    ///
+    /// Returns `false` on timeout.  Note that if the server clears diagnostics
+    /// silently (no explicit notification) this method will timeout and return
+    /// `false`.  In that case prefer checking that no *new* non-empty
+    /// notifications arrive within the deadline instead.
+    pub fn wait_for_no_diagnostics(
+        &self,
+        relative_path: &str,
+        timeout: std::time::Duration,
+    ) -> bool {
+        let uri = self.workspace.uri(relative_path);
+        DiagnosticsTracker::wait_for_uri_matching(
+            || self.client.peek_events(),
+            &uri,
+            timeout,
+            |diagnostics| diagnostics.is_empty(),
+        )
+        .is_some()
     }
 
     /// Request go-to-definition.
