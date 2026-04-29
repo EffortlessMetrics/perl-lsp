@@ -425,6 +425,10 @@ fn pragma_arg_items(arg: &str) -> Vec<String> {
         return inner.split_whitespace().map(|item| item.to_string()).collect();
     }
 
+    if trimmed.contains(char::is_whitespace) {
+        return trimmed.split_whitespace().map(|item| item.to_string()).collect();
+    }
+
     vec![trimmed.to_string()]
 }
 
