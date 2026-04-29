@@ -1,0 +1,125 @@
+[[fixture_family]]
+id = "autoload_dynamic_boundary"
+description = "AUTOLOAD dynamic boundary"
+status = "baseline_pending"
+
+[[fixture_family]]
+id = "dynamic_require_boundary"
+description = "dynamic require boundary"
+status = "baseline_pending"
+
+[[fixture_family]]
+id = "empty_import_suppression"
+description = "empty import suppression"
+status = "baseline_pending"
+
+[[fixture_family]]
+id = "eval_string_dynamic_boundary"
+description = "eval STRING dynamic boundary"
+status = "baseline_pending"
+
+[[fixture_family]]
+id = "export_tag_expansion"
+description = "export tag expansion"
+status = "baseline_pending"
+
+[[fixture_family]]
+id = "generated_accessor"
+description = "generated accessor"
+status = "baseline_pending"
+
+[[fixture_family]]
+id = "imported_function_visibility"
+description = "imported function visibility"
+status = "baseline_pending"
+
+[[fixture_family]]
+id = "inherited_method"
+description = "inherited method"
+status = "baseline_pending"
+
+[[fixture_family]]
+id = "qualified_vs_bare_references"
+description = "qualified vs bare references"
+status = "baseline_pending"
+
+[[fixture_family]]
+id = "role_method"
+description = "role method"
+status = "baseline_pending"
+
+[[fixture_family]]
+id = "same_bare_sub_two_packages"
+description = "same bare sub in two packages"
+status = "baseline_pending"
+
+[[fixture_family]]
+id = "typeglob_alias"
+description = "typeglob alias"
+status = "baseline_pending"
+
+[[metric]]
+name = "completion_top1"
+unit = "ratio"
+status = "not_implemented"
+notes = "baseline pending"
+
+[[metric]]
+name = "completion_top5"
+unit = "ratio"
+status = "not_implemented"
+notes = "baseline pending"
+
+[[metric]]
+name = "definition_hit_at_1"
+unit = "ratio"
+status = "not_implemented"
+notes = "baseline pending"
+
+[[metric]]
+name = "definition_hit_at_5"
+unit = "ratio"
+status = "not_implemented"
+notes = "baseline pending"
+
+[[metric]]
+name = "query_latency_p50"
+unit = "milliseconds"
+status = "not_implemented"
+notes = "baseline pending"
+
+[[metric]]
+name = "query_latency_p95"
+unit = "milliseconds"
+status = "not_implemented"
+notes = "baseline pending"
+
+[[metric]]
+name = "reference_precision"
+unit = "ratio"
+status = "not_implemented"
+notes = "baseline pending"
+
+[[metric]]
+name = "reference_recall"
+unit = "ratio"
+status = "not_implemented"
+notes = "baseline pending"
+
+[[metric]]
+name = "rename_unsafe_edit_count"
+unit = "count"
+status = "not_implemented"
+notes = "baseline pending"
+
+[[metric]]
+name = "safe_delete_external_ref_detection"
+unit = "ratio"
+status = "not_implemented"
+notes = "baseline pending"
+
+[[metric]]
+name = "undefined_symbol_false_positive_rate"
+unit = "ratio"
+status = "not_implemented"
+notes = "baseline pending"

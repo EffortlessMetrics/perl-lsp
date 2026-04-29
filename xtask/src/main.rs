@@ -1142,6 +1142,19 @@ enum Commands {
         ratchet_check: bool,
     },
 
+    /// Build semantic fixture/metric baseline artifacts for compiler-lite scorecard work.
+    SemanticScorecard {
+        /// Optional path to fixture manifest TOML.
+        #[arg(long)]
+        fixtures: Option<PathBuf>,
+        /// Optional path to emitted scorecard JSON artifact.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Optional path to generated status markdown.
+        #[arg(long)]
+        status_md: Option<PathBuf>,
+    },
+
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
 
@@ -2162,6 +2175,9 @@ fn main() -> Result<()> {
                 UxScorecardOutputFormat::Json => UxScorecardFormat::Json,
             };
             ux_scorecard::run(format, input, output, status_md, ratchet_check)
+        }
+        Commands::SemanticScorecard { fixtures, output, status_md } => {
+            semantic_scorecard::run(fixtures, output, status_md)
         }
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {

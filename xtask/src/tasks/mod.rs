@@ -85,6 +85,7 @@ pub mod release_turnkey;
 pub mod review_receipts;
 pub mod srp_microcrates;
 pub mod swarm_summary;
+pub mod semantic_scorecard;
 pub mod targeted_checks;
 pub mod test;
 pub mod test_lsp;
