@@ -503,7 +503,7 @@ mod tests {
         // but only 30 remains, so we should get 30 (or None for find_before(21)).
         let mid = cache.find_before(21);
         assert!(
-            mid.map_or(true, |cp| cp.position != 20),
+            mid.is_none_or(|cp| cp.position != 20),
             "middle checkpoint (20) must be evicted when capacity=2 and total=3"
         );
         Ok(())
