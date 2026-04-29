@@ -79,7 +79,10 @@ impl SemanticShadowCompareReceipt {
     }
 }
 
-fn classify_verdict(old_result: &ShadowResultSummary, new_result: &ShadowResultSummary) -> ShadowCompareVerdict {
+fn classify_verdict(
+    old_result: &ShadowResultSummary,
+    new_result: &ShadowResultSummary,
+) -> ShadowCompareVerdict {
     if !old_result.available || !new_result.available {
         return ShadowCompareVerdict::Unavailable;
     }
@@ -88,17 +91,20 @@ fn classify_verdict(old_result: &ShadowResultSummary, new_result: &ShadowResultS
         return ShadowCompareVerdict::Same;
     }
 
-    if old_result.identities == new_result.identities {
-        return ShadowCompareVerdict::Ambiguous;
+    // Check count direction first so that count-only queries (e.g. CountUsages) that produce
+    // no identity strings but a non-zero match_count still get Improved/Regression rather
+    // than falling into the identity-equality Ambiguous arm below.
+    if new_result.match_count > old_result.match_count {
+        return ShadowCompareVerdict::Improved;
+    }
+    if new_result.match_count < old_result.match_count {
+        return ShadowCompareVerdict::Regression;
     }
 
-    if new_result.match_count > old_result.match_count {
-        ShadowCompareVerdict::Improved
-    } else if new_result.match_count < old_result.match_count {
-        ShadowCompareVerdict::Regression
-    } else {
-        ShadowCompareVerdict::Ambiguous
-    }
+    // Counts are equal but structs differ: identity sets must differ (available is already
+    // asserted true for both). Different identities at the same count is ambiguous —
+    // we cannot decide which answer is better without domain context.
+    ShadowCompareVerdict::Ambiguous
 }
 
 /// Build a stable summary from an optional set of identities.
@@ -160,5 +166,108 @@ mod tests {
             vec!["old path missing fact-backed answer".to_string()],
         );
         assert_eq!(receipt.verdict, ShadowCompareVerdict::Unavailable);
+    }
+
+    #[test]
+    fn same_verdict_when_results_identical() {
+        let summary = summarize_identities(Some(vec!["a.pm:1:1".to_string()]));
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::FindDefinition,
+            ShadowQueryInput { symbol: "Foo::bar".to_string() },
+            summary.clone(),
+            summary,
+            vec![],
+        );
+        assert_eq!(receipt.verdict, ShadowCompareVerdict::Same);
+    }
+
+    #[test]
+    fn improved_verdict_when_new_has_more_matches() {
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::FindReferences,
+            ShadowQueryInput { symbol: "Foo::bar".to_string() },
+            summarize_identities(Some(vec!["a.pm:1:1".to_string()])),
+            summarize_identities(Some(vec!["a.pm:1:1".to_string(), "b.pm:2:2".to_string()])),
+            vec![],
+        );
+        assert_eq!(receipt.verdict, ShadowCompareVerdict::Improved);
+    }
+
+    #[test]
+    fn regression_verdict_when_new_has_fewer_matches() {
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::FindReferences,
+            ShadowQueryInput { symbol: "Foo::bar".to_string() },
+            summarize_identities(Some(vec!["a.pm:1:1".to_string(), "b.pm:2:2".to_string()])),
+            summarize_identities(Some(vec!["a.pm:1:1".to_string()])),
+            vec![],
+        );
+        assert_eq!(receipt.verdict, ShadowCompareVerdict::Regression);
+    }
+
+    /// `CountUsages` produces identity-free summaries; verdict must be based on
+    /// `match_count` alone. The old logic incorrectly returned `Ambiguous` here
+    /// because the identity-equality check (`[] == []`) fired before the count
+    /// comparison, hiding the numeric difference.
+    #[test]
+    fn count_usages_improved_with_empty_identities() {
+        let old_summary =
+            ShadowResultSummary { available: true, match_count: 3, identities: vec![] };
+        let new_summary =
+            ShadowResultSummary { available: true, match_count: 5, identities: vec![] };
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::CountUsages,
+            ShadowQueryInput { symbol: "Foo::bar".to_string() },
+            old_summary,
+            new_summary,
+            vec![],
+        );
+        assert_eq!(receipt.verdict, ShadowCompareVerdict::Improved);
+    }
+
+    /// Symmetric regression case for `CountUsages`.
+    #[test]
+    fn count_usages_regression_with_empty_identities() {
+        let old_summary =
+            ShadowResultSummary { available: true, match_count: 5, identities: vec![] };
+        let new_summary =
+            ShadowResultSummary { available: true, match_count: 2, identities: vec![] };
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::CountUsages,
+            ShadowQueryInput { symbol: "Foo::bar".to_string() },
+            old_summary,
+            new_summary,
+            vec![],
+        );
+        assert_eq!(receipt.verdict, ShadowCompareVerdict::Regression);
+    }
+
+    /// Both paths unavailable: verdict must still be `Unavailable`, not `Same`.
+    #[test]
+    fn both_unavailable_yields_unavailable() {
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::FindDefinition,
+            ShadowQueryInput { symbol: "Foo::bar".to_string() },
+            summarize_identities(None),
+            summarize_identities(None),
+            vec![],
+        );
+        assert_eq!(receipt.verdict, ShadowCompareVerdict::Unavailable);
+    }
+
+    #[test]
+    fn summarize_identities_sorts_and_deduplicates() {
+        let summary = summarize_identities(Some(vec![
+            "c.pm:3:1".to_string(),
+            "a.pm:1:1".to_string(),
+            "a.pm:1:1".to_string(),
+            "b.pm:2:2".to_string(),
+        ]));
+        assert_eq!(summary.available, true);
+        assert_eq!(summary.match_count, 3);
+        assert_eq!(
+            summary.identities,
+            vec!["a.pm:1:1".to_string(), "b.pm:2:2".to_string(), "c.pm:3:1".to_string()]
+        );
     }
 }

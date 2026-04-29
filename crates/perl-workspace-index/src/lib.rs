@@ -67,10 +67,10 @@ pub mod folder;
 pub mod ignore;
 /// Monitoring, limits, and lifecycle instrumentation primitives.
 pub mod monitoring;
-/// Service-level objective tracking for workspace index operations.
-pub mod slo;
 /// Semantic shadow-compare receipt model for old-vs-new workspace query outputs.
 pub mod semantic_shadow_compare;
+/// Service-level objective tracking for workspace index operations.
+pub mod slo;
 
 /// Index lifecycle state machine.
 pub mod state_machine;
