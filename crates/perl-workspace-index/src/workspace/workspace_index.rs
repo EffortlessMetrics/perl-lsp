@@ -4094,6 +4094,100 @@ my $var = 42;
         );
     }
 
+
+    fn reference_kinds_for(index: &WorkspaceIndex, uri: &str, symbol_name: &str) -> Vec<ReferenceKind> {
+        let files = index.files.read();
+        let file = must_some(files.get(uri));
+        file.references
+            .get(symbol_name)
+            .map(|refs| refs.iter().map(|r| r.kind).collect())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn test_reference_kinds_sub_definition_and_call_are_distinct() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///typed-refs-sub.pl";
+        let code = "package TypedRefs;
+sub foo { return 1; }
+foo();
+";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let kinds = reference_kinds_for(&index, uri, "foo");
+        assert!(kinds.contains(&ReferenceKind::Definition));
+        assert!(kinds.contains(&ReferenceKind::Usage));
+    }
+
+    #[test]
+    fn test_reference_kinds_variable_read_and_write_are_distinct() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///typed-refs-var.pl";
+        let code = "my $value = 1;
+$value = 2;
+print $value;
+";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let kinds = reference_kinds_for(&index, uri, "$value");
+        assert!(kinds.contains(&ReferenceKind::Definition));
+        assert!(kinds.contains(&ReferenceKind::Write));
+        assert!(kinds.contains(&ReferenceKind::Read));
+    }
+
+    #[test]
+    fn test_reference_kinds_import_parent_and_export_ok_are_currently_import_only() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///typed-refs-import-export.pm";
+        let code = "package Child;
+use parent 'Base';
+our @EXPORT_OK = qw(foo);
+1;
+";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let parent_kinds = reference_kinds_for(&index, uri, "Base");
+        assert!(
+            parent_kinds.is_empty(),
+            "use parent inheritance edges are currently not stored as typed references"
+        );
+
+        let export_symbol_kinds = reference_kinds_for(&index, uri, "foo");
+        assert!(
+            export_symbol_kinds.is_empty(),
+            "EXPORT_OK entries are currently not represented as reference edges"
+        );
+    }
+
+    #[test]
+    fn test_reference_kinds_dynamic_and_meta_edges_are_not_typed_yet() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///typed-refs-dynamic.pl";
+        let code = r#"package TypedRefs;
+sub foo { 1 }
+&foo;
+my $code = \&foo;
+goto &foo;
+*alias = \&foo;
+eval "foo()";
+with 'RoleName';
+has 'name' => (is => 'ro');
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let foo_kinds = reference_kinds_for(&index, uri, "foo");
+        assert!(
+            foo_kinds.iter().all(|kind| matches!(kind, ReferenceKind::Definition | ReferenceKind::Usage)),
+            r"dynamic call forms (&foo, \&foo, goto &foo) are currently flattened to Usage"
+        );
+
+        assert!(
+            reference_kinds_for(&index, uri, "RoleName").is_empty(),
+            "role composition edges (`with 'RoleName'`) are not indexed as typed references yet"
+        );
+    }
+
     #[test]
     fn test_find_references() {
         let index = WorkspaceIndex::new();
