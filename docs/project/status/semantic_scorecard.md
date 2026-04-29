@@ -36,3 +36,24 @@ Fixtures loaded: `12`
 | undefined_symbol_false_positive_rate | baseline_pending | n/a |
 
 Initial harness: metrics intentionally baseline_pending until semantic facts land.
+
+## Wave 2 adapter/index migration status
+
+| Area | Status | Notes |
+|---|---|---|
+| Exact facts emitted | In progress | Canonical fact model is fixed (`AnchorFact`, `EntityFact`, `OccurrenceFact`, `EdgeFact`, `DiagnosticFact`); adapters are being wired incrementally. |
+| Fact shard write-through | Active (write-through only) | Workspace ingestion is substrate-only and intentionally not provider-facing yet. |
+| Definition candidate multimap | Staged | Compatibility-layer path exists for staged adoption; not yet cut over as sole definition source. |
+| Typed reference index | Staged | Typed-edge/index groundwork is staged behind compatibility behavior. |
+| Shadow-compare receipts | Planning scaffold | Receipt shape/planning exists; full behavior parity receipts are pending. |
+| Scorecard v1 | Scaffold/baseline pending | Fixture bank is live; metric rows stay `baseline_pending` until adapters/indexes are fully producing stable comparable outputs. |
+
+### Explicit non-goals for this wave
+
+- No provider cutover yet.
+- No rename/safe-delete cutover yet.
+- No full type inference.
+
+### Wave 3 pointer
+
+Next substantive cutover work is intentionally centered on `ImportSpec` extraction + `visible_symbols_at` implementation.

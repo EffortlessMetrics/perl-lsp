@@ -94,14 +94,29 @@ rename_plan(entity, new_name)
 safe_delete_plan(entity)
 ```
 
-## Wave 2 (After First-Wave Rails Land)
+## Wave 2 (Adapter/Index Bring-Up)
 
-1. `SymbolDecl -> EntityFact` adapter.
-2. `SymbolRef -> OccurrenceFact` adapter.
-3. `ExportInfo -> ExportSet` adapter.
-4. `FileFactShard` write-through in workspace store.
-5. Definition-candidate multimap behind compatibility APIs.
-6. Typed reference-edge global index behind compatibility APIs.
+Wave 2 began implementation and is intentionally **adapter/index only**. Current state:
+
+1. `SymbolDecl -> EntityFact` adapter: **in progress / partial**.
+2. `SymbolRef -> OccurrenceFact` adapter: **in progress / partial**.
+3. `ExportInfo -> ExportSet` adapter: **in progress / partial**.
+4. `FileFactShard` write-through in workspace store: **write-through only** (no provider cutover).
+5. Definition-candidate multimap behind compatibility APIs: **staged behind compatibility surface**.
+6. Typed reference-edge global index behind compatibility APIs: **staged behind compatibility surface**.
+7. Workspace shadow-compare receipt shape: **planning scaffold in place; behavioral receipts pending**.
+
+### Exact fact surface currently modeled
+
+Wave 2 adapters target the canonical vocabulary from `perl-semantic-facts`:
+
+- Anchor facts (`AnchorFact`)
+- Entity facts (`EntityFact`)
+- Occurrence facts (`OccurrenceFact`)
+- Edge facts (`EdgeFact`)
+- Diagnostic facts (`DiagnosticFact`)
+
+This means adapter work is constrained to translating existing semantic producers into these fact records with typed IDs/provenance/confidence, without changing provider behavior yet.
 
 ## Wave 3 (User-Visible Cutover Staging)
 
@@ -110,9 +125,13 @@ safe_delete_plan(entity)
 3. Completion consumes `VisibleSymbols` behind a feature flag.
 4. Undefined diagnostics consume `VisibleSymbols` behind a feature flag.
 
+Wave 3 is explicitly where `ImportSpec` + `visible_symbols_at(...)` become the bridge from substrate rails to provider-facing behavior.
+
 ## Out of Scope for First Wave
 
 - Full provider migration.
+- Rename/safe-delete provider cutover.
+- Full type inference.
 - Broad rewrite of existing semantic producers.
 - Claiming implementation completeness before fixtures and scorecards prove behavior.
 
@@ -129,4 +148,3 @@ safe_delete_plan(entity)
 - Capability truth: `features.toml`
 - Evidence-backed status: `docs/project/CURRENT_STATUS.md`
 - Canonical planning: `docs/project/ROADMAP.md`
-
