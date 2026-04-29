@@ -95,6 +95,18 @@ fn debug_output_for_unit_variants() {
     }
 }
 
+#[test]
+fn display_for_nodekind_uses_kind_name() {
+    let kind = NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() };
+    assert_eq!(kind.to_string(), "Variable");
+}
+
+#[test]
+fn display_for_node_uses_sexp() {
+    let node = Node::new(NodeKind::Number { value: "42".to_string() }, loc(0, 2));
+    assert_eq!(node.to_string(), node.to_sexp());
+}
+
 // ===========================================================================
 // 2. Clone / PartialEq on complex trees
 // ===========================================================================

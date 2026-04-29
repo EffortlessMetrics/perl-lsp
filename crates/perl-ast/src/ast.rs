@@ -105,6 +105,7 @@
 pub use perl_position_tracking::SourceLocation;
 // Re-export Token and TokenKind from perl-token for AST error nodes
 pub use perl_token::{Token, TokenKind};
+use std::fmt;
 
 /// Core AST node representing any Perl language construct within parsing workflows.
 ///
@@ -2262,6 +2263,20 @@ impl NodeKind {
         "MissingStatement",
         "UnknownRest",
     ];
+}
+
+impl fmt::Display for NodeKind {
+    /// Formats as the canonical `kind_name()` string.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.kind_name())
+    }
+}
+
+impl fmt::Display for Node {
+    /// Formats as the tree-sitter compatible S-expression.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.to_sexp())
+    }
 }
 
 /// Format unary operator for S-expression output
