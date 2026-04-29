@@ -1142,6 +1142,19 @@ enum Commands {
         ratchet_check: bool,
     },
 
+    /// Emit structured UX regression receipt from a failing ux-tests log.
+    UxRegressionReceipt {
+        /// Input log path captured from `just ux-tests` failure output.
+        #[arg(long)]
+        input: PathBuf,
+        /// Optional output path for receipt JSON.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Optional SHA for the triggering commit.
+        #[arg(long)]
+        sha: Option<String>,
+    },
+
     /// Publish semantic fixture scorecard artifact/status.
     SemanticScorecard {
         /// Optional path to semantic fixture manifest JSON.
@@ -2172,6 +2185,13 @@ fn main() -> Result<()> {
             }
             MetricsCommand::SweepStats { input } => metrics::sweep_stats::run(input),
         },
+        Commands::UxRegressionReceipt { input, output, sha } => {
+            ux_regression_receipt::run(ux_regression_receipt::UxRegressionReceiptConfig {
+                input,
+                output,
+                sha,
+            })
+        }
         Commands::UxScorecard { format, input, output, status_md, ratchet_check } => {
             let format = match format {
                 UxScorecardOutputFormat::Human => UxScorecardFormat::Human,
