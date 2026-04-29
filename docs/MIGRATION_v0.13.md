@@ -145,10 +145,10 @@ perl-lexer = "0.13.0"
 
 ### Wave 4 (Wave D) — Parser/AST satellites → `perl-parser`
 
-~20 parser and AST satellite crates absorbed into `perl-parser`. `perl-line-index`,
+19 parser and AST satellite crates absorbed into `perl-parser`. `perl-line-index`,
 `perl-uri`, and `perl-pod` are **NOT** absorbed — they remain foundation primitives.
-`perl-uri-classify` folds into `perl-uri` (not `perl-parser`). Merged as PRs #4493,
-#4506, #4510.
+`perl-uri-classify` folds into `perl-uri` (not `perl-parser`). `perl-feature-catalog` was
+deferred from Wave 4 and absorbed in Wave Final instead. Merged as PRs #4493, #4506, #4510.
 
 | Retired crate | New owning crate | Old import path | New import path |
 |---|---|---|---|
@@ -162,7 +162,6 @@ perl-lexer = "0.13.0"
 | `perl-incremental-parsing` | `perl-parser` | `use perl_incremental_parsing::` | `use perl_parser::incremental::` |
 | `perl-refactoring` | `perl-parser` | `use perl_refactoring::` | `use perl_parser::refactor::` |
 | `perl-dead-code` | `perl-parser` | `use perl_dead_code::` | `use perl_parser::dead_code::` |
-| `perl-feature-catalog` | `perl-parser` | `use perl_feature_catalog::` | `use perl_parser::` (build-dep) |
 | `perl-position-tracking` | `perl-parser` | `use perl_position_tracking::` | `use perl_parser::` |
 | `perl-qualified-name` | `perl-parser` | `use perl_qualified_name::` | `use perl_parser::` |
 | `perl-source-file` | `perl-parser` | `use perl_source_file::` | `use perl_parser::` |
@@ -395,8 +394,9 @@ perl-lsp-rs-core = "0.13.0"
 
 ### Wave G3 — LSP governance/tooling/infra → `perl-lsp-rs-core`
 
-7 LSP governance, tooling, and infrastructure crates absorbed into `perl-lsp-rs-core`.
-Merged as PR #4543.
+6 LSP governance, tooling, and infrastructure crates absorbed into `perl-lsp-rs-core`.
+`perl-lsp-config` was deferred from G3 due to a hard cycle via `perl-dap` — it lands in
+Wave Final instead. Merged as PR #4543.
 
 | Retired crate | New owning crate | Old import path | New import path |
 |---|---|---|---|
@@ -406,7 +406,6 @@ Merged as PR #4543.
 | `perl-lsp-critic-parser` | `perl-lsp-rs-core` | `use perl_lsp_critic_parser::` | `use perl_lsp_rs_core::critic_parser::` |
 | `perl-lsp-transport` | `perl-lsp-rs-core` | `use perl_lsp_transport::` | `use perl_lsp_rs_core::transport::` |
 | `perl-lsp-uri` | `perl-lsp-rs-core` | `use perl_lsp_uri::` | `use perl_lsp_rs_core::uri::` |
-| `perl-lsp-config` | `perl-lsp-rs-core` | `use perl_lsp_config::` | `use perl_lsp_rs_core::config::` |
 
 **Cargo.toml change:**
 
@@ -587,21 +586,17 @@ downstream `impl` blocks:
 
 ## Published crate count
 
-| Version | Published crates | Change |
+| Milestone | Published crates | Notes |
 |---|---|---|
-| 0.12.4 | 132 | baseline |
-| 0.13.0 (Wave 1) | 119 | −13 (perl-module-*) |
-| 0.13.0 (Wave 2) | 113 | −6 (perl-workspace-*) |
-| 0.13.0 (Wave 3) | 109 | −4 (lexer satellites) |
-| 0.13.0 (Wave 4) | 90 | −19 (parser/AST satellites) |
-| 0.13.0 (Wave B) | 87 | −4 (perl-symbol-*), +1 (perl-symbol NEW) |
-| 0.13.0 (Wave E) | 85 | −3 (diagnostic crates), +1 (perl-diagnostics RENAMED) |
-| 0.13.0 (Wave F) | 78 | −8 (perl-lsp-feature-*), +1 (perl-lsp-rs-core NEW) |
-| 0.13.0 (Wave G1) | 53 | −25 (LSP providers) |
-| 0.13.0 (Wave G2) | 49 | −5 (LSP runtime, −1 net: perl-lsp-text-utils kept) |
-| 0.13.0 (Wave G3) | 43 | −7 (LSP governance/infra) |
-| 0.13.0 (Wave H) | 32 | −11 (perl-dap-*) |
-| 0.13.0 (Wave Final) | **30** | −3 (remaining deferrals) |
+| v0.12.4 (baseline) | 132 | Before collapse |
+| v0.13.0 (final) | **30** | After all 10+ waves land |
+
+The collapse removed ~102 crates from the publish surface and added 2 new ones
+(`perl-symbol` and `perl-lsp-rs-core`), for a net reduction of 100.
+
+Waves that added a new crate: Wave B (perl-symbol NEW), Wave F (perl-lsp-rs-core NEW).
+Waves that renamed a crate: Wave 2 (perl-workspace-index → perl-workspace),
+Wave E (perl-diagnostics-codes → perl-diagnostics).
 
 ---
 
