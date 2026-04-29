@@ -7,6 +7,7 @@
 //! storage backends.
 
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 macro_rules! id_newtype {
     ($name:ident) => {
@@ -154,6 +155,21 @@ pub struct DiagnosticFact {
     pub confidence: Confidence,
 }
 
+/// Canonical export surface for a Perl package.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportSet {
+    /// Symbols exported by default (`@EXPORT`).
+    pub default_exports: BTreeSet<String>,
+    /// Symbols exported on request (`@EXPORT_OK`).
+    pub optional_exports: BTreeSet<String>,
+    /// Export-tag groups (`%EXPORT_TAGS`), tag name -> member symbols.
+    pub tag_exports: BTreeMap<String, BTreeSet<String>>,
+    /// Inference source used to derive this export surface.
+    pub provenance: Provenance,
+    /// Confidence associated with the inferred export surface.
+    pub confidence: Confidence,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -244,6 +260,27 @@ mod tests {
         let serialized = serde_json::to_string(&id)?;
         let decoded: EntityId = serde_json::from_str(&serialized)?;
         assert_eq!(decoded, id);
+        Ok(())
+    }
+
+    #[test]
+    fn export_set_roundtrips_with_tag_membership() -> Result<(), serde_json::Error> {
+        let mut tag_exports = BTreeMap::new();
+        tag_exports.insert(
+            "all".to_string(),
+            BTreeSet::from(["foo".to_string(), "bar".to_string()]),
+        );
+        let fact = ExportSet {
+            default_exports: BTreeSet::from(["foo".to_string()]),
+            optional_exports: BTreeSet::from(["bar".to_string(), "baz".to_string()]),
+            tag_exports,
+            provenance: Provenance::ImportExportInference,
+            confidence: Confidence::High,
+        };
+
+        let serialized = serde_json::to_string(&fact)?;
+        let decoded: ExportSet = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, fact);
         Ok(())
     }
 }

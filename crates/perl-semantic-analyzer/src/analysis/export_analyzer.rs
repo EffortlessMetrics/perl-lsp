@@ -27,6 +27,7 @@
 //! forms are extracted.
 
 use crate::ast::{Node, NodeKind};
+use perl_semantic_facts::{Confidence, ExportSet, Provenance};
 use std::collections::{HashMap, HashSet};
 
 /// Information extracted from an Exporter-based module.
@@ -75,6 +76,28 @@ impl ExportSymbolExtractor {
         Self::walk_and_extract_exports(ast, &detector, &mut info);
 
         Some(info)
+    }
+
+    /// Extract canonical export facts from an AST when Exporter semantics are detected.
+    pub fn extract_export_set(ast: &Node) -> Option<ExportSet> {
+        let info = Self::extract(ast)?;
+        Some(Self::to_export_set(&info))
+    }
+
+    /// Convert extracted Exporter arrays to canonical facts.
+    pub fn to_export_set(info: &ExportInfo) -> ExportSet {
+        let tag_exports = info
+            .export_tags
+            .iter()
+            .map(|(tag, symbols)| (tag.clone(), symbols.iter().cloned().collect()))
+            .collect();
+        ExportSet {
+            default_exports: info.default_export.iter().cloned().collect(),
+            optional_exports: info.optional_export.iter().cloned().collect(),
+            tag_exports,
+            provenance: Provenance::ImportExportInference,
+            confidence: Confidence::High,
+        }
     }
 
     /// Detect if the AST represents an Exporter-based module.
