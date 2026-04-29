@@ -151,13 +151,19 @@ describe('OnboardingManager.checkPerltidyInstalled', () => {
   });
 });
 
-describe('OnboardingManager.checkPerlcriticSetup', () => {
+describe('OnboardingManager.checkPerlcriticSetup (tilde expansion)', () => {
+  // Use a unique temp file name to avoid collisions across parallel test runs.
+  // We write inside os.homedir() because resolveUserPath expands `~/` to
+  // os.homedir() and we need fs.existsSync to confirm the expansion is correct.
+  // The file is cleaned up in a `finally` block regardless of test outcome.
   test('accepts ~/ profile path when file exists in the home directory', async () => {
-    const profileName = '.perlcritic-onboarding-test.rc';
+    const profileName = `.perlcritic-test-${Date.now()}-${process.pid}.rc`;
     const profilePath = path.join(os.homedir(), profileName);
-    fs.writeFileSync(profilePath, 'severity = 3\n');
-
+    let profileWritten = false;
     try {
+      fs.writeFileSync(profilePath, 'severity = 3\n');
+      profileWritten = true;
+
       (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
         get: (key: string, defaultValue?: unknown) => {
           if (key === 'perlcritic') {
@@ -180,7 +186,9 @@ describe('OnboardingManager.checkPerlcriticSetup', () => {
       expect(result.status).toBe(HealthCheckStatus.Ok);
       expect(result.detail).toBe('perlcritic found');
     } finally {
-      fs.rmSync(profilePath, { force: true });
+      if (profileWritten) {
+        fs.rmSync(profilePath, { force: true });
+      }
     }
   });
 });
