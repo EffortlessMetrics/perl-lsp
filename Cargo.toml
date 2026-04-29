@@ -11,6 +11,7 @@ members = [
     "crates/perl-parser-bench",
     "crates/perl-parser-core",
     "crates/perl-parser-pest",
+    "crates/perl-semantic-facts",
     "crates/perl-semantic-analyzer",
     "crates/perl-workspace-index",
     "crates/perl-refactoring",
@@ -252,6 +253,7 @@ perl-dead-code = { path = "crates/perl-dead-code", version = "0.12.4" }
 # (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
 # Tier 2: Single-level dependencies
 perl-parser-core = { path = "crates/perl-parser-core", version = "0.12.4" }
+perl-semantic-facts = { path = "crates/perl-semantic-facts", version = "0.12.4" }
 # (perl-lsp-transport absorbed into perl-lsp-rs-core::transport — Wave G3 step 4)
 # (perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling — Wave G3 step 6)
 perl-lsp-perltidy = { path = "crates/perl-lsp-perltidy", version = "0.12.4" }
