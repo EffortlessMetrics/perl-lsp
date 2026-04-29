@@ -67,6 +67,9 @@ use crate::document_store::{Document, DocumentStore};
 use crate::position::{Position, Range};
 use crate::workspace::monitoring::IndexInstrumentation;
 use parking_lot::RwLock;
+use perl_semantic_facts::{
+    AnchorFact, AnchorId, Confidence, EdgeFact, EntityFact, EntityId, EntityKind, FileId, Provenance,
+};
 use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -1124,6 +1127,33 @@ pub struct FileIndex {
     folder_uri: Option<String>,
 }
 
+/// Write-through semantic fact storage for one indexed file.
+#[derive(Clone)]
+pub struct FileFactShard {
+    /// Canonical file URI for this shard.
+    pub source_uri: String,
+    /// Stable file identifier derived from normalized URI.
+    pub file_id: FileId,
+    /// Whole-file content hash used for stale-shard replacement.
+    pub content_hash: u64,
+    /// Optional per-category hashes for change diagnostics.
+    pub anchors_hash: Option<u64>,
+    /// Optional per-category hashes for change diagnostics.
+    pub entities_hash: Option<u64>,
+    /// Optional per-category hashes for change diagnostics.
+    pub occurrences_hash: Option<u64>,
+    /// Optional per-category hashes for change diagnostics.
+    pub edges_hash: Option<u64>,
+    /// Anchor facts for this file.
+    pub anchors: Vec<AnchorFact>,
+    /// Entity facts for this file.
+    pub entities: Vec<EntityFact>,
+    /// Occurrence facts for this file.
+    pub occurrences: Vec<perl_semantic_facts::OccurrenceFact>,
+    /// Edge facts for this file.
+    pub edges: Vec<EdgeFact>,
+}
+
 /// Thread-safe workspace index
 pub struct WorkspaceIndex {
     /// Index data per file URI (normalized key -> data)
@@ -1135,6 +1165,8 @@ pub struct WorkspaceIndex {
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
     /// Provides O(1) lookup for `find_references()` instead of iterating all files.
     global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
+    /// Write-through semantic fact shards keyed by normalized URI.
+    fact_shards: Arc<RwLock<HashMap<String, FileFactShard>>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
     /// Workspace folder URIs for multi-root workspace support
@@ -1400,6 +1432,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
             global_references: Arc::new(RwLock::new(HashMap::new())),
+            fact_shards: Arc::new(RwLock::new(HashMap::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1438,6 +1471,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
+            fact_shards: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1582,6 +1616,8 @@ impl WorkspaceIndex {
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
         visitor.visit(&ast, &mut file_index);
 
+        let fact_shard = Self::build_fact_shard(&uri_str, content_hash, &file_index);
+
         // Update the index, refresh the global symbol cache, and replace this file's
         // contribution in the global reference index.
         {
@@ -1614,6 +1650,7 @@ impl WorkspaceIndex {
                     }
                 }
             }
+            self.fact_shards.write().insert(key, fact_shard);
         }
 
         Ok(())
@@ -1647,6 +1684,7 @@ impl WorkspaceIndex {
         // Remove file index
         let mut files = self.files.write();
         if let Some(file_index) = files.remove(&key) {
+            self.fact_shards.write().remove(&key);
             // Incrementally remove symbols and re-insert any shadowed names.
             let mut symbols = self.symbols.write();
             Self::incremental_remove_symbols(&files, &mut symbols, &file_index);
@@ -2203,6 +2241,64 @@ impl WorkspaceIndex {
         self.files.write().clear();
         self.symbols.write().clear();
         self.global_references.write().clear();
+        self.fact_shards.write().clear();
+    }
+
+    fn hash_uri_to_file_id(uri: &str) -> FileId {
+        let mut hasher = DefaultHasher::new();
+        uri.hash(&mut hasher);
+        FileId(hasher.finish())
+    }
+
+    fn build_fact_shard(uri: &str, content_hash: u64, file_index: &FileIndex) -> FileFactShard {
+        let file_id = Self::hash_uri_to_file_id(uri);
+        let mut anchors = Vec::new();
+        let mut entities = Vec::new();
+        for (idx, symbol) in file_index.symbols.iter().enumerate() {
+            let anchor_id = AnchorId((idx + 1) as u64);
+            anchors.push(AnchorFact {
+                id: anchor_id,
+                file_id,
+                span_start_byte: symbol.range.start.line,
+                span_end_byte: symbol.range.end.line,
+                scope_id: None,
+                provenance: Provenance::SearchFallback,
+                confidence: Confidence::Low,
+            });
+            entities.push(EntityFact {
+                id: EntityId((idx + 1) as u64),
+                kind: EntityKind::Unknown,
+                canonical_name: symbol.qualified_name.clone().unwrap_or_else(|| symbol.name.clone()),
+                anchor_id: Some(anchor_id),
+                scope_id: None,
+                provenance: Provenance::SearchFallback,
+                confidence: Confidence::Low,
+            });
+        }
+        FileFactShard {
+            source_uri: uri.to_string(),
+            file_id,
+            content_hash,
+            anchors_hash: Some(anchors.len() as u64),
+            entities_hash: Some(entities.len() as u64),
+            occurrences_hash: Some(0),
+            edges_hash: Some(0),
+            anchors,
+            entities,
+            occurrences: Vec::new(),
+            edges: Vec::new(),
+        }
+    }
+
+    /// Number of stored file fact shards.
+    pub fn fact_shard_count(&self) -> usize {
+        self.fact_shards.read().len()
+    }
+
+    /// Fetch a file fact shard for test/inspection.
+    pub fn file_fact_shard(&self, uri: &str) -> Option<FileFactShard> {
+        let key = DocumentStore::uri_key(&Self::normalize_uri(uri));
+        self.fact_shards.read().get(&key).cloned()
     }
 
     /// Return the number of indexed files in the workspace
