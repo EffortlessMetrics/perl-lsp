@@ -11,6 +11,7 @@ use crate::ignore::{is_skipped_dir_name, path_contains_skipped_component};
 use perl_parser_core::source_file::is_perl_source_path;
 use std::collections::HashSet;
 use std::ffi::OsString;
+use std::path::Component;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use walkdir::{DirEntry, WalkDir};
@@ -110,6 +111,10 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
 
         let relative_path = PathBuf::from(bytes_to_os_string(entry));
         let relative_path = relative_path.as_path();
+        if !is_safe_relative_git_path(relative_path) {
+            excluded_count += 1;
+            continue;
+        }
         if path_contains_skipped_component(relative_path) {
             excluded_count += 1;
             continue;
@@ -193,6 +198,10 @@ fn should_skip_dir(entry: &DirEntry) -> bool {
 
 fn sort_paths_lexically(paths: &mut [PathBuf]) {
     paths.sort_unstable_by(|left, right| left.as_os_str().cmp(right.as_os_str()));
+}
+
+fn is_safe_relative_git_path(path: &Path) -> bool {
+    !path.is_absolute() && !path.components().any(|component| matches!(component, Component::ParentDir))
 }
 
 fn log_discovery(result: &DiscoveryResult) {
@@ -402,6 +411,40 @@ mod tests {
 
         assert_eq!(files.len(), 1);
         assert_eq!(files[0], Path::new("/home/user/project/lib/Module.pm"));
+    }
+
+    #[test]
+    fn parse_git_output_excludes_parent_directory_components() {
+        let root = Path::new("/tmp/workspace");
+        let payload = b"../outside.pm\0lib/ok.pm\0";
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(files, vec![root.join("lib/ok.pm")]);
+        assert_eq!(excluded_count, 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn parse_git_output_excludes_absolute_paths() {
+        let root = Path::new("/tmp/workspace");
+        // git ls-files should never emit absolute paths, but defend against
+        // a corrupted or adversarial git output that attempts path escape.
+        let payload = b"/etc/passwd\0lib/ok.pm\0";
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(files, vec![root.join("lib/ok.pm")]);
+        assert_eq!(excluded_count, 1);
+    }
+
+    #[test]
+    fn parse_git_output_excludes_embedded_parent_directory_traversal() {
+        let root = Path::new("/tmp/workspace");
+        // Embedded `..` must be rejected even when not at the start of the path.
+        let payload = b"lib/../../etc/passwd\0lib/ok.pm\0";
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(files, vec![root.join("lib/ok.pm")]);
+        assert_eq!(excluded_count, 1);
     }
 
     #[test]
