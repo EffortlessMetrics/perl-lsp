@@ -111,6 +111,7 @@ const RECENT_OUTPUT_MAX_LINES: usize = 2048;
 const DEBUG_SESSION_TERMINATE_WAIT_MS: u64 = 250;
 const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
 const DEBUGGER_FRAME_POLL_MS: u64 = 10;
+const MAX_DEBUGGER_IDENTIFIER_LEN: usize = 512;
 
 fn context_re() -> Option<&'static Regex> {
     CONTEXT_RE
@@ -362,7 +363,8 @@ fn set_variable_name_re() -> Option<&'static Regex> {
 
 /// Validate DAP setVariable names (e.g. `$x`, `%ENV`, `$Package::value`) for safe passthrough.
 fn is_valid_set_variable_name(name: &str) -> bool {
-    set_variable_name_re().is_some_and(|re| re.is_match(name))
+    name.len() <= MAX_DEBUGGER_IDENTIFIER_LEN
+        && set_variable_name_re().is_some_and(|re| re.is_match(name))
 }
 
 fn function_breakpoint_name_re() -> Option<&'static Regex> {
@@ -373,7 +375,8 @@ fn function_breakpoint_name_re() -> Option<&'static Regex> {
 }
 
 fn is_valid_function_breakpoint_name(name: &str) -> bool {
-    function_breakpoint_name_re().is_some_and(|re| re.is_match(name))
+    name.len() <= MAX_DEBUGGER_IDENTIFIER_LEN
+        && function_breakpoint_name_re().is_some_and(|re| re.is_match(name))
 }
 
 fn inc_re() -> Option<&'static Regex> {

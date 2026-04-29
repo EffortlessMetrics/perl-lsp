@@ -6,13 +6,15 @@
 //! only scans backwards from a position, so inline POD inside a sub body
 //! is missed without a body-aware fallback.
 //!
-//! Per perlpod, POD directives must start at column 0 — the parser's
-//! tokenizer recognises `=pod`/`=head1`/`=cut` as a trivia block only
-//! when they begin a line. The fixtures below therefore place POD
-//! directives at column 0 inside sub bodies, which is the form real
-//! Perl source uses.
+//! **Column-0 rule and lenient hover:** Per perlpod, POD directives must
+//! start at column 0 — `perl` itself ignores indented `=pod` lines.  The
+//! LSP deliberately relaxes this for hover: it surfaces whatever the
+//! author wrote as inline documentation, even if indented.  This is a UX
+//! choice documented in issue #4599.  Both column-0 and indented fixtures
+//! are exercised below.
 //!
 //! See: <https://github.com/EffortlessMetrics/perl-lsp/issues/3407>
+//! See: <https://github.com/EffortlessMetrics/perl-lsp/issues/4599>
 
 use perl_semantic_analyzer::Parser;
 use perl_semantic_analyzer::analysis::semantic::SemanticAnalyzer;
@@ -262,6 +264,39 @@ fn inline_pod_in_anonymous_sub_is_surfaced() -> TestResult {
         .all_hover_entries()
         .any(|h| h.documentation.as_deref().is_some_and(|d| d.contains("Anonymous callback doc")));
     assert!(found, "expected anonymous sub hover to carry inline POD");
+    Ok(())
+}
+
+/// Indented `=pod` directives (column > 0) should be surfaced as hover
+/// documentation even though perlpod requires column-0 placement.
+///
+/// This is the deliberate lenient behaviour documented in issue #4599: the
+/// LSP surfaces what the author wrote, not what `perl` would parse.  The
+/// `^\s*` prefix in `BODY_POD_RE` is the mechanism; this test guards it
+/// against accidental strictening.
+#[test]
+fn inline_pod_indented_inside_sub_body_is_surfaced_lenient() -> TestResult {
+    // POD directives indented by 4 spaces — perl would ignore these, but
+    // the LSP should still surface them as hover documentation.
+    let code = "sub indented_docs {\n\
+    =pod\n\
+    Indented inline docs that perl would ignore\n\
+    =cut\n\
+        return 1;\n\
+    }\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+    let symbols = analyzer.symbol_table().find_symbol("indented_docs", 0, SymbolKind::Subroutine);
+    let symbol = symbols.first().ok_or("indented_docs should be in the symbol table")?;
+    let hover =
+        analyzer.hover_at(symbol.location).ok_or("expected hover info for indented_docs")?;
+    let doc = hover.documentation.as_deref().unwrap_or("");
+    assert!(
+        doc.contains("Indented inline docs"),
+        "LSP lenient mode should surface indented POD that perl ignores, got: {doc:?}"
+    );
     Ok(())
 }
 
