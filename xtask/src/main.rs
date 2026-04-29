@@ -1153,6 +1153,9 @@ enum Commands {
         /// Optional path to generated status markdown.
         #[arg(long)]
         status_md: Option<PathBuf>,
+        /// Check mode: fail if generated outputs differ from committed files.
+        #[arg(long)]
+        check: bool,
     },
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
@@ -2179,8 +2182,8 @@ fn main() -> Result<()> {
             };
             ux_scorecard::run(format, input, output, status_md, ratchet_check)
         }
-        Commands::SemanticScorecard { manifest, output, status_md } => {
-            semantic_scorecard::run(manifest, output, status_md)
+        Commands::SemanticScorecard { manifest, output, status_md, check } => {
+            semantic_scorecard::run(manifest, output, status_md, check)
         }
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
