@@ -10,11 +10,18 @@
 //! the actual CI state. **Live CI (statusCheckRollup) is the ground truth:**
 //!
 //! - Live CI GREEN → strip `needs-ci-fix` (the action it flagged for is moot)
+//! - Live CI SKIPPED → strip `needs-ci-fix` (gate is not applicable — path-conditioning)
 //! - Live CI RED → leave `needs-ci-fix` in place; dispatch green-ci to fix
 //! - Live CI PENDING → leave both alone
 //!
+//! "SKIPPED" arises from path-conditioning: docs-only or CI-config-only diffs
+//! skip the Rust build lanes, so the merge-gate job is never required for those
+//! PRs. The reconciler treats SKIPPED the same as GREEN for `needs-ci-fix`
+//! resolution — the gate obligation is satisfied because it was never applicable.
+//!
 //! For `merge-ready + needs-ci-fix` specifically:
 //! - Live CI GREEN → strip `needs-ci-fix`, keep `merge-ready`
+//! - Live CI SKIPPED → strip `needs-ci-fix`, keep `merge-ready` (gate not applicable)
 //! - Live CI RED → strip `merge-ready` (live CI blocks merge)
 //! - Live CI PENDING → leave both
 //!
@@ -146,6 +153,11 @@ pub enum CiOutcome {
     Success,
     Failure,
     Pending,
+    /// All present checks were SKIPPED — path-conditioning excluded the gate
+    /// (e.g. docs-only diff). Treated like `Success` for `needs-ci-fix`
+    /// resolution: the gate obligation is satisfied because it was inapplicable.
+    /// Does NOT trigger the live-CI-red `merge-ready` strip.
+    Skipped,
 }
 
 // ---------------------------------------------------------------------------
@@ -277,17 +289,26 @@ pub fn detect_contradictions(
 
     // --- CI-specific: live state is ground truth ---
 
-    // needs-ci-fix: strip when live CI is definitively green.
-    if has(NEEDS_CI_FIX) && ci_outcome == CiOutcome::Success {
+    // needs-ci-fix: strip when live CI is definitively green OR all checks were SKIPPED
+    // (path-conditioning — e.g. docs-only diff excludes the gate entirely).
+    if has(NEEDS_CI_FIX) && matches!(ci_outcome, CiOutcome::Success | CiOutcome::Skipped) {
+        let reason = if ci_outcome == CiOutcome::Skipped {
+            format!(
+                "live CI checks are all SKIPPED (path-conditioning) — \
+                 gate obligation is not applicable; {NEEDS_CI_FIX} is stale, stripping it"
+            )
+        } else {
+            format!("live CI Gate is SUCCESS — {NEEDS_CI_FIX} is stale, stripping it")
+        };
         out.push(Contradiction {
             keep: CI_GREEN.to_string(),
             strip: NEEDS_CI_FIX.to_string(),
-            reason: format!("live CI Gate is SUCCESS — {NEEDS_CI_FIX} is stale, stripping it"),
+            reason,
         });
     }
 
     // merge-ready + needs-ci-fix:
-    // - Live CI green: strip needs-ci-fix, keep merge-ready (handled above)
+    // - Live CI green or all SKIPPED: strip needs-ci-fix, keep merge-ready (handled above)
     // - Live CI red: strip merge-ready (live CI blocks merge)
     // - Live CI pending: leave both
     if has(MERGE_READY) && has(NEEDS_CI_FIX) && ci_outcome == CiOutcome::Failure {
@@ -449,26 +470,47 @@ pub fn query_live_ci_state(pr_number: u64) -> Result<CiOutcome> {
         return Ok(CiOutcome::Pending);
     }
 
-    let mut all_success = true;
+    let mut any_definitive_success = false;
+    let mut any_failure = false;
+
     for check in &checks {
-        let state = check
-            .get("conclusion")
-            .or_else(|| check.get("state"))
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("UNKNOWN");
+        // GitHub uses `conclusion` for completed runs (SUCCESS, FAILURE, SKIPPED, etc.)
+        // and `state` as a fallback for older check-suite entries. When `conclusion`
+        // is present as a JSON null (check still in progress), fall through to `state`.
+        let conclusion_val = check.get("conclusion");
+        let state_val = if conclusion_val.and_then(serde_json::Value::as_str).is_none() {
+            check.get("state")
+        } else {
+            conclusion_val
+        };
+        let state = state_val.and_then(serde_json::Value::as_str).unwrap_or("UNKNOWN");
 
         match state.to_uppercase().as_str() {
-            "SUCCESS" | "NEUTRAL" | "SKIPPED" => {}
+            "SUCCESS" | "NEUTRAL" => {
+                any_definitive_success = true;
+            }
+            "SKIPPED" => {
+                // Path-conditioned skip — counts neither as success nor failure.
+                // If ALL checks land here we return Skipped below.
+            }
             "IN_PROGRESS" | "QUEUED" | "WAITING" | "PENDING" => {
                 return Ok(CiOutcome::Pending);
             }
             _ => {
-                all_success = false;
+                any_failure = true;
             }
         }
     }
 
-    if all_success { Ok(CiOutcome::Success) } else { Ok(CiOutcome::Failure) }
+    if any_failure {
+        return Ok(CiOutcome::Failure);
+    }
+    if any_definitive_success {
+        return Ok(CiOutcome::Success);
+    }
+    // No failures, no pending, no explicit successes: all present checks were
+    // SKIPPED (path-conditioning). Report as Skipped — not applicable.
+    Ok(CiOutcome::Skipped)
 }
 
 // ---------------------------------------------------------------------------
@@ -757,6 +799,62 @@ mod tests {
         let strips: Vec<&str> = c.iter().map(|x| x.strip.as_str()).collect();
         assert!(!strips.contains(&MERGE_READY), "should not strip merge-ready when pending");
         assert!(!strips.contains(&NEEDS_CI_FIX), "should not strip needs-ci-fix when pending");
+    }
+
+    // -----------------------------------------------------------------------
+    // CiOutcome::Skipped — path-conditioned PRs (docs-only, CI-config-only)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn strips_needs_ci_fix_when_live_ci_is_skipped() {
+        // Path-conditioned PR: all checks SKIPPED — gate is not applicable.
+        // needs-ci-fix should be treated as stale and stripped.
+        let pr = make_pr(1, &[CI_GREEN, NEEDS_CI_FIX]);
+        let c = detect_contradictions(&pr, &[], CiOutcome::Skipped);
+        assert_eq!(c.len(), 1);
+        assert_eq!(c[0].strip, NEEDS_CI_FIX);
+        assert!(
+            c[0].reason.contains("SKIPPED") || c[0].reason.contains("path-conditioning"),
+            "reason should mention SKIPPED or path-conditioning, got: {}",
+            c[0].reason
+        );
+    }
+
+    #[test]
+    fn merge_ready_plus_needs_ci_fix_skipped_strips_needs_ci_fix_not_merge_ready() {
+        // Path-conditioned PR with merge-ready: SKIPPED means gate inapplicable,
+        // so strip needs-ci-fix but keep merge-ready (same as Success path).
+        let pr = make_pr(1, &[MERGE_READY, NEEDS_CI_FIX]);
+        let c = detect_contradictions(&pr, &[], CiOutcome::Skipped);
+        let strips: Vec<&str> = c.iter().map(|x| x.strip.as_str()).collect();
+        assert!(
+            strips.contains(&NEEDS_CI_FIX),
+            "should strip needs-ci-fix when all checks SKIPPED"
+        );
+        assert!(
+            !strips.contains(&MERGE_READY),
+            "should NOT strip merge-ready when CI is SKIPPED (gate inapplicable)"
+        );
+    }
+
+    #[test]
+    fn idempotent_with_skipped_ci() {
+        // Second pass on a path-conditioned PR must be a no-op.
+        let mut state = labels(&[MERGE_READY, CI_GREEN, NEEDS_CI_FIX]);
+        let pass1 = apply_pass(&mut state, &[], CiOutcome::Skipped);
+        // Should strip needs-ci-fix only.
+        assert!(pass1.contains(&NEEDS_CI_FIX.to_string()), "pass1 should strip needs-ci-fix");
+        assert!(!pass1.contains(&MERGE_READY.to_string()), "pass1 should not strip merge-ready");
+        let pass2 = apply_pass(&mut state, &[], CiOutcome::Skipped);
+        assert!(pass2.is_empty(), "second pass must be no-op on path-conditioned PR");
+    }
+
+    #[test]
+    fn clean_pr_with_all_skipped_ci_produces_no_strips() {
+        // A PR with only merge-ready + ci-green and all CI SKIPPED: nothing to strip.
+        let mut state = labels(&[MERGE_READY, CI_GREEN, DEEP_REVIEWED, DIFF_AUDITED]);
+        let pass1 = apply_pass(&mut state, &[], CiOutcome::Skipped);
+        assert!(pass1.is_empty(), "clean path-conditioned PR should produce no strips");
     }
 
     // -----------------------------------------------------------------------
