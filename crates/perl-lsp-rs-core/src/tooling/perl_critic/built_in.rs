@@ -191,7 +191,7 @@ fn missing_use_statement_violation(
     feature: &str,
     explanation: &str,
 ) -> Vec<Violation> {
-    if content.contains(&format!("use {feature}")) {
+    if has_use_statement(content, feature) {
         return Vec::new();
     }
 
@@ -203,6 +203,41 @@ fn missing_use_statement_violation(
         range: insertion_range(),
         file: String::new(),
     }]
+}
+
+
+fn has_use_statement(content: &str, feature: &str) -> bool {
+    content.lines().any(|line| line_has_use_feature(line, feature))
+}
+
+fn line_has_use_feature(line: &str, feature: &str) -> bool {
+    let code_portion = line.split('#').next().unwrap_or_default();
+    let use_stmt = format!("use {feature}");
+    let mut search = code_portion;
+
+    while let Some(pos) = search.find(&use_stmt) {
+        let before_ok = pos == 0
+            || !search[..pos]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
+
+        let after = &search[pos + use_stmt.len()..];
+        let after_trimmed = after.trim_start();
+        let after_ok = after_trimmed.is_empty()
+            || after_trimmed.starts_with(';')
+            || after_trimmed.starts_with('(')
+            || after_trimmed.starts_with('v')
+            || after_trimmed.starts_with(char::is_whitespace);
+
+        if before_ok && after_ok {
+            return true;
+        }
+
+        search = &search[pos + use_stmt.len()..];
+    }
+
+    false
 }
 
 fn find_bareword_open_filehandles(content: &str) -> Vec<Range> {
@@ -529,6 +564,44 @@ eval $code;
         assert!(
             !has_two_arg_violation,
             "three-argument open should not be flagged as two-argument open"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn builtin_analyzer_ignores_commented_use_strict() -> TestResult {
+        let source = "# use strict;
+use warnings;
+my $x = 1;
+";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(
+            violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseStrict"),
+            "commented use strict should not satisfy the policy"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn builtin_analyzer_accepts_versioned_use_strict() -> TestResult {
+        let source = "use strict v1.00;
+use warnings;
+my $x = 1;
+";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(
+            !violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseStrict"),
+            "versioned use strict should satisfy the policy"
         );
         Ok(())
     }
