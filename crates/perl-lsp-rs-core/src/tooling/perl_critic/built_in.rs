@@ -191,7 +191,7 @@ fn missing_use_statement_violation(
     feature: &str,
     explanation: &str,
 ) -> Vec<Violation> {
-    if content.contains(&format!("use {feature}")) {
+    if has_use_statement(content, feature) {
         return Vec::new();
     }
 
@@ -203,6 +203,25 @@ fn missing_use_statement_violation(
         range: insertion_range(),
         file: String::new(),
     }]
+}
+
+fn has_use_statement(content: &str, feature: &str) -> bool {
+    content.lines().any(|line| has_use_statement_line(line, feature))
+}
+
+fn has_use_statement_line(line: &str, feature: &str) -> bool {
+    let code_portion = line.split('#').next().unwrap_or_default();
+    let mut tokens = code_portion.split_whitespace();
+    let Some(first) = tokens.next() else {
+        return false;
+    };
+    if first != "use" {
+        return false;
+    }
+    let Some(module) = tokens.next() else {
+        return false;
+    };
+    module.trim_end_matches(';') == feature
 }
 
 fn find_bareword_open_filehandles(content: &str) -> Vec<Range> {
@@ -549,6 +568,19 @@ eval $code;
             .ok_or("expected InputOutput::ProhibitTwoArgOpen violation")?;
 
         assert_eq!(v.range.start.line, 2, "violation should be on line 2 (zero-indexed)");
+        Ok(())
+    }
+
+    #[test]
+    fn comments_do_not_satisfy_use_statement_requirements() -> TestResult {
+        let source = "# use strict;\n# use warnings;\nmy $x = 1;\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseStrict"));
+        assert!(violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseWarnings"));
         Ok(())
     }
 }
