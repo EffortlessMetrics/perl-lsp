@@ -1612,19 +1612,21 @@ fn run_single_gate(
     // Run through the platform shell because gate commands are policy strings.
     // Linux CI uses bash; Windows local runs use cmd.exe to keep `cargo`/`just`
     // lookup and simple command chaining available without requiring Git Bash.
-    let result = shell_command(command).stderr_to_stdout().stdout_capture().unchecked().run();
+    //
+    // On non-Windows CI we stream output through `tee` so GitHub Actions sees
+    // live output from long-running cargo compilation steps. Without streaming,
+    // the runner kills jobs that produce no output for several minutes (the
+    // output was being fully buffered by stdout_capture). We write to the log
+    // file via tee and read it back afterward for the receipt summary.
+    let result = run_shell_gate(command, &log_path);
 
     let duration_ms = start.elapsed().as_millis() as u64;
 
     match result {
-        Ok(output) => {
-            let exit_code = output.status.code().unwrap_or(-1);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-
-            // Write log file
-            if let Err(e) = fs::write(&log_path, stdout.as_bytes()) {
-                eprintln!("Warning: Failed to write log file: {}", e);
-            }
+        Ok(exit_code) => {
+            // Read the log file written by the shell command
+            let stdout_bytes = fs::read(&log_path).unwrap_or_default();
+            let stdout = String::from_utf8_lossy(&stdout_bytes);
 
             // Check if timed out
             let timed_out = duration_ms > (timeout_secs * 1000);
@@ -1673,34 +1675,63 @@ fn run_single_gate(
                 first_failure,
             })
         }
-        Err(e) => {
-            let duration_ms = start.elapsed().as_millis() as u64;
-            Ok(GateResult {
-                gate_name: gate.name.clone(),
-                tier: gate.tier.clone(),
-                status: "error".to_string(),
-                required: Some(gate.required),
-                duration_ms,
-                command: command.to_string(),
-                exit_code: None,
-                output_summary: Some(format!("Execution error: {}", e)),
-                log_path: None,
-                metrics: None,
-                artifacts: None,
-                first_failure: None,
-            })
-        }
+        Err(e) => Ok(GateResult {
+            gate_name: gate.name.clone(),
+            tier: gate.tier.clone(),
+            status: "error".to_string(),
+            required: Some(gate.required),
+            duration_ms,
+            command: command.to_string(),
+            exit_code: None,
+            output_summary: Some(format!("Execution error: {}", e)),
+            log_path: None,
+            metrics: None,
+            artifacts: None,
+            first_failure: None,
+        }),
     }
 }
 
+/// Run an external shell gate command, streaming output so CI runners see live
+/// progress and don't kill the job for producing no output during long cargo
+/// compilations. Returns the exit code of the underlying command.
+///
+/// On Windows we fall back to the previous capture approach (no CI-inactivity
+/// timeout issue on hosted Windows runners).
+///
+/// On Linux/macOS (including GitHub Actions) we route through bash with
+/// `set -o pipefail` and `tee` so that:
+///   1. All output (stdout + stderr) flows to the parent process's stdout,
+///      keeping the CI runner's inactivity timer alive.
+///   2. The same output is written to `log_path` so the receipt can include a
+///      summary.
+///
+/// The command string is passed via the `GATE_CMD` environment variable and
+/// executed with `eval` to preserve quoting and shell metacharacters.
 #[cfg(windows)]
-fn shell_command(command: &str) -> duct::Expression {
-    cmd!("cmd", "/C", command)
+fn run_shell_gate(command: &str, log_path: &std::path::Path) -> Result<i32> {
+    let result =
+        cmd!("cmd", "/C", command).stderr_to_stdout().stdout_capture().unchecked().run()?;
+    let exit_code = result.status.code().unwrap_or(-1);
+    if let Err(e) = fs::write(log_path, &result.stdout) {
+        eprintln!("Warning: Failed to write log file: {e}");
+    }
+    Ok(exit_code)
 }
 
 #[cfg(not(windows))]
-fn shell_command(command: &str) -> duct::Expression {
-    cmd!("bash", "-lc", command)
+fn run_shell_gate(command: &str, log_path: &std::path::Path) -> Result<i32> {
+    // Use `set -o pipefail` so the pipeline exit code is the command's exit
+    // code (not tee's). Use `bash -c` (not `-lc`) to avoid login-shell profile
+    // sourcing overhead and potential interactive-terminal hangs.
+    // The command is eval'd via the GATE_CMD env var to preserve quoting.
+    let wrapper = "set -o pipefail; eval \"$GATE_CMD\" 2>&1 | tee \"$GATE_LOG\"";
+    let result = cmd!("bash", "-c", wrapper)
+        .env("GATE_CMD", command)
+        .env("GATE_LOG", log_path)
+        .unchecked()
+        .run()?;
+    Ok(result.status.code().unwrap_or(-1))
 }
 
 fn run_internal_xtask_gate(
