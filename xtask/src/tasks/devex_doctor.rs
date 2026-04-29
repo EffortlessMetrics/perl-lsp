@@ -161,7 +161,6 @@ fn find_command_path(program: &str) -> Option<std::path::PathBuf> {
     })
 }
 
-
 #[cfg(unix)]
 fn is_executable_file(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
