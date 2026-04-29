@@ -33,17 +33,6 @@ pub(super) struct ParserMetrics {
     pub token_metrics: TokenHealthMetrics,
 }
 
-#[cfg(test)]
-const PARSER_STATUS_MARKERS: &[&str] = &[
-    "PARSER_TRACKING_TABLE",
-    "PARSER_PERFORMANCE_TABLE",
-    "PARSER_METRICS_BULLETS",
-    "TOKEN_HEALTH_TABLE",
-    "PARSER_NODEKIND_ROW",
-    "PARSER_RELIABILITY_ROW",
-    "PARSER_STRICT_CLEAN_ROW",
-];
-
 #[derive(Debug, Clone, Deserialize)]
 pub(super) struct ParserPerformanceScorecard {
     generated_at_epoch_s: u64,
