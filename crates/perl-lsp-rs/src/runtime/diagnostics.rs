@@ -34,6 +34,14 @@ fn resolve_configured_profile_path(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+fn workspace_root_for_doc(server: &LspServer, uri: &str) -> Option<std::path::PathBuf> {
+    server
+        .folder_for_doc_uri(uri)
+        .and_then(|folder| folder.path.or_else(|| source_path_from_uri(&folder.uri)))
+        .or_else(|| server.root_path.lock().clone())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn find_workspace_perlcritic_profile(
     workspace_root: Option<&std::path::Path>,
     file_path: &std::path::Path,
@@ -178,7 +186,7 @@ impl PullDiagnosticsOrchestrator {
             return;
         }
 
-        let workspace_root = server.root_path.lock().clone();
+        let workspace_root = workspace_root_for_doc(server, uri);
 
         // Validate configured profile if present.
         let resolved_configured_profile = if let Some(ref configured_profile) = profile {
@@ -1356,7 +1364,7 @@ impl LspServer {
             return;
         }
 
-        let workspace_root = self.root_path.lock().clone();
+        let workspace_root = workspace_root_for_doc(self, uri);
         let resolved_configured_profile = if let Some(ref configured_profile) = profile {
             let resolved = resolve_configured_profile_path(
                 configured_profile,
