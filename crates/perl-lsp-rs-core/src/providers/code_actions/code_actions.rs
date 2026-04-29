@@ -110,7 +110,11 @@ impl CodeActionsProvider {
         for diagnostic in diagnostics {
             let qf_diag = to_quick_fix_diagnostic(diagnostic);
             if let Some(code) = &diagnostic.code {
-                match code.as_str() {
+                let policy_code = code
+                    .strip_prefix("Perl::Critic::Policy::")
+                    .unwrap_or(code.as_str());
+
+                match policy_code {
                     // PL103: Undefined/undeclared variable
                     c if c == DiagnosticCode::UndefinedVariable.as_str() => {
                         actions.extend(quick_fixes::fix_undefined_variable(&self.source, &qf_diag));
@@ -168,7 +172,7 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_parse_error(&self.source, &qf_diag, c));
                     }
                     // parse-error-* subcodes (legacy subtype codes from error classifier)
-                    code if code.starts_with("parse-error-") => {
+                    c if c.starts_with("parse-error-") => {
                         actions.extend(quick_fixes::fix_parse_error(&self.source, &qf_diag, code));
                     }
                     // PL108: Unused parameter
@@ -492,6 +496,42 @@ mod tests {
                 range: (0, 4),
                 severity: DiagnosticSeverity::Warning,
                 code: Some("InputOutput::RequireThreeArgOpen".to_string()),
+                message: "Use 3-arg open".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+        ];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+        assert!(actions.iter().any(|a| a.title.contains("bareword filehandle")));
+        assert!(actions.iter().any(|a| a.title.contains("three-argument open() for safety")));
+    }
+
+
+    #[test]
+    fn test_fully_qualified_perlcritic_policy_aliases_produce_quick_fixes() {
+        let source = "open FH, $path;
+";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![
+            Diagnostic {
+                range: (0, 4),
+                severity: DiagnosticSeverity::Warning,
+                code: Some(
+                    "Perl::Critic::Policy::InputOutput::ProhibitBarewordFileHandles".to_string(),
+                ),
+                message: "Bareword filehandle 'FH'".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (0, 4),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("Perl::Critic::Policy::InputOutput::RequireThreeArgOpen".to_string()),
                 message: "Use 3-arg open".to_string(),
                 suggestion: None,
                 related_information: Vec::new(),
