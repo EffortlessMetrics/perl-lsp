@@ -13,6 +13,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import {
   OnboardingManager,
   HealthCheckResult,
@@ -217,6 +218,57 @@ describe('resolveUnixShellInvocationFallback', () => {
     );
 
     expect(fallback).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkPerlcriticSetup
+// ---------------------------------------------------------------------------
+
+describe('OnboardingManager.checkPerlcriticSetup', () => {
+  const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+
+  afterEach(() => {
+    (vscode.workspace as any).workspaceFolders = originalWorkspaceFolders;
+    jest.restoreAllMocks();
+  });
+
+  test('resolves relative perlcritic profile paths from workspace root', async () => {
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ob-critic-'));
+    const configDir = path.join(workspaceRoot, 'config');
+    const profilePath = path.join(configDir, 'perlcriticrc');
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(profilePath, 'severity = 3\n');
+    (vscode.workspace as any).workspaceFolders = [{ uri: { fsPath: workspaceRoot } }];
+    jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+      get: jest.fn(() => ({ enabled: true, profile: 'config/perlcriticrc' })),
+    } as any);
+
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
+    mgr._execCheck = jest.fn(() => Promise.resolve({ stdout: 'perlcritic 1.148', stderr: '' }));
+    const result = await mgr.checkPerlcriticSetup();
+
+    expect(result.ok).toBe(true);
+    fs.rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  test('skips profile existence check when workspace is undefined and path is relative', async () => {
+    // When no workspace folder is open, a relative profile path cannot be resolved
+    // to an absolute location.  The health check must skip the fs.existsSync probe
+    // and proceed as if no profile is configured (i.e. not warn "profile not found").
+    (vscode.workspace as any).workspaceFolders = undefined;
+    jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+      get: jest.fn(() => ({ enabled: true, profile: 'config/perlcriticrc' })),
+    } as any);
+
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
+    mgr._execCheck = jest.fn(() => Promise.resolve({ stdout: 'perlcritic 1.148', stderr: '' }));
+    const result = await mgr.checkPerlcriticSetup();
+
+    // Must not return a "profile not found" warning — without a workspace root
+    // we cannot verify existence, so we should proceed to check the binary.
+    expect(result.ok).toBe(true);
+    expect(result.status).not.toBe('warning');
   });
 });
 
