@@ -69,6 +69,9 @@ pub mod ignore;
 pub mod monitoring;
 /// Service-level objective tracking for workspace index operations.
 pub mod slo;
+/// Semantic shadow-compare receipt model for old-vs-new workspace query outputs.
+pub mod semantic_shadow_compare;
+
 /// Index lifecycle state machine.
 pub mod state_machine;
 
