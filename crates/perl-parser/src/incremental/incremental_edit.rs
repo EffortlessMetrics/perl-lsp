@@ -112,28 +112,13 @@ impl IncrementalEditSet {
             return source.to_string();
         }
 
-        // Sort edits in reverse order to apply from end to start.
-        // Secondary sort by old_end_byte (descending) makes the order deterministic
-        // for edits with the same start_byte, matching normalize_for_source's sort.
-        let mut sorted_edits = self.edits.clone();
-        sorted_edits.sort_by(|a, b| {
-            b.start_byte.cmp(&a.start_byte).then_with(|| b.old_end_byte.cmp(&a.old_end_byte))
-        });
+        let Some(sorted_edits) = self.normalize_for_source(source) else {
+            return source.to_string();
+        };
 
         let mut result = source.to_string();
         for edit in &sorted_edits {
-            let start = edit.start_byte.min(result.len());
-            let end = edit.old_end_byte.min(result.len());
-
-            if start > end {
-                continue;
-            }
-
-            if !result.is_char_boundary(start) || !result.is_char_boundary(end) {
-                continue;
-            }
-
-            result.replace_range(start..end, &edit.new_text);
+            result.replace_range(edit.start_byte..edit.old_end_byte, &edit.new_text);
         }
 
         result
@@ -261,5 +246,26 @@ mod tests {
             assert_eq!(normalized[0].start_byte, 2);
             assert_eq!(normalized[1].start_byte, 2);
         }
+    }
+
+    #[test]
+    fn test_apply_to_string_rejects_non_utf8_boundaries() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(1, 2, "x".to_string()));
+
+        let source = "école";
+        let result = edits.apply_to_string(source);
+        assert_eq!(result, source);
+    }
+
+    #[test]
+    fn test_apply_to_string_rejects_overlapping_non_empty_ranges() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(1, 4, "x".to_string()));
+        edits.add(IncrementalEdit::new(3, 5, "y".to_string()));
+
+        let source = "abcdef";
+        let result = edits.apply_to_string(source);
+        assert_eq!(result, source);
     }
 }
