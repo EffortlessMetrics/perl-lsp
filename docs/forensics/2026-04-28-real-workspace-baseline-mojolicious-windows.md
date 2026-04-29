@@ -1,8 +1,8 @@
-# Real-Workspace Baseline: mojolicious (linux)
+# Real-Workspace Baseline: mojolicious (windows)
 
 **Date**: 2026-04-28
 **Commit**: 5c89a9371
-**System**: linux
+**System**: windows
 **Project**: mojolicious
 
 ## Substrate Versions
@@ -12,7 +12,7 @@
 | perl-lsp  | 0.12.4 |
 | Rust      | rustc 1.92.0 (ded5c06cf 2025-12-08) |
 | Perl      | v5.38.2 |
-| OS        | Linux (GitHub Actions runner, Ubuntu 22.04) |
+| OS        | Windows 11 Pro (worktree agent, Git Bash) |
 
 ## Metrics
 
@@ -68,7 +68,7 @@ an editing session.
 
 ```bash
 # Reproduce this measurement
-just real-workspace-baseline mojolicious linux
+just real-workspace-baseline mojolicious windows
 ```
 
 - Binary: test harness uses debug build via `cargo test` (not `--release`)
@@ -80,7 +80,9 @@ just real-workspace-baseline mojolicious linux
 
 ## Notes
 
-First baseline run for mojolicious on linux. Establishes measurement anchor for v0.13.0 release gate.
+First baseline run for mojolicious on windows. Establishes measurement anchor for v0.13.0 release gate.
+Note: measured on Windows 11 Pro (Git Bash, MSVC toolchain). Linux measurements may differ; a CI-runner
+linux baseline can be obtained by running `just real-workspace-baseline mojolicious linux` on a Linux host.
 
 The 13-file mojolicious skeleton covers the key module structure (Mojolicious.pm, Controller, Routes,
 Plugins, etc.) without including the full 200+ file CPAN distribution. This is a representative
