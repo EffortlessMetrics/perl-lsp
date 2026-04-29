@@ -127,8 +127,8 @@ pub fn is_special_scheme(uri: &str) -> bool {
     } else {
         uri.get(..9).is_some_and(|p| p.eq_ignore_ascii_case("untitled:"))
             || uri.get(..4).is_some_and(|p| p.eq_ignore_ascii_case("git:"))
-            || uri.get(..17).is_some_and(|p| p.eq_ignore_ascii_case("vscode-notebook:"))
-            || uri.get(..22).is_some_and(|p| p.eq_ignore_ascii_case("vscode-notebook-cell:"))
+            || uri.get(..16).is_some_and(|p| p.eq_ignore_ascii_case("vscode-notebook:"))
+            || uri.get(..21).is_some_and(|p| p.eq_ignore_ascii_case("vscode-notebook-cell:"))
             || uri.get(..11).is_some_and(|p| p.eq_ignore_ascii_case("vscode-vfs:"))
     }
 }
