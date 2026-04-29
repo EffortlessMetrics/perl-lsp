@@ -87,16 +87,20 @@ fn token_ref_is_empty_for_zero_length_span() -> TestResult {
 
 #[test]
 fn token_ref_try_new_rejects_end_before_start() -> TestResult {
-    let err = TokenRef::try_new(TokenKind::Identifier, "x", 10, 3)
-        .expect_err("TokenRef::try_new should reject end < start");
+    let err = match TokenRef::try_new(TokenKind::Identifier, "x", 10, 3) {
+        Ok(_) => return Err("TokenRef::try_new should reject end < start".into()),
+        Err(err) => err,
+    };
     assert_eq!(err, TokenSpanError::EndBeforeStart { start: 10, end: 3 });
     Ok(())
 }
 
 #[test]
 fn token_ref_new_checked_rejects_empty_non_eof() -> TestResult {
-    let err = TokenRef::new_checked(TokenKind::Identifier, "", 5, 5)
-        .expect_err("TokenRef::new_checked should reject empty non-EOF spans");
+    let err = match TokenRef::new_checked(TokenKind::Identifier, "", 5, 5) {
+        Ok(_) => return Err("TokenRef::new_checked should reject empty non-EOF spans".into()),
+        Err(err) => err,
+    };
     assert_eq!(err, TokenSpanError::EmptySpanNotAllowed { kind: TokenKind::Identifier, at: 5 });
     Ok(())
 }
