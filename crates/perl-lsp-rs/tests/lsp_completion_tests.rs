@@ -1124,12 +1124,12 @@ fn test_completion_scope_distance_ranking() -> Result<(), Box<dyn std::error::Er
     let inner_sort = inner_item.unwrap()["sortText"].as_str().unwrap_or("");
     let outer_sort = outer_item.unwrap()["sortText"].as_str().unwrap_or("");
 
-    // Immediate scope → sort key 'a' → sort_text "1a_scope_inner"
-    // PackageLevel (file-scope `my`) → sort key 'c' → sort_text "1c_scope_outer"
+    // Immediate scope -> sort key 'a00' -> sort_text "1a00_scope_inner"
+    // PackageLevel (file-scope `my`) -> sort key 'c00' -> sort_text "1c00_scope_outer"
     //
     // Guard that sortText is actually present in the wire response.  Without
-    // this check the `!outer_sort.starts_with("1a_")` assertion passes vacuously
-    // when sortText is absent (empty string does not start with "1a_").
+    // this check the `!outer_sort.starts_with("1a00_")` assertion passes vacuously
+    // when sortText is absent (empty string does not start with "1a00_").
     assert!(
         !inner_sort.is_empty(),
         "$scope_inner must have a non-empty sortText — check that completion.rs \
@@ -1141,12 +1141,12 @@ fn test_completion_scope_distance_ranking() -> Result<(), Box<dyn std::error::Er
          serializes sort_text to the LSP wire response"
     );
     assert!(
-        inner_sort.starts_with("1a_"),
-        "$scope_inner should have Immediate scope sort_text (\"1a_...\"), got: '{inner_sort}'"
+        inner_sort.starts_with("1a00_"),
+        "$scope_inner should have Immediate scope sort_text (\"1a00_...\"), got: '{inner_sort}'"
     );
     assert!(
-        !outer_sort.starts_with("1a_"),
-        "$scope_outer should NOT have Immediate scope sort_text, got: '{outer_sort}'"
+        outer_sort.starts_with("1c00_"),
+        "$scope_outer should have PackageLevel scope sort_text (\"1c00_...\"), got: '{outer_sort}'"
     );
     assert!(
         inner_sort < outer_sort,

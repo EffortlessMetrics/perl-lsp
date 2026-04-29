@@ -201,3 +201,58 @@ fn use_exporter_import_does_not_resolve_as_import() {
         );
     }
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Import/export visibility regression bank (Box 5)
+// ──────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn exporter_default_import_visibility_is_currently_conservative() {
+    let code = r#"use MyLib;
+foo();
+"#;
+    let pkg = parse_and_symbol_at(code, "foo()");
+    assert_ne!(
+        pkg.as_deref(),
+        Some("MyLib"),
+        "currently conservative: bare use MyLib should not claim @EXPORT ownership without export table"
+    );
+}
+
+#[test]
+fn exporter_explicit_export_ok_visibility_resolves_symbols() {
+    let code = r#"use MyLib qw(bar baz);
+bar();
+baz();
+"#;
+    let bar_pkg = parse_and_symbol_at(code, "bar()");
+    let baz_pkg = parse_and_symbol_at(code, "baz()");
+    assert_eq!(bar_pkg.as_deref(), Some("MyLib"));
+    assert_eq!(baz_pkg.as_deref(), Some("MyLib"));
+}
+
+#[test]
+fn exporter_tag_import_visibility_is_currently_conservative() {
+    let code = r#"use MyLib qw(:all);
+foo();
+bar();
+baz();
+"#;
+    for symbol in ["foo()", "bar()", "baz()"] {
+        let pkg = parse_and_symbol_at(code, symbol);
+        assert_ne!(pkg.as_deref(), Some("MyLib"), "currently conservative: {symbol} should not be attributed via :all without export table");
+    }
+}
+
+#[test]
+fn exporter_export_ok_not_visible_without_explicit_import() {
+    let code = r#"use MyLib;
+bar();
+"#;
+    let pkg = parse_and_symbol_at(code, "bar()");
+    assert_ne!(
+        pkg.as_deref(),
+        Some("MyLib"),
+        "@EXPORT_OK symbol should not be visible under bare use MyLib"
+    );
+}
