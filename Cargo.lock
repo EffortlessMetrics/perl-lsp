@@ -1863,6 +1863,7 @@ dependencies = [
 name = "perl-semantic-facts"
 version = "0.12.4"
 dependencies = [
+ "perl-symbol",
  "serde",
  "serde_json",
 ]

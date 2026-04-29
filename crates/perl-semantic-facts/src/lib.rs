@@ -7,6 +7,7 @@
 //! storage backends.
 
 use serde::{Deserialize, Serialize};
+use perl_symbol::{SymbolRef, SymbolRefKind};
 
 macro_rules! id_newtype {
     ($name:ident) => {
@@ -154,9 +155,99 @@ pub struct DiagnosticFact {
     pub confidence: Confidence,
 }
 
+/// Adapter input for converting a `SymbolRef` into canonical semantic facts.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SymbolRefOccurrenceInput<'a> {
+    pub symbol_ref: &'a SymbolRef,
+    /// Optional entity that owns the source occurrence context.
+    pub source_entity_id: Option<EntityId>,
+    /// Optional entity resolved as the target of this symbol reference.
+    pub target_entity_id: Option<EntityId>,
+}
+
+/// Deterministic fact output from adapting `SymbolRef` records.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolRefFactSet {
+    pub anchors: Vec<AnchorFact>,
+    pub occurrences: Vec<OccurrenceFact>,
+    pub edges: Vec<EdgeFact>,
+}
+
+/// Convert phase-1 `SymbolRef` projection records into semantic facts.
+///
+/// This adapter intentionally covers only the phase-1 `SymbolRef` families
+/// (variable references and subroutine-call references). Excluded families such
+/// as method calls, coderef calls, indirect calls, and typeglobs are already
+/// omitted by `SymbolRef` extraction and therefore do not appear here.
+pub fn symbol_ref_occurrence_facts(
+    file_id: FileId,
+    scope_id: Option<ScopeId>,
+    refs: &[SymbolRefOccurrenceInput<'_>],
+) -> SymbolRefFactSet {
+    let mut anchors = Vec::with_capacity(refs.len());
+    let mut occurrences = Vec::with_capacity(refs.len());
+    let mut edges = Vec::new();
+
+    for (index, input) in refs.iter().enumerate() {
+        let anchor_id = AnchorId(index as u64 + 1);
+        let occurrence_id = OccurrenceId(index as u64 + 1);
+
+        let (start, end) = input
+            .symbol_ref
+            .anchor_span
+            .unwrap_or(input.symbol_ref.full_span);
+
+        anchors.push(AnchorFact {
+            id: anchor_id,
+            file_id,
+            span_start_byte: start as u32,
+            span_end_byte: end as u32,
+            scope_id,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+
+        let occurrence_kind = match input.symbol_ref.kind {
+            SymbolRefKind::Variable(_) => OccurrenceKind::Reference,
+            SymbolRefKind::SubroutineCall => OccurrenceKind::Call,
+        };
+
+        occurrences.push(OccurrenceFact {
+            id: occurrence_id,
+            kind: occurrence_kind,
+            entity_id: input.target_entity_id,
+            anchor_id,
+            scope_id,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+
+        if let (Some(from_entity_id), Some(to_entity_id)) =
+            (input.source_entity_id, input.target_entity_id)
+        {
+            edges.push(EdgeFact {
+                id: EdgeId(edges.len() as u64 + 1),
+                kind: EdgeKind::References,
+                from_entity_id,
+                to_entity_id,
+                via_occurrence_id: Some(occurrence_id),
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            });
+        }
+    }
+
+    SymbolRefFactSet {
+        anchors,
+        occurrences,
+        edges,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_symbol::VarKind;
 
     #[test]
     fn entity_fact_roundtrips_through_json() -> Result<(), serde_json::Error> {
@@ -245,5 +336,66 @@ mod tests {
         let decoded: EntityId = serde_json::from_str(&serialized)?;
         assert_eq!(decoded, id);
         Ok(())
+    }
+
+    #[test]
+    fn symbol_ref_occurrence_adapter_emits_deterministic_facts() {
+        let refs = [
+            SymbolRef {
+                kind: SymbolRefKind::Variable(VarKind::Scalar),
+                name: "x".to_string(),
+                qualified_name: "x".to_string(),
+                sigil: Some("$".to_string()),
+                package_qualifier: None,
+                full_span: (10, 12),
+                anchor_span: Some((11, 12)),
+            },
+            SymbolRef {
+                kind: SymbolRefKind::SubroutineCall,
+                name: "foo".to_string(),
+                qualified_name: "Pkg::foo".to_string(),
+                sigil: None,
+                package_qualifier: Some("Pkg".to_string()),
+                full_span: (20, 30),
+                anchor_span: None,
+            },
+        ];
+        let facts = symbol_ref_occurrence_facts(
+            FileId(7),
+            Some(ScopeId(9)),
+            &[
+                SymbolRefOccurrenceInput {
+                    symbol_ref: &refs[0],
+                    source_entity_id: Some(EntityId(100)),
+                    target_entity_id: Some(EntityId(200)),
+                },
+                SymbolRefOccurrenceInput {
+                    symbol_ref: &refs[1],
+                    source_entity_id: None,
+                    target_entity_id: None,
+                },
+            ],
+        );
+
+        assert_eq!(facts.anchors.len(), 2);
+        assert_eq!(facts.anchors[0].id, AnchorId(1));
+        assert_eq!(facts.anchors[0].span_start_byte, 11);
+        assert_eq!(facts.anchors[0].span_end_byte, 12);
+        assert_eq!(facts.anchors[1].id, AnchorId(2));
+        assert_eq!(facts.anchors[1].span_start_byte, 20);
+        assert_eq!(facts.anchors[1].span_end_byte, 30);
+
+        assert_eq!(facts.occurrences.len(), 2);
+        assert_eq!(facts.occurrences[0].kind, OccurrenceKind::Reference);
+        assert_eq!(facts.occurrences[0].entity_id, Some(EntityId(200)));
+        assert_eq!(facts.occurrences[1].kind, OccurrenceKind::Call);
+        assert_eq!(facts.occurrences[1].entity_id, None);
+
+        assert_eq!(facts.edges.len(), 1);
+        assert_eq!(facts.edges[0].id, EdgeId(1));
+        assert_eq!(facts.edges[0].kind, EdgeKind::References);
+        assert_eq!(facts.edges[0].from_entity_id, EntityId(100));
+        assert_eq!(facts.edges[0].to_entity_id, EntityId(200));
+        assert_eq!(facts.edges[0].via_occurrence_id, Some(OccurrenceId(1)));
     }
 }
