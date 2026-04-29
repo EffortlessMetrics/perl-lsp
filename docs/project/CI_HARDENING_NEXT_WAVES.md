@@ -9,7 +9,7 @@ The remaining gap is primarily operability: failure attribution, receipt quality
 ## Primary remaining gaps
 
 1. PR-fast timeout attribution and per-gate receipts.
-2. UX regression failure classification and repairable receipts.
+2. UX regression receipt enrichment — core classifier landed (#7386, #7394); `artifact_path` field and full routing coverage still outstanding.
 3. Workflow-trigger hygiene verification across all CI workflows.
 4. Stable status semantics for SKIPPED / path-conditioned lanes.
 5. Merge-train / batch-validation operating protocol.
@@ -22,6 +22,7 @@ The remaining gap is primarily operability: failure attribution, receipt quality
 - PR Smoke executes shared `cargo xtask gates --tier pr-fast ...`.
 - `pr_fast` has policy-backed planning roles (`always_on`, `rust_scoped`, `rust_fallback`).
 - UX external workflow trigger excludes `labeled` / `unlabeled`.
+- UX regression receipt classifier landed: `xtask ux-regression-receipt` emits structured JSON with `failure_class`, `panic_location`, `repro`, `first_failing_line`, `route` (#7386, #7394).
 
 ## Wave 1 (implement first)
 
@@ -29,9 +30,9 @@ The remaining gap is primarily operability: failure attribution, receipt quality
    - Add gate-level timeout enforcement and attribution before job-level timeout.
    - Receipts should include gate name, command, duration, timeout classification, and repro command.
 
-2. **UX regression failure classifier + receipt enrichment**
-   - Classify failures: `baseline_drift`, `test_race_or_flake`, `test_bug`, `underlying_provider_regression`, `product_regression`, `unknown`.
-   - Emit scenario, panic/assertion site, first failing excerpt, repro, and artifact path.
+2. **UX regression receipt — complete remaining gaps**
+   - Core classifier already in master (#7386, #7394): `MatrixDrift`, `BaselineDrift`, `TestRace`, `NewTestBug`, `ProviderRegression`, `ServerCrash`, `Timeout`, `Infra`, `Unknown`.
+   - Remaining: add `artifact_path` field to receipt struct; verify CI wiring covers all failure paths including non-harness exits.
 
 3. **Close workflow trigger hygiene loop**
    - Verify all relevant workflows follow the same trigger contract and document exceptions.
@@ -66,4 +67,4 @@ The remaining gap is primarily operability: failure attribution, receipt quality
 
 ## Core principle
 
-Shift from **“CI catches failures”** to **“CI emits actionable, attributable receipts that tell agents what failed and what to do next.”**
+Shift from **"CI catches failures"** to **"CI emits actionable, attributable receipts that tell agents what failed and what to do next."**
