@@ -312,3 +312,23 @@ fn no_if_strict_qw_disables_only_requested_categories_conditionally()
     assert!(state.strict_refs, "refs was not in the qw list, must stay enabled");
     Ok(())
 }
+
+#[test]
+fn no_if_warnings_qw_disables_named_warning_categories_conditionally()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 13),
+        no_node("if", &["$cond", "warnings", "qw(uninitialized once)"], 14, 60),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 30);
+    assert!(
+        state.warnings,
+        "conditional no-if-warnings with categories must keep global warnings enabled"
+    );
+    assert!(!state.is_warning_active("uninitialized"));
+    assert!(!state.is_warning_active("once"));
+    assert!(state.is_warning_active("numeric"));
+    Ok(())
+}

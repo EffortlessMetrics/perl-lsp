@@ -606,11 +606,13 @@ impl PragmaTracker {
                                 current_state.strict_refs = true;
                             } else {
                                 for arg in conditional_args {
-                                    match normalized_pragma_token(arg) {
-                                        "vars" => current_state.strict_vars = true,
-                                        "subs" => current_state.strict_subs = true,
-                                        "refs" => current_state.strict_refs = true,
-                                        _ => {}
+                                    for item in pragma_arg_items(arg) {
+                                        match item.as_str() {
+                                            "vars" => current_state.strict_vars = true,
+                                            "subs" => current_state.strict_subs = true,
+                                            "refs" => current_state.strict_refs = true,
+                                            _ => {}
+                                        }
                                     }
                                 }
                             }
@@ -785,11 +787,13 @@ impl PragmaTracker {
                                 current_state.strict_refs = false;
                             } else {
                                 for arg in conditional_args {
-                                    match normalized_pragma_token(arg) {
-                                        "vars" => current_state.strict_vars = false,
-                                        "subs" => current_state.strict_subs = false,
-                                        "refs" => current_state.strict_refs = false,
-                                        _ => {}
+                                    for item in pragma_arg_items(arg) {
+                                        match item.as_str() {
+                                            "vars" => current_state.strict_vars = false,
+                                            "subs" => current_state.strict_subs = false,
+                                            "refs" => current_state.strict_refs = false,
+                                            _ => {}
+                                        }
                                     }
                                 }
                             }
@@ -805,8 +809,9 @@ impl PragmaTracker {
                                 current_state.disabled_warning_categories.clear();
                             } else {
                                 for arg in conditional_args {
-                                    let category = normalized_pragma_token(arg);
-                                    add_disabled_warning_category(current_state, category);
+                                    for item in pragma_arg_items(arg) {
+                                        add_disabled_warning_category(current_state, &item);
+                                    }
                                 }
                             }
                             ranges.push((
