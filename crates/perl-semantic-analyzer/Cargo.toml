@@ -30,6 +30,7 @@ perl-symbol = { workspace = true }
 regex.workspace = true
 rustc-hash = "2.1.2"
 tracing.workspace = true
+perl-semantic-facts = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

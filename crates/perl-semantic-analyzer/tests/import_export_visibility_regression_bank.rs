@@ -6,6 +6,7 @@
 
 use perl_semantic_analyzer::Parser;
 use perl_semantic_analyzer::analysis::export_analyzer::{ExportInfo, ExportSymbolExtractor};
+use perl_semantic_facts::Provenance;
 use std::error::Error;
 
 fn extract_export_info(code: &str) -> Result<ExportInfo, Box<dyn Error>> {
@@ -78,5 +79,55 @@ our @EXPORT_OK = qw(fake_optional);
         info.is_none(),
         "module without Exporter inheritance must not produce export info"
     );
+    Ok(())
+}
+
+#[test]
+fn export_set_adapter_captures_default_optional_and_tags() -> Result<(), Box<dyn Error>> {
+    let code = r#"
+package AdapterFixture;
+use Exporter 'import';
+our @EXPORT = qw(default_one);
+our @EXPORT_OK = qw(optional_one optional_two);
+our %EXPORT_TAGS = (
+  all => [qw(default_one optional_one optional_two)],
+  opt => [qw(optional_one optional_two)],
+);
+1;
+"#;
+
+    let info = extract_export_info(code)?;
+    let export_set = info.to_export_set();
+
+    assert!(export_set.default_exports.contains("default_one"));
+    assert!(export_set.optional_exports.contains("optional_one"));
+    assert!(export_set.optional_exports.contains("optional_two"));
+    assert_eq!(export_set.provenance, Provenance::ImportExportInference);
+
+    let all_tag = export_set.export_tags.get("all").ok_or("missing :all tag")?;
+    assert!(all_tag.contains("default_one"));
+    assert!(all_tag.contains("optional_one"));
+    assert!(all_tag.contains("optional_two"));
+    Ok(())
+}
+
+#[test]
+fn export_set_adapter_supports_parent_exporter_inheritance_form() -> Result<(), Box<dyn Error>> {
+    let code = r#"
+package ParentAdapter;
+use parent 'Exporter';
+our @EXPORT = qw(alpha);
+our @EXPORT_OK = qw(beta);
+our %EXPORT_TAGS = (
+  both => [qw(alpha beta)],
+);
+1;
+"#;
+
+    let info = extract_export_info(code)?;
+    let export_set = info.to_export_set();
+    assert!(export_set.default_exports.contains("alpha"));
+    assert!(export_set.optional_exports.contains("beta"));
+    assert!(export_set.export_tags.contains_key("both"));
     Ok(())
 }

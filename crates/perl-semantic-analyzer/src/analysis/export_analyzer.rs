@@ -27,6 +27,7 @@
 //! forms are extracted.
 
 use crate::ast::{Node, NodeKind};
+use perl_semantic_facts::{ExportSet, Provenance};
 use std::collections::{HashMap, HashSet};
 
 /// Information extracted from an Exporter-based module.
@@ -404,6 +405,29 @@ impl ExportSymbolExtractor {
             NodeKind::Identifier { name } => Some(name.clone()),
             _ => None,
         }
+    }
+}
+
+impl From<ExportInfo> for ExportSet {
+    fn from(info: ExportInfo) -> Self {
+        let mut export_tags = std::collections::BTreeMap::new();
+        for (tag, symbols) in info.export_tags {
+            export_tags.insert(tag, symbols.into_iter().collect());
+        }
+
+        ExportSet::new(
+            info.default_export.into_iter().collect(),
+            info.optional_export.into_iter().collect(),
+            export_tags,
+            Provenance::ImportExportInference,
+        )
+    }
+}
+
+impl ExportInfo {
+    /// Convert extracted Exporter analysis into canonical export facts.
+    pub fn to_export_set(self) -> ExportSet {
+        self.into()
     }
 }
 

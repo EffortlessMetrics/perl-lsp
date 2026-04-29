@@ -7,6 +7,7 @@
 //! storage backends.
 
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 macro_rules! id_newtype {
     ($name:ident) => {
@@ -154,6 +155,48 @@ pub struct DiagnosticFact {
     pub confidence: Confidence,
 }
 
+/// Canonical export surface for an exporting package.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct ExportSet {
+    /// Symbols available by default import.
+    pub default_exports: BTreeSet<String>,
+    /// Symbols available for explicit opt-in import.
+    pub optional_exports: BTreeSet<String>,
+    /// Export tags/groups and their member symbols.
+    pub export_tags: BTreeMap<String, BTreeSet<String>>,
+    /// How this export information was inferred.
+    pub provenance: Provenance,
+}
+
+impl Default for ExportSet {
+    fn default() -> Self {
+        Self {
+            default_exports: BTreeSet::new(),
+            optional_exports: BTreeSet::new(),
+            export_tags: BTreeMap::new(),
+            provenance: Provenance::ImportExportInference,
+        }
+    }
+}
+
+impl ExportSet {
+    /// Build an [`ExportSet`] from normalized export collections.
+    pub fn new(
+        default_exports: BTreeSet<String>,
+        optional_exports: BTreeSet<String>,
+        export_tags: BTreeMap<String, BTreeSet<String>>,
+        provenance: Provenance,
+    ) -> Self {
+        Self {
+            default_exports,
+            optional_exports,
+            export_tags,
+            provenance,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -244,6 +287,24 @@ mod tests {
         let serialized = serde_json::to_string(&id)?;
         let decoded: EntityId = serde_json::from_str(&serialized)?;
         assert_eq!(decoded, id);
+        Ok(())
+    }
+
+    #[test]
+    fn export_set_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let mut facts = ExportSet {
+            default_exports: BTreeSet::from(["foo".to_string()]),
+            optional_exports: BTreeSet::from(["bar".to_string(), "baz".to_string()]),
+            export_tags: BTreeMap::new(),
+            provenance: Provenance::ImportExportInference,
+        };
+        facts
+            .export_tags
+            .insert("all".to_string(), BTreeSet::from(["foo".to_string(), "bar".to_string()]));
+
+        let serialized = serde_json::to_string(&facts)?;
+        let decoded: ExportSet = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, facts);
         Ok(())
     }
 }
