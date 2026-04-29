@@ -20,14 +20,16 @@ use url::Url;
 /// Both forms are converted to `file:///c:/path/file.pl`.
 #[must_use]
 pub fn uri_key(uri: &str) -> String {
+    let trimmed = uri.trim();
+
     // Try to normalize legacy Windows path forms before URL parsing, since
     // `file://C:\...` and `C:\...` are not valid URLs and fall through to the
     // else branch as-is without this pre-pass.
-    if let Some(normalized) = normalize_legacy_windows_uri(uri) {
+    if let Some(normalized) = normalize_legacy_windows_uri(trimmed) {
         return normalized;
     }
 
-    if let Ok(parsed) = Url::parse(uri) {
+    if let Ok(parsed) = Url::parse(trimmed) {
         let mut value = parsed.as_str().to_string();
 
         // Canonicalize localhost file authorities (file://localhost/...) to
@@ -49,7 +51,7 @@ pub fn uri_key(uri: &str) -> String {
         }
         value
     } else {
-        uri.to_string()
+        trimmed.to_string()
     }
 }
 
