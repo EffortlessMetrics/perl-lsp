@@ -213,4 +213,37 @@ mod tests {
         );
         Ok(())
     }
+
+    /// Verify OccurrenceFact with a None entity_id round-trips correctly — this
+    /// exercises the optional foreign-key path that EntityFact's test does not cover.
+    #[test]
+    fn occurrence_fact_with_null_entity_id_roundtrips() -> Result<(), serde_json::Error> {
+        let fact = OccurrenceFact {
+            id: OccurrenceId(42),
+            kind: OccurrenceKind::Call,
+            entity_id: None,
+            anchor_id: AnchorId(10),
+            scope_id: Some(ScopeId(2)),
+            provenance: Provenance::NameHeuristic,
+            confidence: Confidence::Low,
+        };
+        let serialized = serde_json::to_string(&fact)?;
+        let decoded: OccurrenceFact = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, fact);
+        // entity_id: None must serialize as JSON null, not be omitted.
+        assert!(serialized.contains("\"entity_id\":null"), "entity_id null must be explicit in JSON");
+        Ok(())
+    }
+
+    /// Verify that u64::MAX is preserved through JSON serialization without
+    /// truncation — serde_json serializes u64 as a JSON number, which can
+    /// exceed JS safe-integer range but round-trips correctly in Rust.
+    #[test]
+    fn id_u64_max_roundtrips() -> Result<(), serde_json::Error> {
+        let id = EntityId(u64::MAX);
+        let serialized = serde_json::to_string(&id)?;
+        let decoded: EntityId = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, id);
+        Ok(())
+    }
 }
