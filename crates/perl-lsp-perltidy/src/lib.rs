@@ -110,6 +110,7 @@ impl PerlTidyConfig {
 
         if let Some(profile) = &self.profile {
             args.push(format!("--profile={profile}"));
+            args.extend(self.extra_args.clone());
             return args;
         }
 

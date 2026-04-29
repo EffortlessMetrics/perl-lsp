@@ -21,31 +21,35 @@ fn pbp_preset_sets_best_practices_flag() {
 }
 
 #[test]
-fn config_with_profile_uses_only_profile_flag() {
+fn config_with_profile_uses_profile_flag_and_extra_args() {
     let config = PerlTidyConfig {
         profile: Some("/home/user/.perltidyrc".to_string()),
+        extra_args: vec!["--standard-output".to_string()],
         ..PerlTidyConfig::default()
     };
     let args = config.to_args();
 
-    assert_eq!(args.len(), 1);
+    assert_eq!(args.len(), 2);
     assert_eq!(args[0], "--profile=/home/user/.perltidyrc");
+    assert_eq!(args[1], "--standard-output");
 }
 
 #[test]
-fn config_with_profile_ignores_other_settings() {
+fn config_with_profile_ignores_other_settings_but_keeps_extra_args() {
     let config = PerlTidyConfig {
         maximum_line_length: Some(120),
         indent_columns: Some(8),
         tabs: Some(true),
         profile: Some(".perltidyrc".to_string()),
+        extra_args: vec!["--check-syntax".to_string()],
         ..PerlTidyConfig::default()
     };
     let args = config.to_args();
 
-    // Only profile flag should be present; all others suppressed
-    assert_eq!(args.len(), 1);
+    // Only profile and explicit extra args should be present; other config suppressed
+    assert_eq!(args.len(), 2);
     assert!(args[0].starts_with("--profile="));
+    assert_eq!(args[1], "--check-syntax");
 }
 
 #[test]
