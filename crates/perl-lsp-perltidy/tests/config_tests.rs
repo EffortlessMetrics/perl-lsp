@@ -53,6 +53,19 @@ fn config_with_profile_ignores_other_settings_but_keeps_extra_args() {
 }
 
 #[test]
+fn config_with_profile_and_no_extra_args_produces_only_profile_flag() {
+    // Profile without extra_args should still yield exactly one arg.
+    let config = PerlTidyConfig {
+        profile: Some("/home/user/.perltidyrc".to_string()),
+        ..PerlTidyConfig::default()
+    };
+    let args = config.to_args();
+
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0], "--profile=/home/user/.perltidyrc");
+}
+
+#[test]
 fn gnu_preset_sets_gnu_style_flag() {
     let args = PerlTidyConfig::gnu().to_args();
     assert!(args.contains(&"--gnu-style".to_string()));
