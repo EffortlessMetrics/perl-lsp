@@ -133,10 +133,12 @@ fn infer_failure_class(raw: &str) -> FailureClass {
         FailureClass::NewTestBug
     } else if lower.contains("no such file") || lower.contains("permission denied") {
         FailureClass::Infra
-    } else if lower.contains("assertion failed") || lower.contains("expected") {
+    } else if lower.contains("assertion failed") {
         // Check ProviderRegression before the generic panicked/ServerCrash catch-all:
         // a typical assertion failure log contains both "panicked" and "assertion failed",
         // so this branch must precede the ServerCrash arm to remain reachable.
+        // Note: we do NOT match on bare "expected" because it appears as a substring of
+        // unrelated words like "unexpectedly", causing false positives on ServerCrash logs.
         FailureClass::ProviderRegression
     } else if lower.contains("panicked") || lower.contains("server exited") {
         FailureClass::ServerCrash
@@ -213,9 +215,7 @@ mod tests {
     #[test]
     fn classify_server_crash_routes_to_provider_fix() {
         // ServerCrash: panicked in non-ux_scenario path (e.g., the LSP server process itself).
-        // The panic message must not contain "assertion failed" or "expected" (which would
-        // trigger ProviderRegression instead), and must not contain "tests/ux_scenario_"
-        // (which would trigger NewTestBug).
+        // Must not contain "tests/ux_scenario_" (NewTestBug) or "assertion failed" (ProviderRegression).
         let log = "running 1 test\ntest ux_scenario_02_open::open_file ... FAILED\nthread 'server' panicked at crates/perl-lsp-rs/src/provider.rs:55:9:\nserver crashed with SIGABRT\ntest result: FAILED. 0 passed; 1 failed";
         let receipt = classify(log, Some("sha2".to_string()));
         assert!(
@@ -224,6 +224,21 @@ mod tests {
             receipt.failure_class
         );
         assert_eq!(receipt.route, "needs-provider-fix", "ServerCrash routes to needs-provider-fix");
+    }
+
+    #[test]
+    fn classify_server_exited_unexpectedly_is_server_crash_not_provider() {
+        // "unexpectedly" contains the substring "expected", but ProviderRegression only
+        // triggers on "assertion failed" — not bare "expected" — so this must classify
+        // as ServerCrash, not ProviderRegression.
+        let log = "running 1 test\ntest ux_scenario_03_diag::diag_test ... FAILED\nthread 'main' panicked at crates/perl-lsp-rs/src/server.rs:10:1:\nserver exited unexpectedly\ntest result: FAILED. 0 passed; 1 failed";
+        let receipt = classify(log, Some("sha8".to_string()));
+        assert!(
+            matches!(receipt.failure_class, FailureClass::ServerCrash),
+            "log with 'unexpectedly' (substring of 'expected') should be ServerCrash, got {:?}",
+            receipt.failure_class
+        );
+        assert_eq!(receipt.route, "needs-provider-fix");
     }
 
     #[test]
