@@ -10,7 +10,10 @@ name: UX Regression Gate
 on:
   pull_request:
     branches: [main, master]
-    types: [opened, synchronize, reopened, labeled]
+    # Deliberately exclude `labeled` / `unlabeled` — label application should not
+    # restart this workflow under `cancel-in-progress`, or operators lose active CI
+    # runs to label churn instead of code changes.
+    types: [opened, synchronize, reopened]
     paths:
       - 'crates/perl-lsp*/**'
       - 'crates/perl-dap*/**'
@@ -117,11 +120,19 @@ jobs:
           just ux-tests 2>&1 | tee /tmp/ux-test-output.txt
           exit ${PIPESTATUS[0]}
 
+      - name: Emit structured UX regression receipt
+        if: failure() && steps.harness_check.outputs.harness_available == 'true'
+        run: |
+          cargo xtask ux-regression-receipt \
+            --input /tmp/ux-test-output.txt \
+            --receipt .ci/receipts/ux-regression.json \
+            --sha "${{ github.sha }}"
+
       - name: Parse and summarize UX test results
         if: always() && steps.harness_check.outputs.harness_available == 'true'
         run: |
           python3 - <<'PY'
-          import os, re, pathlib, sys
+          import json, os, re, pathlib, sys
 
           output_file = pathlib.Path("/tmp/ux-test-output.txt")
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
@@ -130,6 +141,13 @@ jobs:
               sys.exit(0)
 
           lines = output_file.read_text(encoding="utf-8").splitlines() if output_file.exists() else []
+          receipt_path = pathlib.Path(".ci/receipts/ux-regression.json")
+          receipt = None
+          if receipt_path.exists():
+              try:
+                  receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+              except Exception:
+                  receipt = None
 
           # Categories defined in the spec
           categories = {
@@ -200,6 +218,22 @@ jobs:
                   "",
                   "See [UX_TESTING.md](docs/reference/UX_TESTING.md) for guidance on fixing failures.",
               ]
+              if receipt:
+                  # Use `or` instead of dict.get() default for nullable JSON fields:
+                  # serde serializes Option::None as JSON null, which json.loads()
+                  # returns as Python None — dict.get(key, default) only falls back
+                  # on KeyError (missing key), not on null values.
+                  summary_lines += [
+                      "",
+                      "### Structured Failure Receipt",
+                      "",
+                      f"- Receipt path: `{receipt_path}`",
+                      f"- Failure class: `{receipt.get('failure_class') or 'unknown'}`",
+                      f"- First failing test: `{receipt.get('test') or 'unknown'}`",
+                      f"- Panic location: `{receipt.get('panic_location') or 'n/a'}`",
+                      f"- Repro command: `{receipt.get('repro') or 'just ux-tests'}`",
+                      f"- Route: `{receipt.get('route') or 'needs-triage'}`",
+                  ]
           else:
               summary_lines.append("All UX scenarios passed.")
 

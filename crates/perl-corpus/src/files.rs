@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 /// Environment variable used to override corpus root discovery.
 pub const CORPUS_ROOT_ENV: &str = "PERL_CORPUS_ROOT";
-const TEST_EXTENSIONS: &[&str] = &["pl", "pm", "t", "psgi", "cgi"];
+const TEST_EXTENSIONS: &[&str] = &["pl", "pm", "plx", "t", "psgi", "cgi"];
 
 /// Common corpus paths anchored at a root directory.
 #[derive(Debug, Clone)]
@@ -200,6 +200,7 @@ mod tests {
         let fixtures = [
             root.join("case.pl"),
             root.join("case.pm"),
+            root.join("case.plx"),
             root.join("case.t"),
             root.join("case.psgi"),
             root.join("case.cgi"),
@@ -223,7 +224,8 @@ mod tests {
             .collect();
         names.sort();
 
-        let expected = vec!["case.cgi", "case.pl", "case.pm", "case.psgi", "case.t", "nested.pl"];
+        let expected =
+            vec!["case.cgi", "case.pl", "case.plx", "case.pm", "case.psgi", "case.t", "nested.pl"];
         assert_eq!(names, expected);
 
         fs::remove_dir_all(&root)?;
@@ -269,6 +271,7 @@ mod tests {
             root.join("upper.PL"),
             root.join("mixed.Pm"),
             root.join("suite.T"),
+            root.join("tool.PlX"),
             root.join("app.PsGi"),
             root.join("legacy.CgI"),
         ];
@@ -286,7 +289,8 @@ mod tests {
             .collect();
         names.sort();
 
-        let expected = vec!["app.PsGi", "legacy.CgI", "mixed.Pm", "suite.T", "upper.PL"];
+        let expected =
+            vec!["app.PsGi", "legacy.CgI", "mixed.Pm", "suite.T", "tool.PlX", "upper.PL"];
         assert_eq!(names, expected);
 
         fs::remove_dir_all(&root)?;
