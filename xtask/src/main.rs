@@ -299,6 +299,21 @@ enum Commands {
         fixture: Option<PathBuf>,
     },
 
+    /// Emit a structured receipt from UX regression test output logs.
+    UxRegressionReceipt {
+        /// Path to captured UX test output (e.g. /tmp/ux-test-output.txt).
+        #[arg(long)]
+        input: PathBuf,
+
+        /// Optional path to write JSON receipt output.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Optional commit SHA to embed in the receipt.
+        #[arg(long)]
+        sha: Option<String>,
+    },
+
     /// Format code
     Fmt {
         /// Check formatting without making changes
@@ -1142,7 +1157,6 @@ enum Commands {
         ratchet_check: bool,
     },
 
-
     /// Publish semantic fixture scorecard artifact/status.
     SemanticScorecard {
         /// Optional path to semantic fixture manifest JSON.
@@ -1154,6 +1168,9 @@ enum Commands {
         /// Optional path to generated status markdown.
         #[arg(long)]
         status_md: Option<PathBuf>,
+        /// Check mode: fail if generated outputs differ from committed files.
+        #[arg(long)]
+        check: bool,
     },
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
@@ -1197,6 +1214,10 @@ enum Commands {
         /// Run a specific gate by name
         #[arg(long, short)]
         gate: Option<String>,
+
+        /// Base git ref used for scope-aware PR-fast planning
+        #[arg(long)]
+        base: Option<String>,
 
         /// List available gates without running them
         #[arg(long, short)]
@@ -1842,6 +1863,13 @@ fn main() -> Result<()> {
                 fixture,
             })
         }
+        Commands::UxRegressionReceipt { input, receipt, sha } => {
+            ux_regression_receipt::run(ux_regression_receipt::UxRegressionReceiptConfig {
+                input,
+                receipt,
+                sha,
+            })
+        }
         Commands::Fmt { check, package } => fmt::run(check, package),
         #[cfg(feature = "legacy")]
         Commands::Corpus { path, scanner, diagnose, test } => {
@@ -2176,8 +2204,8 @@ fn main() -> Result<()> {
             };
             ux_scorecard::run(format, input, output, status_md, ratchet_check)
         }
-        Commands::SemanticScorecard { manifest, output, status_md } => {
-            semantic_scorecard::run(manifest, output, status_md)
+        Commands::SemanticScorecard { manifest, output, status_md, check } => {
+            semantic_scorecard::run(manifest, output, status_md, check)
         }
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
@@ -2192,6 +2220,7 @@ fn main() -> Result<()> {
         Commands::Gates {
             tier,
             gate,
+            base,
             list,
             format,
             receipt,
@@ -2203,6 +2232,7 @@ fn main() -> Result<()> {
         } => gates::run(gates::GateRunnerConfig {
             tier,
             gate_filter: gate,
+            base_ref: base,
             output_format: format,
             emit_receipt: receipt,
             receipt_path,
