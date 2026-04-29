@@ -992,6 +992,16 @@ impl SemanticAnalyzer {
     /// surrounding whitespace and includes the opening directive through
     /// the closing `=cut`, mirroring the format produced by
     /// `extract_documentation` for leading POD blocks.
+    ///
+    /// **Deliberate divergence from perlpod:** the regex allows optional
+    /// leading whitespace (`^\s*`) before the opening POD directive.  Per
+    /// [perlpod](https://perldoc.perl.org/perlpod), POD directives must
+    /// begin at column 0 — `perl` itself silently ignores lines like
+    /// `    =pod`.  The LSP intentionally relaxes this rule so that authors
+    /// who indent `=pod` inside a sub body (a common editor style) still
+    /// get hover documentation.  This is a UX choice: we surface what the
+    /// author *wrote* as documentation rather than enforcing the strict
+    /// perlpod column-0 rule.  See issue #4599 for the decision record.
     pub(super) fn find_pod_in_node_body(&self, body: &Node) -> Option<String> {
         static BODY_POD_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 
