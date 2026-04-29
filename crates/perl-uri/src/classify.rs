@@ -85,7 +85,7 @@ fn normalize_legacy_windows_uri(uri: &str) -> Option<String> {
 
 /// Convert a Windows-style path string (with or without a drive letter) into a
 /// canonical `file:///c:/...` key.  Returns `None` if `path` does not look like
-/// a Windows path (i.e. does not start with `<letter>:`).
+/// a Windows path (i.e. does not start with `<letter>:` or legacy `<letter>|`).
 fn normalize_windows_path_to_key(path: &str) -> Option<String> {
     // Strip any leading slashes (e.g. from a `file://` prefix that had an extra `/`).
     let path = path.trim_start_matches('/');
@@ -96,12 +96,15 @@ fn normalize_windows_path_to_key(path: &str) -> Option<String> {
     }
 
     let bytes = path.as_bytes();
-    if !bytes[0].is_ascii_alphabetic() || bytes[1] != b':' {
+    if !bytes[0].is_ascii_alphabetic() || (bytes[1] != b':' && bytes[1] != b'|') {
         return None;
     }
 
     // Replace backslashes with forward slashes.
     let mut normalized = path.replace('\\', "/");
+    if normalized.as_bytes().get(1) == Some(&b'|') {
+        normalized.replace_range(1..2, ":");
+    }
 
     // Ensure there is a separator after the drive colon: `C:foo` → `C:/foo`.
     if normalized.as_bytes().get(2) != Some(&b'/') {
@@ -204,6 +207,10 @@ mod tests {
         assert_eq!(
             uri_key("file://D:/projects/MyApp/script.pl"),
             "file:///d:/projects/MyApp/script.pl"
+        );
+        assert_eq!(
+            uri_key("file://C|/Users/dev/example.pl"),
+            "file:///c:/Users/dev/example.pl"
         );
     }
 
