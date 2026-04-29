@@ -800,6 +800,8 @@ impl TokenKind {
         }
     }
 
+    // --- Category-based predicates (classify by TokenCategory) ---
+
     /// Returns `true` if this token kind is a keyword.
     pub const fn is_keyword(self) -> bool {
         matches!(self.category(), TokenCategory::Keyword)
@@ -828,6 +830,137 @@ impl TokenKind {
     /// Returns `true` if this token kind is a special sentinel/recovery token.
     pub const fn is_special(self) -> bool {
         matches!(self.category(), TokenCategory::Special)
+    }
+
+    // --- Parser-facing role predicates (specific semantic roles) ---
+
+    /// Return whether this token is an assignment operator.
+    #[inline]
+    pub fn is_assignment_operator(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Assign
+                | TokenKind::PlusAssign
+                | TokenKind::MinusAssign
+                | TokenKind::StarAssign
+                | TokenKind::SlashAssign
+                | TokenKind::PercentAssign
+                | TokenKind::DotAssign
+                | TokenKind::AndAssign
+                | TokenKind::OrAssign
+                | TokenKind::XorAssign
+                | TokenKind::PowerAssign
+                | TokenKind::LeftShiftAssign
+                | TokenKind::RightShiftAssign
+                | TokenKind::LogicalAndAssign
+                | TokenKind::LogicalOrAssign
+                | TokenKind::DefinedOrAssign
+        )
+    }
+
+    /// Return whether this token is a comparison operator.
+    #[inline]
+    pub fn is_comparison_operator(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Equal
+                | TokenKind::NotEqual
+                | TokenKind::Less
+                | TokenKind::Greater
+                | TokenKind::LessEqual
+                | TokenKind::GreaterEqual
+                | TokenKind::Spaceship
+                | TokenKind::StringCompare
+                | TokenKind::Match
+                | TokenKind::NotMatch
+                | TokenKind::SmartMatch
+        )
+    }
+
+    /// Return whether this token is a logical operator.
+    #[inline]
+    pub fn is_logical_operator(self) -> bool {
+        matches!(
+            self,
+            TokenKind::And
+                | TokenKind::Or
+                | TokenKind::Not
+                | TokenKind::DefinedOr
+                | TokenKind::WordAnd
+                | TokenKind::WordOr
+                | TokenKind::WordNot
+                | TokenKind::WordXor
+        )
+    }
+
+    /// Return whether this token is a word-form operator token.
+    #[inline]
+    pub fn is_word_operator(self) -> bool {
+        matches!(
+            self,
+            TokenKind::StringCompare
+                | TokenKind::WordAnd
+                | TokenKind::WordOr
+                | TokenKind::WordNot
+                | TokenKind::WordXor
+        )
+    }
+
+    /// Return whether this token is a low-precedence word operator.
+    #[inline]
+    pub fn is_low_precedence_word_operator(self) -> bool {
+        matches!(
+            self,
+            TokenKind::WordAnd | TokenKind::WordOr | TokenKind::WordNot | TokenKind::WordXor
+        )
+    }
+
+    /// Return whether this token is an opening paired delimiter.
+    #[inline]
+    pub fn is_open_delimiter(self) -> bool {
+        matches!(self, TokenKind::LeftParen | TokenKind::LeftBrace | TokenKind::LeftBracket)
+    }
+
+    /// Return whether this token is a closing paired delimiter.
+    #[inline]
+    pub fn is_close_delimiter(self) -> bool {
+        matches!(self, TokenKind::RightParen | TokenKind::RightBrace | TokenKind::RightBracket)
+    }
+
+    /// Return the matching paired delimiter for this token, if any.
+    #[inline]
+    pub fn matching_delimiter(self) -> Option<Self> {
+        match self {
+            TokenKind::LeftParen => Some(TokenKind::RightParen),
+            TokenKind::RightParen => Some(TokenKind::LeftParen),
+            TokenKind::LeftBrace => Some(TokenKind::RightBrace),
+            TokenKind::RightBrace => Some(TokenKind::LeftBrace),
+            TokenKind::LeftBracket => Some(TokenKind::RightBracket),
+            TokenKind::RightBracket => Some(TokenKind::LeftBracket),
+            _ => None,
+        }
+    }
+
+    /// Return whether this token is quote-like syntax.
+    #[inline]
+    pub fn is_quote_like(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Regex
+                | TokenKind::Substitution
+                | TokenKind::Transliteration
+                | TokenKind::QuoteSingle
+                | TokenKind::QuoteDouble
+                | TokenKind::QuoteWords
+                | TokenKind::QuoteCommand
+                | TokenKind::HeredocStart
+        )
+    }
+
+    /// Return whether this token is a hard recovery boundary.
+    #[inline]
+    pub fn is_recovery_boundary(self) -> bool {
+        self == TokenKind::Semicolon || self.is_close_delimiter() || self == TokenKind::Eof
     }
 
     /// Map a canonical keyword spelling to its [`TokenKind`].
