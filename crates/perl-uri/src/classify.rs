@@ -20,14 +20,16 @@ use url::Url;
 /// Both forms are converted to `file:///c:/path/file.pl`.
 #[must_use]
 pub fn uri_key(uri: &str) -> String {
+    let trimmed = uri.trim();
+
     // Try to normalize legacy Windows path forms before URL parsing, since
     // `file://C:\...` and `C:\...` are not valid URLs and fall through to the
     // else branch as-is without this pre-pass.
-    if let Some(normalized) = normalize_legacy_windows_uri(uri) {
+    if let Some(normalized) = normalize_legacy_windows_uri(trimmed) {
         return normalized;
     }
 
-    if let Ok(parsed) = Url::parse(uri) {
+    if let Ok(parsed) = Url::parse(trimmed) {
         let mut value = parsed.as_str().to_string();
 
         // Canonicalize localhost file authorities (file://localhost/...) to
@@ -42,14 +44,20 @@ pub fn uri_key(uri: &str) -> String {
 
         if let Some(rest) = value.strip_prefix("file:///")
             && rest.len() > 1
-            && rest.as_bytes()[1] == b':'
+            && (rest.as_bytes()[1] == b':' || rest.as_bytes()[1] == b'|')
             && rest.as_bytes()[0].is_ascii_alphabetic()
         {
-            return format!("file:///{}{}", rest[0..1].to_ascii_lowercase(), &rest[1..]);
+            let separator = if rest.as_bytes()[1] == b'|' { ":" } else { &rest[1..2] };
+            return format!(
+                "file:///{}{}{}",
+                rest[0..1].to_ascii_lowercase(),
+                separator,
+                &rest[2..]
+            );
         }
         value
     } else {
-        uri.to_string()
+        trimmed.to_string()
     }
 }
 
@@ -80,7 +88,32 @@ fn normalize_legacy_windows_uri(uri: &str) -> Option<String> {
         trimmed
     };
 
-    normalize_windows_path_to_key(path)
+    // Accept malformed localhost authorities commonly emitted by some clients,
+    // e.g. `file://localhost/C:\dir\file.pl` and `file://localhost/C:/dir/file.pl`.
+    let path =
+        path.strip_prefix("localhost/").or_else(|| path.strip_prefix("LOCALHOST/")).unwrap_or(path);
+
+    normalize_windows_path_to_key(path).or_else(|| normalize_unc_path_to_key(path))
+}
+
+/// Convert a UNC path into canonical `file://server/share/...` key.
+///
+/// Handles both bare UNC paths (e.g. `\\server\share\file.pl`) and
+/// legacy two-slash URI payloads (e.g. `file://\\server\share\file.pl`).
+fn normalize_unc_path_to_key(path: &str) -> Option<String> {
+    let without_prefix = path.strip_prefix(r"\\").or_else(|| path.strip_prefix("//"))?;
+    let replaced = without_prefix.replace('\\', "/");
+    let mut parts = replaced.split('/').filter(|segment| !segment.is_empty());
+
+    let server = parts.next()?;
+    let share = parts.next()?;
+    let rest = parts.collect::<Vec<_>>().join("/");
+
+    if rest.is_empty() {
+        Some(format!("file://{server}/{share}"))
+    } else {
+        Some(format!("file://{server}/{share}/{rest}"))
+    }
 }
 
 /// Convert a Windows-style path string (with or without a drive letter) into a
@@ -96,12 +129,17 @@ fn normalize_windows_path_to_key(path: &str) -> Option<String> {
     }
 
     let bytes = path.as_bytes();
-    if !bytes[0].is_ascii_alphabetic() || bytes[1] != b':' {
+    if !bytes[0].is_ascii_alphabetic() || (bytes[1] != b':' && bytes[1] != b'|') {
         return None;
     }
 
     // Replace backslashes with forward slashes.
     let mut normalized = path.replace('\\', "/");
+
+    // Convert legacy drive separators (`C|`) to `C:`.
+    if normalized.as_bytes().get(1) == Some(&b'|') {
+        normalized.replace_range(1..2, ":");
+    }
 
     // Ensure there is a separator after the drive colon: `C:foo` → `C:/foo`.
     if normalized.as_bytes().get(2) != Some(&b'/') {
@@ -125,11 +163,11 @@ pub fn is_special_scheme(uri: &str) -> bool {
     if let Ok(url) = Url::parse(uri) {
         url.scheme() != "file"
     } else {
-        uri.starts_with("untitled:")
-            || uri.starts_with("git:")
-            || uri.starts_with("vscode-notebook:")
-            || uri.starts_with("vscode-notebook-cell:")
-            || uri.starts_with("vscode-vfs:")
+        uri.get(..9).is_some_and(|p| p.eq_ignore_ascii_case("untitled:"))
+            || uri.get(..4).is_some_and(|p| p.eq_ignore_ascii_case("git:"))
+            || uri.get(..16).is_some_and(|p| p.eq_ignore_ascii_case("vscode-notebook:"))
+            || uri.get(..21).is_some_and(|p| p.eq_ignore_ascii_case("vscode-notebook-cell:"))
+            || uri.get(..11).is_some_and(|p| p.eq_ignore_ascii_case("vscode-vfs:"))
     }
 }
 
@@ -208,10 +246,44 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_legacy_windows_drive_pipe_separator() {
+        assert_eq!(uri_key("file:///C|/Users/dev/example.pl"), "file:///c:/Users/dev/example.pl");
+        assert_eq!(
+            uri_key(r"file://D|\projects\MyApp\script.pl"),
+            "file:///d:/projects/MyApp/script.pl"
+        );
+    }
+
+    #[test]
+    fn normalizes_legacy_localhost_windows_uri_variants() {
+        assert_eq!(
+            uri_key(r"file://localhost/C:\Users\dev\example.pl"),
+            "file:///c:/Users/dev/example.pl"
+        );
+        assert_eq!(
+            uri_key("file://localhost/C:/Users/dev/example.pl"),
+            "file:///c:/Users/dev/example.pl"
+        );
+        assert_eq!(
+            uri_key(r"file://LOCALHOST/D:\projects\myapp\script.pl"),
+            "file:///d:/projects/myapp/script.pl"
+        );
+    }
+
+    #[test]
     fn canonical_file_uri_three_slashes_unchanged_by_legacy_pass() {
         // Canonical `file:///c:/...` must NOT be double-processed by the legacy pass.
         assert_eq!(uri_key("file:///c:/Users/dev/example.pl"), "file:///c:/Users/dev/example.pl");
         assert_eq!(uri_key("file:///C:/Users/dev/example.pl"), "file:///c:/Users/dev/example.pl");
+    }
+
+    #[test]
+    fn normalizes_legacy_unc_windows_path() {
+        assert_eq!(uri_key(r"\\server\share\folder\file.pl"), "file://server/share/folder/file.pl");
+        assert_eq!(
+            uri_key(r"file://\\server\share\folder\file.pl"),
+            "file://server/share/folder/file.pl"
+        );
     }
 
     #[test]
@@ -237,6 +309,14 @@ mod tests {
         assert!(is_special_scheme("git:/foo/bar"));
         assert!(is_special_scheme("vscode-notebook-cell:/nb.ipynb#cell-id"));
         assert!(!is_special_scheme("file:///tmp/test.pl"));
+    }
+
+    #[test]
+    fn detects_special_schemes_case_insensitive_fallback() {
+        // Invalid URIs can still be recognized by prefix fallback, regardless of case.
+        assert!(is_special_scheme("UNTITLED:Untitled-1"));
+        assert!(is_special_scheme("GIT:relative/path"));
+        assert!(is_special_scheme("VSCODE-NOTEBOOK-CELL:bad uri"));
     }
 
     #[test]
