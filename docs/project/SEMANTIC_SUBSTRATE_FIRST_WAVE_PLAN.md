@@ -94,19 +94,41 @@ rename_plan(entity, new_name)
 safe_delete_plan(entity)
 ```
 
-## Wave 2 (After First-Wave Rails Land)
+## Wave 2 (Current Implementation Status)
 
-1. `SymbolDecl -> EntityFact` adapter.
-2. `SymbolRef -> OccurrenceFact` adapter.
-3. `ExportInfo -> ExportSet` adapter.
-4. `FileFactShard` write-through in workspace store.
-5. Definition-candidate multimap behind compatibility APIs.
-6. Typed reference-edge global index behind compatibility APIs.
+Wave 2 implementation has started. The substrate now includes the following rails and adapter/index
+behaviors:
+
+### Exact facts emitted now
+
+- `EntityFact` is emitted from `SymbolDecl` adapter paths.
+- `OccurrenceFact` is emitted from `SymbolRef` adapter paths.
+- `ExportSet` is emitted from `ExportInfo` adapter paths.
+
+### Workspace storage / index status
+
+- `FileFactShard` is **write-through enabled** in workspace storage.
+- Definition candidate multimap is present as a **compatibility-layer backing index**.
+- Typed reference-edge global index is present as a **compatibility-layer backing index**.
+
+### Shadow compare + scorecard status
+
+- Shadow-compare receipts are available as an implementation receipt surface for parity tracking.
+- Semantic scorecard v1 harness is integrated; metrics remain intentionally staged while provider cutover is deferred.
+
+### Explicit non-goals (still true in Wave 2)
+
+- No provider cutover yet.
+- No rename/safe-delete cutover yet.
+- No full type inference.
 
 ## Wave 3 (User-Visible Cutover Staging)
 
+Wave 3 remains focused on landing the `ImportSpec` + `visible_symbols_at` bridge that unblocks
+provider-facing behavior:
+
 1. `ImportSpec` extraction.
-2. `VisibleSymbols` query implementation.
+2. `visible_symbols_at` query implementation (`VisibleSymbols` substrate query).
 3. Completion consumes `VisibleSymbols` behind a feature flag.
 4. Undefined diagnostics consume `VisibleSymbols` behind a feature flag.
 
@@ -129,4 +151,3 @@ safe_delete_plan(entity)
 - Capability truth: `features.toml`
 - Evidence-backed status: `docs/project/CURRENT_STATUS.md`
 - Canonical planning: `docs/project/ROADMAP.md`
-

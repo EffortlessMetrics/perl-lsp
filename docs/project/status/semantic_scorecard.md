@@ -35,4 +35,4 @@ Fixtures loaded: `12`
 | safe_delete_external_ref_detection | baseline_pending | n/a |
 | undefined_symbol_false_positive_rate | baseline_pending | n/a |
 
-Initial harness: metrics intentionally baseline_pending until semantic facts land.
+Initial harness: metrics intentionally baseline_pending during Wave 2 adapter/index bring-up and shadow-compare receipt collection. Provider-facing cutover remains deferred to Wave 3 (`ImportSpec` + `visible_symbols_at`).
