@@ -823,10 +823,7 @@ fn build_replacement_text(
             && text[match_start - legacy_prefix.len()..match_start] == *legacy_prefix
         {
             let target_package = new_package.unwrap_or(pkg.as_str());
-            return (
-                match_start - legacy_prefix.len(),
-                format!("{target_package}::{new_bare}"),
-            );
+            return (match_start - legacy_prefix.len(), format!("{target_package}::{new_bare}"));
         }
     }
 
