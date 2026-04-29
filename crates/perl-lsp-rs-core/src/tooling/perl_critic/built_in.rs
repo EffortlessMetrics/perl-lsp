@@ -583,4 +583,21 @@ eval $code;
         assert!(violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseWarnings"));
         Ok(())
     }
+
+    #[test]
+    fn use_strictures_does_not_satisfy_use_strict_requirement() -> TestResult {
+        // "use strictures;" must NOT suppress RequireUseStrict — it is a different module.
+        // A substring check ("use strict" in "use strictures") would false-negative here.
+        let source = "use strictures;\nuse warnings;\nmy $x = 1;\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(
+            violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseStrict"),
+            "use strictures should not satisfy RequireUseStrict — they are different modules"
+        );
+        Ok(())
+    }
 }
