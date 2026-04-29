@@ -38,7 +38,11 @@ struct Cli {
 enum Commands {
     /// Print all available top-level xtask commands.
     #[command(name = "list-commands")]
-    List,
+    List {
+        /// Print one-line descriptions next to command names.
+        #[arg(long)]
+        detailed: bool,
+    },
 
     /// Run lean CI suite (format, clippy, tests) for constrained environments
     Ci,
@@ -1745,8 +1749,8 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::List => {
-            print_top_level_commands();
+        Commands::List { detailed } => {
+            print_top_level_commands(detailed);
             Ok(())
         }
         Commands::Ci => ci::run(),
@@ -2252,15 +2256,25 @@ fn main() -> Result<()> {
     }
 }
 
-fn print_top_level_commands() {
-    let mut command_names = Cli::command()
+fn print_top_level_commands(detailed: bool) {
+    let mut commands = Cli::command()
         .get_subcommands()
-        .map(|subcommand| subcommand.get_name().to_string())
+        .map(|subcommand| {
+            (subcommand.get_name().to_string(), subcommand.get_about().map(ToString::to_string))
+        })
         .collect::<Vec<_>>();
-    command_names.sort_unstable();
+    commands.sort_unstable_by(|left, right| left.0.cmp(&right.0));
 
-    for command_name in command_names {
-        println!("{command_name}");
+    for (command_name, about) in commands {
+        if detailed {
+            if let Some(about) = about {
+                println!("{command_name}\t{about}");
+            } else {
+                println!("{command_name}");
+            }
+        } else {
+            println!("{command_name}");
+        }
     }
 }
 
