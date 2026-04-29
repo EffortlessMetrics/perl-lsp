@@ -1371,6 +1371,17 @@ impl Node {
         children
     }
 
+    /// Count direct child nodes without allocating an intermediate vector.
+    ///
+    /// This is more efficient than `children().len()` when callers only need
+    /// cardinality.
+    #[inline]
+    pub fn child_count(&self) -> usize {
+        let mut count = 0;
+        self.for_each_child(|_| count += 1);
+        count
+    }
+
     /// Get the first direct child node, if any.
     ///
     /// Optimized to avoid allocating the children vector.
