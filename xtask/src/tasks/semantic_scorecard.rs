@@ -59,9 +59,14 @@ struct Artifact {
     notes: &'static str,
 }
 
-pub fn run(manifest: Option<PathBuf>, output: Option<PathBuf>, status_md: Option<PathBuf>) -> Result<()> {
+pub fn run(
+    manifest: Option<PathBuf>,
+    output: Option<PathBuf>,
+    status_md: Option<PathBuf>,
+) -> Result<()> {
     let root = project_root()?;
-    let manifest_path = root.join(manifest.unwrap_or_else(|| PathBuf::from(DEFAULT_FIXTURE_MANIFEST)));
+    let manifest_path =
+        root.join(manifest.unwrap_or_else(|| PathBuf::from(DEFAULT_FIXTURE_MANIFEST)));
     let output_path = root.join(output.unwrap_or_else(|| PathBuf::from(DEFAULT_OUTPUT)));
     let status_path = root.join(status_md.unwrap_or_else(|| PathBuf::from(DEFAULT_STATUS_MD)));
 
@@ -89,7 +94,8 @@ fn load_manifest(path: &Path) -> Result<SemanticManifest> {
 }
 
 fn build_artifact(manifest: SemanticManifest) -> Artifact {
-    let fixture_ids = manifest.fixtures.iter().map(|fixture| fixture.id.clone()).collect::<Vec<_>>();
+    let fixture_ids =
+        manifest.fixtures.iter().map(|fixture| fixture.id.clone()).collect::<Vec<_>>();
     let mut rows = BTreeMap::new();
     for &metric in METRICS {
         rows.insert(metric.to_string(), MetricRow { status: "baseline_pending", value: None });
@@ -149,8 +155,16 @@ mod tests {
         let manifest = SemanticManifest {
             fixture_family_version: 1,
             fixtures: vec![
-                FixtureCase { id: "b".to_string(), family: "x".to_string(), path: "b.pl".to_string() },
-                FixtureCase { id: "a".to_string(), family: "x".to_string(), path: "a.pl".to_string() },
+                FixtureCase {
+                    id: "b".to_string(),
+                    family: "x".to_string(),
+                    path: "b.pl".to_string(),
+                },
+                FixtureCase {
+                    id: "a".to_string(),
+                    family: "x".to_string(),
+                    path: "a.pl".to_string(),
+                },
             ],
         };
         let artifact = build_artifact(manifest);
