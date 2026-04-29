@@ -1082,6 +1082,16 @@ enum Commands {
         only: Option<update_status::StatusSubsystem>,
     },
 
+    /// Run semantic fixture scorecard harness for compiler-lite behavior.
+    SemanticScorecard {
+        /// Optional path to semantic fixture manifest JSON.
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// Emit JSON output.
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Generate SRP microcrate inventory and split-candidate report
     SrpMicrocrates {
         /// Optional output path (default: docs/SRP_MICROCRATES.md)
@@ -2156,6 +2166,7 @@ fn main() -> Result<()> {
             }
             MetricsCommand::SweepStats { input } => metrics::sweep_stats::run(input),
         },
+        Commands::SemanticScorecard { manifest, json } => tasks::semantic_scorecard::run(manifest, json),
         Commands::UxScorecard { format, input, output, status_md, ratchet_check } => {
             let format = match format {
                 UxScorecardOutputFormat::Human => UxScorecardFormat::Human,

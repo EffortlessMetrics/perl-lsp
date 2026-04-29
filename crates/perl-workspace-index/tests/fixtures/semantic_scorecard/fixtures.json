@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "fixture_set": "compiler_lite_semantic_v1",
+  "fixtures": [
+    {"id":"autoload_dynamic_boundary","family":"autoload_dynamic_boundary","description":"Track AUTOLOAD as a dynamic resolution boundary.","entry_file":"autoload_dynamic_boundary.pl"},
+    {"id":"dynamic_require_boundary","family":"dynamic_require_boundary","description":"Require with runtime expression marks unknown symbol import set.","entry_file":"dynamic_require_boundary.pl"},
+    {"id":"empty_import_suppression","family":"empty_import_suppression","description":"Do not create symbols for explicit empty import lists.","entry_file":"empty_import_suppression.pl"},
+    {"id":"eval_string_dynamic_boundary","family":"eval_string_dynamic_boundary","description":"String eval should stay isolated behind dynamic boundary.","entry_file":"eval_string_dynamic_boundary.pl"},
+    {"id":"export_tag_expansion","family":"export_tag_expansion","description":"Expand export tags into imported symbols.","entry_file":"export_tag_expansion.pl"},
+    {"id":"generated_accessor","family":"generated_accessor","description":"Generated accessor methods should be tracked as synthetic symbols.","entry_file":"generated_accessor.pl"},
+    {"id":"imported_function_visibility","family":"imported_function_visibility","description":"Imported functions appear in bare call sites.","entry_file":"imported_function_visibility.pl"},
+    {"id":"inherited_method","family":"inherited_method","description":"Inherited methods resolve through package ancestry.","entry_file":"inherited_method.pl"},
+    {"id":"qualified_vs_bare_references","family":"qualified_vs_bare_references","description":"Distinguish Foo::bar from local bare bar references.","entry_file":"qualified_vs_bare_references.pl"},
+    {"id":"role_method","family":"role_method","description":"Role-composed methods resolve as callable methods.","entry_file":"role_method.pl"},
+    {"id":"same_bare_sub_in_two_packages","family":"same_bare_sub_in_two_packages","description":"Same sub name in two packages should keep package disambiguation.","entry_file":"same_bare_sub_in_two_packages.pl"},
+    {"id":"typeglob_alias","family":"typeglob_alias","description":"Typeglob aliasing should unify symbol identity for rename/ref queries.","entry_file":"typeglob_alias.pl"}
+  ],
+  "metrics": {
+    "completion_top1": {"status":"baseline_pending","unit":"ratio","value":null,"notes":"Pending semantic facts implementation."},
+    "completion_top5": {"status":"baseline_pending","unit":"ratio","value":null,"notes":"Pending semantic facts implementation."},
+    "definition_hit_at_1": {"status":"baseline_pending","unit":"ratio","value":null,"notes":"Pending semantic facts implementation."},
+    "definition_hit_at_5": {"status":"baseline_pending","unit":"ratio","value":null,"notes":"Pending semantic facts implementation."},
+    "query_latency_p50": {"status":"not_implemented","unit":"milliseconds","value":null,"notes":"Harness exists; latency sampling to be added."},
+    "query_latency_p95": {"status":"not_implemented","unit":"milliseconds","value":null,"notes":"Harness exists; latency sampling to be added."},
+    "reference_precision": {"status":"baseline_pending","unit":"ratio","value":null,"notes":"Pending semantic facts implementation."},
+    "reference_recall": {"status":"baseline_pending","unit":"ratio","value":null,"notes":"Pending semantic facts implementation."},
+    "rename_unsafe_edit_count": {"status":"not_implemented","unit":"count","value":null,"notes":"Awaiting rename safety oracle wiring."},
+    "safe_delete_external_ref_detection": {"status":"not_implemented","unit":"ratio","value":null,"notes":"Awaiting external-reference signal plumbing."},
+    "undefined_symbol_false_positive_rate": {"status":"baseline_pending","unit":"ratio","value":null,"notes":"Pending semantic facts implementation."}
+  }
+}
