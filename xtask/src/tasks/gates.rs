@@ -1612,7 +1612,8 @@ fn run_single_gate(
     // Run through the platform shell because gate commands are policy strings.
     // Linux CI uses bash; Windows local runs use cmd.exe to keep `cargo`/`just`
     // lookup and simple command chaining available without requiring Git Bash.
-    let result = shell_command(command).stderr_to_stdout().stdout_capture().unchecked().run();
+    let (gate_cmd, timeout_enforced) = shell_command_with_timeout(command, timeout_secs);
+    let result = gate_cmd.stderr_to_stdout().stdout_capture().unchecked().run();
 
     let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -1626,8 +1627,8 @@ fn run_single_gate(
                 eprintln!("Warning: Failed to write log file: {}", e);
             }
 
-            // Check if timed out
-            let timed_out = duration_ms > (timeout_secs * 1000);
+            // `timeout` exits 124 on hard timeout. Keep duration guard for fallback/local behavior.
+            let timed_out = (timeout_enforced && exit_code == 124) || duration_ms > (timeout_secs * 1000);
 
             let status = if timed_out {
                 "timeout".to_string()
@@ -1638,7 +1639,13 @@ fn run_single_gate(
             };
 
             // Extract output summary (last 10 lines or error message)
-            let output_summary = extract_output_summary(&stdout, 10);
+            let mut output_summary = extract_output_summary(&stdout, 10);
+            if timed_out {
+                output_summary = format!(
+                    "Timed out after {timeout_secs}s while running `{command}`. See logs/{}.log. {output_summary}",
+                    gate.name
+                );
+            }
 
             // Parse metrics if this is a test gate
             let metrics = if gate.tags.contains(&"test".to_string()) {
@@ -1694,15 +1701,15 @@ fn run_single_gate(
 }
 
 #[cfg(windows)]
-fn shell_command(command: &str) -> duct::Expression {
-    cmd!("cmd", "/C", command)
+fn shell_command_with_timeout(command: &str, _timeout_secs: u64) -> (duct::Expression, bool) {
+    (cmd!("cmd", "/C", command), false)
 }
 
 #[cfg(not(windows))]
-fn shell_command(command: &str) -> duct::Expression {
-    cmd!("bash", "-lc", command)
+fn shell_command_with_timeout(command: &str, timeout_secs: u64) -> (duct::Expression, bool) {
+    // GNU timeout enforces per-gate limits before the outer workflow timeout.
+    (cmd!("timeout", "--signal=TERM", format!("{}s", timeout_secs), "bash", "-lc", command), true)
 }
-
 fn run_internal_xtask_gate(
     gate: &GateDefinition,
     log_path: &std::path::Path,
