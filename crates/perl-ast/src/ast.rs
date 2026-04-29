@@ -1412,6 +1412,35 @@ impl Node {
     pub fn span_len(&self) -> usize {
         self.location.end.saturating_sub(self.location.start)
     }
+
+    /// Get the last direct child node, if any.
+    ///
+    /// Optimized to avoid allocating the children vector.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_ast::{Node, NodeKind, SourceLocation};
+    ///
+    /// let loc = SourceLocation { start: 0, end: 1 };
+    /// let first = Node::new(NodeKind::Number { value: "1".to_string() }, loc);
+    /// let second = Node::new(NodeKind::Number { value: "2".to_string() }, loc);
+    /// let program = Node::new(
+    ///     NodeKind::Program { statements: vec![first, second] },
+    ///     loc,
+    /// );
+    ///
+    /// assert_eq!(program.last_child().map(|n| n.kind.kind_name()), Some("Number"));
+    /// assert_eq!(Node::new(NodeKind::Block { statements: vec![] }, loc).last_child(), None);
+    /// ```
+    #[inline]
+    pub fn last_child(&self) -> Option<&Node> {
+        let mut result = None;
+        self.for_each_child(|child| {
+            result = Some(child);
+        });
+        result
+    }
 }
 
 /// Comprehensive enumeration of all Perl language constructs supported by the parser.
