@@ -48,9 +48,18 @@ pub fn parse_perlcritic_line(line: &str) -> Option<ParsedCriticLine> {
     let mut numeric_idx = None;
     let max_start = parts.len().saturating_sub(4);
     for idx in 1..=max_start {
-        if parts.get(idx).and_then(|v| v.parse::<u32>().ok()).is_some()
-            && parts.get(idx + 1).and_then(|v| v.parse::<u32>().ok()).is_some()
-            && parts.get(idx + 2).and_then(|v| v.parse::<u8>().ok()).is_some()
+        if parts
+            .get(idx)
+            .and_then(|v| v.trim().parse::<u32>().ok())
+            .is_some()
+            && parts
+                .get(idx + 1)
+                .and_then(|v| v.trim().parse::<u32>().ok())
+                .is_some()
+            && parts
+                .get(idx + 2)
+                .and_then(|v| v.trim().parse::<u8>().ok())
+                .is_some()
         {
             numeric_idx = Some(idx);
             break;
@@ -58,14 +67,14 @@ pub fn parse_perlcritic_line(line: &str) -> Option<ParsedCriticLine> {
     }
 
     let start = numeric_idx?;
-    let file = parts[..start].join(":");
+    let file = parts[..start].join(":").trim().to_string();
     if file.is_empty() {
         return None;
     }
 
-    let line_num = parts[start].parse::<u32>().ok()?;
-    let column = parts[start + 1].parse::<u32>().ok()?;
-    let severity = parts[start + 2].parse::<u8>().ok()?;
+    let line_num = parts[start].trim().parse::<u32>().ok()?;
+    let column = parts[start + 1].trim().parse::<u32>().ok()?;
+    let severity = parts[start + 2].trim().parse::<u8>().ok()?;
     if line_num == 0 || column == 0 || !(1..=5).contains(&severity) {
         return None;
     }
@@ -73,7 +82,7 @@ pub fn parse_perlcritic_line(line: &str) -> Option<ParsedCriticLine> {
     let tail = parts[start + 3..].join(":");
     let boundary = find_policy_message_boundary(&tail)?;
 
-    let policy = tail[..boundary].to_string();
+    let policy = tail[..boundary].trim().to_string();
     let message = tail[boundary + 1..].to_string();
 
     if policy.is_empty() || message.is_empty() {
@@ -235,6 +244,19 @@ mod tests {
     }
 
     #[test]
+    fn parse_perlcritic_line_allows_whitespace_around_numeric_and_policy_fields() {
+        let line =
+            " lib/Foo.pm : 7 : 9 : 2 : TestingAndDebugging::RequireUseStrict :  msg with spaces  ";
+        let parsed = parse_perlcritic_line(line).expect("line with surrounding spaces must parse");
+        assert_eq!(parsed.file, "lib/Foo.pm");
+        assert_eq!(parsed.line, 7);
+        assert_eq!(parsed.column, 9);
+        assert_eq!(parsed.severity, 2);
+        assert_eq!(parsed.policy, "TestingAndDebugging::RequireUseStrict");
+        assert_eq!(parsed.message, "  msg with spaces  ");
+    }
+
+    #[test]
     fn parse_perlcritic_line_rejects_truncated_line() {
         // Missing message and/or policy.
         assert!(parse_perlcritic_line("lib/Foo.pm:1:1:3").is_none());
@@ -291,7 +313,8 @@ fn is_valid_policy(policy: &str) -> bool {
         return false;
     }
 
-    for segment in policy.split("::") {
+    for raw_segment in policy.split("::") {
+        let segment = raw_segment.trim();
         let mut chars = segment.chars();
         let Some(first) = chars.next() else {
             return false;
