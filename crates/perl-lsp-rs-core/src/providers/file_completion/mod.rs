@@ -120,6 +120,7 @@ pub fn complete_file_paths(
             additional_edits: Vec::new(),
             text_edit_range: Some((context.prefix_start, context.position)),
             commit_characters: None,
+            label_details: None,
         });
     }
 
