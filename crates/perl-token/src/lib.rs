@@ -123,6 +123,38 @@ impl<'src> TokenRef<'src> {
         Self { kind, text, start, end }
     }
 
+    /// Create a borrowed token view with checked span ordering.
+    ///
+    /// Unlike [`TokenRef::new`], this rejects spans where `end < start`.
+    pub fn try_new(
+        kind: TokenKind,
+        text: &'src str,
+        start: usize,
+        end: usize,
+    ) -> Result<Self, TokenSpanError> {
+        let span = TokenSpan::try_new(start, end)?;
+        Ok(Self { kind, text, start: span.start, end: span.end })
+    }
+
+    /// Create a borrowed token view while enforcing span invariants.
+    ///
+    /// Rules:
+    /// - `start <= end`
+    /// - zero-length spans are accepted only for EOF tokens
+    pub fn new_checked(
+        kind: TokenKind,
+        text: &'src str,
+        start: usize,
+        end: usize,
+    ) -> Result<Self, TokenSpanError> {
+        let token = Self::try_new(kind, text, start, end)?;
+        if token.is_empty() && token.kind != TokenKind::Eof {
+            return Err(TokenSpanError::EmptySpanNotAllowed { kind: token.kind, at: token.start });
+        }
+
+        Ok(token)
+    }
+
     /// Return the token span length in bytes.
     pub fn len(self) -> usize {
         self.end.saturating_sub(self.start)
