@@ -29,6 +29,10 @@
 
 pub mod decl;
 pub mod r#ref;
+pub mod semantic_facts;
 
 pub use decl::{SymbolDecl, extract_symbol_decls};
 pub use r#ref::{SymbolRef, SymbolRefKind, extract_symbol_refs};
+pub use semantic_facts::{
+    SymbolDeclSemanticFacts, UnsupportedSymbolDecl, symbol_decls_to_semantic_facts,
+};

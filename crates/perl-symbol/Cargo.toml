@@ -28,6 +28,7 @@ doctest = false
 [dependencies]
 perl-ast = { workspace = true }
 serde = { workspace = true }
+perl-semantic-facts = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
