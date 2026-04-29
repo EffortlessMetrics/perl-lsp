@@ -8,6 +8,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import * as vscode from 'vscode';
@@ -96,6 +97,19 @@ type ExecCheckFn = (
 interface ExecInvocation {
   command: string;
   args: string[];
+}
+
+function resolveUserPath(rawPath: string): string {
+  const trimmedPath = rawPath.trim();
+  if (trimmedPath === '~') {
+    return os.homedir();
+  }
+
+  if (trimmedPath.startsWith('~/') || trimmedPath.startsWith('~\\')) {
+    return path.join(os.homedir(), trimmedPath.slice(2));
+  }
+
+  return trimmedPath;
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +225,10 @@ export class OnboardingManager {
     const label = 'perlcritic';
     const perlcriticConfig = vscode.workspace.getConfiguration('perl-lsp').get<any>('perlcritic', {});
     const enabled = Boolean(perlcriticConfig?.enabled);
-    const profile = typeof perlcriticConfig?.profile === 'string' ? perlcriticConfig.profile.trim() : '';
+    const profile =
+      typeof perlcriticConfig?.profile === 'string'
+        ? resolveUserPath(perlcriticConfig.profile)
+        : '';
 
     if (!enabled) {
       return {
