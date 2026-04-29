@@ -104,6 +104,11 @@ impl PullDiagnosticsOrchestrator {
 
         // Get workspace root for this document's containing folder (multi-root aware).
         // Falls back to the global root_path when no specific folder matches.
+        //
+        // Note: we inline the resolution here rather than calling `workspace_root_for_doc`
+        // because `build_context` runs on all targets (including wasm32), while
+        // `workspace_root_for_doc` is `#[cfg(not(target_arch = "wasm32"))]` since it is
+        // only needed from the native perlcritic diagnostic paths.
         let workspace_root = server
             .folder_for_doc_uri(uri)
             .and_then(|folder| folder.path.or_else(|| source_path_from_uri(&folder.uri)))
