@@ -48,6 +48,7 @@ mod ast_explorer;
 mod cancellation;
 mod experimental;
 mod lifecycle;
+mod request_cancellation;
 mod text_document;
 mod workspace;
 
@@ -55,101 +56,25 @@ pub(crate) use cancellation::early_cancel_or;
 pub(crate) use cancellation::enhanced_cancelled_response;
 
 use super::*;
-use crate::cancellation::{
-    GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, ProviderCleanupContext,
+use request_cancellation::{
+    finalize_cancellation_state, handle_cancel_notification, register_request_cancellation,
 };
-use std::time::Instant;
 
 impl LspServer {
     /// Handle a JSON-RPC request
     pub fn handle_request(&self, request: JsonRpcRequest) -> Option<JsonRpcResponse> {
-        let id = request.id.and_then(|id| if id.is_null() { None } else { Some(id) });
+        let id = request
+            .id
+            .clone()
+            .and_then(|id| if id.is_null() { None } else { Some(id) });
         let should_respond = id.is_some();
 
-        // Handle $/cancelRequest notification with enhanced context processing
-        if request.method == "$/cancelRequest" {
-            if let Some(params) = request.params.as_ref() {
-                if let Some(idv) = params.get("id").cloned() {
-                    // Enhanced cancellation with provider context
-                    let start_time = Instant::now();
-
-                    // Use global registry for enhanced cancellation
-                    if let Ok(_cleanup_context) = GLOBAL_CANCELLATION_REGISTRY.cancel_request(&idv)
-                    {
-                        let latency = start_time.elapsed();
-
-                        // Log performance metrics for AC12 validation
-                        tracing::debug!(latency = ?latency, request = ?idv, "Enhanced cancellation processed");
-
-                        // Validate performance requirements (<50ms end-to-end response time)
-                        if latency.as_millis() > 50 {
-                            tracing::warn!(latency = ?latency, "Cancellation latency exceeded 50ms");
-                        }
-
-                        // Optional: Send response with enhanced context for client tracking
-                        // (Note: $/cancelRequest is typically a notification, but enhanced context
-                        // can be useful for debugging and performance analysis)
-                    }
-
-                    // Fallback to legacy cancellation for compatibility
-                    self.cancel_mark(&idv);
-                }
-            }
+        if handle_cancel_notification(self, &request) {
             return None; // Notifications don't get responses
         }
 
-        // Optimized cancellation setup - batch operations for better performance
-        if let Some(ref request_id) = id {
-            // Fast path: Check for immediate cancellation before expensive setup
-            if self.is_cancelled(request_id) {
-                return Some(cancelled_response_with_method(request_id, &request.method));
-            }
-
-            // Only register cancellation token for potentially long-running operations
-            let needs_cancellation = matches!(
-                request.method.as_str(),
-                "textDocument/completion"
-                    | "textDocument/hover"
-                    | "textDocument/definition"
-                    | "textDocument/references"
-                    | "textDocument/documentSymbol"
-                    | "textDocument/codeAction"
-                    | "textDocument/formatting"
-                    | "textDocument/rename"
-                    | "workspace/symbol"
-                    | "callHierarchy/incomingCalls"
-                    | "callHierarchy/outgoingCalls"
-                    | "textDocument/inlayHint"
-            );
-
-            if needs_cancellation {
-                let token =
-                    PerlLspCancellationToken::new(request_id.clone(), request.method.clone());
-                let cleanup_context =
-                    ProviderCleanupContext::new(request.method.clone(), request.params.clone());
-
-                // Batch registration to reduce lock overhead
-                if let Err(e) = GLOBAL_CANCELLATION_REGISTRY.register_token(token) {
-                    tracing::trace!(error = %e, "cancellation: failed to register token");
-                }
-                if let Err(e) =
-                    GLOBAL_CANCELLATION_REGISTRY.register_cleanup(request_id, cleanup_context)
-                {
-                    tracing::trace!(error = %e, "cancellation: failed to register cleanup");
-                }
-
-                // Quick cancellation check after registration
-                if GLOBAL_CANCELLATION_REGISTRY.is_cancelled(request_id) {
-                    if let Some(token) = GLOBAL_CANCELLATION_REGISTRY.get_token(request_id) {
-                        let cleanup_context =
-                            GLOBAL_CANCELLATION_REGISTRY.cancel_request(request_id).map_err(|e| {
-                                tracing::trace!(error = %e, "cancellation: failed to cancel request (early)");
-                            }).ok().flatten();
-                        return Some(enhanced_cancelled_response(&token, cleanup_context.as_ref()));
-                    }
-                    return Some(cancelled_response_with_method(request_id, &request.method));
-                }
-            }
+        if let Some(cancelled) = register_request_cancellation(self, id.as_ref(), &request) {
+            return Some(cancelled);
         }
 
         if !self.initialized.load(Ordering::Acquire)
@@ -349,19 +274,8 @@ impl LspServer {
         // Check for enhanced cancellation with provider context before cleanup.
         // This preserves cancelled responses for requests that are interrupted while
         // handlers are already running.
-        if let Some(ref request_id) = id {
-            if let Some(token) = GLOBAL_CANCELLATION_REGISTRY.get_token(request_id) {
-                if token.is_cancelled() {
-                    let cleanup_context =
-                        GLOBAL_CANCELLATION_REGISTRY.cancel_request(request_id).map_err(|e| {
-                            tracing::trace!(error = %e, "cancellation: failed to cancel request (post-dispatch)");
-                        }).ok().flatten();
-                    GLOBAL_CANCELLATION_REGISTRY.remove_request(request_id);
-                    return Some(enhanced_cancelled_response(&token, cleanup_context.as_ref()));
-                }
-            }
-            // Clean up cancellation token after request processing.
-            GLOBAL_CANCELLATION_REGISTRY.remove_request(request_id);
+        if let Some(cancelled) = finalize_cancellation_state(id.as_ref()) {
+            return Some(cancelled);
         }
 
         match result {
