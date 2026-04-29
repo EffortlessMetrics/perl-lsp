@@ -2260,8 +2260,11 @@ impl WorkspaceIndex {
             anchors.push(AnchorFact {
                 id: anchor_id,
                 file_id,
-                span_start_byte: symbol.range.start.line,
-                span_end_byte: symbol.range.end.line,
+                // WorkspaceSymbol provides line/column coordinates only, not byte
+                // offsets.  Zero-initialize span_*_byte until a byte-offset source
+                // is plumbed through the indexing pipeline.
+                span_start_byte: 0,
+                span_end_byte: 0,
                 scope_id: None,
                 provenance: Provenance::SearchFallback,
                 confidence: Confidence::Low,
@@ -2279,12 +2282,33 @@ impl WorkspaceIndex {
                 confidence: Confidence::Low,
             });
         }
+        // Hash the per-category fact vectors so consumers can detect staleness
+        // without re-reading the full shard.
+        let anchors_hash = {
+            let mut h = DefaultHasher::new();
+            anchors.len().hash(&mut h);
+            for a in &anchors {
+                a.id.hash(&mut h);
+                a.span_start_byte.hash(&mut h);
+                a.span_end_byte.hash(&mut h);
+            }
+            h.finish()
+        };
+        let entities_hash = {
+            let mut h = DefaultHasher::new();
+            entities.len().hash(&mut h);
+            for e in &entities {
+                e.id.hash(&mut h);
+                e.canonical_name.hash(&mut h);
+            }
+            h.finish()
+        };
         FileFactShard {
             source_uri: uri.to_string(),
             file_id,
             content_hash,
-            anchors_hash: Some(anchors.len() as u64),
-            entities_hash: Some(entities.len() as u64),
+            anchors_hash: Some(anchors_hash),
+            entities_hash: Some(entities_hash),
             occurrences_hash: Some(0),
             edges_hash: Some(0),
             anchors,
