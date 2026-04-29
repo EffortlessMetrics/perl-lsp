@@ -90,10 +90,8 @@ fn normalize_legacy_windows_uri(uri: &str) -> Option<String> {
 
     // Accept malformed localhost authorities commonly emitted by some clients,
     // e.g. `file://localhost/C:\dir\file.pl` and `file://localhost/C:/dir/file.pl`.
-    let path = path
-        .strip_prefix("localhost/")
-        .or_else(|| path.strip_prefix("LOCALHOST/"))
-        .unwrap_or(path);
+    let path =
+        path.strip_prefix("localhost/").or_else(|| path.strip_prefix("LOCALHOST/")).unwrap_or(path);
 
     normalize_windows_path_to_key(path).or_else(|| normalize_unc_path_to_key(path))
 }
