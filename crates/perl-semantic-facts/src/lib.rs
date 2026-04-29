@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 
 macro_rules! id_newtype {
     ($name:ident) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+        #[derive(
+            Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+        )]
         pub struct $name(pub u64);
     };
 }
@@ -231,7 +233,10 @@ mod tests {
         let decoded: OccurrenceFact = serde_json::from_str(&serialized)?;
         assert_eq!(decoded, fact);
         // entity_id: None must serialize as JSON null, not be omitted.
-        assert!(serialized.contains("\"entity_id\":null"), "entity_id null must be explicit in JSON");
+        assert!(
+            serialized.contains("\"entity_id\":null"),
+            "entity_id null must be explicit in JSON"
+        );
         Ok(())
     }
 

@@ -25,7 +25,8 @@ fn same_bare_sub_name_in_two_packages_is_deterministic() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn same_method_name_in_parent_and_child_package_is_qualified() -> Result<(), Box<dyn std::error::Error>> {
+fn same_method_name_in_parent_and_child_package_is_qualified()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let parent_uri = file_url("/workspace/lib/Parent.pm")?;
     let child_uri = file_url("/workspace/lib/Parent/Child.pm")?;
@@ -71,7 +72,8 @@ fn bare_lookup_prefers_same_package_when_unambiguous() -> Result<(), Box<dyn std
 }
 
 #[test]
-fn imported_bar_is_distinguishable_from_local_bar_in_symbol_surface() -> Result<(), Box<dyn std::error::Error>> {
+fn imported_bar_is_distinguishable_from_local_bar_in_symbol_surface()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let exporter_uri = file_url("/workspace/lib/ExporterPkg.pm")?;
     let consumer_uri = file_url("/workspace/lib/Consumer.pm")?;
@@ -79,12 +81,12 @@ fn imported_bar_is_distinguishable_from_local_bar_in_symbol_surface() -> Result<
     index.index_file(exporter_uri, "package ExporterPkg;\nsub bar { 1 }\n".to_string())?;
     index.index_file(
         consumer_uri,
-        "package Consumer;\nuse ExporterPkg qw(bar);\nsub bar { 2 }\nsub call { bar(); }\n".to_string(),
+        "package Consumer;\nuse ExporterPkg qw(bar);\nsub bar { 2 }\nsub call { bar(); }\n"
+            .to_string(),
     )?;
 
-    let refs = index
-        .query_symbol_references("Consumer::bar")
-        .ok_or("Consumer::bar should resolve")?;
+    let refs =
+        index.query_symbol_references("Consumer::bar").ok_or("Consumer::bar should resolve")?;
 
     assert_eq!(refs.symbol.qualified_name.as_deref(), Some("Consumer::bar"));
     assert_eq!(refs.symbol.stable_key, "Consumer::bar");
@@ -92,7 +94,8 @@ fn imported_bar_is_distinguishable_from_local_bar_in_symbol_surface() -> Result<
 }
 
 #[test]
-fn duplicate_qualified_name_across_files_remains_deterministic() -> Result<(), Box<dyn std::error::Error>> {
+fn duplicate_qualified_name_across_files_remains_deterministic()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let first_uri = file_url("/workspace/lib/DupeA.pm")?;
     let second_uri = file_url("/workspace/lib/DupeB.pm")?;
@@ -111,7 +114,8 @@ fn duplicate_qualified_name_across_files_remains_deterministic() -> Result<(), B
 }
 
 #[test]
-fn removing_one_duplicate_definition_removes_that_candidate() -> Result<(), Box<dyn std::error::Error>> {
+fn removing_one_duplicate_definition_removes_that_candidate()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let first_uri = file_url("/workspace/lib/DupeA.pm")?;
     let second_uri = file_url("/workspace/lib/DupeB.pm")?;
@@ -129,7 +133,8 @@ fn removing_one_duplicate_definition_removes_that_candidate() -> Result<(), Box<
 }
 
 #[test]
-fn reindexing_one_file_does_not_leave_stale_duplicate_candidates() -> Result<(), Box<dyn std::error::Error>> {
+fn reindexing_one_file_does_not_leave_stale_duplicate_candidates()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let first_uri = file_url("/workspace/lib/DupeA.pm")?;
     let second_uri = file_url("/workspace/lib/DupeB.pm")?;
@@ -140,7 +145,8 @@ fn reindexing_one_file_does_not_leave_stale_duplicate_candidates() -> Result<(),
     index.index_file(first_uri, "package Dupe;\nsub renamed { 1 }\n".to_string())?;
 
     assert!(index.find_definition("Dupe::renamed").is_some(), "new symbol should exist");
-    let resolved = index.find_definition("Dupe::same").ok_or("remaining duplicate should resolve")?;
+    let resolved =
+        index.find_definition("Dupe::same").ok_or("remaining duplicate should resolve")?;
     let candidates = index.definition_candidates("Dupe::same");
     assert_eq!(resolved.uri, "file:///workspace/lib/DupeB.pm");
     assert_eq!(candidates.len(), 1, "reindexing must not leave stale candidates");

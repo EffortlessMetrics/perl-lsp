@@ -1195,26 +1195,31 @@ impl WorkspaceIndex {
             for symbol in &file_index.symbols {
                 let location = Location { uri: symbol.uri.clone(), range: symbol.range };
                 if let Some(qname) = symbol.qualified_name.clone() {
-                    qualified_symbols.entry(qname.clone()).or_default().push(DefinitionCandidate {
-                        key: qname,
-                        location: location.clone(),
-                    });
+                    qualified_symbols
+                        .entry(qname.clone())
+                        .or_default()
+                        .push(DefinitionCandidate { key: qname, location: location.clone() });
                 }
-                bare_symbols.entry(symbol.name.clone()).or_default().push(DefinitionCandidate {
-                    key: symbol.name.clone(),
-                    location,
-                });
+                bare_symbols
+                    .entry(symbol.name.clone())
+                    .or_default()
+                    .push(DefinitionCandidate { key: symbol.name.clone(), location });
             }
         }
         for candidates in qualified_symbols.values_mut() {
-            candidates.sort_by(|l, r| Self::candidate_sort_key(l).cmp(&Self::candidate_sort_key(r)));
+            candidates
+                .sort_by(|l, r| Self::candidate_sort_key(l).cmp(&Self::candidate_sort_key(r)));
         }
         for candidates in bare_symbols.values_mut() {
-            candidates.sort_by(|l, r| Self::candidate_sort_key(l).cmp(&Self::candidate_sort_key(r)));
+            candidates
+                .sort_by(|l, r| Self::candidate_sort_key(l).cmp(&Self::candidate_sort_key(r)));
         }
     }
 
-    fn find_definition_candidates_in_files(files: &HashMap<String, FileIndex>, symbol_name: &str) -> Vec<DefinitionCandidate> {
+    fn find_definition_candidates_in_files(
+        files: &HashMap<String, FileIndex>,
+        symbol_name: &str,
+    ) -> Vec<DefinitionCandidate> {
         let mut qualified_symbols = HashMap::new();
         let mut bare_symbols = HashMap::new();
         Self::rebuild_symbol_cache(files, &mut qualified_symbols, &mut bare_symbols);
