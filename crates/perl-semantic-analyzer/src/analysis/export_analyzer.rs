@@ -693,11 +693,13 @@ our %EXPORT_TAGS = (all => [qw(foo bar baz)]);
         assert!(info.default_export.contains("foo"));
         assert!(info.optional_export.contains("bar"));
         assert!(info.optional_export.contains("baz"));
-        assert_eq!(info.export_tags.get("core").unwrap(), &vec!["foo".to_string(), "bar".to_string()]);
+        assert_eq!(
+            info.export_tags.get("core").unwrap(),
+            &vec!["foo".to_string(), "bar".to_string()]
+        );
         assert_eq!(
             info.export_tags.get("all").unwrap(),
             &vec!["foo".to_string(), "bar".to_string(), "baz".to_string()]
         );
     }
-
 }
