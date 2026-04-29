@@ -1197,6 +1197,10 @@ enum Commands {
         #[arg(long, short)]
         gate: Option<String>,
 
+        /// Base git ref used for scope-aware PR-fast planning
+        #[arg(long)]
+        base: Option<String>,
+
         /// List available gates without running them
         #[arg(long, short)]
         list: bool,
@@ -2191,6 +2195,7 @@ fn main() -> Result<()> {
         Commands::Gates {
             tier,
             gate,
+            base,
             list,
             format,
             receipt,
@@ -2202,6 +2207,7 @@ fn main() -> Result<()> {
         } => gates::run(gates::GateRunnerConfig {
             tier,
             gate_filter: gate,
+            base_ref: base,
             output_format: format,
             emit_receipt: receipt,
             receipt_path,
