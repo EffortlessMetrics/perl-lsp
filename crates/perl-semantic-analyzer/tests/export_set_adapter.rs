@@ -100,3 +100,34 @@ our @EXPORT = @{ build_exports() };
     assert!(set.tags.is_empty());
     Ok(())
 }
+
+#[test]
+fn regression_merges_export_assignments_across_statements() -> Result<(), Box<dyn Error>> {
+    // Real CPAN modules often build @EXPORT_OK and %EXPORT_TAGS incrementally
+    // across multiple assignment statements. The adapter must merge them correctly.
+    let set = extract_export_set(
+        r#"
+package MyLib;
+use Exporter 'import';
+our @EXPORT = qw(foo);
+our @EXPORT_OK = qw(bar);
+our @EXPORT_OK = qw(bar baz);
+our %EXPORT_TAGS = (core => [qw(foo bar)]);
+our %EXPORT_TAGS = (all => [qw(foo bar baz)]);
+1;
+"#,
+    )?;
+
+    assert_eq!(set.default_exports, vec!["foo".to_string()]);
+    assert_eq!(set.optional_exports, vec!["bar".to_string(), "baz".to_string()]);
+
+    let core = set.tags.iter().find(|t| t.name == "core")
+        .ok_or_else(|| "core tag must exist".to_string())?;
+    assert_eq!(core.members, vec!["bar".to_string(), "foo".to_string()]);
+
+    let all = set.tags.iter().find(|t| t.name == "all")
+        .ok_or_else(|| "all tag must exist".to_string())?;
+    assert_eq!(all.members, vec!["bar".to_string(), "baz".to_string(), "foo".to_string()]);
+
+    Ok(())
+}
