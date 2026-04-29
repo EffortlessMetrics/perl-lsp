@@ -337,7 +337,8 @@ fn collect_line_variables(line: &str, include_non_scalars: bool) -> Vec<(usize, 
         }
     }
 
-    matches.sort_by_key(|(start, _, _)| *start);
+    matches.sort_by(|a, b| (a.0, a.1, &a.2).cmp(&(b.0, b.1, &b.2)));
+    matches.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1 && a.2 == b.2);
     matches
 }
 
@@ -791,6 +792,14 @@ mod tests {
         assert!(names.contains(&"$keep".to_string()));
         assert!(names.contains(&"$weird".to_string()));
         assert!(names.contains(&"$also_keep".to_string()));
+    }
+
+    #[test]
+    fn test_extract_variable_names_deduplicates_repeated_mentions() {
+        let source = "my $foo = ${foo};\n";
+        let names = extract_variable_names(source, 1, 1);
+
+        assert_eq!(names, vec!["$foo".to_string()]);
     }
 
     #[test]
