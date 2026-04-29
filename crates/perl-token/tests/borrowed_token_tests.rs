@@ -1,4 +1,4 @@
-use perl_token::{Token, TokenKind, TokenRef, TokenSpan};
+use perl_token::{Token, TokenKind, TokenRef, TokenSpan, TokenSpanError};
 use std::error::Error;
 use std::sync::Arc;
 
@@ -82,5 +82,34 @@ fn token_ref_is_empty_for_zero_length_span() -> TestResult {
     assert_eq!(borrowed.len(), 0);
     assert!(borrowed.is_empty());
     assert_eq!(borrowed.span(), (8, 8));
+    Ok(())
+}
+
+#[test]
+fn token_ref_try_new_rejects_end_before_start() -> TestResult {
+    let err = match TokenRef::try_new(TokenKind::Identifier, "x", 10, 3) {
+        Ok(_) => return Err("TokenRef::try_new should reject end < start".into()),
+        Err(err) => err,
+    };
+    assert_eq!(err, TokenSpanError::EndBeforeStart { start: 10, end: 3 });
+    Ok(())
+}
+
+#[test]
+fn token_ref_new_checked_rejects_empty_non_eof() -> TestResult {
+    let err = match TokenRef::new_checked(TokenKind::Identifier, "", 5, 5) {
+        Ok(_) => return Err("TokenRef::new_checked should reject empty non-EOF spans".into()),
+        Err(err) => err,
+    };
+    assert_eq!(err, TokenSpanError::EmptySpanNotAllowed { kind: TokenKind::Identifier, at: 5 });
+    Ok(())
+}
+
+#[test]
+fn token_ref_new_checked_allows_empty_eof() -> TestResult {
+    let token = TokenRef::new_checked(TokenKind::Eof, "", 12, 12)?;
+    assert_eq!(token.kind, TokenKind::Eof);
+    assert_eq!(token.span(), (12, 12));
+    assert!(token.is_empty());
     Ok(())
 }

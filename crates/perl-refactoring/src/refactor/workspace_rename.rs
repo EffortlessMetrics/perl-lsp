@@ -497,7 +497,8 @@ impl WorkspaceRename {
                     let in_scope = if let Some(ref pkg) = scope_package {
                         // Check if the reference is qualified with the correct package
                         let before = &text[..match_start];
-                        let is_qualified_with_pkg = before.ends_with(&format!("{}::", pkg));
+                        let is_qualified_with_pkg = before.ends_with(&format!("{}::", pkg))
+                            || before.ends_with(&format!("{pkg}'"));
 
                         // Check if we're within the right package scope
                         let current_package = find_package_at_offset(text, match_start);
@@ -816,6 +817,14 @@ fn build_replacement_text(
             let target_package = new_package.unwrap_or(pkg.as_str());
             return (match_start - prefix.len(), format!("{target_package}::{new_bare}"));
         }
+
+        let legacy_prefix = format!("{pkg}'");
+        if match_start >= legacy_prefix.len()
+            && text[match_start - legacy_prefix.len()..match_start] == *legacy_prefix
+        {
+            let target_package = new_package.unwrap_or(pkg.as_str());
+            return (match_start - legacy_prefix.len(), format!("{target_package}::{new_bare}"));
+        }
     }
 
     (match_start, new_bare.to_string())
@@ -922,5 +931,16 @@ mod tests {
 
         assert_eq!(start, 0);
         assert_eq!(replacement, "execute");
+    }
+
+    #[test]
+    fn test_build_replacement_text_legacy_qualified_rewrites_to_double_colon() {
+        let text = "Old'process()";
+        let scope_package = Some("Old".to_string());
+        let (start, replacement) =
+            build_replacement_text(text, "Old'".len(), &scope_package, Some("New"), "execute");
+
+        assert_eq!(start, 0);
+        assert_eq!(replacement, "New::execute");
     }
 }
