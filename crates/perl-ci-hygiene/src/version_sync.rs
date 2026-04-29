@@ -56,22 +56,20 @@ impl VersionSite {
 /// dashes. Keep in sync with bump's CLI validation — they must accept the same shape.
 pub fn validate_version_format(version: &str) -> Result<()> {
     // Split on the first '-' to separate the base version from the optional pre-release tag.
-    let (base, pre_release) = version
-        .split_once('-')
-        .map(|(b, p)| (b, Some(p)))
-        .unwrap_or((version, None));
+    let (base, pre_release) =
+        version.split_once('-').map(|(b, p)| (b, Some(p))).unwrap_or((version, None));
 
     let mut parts = base.split('.');
 
-    let major = parts
-        .next()
-        .ok_or_else(|| eyre!("invalid version format: {version:?} (expected X.Y.Z or X.Y.Z-pre)"))?;
-    let minor = parts
-        .next()
-        .ok_or_else(|| eyre!("invalid version format: {version:?} (expected X.Y.Z or X.Y.Z-pre)"))?;
-    let patch = parts
-        .next()
-        .ok_or_else(|| eyre!("invalid version format: {version:?} (expected X.Y.Z or X.Y.Z-pre)"))?;
+    let major = parts.next().ok_or_else(|| {
+        eyre!("invalid version format: {version:?} (expected X.Y.Z or X.Y.Z-pre)")
+    })?;
+    let minor = parts.next().ok_or_else(|| {
+        eyre!("invalid version format: {version:?} (expected X.Y.Z or X.Y.Z-pre)")
+    })?;
+    let patch = parts.next().ok_or_else(|| {
+        eyre!("invalid version format: {version:?} (expected X.Y.Z or X.Y.Z-pre)")
+    })?;
 
     if parts.next().is_some()
         || major.is_empty()
@@ -87,11 +85,11 @@ pub fn validate_version_format(version: &str) -> Result<()> {
     // Validate the pre-release tag if present: alphanumeric segments separated by '.' or '-'.
     if let Some(pre) = pre_release {
         let invalid = pre.is_empty()
-            || !pre
-                .chars()
-                .all(|ch| ch.is_ascii_alphanumeric() || ch == '.' || ch == '-');
+            || !pre.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '.' || ch == '-');
         if invalid {
-            bail!("invalid pre-release suffix in {version:?}: {pre:?} (expected alphanumeric segments)");
+            bail!(
+                "invalid pre-release suffix in {version:?}: {pre:?} (expected alphanumeric segments)"
+            );
         }
     }
 
@@ -358,9 +356,8 @@ fn rewrite_version_in_line(line: &str, old: &str, new: &str) -> String {
 /// site-discovery regexes so pre-release versions are tracked consistently.
 const VERSION_FRAGMENT: &str = r"\d+\.\d+\.\d+(?:-[A-Za-z0-9][A-Za-z0-9.\-]*)?";
 
-static BARE_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
-    compile_regex(&format!(r#"^\s*version\s*=\s*"({VERSION_FRAGMENT})""#))
-});
+static BARE_VERSION_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(&format!(r#"^\s*version\s*=\s*"({VERSION_FRAGMENT})""#)));
 static WORKSPACE_DEP_WITH_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
     compile_regex(&format!(
         r#"\{{\s*path\s*=\s*"crates/[^"]+"[^}}]*version\s*=\s*"({VERSION_FRAGMENT})""#
@@ -371,24 +368,18 @@ static CRATE_DEP_WITH_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
         r#"\{{\s*path\s*=\s*"\.\.?/[^"]+"[^}}]*version\s*=\s*"({VERSION_FRAGMENT})""#
     ))
 });
-static JSON_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
-    compile_regex(&format!(r#"^\s*"version"\s*:\s*"({VERSION_FRAGMENT})""#))
-});
-static LOCKFILE_ROOT_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
-    compile_regex(&format!(r#"^  "version"\s*:\s*"({VERSION_FRAGMENT})""#))
-});
-static LOCKFILE_SELF_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
-    compile_regex(&format!(r#"^      "version"\s*:\s*"({VERSION_FRAGMENT})""#))
-});
-static README_RELEASE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    compile_regex(&format!(r"\*\*Current release:\s*v({VERSION_FRAGMENT})\*\*"))
-});
-static CLAUDE_RELEASE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    compile_regex(&format!(r"\*\*Latest Release\*\*:\s*({VERSION_FRAGMENT})"))
-});
-static ROADMAP_WORKSPACE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    compile_regex(&format!(r"Workspace version line:\s*`v({VERSION_FRAGMENT})`"))
-});
+static JSON_VERSION_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(&format!(r#"^\s*"version"\s*:\s*"({VERSION_FRAGMENT})""#)));
+static LOCKFILE_ROOT_VERSION_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(&format!(r#"^  "version"\s*:\s*"({VERSION_FRAGMENT})""#)));
+static LOCKFILE_SELF_VERSION_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(&format!(r#"^      "version"\s*:\s*"({VERSION_FRAGMENT})""#)));
+static README_RELEASE_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(&format!(r"\*\*Current release:\s*v({VERSION_FRAGMENT})\*\*")));
+static CLAUDE_RELEASE_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(&format!(r"\*\*Latest Release\*\*:\s*({VERSION_FRAGMENT})")));
+static ROADMAP_WORKSPACE_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(&format!(r"Workspace version line:\s*`v({VERSION_FRAGMENT})`")));
 static ROADMAP_PUBLISHED_RE: LazyLock<Regex> = LazyLock::new(|| {
     compile_regex(&format!(r"Latest published release:\s*`v({VERSION_FRAGMENT})`"))
 });
@@ -754,10 +745,7 @@ mod tests {
     fn rewrite_version_in_line_stable_to_rc() {
         let line = r#"perl-foo = { path = "crates/perl-foo", version = "0.12.4" }"#;
         let updated = rewrite_version_in_line(line, "0.12.4", "0.13.0-rc1");
-        assert_eq!(
-            updated,
-            r#"perl-foo = { path = "crates/perl-foo", version = "0.13.0-rc1" }"#
-        );
+        assert_eq!(updated, r#"perl-foo = { path = "crates/perl-foo", version = "0.13.0-rc1" }"#);
     }
 
     #[test]
@@ -939,10 +927,7 @@ perl-token = { path = "../perl-token", version = "0.42.0" }
         collect_vscode_sites(&repo_root, &mut sites)?;
 
         assert_eq!(sites.len(), 3, "should find 3 vscode sites");
-        assert!(
-            sites.iter().all(|s| s.channel_split),
-            "all vscode sites must be channel-split"
-        );
+        assert!(sites.iter().all(|s| s.channel_split), "all vscode sites must be channel-split");
 
         fs::remove_dir_all(&repo_root)
             .map_err(|e| eyre!("cleanup {}: {e}", repo_root.display()))?;
