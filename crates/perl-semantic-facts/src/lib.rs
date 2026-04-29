@@ -98,6 +98,20 @@ pub enum Confidence {
     Low,
 }
 
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct ReferenceEdge {
+    pub kind: OccurrenceKind,
+    pub confidence: Confidence,
+}
+
+impl ReferenceEdge {
+    #[must_use]
+    pub const fn new(kind: OccurrenceKind, confidence: Confidence) -> Self {
+        Self { kind, confidence }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnchorFact {
     pub id: AnchorId,

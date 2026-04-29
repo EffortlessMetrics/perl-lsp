@@ -71,6 +71,7 @@ use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
+use perl_semantic_facts::{Confidence, OccurrenceKind, ReferenceEdge};
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::sync::Arc;
@@ -1134,7 +1135,7 @@ pub struct WorkspaceIndex {
     ///
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
     /// Provides O(1) lookup for `find_references()` instead of iterating all files.
-    global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
+    global_references: Arc<RwLock<HashMap<String, Vec<(Location, ReferenceEdge)>>>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
     /// Workspace folder URIs for multi-root workspace support
@@ -1361,7 +1362,7 @@ impl WorkspaceIndex {
 
         for symbol_name in names_to_query {
             if let Some(refs) = global_refs.get(symbol_name) {
-                for location in refs {
+                for (location, _edge) in refs {
                     let key = (
                         location.uri.clone(),
                         location.range.start.line,
@@ -1488,13 +1489,13 @@ impl WorkspaceIndex {
     /// Retains only entries whose URI does not match `file_uri`.
     /// Empty keys are removed to avoid unbounded map growth.
     fn remove_file_global_refs(
-        global_refs: &mut HashMap<String, Vec<Location>>,
+        global_refs: &mut HashMap<String, Vec<(Location, ReferenceEdge)>>,
         file_index: &FileIndex,
         file_uri: &str,
     ) {
         for name in file_index.references.keys() {
             if let Some(locs) = global_refs.get_mut(name) {
-                locs.retain(|loc| loc.uri != file_uri);
+                locs.retain(|(loc, _)| loc.uri != file_uri);
                 if locs.is_empty() {
                     global_refs.remove(name);
                 }
@@ -1610,7 +1611,7 @@ impl WorkspaceIndex {
                 for (name, refs) in &file_index.references {
                     let entry = global_refs.entry(name.clone()).or_default();
                     for reference in refs {
-                        entry.push(Location { uri: reference.uri.clone(), range: reference.range });
+                        entry.push((Location { uri: reference.uri.clone(), range: reference.range }, Self::reference_edge_from_kind(reference.kind)));
                     }
                 }
             }
@@ -1926,10 +1927,13 @@ impl WorkspaceIndex {
                     for (name, refs) in &fi.references {
                         let entry = global_refs.entry(name.clone()).or_default();
                         for reference in refs {
-                            entry.push(Location {
-                                uri: reference.uri.clone(),
-                                range: reference.range,
-                            });
+                            entry.push((
+                                Location {
+                                    uri: reference.uri.clone(),
+                                    range: reference.range,
+                                },
+                                Self::reference_edge_from_kind(reference.kind),
+                            ));
                         }
                     }
                 }
@@ -1976,7 +1980,7 @@ impl WorkspaceIndex {
 
         // O(1) lookup for exact symbol name
         if let Some(refs) = global_refs.get(symbol_name) {
-            for loc in refs {
+            for (loc, _edge) in refs {
                 let key = (
                     loc.uri.clone(),
                     loc.range.start.line,
@@ -1994,7 +1998,7 @@ impl WorkspaceIndex {
         if let Some(idx) = symbol_name.rfind("::") {
             let bare_name = &symbol_name[idx + 2..];
             if let Some(refs) = global_refs.get(bare_name) {
-                for loc in refs {
+                for (loc, _edge) in refs {
                     let key = (
                         loc.uri.clone(),
                         loc.range.start.line,
@@ -2015,7 +2019,7 @@ impl WorkspaceIndex {
                     continue;
                 }
 
-                for loc in refs {
+                for (loc, _edge) in refs {
                     let key = (
                         loc.uri.clone(),
                         loc.range.start.line,
@@ -2074,55 +2078,55 @@ impl WorkspaceIndex {
     /// returning only actual usage sites. This is used by code lens to show
     /// "N references" where N means call sites, not the definition itself.
     pub fn count_usages(&self, symbol_name: &str) -> usize {
-        let files = self.files.read();
+        let global_refs = self.global_references.read();
         let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
 
-        for (_uri_key, file_index) in files.iter() {
-            if let Some(refs) = file_index.references.get(symbol_name) {
-                for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
-                    seen.insert((
-                        r.uri.clone(),
-                        r.range.start.line,
-                        r.range.start.column,
-                        r.range.end.line,
-                        r.range.end.column,
-                    ));
+        let mut collect = |refs: &Vec<(Location, ReferenceEdge)>| {
+            for (location, edge) in refs {
+                if edge.kind == OccurrenceKind::Definition {
+                    continue;
                 }
+                seen.insert((
+                    location.uri.clone(),
+                    location.range.start.line,
+                    location.range.start.column,
+                    location.range.end.line,
+                    location.range.end.column,
+                ));
             }
+        };
 
-            if let Some(idx) = symbol_name.rfind("::") {
-                let bare_name = &symbol_name[idx + 2..];
-                if let Some(refs) = file_index.references.get(bare_name) {
-                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
-                        seen.insert((
-                            r.uri.clone(),
-                            r.range.start.line,
-                            r.range.start.column,
-                            r.range.end.line,
-                            r.range.end.column,
-                        ));
-                    }
-                }
-            } else {
-                for (name, refs) in &file_index.references {
-                    if !Self::is_qualified_variant_of(name, symbol_name) {
-                        continue;
-                    }
+        if let Some(refs) = global_refs.get(symbol_name) {
+            collect(refs);
+        }
 
-                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
-                        seen.insert((
-                            r.uri.clone(),
-                            r.range.start.line,
-                            r.range.start.column,
-                            r.range.end.line,
-                            r.range.end.column,
-                        ));
-                    }
+        if let Some(idx) = symbol_name.rfind("::") {
+            let bare_name = &symbol_name[idx + 2..];
+            if let Some(refs) = global_refs.get(bare_name) {
+                collect(refs);
+            }
+        } else {
+            for (name, refs) in global_refs.iter() {
+                if Self::is_qualified_variant_of(name, symbol_name) {
+                    collect(refs);
                 }
             }
         }
 
         seen.len()
+    }
+
+    fn reference_edge_from_kind(kind: ReferenceKind) -> ReferenceEdge {
+        ReferenceEdge::new(
+            match kind {
+                ReferenceKind::Definition => OccurrenceKind::Definition,
+                ReferenceKind::Usage => OccurrenceKind::Reference,
+                ReferenceKind::Import => OccurrenceKind::Import,
+                ReferenceKind::Read => OccurrenceKind::Read,
+                ReferenceKind::Write => OccurrenceKind::Write,
+            },
+            Confidence::High,
+        )
     }
 
     fn is_qualified_variant_of(candidate: &str, bare_symbol: &str) -> bool {
@@ -2306,8 +2310,9 @@ impl WorkspaceIndex {
         let mut global_refs_bytes: usize = 0;
         for (sym_name, locs) in global_refs_guard.iter() {
             global_refs_bytes += sym_name.len();
-            for loc in locs {
-                global_refs_bytes += loc.uri.len() + size_of::<Location>();
+            for (loc, edge) in locs {
+                global_refs_bytes += loc.uri.len() + size_of::<Location>() + size_of::<ReferenceEdge>();
+                let _ = edge;
             }
         }
 
@@ -4161,6 +4166,54 @@ UsageDemo::helper();
             bare_usage_count >= qualified_usage_count,
             "bare-name usage count should include qualified call sites"
         );
+    }
+
+
+    #[test]
+    fn test_global_references_preserve_typed_edges() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///typed_refs.pl";
+        let code = "sub helper { return 1; }
+helper();
+";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let refs = index.global_references.read();
+        let helper_refs = refs.get("helper");
+        assert!(helper_refs.is_some(), "helper refs missing");
+        let Some(helper_refs) = helper_refs else {
+            unreachable!("asserted above");
+        };
+        assert!(helper_refs.iter().any(|(_, edge)| edge.kind == OccurrenceKind::Definition));
+        assert!(helper_refs.iter().any(|(_, edge)| edge.kind == OccurrenceKind::Reference));
+    }
+
+    #[test]
+    fn test_count_usages_excludes_definition_with_typed_edges() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///typed_usage.pl";
+        let code = "sub helper { return 1; }
+helper();
+";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        assert_eq!(index.count_usages("helper"), 1);
+    }
+
+    #[test]
+    fn test_typed_global_references_are_replaced_on_reindex() {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///typed_reindex.pl"));
+
+        must(index.index_file(uri.clone(), "sub helper { return 1; }
+helper();
+".to_string()));
+        must(index.index_file(uri.clone(), "sub helper { return 1; }
+".to_string()));
+
+        let refs = index.find_references("helper");
+        assert_eq!(refs.len(), 1, "reindex should remove stale call-site references");
+        assert_eq!(index.count_usages("helper"), 0, "usage count should drop after call removal");
     }
 
     #[test]
