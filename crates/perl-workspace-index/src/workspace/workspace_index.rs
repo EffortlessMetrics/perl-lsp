@@ -991,6 +991,12 @@ pub struct Location {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct DefinitionCandidate {
+    uri: String,
+    range: Range,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Stable symbol identity returned by cross-file reference queries.
 pub struct SymbolIdentity {
     /// Canonical stable key for the symbol (qualified when available).
@@ -1128,8 +1134,8 @@ pub struct FileIndex {
 pub struct WorkspaceIndex {
     /// Index data per file URI (normalized key -> data)
     files: Arc<RwLock<HashMap<String, FileIndex>>>,
-    /// Global symbol map (qualified name -> defining URI)
-    symbols: Arc<RwLock<HashMap<String, String>>>,
+    /// Global symbol candidate map (qualified and bare names -> ranked definition candidates)
+    symbols: Arc<RwLock<HashMap<String, Vec<DefinitionCandidate>>>>,
     /// Global reference index (symbol name -> locations across all files)
     ///
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
@@ -1161,18 +1167,49 @@ impl WorkspaceIndex {
         });
     }
 
+    fn rank_definition_candidates(candidates: &mut Vec<DefinitionCandidate>) {
+        candidates.sort_by(|left, right| {
+            (
+                left.uri.as_str(),
+                left.range.start.line,
+                left.range.start.column,
+                left.range.end.line,
+                left.range.end.column,
+            )
+                .cmp(&(
+                    right.uri.as_str(),
+                    right.range.start.line,
+                    right.range.start.column,
+                    right.range.end.line,
+                    right.range.end.column,
+                ))
+        });
+        candidates.dedup_by(|left, right| left.uri == right.uri && left.range == right.range);
+    }
+
+    fn append_symbol_candidate(
+        symbols: &mut HashMap<String, Vec<DefinitionCandidate>>,
+        key: String,
+        candidate: DefinitionCandidate,
+    ) {
+        let entry = symbols.entry(key).or_default();
+        entry.push(candidate);
+        Self::rank_definition_candidates(entry);
+    }
+
     fn rebuild_symbol_cache(
         files: &HashMap<String, FileIndex>,
-        symbols: &mut HashMap<String, String>,
+        symbols: &mut HashMap<String, Vec<DefinitionCandidate>>,
     ) {
         symbols.clear();
 
         for file_index in files.values() {
             for symbol in &file_index.symbols {
+                let candidate = DefinitionCandidate { uri: symbol.uri.clone(), range: symbol.range };
                 if let Some(ref qname) = symbol.qualified_name {
-                    symbols.insert(qname.clone(), symbol.uri.clone());
+                    Self::append_symbol_candidate(symbols, qname.clone(), candidate.clone());
                 }
-                symbols.insert(symbol.name.clone(), symbol.uri.clone());
+                Self::append_symbol_candidate(symbols, symbol.name.clone(), candidate);
             }
         }
     }
@@ -1180,46 +1217,41 @@ impl WorkspaceIndex {
     /// Incrementally remove one file's symbols from the global cache,
     /// re-inserting shadowed symbols from remaining files.
     fn incremental_remove_symbols(
-        files: &HashMap<String, FileIndex>,
-        symbols: &mut HashMap<String, String>,
+        _files: &HashMap<String, FileIndex>,
+        symbols: &mut HashMap<String, Vec<DefinitionCandidate>>,
         old_file_index: &FileIndex,
     ) {
-        let mut affected_names: Vec<String> = Vec::new();
+        let mut affected_names: HashSet<String> = HashSet::new();
         for sym in &old_file_index.symbols {
             if let Some(ref qname) = sym.qualified_name {
-                if symbols.get(qname) == Some(&sym.uri) {
-                    symbols.remove(qname);
-                    affected_names.push(qname.clone());
-                }
+                affected_names.insert(qname.clone());
             }
-            if symbols.get(&sym.name) == Some(&sym.uri) {
-                symbols.remove(&sym.name);
-                affected_names.push(sym.name.clone());
-            }
+            affected_names.insert(sym.name.clone());
         }
-        if !affected_names.is_empty() {
-            for file_index in files.values() {
-                for sym in &file_index.symbols {
-                    if let Some(ref qname) = sym.qualified_name {
-                        if !symbols.contains_key(qname) && affected_names.contains(qname) {
-                            symbols.insert(qname.clone(), sym.uri.clone());
-                        }
-                    }
-                    if !symbols.contains_key(&sym.name) && affected_names.contains(&sym.name) {
-                        symbols.insert(sym.name.clone(), sym.uri.clone());
-                    }
+
+        for key in affected_names {
+            if let Some(candidates) = symbols.get_mut(&key) {
+                candidates.retain(|candidate| candidate.uri != old_file_index.source_uri);
+                if candidates.is_empty() {
+                    symbols.remove(&key);
+                } else {
+                    Self::rank_definition_candidates(candidates);
                 }
             }
         }
     }
 
     /// Incrementally add one file's symbols to the global cache.
-    fn incremental_add_symbols(symbols: &mut HashMap<String, String>, file_index: &FileIndex) {
+    fn incremental_add_symbols(
+        symbols: &mut HashMap<String, Vec<DefinitionCandidate>>,
+        file_index: &FileIndex,
+    ) {
         for sym in &file_index.symbols {
+            let candidate = DefinitionCandidate { uri: sym.uri.clone(), range: sym.range };
             if let Some(ref qname) = sym.qualified_name {
-                symbols.insert(qname.clone(), sym.uri.clone());
+                Self::append_symbol_candidate(symbols, qname.clone(), candidate.clone());
             }
-            symbols.insert(sym.name.clone(), sym.uri.clone());
+            Self::append_symbol_candidate(symbols, sym.name.clone(), candidate);
         }
     }
 
@@ -1270,37 +1302,6 @@ impl WorkspaceIndex {
             }
         }
         best_match.cloned()
-    }
-
-    fn find_definition_in_files(
-        files: &HashMap<String, FileIndex>,
-        symbol_name: &str,
-        uri_filter: Option<&str>,
-    ) -> Option<(Location, String)> {
-        let mut candidates: Vec<(Location, String)> = Vec::new();
-        for file_index in files.values() {
-            if let Some(filter) = uri_filter
-                && file_index.symbols.first().is_some_and(|symbol| symbol.uri != filter)
-            {
-                continue;
-            }
-
-            for symbol in &file_index.symbols {
-                if symbol.name == symbol_name
-                    || symbol.qualified_name.as_deref() == Some(symbol_name)
-                {
-                    candidates.push((
-                        Location { uri: symbol.uri.clone(), range: symbol.range },
-                        symbol.uri.clone(),
-                    ));
-                }
-            }
-        }
-
-        candidates.sort_by(|left, right| {
-            Self::location_sort_key(&left.0).cmp(&Self::location_sort_key(&right.0))
-        });
-        candidates.into_iter().next()
     }
 
     fn find_symbol_by_definition(
@@ -1660,7 +1661,10 @@ impl WorkspaceIndex {
             // uri_str) so the comparison is always against the exact string that
             // was stored during indexing.
             if let Some(indexed_uri) = file_index.symbols.first().map(|s| s.uri.as_str()) {
-                symbols.retain(|_, v| v.as_str() != indexed_uri);
+                symbols.retain(|_, candidates| {
+                    candidates.retain(|candidate| candidate.uri.as_str() != indexed_uri);
+                    !candidates.is_empty()
+                });
             }
 
             // Remove from global reference index
@@ -2147,30 +2151,78 @@ impl WorkspaceIndex {
     /// let index = WorkspaceIndex::new();
     /// let _def = index.find_definition("MyPackage::example");
     /// ```
-    pub fn find_definition(&self, symbol_name: &str) -> Option<Location> {
-        let cached_uri = {
+    /// Return all definition candidates for a symbol in deterministic order.
+    pub fn find_definition_candidates(&self, symbol_name: &str) -> Vec<Location> {
+        let cached_candidates = {
             let symbols = self.symbols.read();
             symbols.get(symbol_name).cloned()
         };
 
+        if let Some(cached_candidates) = cached_candidates {
+            let mut locations: Vec<Location> = cached_candidates
+                .into_iter()
+                .map(|candidate| Location { uri: candidate.uri, range: candidate.range })
+                .collect();
+            Self::sort_locations_deterministically(&mut locations);
+            return locations;
+        }
+
         let files = self.files.read();
-        if let Some(ref uri_str) = cached_uri
-            && let Some((location, _uri)) =
-                Self::find_definition_in_files(&files, symbol_name, Some(uri_str))
-        {
-            return Some(location);
+        let mut resolved: Vec<Location> = Vec::new();
+        for file_index in files.values() {
+            for symbol in &file_index.symbols {
+                if symbol.name == symbol_name
+                    || symbol.qualified_name.as_deref() == Some(symbol_name)
+                {
+                    resolved.push(Location { uri: symbol.uri.clone(), range: symbol.range });
+                }
+            }
         }
-
-        let resolved = Self::find_definition_in_files(&files, symbol_name, None);
         drop(files);
+        Self::sort_locations_deterministically(&mut resolved);
 
-        if let Some((location, uri)) = resolved {
+        if !resolved.is_empty() {
             let mut symbols = self.symbols.write();
-            symbols.insert(symbol_name.to_string(), uri);
-            return Some(location);
+            let candidates: Vec<DefinitionCandidate> = resolved
+                .iter()
+                .map(|location| DefinitionCandidate {
+                    uri: location.uri.clone(),
+                    range: location.range,
+                })
+                .collect();
+            symbols.insert(symbol_name.to_string(), candidates);
         }
+        resolved
+    }
 
-        None
+    pub fn find_definition(&self, symbol_name: &str) -> Option<Location> {
+        let candidates = self.find_definition_candidates(symbol_name);
+        candidates
+            .into_iter()
+            .min_by_key(|location| {
+                let kind_rank = self
+                    .find_symbol_by_definition(location, symbol_name)
+                    .map(|symbol| match symbol.kind {
+                        SymbolKind::Subroutine | SymbolKind::Method => 0_u8,
+                        SymbolKind::Package | SymbolKind::Class => 1,
+                        SymbolKind::Constant => 2,
+                        _ => 3,
+                    })
+                    .unwrap_or(4);
+                (
+                    kind_rank,
+                    location.uri.clone(),
+                    location.range.start.line,
+                    location.range.start.column,
+                    location.range.end.line,
+                    location.range.end.column,
+                )
+            })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_only_definition_candidates(&self, symbol_name: &str) -> Vec<Location> {
+        self.find_definition_candidates(symbol_name)
     }
 
     /// Get all symbols in the workspace
@@ -5527,6 +5579,52 @@ helper_one();
             index.find_definition("B::shared_fn").is_some(),
             "qualified 'B::shared_fn' must remain after A.pm deletion"
         );
+    }
+
+    #[test]
+    fn test_definition_candidates_multiple_packages_stable_order() {
+        let index = WorkspaceIndex::new();
+        let uri_a = must(url::Url::parse("file:///workspace/A.pm"));
+        let uri_b = must(url::Url::parse("file:///workspace/B.pm"));
+
+        must(index.index_file(uri_a, "package A;\nsub helper { 1 }\n1;\n".to_string()));
+        must(index.index_file(uri_b, "package B;\nsub helper { 1 }\n1;\n".to_string()));
+
+        let candidates = index.test_only_definition_candidates("helper");
+        assert_eq!(candidates.len(), 2);
+        assert!(candidates[0].uri <= candidates[1].uri);
+    }
+
+    #[test]
+    fn test_definition_candidates_same_qualified_name_in_multiple_files() {
+        let index = WorkspaceIndex::new();
+        let uri_a = must(url::Url::parse("file:///workspace/One.pm"));
+        let uri_b = must(url::Url::parse("file:///workspace/Two.pm"));
+
+        must(index.index_file(uri_a, "package Dup;\nsub fn_name { 1 }\n1;\n".to_string()));
+        must(index.index_file(uri_b, "package Dup;\nsub fn_name { 2 }\n1;\n".to_string()));
+
+        let candidates = index.test_only_definition_candidates("Dup::fn_name");
+        assert_eq!(candidates.len(), 2);
+    }
+
+    #[test]
+    fn test_definition_candidates_cleanup_after_remove_and_reindex() {
+        let index = WorkspaceIndex::new();
+        let uri_a = must(url::Url::parse("file:///workspace/C1.pm"));
+        let uri_b = must(url::Url::parse("file:///workspace/C2.pm"));
+
+        must(index.index_file(uri_a.clone(), "package A;\nsub target { 1 }\n1;\n".to_string()));
+        must(index.index_file(uri_b, "package B;\nsub target { 1 }\n1;\n".to_string()));
+        assert_eq!(index.test_only_definition_candidates("target").len(), 2);
+
+        index.remove_file(uri_a.as_str());
+        let after_remove = index.test_only_definition_candidates("target");
+        assert_eq!(after_remove.len(), 1);
+        assert_eq!(after_remove[0].uri, "file:///workspace/C2.pm");
+
+        must(index.index_file(uri_a, "package A;\nsub target { 2 }\n1;\n".to_string()));
+        assert_eq!(index.test_only_definition_candidates("target").len(), 2);
     }
 
     #[test]
