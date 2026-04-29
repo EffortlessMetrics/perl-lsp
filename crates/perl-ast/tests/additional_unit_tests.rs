@@ -1087,9 +1087,7 @@ fn children_of_ternary() {
 #[test]
 fn child_count_matches_children_len_for_program() {
     let node = Node::new(
-        NodeKind::Program {
-            statements: vec![num_node("1"), num_node("2"), num_node("3")],
-        },
+        NodeKind::Program { statements: vec![num_node("1"), num_node("2"), num_node("3")] },
         loc(0, 20),
     );
     assert_eq!(node.child_count(), node.children().len());
