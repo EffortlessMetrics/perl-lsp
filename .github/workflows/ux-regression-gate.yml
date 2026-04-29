@@ -121,15 +121,36 @@ jobs:
         if: always() && steps.harness_check.outputs.harness_available == 'true'
         run: |
           python3 - <<'PY'
-          import os, re, pathlib, sys
+          import json
+          import os, pathlib, re, sys
 
           output_file = pathlib.Path("/tmp/ux-test-output.txt")
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          receipt_path = pathlib.Path("target/receipts/ux-regression-receipt.json")
+          receipt_path.parent.mkdir(parents=True, exist_ok=True)
 
-          if not summary_path:
-              sys.exit(0)
+          sha = os.environ.get("GITHUB_SHA", "")
+          run_id = os.environ.get("GITHUB_RUN_ID", "")
+          server_url = os.environ.get("GITHUB_SERVER_URL", "")
+          repository = os.environ.get("GITHUB_REPOSITORY", "")
+          run_url = f"{server_url}/{repository}/actions/runs/{run_id}" if server_url and repository and run_id else None
 
           lines = output_file.read_text(encoding="utf-8").splitlines() if output_file.exists() else []
+
+          def classify_failure(fail_line: str, all_lines: list[str]) -> str:
+              text = f"{fail_line}\n" + "\n".join(all_lines[-300:])
+              text_l = text.lower()
+              if "editor_ux_fixture_matrix" in text_l and "assertion `left == right` failed" in text_l:
+                  return "matrix_drift"
+              if "timed out" in text_l or "timeout" in text_l:
+                  return "timeout"
+              if "panic" in text_l or "panicked" in text_l:
+                  return "new_test_bug"
+              if "connection reset" in text_l or "broken pipe" in text_l or "address already in use" in text_l:
+                  return "infra"
+              if "assertion failed" in text_l:
+                  return "provider_regression"
+              return "unknown"
 
           # Categories defined in the spec
           categories = {
@@ -147,24 +168,37 @@ jobs:
           fail_count = 0
           skip_count = 0
           failed_scenarios = []
+          first_failed_test = None
           current_category = "uncategorized"
+          panic_location = None
+          first_failing_line = None
 
           for line in lines:
+              trimmed = line.strip()
               # Detect category headers
               for cat in categories:
-                  if cat.lower() in line.lower():
+                  if cat.lower() in trimmed.lower():
                       current_category = cat
                       break
               # Detect test result lines
-              if re.search(r'\bPASS\b|\bpassed\b|test \S+ \.\.\. ok', line, re.IGNORECASE):
+              if re.search(r'\bPASS\b|\bpassed\b|test \S+ \.\.\. ok', trimmed, re.IGNORECASE):
                   pass_count += 1
-                  categories[current_category].append(("PASS", line.strip()))
-              elif re.search(r'\bFAIL\b|\bfailed\b|test \S+ \.\.\. FAILED', line, re.IGNORECASE):
+                  categories[current_category].append(("PASS", trimmed))
+              elif re.search(r'\bFAIL\b|\bfailed\b|test \S+ \.\.\. FAILED', trimmed, re.IGNORECASE):
                   fail_count += 1
-                  categories[current_category].append(("FAIL", line.strip()))
-                  failed_scenarios.append(line.strip())
-              elif re.search(r'\bSKIP\b|\bskipped\b|test \S+ \.\.\. ignored', line, re.IGNORECASE):
+                  categories[current_category].append(("FAIL", trimmed))
+                  failed_scenarios.append(trimmed)
+                  if first_failed_test is None:
+                      match = re.search(r'test\s+([A-Za-z0-9_]+)\s+\.\.\.\s+FAILED', trimmed)
+                      first_failed_test = match.group(1) if match else trimmed
+              elif re.search(r'\bSKIP\b|\bskipped\b|test \S+ \.\.\. ignored', trimmed, re.IGNORECASE):
                   skip_count += 1
+              if panic_location is None:
+                  panic_match = re.search(r"panicked at .*?([A-Za-z0-9_./-]+\.rs:\d+:\d+)", trimmed)
+                  if panic_match:
+                      panic_location = panic_match.group(1)
+              if first_failing_line is None and "assertion failed" in trimmed.lower():
+                  first_failing_line = trimmed
 
           total = pass_count + fail_count + skip_count
           covered_categories = sum(1 for cat, items in categories.items() if items and cat != "uncategorized")
@@ -221,14 +255,56 @@ jobs:
               f"**Coverage metric**: {total} scenarios cover {covered_categories} categories of UX.",
           ]
 
-          pathlib.Path(summary_path).write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+          if summary_path:
+              pathlib.Path(summary_path).write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+
+          scenario_file = None
+          if first_failed_test:
+              scenario_match = re.search(r'(ux_scenario_\d+_[A-Za-z0-9_]+)', first_failed_test)
+              if scenario_match:
+                  scenario_file = f"{scenario_match.group(1)}.rs"
+              elif first_failed_test.startswith("scenario_"):
+                  scenario_file = f"{first_failed_test}.rs"
+
+          failure_class = classify_failure(failed_scenarios[0], lines) if failed_scenarios else "none"
+          repro = f"just ux-tests {first_failed_test}" if first_failed_test else "just ux-tests"
+          receipt = {
+              "kind": "ux_regression_receipt",
+              "schema_version": 1,
+              "sha": sha,
+              "run_url": run_url,
+              "result": "fail" if fail_count > 0 else "pass",
+              "summary": {
+                  "total": total,
+                  "passed": pass_count,
+                  "failed": fail_count,
+                  "skipped": skip_count,
+              },
+              "scenario": scenario_file,
+              "test": first_failed_test,
+              "failure_class": failure_class,
+              "panic_location": panic_location,
+              "repro": repro,
+              "first_failing_line": first_failing_line,
+          }
+          receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
 
           # Also print to stdout for CI logs
           print(f"\nUX Coverage: {total} scenarios across {covered_categories} categories")
           for cat, items in categories.items():
               if items:
                   print(f"  {cat}: {len(items)} scenario(s)")
+          print(f"UX receipt: {receipt_path}")
           PY
+
+      - name: Upload UX regression receipt
+        if: always() && steps.harness_check.outputs.harness_available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ux-regression-receipt-${{ github.sha }}
+          path: target/receipts/ux-regression-receipt.json
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Job summary — harness not yet available
         if: steps.harness_check.outputs.harness_available == 'false'
