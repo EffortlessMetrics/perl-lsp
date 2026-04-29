@@ -35,6 +35,29 @@ fn reindex_replaces_stale_fact_shard() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
+/// Reindexing the same content must not produce a new shard or change the
+/// existing shard's content_hash (early-exit idempotency path).
+#[test]
+fn reindex_same_content_preserves_shard() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = Url::parse("file:///workspace/idempotent.pl")?;
+    let content = "package A; sub foo { 1 }".to_string();
+
+    index.index_file(uri.clone(), content.clone())?;
+    let first = index.file_fact_shard(uri.as_str()).ok_or("missing first")?;
+
+    // Second index_file call with identical content hits the content_hash
+    // early-exit and must leave the shard unchanged.
+    index.index_file(uri.clone(), content)?;
+    let second = index.file_fact_shard(uri.as_str()).ok_or("missing second")?;
+
+    assert_eq!(first.content_hash, second.content_hash, "content_hash must be stable");
+    assert_eq!(first.entities, second.entities, "entities must be unchanged");
+    assert_eq!(first.anchors, second.anchors, "anchors must be unchanged");
+    assert_eq!(index.fact_shard_count(), 1);
+    Ok(())
+}
+
 #[test]
 fn remove_file_removes_fact_shard() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
