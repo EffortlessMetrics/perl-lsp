@@ -286,6 +286,108 @@ mod tests {
         );
     }
 
+    /// When a decl's container is not itself present as a declaration, the
+    /// adapter must emit an `UnsupportedDeclFact` explaining the missing edge
+    /// rather than silently dropping the Defines record.
+    #[test]
+    fn missing_container_produces_unsupported_entry() {
+        let decls = vec![SymbolDecl {
+            kind: SymbolKind::Subroutine,
+            name: "orphan".to_string(),
+            qualified_name: "Missing::orphan".to_string(),
+            full_span: (0, 30),
+            anchor_span: Some((10, 16)),
+            container: Some("Missing".to_string()),
+            declarator: None,
+        }];
+
+        let facts = symbol_decls_to_semantic_facts(&decls, FileId(3));
+        assert_eq!(facts.entities.len(), 1, "entity is still emitted");
+        assert_eq!(facts.defines_edges.len(), 0, "no edge without container entity");
+        assert_eq!(facts.unsupported.len(), 1, "one unsupported entry for missing container");
+        assert_eq!(
+            facts.unsupported[0].reason,
+            "container declaration not present; Defines edge omitted",
+        );
+        assert_eq!(facts.unsupported[0].qualified_name, "Missing::orphan");
+    }
+
+    /// Deeply nested qualified names must resolve the container using a full
+    /// segment-boundary match, not just the last segment.
+    ///
+    /// "A::B::C::D" with container "C" should produce a Defines edge
+    /// FROM "A::B::C" (the qualified prefix that ends_with "::C") TO "A::B::C::D".
+    #[test]
+    fn deeply_nested_qualified_name_resolves_correct_container() {
+        let decls = vec![
+            SymbolDecl {
+                kind: SymbolKind::Package,
+                name: "A".to_string(),
+                qualified_name: "A".to_string(),
+                full_span: (0, 5),
+                anchor_span: None,
+                container: None,
+                declarator: None,
+            },
+            SymbolDecl {
+                kind: SymbolKind::Package,
+                name: "B".to_string(),
+                qualified_name: "A::B".to_string(),
+                full_span: (6, 15),
+                anchor_span: None,
+                container: Some("A".to_string()),
+                declarator: None,
+            },
+            SymbolDecl {
+                kind: SymbolKind::Package,
+                name: "C".to_string(),
+                qualified_name: "A::B::C".to_string(),
+                full_span: (16, 30),
+                anchor_span: None,
+                container: Some("B".to_string()),
+                declarator: None,
+            },
+            SymbolDecl {
+                kind: SymbolKind::Subroutine,
+                name: "D".to_string(),
+                qualified_name: "A::B::C::D".to_string(),
+                full_span: (31, 55),
+                anchor_span: Some((35, 36)),
+                container: Some("C".to_string()),
+                declarator: None,
+            },
+        ];
+
+        let facts = symbol_decls_to_semantic_facts(&decls, FileId(5));
+        assert_eq!(facts.entities.len(), 4);
+        // A has no container -> no edge
+        // A::B has container "A" -> edge A -> A::B
+        // A::B::C has container "B" -> prefix "A::B", ends_with("::B") -> edge A::B -> A::B::C
+        // A::B::C::D has container "C" -> prefix "A::B::C", ends_with("::C") -> edge A::B::C -> A::B::C::D
+        assert_eq!(facts.defines_edges.len(), 3, "should have 3 Defines edges");
+        assert!(facts.unsupported.is_empty(), "no unsupported entries");
+
+        let c_entity = facts
+            .entities
+            .iter()
+            .find(|e| e.canonical_name == "A::B::C")
+            .expect("A::B::C entity must exist");
+        let d_entity = facts
+            .entities
+            .iter()
+            .find(|e| e.canonical_name == "A::B::C::D")
+            .expect("A::B::C::D entity must exist");
+        let d_edge = facts
+            .defines_edges
+            .iter()
+            .find(|e| e.to_entity_id == d_entity.id)
+            .expect("Defines edge to A::B::C::D must exist");
+        assert_eq!(
+            d_edge.from_entity_id, c_entity.id,
+            "Defines edge for A::B::C::D must come FROM A::B::C"
+        );
+    }
+
     #[test]
     fn unsupported_kinds_are_reported_explicitly() {
         let decls = vec![SymbolDecl {
