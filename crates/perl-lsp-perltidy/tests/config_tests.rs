@@ -298,3 +298,10 @@ fn builtin_formatter_multi_closer_line_does_not_over_decrement() {
     assert_eq!(lines[5], "}"); // one closer — back to level 0
     assert_eq!(lines[6], "print 3;"); // at level 0, not negative
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn with_os_runtime_clamps_zero_timeout() {
+    let config = PerlTidyConfig { timeout_secs: 0, ..PerlTidyConfig::default() };
+    let _formatter = PerlTidyFormatter::with_os_runtime(config);
+}
