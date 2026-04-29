@@ -107,14 +107,20 @@ safe_delete_plan(entity)
 
 This section is the migration receipt for what has landed versus what remains staged.
 
-### Landed now
+### Landed
 
-- **Exact facts emitted (neutral vocabulary is live):** `AnchorFact`, `EntityFact`, `OccurrenceFact`, `EdgeFact`, and `DiagnosticFact` exist in `perl-semantic-facts` with deterministic serde/roundtrip coverage.
-- **Fact shard write-through:** **not landed yet**; workspace continues to operate on legacy symbol/reference indexes as the source of truth.
-- **Definition candidate multimap:** **not landed yet**; compatibility APIs still resolve against existing per-file/global symbol tables.
-- **Typed reference index:** **not landed yet**; typed-reference behavior is currently constrained to fixture/regression banks rather than a provider-facing global index.
-- **Shadow-compare receipt:** **design/test rail only** in this wave; no provider cutover or production shadow-read gating is enabled.
-- **Scorecard v1:** fixture harness + baseline-pending semantic scorecard are landed; metric rows are intentionally `baseline_pending` until full adapter/index plumbing is wired.
+- **Neutral fact vocabulary:** `AnchorFact`, `EntityFact`, `OccurrenceFact`, `EdgeFact`, and `DiagnosticFact` exist in `perl-semantic-facts` with deterministic serde/roundtrip coverage. (PR #7314)
+- **`SymbolDecl -> EntityFact` adapter:** `perl-symbol` now emits `EntityFact` and `EdgeFact` rows from `SymbolDecl` with `Defines` edges and provenance. (PR #7341)
+- **Fact shard write-through:** `FileFactShard` struct and write-through storage in `WorkspaceIndex` are landed; workspace populates shards on index. Legacy symbol/reference indexes remain the source of truth for providers. (PR #7357)
+- **Definition candidate multimap:** `DefinitionCandidate` multimap behind compatibility APIs is landed with deterministic sort and incremental removal. (PR #7360)
+- **Shadow-compare receipt:** design/test rail is landed (`semantic_shadow_compare.rs`); no provider cutover or production shadow-read gating is enabled. (PR #7366)
+- **Scorecard v1:** fixture harness and baseline-pending semantic scorecard are landed; metric rows are intentionally `baseline_pending` until full adapter/index plumbing is wired. (PR #7367)
+
+### Still staged
+
+- **`SymbolRef -> OccurrenceFact` adapter:** not landed; occurrence facts are not yet emitted from reference sites.
+- **`ExportInfo -> ExportSet` adapter:** not landed; export analysis remains in legacy format.
+- **Typed reference-edge global index:** not landed; typed-reference behavior is constrained to fixture/regression banks rather than a provider-facing global index.
 
 ### Explicit non-goals for current Wave 2 state
 
