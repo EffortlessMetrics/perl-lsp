@@ -224,7 +224,8 @@ mod tests {
             .collect();
         names.sort();
 
-        let expected = vec!["case.cgi", "case.pl", "case.plx", "case.pm", "case.psgi", "case.t", "nested.pl"];
+        let expected =
+            vec!["case.cgi", "case.pl", "case.plx", "case.pm", "case.psgi", "case.t", "nested.pl"];
         assert_eq!(names, expected);
 
         fs::remove_dir_all(&root)?;
@@ -288,7 +289,8 @@ mod tests {
             .collect();
         names.sort();
 
-        let expected = vec!["app.PsGi", "legacy.CgI", "mixed.Pm", "suite.T", "tool.PlX", "upper.PL"];
+        let expected =
+            vec!["app.PsGi", "legacy.CgI", "mixed.Pm", "suite.T", "tool.PlX", "upper.PL"];
         assert_eq!(names, expected);
 
         fs::remove_dir_all(&root)?;
