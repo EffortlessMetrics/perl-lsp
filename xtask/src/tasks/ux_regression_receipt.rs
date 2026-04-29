@@ -260,10 +260,7 @@ mod tests {
             matches!(receipt.failure_class, FailureClass::BaselineDrift),
             "baseline snapshot log should classify as BaselineDrift"
         );
-        assert_eq!(
-            receipt.route, "needs-fixture-fix",
-            "BaselineDrift routes to needs-fixture-fix"
-        );
+        assert_eq!(receipt.route, "needs-fixture-fix", "BaselineDrift routes to needs-fixture-fix");
     }
 
     #[test]
@@ -323,8 +320,7 @@ mod tests {
     #[test]
     fn panic_re_matches_modern_rust_format() {
         // Rust 1.73+ format: "panicked at path:row:col:" with no quoted message.
-        let line =
-            "thread 'test' panicked at crates/perl-lsp-rs/src/lib.rs:42:8:";
+        let line = "thread 'test' panicked at crates/perl-lsp-rs/src/lib.rs:42:8:";
         let cap = PANIC_RE.captures(line).expect("should match modern panic format");
         assert_eq!(&cap[1], "crates/perl-lsp-rs/src/lib.rs:42:8");
     }
