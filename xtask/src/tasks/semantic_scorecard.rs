@@ -1,5 +1,5 @@
 use crate::utils::project_root;
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -59,20 +59,36 @@ struct Artifact {
     notes: &'static str,
 }
 
-pub fn run(manifest: Option<PathBuf>, output: Option<PathBuf>, status_md: Option<PathBuf>) -> Result<()> {
+pub fn run(
+    manifest: Option<PathBuf>,
+    output: Option<PathBuf>,
+    status_md: Option<PathBuf>,
+    check: bool,
+) -> Result<()> {
     let root = project_root()?;
-    let manifest_path = root.join(manifest.unwrap_or_else(|| PathBuf::from(DEFAULT_FIXTURE_MANIFEST)));
+    let manifest_path =
+        root.join(manifest.unwrap_or_else(|| PathBuf::from(DEFAULT_FIXTURE_MANIFEST)));
     let output_path = root.join(output.unwrap_or_else(|| PathBuf::from(DEFAULT_OUTPUT)));
     let status_path = root.join(status_md.unwrap_or_else(|| PathBuf::from(DEFAULT_STATUS_MD)));
 
     let manifest = load_manifest(&manifest_path)?;
     let artifact = build_artifact(manifest);
 
-    write_json(&output_path, &artifact)?;
+    let payload = serialize_json(&artifact)?;
+    let status_markdown = render_status_markdown(&artifact);
+
+    if check {
+        verify_file_matches(&output_path, &payload)?;
+        verify_file_matches(&status_path, &status_markdown)?;
+        println!("semantic scorecard check passed: outputs are current");
+        return Ok(());
+    }
+
+    write_json(&output_path, &payload)?;
     if let Some(parent) = status_path.parent() {
         fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
     }
-    fs::write(&status_path, render_status_markdown(&artifact))
+    fs::write(&status_path, status_markdown)
         .with_context(|| format!("writing {}", status_path.display()))?;
 
     println!("semantic scorecard updated: {}", output_path.display());
@@ -89,7 +105,8 @@ fn load_manifest(path: &Path) -> Result<SemanticManifest> {
 }
 
 fn build_artifact(manifest: SemanticManifest) -> Artifact {
-    let fixture_ids = manifest.fixtures.iter().map(|fixture| fixture.id.clone()).collect::<Vec<_>>();
+    let fixture_ids =
+        manifest.fixtures.iter().map(|fixture| fixture.id.clone()).collect::<Vec<_>>();
     let mut rows = BTreeMap::new();
     for &metric in METRICS {
         rows.insert(metric.to_string(), MetricRow { status: "baseline_pending", value: None });
@@ -107,12 +124,26 @@ fn build_artifact(manifest: SemanticManifest) -> Artifact {
     }
 }
 
-fn write_json(path: &Path, artifact: &Artifact) -> Result<()> {
+fn serialize_json(artifact: &Artifact) -> Result<String> {
+    Ok(format!("{}\n", serde_json::to_string_pretty(artifact)?))
+}
+
+fn write_json(path: &Path, payload: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
     }
-    let payload = serde_json::to_string_pretty(artifact)?;
-    fs::write(path, format!("{payload}\n")).with_context(|| format!("writing {}", path.display()))
+    fs::write(path, payload).with_context(|| format!("writing {}", path.display()))
+}
+
+fn verify_file_matches(path: &Path, expected: &str) -> Result<()> {
+    let actual = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    if actual != expected {
+        bail!(
+            "{} is stale; run `cargo xtask semantic-scorecard` to refresh generated outputs",
+            path.display()
+        );
+    }
+    Ok(())
 }
 
 fn render_status_markdown(artifact: &Artifact) -> String {
@@ -149,8 +180,16 @@ mod tests {
         let manifest = SemanticManifest {
             fixture_family_version: 1,
             fixtures: vec![
-                FixtureCase { id: "b".to_string(), family: "x".to_string(), path: "b.pl".to_string() },
-                FixtureCase { id: "a".to_string(), family: "x".to_string(), path: "a.pl".to_string() },
+                FixtureCase {
+                    id: "b".to_string(),
+                    family: "x".to_string(),
+                    path: "b.pl".to_string(),
+                },
+                FixtureCase {
+                    id: "a".to_string(),
+                    family: "x".to_string(),
+                    path: "a.pl".to_string(),
+                },
             ],
         };
         let artifact = build_artifact(manifest);
@@ -222,6 +261,15 @@ mod tests {
             "fixture IDs must be identical regardless of input order"
         );
         assert_eq!(artifact_fwd.fixture_ids, vec!["alpha".to_string(), "beta".to_string()]);
+        Ok(())
+    }
+
+    #[test]
+    fn verify_file_matches_detects_drift() -> Result<()> {
+        let tmp = tempfile::NamedTempFile::new()?;
+        fs::write(tmp.path(), "actual\n")?;
+        let err = verify_file_matches(tmp.path(), "expected\n").expect_err("must fail on drift");
+        assert!(err.to_string().contains("is stale"));
         Ok(())
     }
 }

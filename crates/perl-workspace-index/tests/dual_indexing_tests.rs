@@ -592,7 +592,8 @@ fn cross_file_function_call_references() -> Result<(), Box<dyn std::error::Error
 // =========================================================================
 
 #[test]
-fn typed_reference_baseline_sub_definition_and_call_are_untyped_in_results() -> Result<(), Box<dyn std::error::Error>> {
+fn typed_reference_baseline_sub_definition_and_call_are_untyped_in_results()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/lib/Typed/Subs.pm")?;
 
@@ -609,7 +610,8 @@ foo();
 }
 
 #[test]
-fn typed_reference_baseline_variable_read_write_collapse_to_same_symbol_refs() -> Result<(), Box<dyn std::error::Error>> {
+fn typed_reference_baseline_variable_read_write_collapse_to_same_symbol_refs()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/lib/Typed/Var.pm")?;
 
@@ -629,7 +631,8 @@ $count = $count + 1;
 }
 
 #[test]
-fn typed_reference_baseline_import_export_inheritance_role_and_generated_accessor_are_calls_only() -> Result<(), Box<dyn std::error::Error>> {
+fn typed_reference_baseline_import_export_inheritance_role_and_generated_accessor_are_calls_only()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/lib/Typed/Edges.pm")?;
 
@@ -664,7 +667,8 @@ has 'name' => (is => 'ro');
 }
 
 #[test]
-fn typed_reference_baseline_code_ref_forms_and_dynamic_boundaries_are_not_typed() -> Result<(), Box<dyn std::error::Error>> {
+fn typed_reference_baseline_code_ref_forms_and_dynamic_boundaries_are_not_typed()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/lib/Typed/Dynamic.pm")?;
 

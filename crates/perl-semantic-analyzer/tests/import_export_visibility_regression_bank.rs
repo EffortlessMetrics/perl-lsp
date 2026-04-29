@@ -33,10 +33,7 @@ our %EXPORT_TAGS = (
     assert!(info.optional_export.contains("bar"));
     assert!(info.optional_export.contains("baz"));
 
-    let all_tag = info
-        .export_tags
-        .get("all")
-        .ok_or("missing expected :all export tag")?;
+    let all_tag = info.export_tags.get("all").ok_or("missing expected :all export tag")?;
     assert!(all_tag.iter().any(|symbol| symbol == "foo"));
     assert!(all_tag.iter().any(|symbol| symbol == "bar"));
     assert!(all_tag.iter().any(|symbol| symbol == "baz"));
@@ -63,7 +60,8 @@ our @EXPORT_OK = qw(beta gamma);
 }
 
 #[test]
-fn non_exporter_module_with_export_arrays_is_not_treated_as_export_source() -> Result<(), Box<dyn Error>> {
+fn non_exporter_module_with_export_arrays_is_not_treated_as_export_source()
+-> Result<(), Box<dyn Error>> {
     let code = r#"
 package NotExporter;
 our @EXPORT = qw(fake_default);
@@ -74,9 +72,6 @@ our @EXPORT_OK = qw(fake_optional);
     let mut parser = Parser::new(code);
     let ast = parser.parse()?;
     let info = ExportSymbolExtractor::extract(&ast);
-    assert!(
-        info.is_none(),
-        "module without Exporter inheritance must not produce export info"
-    );
+    assert!(info.is_none(), "module without Exporter inheritance must not produce export info");
     Ok(())
 }
