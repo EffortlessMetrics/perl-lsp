@@ -278,6 +278,7 @@ pub fn normalize_uri(uri: &str) -> String {
         // forms like `file://C:/...` normalize to `file:///c:/...` on Windows
         // and `file:///tmp/...` on Unix while preserving non-local authorities.
         if url.scheme() == "file"
+            && url.host_str() == Some("localhost")
             && let Some(fs_path) = uri_to_fs_path(uri)
             && let Ok(normalized) = fs_path_to_uri(&fs_path)
         {
