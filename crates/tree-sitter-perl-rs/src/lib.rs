@@ -823,6 +823,16 @@ mod tests {
     }
 
     #[test]
+    fn test_tree_walk_starts_at_root_node() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $x = 42;"));
+        let cursor = tree.walk();
+
+        assert_eq!(cursor.node().kind(), tree.root_node().kind());
+        assert_eq!(cursor.node().start_byte(), 0);
+    }
+
+    #[test]
     fn test_utf8_text_round_trip() {
         let source = "my $x = 42;";
         let mut p = Parser::new();
