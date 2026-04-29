@@ -263,12 +263,16 @@ impl LspServer {
                 self.set_root_uri(root_uri);
             } else if let Some(root_path) = params.get("rootPath").and_then(|p| p.as_str()) {
                 // Legacy fallback: rootPath is deprecated since LSP 3.0 but still sent by some clients
+                // (including older JetBrains LSP clients).
                 tracing::debug!(root_path, "Initialized with legacy rootPath");
                 let root_uri = root_path_to_file_uri(root_path);
+                let mut folder =
+                    super::super::workspace_folder::WorkspaceFolderState::new(root_uri.clone());
+                // Preserve filesystem path metadata so project-config loading and other
+                // path-based workflows behave the same as rootUri/workspaceFolders initialization.
+                folder = folder.with_path(std::path::PathBuf::from(root_path));
                 let mut folders = self.workspace_folders.lock();
-                folders.push(super::super::workspace_folder::WorkspaceFolderState::new(
-                    root_uri.clone(),
-                ));
+                folders.push(folder);
                 self.set_root_uri(&root_uri);
             } else if let Some(init_options) = params.get("initializationOptions") {
                 // Compatibility fallback for clients that place workspace roots in
