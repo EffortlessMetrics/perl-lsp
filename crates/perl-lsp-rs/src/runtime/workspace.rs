@@ -35,6 +35,11 @@ use std::time::Instant;
 #[cfg(feature = "workspace")]
 use url::Url;
 
+#[cfg(feature = "workspace")]
+mod progress;
+#[cfg(feature = "workspace")]
+mod text_decode;
+
 const WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 // Note: WalkDir logic has been extracted to super::file_discovery.
 // These helper functions are retained for potential future use by
@@ -72,46 +77,12 @@ fn is_permission_denied_error(e: &std::io::Error) -> bool {
     false
 }
 
-/// Read source text from disk with basic encoding fallbacks.
-///
-/// Behavior:
-/// - UTF-8 BOM (`EF BB BF`) is removed.
-/// - UTF-16 LE/BE with BOM is decoded.
-/// - Other content first tries strict UTF-8, then falls back to lossy UTF-8.
-///
-/// Odd-length payloads after a UTF-16 BOM fall back to lossy UTF-8 decoding
-/// of the original bytes rather than silently dropping the trailing byte.
 #[cfg(feature = "workspace")]
-fn read_text_with_encoding_fallback(path: &Path) -> std::io::Result<String> {
-    let bytes = std::fs::read(path)?;
-    if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
-        return Ok(String::from_utf8_lossy(&bytes[3..]).into_owned());
-    }
-    if bytes.starts_with(&[0xFF, 0xFE]) {
-        let payload = &bytes[2..];
-        if !payload.len().is_multiple_of(2) {
-            // Odd-length UTF-16 payload; fall back to lossy UTF-8 of the
-            // full original bytes rather than truncating the trailing byte.
-            return Ok(String::from_utf8_lossy(&bytes).into_owned());
-        }
-        let units: Vec<u16> =
-            payload.chunks_exact(2).map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]])).collect();
-        return Ok(String::from_utf16_lossy(&units));
-    }
-    if bytes.starts_with(&[0xFE, 0xFF]) {
-        let payload = &bytes[2..];
-        if !payload.len().is_multiple_of(2) {
-            return Ok(String::from_utf8_lossy(&bytes).into_owned());
-        }
-        let units: Vec<u16> =
-            payload.chunks_exact(2).map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]])).collect();
-        return Ok(String::from_utf16_lossy(&units));
-    }
-    match String::from_utf8(bytes) {
-        Ok(text) => Ok(text),
-        Err(err) => Ok(String::from_utf8_lossy(&err.into_bytes()).into_owned()),
-    }
-}
+use progress::{
+    send_progress_begin, send_progress_create, send_progress_end, send_progress_report,
+};
+#[cfg(feature = "workspace")]
+use text_decode::read_text_with_encoding_fallback;
 
 /// RAII guard that clears the `indexing_in_progress` flag on drop.
 ///
