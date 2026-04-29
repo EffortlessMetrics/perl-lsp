@@ -87,6 +87,28 @@ Merged #5259 documents the semver contract for allowlisted crates. But nothing g
 
 #5263 enriched the gate receipt with `agent_receipt` block. But no agent actually consumes it yet — pr-responder still reads log tails. Next iteration: pr-responder wires into `agent_receipt.failures[].repro` directly and the receipt becomes the input protocol instead of stdout parsing.
 
+
+### 20. Semantic substrate first-wave readiness (workspace-wide awareness)
+
+To improve workspace-wide awareness and analysis without premature provider cutover, execute the first wave as rails-building:
+
+1. canonical facts vocabulary (`perl-semantic-facts`)
+2. fixture-heavy regression banks (definitions/references/import-export/framework-generated members)
+3. deterministic scorecards and shadow-compare receipts
+
+Success criteria for release-readiness tracking:
+
+- imported-symbol completion behavior has fixture coverage
+- export-tag visibility behavior has fixture coverage
+- definition exact-hit fixtures are tracked (`hit@1`, `hit@5`)
+- references can be scored by typed intent (definition/import/call/read/write)
+- generated accessor and inherited-method fixtures are present
+- dynamic-boundary policy is explicitly visible in docs/fixtures
+- rename and safe-delete safety scorecard rows exist
+- semantic query latency p50/p95 fields exist in scorecard output
+
+Reference architecture and migration contract: `docs/project/SEMANTIC_FACT_SUBSTRATE.md`.
+
 ## Lower-priority / nice-to-have
 
 ### 13. Release-engineering substrate
