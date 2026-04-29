@@ -1849,6 +1849,7 @@ version = "0.13.0-rc1"
 dependencies = [
  "perl-module",
  "perl-parser-core",
+ "perl-semantic-facts",
  "perl-symbol",
  "perl-tdd-support",
  "perl-test-generators",
