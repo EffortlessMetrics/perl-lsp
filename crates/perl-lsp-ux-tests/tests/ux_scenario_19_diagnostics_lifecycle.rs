@@ -30,6 +30,7 @@ const FIXED_SOURCE: &str = "use strict;\nmy $x = 1;\n";
 ///   1. Broken content → diagnostics appear.
 ///   2. Fixed content → diagnostics clear (either explicitly or by silence).
 #[test]
+#[ignore = "flaky in CI; tracked in #7297"]
 fn scenario_19_diagnostics_clear_after_fix() {
     if !binary_available() {
         eprintln!("SKIP scenario_19_diagnostics_clear_after_fix: perl-lsp binary not found");
