@@ -21,31 +21,33 @@ fn pbp_preset_sets_best_practices_flag() {
 }
 
 #[test]
-fn config_with_profile_uses_only_profile_flag() {
+fn config_with_profile_keeps_profile_first() {
     let config = PerlTidyConfig {
         profile: Some("/home/user/.perltidyrc".to_string()),
         ..PerlTidyConfig::default()
     };
     let args = config.to_args();
 
-    assert_eq!(args.len(), 1);
     assert_eq!(args[0], "--profile=/home/user/.perltidyrc");
+    assert_eq!(args.len(), 1);
 }
 
 #[test]
-fn config_with_profile_ignores_other_settings() {
+fn config_with_profile_ignores_structured_settings_but_keeps_extra_args() {
     let config = PerlTidyConfig {
         maximum_line_length: Some(120),
         indent_columns: Some(8),
         tabs: Some(true),
         profile: Some(".perltidyrc".to_string()),
+        extra_args: vec!["--custom-flag".to_string()],
         ..PerlTidyConfig::default()
     };
     let args = config.to_args();
 
-    // Only profile flag should be present; all others suppressed
-    assert_eq!(args.len(), 1);
-    assert!(args[0].starts_with("--profile="));
+    // Structured settings should be suppressed, but pass-through flags preserved.
+    assert_eq!(args[0], "--profile=.perltidyrc");
+    assert_eq!(args[1], "--custom-flag");
+    assert_eq!(args.len(), 2);
 }
 
 #[test]
