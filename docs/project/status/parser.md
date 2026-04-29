@@ -40,6 +40,16 @@
 | **scope analysis** | p50 0.010 ms / p95 0.025 ms | mean 0.012 ms over 40 samples | `docs/project/status/parser_performance_scorecard.json` |
 <!-- END: PARSER_PERFORMANCE_TABLE -->
 
+## Parser Failure Worklist (Clustered)
+
+Failures in the system-Perl baseline grouped by cluster. Counts come from `first_error_buckets` in `.ci/parser-corpus-baseline.json`.
+
+| Cluster | Files |
+| --- | --- |
+<!-- BEGIN: PARSER_FAILURE_WORKLIST -->
+| (no receipt — run `just corpus-sweep-check` to generate) | 0 |
+<!-- END: PARSER_FAILURE_WORKLIST -->
+
 <!-- BEGIN: PARSER_METRICS_BULLETS -->
 - **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against the cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against the repo-owned corpus.
 - **Strict promise lists**: `just common-corpus-check` and the CPAN known-clean manifest inside `just cpan-corpus-check` pin subsets that must remain clean on top of the broader baseline receipts.
