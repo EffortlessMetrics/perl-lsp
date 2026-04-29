@@ -542,6 +542,32 @@ mod tests {
     }
 
     #[test]
+    fn test_parser_status_marker_contract() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let target_file = "docs/project/status/parser.md";
+        let parser_status = std::fs::read_to_string(root.join(target_file))?;
+
+        for marker in PARSER_STATUS_MARKERS {
+            let begin_marker = format!("<!-- BEGIN: {marker} -->");
+            let end_marker = format!("<!-- END: {marker} -->");
+
+            let begin_count = parser_status.match_indices(&begin_marker).count();
+            assert_eq!(
+                begin_count, 1,
+                "missing or duplicate marker in {target_file}: expected BEGIN marker exactly once: `{begin_marker}`; found {begin_count}"
+            );
+
+            let end_count = parser_status.match_indices(&end_marker).count();
+            assert_eq!(
+                end_count, 1,
+                "missing or duplicate marker in {target_file}: expected END marker exactly once: `{end_marker}`; found {end_count}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn test_parser_receipts_load() -> Result<()> {
         let root = crate::utils::project_root()?;
         let metrics = collect_parser_metrics(&root);
