@@ -167,3 +167,19 @@ fn when_traversing_for_node_without_optional_parts_then_only_body_is_visited() {
 
     assert_eq!(visited, 1);
 }
+
+#[test]
+fn when_checking_contains_offset_then_start_is_inclusive_and_end_is_exclusive() {
+    let node = Node::new(NodeKind::Identifier { name: "foo".to_string() }, loc(3, 7));
+
+    assert!(node.contains_offset(3));
+    assert!(node.contains_offset(6));
+    assert!(!node.contains_offset(7));
+    assert!(!node.contains_offset(2));
+}
+
+#[test]
+fn when_requesting_span_len_then_it_matches_location_width() {
+    let node = Node::new(NodeKind::Identifier { name: "foo".to_string() }, loc(10, 14));
+    assert_eq!(node.span_len(), 4);
+}
