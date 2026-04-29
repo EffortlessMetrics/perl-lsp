@@ -26,9 +26,22 @@ pub fn find_data_marker_byte_lexed(s: &str) -> Option<usize> {
     None
 }
 
+
+/// Split source text into executable code and trailing data-section payload.
+///
+/// If a `__DATA__` or `__END__` marker is present, this returns `(code, Some(data))`
+/// where `code` excludes the marker line and `data` starts at the marker line.
+/// Otherwise this returns `(text, None)`.
+pub fn split_code_and_data_sections(text: &str) -> (&str, Option<&str>) {
+    match find_data_marker_byte_lexed(text) {
+        Some(marker_start) => (&text[..marker_start], Some(&text[marker_start..])),
+        None => (text, None),
+    }
+}
+
 /// Helper to get the code portion of text (before __DATA__/__END__)
 pub fn code_slice(text: &str) -> &str {
-    find_data_marker_byte_lexed(text).map(|i| &text[..i]).unwrap_or(text)
+    split_code_and_data_sections(text).0
 }
 
 /// Find the byte offset of a __DATA__ or __END__ marker in the source text.
@@ -58,6 +71,18 @@ mod tests {
         // Marker not at line start (should not match)
         let src3 = "print '__DATA__';\n";
         assert_eq!(find_data_marker_byte_lexed(src3), None);
+    }
+
+    #[test]
+    fn test_split_code_and_data_sections() {
+        let src = "print 'hello';\n__DATA__\ndata here";
+        assert_eq!(split_code_and_data_sections(src), ("print 'hello';\n", Some("__DATA__\ndata here")));
+
+        let src2 = "code;\n__END__\ndata";
+        assert_eq!(split_code_and_data_sections(src2), ("code;\n", Some("__END__\ndata")));
+
+        let src3 = "print 'hello';\n";
+        assert_eq!(split_code_and_data_sections(src3), ("print 'hello';\n", None));
     }
 
     #[test]
