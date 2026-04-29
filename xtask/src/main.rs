@@ -1142,6 +1142,13 @@ enum Commands {
         ratchet_check: bool,
     },
 
+    /// Emit the semantic fixture/metric scorecard baseline as deterministic JSON.
+    SemanticScorecard {
+        /// Optional path to semantic fixture manifest TOML.
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+    },
+
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
 
@@ -2163,6 +2170,7 @@ fn main() -> Result<()> {
             };
             ux_scorecard::run(format, input, output, status_md, ratchet_check)
         }
+        Commands::SemanticScorecard { manifest } => semantic_scorecard::run(manifest),
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
             e2e_validate::run(e2e_validate::E2eConfig {

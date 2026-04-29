@@ -111,6 +111,7 @@ For a full walkthrough, see [Getting Started](docs/tutorials/GETTING_STARTED.md)
 cargo test --workspace --lib
 cargo xtask fmt
 cargo clippy --workspace
+cargo xtask semantic-scorecard   # semantic fixture baseline (compiler-lite harness)
 nix develop -c just ci-gate   # required before merge
 ```
 

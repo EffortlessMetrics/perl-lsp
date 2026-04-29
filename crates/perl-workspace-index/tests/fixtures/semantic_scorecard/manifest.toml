@@ -1,0 +1,73 @@
+metrics = [
+  "definition_hit_at_1",
+  "definition_hit_at_5",
+  "reference_precision",
+  "reference_recall",
+  "completion_top1",
+  "completion_top5",
+  "undefined_symbol_false_positive_rate",
+  "rename_unsafe_edit_count",
+  "safe_delete_external_ref_detection",
+  "query_latency_p50",
+  "query_latency_p95",
+]
+
+[[fixtures]]
+id = "autoload-dynamic-boundary"
+family = "AUTOLOAD dynamic boundary"
+description = "Calls resolved only via AUTOLOAD remain dynamic and should not report hard references."
+
+[[fixtures]]
+id = "dynamic-require-boundary"
+family = "dynamic require boundary"
+description = "Runtime-built require strings should be treated as unresolved module loads."
+
+[[fixtures]]
+id = "empty-import-suppression"
+family = "empty import suppression"
+description = "Do not emit undefined symbol diagnostics for intentionally empty import lists."
+
+[[fixtures]]
+id = "eval-string-dynamic-boundary"
+family = "eval STRING dynamic boundary"
+description = "Symbols introduced through eval STRING stay behind an analysis boundary."
+
+[[fixtures]]
+id = "export-tag-expansion"
+family = "export tag expansion"
+description = "Import tags (e.g. :all) expand to concrete exported subroutines."
+
+[[fixtures]]
+id = "generated-accessor"
+family = "generated accessor"
+description = "Moose/Moo-style generated accessors should resolve to generated symbol definitions."
+
+[[fixtures]]
+id = "imported-function-visibility"
+family = "imported function visibility"
+description = "Imported subs from external packages should be visible to completion and goto-definition."
+
+[[fixtures]]
+id = "inherited-method"
+family = "inherited method"
+description = "Method lookup should traverse inheritance parents for references and navigation."
+
+[[fixtures]]
+id = "qualified-vs-bare-references"
+family = "qualified vs bare references"
+description = "Qualified calls and bare calls to the same sub are grouped into the same symbol identity when safe."
+
+[[fixtures]]
+id = "role-method"
+family = "role method"
+description = "Composed role methods should surface in completion/reference queries on consuming classes."
+
+[[fixtures]]
+id = "same-bare-sub-two-packages"
+family = "same bare sub in two packages"
+description = "Disambiguate bare sub names that appear in sibling packages."
+
+[[fixtures]]
+id = "typeglob-alias"
+family = "typeglob alias"
+description = "Typeglob-assigned aliases should propagate definition/reference mapping."
