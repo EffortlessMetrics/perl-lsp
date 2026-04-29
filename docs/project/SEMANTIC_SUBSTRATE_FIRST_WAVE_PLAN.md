@@ -103,12 +103,82 @@ safe_delete_plan(entity)
 5. Definition-candidate multimap behind compatibility APIs.
 6. Typed reference-edge global index behind compatibility APIs.
 
+## Wave 2 Implementation Status (as of 2026-04-29)
+
+This section is the migration receipt for what has landed versus what remains staged.
+
+### Landed
+
+- **Neutral fact vocabulary:** `AnchorFact`, `EntityFact`, `OccurrenceFact`, `EdgeFact`, and `DiagnosticFact` exist in `perl-semantic-facts` with deterministic serde/roundtrip coverage. (PR #7314)
+- **`SymbolDecl -> EntityFact` adapter:** `perl-symbol` now emits `EntityFact` and `EdgeFact` rows from `SymbolDecl` with `Defines` edges and provenance. (PR #7341)
+- **Fact shard write-through:** `FileFactShard` struct and write-through storage in `WorkspaceIndex` are landed; workspace populates shards on index. Legacy symbol/reference indexes remain the source of truth for providers. (PR #7357)
+- **Definition candidate multimap:** `DefinitionCandidate` multimap behind compatibility APIs is landed with deterministic sort and incremental removal. (PR #7360)
+- **Shadow-compare receipt:** design/test rail is landed (`semantic_shadow_compare.rs`); no provider cutover or production shadow-read gating is enabled. (PR #7366)
+- **Scorecard v1:** fixture harness and baseline-pending semantic scorecard are landed; metric rows are intentionally `baseline_pending` until full adapter/index plumbing is wired. (PR #7367)
+
+### Still staged
+
+- **`SymbolRef -> OccurrenceFact` adapter:** not landed; occurrence facts are not yet emitted from reference sites.
+- **`ExportInfo -> ExportSet` adapter:** not landed; export analysis remains in legacy format.
+- **Typed reference-edge global index:** not landed; typed-reference behavior is constrained to fixture/regression banks rather than a provider-facing global index.
+
+### Explicit non-goals for current Wave 2 state
+
+- No provider cutover yet.
+- No rename/safe-delete cutover yet.
+- No full type inference.
+
+## Wave 2 Execution Discipline (Curation + Test Floor)
+
+When duplicate Wave 2 candidates exist, run a curator pass before merging additional tracks.
+
+### Required Curator Output Shape
+
+```json
+{
+  "cluster": "typed_reference_index",
+  "keepers": [7348],
+  "close_as_superseded": [7362, 7363],
+  "port_from_losers": [
+    {
+      "from": 7363,
+      "detail": "count_usages test shape",
+      "to": 7348
+    }
+  ],
+  "review_notes": [
+    "verify ReferenceEdge shape lives in perl-semantic-facts"
+  ]
+}
+```
+
+### Parity Test Floor
+
+Before merging the workspace-facing boxes (4–7), fix and re-green the parity test floor:
+
+```bash
+cargo test -p perl-workspace surface_workspace_parity
+cargo test -p perl-workspace
+cargo check --workspace --all-targets
+```
+
+Interpret failures explicitly as one of: real regression, stale expected output, fixture drift, or documented legacy divergence.
+
+### Merge Train Discipline
+
+1. Merge boxes 1–3 (exact adapters) and verify workspace-wide checks.
+2. Merge one curated winner for each duplicate cluster (facts shard, typed refs, shadow receipts, scorecard rows).
+3. Re-check `perl-workspace` parity tests after each merge-train step.
+4. Close superseded PRs only after loser-test harvest is ported.
+
 ## Wave 3 (User-Visible Cutover Staging)
 
 1. `ImportSpec` extraction.
 2. `VisibleSymbols` query implementation.
 3. Completion consumes `VisibleSymbols` behind a feature flag.
 4. Undefined diagnostics consume `VisibleSymbols` behind a feature flag.
+
+Wave 3 should start by landing `ImportSpec` extraction and a concrete `visible_symbols_at(...)` query surface, then stage provider adoption behind feature flags.
 
 ## Out of Scope for First Wave
 
@@ -129,4 +199,3 @@ safe_delete_plan(entity)
 - Capability truth: `features.toml`
 - Evidence-backed status: `docs/project/CURRENT_STATUS.md`
 - Canonical planning: `docs/project/ROADMAP.md`
-

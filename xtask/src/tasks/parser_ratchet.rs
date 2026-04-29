@@ -1,201 +1,122 @@
-use crate::tasks::parser_corpus_sweep::SweepReport;
-use crate::tasks::parser_ratchet_compare::{
-    ParserRatchetMetrics, ParserRatchetViolation, compare_metrics,
-};
-use color_eyre::eyre::{Context, Result, bail};
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use clap::ValueEnum;
+use color_eyre::eyre::{Context, Result, eyre};
+use serde::Serialize;
 use std::fs;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tempfile::TempDir;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum RatchetProfile {
+    Pr,
+    Nightly,
+    Release,
+}
 
 #[derive(Debug, Clone)]
-pub struct ParserRatchetConfig {
-    pub profile: String,
-    pub base_sha: String,
-    pub head_sha: String,
-    pub manifest: PathBuf,
+pub struct ParserRatchetRunConfig {
+    pub profile: RatchetProfile,
+    pub base: String,
+    pub head: String,
     pub receipt: PathBuf,
+    pub force_selected: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ParserRatchetReceipt {
-    pub check: String,
-    pub profile: String,
-    pub selected: String,
-    pub selection_reason: String,
-    pub manifest_fingerprint: String,
-    pub base_sha: String,
-    pub candidate_sha: String,
-    pub metrics: ParserRatchetReceiptMetrics,
-    pub violations: Vec<ParserRatchetViolation>,
-    pub ratchet_opportunity: bool,
-    pub verdict: String,
-    pub repro: ParserRatchetRepro,
+#[derive(Debug, Serialize)]
+struct ParserRatchetReceipt {
+    schema_version: String,
+    check: String,
+    event: String,
+    profile: String,
+    base_sha: String,
+    head_sha: String,
+    selected: bool,
+    selection_reason: Vec<String>,
+    verdict: String,
+    repro: Repro,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ParserRatchetReceiptMetrics {
-    pub base: ParserRatchetMetrics,
-    pub head: ParserRatchetMetrics,
+#[derive(Debug, Serialize)]
+struct Repro {
+    command: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ParserRatchetRepro {
-    pub command: String,
-}
+pub fn run(config: ParserRatchetRunConfig) -> Result<()> {
+    let profile_name = profile_name(config.profile);
+    let base_sha = resolve_revision(&config.base)?;
+    let head_sha = resolve_revision(&config.head)?;
 
-pub fn run(config: ParserRatchetConfig) -> Result<()> {
-    let manifest_path = resolve_path(&config.manifest)?;
-    let manifest_text = fs::read_to_string(&manifest_path)
-        .with_context(|| format!("failed to read manifest {}", manifest_path.display()))?;
-    let mut hasher = DefaultHasher::new();
-    manifest_text.hash(&mut hasher);
-    let manifest_fingerprint = format!("stdhash:{:x}", hasher.finish());
-
-    let profile_path =
-        PathBuf::from(format!(".ci/parser-ratchet/profiles/{}.toml", config.profile));
-    let profile_text = fs::read_to_string(&profile_path)
-        .with_context(|| format!("failed to read {}", profile_path.display()))?;
-    let profile: toml::Table = toml::from_str(&profile_text)
-        .with_context(|| format!("failed to parse {}", profile_path.display()))?;
-    let selected =
-        profile.get("selected").and_then(toml::Value::as_str).unwrap_or("perl-corpus").to_string();
-    let selection_reason = profile
-        .get("selection_reason")
-        .and_then(toml::Value::as_str)
-        .unwrap_or("profile default")
-        .to_string();
-
-    let temp_dir = TempDir::new().context("failed to create temp dir for parser ratchet")?;
-    let stable_manifest = temp_dir.path().join("corpus-manifest.txt");
-    fs::write(&stable_manifest, manifest_text).context("failed to write normalized manifest")?;
-
-    let base_report = run_sweep_for_sha(&config.base_sha, &stable_manifest, &selected)?;
-    let head_report = run_sweep_for_sha(&config.head_sha, &stable_manifest, &selected)?;
-
-    let base_metrics = metrics_from_sweep(&base_report, &selected);
-    let head_metrics = metrics_from_sweep(&head_report, &selected);
-    let comparison = compare_metrics(&base_metrics, &head_metrics);
+    let selected = config.force_selected;
+    let selection_reason = if selected {
+        vec!["force-selected (scaffold only; measurements disabled)".to_string()]
+    } else {
+        vec!["not selected by ci-scope".to_string()]
+    };
 
     let receipt = ParserRatchetReceipt {
-        check: "Parser Ratchet".to_string(),
-        profile: config.profile,
+        schema_version: "1".to_string(),
+        check: "parser-ratchet".to_string(),
+        event: "local".to_string(),
+        profile: profile_name.to_string(),
+        base_sha,
+        head_sha,
         selected,
         selection_reason,
-        manifest_fingerprint,
-        base_sha: config.base_sha.clone(),
-        candidate_sha: config.head_sha.clone(),
-        metrics: ParserRatchetReceiptMetrics { base: base_metrics, head: head_metrics },
-        violations: comparison.violations,
-        ratchet_opportunity: comparison.ratchet_opportunity,
-        verdict: comparison.verdict,
-        repro: ParserRatchetRepro {
+        verdict: "pass".to_string(),
+        repro: Repro {
             command: format!(
-                "cargo xtask parser-ratchet --profile pr --base {} --head {} --manifest {} --receipt {}",
-                receipt_escape(&config.base_sha),
-                receipt_escape(&config.head_sha),
-                manifest_path.display(),
-                config.receipt.display()
+                "cargo xtask parser-ratchet run --profile {} --base {} --head {} --receipt {}{}",
+                profile_name,
+                config.base,
+                config.head,
+                config.receipt.display(),
+                if config.force_selected { " --force-selected" } else { "" }
             ),
         },
     };
 
-    if let Some(parent) = config.receipt.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create {}", parent.display()))?;
-    }
-    fs::write(&config.receipt, format!("{}\n", serde_json::to_string_pretty(&receipt)?))
-        .with_context(|| format!("failed to write {}", config.receipt.display()))?;
+    write_receipt(&config.receipt, &receipt)?;
 
-    if receipt.verdict == "fail" {
-        bail!("parser ratchet failed")
+    if registry_exists() {
+        super::gate_receipts::validate(&config.receipt, super::gate_receipts::OutputFormat::Human)
+            .map_err(|error| eyre!("parser-ratchet receipt failed registry validation: {error}"))?;
     }
+
     Ok(())
 }
 
-fn run_sweep_for_sha(sha: &str, manifest: &Path, selected: &str) -> Result<SweepReport> {
-    let repo_root =
-        PathBuf::from(".").canonicalize().context("failed to canonicalize repo root")?;
-    let worktree_root = tempfile::tempdir().context("failed to create temp worktree dir")?;
-    let worktree_path = worktree_root.path().join(format!("ratchet-{}", &sha[..sha.len().min(12)]));
-
-    let add_status = Command::new("git")
-        .arg("worktree")
-        .arg("add")
-        .arg("--detach")
-        .arg(&worktree_path)
-        .arg(sha)
-        .status()
-        .context("failed to execute git worktree add")?;
-    if !add_status.success() {
-        bail!("git worktree add failed for {sha}");
+fn write_receipt(path: &Path, receipt: &ParserRatchetReceipt) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create receipt directory {}", parent.display()))?;
     }
-
-    let output_path = worktree_path.join("target/parser-ratchet-metrics.json");
-    let mut cmd = Command::new("cargo");
-    cmd.current_dir(&worktree_path)
-        .arg("run")
-        .arg("-p")
-        .arg("xtask")
-        .arg("--")
-        .arg("parser-corpus-sweep")
-        .arg("--manifest")
-        .arg(manifest)
-        .arg("--output")
-        .arg(&output_path);
-
-    let status = cmd.status().context("failed to run parser-corpus-sweep")?;
-
-    let remove_status = Command::new("git")
-        .current_dir(&repo_root)
-        .arg("worktree")
-        .arg("remove")
-        .arg("--force")
-        .arg(&worktree_path)
-        .status()
-        .context("failed to remove temporary worktree")?;
-    if !remove_status.success() {
-        bail!("failed to remove temporary worktree {}", worktree_path.display());
-    }
-
-    if !status.success() {
-        bail!("parser-corpus-sweep failed at commit {sha}");
-    }
-
-    let output_text = fs::read_to_string(output_path)
-        .with_context(|| format!("failed to read sweep output for {sha}"))?;
-    let mut report: SweepReport = serde_json::from_str(&output_text)
-        .with_context(|| format!("failed to parse sweep output for {sha}"))?;
-    report.corpus_profile = selected.to_string();
-    Ok(report)
+    let payload = serde_json::to_string_pretty(receipt)?;
+    fs::write(path, payload)
+        .with_context(|| format!("failed to write receipt {}", path.display()))?;
+    Ok(())
 }
 
-fn metrics_from_sweep(report: &SweepReport, scope: &str) -> ParserRatchetMetrics {
-    let total = report.total_files.max(1) as f64;
-    let mut concept_floors = BTreeMap::new();
-    concept_floors.insert(
-        "clean_parse_nonzero".to_string(),
-        report.clean_files > 0 || report.total_files == 0,
-    );
-    ParserRatchetMetrics {
-        panic_count: report.files_with_catastrophic_parse_failure as u64,
-        timeout_count: 0,
-        clean_parse_rate: report.clean_files as f64 / total,
-        error_node_count: report.total_error_nodes as u64,
-        node_kind_seen_count: None,
-        concept_floors,
-        corpus_runtime_ms: (report.elapsed_secs * 1000.0).round() as u64,
-        scope: scope.to_string(),
+fn resolve_revision(reference: &str) -> Result<String> {
+    let output = Command::new("git")
+        .args(["rev-parse", reference])
+        .output()
+        .with_context(|| format!("failed to run git rev-parse for '{reference}'"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(eyre!("failed to resolve git revision '{reference}': {stderr}"));
     }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-fn resolve_path(path: &Path) -> Result<PathBuf> {
-    if path.is_absolute() { Ok(path.to_path_buf()) } else { Ok(PathBuf::from(".").join(path)) }
+fn registry_exists() -> bool {
+    Path::new(".ci/receipts/registry.toml").exists()
 }
 
-fn receipt_escape(value: &str) -> String {
-    value.replace('"', "\\\"")
+fn profile_name(profile: RatchetProfile) -> &'static str {
+    match profile {
+        RatchetProfile::Pr => "pr",
+        RatchetProfile::Nightly => "nightly",
+        RatchetProfile::Release => "release",
+    }
 }

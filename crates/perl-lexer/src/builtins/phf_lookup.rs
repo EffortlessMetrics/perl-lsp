@@ -359,9 +359,18 @@ pub static BUILTIN_FULL_SIGS: phf::Map<&'static str, &'static [&'static str]> = 
     "utf8::unicode_to_native" => &["utf8::unicode_to_native CODEPOINT"],
 };
 
-/// Get parameter names for a builtin function
+/// Try to get parameter names for a builtin function.
+///
+/// Returns `None` when `function_name` is not a builtin entry.
+pub fn try_get_param_names(function_name: &str) -> Option<&'static [&'static str]> {
+    BUILTIN_SIGS.get(function_name).copied()
+}
+
+/// Get parameter names for a builtin function.
+///
+/// Returns an empty slice when `function_name` is unknown.
 pub fn get_param_names(function_name: &str) -> &'static [&'static str] {
-    BUILTIN_SIGS.get(function_name).copied().unwrap_or(&[])
+    try_get_param_names(function_name).unwrap_or(&[])
 }
 
 /// Check if a function is a builtin
@@ -376,7 +385,9 @@ pub fn builtin_count() -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{BUILTIN_FULL_SIGS, builtin_count, get_param_names, is_builtin};
+    use super::{
+        BUILTIN_FULL_SIGS, builtin_count, get_param_names, is_builtin, try_get_param_names,
+    };
 
     #[test]
     fn exposes_common_builtins() {
@@ -384,6 +395,11 @@ mod tests {
         assert!(!is_builtin("not_a_builtin"));
     }
 
+    #[test]
+    fn try_get_param_names_distinguishes_missing_entries() {
+        assert_eq!(try_get_param_names("print"), Some(["FILEHANDLE", "LIST"].as_slice()));
+        assert_eq!(try_get_param_names("not_a_builtin"), None);
+    }
     #[test]
     fn returns_open_param_names() {
         assert_eq!(get_param_names("open"), ["FILEHANDLE", "MODE", "FILENAME"]);

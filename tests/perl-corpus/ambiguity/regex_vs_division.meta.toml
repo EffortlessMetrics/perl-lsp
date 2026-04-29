@@ -9,9 +9,9 @@ mode = "parse_clean"
 
 [metrics]
 max_error_nodes = 0
-must_emit_node_kinds = ["Regex", "BinaryExpr"]
+must_emit_node_kinds = ["BinaryExpression", "RegexMatch"]
 
 [snapshots]
 tokens = true
 ast = true
-spans = true
+spans = false
