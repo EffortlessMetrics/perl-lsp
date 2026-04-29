@@ -118,6 +118,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Quality cleanup PRs land, version bump to 0.13.0
 - Seamless install story verified across all distribution channels
 - Announcement blog post / release notes
+- Semantic-substrate rails-first prep lands before provider cutover: canonical facts schema, fixture regression banks, scorecard harness, and shadow-compare receipts (see [`SEMANTIC_FACT_SUBSTRATE.md`](SEMANTIC_FACT_SUBSTRATE.md))
 
 ## Milestone Ladder
 
