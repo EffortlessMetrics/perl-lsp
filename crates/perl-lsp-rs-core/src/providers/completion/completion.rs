@@ -4415,4 +4415,105 @@ sub run {
         let result = CompletionProvider::detect_hash_key_context(source, source.len());
         assert_eq!(result, Some(("config".to_string(), "key".to_string())));
     }
+
+    #[test]
+    fn test_provider_captures_include_and_system_inc_paths() {
+        let code = "use My::Module;\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let include_paths = vec![PathBuf::from("/workspace/lib"), PathBuf::from("t/lib")];
+        let system_inc_paths = vec![PathBuf::from("/usr/lib/perl5")];
+
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            None,
+            include_paths.clone(),
+            system_inc_paths.clone(),
+            false,
+        );
+
+        assert_eq!(provider.include_paths, include_paths);
+        assert_eq!(provider.system_inc_paths, system_inc_paths);
+    }
+
+    #[test]
+    fn test_use_module_completion_unchanged_with_empty_inc_vectors()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyApp.pm")?;
+        index.index_file(module_uri, "package MyApp;\n1;\n".to_string())?;
+
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let baseline_provider =
+            CompletionProvider::new_with_index_and_source(&ast, code, Some(Arc::clone(&index)));
+        let baseline = baseline_provider.get_completions_with_path(code, code.len(), None);
+
+        let with_empty_inc = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            Vec::new(),
+            Vec::new(),
+            false,
+        );
+        let with_empty_inc_results =
+            with_empty_inc.get_completions_with_path(code, code.len(), None);
+
+        let baseline_labels: std::collections::HashSet<String> =
+            baseline.into_iter().map(|item| item.label).collect();
+        let with_empty_labels: std::collections::HashSet<String> =
+            with_empty_inc_results.into_iter().map(|item| item.label).collect();
+
+        assert_eq!(
+            baseline_labels, with_empty_labels,
+            "empty include paths must not change completion results in phase 1"
+        );
+        Ok(())
+    }
+
+    /// Phase 1 contract: non-empty inc_paths are stored but do NOT alter completions
+    /// (no filesystem scanning until phase 2). If this test breaks it means someone
+    /// started using the paths without adding scan logic — a regression, not a feature.
+    #[test]
+    fn test_non_empty_inc_paths_do_not_change_phase1_completions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyApp.pm")?;
+        index.index_file(module_uri, "package MyApp;\n1;\n".to_string())?;
+
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let baseline =
+            CompletionProvider::new_with_index_and_source(&ast, code, Some(Arc::clone(&index)))
+                .get_completions_with_path(code, code.len(), None);
+
+        // Non-empty inc paths: completions must still be identical to workspace-only baseline.
+        let with_inc = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            vec![PathBuf::from("/usr/local/lib/perl5"), PathBuf::from("t/lib")],
+            vec![PathBuf::from("/usr/lib/perl5/5.38")],
+            false,
+        )
+        .get_completions_with_path(code, code.len(), None);
+
+        let baseline_labels: std::collections::HashSet<String> =
+            baseline.into_iter().map(|item| item.label).collect();
+        let with_inc_labels: std::collections::HashSet<String> =
+            with_inc.into_iter().map(|item| item.label).collect();
+
+        assert_eq!(
+            baseline_labels, with_inc_labels,
+            "non-empty include paths must not change completions in phase 1 (no filesystem scanning yet)"
+        );
+        Ok(())
+    }
 }

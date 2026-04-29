@@ -27,6 +27,7 @@
 //! forms are extracted.
 
 use crate::ast::{Node, NodeKind};
+use perl_semantic_facts::{Confidence, ExportSet, ExportTag, Provenance};
 use std::collections::{HashMap, HashSet};
 
 /// Information extracted from an Exporter-based module.
@@ -38,6 +39,38 @@ pub struct ExportInfo {
     pub optional_export: HashSet<String>,
     /// Tag-based exports via `%EXPORT_TAGS` (tag name -> symbols)
     pub export_tags: HashMap<String, Vec<String>>,
+}
+
+impl ExportInfo {
+    /// Convert extracted Exporter data into canonical semantic export facts.
+    #[must_use]
+    pub fn to_export_set(&self) -> ExportSet {
+        let mut default_exports: Vec<String> = self.default_export.iter().cloned().collect();
+        default_exports.sort();
+
+        let mut optional_exports: Vec<String> = self.optional_export.iter().cloned().collect();
+        optional_exports.sort();
+
+        let mut tags: Vec<ExportTag> = self
+            .export_tags
+            .iter()
+            .map(|(name, members)| {
+                let mut members = members.clone();
+                members.sort();
+                members.dedup();
+                ExportTag { name: name.clone(), members }
+            })
+            .collect();
+        tags.sort_by(|left, right| left.name.cmp(&right.name));
+
+        ExportSet {
+            default_exports,
+            optional_exports,
+            tags,
+            provenance: Provenance::ImportExportInference,
+            confidence: Confidence::High,
+        }
+    }
 }
 
 /// Detection method for Exporter inheritance.
@@ -650,5 +683,56 @@ our @EXPORT = qw(multi_func);
         assert!(info.is_some(), "Should detect Exporter even when mixed with other @ISA parents");
         let info = info.unwrap();
         assert!(info.default_export.contains("multi_func"));
+    }
+    #[test]
+    fn test_regression_exporter_visibility_fixture() {
+        let code = r#"
+package MyLib;
+use Exporter 'import';
+our @EXPORT = qw(foo);
+our @EXPORT_OK = qw(bar baz);
+our %EXPORT_TAGS = (
+    all => [qw(foo bar baz)],
+);
+1;
+"#;
+        let info = parse_and_extract(code).unwrap();
+
+        assert_eq!(info.default_export.len(), 1);
+        assert!(info.default_export.contains("foo"));
+
+        assert_eq!(info.optional_export.len(), 2);
+        assert!(info.optional_export.contains("bar"));
+        assert!(info.optional_export.contains("baz"));
+
+        let all = info.export_tags.get("all").unwrap();
+        assert_eq!(all, &vec!["foo".to_string(), "bar".to_string(), "baz".to_string()]);
+    }
+
+    #[test]
+    fn test_regression_merges_export_assignments_across_statements() {
+        let code = r#"
+package MyLib;
+use Exporter 'import';
+our @EXPORT = qw(foo);
+our @EXPORT_OK = qw(bar);
+our @EXPORT_OK = qw(bar baz);
+our %EXPORT_TAGS = (core => [qw(foo bar)]);
+our %EXPORT_TAGS = (all => [qw(foo bar baz)]);
+1;
+"#;
+        let info = parse_and_extract(code).unwrap();
+
+        assert!(info.default_export.contains("foo"));
+        assert!(info.optional_export.contains("bar"));
+        assert!(info.optional_export.contains("baz"));
+        assert_eq!(
+            info.export_tags.get("core").unwrap(),
+            &vec!["foo".to_string(), "bar".to_string()]
+        );
+        assert_eq!(
+            info.export_tags.get("all").unwrap(),
+            &vec!["foo".to_string(), "bar".to_string(), "baz".to_string()]
+        );
     }
 }

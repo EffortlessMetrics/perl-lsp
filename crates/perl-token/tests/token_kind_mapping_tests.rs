@@ -162,3 +162,15 @@ fn mappings_are_case_sensitive_and_contextual() {
     assert_eq!(TokenKind::from_delimiter("<"), None);
     assert_eq!(TokenKind::from_sigil("+"), None);
 }
+
+#[test]
+fn category_helpers_align_with_category_method() {
+    for kind in TokenKind::all() {
+        assert_eq!(kind.is_keyword(), kind.category() == perl_token::TokenCategory::Keyword);
+        assert_eq!(kind.is_operator(), kind.category() == perl_token::TokenCategory::Operator);
+        assert_eq!(kind.is_literal(), kind.category() == perl_token::TokenCategory::Literal);
+        assert_eq!(kind.is_delimiter(), kind.category() == perl_token::TokenCategory::Delimiter);
+        assert_eq!(kind.is_identifier(), kind.category() == perl_token::TokenCategory::Identifier);
+        assert_eq!(kind.is_special(), kind.category() == perl_token::TokenCategory::Special);
+    }
+}
