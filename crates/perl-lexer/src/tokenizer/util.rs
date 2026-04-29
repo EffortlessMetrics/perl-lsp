@@ -92,15 +92,9 @@ mod tests {
         assert_eq!(split_code_and_data(no_marker), (no_marker, None));
 
         let with_data = "print 'hello';\n__DATA__\nvalue";
-        assert_eq!(
-            split_code_and_data(with_data),
-            ("print 'hello';\n", Some("__DATA__\nvalue"))
-        );
+        assert_eq!(split_code_and_data(with_data), ("print 'hello';\n", Some("__DATA__\nvalue")));
 
         let with_end = "code;\n__END__\nvalue";
-        assert_eq!(
-            split_code_and_data(with_end),
-            ("code;\n", Some("__END__\nvalue"))
-        );
+        assert_eq!(split_code_and_data(with_end), ("code;\n", Some("__END__\nvalue")));
     }
 }
