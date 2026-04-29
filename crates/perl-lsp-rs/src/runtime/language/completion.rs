@@ -121,7 +121,6 @@ impl LspServer {
             }
         }
 
-
         if !include_system_inc {
             include_system_inc = self
                 .workspace_folders
