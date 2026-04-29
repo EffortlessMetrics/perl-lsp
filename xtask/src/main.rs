@@ -1142,7 +1142,6 @@ enum Commands {
         ratchet_check: bool,
     },
 
-
     /// Publish semantic fixture scorecard artifact/status.
     SemanticScorecard {
         /// Optional path to semantic fixture manifest JSON.
@@ -1155,6 +1154,17 @@ enum Commands {
         #[arg(long)]
         status_md: Option<PathBuf>,
     },
+
+    /// Emit deterministic semantic old-vs-new query shadow-compare receipts.
+    SemanticShadowCompare {
+        /// Optional path to input fixture JSON containing receipt records.
+        #[arg(long)]
+        input: Option<PathBuf>,
+        /// Optional path to emitted receipt JSON artifact.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
 
@@ -2178,6 +2188,9 @@ fn main() -> Result<()> {
         }
         Commands::SemanticScorecard { manifest, output, status_md } => {
             semantic_scorecard::run(manifest, output, status_md)
+        }
+        Commands::SemanticShadowCompare { input, output } => {
+            semantic_shadow_compare::run(input, output)
         }
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {

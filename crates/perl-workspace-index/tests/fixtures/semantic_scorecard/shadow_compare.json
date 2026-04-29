@@ -1,0 +1,29 @@
+[
+  {
+    "schema_version": 1,
+    "query": "find_definition",
+    "input": { "symbol": "Demo::run" },
+    "old_result_summary": { "present": true, "item_count": 1, "preview": ["file:///demo.pm:3:1"] },
+    "new_result_summary": { "present": true, "item_count": 1, "preview": ["file:///demo.pm:3:1"] },
+    "verdict": "same",
+    "notes": ["fixture baseline"]
+  },
+  {
+    "schema_version": 1,
+    "query": "find_references",
+    "input": { "symbol": "Demo::run" },
+    "old_result_summary": { "present": true, "item_count": 2, "preview": ["file:///demo.pl:5:2"] },
+    "new_result_summary": { "present": false, "item_count": 0 },
+    "verdict": "unavailable",
+    "notes": ["fact-backed path unavailable"]
+  },
+  {
+    "schema_version": 1,
+    "query": "count_usages",
+    "input": { "symbol": "Demo::run" },
+    "old_result_summary": { "present": true, "item_count": 1 },
+    "new_result_summary": { "present": true, "item_count": 1 },
+    "verdict": "ambiguous",
+    "notes": ["same cardinality but differing locations"]
+  }
+]
