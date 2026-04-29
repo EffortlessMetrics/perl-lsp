@@ -99,6 +99,13 @@ pub enum Confidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReferenceEdge {
+    pub symbol_key: String,
+    pub occurrence_kind: OccurrenceKind,
+    pub confidence: Confidence,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnchorFact {
     pub id: AnchorId,
     pub file_id: FileId,

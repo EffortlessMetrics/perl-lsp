@@ -68,6 +68,7 @@ use crate::position::{Position, Range};
 use crate::workspace::monitoring::IndexInstrumentation;
 use parking_lot::RwLock;
 use perl_position_tracking::{WireLocation, WirePosition, WireRange};
+use perl_semantic_facts::{Confidence, OccurrenceKind, ReferenceEdge};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -1130,11 +1131,11 @@ pub struct WorkspaceIndex {
     files: Arc<RwLock<HashMap<String, FileIndex>>>,
     /// Global symbol map (qualified name -> defining URI)
     symbols: Arc<RwLock<HashMap<String, String>>>,
-    /// Global reference index (symbol name -> locations across all files)
+    /// Global reference index (symbol name -> typed edges across all files)
     ///
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
     /// Provides O(1) lookup for `find_references()` instead of iterating all files.
-    global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
+    global_references: Arc<RwLock<HashMap<String, Vec<TypedReferenceLocation>>>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
     /// Workspace folder URIs for multi-root workspace support
@@ -1145,6 +1146,16 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    fn occurrence_kind_from_reference_kind(kind: ReferenceKind) -> OccurrenceKind {
+        match kind {
+            ReferenceKind::Definition => OccurrenceKind::Definition,
+            ReferenceKind::Usage => OccurrenceKind::Reference,
+            ReferenceKind::Import => OccurrenceKind::Import,
+            ReferenceKind::Read => OccurrenceKind::Read,
+            ReferenceKind::Write => OccurrenceKind::Write,
+        }
+    }
+
     fn location_sort_key(location: &Location) -> (&str, u32, u32, u32, u32) {
         (
             location.uri.as_str(),
@@ -1361,7 +1372,8 @@ impl WorkspaceIndex {
 
         for symbol_name in names_to_query {
             if let Some(refs) = global_refs.get(symbol_name) {
-                for location in refs {
+                for typed_ref in refs {
+                    let location = &typed_ref.location;
                     let key = (
                         location.uri.clone(),
                         location.range.start.line,
@@ -1488,13 +1500,13 @@ impl WorkspaceIndex {
     /// Retains only entries whose URI does not match `file_uri`.
     /// Empty keys are removed to avoid unbounded map growth.
     fn remove_file_global_refs(
-        global_refs: &mut HashMap<String, Vec<Location>>,
+        global_refs: &mut HashMap<String, Vec<TypedReferenceLocation>>,
         file_index: &FileIndex,
         file_uri: &str,
     ) {
         for name in file_index.references.keys() {
             if let Some(locs) = global_refs.get_mut(name) {
-                locs.retain(|loc| loc.uri != file_uri);
+                locs.retain(|loc| loc.location.uri != file_uri);
                 if locs.is_empty() {
                     global_refs.remove(name);
                 }
@@ -1610,7 +1622,16 @@ impl WorkspaceIndex {
                 for (name, refs) in &file_index.references {
                     let entry = global_refs.entry(name.clone()).or_default();
                     for reference in refs {
-                        entry.push(Location { uri: reference.uri.clone(), range: reference.range });
+                        entry.push(TypedReferenceLocation {
+                            location: Location { uri: reference.uri.clone(), range: reference.range },
+                            edge: ReferenceEdge {
+                                symbol_key: name.clone(),
+                                occurrence_kind: Self::occurrence_kind_from_reference_kind(
+                                    reference.kind,
+                                ),
+                                confidence: Confidence::High,
+                            },
+                        });
                     }
                 }
             }
@@ -1926,9 +1947,15 @@ impl WorkspaceIndex {
                     for (name, refs) in &fi.references {
                         let entry = global_refs.entry(name.clone()).or_default();
                         for reference in refs {
-                            entry.push(Location {
-                                uri: reference.uri.clone(),
-                                range: reference.range,
+                            entry.push(TypedReferenceLocation {
+                                location: Location { uri: reference.uri.clone(), range: reference.range },
+                                edge: ReferenceEdge {
+                                    symbol_key: name.clone(),
+                                    occurrence_kind: Self::occurrence_kind_from_reference_kind(
+                                        reference.kind,
+                                    ),
+                                    confidence: Confidence::High,
+                                },
                             });
                         }
                     }
@@ -1976,7 +2003,8 @@ impl WorkspaceIndex {
 
         // O(1) lookup for exact symbol name
         if let Some(refs) = global_refs.get(symbol_name) {
-            for loc in refs {
+            for typed_loc in refs {
+                let loc = &typed_loc.location;
                 let key = (
                     loc.uri.clone(),
                     loc.range.start.line,
@@ -1994,7 +2022,8 @@ impl WorkspaceIndex {
         if let Some(idx) = symbol_name.rfind("::") {
             let bare_name = &symbol_name[idx + 2..];
             if let Some(refs) = global_refs.get(bare_name) {
-                for loc in refs {
+                for typed_loc in refs {
+                    let loc = &typed_loc.location;
                     let key = (
                         loc.uri.clone(),
                         loc.range.start.line,
@@ -2015,7 +2044,8 @@ impl WorkspaceIndex {
                     continue;
                 }
 
-                for loc in refs {
+                for typed_loc in refs {
+                    let loc = &typed_loc.location;
                     let key = (
                         loc.uri.clone(),
                         loc.range.start.line,
@@ -2074,50 +2104,29 @@ impl WorkspaceIndex {
     /// returning only actual usage sites. This is used by code lens to show
     /// "N references" where N means call sites, not the definition itself.
     pub fn count_usages(&self, symbol_name: &str) -> usize {
-        let files = self.files.read();
+        let global_refs = self.global_references.read();
         let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
-
-        for (_uri_key, file_index) in files.iter() {
-            if let Some(refs) = file_index.references.get(symbol_name) {
-                for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
-                    seen.insert((
-                        r.uri.clone(),
-                        r.range.start.line,
-                        r.range.start.column,
-                        r.range.end.line,
-                        r.range.end.column,
-                    ));
+        let mut ingest_refs = |refs: &Vec<TypedReferenceLocation>| {
+            for typed_ref in refs {
+                if typed_ref.edge.occurrence_kind == OccurrenceKind::Definition {
+                    continue;
                 }
+                let r = &typed_ref.location;
+                seen.insert((r.uri.clone(), r.range.start.line, r.range.start.column, r.range.end.line, r.range.end.column));
             }
-
-            if let Some(idx) = symbol_name.rfind("::") {
-                let bare_name = &symbol_name[idx + 2..];
-                if let Some(refs) = file_index.references.get(bare_name) {
-                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
-                        seen.insert((
-                            r.uri.clone(),
-                            r.range.start.line,
-                            r.range.start.column,
-                            r.range.end.line,
-                            r.range.end.column,
-                        ));
-                    }
-                }
-            } else {
-                for (name, refs) in &file_index.references {
-                    if !Self::is_qualified_variant_of(name, symbol_name) {
-                        continue;
-                    }
-
-                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
-                        seen.insert((
-                            r.uri.clone(),
-                            r.range.start.line,
-                            r.range.start.column,
-                            r.range.end.line,
-                            r.range.end.column,
-                        ));
-                    }
+        };
+        if let Some(refs) = global_refs.get(symbol_name) {
+            ingest_refs(refs);
+        }
+        if let Some(idx) = symbol_name.rfind("::") {
+            let bare_name = &symbol_name[idx + 2..];
+            if let Some(refs) = global_refs.get(bare_name) {
+                ingest_refs(refs);
+            }
+        } else {
+            for (name, refs) in global_refs.iter() {
+                if Self::is_qualified_variant_of(name, symbol_name) {
+                    ingest_refs(refs);
                 }
             }
         }
@@ -2837,6 +2846,12 @@ impl WorkspaceIndex {
 
         all_refs
     }
+}
+
+#[derive(Debug, Clone)]
+struct TypedReferenceLocation {
+    location: Location,
+    edge: ReferenceEdge,
 }
 
 /// AST visitor for extracting symbols and references
