@@ -25,6 +25,7 @@ include = [
 doctest = false
 
 [dependencies]
+perl-symbol = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
