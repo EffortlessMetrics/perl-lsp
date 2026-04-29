@@ -41,7 +41,6 @@ pub struct ExportInfo {
     pub export_tags: HashMap<String, Vec<String>>,
 }
 
-
 impl ExportInfo {
     /// Convert extracted Exporter data into canonical semantic export facts.
     #[must_use]
@@ -59,10 +58,7 @@ impl ExportInfo {
                 let mut members = members.clone();
                 members.sort();
                 members.dedup();
-                ExportTag {
-                    name: name.clone(),
-                    members,
-                }
+                ExportTag { name: name.clone(), members }
             })
             .collect();
         tags.sort_by(|left, right| left.name.cmp(&right.name));

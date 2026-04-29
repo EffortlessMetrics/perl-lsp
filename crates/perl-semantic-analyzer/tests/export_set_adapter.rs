@@ -121,11 +121,17 @@ our %EXPORT_TAGS = (all => [qw(foo bar baz)]);
     assert_eq!(set.default_exports, vec!["foo".to_string()]);
     assert_eq!(set.optional_exports, vec!["bar".to_string(), "baz".to_string()]);
 
-    let core = set.tags.iter().find(|t| t.name == "core")
+    let core = set
+        .tags
+        .iter()
+        .find(|t| t.name == "core")
         .ok_or_else(|| "core tag must exist".to_string())?;
     assert_eq!(core.members, vec!["bar".to_string(), "foo".to_string()]);
 
-    let all = set.tags.iter().find(|t| t.name == "all")
+    let all = set
+        .tags
+        .iter()
+        .find(|t| t.name == "all")
         .ok_or_else(|| "all tag must exist".to_string())?;
     assert_eq!(all.members, vec!["bar".to_string(), "baz".to_string(), "foo".to_string()]);
 
