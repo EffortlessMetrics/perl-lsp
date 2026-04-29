@@ -1882,6 +1882,7 @@ dependencies = [
  "criterion",
  "perl-ast",
  "perl-parser-core",
+ "perl-semantic-facts",
  "perl-tdd-support",
  "serde",
  "serde_json",
