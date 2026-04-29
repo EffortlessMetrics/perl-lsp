@@ -414,7 +414,6 @@ mod tests {
         Ok(())
     }
 
-
     #[test]
     fn test_checkpoint_cache_add_replaces_same_position() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let mut cache = CheckpointCache::new(5);
