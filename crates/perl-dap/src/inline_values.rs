@@ -598,7 +598,7 @@ mod tests {
     #[test]
     fn test_extract_variable_names() {
         let source = "my $x = 1;\nmy @arr = (1,2,3);\nmy %h = (a => 1);";
-        let names = extract_variable_names(source, 1, 4);
+        let names = extract_variable_names(source, 1, 3);
         assert!(names.contains(&"$x".to_string()));
         assert!(names.contains(&"@arr".to_string()));
         assert!(names.contains(&"%h".to_string()));
@@ -607,7 +607,7 @@ mod tests {
     #[test]
     fn test_extract_variable_names_with_namespace_qualifiers() {
         let source = "our $Foo::bar = 1;\nour @My::Pkg::items = (1);\nour %App::Config::opts = ();";
-        let names = extract_variable_names(source, 1, 4);
+        let names = extract_variable_names(source, 1, 3);
         assert!(names.contains(&"$Foo::bar".to_string()));
         assert!(names.contains(&"@My::Pkg::items".to_string()));
         assert!(names.contains(&"%App::Config::opts".to_string()));
