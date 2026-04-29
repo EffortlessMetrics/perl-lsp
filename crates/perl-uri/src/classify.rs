@@ -88,6 +88,13 @@ fn normalize_legacy_windows_uri(uri: &str) -> Option<String> {
         trimmed
     };
 
+    // Accept malformed localhost authorities commonly emitted by some clients,
+    // e.g. `file://localhost/C:\dir\file.pl` and `file://localhost/C:/dir/file.pl`.
+    let path = path
+        .strip_prefix("localhost/")
+        .or_else(|| path.strip_prefix("LOCALHOST/"))
+        .unwrap_or(path);
+
     normalize_windows_path_to_key(path).or_else(|| normalize_unc_path_to_key(path))
 }
 
@@ -246,6 +253,22 @@ mod tests {
         assert_eq!(
             uri_key(r"file://D|\projects\MyApp\script.pl"),
             "file:///d:/projects/MyApp/script.pl"
+        );
+    }
+
+    #[test]
+    fn normalizes_legacy_localhost_windows_uri_variants() {
+        assert_eq!(
+            uri_key(r"file://localhost/C:\Users\dev\example.pl"),
+            "file:///c:/Users/dev/example.pl"
+        );
+        assert_eq!(
+            uri_key("file://localhost/C:/Users/dev/example.pl"),
+            "file:///c:/Users/dev/example.pl"
+        );
+        assert_eq!(
+            uri_key(r"file://LOCALHOST/D:\projects\myapp\script.pl"),
+            "file:///d:/projects/myapp/script.pl"
         );
     }
 
