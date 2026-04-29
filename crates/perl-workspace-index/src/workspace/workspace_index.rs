@@ -67,6 +67,10 @@ use crate::document_store::{Document, DocumentStore};
 use crate::position::{Position, Range};
 use crate::workspace::monitoring::IndexInstrumentation;
 use parking_lot::RwLock;
+use perl_semantic_facts::{
+    AnchorFact, AnchorId, Confidence, EdgeFact, EntityFact, EntityId, EntityKind, FileId,
+    OccurrenceFact, OccurrenceId, OccurrenceKind, Provenance,
+};
 use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -1122,6 +1126,23 @@ pub struct FileIndex {
     content_hash: u64,
     /// Workspace folder URI this file belongs to (for multi-root workspace support)
     folder_uri: Option<String>,
+    /// Canonical semantic-fact shard for this file (write-through only).
+    fact_shard: FileFactShard,
+}
+
+#[derive(Default, Clone)]
+pub struct FileFactShard {
+    pub file_id: Option<FileId>,
+    pub uri: String,
+    pub content_hash: u64,
+    pub anchors: Vec<AnchorFact>,
+    pub entities: Vec<EntityFact>,
+    pub occurrences: Vec<OccurrenceFact>,
+    pub edges: Vec<EdgeFact>,
+    pub anchor_hash: Option<u64>,
+    pub entity_hash: Option<u64>,
+    pub occurrence_hash: Option<u64>,
+    pub edge_hash: Option<u64>,
 }
 
 /// Thread-safe workspace index
@@ -1145,6 +1166,126 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    fn hash_slice<T: Serialize>(items: &[T]) -> Option<u64> {
+        if items.is_empty() {
+            return None;
+        }
+        let serialized = serde_json::to_vec(items).ok()?;
+        let mut hasher = DefaultHasher::new();
+        serialized.hash(&mut hasher);
+        Some(hasher.finish())
+    }
+
+    fn build_file_fact_shard(
+        uri: &str,
+        content_hash: u64,
+        symbols: &[WorkspaceSymbol],
+        references: &HashMap<String, Vec<SymbolReference>>,
+    ) -> FileFactShard {
+        let file_id = Some(FileId(content_hash));
+        let mut entities = Vec::new();
+        let mut anchors = Vec::new();
+        let mut occurrences = Vec::new();
+        let edges = Vec::new();
+
+        for (idx, symbol) in symbols.iter().enumerate() {
+            let anchor_id = AnchorId((idx as u64) + 1);
+            let entity_id = EntityId((idx as u64) + 1);
+            anchors.push(AnchorFact {
+                id: anchor_id,
+                file_id: FileId(content_hash),
+                span_start_byte: symbol.range.start.column,
+                span_end_byte: symbol.range.end.column,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            });
+            entities.push(EntityFact {
+                id: entity_id,
+                kind: Self::map_symbol_kind_to_entity_kind(symbol.kind),
+                canonical_name: symbol
+                    .qualified_name
+                    .clone()
+                    .unwrap_or_else(|| symbol.name.clone()),
+                anchor_id: Some(anchor_id),
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            });
+            occurrences.push(OccurrenceFact {
+                id: OccurrenceId((idx as u64) + 1),
+                kind: OccurrenceKind::Definition,
+                entity_id: Some(entity_id),
+                anchor_id,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            });
+        }
+
+        if !references.is_empty() {
+            let mut next_occurrence_id = occurrences.len() as u64 + 1;
+            for refs in references.values() {
+                for reference in refs {
+                    let anchor_id = AnchorId(next_occurrence_id);
+                    anchors.push(AnchorFact {
+                        id: anchor_id,
+                        file_id: FileId(content_hash),
+                        span_start_byte: reference.range.start.column,
+                        span_end_byte: reference.range.end.column,
+                        scope_id: None,
+                        provenance: Provenance::ExactAst,
+                        confidence: Confidence::Medium,
+                    });
+                    occurrences.push(OccurrenceFact {
+                        id: OccurrenceId(next_occurrence_id),
+                        kind: OccurrenceKind::Reference,
+                        entity_id: None,
+                        anchor_id,
+                        scope_id: None,
+                        provenance: Provenance::ExactAst,
+                        confidence: Confidence::Medium,
+                    });
+                    next_occurrence_id += 1;
+                }
+            }
+        }
+
+        let anchor_hash = Self::hash_slice(&anchors);
+        let entity_hash = Self::hash_slice(&entities);
+        let occurrence_hash = Self::hash_slice(&occurrences);
+        let edge_hash = Self::hash_slice(&edges);
+
+        FileFactShard {
+            file_id,
+            uri: uri.to_string(),
+            content_hash,
+            anchors,
+            entities,
+            occurrences,
+            edges,
+            anchor_hash,
+            entity_hash,
+            occurrence_hash,
+            edge_hash,
+        }
+    }
+
+    fn map_symbol_kind_to_entity_kind(kind: SymbolKind) -> EntityKind {
+        match kind {
+            SymbolKind::Package => EntityKind::Package,
+            SymbolKind::Class => EntityKind::Class,
+            SymbolKind::Subroutine => EntityKind::Subroutine,
+            SymbolKind::Method => EntityKind::Method,
+            SymbolKind::Variable(_) => EntityKind::Variable,
+            SymbolKind::Constant => EntityKind::Constant,
+            SymbolKind::Label => EntityKind::Label,
+            SymbolKind::Role => EntityKind::Role,
+            SymbolKind::Import => EntityKind::ExternalSymbol,
+            SymbolKind::Export => EntityKind::ExternalSymbol,
+            SymbolKind::Format => EntityKind::Format,
+        }
+    }
     fn location_sort_key(location: &Location) -> (&str, u32, u32, u32, u32) {
         (
             location.uri.as_str(),
@@ -1581,6 +1722,12 @@ impl WorkspaceIndex {
         };
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
         visitor.visit(&ast, &mut file_index);
+        file_index.fact_shard = Self::build_file_fact_shard(
+            &uri_str,
+            content_hash,
+            &file_index.symbols,
+            &file_index.references,
+        );
 
         // Update the index, refresh the global symbol cache, and replace this file's
         // contribution in the global reference index.
@@ -2209,6 +2356,13 @@ impl WorkspaceIndex {
     pub fn file_count(&self) -> usize {
         let files = self.files.read();
         files.len()
+    }
+
+    pub fn file_fact_shard(&self, uri: &str) -> Option<FileFactShard> {
+        let uri_str = Self::normalize_uri(uri);
+        let key = DocumentStore::uri_key(&uri_str);
+        let files = self.files.read();
+        files.get(&key).map(|file_index| file_index.fact_shard.clone())
     }
 
     /// Return the total number of symbols across all indexed files
@@ -3885,6 +4039,47 @@ pub mod lsp_adapter {
 mod tests {
     use super::*;
     use perl_tdd_support::{must, must_some};
+    use url::Url;
+
+    #[test]
+    fn fact_shard_lifecycle_index_reindex_remove_clear() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///fact_shard.pl";
+        let parsed_uri = must(Url::parse(uri));
+
+        must(index.index_file(parsed_uri.clone(), "package A; sub alpha { 1 } 1;".to_string()));
+        let first_shard = must_some(index.file_fact_shard(uri));
+        assert_eq!(first_shard.uri, uri);
+        assert_eq!(first_shard.content_hash, first_shard.file_id.unwrap_or(FileId(0)).0);
+        assert!(!first_shard.entities.is_empty());
+
+        must(index.index_file(parsed_uri, "package A; sub beta { 2 } 1;".to_string()));
+        let second_shard = must_some(index.file_fact_shard(uri));
+        assert_ne!(first_shard.content_hash, second_shard.content_hash);
+        assert!(
+            second_shard
+                .entities
+                .iter()
+                .any(|entity| entity.canonical_name.contains("beta"))
+        );
+        assert!(
+            !second_shard
+                .entities
+                .iter()
+                .any(|entity| entity.canonical_name.contains("alpha"))
+        );
+
+        index.remove_file(uri);
+        assert!(index.file_fact_shard(uri).is_none());
+
+        must(index.index_file(
+            must(Url::parse(uri)),
+            "package A; sub gamma { 3 } 1;".to_string(),
+        ));
+        assert!(index.file_fact_shard(uri).is_some());
+        index.clear();
+        assert!(index.file_fact_shard(uri).is_none());
+    }
 
     #[test]
     fn test_use_constant_indexed_as_constant_symbol() {
