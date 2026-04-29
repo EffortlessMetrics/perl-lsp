@@ -119,6 +119,24 @@ fn surface_workspace_parity_bank() -> Result<()> {
             ),
         },
         ParityCase {
+            label: "my array variable declaration",
+            src: "my @items = ();",
+            symbol_name: "items",
+            expect_core_match: true,
+            actionable_divergence: Some(
+                "workspace index keeps core identity but does not preserve variable declarator (`my` vs `our`)",
+            ),
+        },
+        ParityCase {
+            label: "my hash variable declaration",
+            src: "my %opts = ();",
+            symbol_name: "opts",
+            expect_core_match: true,
+            actionable_divergence: Some(
+                "workspace index keeps core identity but does not preserve variable declarator (`my` vs `our`)",
+            ),
+        },
+        ParityCase {
             label: "use constant",
             src: "package C; use constant PI => 3.14;",
             symbol_name: "PI",
