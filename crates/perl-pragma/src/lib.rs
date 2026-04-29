@@ -947,7 +947,10 @@ impl PragmaTracker {
                             current_state.disabled_warning_categories.len() != before
                         };
                         if changed {
-                            ranges.push((node.location.start..node.location.end, current_state.clone()));
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
                         }
                     }
                     "utf8" => {
