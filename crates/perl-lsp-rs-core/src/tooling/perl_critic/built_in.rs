@@ -191,7 +191,7 @@ fn missing_use_statement_violation(
     feature: &str,
     explanation: &str,
 ) -> Vec<Violation> {
-    if content.contains(&format!("use {feature}")) {
+    if has_use_statement(content, feature) {
         return Vec::new();
     }
 
@@ -203,6 +203,15 @@ fn missing_use_statement_violation(
         range: insertion_range(),
         file: String::new(),
     }]
+}
+
+
+fn has_use_statement(content: &str, feature: &str) -> bool {
+    let needle = format!("use {feature}");
+    content.lines().any(|line| {
+        let code = line.split('#').next().unwrap_or_default();
+        code.contains(&needle)
+    })
 }
 
 fn find_bareword_open_filehandles(content: &str) -> Vec<Range> {
@@ -511,6 +520,48 @@ eval $code;
         let has_two_arg_violation =
             violations.iter().any(|v| v.policy == "InputOutput::ProhibitTwoArgOpen");
         assert!(has_two_arg_violation, "expected InputOutput::ProhibitTwoArgOpen violation");
+        Ok(())
+    }
+
+    #[test]
+    fn builtin_analyzer_flags_missing_strict_when_only_comment_mentions_it() -> TestResult {
+        let source = "# use strict;
+use warnings;
+my $x = 1;
+";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.policy == "TestingAndDebugging::RequireUseStrict"),
+            "commented use strict should not satisfy RequireUseStrict"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn builtin_analyzer_flags_missing_warnings_when_only_comment_mentions_it() -> TestResult {
+        let source = "use strict;
+# use warnings;
+my $x = 1;
+";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.policy == "TestingAndDebugging::RequireUseWarnings"),
+            "commented use warnings should not satisfy RequireUseWarnings"
+        );
         Ok(())
     }
 
