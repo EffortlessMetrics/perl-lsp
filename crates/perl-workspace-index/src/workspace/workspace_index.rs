@@ -67,6 +67,10 @@ use crate::document_store::{Document, DocumentStore};
 use crate::position::{Position, Range};
 use crate::workspace::monitoring::IndexInstrumentation;
 use parking_lot::RwLock;
+use perl_semantic_facts::{
+    AnchorFact, AnchorId, Confidence, EdgeFact, EdgeId, EdgeKind, EntityFact, EntityId,
+    EntityKind, FileId, OccurrenceFact, OccurrenceId, OccurrenceKind, Provenance,
+};
 use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -1124,6 +1128,17 @@ pub struct FileIndex {
     folder_uri: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+struct FileFactShard {
+    file_id: FileId,
+    uri: String,
+    content_hash: u64,
+    anchors: Vec<AnchorFact>,
+    entities: Vec<EntityFact>,
+    occurrences: Vec<OccurrenceFact>,
+    edges: Vec<EdgeFact>,
+}
+
 /// Thread-safe workspace index
 pub struct WorkspaceIndex {
     /// Index data per file URI (normalized key -> data)
@@ -1135,6 +1150,8 @@ pub struct WorkspaceIndex {
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
     /// Provides O(1) lookup for `find_references()` instead of iterating all files.
     global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
+    /// Canonical semantic fact shards keyed by normalized URI key.
+    fact_shards: Arc<RwLock<HashMap<String, FileFactShard>>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
     /// Workspace folder URIs for multi-root workspace support
@@ -1400,6 +1417,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
             global_references: Arc::new(RwLock::new(HashMap::new())),
+            fact_shards: Arc::new(RwLock::new(HashMap::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1438,6 +1456,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
+            fact_shards: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1499,6 +1518,133 @@ impl WorkspaceIndex {
                     global_refs.remove(name);
                 }
             }
+        }
+    }
+
+    fn file_id_for_uri(uri: &str) -> FileId {
+        let mut hasher = DefaultHasher::new();
+        uri.hash(&mut hasher);
+        FileId(hasher.finish())
+    }
+
+    fn build_fact_shard(file_index: &FileIndex) -> FileFactShard {
+        let file_id = Self::file_id_for_uri(&file_index.source_uri);
+        let mut anchors = Vec::new();
+        let mut entities = Vec::new();
+        let mut occurrences = Vec::new();
+        let mut edges = Vec::new();
+        let mut anchor_id = 1_u64;
+        let mut occurrence_id = 1_u64;
+        let mut entity_id = 1_u64;
+        let mut edge_id = 1_u64;
+
+        for symbol in &file_index.symbols {
+            let start = symbol.range.start.column;
+            let end = symbol.range.end.column.max(start.saturating_add(1));
+            let this_anchor = AnchorId(anchor_id);
+            anchor_id += 1;
+            anchors.push(AnchorFact {
+                id: this_anchor,
+                file_id,
+                span_start_byte: start,
+                span_end_byte: end,
+                scope_id: None,
+                provenance: Provenance::NameHeuristic,
+                confidence: Confidence::Low,
+            });
+
+            let this_entity = EntityId(entity_id);
+            entity_id += 1;
+            entities.push(EntityFact {
+                id: this_entity,
+                kind: match symbol.kind {
+                    SymbolKind::Package => EntityKind::Package,
+                    SymbolKind::Subroutine | SymbolKind::Method => EntityKind::Subroutine,
+                    SymbolKind::Variable(_) => EntityKind::Variable,
+                    _ => EntityKind::Unknown,
+                },
+                canonical_name: symbol
+                    .qualified_name
+                    .clone()
+                    .unwrap_or_else(|| symbol.name.clone()),
+                anchor_id: Some(this_anchor),
+                scope_id: None,
+                provenance: Provenance::NameHeuristic,
+                confidence: Confidence::Low,
+            });
+
+            occurrences.push(OccurrenceFact {
+                id: OccurrenceId(occurrence_id),
+                kind: OccurrenceKind::Definition,
+                entity_id: Some(this_entity),
+                anchor_id: this_anchor,
+                scope_id: None,
+                provenance: Provenance::NameHeuristic,
+                confidence: Confidence::Low,
+            });
+            occurrence_id += 1;
+        }
+
+        for refs in file_index.references.values() {
+            for reference in refs {
+                let start = reference.range.start.column;
+                let end = reference.range.end.column.max(start.saturating_add(1));
+                let this_anchor = AnchorId(anchor_id);
+                anchor_id += 1;
+                anchors.push(AnchorFact {
+                    id: this_anchor,
+                    file_id,
+                    span_start_byte: start,
+                    span_end_byte: end,
+                    scope_id: None,
+                    provenance: Provenance::NameHeuristic,
+                    confidence: Confidence::Low,
+                });
+                occurrences.push(OccurrenceFact {
+                    id: OccurrenceId(occurrence_id),
+                    kind: OccurrenceKind::Reference,
+                    entity_id: None,
+                    anchor_id: this_anchor,
+                    scope_id: None,
+                    provenance: Provenance::NameHeuristic,
+                    confidence: Confidence::Low,
+                });
+                occurrence_id += 1;
+            }
+        }
+
+        for dependency in &file_index.dependencies {
+            let dep_entity = EntityId(entity_id);
+            entity_id += 1;
+            entities.push(EntityFact {
+                id: dep_entity,
+                kind: EntityKind::Module,
+                canonical_name: dependency.clone(),
+                anchor_id: None,
+                scope_id: None,
+                provenance: Provenance::NameHeuristic,
+                confidence: Confidence::Low,
+            });
+            edges.push(EdgeFact {
+                id: EdgeId(edge_id),
+                kind: EdgeKind::ImportsModule,
+                from_entity_id: dep_entity,
+                to_entity_id: dep_entity,
+                via_occurrence_id: None,
+                provenance: Provenance::NameHeuristic,
+                confidence: Confidence::Low,
+            });
+            edge_id += 1;
+        }
+
+        FileFactShard {
+            file_id,
+            uri: file_index.source_uri.clone(),
+            content_hash: file_index.content_hash,
+            anchors,
+            entities,
+            occurrences,
+            edges,
         }
     }
 
@@ -1600,6 +1746,10 @@ impl WorkspaceIndex {
                 drop(symbols);
             }
             files.insert(key.clone(), file_index);
+            if let Some(new_index) = files.get(&key) {
+                let shard = Self::build_fact_shard(new_index);
+                self.fact_shards.write().insert(key.clone(), shard);
+            }
             let mut symbols = self.symbols.write();
             if let Some(new_index) = files.get(&key) {
                 Self::incremental_add_symbols(&mut symbols, new_index);
@@ -1666,6 +1816,7 @@ impl WorkspaceIndex {
             // Remove from global reference index
             let mut global_refs = self.global_references.write();
             Self::remove_file_global_refs(&mut global_refs, &file_index, &uri_str);
+            self.fact_shards.write().remove(&key);
         }
     }
 
@@ -2203,6 +2354,7 @@ impl WorkspaceIndex {
         self.files.write().clear();
         self.symbols.write().clear();
         self.global_references.write().clear();
+        self.fact_shards.write().clear();
     }
 
     /// Return the number of indexed files in the workspace
@@ -5922,6 +6074,72 @@ MixedMod->import(qw(qw_one qw_two));
             let refs = index.find_references(symbol);
             assert!(!refs.is_empty(), "all import forms should index symbols: {}", symbol);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_facts_lifecycle_index_file_creates_shard() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/facts-index.pl"));
+        must(index.index_file(uri.clone(), "package Foo; sub bar { 1 }".to_string()));
+
+        let key = DocumentStore::uri_key(uri.as_str());
+        let shards = index.fact_shards.read();
+        let Some(shard) = shards.get(&key) else {
+            return Err("fact shard should exist".into());
+        };
+        assert_eq!(shard.uri, uri.as_str());
+        assert!(!shard.entities.is_empty(), "entities should be populated");
+        assert!(!shard.occurrences.is_empty(), "occurrences should be populated");
+        Ok(())
+    }
+
+    #[test]
+    fn test_facts_lifecycle_reindex_replaces_stale_shard() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/facts-reindex.pl"));
+        must(index.index_file(uri.clone(), "package Foo; sub bar { 1 }".to_string()));
+        let key = DocumentStore::uri_key(uri.as_str());
+        let first_hash = {
+            let shards = index.fact_shards.read();
+            let Some(shard) = shards.get(&key) else {
+                return Err("initial shard should exist".into());
+            };
+            shard.content_hash
+        };
+
+        must(index.index_file(uri.clone(), "package Foo; sub baz { 2 }".to_string()));
+        let second_hash = {
+            let shards = index.fact_shards.read();
+            let Some(shard) = shards.get(&key) else {
+                return Err("updated shard should exist".into());
+            };
+            shard.content_hash
+        };
+        assert_ne!(first_hash, second_hash, "reindex should replace shard");
+        Ok(())
+    }
+
+    #[test]
+    fn test_facts_lifecycle_remove_file_removes_shard() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/facts-remove.pl"));
+        must(index.index_file(uri.clone(), "package Foo; sub bar { 1 }".to_string()));
+        let key = DocumentStore::uri_key(uri.as_str());
+        assert!(index.fact_shards.read().contains_key(&key));
+        index.remove_file(uri.as_str());
+        assert!(!index.fact_shards.read().contains_key(&key));
+        Ok(())
+    }
+
+    #[test]
+    fn test_facts_lifecycle_clear_removes_all_shards() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/facts-clear.pl"));
+        must(index.index_file(uri, "package Foo; sub bar { 1 }".to_string()));
+        assert!(!index.fact_shards.read().is_empty());
+        index.clear();
+        assert!(index.fact_shards.read().is_empty());
         Ok(())
     }
 }
