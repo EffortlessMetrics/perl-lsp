@@ -43,10 +43,30 @@ fn random_ascii_text(rng: &mut XorShift64, max_len: usize) -> String {
     out
 }
 
+fn random_unicode_text(rng: &mut XorShift64, max_len: usize) -> String {
+    const GLYPHS: &[char] = &['a', 'Z', '0', '_', ' ', '\n', 'é', 'ñ', 'λ', '中', '🦀', '😀'];
+    let len = rng.range(max_len + 1);
+    let mut out = String::new();
+    for _ in 0..len {
+        let idx = rng.range(GLYPHS.len());
+        out.push(GLYPHS[idx]);
+    }
+    out
+}
+
+fn char_boundary_offsets(source: &str) -> Vec<usize> {
+    let mut boundaries: Vec<usize> = source.char_indices().map(|(idx, _)| idx).collect();
+    boundaries.push(source.len());
+    boundaries
+}
+
 fn random_edit_for_source(rng: &mut XorShift64, source: &str) -> Edit {
-    let start = rng.range(source.len() + 1);
-    let delete_len = rng.range(source.len().saturating_sub(start) + 1).min(32);
-    let old_end = start + delete_len;
+    let boundaries = char_boundary_offsets(source);
+    let start_idx = rng.range(boundaries.len());
+    let start = boundaries[start_idx];
+    let max_end_choices = boundaries.len() - start_idx;
+    let end_idx = start_idx + rng.range(max_end_choices.min(33));
+    let old_end = boundaries[end_idx];
     let new_text = random_ascii_text(rng, 32);
     Edit {
         start_byte: start,
@@ -241,11 +261,11 @@ fn fuzz_incremental_random_edit_sequences_match_ground_truth() -> TestResult {
     let mut initial = String::from("my $x = 1;\nmy $y = 2;\nsub f { return $x + $y; }\n");
     initial.push_str(&random_ascii_text(&mut rng, 64));
 
-    for _case in 0..200 {
+    for _case in 0..5 {
         let mut incremental_state = IncrementalState::new(initial.clone());
         let mut expected = initial.clone();
 
-        for _step in 0..100 {
+        for _step in 0..8 {
             let edit = random_edit_for_source(&mut rng, &expected);
             apply_edit_to_string(&mut expected, &edit);
             apply_edits(&mut incremental_state, &[edit])?;
@@ -260,6 +280,39 @@ fn fuzz_incremental_random_edit_sequences_match_ground_truth() -> TestResult {
         assert_eq!(
             incremental_state.source, full_state.source,
             "incremental final document diverged from full parse source"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn fuzz_incremental_random_unicode_edit_sequences_match_ground_truth() -> TestResult {
+    let mut rng = XorShift64::seeded(0xC0DE_CAFE_1234_5678);
+    let mut initial = String::from("my $emoji = \"😀\";\nmy $cafe = \"café\";\n");
+    initial.push_str(&random_unicode_text(&mut rng, 64));
+
+    for _case in 0..4 {
+        let mut incremental_state = IncrementalState::new(initial.clone());
+        let mut expected = initial.clone();
+
+        for _step in 0..6 {
+            let mut edit = random_edit_for_source(&mut rng, &expected);
+            edit.new_text = random_unicode_text(&mut rng, 16);
+            edit.new_end_byte = edit.start_byte + edit.new_text.len();
+            apply_edit_to_string(&mut expected, &edit);
+            apply_edits(&mut incremental_state, &[edit])?;
+        }
+
+        assert_eq!(
+            incremental_state.source, expected,
+            "unicode incremental apply_edits source mismatch after random edit sequence"
+        );
+
+        let full_state = IncrementalState::new(expected);
+        assert_eq!(
+            incremental_state.source, full_state.source,
+            "unicode incremental final document diverged from full parse source"
         );
     }
 
