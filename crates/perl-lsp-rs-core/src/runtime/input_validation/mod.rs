@@ -1,201 +1,22 @@
 #![warn(missing_docs)]
 //! Input validation and sanitization utilities for production hardening.
 
-use anyhow::{Result, anyhow};
-use perl_parser_core::path_security::validate_workspace_path;
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+mod constants;
+mod file_validation;
+mod lsp_validation;
+mod sanitize;
+mod workspace_validation;
 
-// NOTE(G2-API-fix): After absorption, input_validation no longer depends on the
-// external perl-lsp-limits crate. It instead accesses the sibling limits module
-// through the super::limits path within perl-lsp-rs-core::runtime.
-use crate::runtime::limits::max_file_size_bytes as limits_max_file_size_bytes;
-
-/// Maximum allowed path length.
-const MAX_PATH_LENGTH: usize = 4096;
-
-/// Allowed file extensions for Perl files.
-const ALLOWED_EXTENSIONS: &[&str] = &["pl", "pm", "t", "pod"];
-/// Allowed URI schemes for text document synchronization.
-const ALLOWED_TEXT_DOCUMENT_URI_SCHEMES: &[&str] = &["file://", "untitled:", "opencode:"];
-
-/// Validates and sanitizes a file path to prevent path traversal attacks.
-pub fn validate_file_path<P: AsRef<Path>>(path: P, workspace_root: &Path) -> Result<PathBuf> {
-    let path = path.as_ref();
-
-    if path.to_string_lossy().len() > MAX_PATH_LENGTH {
-        return Err(anyhow!("Path too long: {}", path.display()));
-    }
-
-    let validated = validate_workspace_path(path, workspace_root)
-        .map_err(|error| anyhow!("Invalid workspace path {}: {error}", path.display()))?;
-
-    if let Some(extension) = validated.extension().and_then(OsStr::to_str)
-        && !ALLOWED_EXTENSIONS.contains(&extension)
-    {
-        return Err(anyhow!(
-            "File extension '{}' not allowed. Allowed: {:?}",
-            extension,
-            ALLOWED_EXTENSIONS
-        ));
-    }
-
-    Ok(validated)
-}
-
-/// Validates file content before parsing to prevent resource exhaustion.
-///
-/// The file size limit is sourced from [`crate::runtime::limits::max_file_size_bytes`],
-/// which defaults to 1MB and is configurable via `perl.limits.maxFileSizeBytes`.
-pub fn validate_file_content(content: &str, file_path: &Path) -> Result<()> {
-    let max_file_size = limits_max_file_size_bytes();
-    if content.len() > max_file_size {
-        return Err(anyhow!(
-            "File {} too large: {} bytes (max: {} bytes) â€” adjust perl.limits.maxFileSizeBytes to increase",
-            file_path.display(),
-            content.len(),
-            max_file_size
-        ));
-    }
-
-    if content.contains('\0') {
-        return Err(anyhow!("File {} contains null bytes", file_path.display()));
-    }
-
-    for (index, line) in content.lines().enumerate() {
-        if line.len() > 100_000 {
-            return Err(anyhow!(
-                "Line {} in file {} is too long: {} characters",
-                index + 1,
-                file_path.display(),
-                line.len()
-            ));
-        }
-    }
-
-    let suspicious_patterns = ["<script", "javascript:", "data:text/html", "<?php", "<%"];
-    let lowercase = content.to_lowercase();
-    for pattern in suspicious_patterns {
-        if lowercase.contains(pattern) {
-            return Err(anyhow!(
-                "File {} contains suspicious pattern: {}",
-                file_path.display(),
-                pattern
-            ));
-        }
-    }
-
-    Ok(())
-}
-
-/// Validates LSP request parameters to ensure they're safe.
-pub fn validate_lsp_request(method: &str, params: &serde_json::Value) -> Result<()> {
-    if method.len() > 100 || !method.chars().all(|c| c.is_alphanumeric() || c == '/' || c == '$') {
-        return Err(anyhow!("Invalid LSP method: {}", method));
-    }
-
-    let params_str = serde_json::to_string(params)?;
-    if params_str.len() > 1_000_000 {
-        return Err(anyhow!("LSP parameters too large for method: {}", method));
-    }
-
-    match method {
-        "textDocument/didOpen" | "textDocument/didChange" | "textDocument/didSave" => {
-            validate_text_document_params(params)?;
-        }
-        "workspace/executeCommand" => {
-            validate_execute_command_params(params)?;
-        }
-        _ => {
-            if params_str.contains("javascript:") || params_str.contains("<script") {
-                return Err(anyhow!("Suspicious content in parameters for method: {}", method));
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn validate_text_document_params(params: &serde_json::Value) -> Result<()> {
-    if let Some(uri) = params
-        .get("textDocument")
-        .and_then(|text_document| text_document.get("uri"))
-        .and_then(serde_json::Value::as_str)
-    {
-        if !ALLOWED_TEXT_DOCUMENT_URI_SCHEMES.iter().any(|scheme| uri.starts_with(scheme)) {
-            return Err(anyhow!("Invalid URI scheme: {}", uri));
-        }
-
-        if uri.len() > 4096 {
-            return Err(anyhow!("URI too long: {}", uri));
-        }
-    }
-
-    if let Some(text) = params
-        .get("textDocument")
-        .and_then(|text_document| text_document.get("text"))
-        .and_then(serde_json::Value::as_str)
-    {
-        validate_file_content(text, Path::new("<lsp_input>"))?;
-    }
-
-    Ok(())
-}
-
-fn validate_execute_command_params(params: &serde_json::Value) -> Result<()> {
-    if let Some(command) = params.get("command").and_then(serde_json::Value::as_str) {
-        let allowed_commands = [
-            "perl.runCritic",
-            "perl.formatDocument",
-            "perl.extractVariable",
-            "perl.extractSubroutine",
-            "perl.optimizeImports",
-        ];
-
-        if !allowed_commands.contains(&command) {
-            return Err(anyhow!("Command not allowed: {}", command));
-        }
-    }
-
-    Ok(())
-}
-
-/// Sanitizes a string by removing potentially dangerous characters.
-pub fn sanitize_string(input: &str) -> String {
-    input
-        .chars()
-        .filter(|character| {
-            *character == '\t'
-                || *character == '\n'
-                || *character == '\r'
-                || (*character >= ' ' && *character <= '~')
-                || *character as u32 > 127
-        })
-        .collect()
-}
-
-/// Validates workspace root to ensure it's safe.
-pub fn validate_workspace_root(workspace_root: &Path) -> Result<()> {
-    if !workspace_root.exists() {
-        return Err(anyhow!("Workspace root does not exist: {}", workspace_root.display()));
-    }
-
-    if !workspace_root.is_dir() {
-        return Err(anyhow!("Workspace root is not a directory: {}", workspace_root.display()));
-    }
-
-    let path_str = workspace_root.to_string_lossy();
-    if path_str.contains("..") || path_str.contains('~') {
-        return Err(anyhow!("Suspicious workspace root path: {}", workspace_root.display()));
-    }
-
-    Ok(())
-}
+pub use file_validation::{validate_file_content, validate_file_path};
+pub use lsp_validation::validate_lsp_request;
+pub use sanitize::sanitize_string;
+pub use workspace_validation::validate_workspace_root;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
 
     #[test]
@@ -218,6 +39,18 @@ mod tests {
         let malicious_path = Path::new("../../etc/passwd");
 
         let result = validate_file_path(malicious_path, workspace_root);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_file_path_rejects_disallowed_extension() {
+        use perl_tdd_support::must;
+        let temp_dir = must(TempDir::new());
+        let workspace_root = temp_dir.path();
+        let file_path = workspace_root.join("notes.txt");
+        must(fs::write(&file_path, "not perl"));
+
+        let result = validate_file_path(&file_path, workspace_root);
         assert!(result.is_err());
     }
 
@@ -261,12 +94,34 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_file_content_suspicious_patterns() {
-        let content = "print q{<script>alert('xss')</script>};";
+    fn test_validate_file_content_suspicious_patterns_case_insensitive() {
+        let content = "print q{<ScRiPt>alert('xss')</script>};";
         let file_path = Path::new("suspicious.pl");
 
         let result = validate_file_content(content, file_path);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_file_content_exact_size_limit_allowed() {
+        let max = crate::runtime::limits::max_file_size_bytes();
+        let segment = "x".repeat(100_000);
+        let repeats = max / 100_001;
+        let remainder = max % 100_001;
+        let mut content = (0..repeats).map(|_| format!("{segment}\n")).collect::<String>();
+        if remainder > 0 {
+            content.push_str(&"x".repeat(remainder));
+        }
+
+        let result = validate_file_content(&content, Path::new("exact_limit.pl"));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_file_content_exact_line_limit_allowed() {
+        let line = "x".repeat(100_000);
+        let result = validate_file_content(&line, Path::new("line_limit.pl"));
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -378,17 +233,38 @@ mod tests {
         assert!(result.is_err());
     }
 
-    /// Regression guard: the `untitled:` scheme must still be accepted after the
-    /// allowlist refactor (PR #5649 replaced hardcoded checks with a constant).
+    #[test]
+    fn test_validate_lsp_request_does_not_require_command_field() {
+        let method = "workspace/executeCommand";
+        let params = serde_json::json!({ "arguments": [] });
+
+        let result = validate_lsp_request(method, &params);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_lsp_request_rejects_long_uri() {
+        let method = "textDocument/didOpen";
+        let uri = format!("file:///{}", "a".repeat(5000));
+        let params = serde_json::json!({
+            "textDocument": {
+                "uri": uri,
+                "text": "print 'Hello';"
+            }
+        });
+
+        let result = validate_lsp_request(method, &params);
+        assert!(result.is_err());
+    }
+
+    /// Regression guard: the `untitled:` scheme must still be accepted.
     #[test]
     fn test_validate_lsp_request_valid_untitled_uri_still_accepted() {
         let method = "textDocument/didOpen";
         let params = serde_json::json!({
             "textDocument": {
                 "uri": "untitled:Untitled-1",
-                "text": "package Scratch;
-1;
-"
+                "text": "package Scratch;\n1;\n"
             }
         });
 
@@ -403,9 +279,7 @@ mod tests {
         let params = serde_json::json!({
             "textDocument": {
                 "uri": "file:///home/user/project/lib/My.pm",
-                "text": "package My;
-1;
-"
+                "text": "package My;\n1;\n"
             }
         });
 
@@ -414,27 +288,8 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_file_path_rejects_disallowed_extension() {
-        use perl_tdd_support::must;
-        let temp_dir = must(TempDir::new());
-        let workspace_root = temp_dir.path();
-        let file_path = workspace_root.join("notes.txt");
-        must(fs::write(&file_path, "not perl"));
-
-        let result = validate_file_path(&file_path, workspace_root);
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn test_file_size_limit_sourced_from_lsp_limits() {
-        // The file size limit must come from perl-lsp-limits, not a local constant.
-        // This test documents the expected single source of truth.
         let expected_limit = crate::runtime::limits::max_file_size_bytes();
-        // Default is 1MB per LspLimits::default()
-        assert_eq!(
-            expected_limit,
-            1_024 * 1_024,
-            "default file size limit must be 1MB from perl-lsp-limits"
-        );
+        assert_eq!(expected_limit, 1_024 * 1_024);
     }
 }

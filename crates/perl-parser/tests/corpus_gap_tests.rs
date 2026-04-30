@@ -108,6 +108,11 @@ mod corpus_gap_tests {
     }
 
     #[test]
+    fn test_end_section() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("end_section.pl")
+    }
+
+    #[test]
     fn test_packages_versions() -> Result<(), Box<dyn std::error::Error>> {
         test_corpus_file("packages_versions.pl")
     }
@@ -140,6 +145,11 @@ mod corpus_gap_tests {
     #[test]
     fn test_regex_timeout_hardening() -> Result<(), Box<dyn std::error::Error>> {
         test_corpus_file("regex_timeout_hardening.pl")
+    }
+
+    #[test]
+    fn test_parser_stress_cases() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("parser_stress_cases.pl")
     }
 
     /// Regression: anonymous sub as expression initializer (`my $c = sub { 1 };`)

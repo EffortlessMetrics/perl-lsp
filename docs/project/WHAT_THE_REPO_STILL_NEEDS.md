@@ -44,6 +44,11 @@ No PR this session stages the actual release. What's needed:
 
 ### 5. UX scorecard: from fixture-backed to measured
 
+### 5a. Semantic substrate first-wave execution
+
+Execute the rails-first semantic wave captured in [SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md](SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md): establish canonical facts vocabulary, fixture-heavy regression banks, and scorecard/query contracts before provider migration. The goal is reviewer-verifiable behavior and deterministic baselines, not broad cutover in a single PR.
+
+
 Merged this session: #5154 (fixture-backed scorecard), #5301/#5303/#5310/#5311 (metrics cohort — lane yield, receipt enrichment, ranking relevance fields). **But** the receipt still emits placeholders for several rows. Actually wire:
 - Hover correctness % (needs real measurement harness against gold fixtures from #5307 schema)
 - Completion top-1 / top-5 % (needs completion-ranking gold fixtures)

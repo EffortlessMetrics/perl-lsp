@@ -221,15 +221,19 @@
 
 pub mod cases;
 pub mod codegen;
+pub mod concepts;
 pub mod continue_redo;
 pub mod files;
+pub mod fixture_expectations;
 pub mod format_statements;
 pub mod r#gen;
 pub mod glob_expressions;
 pub mod gold;
 pub mod index;
+pub mod inventory;
 pub mod lint;
 pub mod meta;
+pub mod sidecar;
 pub mod tie_interface;
 
 use anyhow::{Context, Result};
@@ -241,6 +245,7 @@ pub use codegen::{
     CodegenOptions, StatementKind, generate_perl_code, generate_perl_code_with_options,
     generate_perl_code_with_seed, generate_perl_code_with_statements,
 };
+pub use concepts::{ConceptRow, LoadedConcept, load_concept_registry};
 pub use continue_redo::{
     ContinueRedoCase, cases_by_tag as continue_redo_cases_by_tag, continue_redo_cases,
     find_case as find_continue_redo_case, invalid_cases as invalid_continue_redo_cases,
@@ -258,13 +263,24 @@ pub use glob_expressions::{
 };
 pub use gold::{
     CompletionAssertion, CompletionAssertionKind, CompletionGoldExpected, CompletionGoldFixture,
-    GoldAssertion, GoldExpected, GoldFixture, GotoAssertion, GotoAssertionKind, GotoGoldExpected,
-    GotoGoldFixture, HoverAssertion, HoverAssertionKind, HoverGoldExpected, HoverGoldFixture,
-    load_completion_gold_fixtures, load_gold_fixture, load_gold_fixtures, load_gold_fixtures_from,
-    load_goto_gold_fixtures, load_hover_gold_fixtures,
+    DocumentSymbolAssertion, DocumentSymbolAssertionKind, DocumentSymbolGoldExpected,
+    DocumentSymbolGoldFixture, GoldAssertion, GoldExpected, GoldFixture, GotoAssertion,
+    GotoAssertionKind, GotoGoldExpected, GotoGoldFixture, HoverAssertion, HoverAssertionKind,
+    HoverGoldExpected, HoverGoldFixture, load_completion_gold_fixtures,
+    load_document_symbol_gold_fixtures, load_gold_fixture, load_gold_fixtures,
+    load_gold_fixtures_from, load_goto_gold_fixtures, load_hover_gold_fixtures,
+};
+pub use inventory::{
+    CorpusInventory, InventoryIds, InventoryMarkers, InventoryTags, build_inventory,
+    build_inventory_from_paths, generator_families, inventory_from_sections,
 };
 use meta::Section;
 use regex::Regex;
+pub use sidecar::{
+    ConceptRegistry, ExpectationMode, FixtureExpectationSidecar, SidecarConcept, SidecarExpect,
+    SidecarMetrics, SidecarSnapshots, SidecarValidation, discover_sidecars, expected_fixture_path,
+    load_and_validate_sidecar, parse_sidecar, validate_sidecar,
+};
 use std::collections::HashMap;
 use std::{fs, path::Path};
 pub use tie_interface::{

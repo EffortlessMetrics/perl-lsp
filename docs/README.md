@@ -29,6 +29,29 @@ If a doc starts mixing multiple intents, split it and cross-link the parts.
 
 Rule: if a project metric appears outside [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), treat it as stale until reverified.
 
+## Repository Map (Code + Docs)
+
+Start here if you need to orient quickly before diving into a crate:
+
+| Path | What lives here | When to go there |
+| --- | --- | --- |
+| `crates/perllsp/` | Thin top-level CLI binary (`perllsp`) | Entry point wiring, CLI flags, process startup |
+| `crates/perl-lsp-rs/` | LSP server integration crate | User-visible LSP behavior, request plumbing |
+| `crates/perl-lsp-rs-core/` | Shared LSP runtime, protocol, providers, governance | Core provider/runtime implementation |
+| `crates/perl-dap/` | Debug Adapter Protocol server | Breakpoints, stepping, debugger transport |
+| `crates/perl-parser/` | Native recursive-descent parser | Syntax parsing and parser behavior changes |
+| `crates/perl-lexer/` | Context-aware tokenizer | Lexing/token stream changes |
+| `crates/perl-parser-core/` | Parser shared infrastructure | Low-level parser utilities and common primitives |
+| `crates/perl-semantic-analyzer/` | Scope/symbol resolution | Name resolution, cross-reference semantics |
+| `crates/perl-workspace-index/` | Cross-file indexing and symbol lookup | Workspace search/refactor surfaces |
+| `crates/tree-sitter-perl-c/` | C tree-sitter grammar binding | Compatibility for tree-sitter consumers |
+| `crates/tree-sitter-perl-rs/` | Rust-native tree-sitter-style facade over v3 parser | Tree-sitter ergonomics on native parser stack |
+| `docs/project/` | Status, roadmap, process, governance docs | "What is true now?" and "what ships next?" |
+| `docs/reference/` | Contract-style reference docs | Command/config/API behavior lookups |
+| `docs/how-to/`, `docs/tutorials/`, `docs/explanation/` | Task guides, walkthroughs, rationale | Learning and operational guidance |
+
+For complete workspace membership and canonical crate/version truth, use [`../Cargo.toml`](../Cargo.toml).
+
 ## Common Routes
 
 | If you need to... | Read this |

@@ -321,6 +321,11 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
 
     let tracking_table = [system_row, cpan_row, project_row].join("\n");
 
+    let failure_worklist = metrics.system_receipt.as_ref().map_or_else(
+        || "| (no receipt — run `just corpus-sweep-check` to generate) | 0 |".to_string(),
+        build_failure_worklist,
+    );
+
     let parser_coverage_bullets = format!(
         "- **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against the cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against the repo-owned corpus.\n\
          - **Strict promise lists**: `just common-corpus-check` and the CPAN known-clean manifest inside `just cpan-corpus-check` pin subsets that must remain clean on top of the broader baseline receipts.\n\
@@ -375,7 +380,148 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         "<!-- END: PARSER_STRICT_CLEAN_ROW -->",
         &strict_clean_row,
     )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: PARSER_FAILURE_WORKLIST -->",
+        "<!-- END: PARSER_FAILURE_WORKLIST -->",
+        &failure_worklist,
+    )?;
     Ok(text)
+}
+
+#[cfg(test)]
+pub(super) const PARSER_STATUS_MARKERS: [&str; 7] = [
+    "PARSER_TRACKING_TABLE",
+    "PARSER_PERFORMANCE_TABLE",
+    "PARSER_METRICS_BULLETS",
+    "TOKEN_HEALTH_TABLE",
+    "PARSER_NODEKIND_ROW",
+    "PARSER_RELIABILITY_ROW",
+    "PARSER_STRICT_CLEAN_ROW",
+];
+
+// ---------------------------------------------------------------------------
+// Failure clustering
+// ---------------------------------------------------------------------------
+
+/// Failure cluster categories used to group parser corpus error buckets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum FailureCluster {
+    TransliterationQuote,
+    DeclarationPackage,
+    HeredocDelimiter,
+    RecoveryOnly,
+    EncodingMultibyte,
+    Other,
+}
+
+impl FailureCluster {
+    fn display_name(self) -> &'static str {
+        match self {
+            FailureCluster::TransliterationQuote => "transliteration / quote parsing",
+            FailureCluster::DeclarationPackage => "declaration / package parsing",
+            FailureCluster::HeredocDelimiter => "heredoc / delimiter handling",
+            FailureCluster::RecoveryOnly => "recovery-only failures",
+            FailureCluster::EncodingMultibyte => "encoding / multibyte",
+            FailureCluster::Other => "other",
+        }
+    }
+}
+
+/// Classify a single error bucket name into a [`FailureCluster`].
+///
+/// Priority order (highest first):
+/// 1. `RecoveryOnly` — catch-all token/expression recovery buckets
+/// 2. `HeredocDelimiter` — delimiter and bracket mismatch errors
+/// 3. `DeclarationPackage` — identifier, variable, and declaration errors
+/// 4. `EncodingMultibyte` — wide-character and Unicode errors
+/// 5. `TransliterationQuote` — transliteration, quote, and string errors
+/// 6. `Other` — anything else
+pub(crate) fn classify_failure_bucket(bucket: &str) -> FailureCluster {
+    let lower = bucket.to_ascii_lowercase();
+
+    // RecoveryOnly: generic expression-level recovery buckets
+    if lower.contains("unexpected_token") || lower.contains("incomplete") {
+        return FailureCluster::RecoveryOnly;
+    }
+
+    // HeredocDelimiter: bracket/brace/paren/delimiter mismatches and unclosed_ errors
+    if lower.contains("brace")
+        || lower.contains("bracket")
+        || lower.contains("paren")
+        || lower.contains("delimiter")
+        || lower.starts_with("unclosed_")
+    {
+        return FailureCluster::HeredocDelimiter;
+    }
+
+    // DeclarationPackage: identifier, variable, and named-block declarations
+    if lower.contains("identifier")
+        || lower.contains("variable")
+        || lower.contains("check must")
+        || lower.contains("signature")
+        || lower.contains("declaration")
+        || lower.contains("package")
+    {
+        return FailureCluster::DeclarationPackage;
+    }
+
+    // EncodingMultibyte: wide-character and Unicode errors
+    if lower.contains("wide character")
+        || lower.contains("unicode")
+        || lower.contains("utf")
+        || lower.contains("multibyte")
+        || lower.contains("encoding")
+    {
+        return FailureCluster::EncodingMultibyte;
+    }
+
+    // TransliterationQuote: transliteration operators and string/quote errors
+    if lower.contains("tr/")
+        || lower.contains("translit")
+        || lower.contains("string")
+        || lower.contains("quote")
+    {
+        return FailureCluster::TransliterationQuote;
+    }
+
+    FailureCluster::Other
+}
+
+/// Build a markdown table summarising parser corpus failures grouped by cluster.
+///
+/// Returns a multi-line string with one row per [`FailureCluster`] variant.
+/// The table has **no** header row — callers embed it inside an existing table.
+pub(crate) fn build_failure_worklist(
+    report: &super::super::parser_corpus_sweep::SweepReport,
+) -> String {
+    use std::collections::BTreeMap;
+
+    // Accumulate counts per cluster from first_error_buckets.
+    let mut counts: BTreeMap<FailureCluster, usize> = BTreeMap::new();
+    for (bucket_name, &count) in &report.first_error_buckets {
+        let cluster = classify_failure_bucket(bucket_name);
+        *counts.entry(cluster).or_insert(0) += count;
+    }
+
+    // Emit one row per cluster in a stable order.
+    let clusters = [
+        FailureCluster::TransliterationQuote,
+        FailureCluster::DeclarationPackage,
+        FailureCluster::HeredocDelimiter,
+        FailureCluster::RecoveryOnly,
+        FailureCluster::EncodingMultibyte,
+        FailureCluster::Other,
+    ];
+
+    clusters
+        .iter()
+        .map(|cluster| {
+            let count = counts.get(cluster).copied().unwrap_or(0);
+            format!("| {} | {} |", cluster.display_name(), count)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +538,32 @@ mod tests {
         let root = crate::utils::project_root()?;
         let sections = count_corpus_sections(&root);
         assert!(sections > 0, "expected nonzero corpus sections");
+        Ok(())
+    }
+
+    #[test]
+    fn test_parser_status_marker_contract() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let target_file = "docs/project/status/parser.md";
+        let parser_status = std::fs::read_to_string(root.join(target_file))?;
+
+        for marker in PARSER_STATUS_MARKERS {
+            let begin_marker = format!("<!-- BEGIN: {marker} -->");
+            let end_marker = format!("<!-- END: {marker} -->");
+
+            let begin_count = parser_status.match_indices(&begin_marker).count();
+            assert_eq!(
+                begin_count, 1,
+                "missing or duplicate marker in {target_file}: expected BEGIN marker exactly once: `{begin_marker}`; found {begin_count}"
+            );
+
+            let end_count = parser_status.match_indices(&end_marker).count();
+            assert_eq!(
+                end_count, 1,
+                "missing or duplicate marker in {target_file}: expected END marker exactly once: `{end_marker}`; found {end_count}"
+            );
+        }
+
         Ok(())
     }
 
@@ -444,7 +616,7 @@ mod tests {
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
-                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n";
+                        <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
         assert!(result.contains("94.2"), "nodekind row missing 94.2%");
@@ -475,7 +647,7 @@ mod tests {
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
-                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n";
+                        <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(
             result.contains("10 modules (unverified)"),
@@ -535,7 +707,7 @@ mod tests {
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
-                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n";
+                        <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n";
 
         let result = generate_parser_status(&metrics, template)?;
 
@@ -561,6 +733,211 @@ mod tests {
         assert!(result.contains("1777010864"), "perf receipt note should show epoch 1777010864");
 
         Ok(())
+    }
+
+    #[test]
+    fn test_classify_failure_bucket_routing() {
+        // RecoveryOnly matches take highest priority
+        assert_eq!(
+            classify_failure_bucket("unexpected_token_in_expr"),
+            FailureCluster::RecoveryOnly,
+            "catch-all expr token bucket must be RecoveryOnly"
+        );
+        assert_eq!(
+            classify_failure_bucket("Incomplete arrow expression"),
+            FailureCluster::RecoveryOnly,
+            "'incomplete' substring routes to RecoveryOnly"
+        );
+
+        // HeredocDelimiter for bracket/brace/paren/substitution errors
+        assert_eq!(
+            classify_failure_bucket("expected_left_brace"),
+            FailureCluster::HeredocDelimiter,
+            "brace errors map to HeredocDelimiter cluster"
+        );
+        assert_eq!(
+            classify_failure_bucket("unclosed_substitution_delimiter"),
+            FailureCluster::HeredocDelimiter,
+            "unclosed_ prefix maps to HeredocDelimiter"
+        );
+
+        // DeclarationPackage for identifier/variable/signature errors
+        assert_eq!(
+            classify_failure_bucket("expected_identifier"),
+            FailureCluster::DeclarationPackage,
+            "'identifier' routes to DeclarationPackage"
+        );
+        assert_eq!(
+            classify_failure_bucket("expected_variable"),
+            FailureCluster::DeclarationPackage,
+            "'variable' routes to DeclarationPackage"
+        );
+        assert_eq!(
+            classify_failure_bucket("CHECK must be followed by a block"),
+            FailureCluster::DeclarationPackage,
+            "CHECK block error routes to DeclarationPackage"
+        );
+
+        // EncodingMultibyte for utf/unicode/wide character errors
+        assert_eq!(
+            classify_failure_bucket("wide character in syswrite"),
+            FailureCluster::EncodingMultibyte,
+            "'wide character' substring routes to EncodingMultibyte"
+        );
+
+        // TransliterationQuote for quote/translit/tr/y/string errors
+        assert_eq!(
+            classify_failure_bucket("tr/abc/xyz/ misparse"),
+            FailureCluster::TransliterationQuote,
+            "'tr/' routes to TransliterationQuote"
+        );
+        assert_eq!(
+            classify_failure_bucket("unclosed string literal"),
+            FailureCluster::TransliterationQuote,
+            "'string' routes to TransliterationQuote"
+        );
+
+        // Other for unrecognized errors
+        assert_eq!(
+            classify_failure_bucket("expected_comma"),
+            FailureCluster::Other,
+            "comma errors fall through to Other"
+        );
+        assert_eq!(
+            classify_failure_bucket("expected_colon"),
+            FailureCluster::Other,
+            "colon errors fall through to Other"
+        );
+    }
+
+    #[test]
+    fn test_build_failure_worklist_with_populated_receipt() -> Result<()> {
+        use std::collections::BTreeMap;
+
+        let mut buckets = BTreeMap::new();
+        buckets.insert("expected_variable".to_string(), 6usize);
+        buckets.insert("expected_left_brace".to_string(), 10usize);
+        buckets.insert("unexpected_token_in_expr".to_string(), 3usize);
+        buckets.insert("expected_colon".to_string(), 5usize);
+
+        let mut files_by_bucket = BTreeMap::new();
+        files_by_bucket
+            .insert("expected_variable".to_string(), vec!["/usr/share/perl5/Foo.pm".to_string()]);
+        files_by_bucket.insert(
+            "expected_left_brace".to_string(),
+            vec!["/usr/share/perl5/Bar.pm".to_string(), "/usr/share/perl5/Baz.pm".to_string()],
+        );
+
+        let report = super::super::super::parser_corpus_sweep::SweepReport {
+            schema_version: "1".to_string(),
+            commit: "abc".to_string(),
+            timestamp: "2026-04-09T00:00:00Z".to_string(),
+            corpus_profile: "system".to_string(),
+            corpus_roots: vec![],
+            resolved_roots_count: 0,
+            perl_version: "5.038".to_string(),
+            total_files: 200,
+            files_unreadable: 0,
+            clean_files: 176,
+            files_with_errors: 24,
+            total_dirty_files: 24,
+            files_with_structured_recovery_only: 0,
+            files_with_error_nodes: 24,
+            files_with_catastrophic_parse_failure: 0,
+            total_error_nodes: 100,
+            recovered_node_count: 0,
+            first_unrecovered_error_node_buckets: std::collections::BTreeMap::new(),
+            first_error_buckets: buckets,
+            files_by_bucket,
+            file_results: vec![],
+            elapsed_secs: 1.0,
+            phase_timings: None,
+            median_error_density_per_1k_loc: None,
+            recovery_salvage_rate: None,
+            slowest_files: vec![],
+        };
+
+        let worklist = build_failure_worklist(&report);
+
+        // DeclarationPackage: expected_variable (6)
+        assert!(
+            worklist.contains("declaration / package parsing"),
+            "DeclarationPackage cluster missing from worklist"
+        );
+        // HeredocDelimiter: expected_left_brace (10)
+        assert!(
+            worklist.contains("heredoc / delimiter handling"),
+            "HeredocDelimiter cluster missing from worklist"
+        );
+        // RecoveryOnly: unexpected_token_in_expr (3)
+        assert!(
+            worklist.contains("recovery-only failures"),
+            "RecoveryOnly cluster missing from worklist"
+        );
+        // Other: expected_colon (5)
+        assert!(worklist.contains("other"), "Other cluster missing from worklist");
+
+        // Counts should appear in the output rows
+        assert!(worklist.contains("| 6 |"), "DeclarationPackage count (6) not found");
+        assert!(worklist.contains("| 10 |"), "HeredocDelimiter count (10) not found");
+        assert!(worklist.contains("| 3 |"), "RecoveryOnly count (3) not found");
+        assert!(worklist.contains("| 5 |"), "Other count (5) not found");
+
+        // Rows are deterministic — same input always produces same output
+        let worklist2 = build_failure_worklist(&report);
+        assert_eq!(worklist, worklist2, "cluster worklist must be deterministic");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_failure_worklist_empty_buckets() {
+        use super::super::super::parser_corpus_sweep::SweepReport;
+        use std::collections::BTreeMap;
+
+        let report = SweepReport {
+            schema_version: "1".to_string(),
+            commit: "abc".to_string(),
+            timestamp: "2026-04-09T00:00:00Z".to_string(),
+            corpus_profile: "system".to_string(),
+            corpus_roots: vec![],
+            resolved_roots_count: 0,
+            perl_version: "5.038".to_string(),
+            total_files: 10,
+            files_unreadable: 0,
+            clean_files: 10,
+            files_with_errors: 0,
+            total_dirty_files: 0,
+            files_with_structured_recovery_only: 0,
+            files_with_error_nodes: 0,
+            files_with_catastrophic_parse_failure: 0,
+            total_error_nodes: 0,
+            recovered_node_count: 0,
+            first_unrecovered_error_node_buckets: BTreeMap::new(),
+            first_error_buckets: BTreeMap::new(),
+            files_by_bucket: BTreeMap::new(),
+            file_results: vec![],
+            elapsed_secs: 0.5,
+            phase_timings: None,
+            median_error_density_per_1k_loc: None,
+            recovery_salvage_rate: None,
+            slowest_files: vec![],
+        };
+
+        let worklist = build_failure_worklist(&report);
+        // All six clusters should appear with 0 counts
+        assert!(
+            worklist.contains("transliteration / quote parsing"),
+            "TransliterationQuote row missing in empty case"
+        );
+        assert!(
+            worklist.contains("declaration / package parsing"),
+            "DeclarationPackage row missing in empty case"
+        );
+        assert!(worklist.contains("| 0 |"), "empty worklist should show 0 counts");
+        // Output should have 6 rows
+        let row_count = worklist.lines().count();
+        assert_eq!(row_count, 6, "empty worklist must have exactly 6 rows, got {row_count}");
     }
 
     #[test]
@@ -610,7 +987,7 @@ mod tests {
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
-                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n";
+                        <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("10/10"), "strict-clean row missing 10/10");
         assert!(result.contains("100%"), "strict-clean row missing 100%");
@@ -674,6 +1051,42 @@ mod tests {
             ),
             "TOKEN_HEALTH_TABLE block must be replaced — replace_block did not fire"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn status_marker_contract_parser_doc() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let target_file = root.join("docs/project/status/parser.md");
+        let content = std::fs::read_to_string(&target_file).map_err(|err| {
+            color_eyre::eyre::eyre!("failed reading {}: {err}", target_file.display())
+        })?;
+
+        for marker in PARSER_STATUS_MARKERS {
+            let begin = format!("<!-- BEGIN: {marker} -->");
+            let end = format!("<!-- END: {marker} -->");
+            let begin_count = content.match_indices(&begin).count();
+            let end_count = content.match_indices(&end).count();
+
+            assert_eq!(
+                begin_count,
+                1,
+                "status marker contract violation: missing or duplicate marker in {} (BEGIN count = {}). expected BEGIN string: `{}`; expected END string: `{}`",
+                target_file.display(),
+                begin_count,
+                begin,
+                end,
+            );
+            assert_eq!(
+                end_count,
+                1,
+                "status marker contract violation: missing or duplicate marker in {} (END count = {}). expected BEGIN string: `{}`; expected END string: `{}`",
+                target_file.display(),
+                end_count,
+                begin,
+                end,
+            );
+        }
         Ok(())
     }
 }

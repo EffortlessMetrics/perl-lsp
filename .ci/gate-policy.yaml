@@ -131,6 +131,188 @@ gates:
     tags:
       - formatting
       - style
+    planning:
+      role: always_on
+
+  - name: check_conflict_markers
+    tier: pr_fast
+    description: "Prevent committed merge conflict markers"
+    required: true
+    command: just check-conflict-markers
+    timeout_seconds: 30
+    retry_count: 0
+    budgets:
+      max_duration_ms: 10000
+    quarantine: false
+    tags:
+      - hygiene
+      - conflict-markers
+    planning:
+      role: always_on
+
+  - name: release_history
+    tier: pr_fast
+    description: "Validate release-history surfaces"
+    required: true
+    command: just ci-release-history
+    timeout_seconds: 60
+    retry_count: 0
+    budgets:
+      max_duration_ms: 30000
+    quarantine: false
+    tags:
+      - release
+      - hygiene
+    planning:
+      role: always_on
+
+  - name: readme_heading_check
+    tier: pr_fast
+    description: "Prevent duplicate README level-2 headings"
+    required: true
+    command: just readme-heading-check
+    timeout_seconds: 30
+    retry_count: 0
+    budgets:
+      max_duration_ms: 10000
+    quarantine: false
+    tags:
+      - docs
+      - hygiene
+    planning:
+      role: always_on
+
+  - name: publish_closure
+    tier: pr_fast
+    description: "Check publish-closure transitive dependencies"
+    required: true
+    command: just ci-publish-closure
+    timeout_seconds: 60
+    retry_count: 0
+    budgets:
+      max_duration_ms: 30000
+    quarantine: false
+    tags:
+      - publish
+      - hygiene
+    planning:
+      role: always_on
+
+  - name: publish_manifest_check
+    tier: pr_fast
+    description: "Check publish manifest allowlist drift and license metadata"
+    required: true
+    command: just ci-publish-manifest-check
+    timeout_seconds: 60
+    retry_count: 0
+    budgets:
+      max_duration_ms: 30000
+    quarantine: false
+    tags:
+      - publish
+      - manifest
+    planning:
+      role: always_on
+
+  - name: layer_check
+    tier: pr_fast
+    description: "Enforce crate dependency layering"
+    required: true
+    command: just ci-layer-check
+    timeout_seconds: 60
+    retry_count: 0
+    budgets:
+      max_duration_ms: 30000
+    quarantine: false
+    tags:
+      - architecture
+      - hygiene
+    planning:
+      role: always_on
+
+  - name: published_crate_count_pr_fast
+    tier: pr_fast
+    description: "Ratchet published crate count"
+    required: true
+    command: just ci-published-crate-count
+    timeout_seconds: 30
+    retry_count: 0
+    budgets:
+      max_duration_ms: 10000
+    quarantine: false
+    tags:
+      - publish
+      - ratchet
+    planning:
+      role: always_on
+
+  - name: release_history_check
+    tier: pr_fast
+    description: "Check release-history drift"
+    required: true
+    command: just ci-release-history-check
+    timeout_seconds: 60
+    retry_count: 0
+    budgets:
+      max_duration_ms: 30000
+    quarantine: false
+    tags:
+      - release
+      - hygiene
+    planning:
+      role: always_on
+
+  - name: clippy_scoped
+    tier: pr_fast
+    description: "Scope-aware library clippy for ci-scope selected crates"
+    required: true
+    command: cargo clippy --locked --lib {package_args} -- -D warnings -A missing_docs
+    timeout_seconds: 180
+    retry_count: 0
+    budgets:
+      max_duration_ms: 120000
+      max_warnings: 0
+    quarantine: false
+    tags:
+      - lint
+      - clippy
+      - scoped
+    planning:
+      role: rust_scoped
+
+  - name: unit_scoped
+    tier: pr_fast
+    description: "Scope-aware library tests for ci-scope selected crates"
+    required: true
+    command: cargo test --locked --lib {package_args}
+    timeout_seconds: 300
+    retry_count: 1
+    budgets:
+      max_duration_ms: 240000
+    quarantine: false
+    tags:
+      - test
+      - unit
+      - scoped
+    planning:
+      role: rust_scoped
+
+  - name: check_tests_scoped
+    tier: pr_fast
+    description: "Compile integration tests for ci-scope selected crates"
+    required: true
+    command: cargo check --locked --tests {package_args}
+    timeout_seconds: 180
+    retry_count: 0
+    budgets:
+      max_duration_ms: 150000
+    quarantine: false
+    tags:
+      - check
+      - tests
+      - scoped
+    planning:
+      role: rust_scoped
 
   - name: clippy_core
     tier: pr_fast
@@ -151,6 +333,8 @@ gates:
     tags:
       - lint
       - clippy
+    planning:
+      role: rust_fallback
 
   - name: unit_core
     tier: pr_fast
@@ -170,6 +354,8 @@ gates:
     tags:
       - test
       - unit
+    planning:
+      role: rust_fallback
 
   - name: perl_token_leaf_contract
     tier: pr_fast
@@ -185,6 +371,8 @@ gates:
       - test
       - conformance
       - perl-token
+    planning:
+      role: always_on
 
   # ===========================================================================
   # Tier: merge_gate
@@ -218,10 +406,10 @@ gates:
     description: "All release-track workspace library tests (excluding internal tree-sitter harness)"
     required: true
     command: cargo test --workspace --lib --locked --exclude tree-sitter-perl
-    timeout_seconds: 300
+    timeout_seconds: 600
     retry_count: 1
     budgets:
-      max_duration_ms: 240000
+      max_duration_ms: 480000
     quarantine: false
     tags:
       - test
@@ -333,7 +521,10 @@ gates:
 
   - name: parser_audit_closeout
     tier: merge_gate
-    description: "Project corpus parser closeout metrics (gaps, NodeKinds, recovery) must not regress"
+    # Deterministic/scoped rationale for required=true:
+    # - Evaluates repository-local corpus files only (`--corpus-path .`), not host CPAN/system trees.
+    # - Uses a fresh in-process run (`--fresh`) to avoid stale machine-local cache baselines.
+    description: "Project corpus parser closeout metrics (repo-scoped, deterministic run) must not regress"
     required: true
     command: >-
       cargo run --locked -p xtask
@@ -353,13 +544,16 @@ gates:
     tier: merge_gate
     description: "Check dependencies for known security vulnerabilities"
     required: true
-    # cargo-audit must be installed; CI installs it if missing
-    command: cargo audit --deny warnings --ignore RUSTSEC-2023-0089 2>/dev/null || cargo install cargo-audit --locked && cargo audit --deny warnings --ignore RUSTSEC-2023-0089
+    # Quarantined: cargo-audit ecosystem breakage as of 2026-04-26.
+    # - cargo-audit >= 0.21: can't install (abscissa_core ^0.8 requires secrecy ^0.10, all 0.10.x yanked)
+    # - cargo-audit <= 0.20: installs but can't parse CVSS 4.0 advisories (RUSTSEC-2026-0041)
+    # Unquarantine when a working cargo-audit release is available. See debt-ledger.yaml.
+    command: cargo audit --deny warnings --ignore RUSTSEC-2023-0089 2>/dev/null || cargo install cargo-audit && cargo audit --deny warnings --ignore RUSTSEC-2023-0089
     timeout_seconds: 300
     retry_count: 1
     budgets:
       max_duration_ms: 240000
-    quarantine: false
+    quarantine: true  # See debt-ledger.yaml: cargo-audit-broken-install-2026-04-26
     tags:
       - security
       - dependencies

@@ -125,7 +125,7 @@ fn replace_block(
 ) -> Result<String> {
     let escaped_begin = regex::escape(begin_marker);
     let escaped_end = regex::escape(end_marker);
-    let pattern = format!(r"(?s)({})\n.*?\n({})", escaped_begin, escaped_end);
+    let pattern = format!(r"(?s)({})\n.*?({})", escaped_begin, escaped_end);
     let re = Regex::new(&pattern).context("building block replacement regex")?;
 
     let replacement = format!("{begin_marker}\n{new_content}\n{end_marker}");

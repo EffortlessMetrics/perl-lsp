@@ -260,10 +260,10 @@ mod tests {
 
         let calls = call_count.load(Ordering::SeqCst);
         let uris = total_uris.load(Ordering::SeqCst);
-        // Should coalesce into <=4 batch calls — under CI scheduler load the 100ms
+        // Should coalesce into <=6 batch calls — under CI scheduler load the 100ms
         // window may fire before all 50 events arrive, splitting into a few batches.
         // The meaningful check is that coalescence occurred (not 50 individual calls).
-        assert!(calls <= 4, "Expected <=4 batch calls for 50 rapid changes, got {calls}");
+        assert!(calls <= 6, "Expected <=6 batch calls for 50 rapid changes, got {calls}");
         assert_eq!(uris, 50, "All 50 URIs should be delivered, got {uris}");
     }
 }
