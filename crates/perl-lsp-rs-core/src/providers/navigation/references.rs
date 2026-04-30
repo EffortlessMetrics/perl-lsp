@@ -88,7 +88,9 @@ pub fn find_references_single_file(ast: &Node, offset: usize) -> Option<Vec<(usi
                 }
             }
             NodeKind::Subroutine { name: Some(name), .. } if want_kind == "sub" => {
-                if name == want_name {
+                let (pkg, bare) = split_qualified_name(name);
+                let pkg = pkg.unwrap_or("main");
+                if bare == want_name && pkg == want_pkg {
                     out.push((location.start, location.end));
                 }
             }
@@ -124,4 +126,61 @@ fn find_node_at_offset(node: &Node, offset: usize) -> Option<&Node> {
 
 fn get_node_children(node: &Node) -> Vec<&Node> {
     node.children()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser_core::Parser;
+
+    fn parse(source: &str) -> Node {
+        let mut parser = Parser::new(source);
+        parser.parse().expect("parse failed")
+    }
+
+    #[test]
+    fn qualified_sub_declaration_found_in_references() {
+        // `sub Foo::bar` stores name as "Foo::bar"; the walk must split it to
+        // match against the bare "bar" and package "Foo" extracted at lookup
+        // time.  Before the fix, name == want_name compared "Foo::bar" to "bar"
+        // and the subroutine declaration was silently dropped from results.
+        let source = "sub Foo::bar { 1 } Foo::bar();";
+        let ast = parse(source);
+        // Cursor at position 4 sits on the 'F' in `sub Foo::bar { ... }`,
+        // which resolves to the Subroutine node whose name is "Foo::bar".
+        let refs = find_references_single_file(&ast, 4);
+        assert!(refs.is_some(), "should return Some for a known sub name");
+        let refs = refs.unwrap();
+        // Must include both the declaration and the call site
+        assert!(refs.len() >= 2, "expected at least 2 references, got {}", refs.len());
+    }
+
+    #[test]
+    fn bare_sub_declaration_still_found() {
+        let source = "sub greet { } greet();";
+        let ast = parse(source);
+        let refs = find_references_single_file(&ast, 4);
+        assert!(refs.is_some());
+        let refs = refs.unwrap();
+        assert!(refs.len() >= 2, "expected declaration + call, got {}", refs.len());
+    }
+
+    #[test]
+    fn sub_in_different_package_not_confused() {
+        // A subroutine named `bar` in package `Other` must NOT appear when
+        // searching for `Foo::bar`.
+        let source = "sub Foo::bar { 1 } sub Other::bar { 2 } Foo::bar();";
+        let ast = parse(source);
+        let refs = find_references_single_file(&ast, 4);
+        assert!(refs.is_some());
+        let refs = refs.unwrap();
+        // Should find `sub Foo::bar` and the call `Foo::bar()`, but NOT `sub Other::bar`
+        for &(start, end) in &refs {
+            let slice = &source[start..end];
+            assert!(
+                !slice.contains("Other"),
+                "Other::bar must not appear in results for Foo::bar, but got: {slice:?}"
+            );
+        }
+    }
 }

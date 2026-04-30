@@ -129,6 +129,8 @@ impl SubprocessRuntime for OsSubprocessRuntime {
         use std::io::Write;
         use std::process::{Command, Stdio};
 
+        validate_command_input(program, args)?;
+
         let (resolved_program, resolved_args) = resolve_command_invocation(program, args);
         let mut cmd = Command::new(&resolved_program);
         cmd.args(resolved_args.iter().map(String::as_str));
@@ -220,6 +222,20 @@ impl SubprocessRuntime for OsSubprocessRuntime {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+fn validate_command_input(program: &str, args: &[&str]) -> Result<(), SubprocessError> {
+    if program.trim().is_empty() {
+        return Err(SubprocessError::new("program name must not be empty"));
+    }
+    if program.contains('\0') {
+        return Err(SubprocessError::new("program name must not contain NUL bytes"));
+    }
+    if args.iter().any(|arg| arg.contains('\0')) {
+        return Err(SubprocessError::new("arguments must not contain NUL bytes"));
+    }
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn resolve_command_invocation(program: &str, args: &[&str]) -> (String, Vec<String>) {
     #[cfg(windows)]
     {
@@ -227,8 +243,25 @@ fn resolve_command_invocation(program: &str, args: &[&str]) -> (String, Vec<Stri
             resolve_windows_program(program).unwrap_or_else(|| program.to_string());
 
         if windows_requires_cmd_shell(&resolved_program) {
-            let mut shell_args = vec!["/C".to_string(), resolved_program];
-            shell_args.extend(args.iter().map(|arg| (*arg).to_string()));
+            let command_line = std::iter::once(resolved_program.as_str())
+                .chain(args.iter().copied())
+                .map(windows_quote_for_cmd)
+                .collect::<Vec<_>>()
+                .join(" ");
+            // /D  – disable AutoRun registry commands.
+            // /V:OFF – disable delayed expansion so that !VAR! patterns in
+            //          arguments are not expanded even when the caller's
+            //          environment has delayed expansion enabled.
+            // /S  – strip the outer quotes from the /C argument and re-parse
+            //        the remainder, which lets each individual token retain its
+            //        own double-quoting.
+            let shell_args = vec![
+                "/D".to_string(),
+                "/V:OFF".to_string(),
+                "/S".to_string(),
+                "/C".to_string(),
+                command_line,
+            ];
             return ("cmd.exe".to_string(), shell_args);
         }
 
@@ -239,6 +272,56 @@ fn resolve_command_invocation(program: &str, args: &[&str]) -> (String, Vec<Stri
     {
         (program.to_string(), args.iter().map(|arg| (*arg).to_string()).collect())
     }
+}
+
+/// Quote a single argument for use inside a `cmd.exe /V:OFF /S /C "..."` command line.
+///
+/// ## cmd.exe quoting rules inside double-quoted regions
+///
+/// Once cmd.exe sees an opening `"` it enters a quoted region.  Inside that region:
+///
+/// - Shell metacharacters (`&`, `|`, `<`, `>`, `(`, `)`) are **literal** — no
+///   `^` prefix is needed or correct.  Inserting `^` before them would deliver
+///   a spurious `^` character to the program for every argument that legitimately
+///   contains one of these characters.
+/// - `^` itself is **literal** inside a quoted region.  It is NOT an escape prefix,
+///   so it must not be doubled.  The original PR doubled it, which corrupted any
+///   argument containing a `^` (e.g. `C:\tools\my^profile.txt` became
+///   `C:\tools\my^^profile.txt`).
+/// - `%` is still processed by the variable-substitution pass, which runs before
+///   the shell-metachar pass and is not suppressed by quoting.  Double it (`%%`)
+///   to produce a literal `%`.
+/// - `!` would be processed by the delayed-expansion pass when `/V:ON` is in
+///   effect.  We invoke cmd.exe with `/V:OFF` to suppress this entirely, so `!`
+///   needs no escaping here.
+/// - To embed a literal `"` inside a double-quoted cmd.exe token, use `""` (the
+///   cmd.exe shell convention).  The `\"` form is for `CommandLineToArgvW` (the
+///   Win32 C-runtime argv parser) which is a **different** parser from the
+///   cmd.exe shell.  Using `\"` in cmd.exe context causes the shell to treat the
+///   `\` as a literal character and the `"` as ending the current quoted region,
+///   which breaks argument boundaries and can enable injection.
+#[cfg(all(not(target_arch = "wasm32"), windows))]
+fn windows_quote_for_cmd(arg: &str) -> String {
+    let mut escaped = String::with_capacity(arg.len() + 2);
+    escaped.push('"');
+    for ch in arg.chars() {
+        match ch {
+            // % must be doubled: %VAR% expansion runs before the shell-metachar
+            // pass and is not suppressed by double-quoting.
+            '%' => escaped.push_str("%%"),
+            // Use "" (doubled quote) to represent a literal " inside a
+            // cmd.exe double-quoted token.  This is the cmd.exe shell convention.
+            // The \" form (CommandLineToArgvW convention) would end the quoted
+            // region from cmd.exe's perspective and enable injection.
+            '"' => escaped.push_str("\"\""),
+            // All other characters — including shell metacharacters (&, |, <,
+            // >, (, )) and the caret (^) — are already literal inside a
+            // double-quoted cmd.exe token.  No escaping is required or correct.
+            _ => escaped.push(ch),
+        }
+    }
+    escaped.push('"');
+    escaped
 }
 
 #[cfg(all(not(target_arch = "wasm32"), windows))]
@@ -486,6 +569,32 @@ mod tests {
         assert!(result.is_err());
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn test_os_runtime_rejects_empty_program_name() {
+        let runtime = OsSubprocessRuntime::new();
+        let result = runtime.run_command("   ", &["--version"], None);
+        assert!(result.is_err());
+        let err = result.expect_err("empty program name must be rejected");
+        assert!(err.message.contains("must not be empty"));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn test_os_runtime_rejects_nul_bytes_in_program_or_args() {
+        let runtime = OsSubprocessRuntime::new();
+
+        let bad_program = runtime.run_command("perl\0", &["--version"], None);
+        assert!(bad_program.is_err());
+        let bad_program_err = bad_program.expect_err("NUL in program must be rejected");
+        assert!(bad_program_err.message.contains("NUL"));
+
+        let bad_arg = runtime.run_command("perl", &["-e", "print \"ok\"\0"], None);
+        assert!(bad_arg.is_err());
+        let bad_arg_err = bad_arg.expect_err("NUL in arg must be rejected");
+        assert!(bad_arg_err.message.contains("NUL"));
+    }
+
     #[cfg(windows)]
     #[test]
     fn test_resolve_command_invocation_uses_cmd_for_batch_wrappers() {
@@ -496,11 +605,88 @@ mod tests {
         assert_eq!(
             args,
             vec![
+                "/D".to_string(),
+                "/V:OFF".to_string(),
+                "/S".to_string(),
                 "/C".to_string(),
-                r"C:\Strawberry\perl\bin\perltidy.bat".to_string(),
-                "-st".to_string(),
-                "-se".to_string(),
+                "\"C:\\Strawberry\\perl\\bin\\perltidy.bat\" \"-st\" \"-se\"".to_string(),
             ]
+        );
+    }
+
+    /// Verify that cmd.exe shell metacharacters are handled correctly inside
+    /// double-quoted tokens.
+    ///
+    /// Inside a cmd.exe double-quoted region, shell metacharacters (`&`, `|`,
+    /// `<`, `>`, `(`, `)`) are already literal — no `^` prefix is used.
+    /// `^` is also literal and must not be doubled.
+    /// `%` is doubled to prevent `%VAR%` expansion.
+    /// `"` is doubled (`""`) per the cmd.exe shell convention.
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_quote_for_cmd_metacharacters_are_literal_inside_quotes() {
+        // Metacharacters & | < > are passed through literally — no ^ prefix.
+        // ^ is literal — must NOT be doubled.
+        // % is doubled to prevent %VAR% expansion.
+        // " is doubled (cmd.exe "" convention), not backslash-escaped.
+        let quoted = windows_quote_for_cmd(r#"profile&name|1>%TEMP%^"x""#);
+        assert_eq!(quoted, r#""profile&name|1>%%TEMP%%^""x""""#);
+    }
+
+    /// Verify that a caret in an argument is not doubled.
+    ///
+    /// The original PR erroneously included `'^'` in the metacharacter match
+    /// arm, which caused `windows_quote_for_cmd("foo^bar")` to return
+    /// `"foo^^bar"` — delivering two carets to the program.  Inside a
+    /// cmd.exe double-quoted region `^` is literal and must not be escaped.
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_quote_for_cmd_caret_not_doubled() {
+        let quoted = windows_quote_for_cmd(r"foo^bar");
+        assert_eq!(quoted, r#""foo^bar""#);
+    }
+
+    /// Verify that an embedded double-quote uses the cmd.exe `""` convention.
+    ///
+    /// The original PR used `\"` which is the `CommandLineToArgvW` / C-runtime
+    /// convention.  In cmd.exe context the backslash is literal and the `"`
+    /// terminates the quoted region, breaking argument boundaries.
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_quote_for_cmd_embedded_quote_uses_doubling() {
+        let quoted = windows_quote_for_cmd(r#"arg"with"quotes"#);
+        // cmd.exe convention: "" represents a literal " inside a quoted token.
+        assert_eq!(quoted, r#""arg""with""quotes""#);
+    }
+
+    /// Verify that an attacker-controlled injection attempt is rendered inert.
+    ///
+    /// An arg like `&calc.exe` must not break out of the quoted token.
+    /// After quoting, cmd.exe sees `&` as a literal character inside the
+    /// double-quoted region.
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_quote_for_cmd_injection_attempt_is_inert() {
+        let quoted = windows_quote_for_cmd("&calc.exe");
+        assert_eq!(quoted, "\"&calc.exe\"");
+    }
+
+    /// Verify that /V:OFF is present in the cmd.exe argument list.
+    ///
+    /// Without /V:OFF, cmd.exe with delayed expansion enabled would expand
+    /// `!VAR!` patterns inside arguments, which is an information-disclosure
+    /// vector and, in edge cases, an injection vector.
+    #[cfg(windows)]
+    #[test]
+    fn test_resolve_command_invocation_includes_v_off_flag() {
+        let (program, args) =
+            resolve_command_invocation(r"C:\tools\perlcritic.bat", &["--profile=!TEMP!"]);
+
+        assert_eq!(program, "cmd.exe");
+        assert!(
+            args.contains(&"/V:OFF".to_string()),
+            "/V:OFF must be present to disable delayed expansion; got: {:?}",
+            args
         );
     }
 

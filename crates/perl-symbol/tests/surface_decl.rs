@@ -503,6 +503,108 @@ fn test_class_produces_symbol_decl() {
     assert!(d.anchor_span.is_none());
 }
 
+#[test]
+fn test_format_produces_symbol_decl() {
+    // format REPORT =
+    // .
+    let format_node = Node::new(
+        NodeKind::Format { name: "REPORT".to_string(), body: "@<<<".to_string() },
+        loc(0, 18),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![format_node] }, loc(0, 18));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    let d = &decls[0];
+    assert_eq!(d.kind, SymbolKind::Format);
+    assert_eq!(d.name, "REPORT");
+    assert_eq!(d.qualified_name, "REPORT");
+    assert_eq!(d.full_span, (0, 18));
+    assert!(d.anchor_span.is_none());
+}
+
+#[test]
+fn test_labeled_statement_produces_label_decl_and_walks_inner_statement() -> Result<(), String> {
+    // LOOP: sub inner { }
+    let sub_body = Node::new(NodeKind::Block { statements: vec![] }, loc(15, 18));
+    let sub_node = Node::new(
+        NodeKind::Subroutine {
+            name: Some("inner".to_string()),
+            name_span: Some(loc(10, 15)),
+            prototype: None,
+            signature: None,
+            attributes: vec![],
+            body: Box::new(sub_body),
+        },
+        loc(6, 18),
+    );
+    let labeled = Node::new(
+        NodeKind::LabeledStatement { label: "LOOP".to_string(), statement: Box::new(sub_node) },
+        loc(0, 18),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![labeled] }, loc(0, 18));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 2);
+
+    let label_decl =
+        decls.iter().find(|d| d.kind == SymbolKind::Label).ok_or("expected label decl")?;
+    assert_eq!(label_decl.name, "LOOP");
+    assert_eq!(label_decl.qualified_name, "LOOP");
+    assert!(label_decl.anchor_span.is_none());
+
+    let sub_decl = decls
+        .iter()
+        .find(|d| d.kind == SymbolKind::Subroutine)
+        .ok_or("expected inner subroutine decl")?;
+    assert_eq!(sub_decl.name, "inner");
+    Ok(())
+}
+
+#[test]
+fn test_label_inside_package_is_not_package_qualified() -> Result<(), String> {
+    // Perl labels are lexically scoped, not stored in the package stash.
+    // `goto LOOP` never resolves as `Foo::LOOP`.
+    // package Foo; LOOP: while (1) { last LOOP; }
+    let body = Node::new(NodeKind::Block { statements: vec![] }, loc(30, 32));
+    let while_node = Node::new(
+        NodeKind::While {
+            condition: Box::new(Node::new(
+                NodeKind::Number { value: "1".to_string() },
+                loc(25, 26),
+            )),
+            body: Box::new(body),
+            continue_block: None,
+        },
+        loc(20, 32),
+    );
+    let labeled = Node::new(
+        NodeKind::LabeledStatement { label: "LOOP".to_string(), statement: Box::new(while_node) },
+        loc(14, 32),
+    );
+    let pkg_node = Node::new(
+        NodeKind::Package { name: "Foo".to_string(), name_span: loc(8, 11), block: None },
+        loc(0, 14),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![pkg_node, labeled] }, loc(0, 32));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    let label_decl =
+        decls.iter().find(|d| d.kind == SymbolKind::Label).ok_or("expected label decl")?;
+    assert_eq!(label_decl.name, "LOOP");
+    // Labels are lexically scoped — qualified_name must NOT be "Foo::LOOP"
+    assert_eq!(label_decl.qualified_name, "LOOP", "label must not be package-qualified");
+    assert_eq!(
+        label_decl.container.as_deref(),
+        Some("Foo"),
+        "container should reflect enclosing package"
+    );
+    Ok(())
+}
+
 // ── Container tracking ────────────────────────────────────────────────────────
 
 #[test]

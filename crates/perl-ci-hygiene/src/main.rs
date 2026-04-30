@@ -1,7 +1,7 @@
-mod version_sync;
+use perl_ci_hygiene::version_sync;
 
 use chrono::Utc;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use color_eyre::eyre::{Context, Result};
 use regex::Regex;
 use serde_json::{Value, json};
@@ -18,170 +18,16 @@ use std::time::{Duration, Instant};
 use toml::Value as TomlValue;
 use walkdir::{DirEntry, WalkDir};
 
+mod cli;
+mod commands;
+
+use crate::cli::{Cli, CliCommand};
+
 const RED: &str = "\x1b[0;31m";
 const GREEN: &str = "\x1b[0;32m";
 const YELLOW: &str = "\x1b[0;33m";
 const BLUE: &str = "\x1b[0;34m";
 const NC: &str = "\x1b[0m";
-
-#[derive(Parser)]
-#[command(
-    name = "perl-ci-hygiene",
-    version = "0.10.0",
-    about = "Native Rust versions of CI scripts"
-)]
-struct Cli {
-    #[command(subcommand)]
-    command: CliCommand,
-}
-
-#[derive(Subcommand)]
-enum CliCommand {
-    /// Benchmark perl-parser against tree-sitter-perl-c for standard cases.
-    RunParserComparison,
-
-    /// Print and apply environment caps for local safety checks.
-    Preflight,
-
-    /// Run cargo test with concurrency caps for Rust tasks.
-    TestCapped {
-        #[arg(trailing_var_arg = true)]
-        cargo_args: Vec<String>,
-    },
-
-    /// Run E2E test subset with a shared lock to cap parallel invocations.
-    E2eGate {
-        #[arg(trailing_var_arg = true)]
-        cargo_args: Vec<String>,
-    },
-
-    /// Run preflight checks then E2E lock-gated cargo test.
-    TestE2ECapped {
-        #[arg(trailing_var_arg = true)]
-        cargo_args: Vec<String>,
-    },
-
-    /// Verify stacker behavior in release/debug modes.
-    VerifyStacker,
-
-    /// Run iterative parser validation and related tests/benchmarks.
-    TestIterativeParser,
-    /// Compare bundled parser artifacts between v2 parser modules.
-    CheckV2BundleSync,
-    /// Compare benchmark outputs with the Python benchmark comparator.
-    /// Compare benchmark outputs with the Python benchmark comparator.
-    CompareBenchmarks {
-        #[arg(trailing_var_arg = true)]
-        args: Vec<String>,
-    },
-    /// Compare modern, C legacy, and parser outputs across sample snippets.
-    RunComparison,
-    /// Run quick parser benchmarks across preselected fixture files.
-    QuickBench,
-    /// Run pure-Rust parser benchmark across generated fixture sizes.
-    SimpleBench,
-    /// Profile stack-overflow behavior in debug-mode parser tests.
-    ProfileStackOverflow,
-    /// Build cargo package --dry-run for workspace crates with dynamic local patch config.
-    CargoPackageWorkspaceDryRun {
-        #[arg(trailing_var_arg = true)]
-        crates: Vec<String>,
-    },
-    /// Run perl-parser tests with feature-catalog override fixtures.
-    TestWithOverride,
-    /// Emit a single initialize request against perl-lsp stdin.
-    SimpleLspTest,
-    /// Check workspace version sync across every tracked site.
-    ///
-    /// This walks Cargo.toml (workspace + per-crate), features.toml, the
-    /// VSCode extension manifest, and the doc surface (README, CLAUDE.md,
-    /// ROADMAP) and fails if any site drifts from the canonical workspace
-    /// version.
-    CheckVersionSync,
-
-    /// Bump the workspace version across every tracked site.
-    ///
-    /// Non-interactive and idempotent: running it twice with the same
-    /// version produces no diff on the second run. Pair it with
-    /// `check-version-sync` in CI to catch drift at merge time.
-    BumpVersion {
-        /// New version to set (X.Y.Z format).
-        version: String,
-    },
-    /// Run edge case test suites, with optional benchmark/coverage submodes.
-    TestEdgeCases {
-        /// Run edge case benchmark suite.
-        #[arg(long)]
-        bench: bool,
-        /// Generate tarpaulin coverage report.
-        #[arg(long)]
-        coverage: bool,
-    },
-    /// Generate lightweight receipt artifacts without running tests.
-    QuickReceipts,
-    /// Run LSP cancellation tests via pre-built test binary.
-    TestLspCancellation,
-
-    /// Generate `badges.md` from canonical badge links.
-    GenerateBadges,
-
-    /// Install local development git hooks.
-    InstallGithooks,
-
-    /// Check docs for machine-specific paths.
-    CheckDocPaths {
-        /// Directory to scan (defaults to `docs`).
-        docs_dir: Option<String>,
-    },
-
-    /// Enforce linked-only TODO/FIXME markers policy.
-    CheckTodos {
-        /// Print the full list of matching lines instead of enforcing a baseline.
-        #[arg(long)]
-        list: bool,
-    },
-
-    /// Prevent fatal constructs in production crates.
-    ForbidFatalConstructs {
-        /// Print summary when checks pass.
-        #[arg(short, long)]
-        verbose: bool,
-    },
-
-    /// Track ignored tests and enforce gate policy.
-    IgnoredTestCount {
-        /// Write current counts back to baseline.
-        #[arg(long)]
-        update: bool,
-        /// CI gate mode: fail when ignored count increases.
-        #[arg(long)]
-        check: bool,
-    },
-    /// Scan docs for documentation hygiene problems.
-    CheckDocHygiene,
-    /// Enforce ignored test cap and trend baseline.
-    CheckIgnored,
-    /// Run local development quality checks mirroring CI.
-    CheckLocal,
-    /// Count missing_docs warnings and enforce baseline ratchet.
-    CheckMissingDocs,
-    /// Enforce no lock().unwrap() and similar panic-prone calls.
-    CheckP0Locks,
-    /// Enforce parse-error baseline against corpus audit report.
-    CheckParseErrors,
-    /// Ensure parser feature matrix stays in sync with latest audit report.
-    CheckParserMatrix,
-    /// Enforce production unsafe syntax budget.
-    CheckUnsafeProd,
-    /// Enforce module-scoped unwrap budgets.
-    CheckUnwrapsModules,
-    /// Enforce production unwrap/panic-family budgets.
-    CheckUnwrapsProd,
-    /// Execute the quick CI mirror.
-    QuickCheck,
-    /// Run heredoc integration tests, using xtask when available.
-    TestHeredocs,
-}
 
 fn main() -> std::process::ExitCode {
     if let Err(err) = color_eyre::install() {
@@ -867,6 +713,10 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
         "  c-grammar  : bench_parser_c      (tree-sitter C grammar binding, requires libclang)"
     );
     println!();
+    println!("Building benchmark binaries...");
+    build_quick_bench_binaries(repo_root)?;
+    println!("Using median of {QUICK_BENCH_SAMPLES} direct binary runs per parser/file.");
+    println!();
 
     let files = vec![
         repo_root.join("test_corpus/simple.pl"),
@@ -1172,27 +1022,70 @@ const FACADE_BENCH_CRATE: &str = "tree-sitter-perl-rs";
 /// `three_way_bench_all_binaries_distinct`.
 const FACADE_BENCH_BIN: &str = "bench_facade";
 
-/// Run the v3 native Rust parser bench binary against `file`.
+/// Number of timed samples collected per parser/file pair in quick-bench mode.
+const QUICK_BENCH_SAMPLES: usize = 3;
+
+/// Build the quick-bench parser binaries ahead of timing.
 ///
-/// Returns wall-clock duration in microseconds, or `None` if the bench
-/// binary exits non-zero. Note that the elapsed time includes the
-/// `cargo run` startup overhead; both [`run_rust_bench_us`] and
-/// [`run_c_bench_us`] share that overhead so the comparison stays fair.
-fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
+/// The C grammar bench is optional because it depends on libclang. Failures
+/// while building that bench are treated as "N/A" at measurement time.
+fn build_quick_bench_binaries(repo_root: &Path) -> Result<()> {
+    command_status_strict(
+        repo_root,
+        "cargo",
+        &["build", "--quiet", "--release", "-p", RUST_BENCH_CRATE, "--bin", RUST_BENCH_BIN],
+        &[],
+    )?;
+    command_status_strict(
+        repo_root,
+        "cargo",
+        &["build", "--quiet", "--release", "-p", FACADE_BENCH_CRATE, "--bin", FACADE_BENCH_BIN],
+        &[],
+    )?;
+    // Optional dependency path: allow failure and report as N/A during run.
+    let _ = command_status(
+        repo_root,
+        "cargo",
+        &[
+            "build",
+            "--quiet",
+            "--release",
+            "--manifest-path",
+            C_BENCH_MANIFEST,
+            "--bin",
+            C_BENCH_BIN,
+            "--features",
+            "test-utils",
+        ],
+        &[],
+    )?;
+    Ok(())
+}
+
+/// Return the median duration in microseconds over `QUICK_BENCH_SAMPLES` runs.
+fn run_bench_samples_us(repo_root: &Path, command: &Path, file: &Path) -> Result<Option<f64>> {
+    let command_str = command.to_string_lossy().into_owned();
     let file_arg = file.to_string_lossy().into_owned();
-    let args = [
-        "run",
-        "--quiet",
-        "--release",
-        "-p",
-        RUST_BENCH_CRATE,
-        "--bin",
-        RUST_BENCH_BIN,
-        "--",
-        file_arg.as_str(),
-    ];
-    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
-    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+    let args = [file_arg.as_str()];
+    let mut samples = Vec::with_capacity(QUICK_BENCH_SAMPLES);
+    for _ in 0..QUICK_BENCH_SAMPLES {
+        let (status, elapsed) = command_timed_status(repo_root, &command_str, &args, &[])?;
+        if status != 0 {
+            return Ok(None);
+        }
+        samples.push(elapsed.as_micros() as f64);
+    }
+    if samples.is_empty() {
+        return Ok(None);
+    }
+    samples.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    Ok(samples.get(samples.len() / 2).copied())
+}
+
+/// Run the v3 native Rust parser bench binary against `file`.
+fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
+    let binary = repo_root.join("target").join("release").join(RUST_BENCH_BIN);
+    run_bench_samples_us(repo_root, &binary, file)
 }
 
 /// Run the legacy C tree-sitter parser bench binary against `file`.
@@ -1207,22 +1100,13 @@ fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
 /// libclang installed). Quick-bench treats `None` as N/A in the speedup
 /// column rather than failing the whole run.
 fn run_c_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
-    let file_arg = file.to_string_lossy().into_owned();
-    let args = [
-        "run",
-        "--quiet",
-        "--release",
-        "--manifest-path",
-        C_BENCH_MANIFEST,
-        "--bin",
-        C_BENCH_BIN,
-        "--features",
-        "test-utils",
-        "--",
-        file_arg.as_str(),
-    ];
-    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
-    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+    let binary = repo_root
+        .join("crates")
+        .join("tree-sitter-perl-c")
+        .join("target")
+        .join("release")
+        .join(C_BENCH_BIN);
+    run_bench_samples_us(repo_root, &binary, file)
 }
 
 /// Run the `tree-sitter-perl-rs` facade bench binary against `file`.
@@ -1231,20 +1115,8 @@ fn run_c_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
 /// `-p` rather than `--manifest-path`. Returns wall-clock duration in
 /// microseconds, or `None` if the bench binary exits non-zero.
 fn run_facade_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
-    let file_arg = file.to_string_lossy().into_owned();
-    let args = [
-        "run",
-        "--quiet",
-        "--release",
-        "-p",
-        FACADE_BENCH_CRATE,
-        "--bin",
-        FACADE_BENCH_BIN,
-        "--",
-        file_arg.as_str(),
-    ];
-    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
-    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+    let binary = repo_root.join("target").join("release").join(FACADE_BENCH_BIN);
+    run_bench_samples_us(repo_root, &binary, file)
 }
 
 fn timed_file_run_ms(repo_root: &Path, parser: &Path, file: &Path) -> Result<f64> {
@@ -3155,9 +3027,12 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
-fn is_allowlisted_prod_panic_hit(rel_path: &str, line: &str) -> bool {
-    normalize_path_for_match(rel_path) == "crates/perl-heredoc-anti-patterns/src/lib.rs"
-        && line.contains("regex failed to compile")
+fn is_allowlisted_prod_panic_hit(_rel_path: &str, line: &str) -> bool {
+    // Static LazyLock<Regex> initializers that use unreachable!() for known-good patterns
+    // are exempt regardless of which file they live in.  Two message conventions:
+    //   • "... regex failed to compile" — used in heredoc anti-pattern initializers
+    //   • "... is a known-good static pattern ..." — used in other static regex initializers
+    line.contains("regex failed to compile") || line.contains("known-good static pattern")
 }
 
 fn cmd_quick_check(repo_root: &Path) -> Result<i32> {
@@ -3286,80 +3161,17 @@ fn cmd_test_heredocs(repo_root: &Path) -> Result<i32> {
 }
 
 fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> {
-    let docs_dir = docs_dir.unwrap_or("docs");
-    let docs_path = if Path::new(docs_dir).is_absolute() {
-        PathBuf::from(docs_dir)
-    } else {
-        repo_root.join(docs_dir)
-    };
-    let home_user_path = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
-    let users_name_path = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
-
-    let mut hard_failures = Vec::new();
-    let mut warnings = Vec::new();
-
-    if !docs_path.is_dir() {
-        return Err(color_eyre::eyre::eyre!("Docs directory not found: {}", docs_path.display()));
-    }
-
-    for entry in walk_entries(&docs_path) {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let path = entry.path();
-        if !is_text_file(path) {
-            continue;
-        }
-        let rel = display_path(repo_root, path);
-        let contents = fs::read_to_string(path)?;
-        for (line_no, line) in contents.lines().enumerate() {
-            let number = line_no + 1;
-            if has_machine_specific_home_path(line, &home_user_path) {
-                hard_failures.push(format!("{rel}:{number}:{line}"));
-            }
-            if has_machine_specific_users_path(line, &users_name_path) {
-                warnings.push(format!("{rel}:{number}:{line}"));
-            }
-        }
-    }
-
-    if !warnings.is_empty() {
-        println!("⚠️  Found macOS user paths that may be machine-specific");
-        for hit in warnings {
-            println!("{hit}");
-        }
-        println!();
-    }
-
-    if hard_failures.is_empty() {
-        println!("✅ No machine-specific paths found in documentation");
-        return Ok(0);
-    }
-
-    println!("{RED}❌ Found machine-specific /home/ paths (not /home/user examples){NC}");
-    for hit in hard_failures {
-        println!("{hit}");
-    }
-    println!();
-    println!("Fix: Replace absolute paths with repo-relative paths or generic examples");
-    println!("  - Use relative paths: docs/file.md instead of /home/.../docs/file.md");
-    println!("  - Use generic examples: /home/user/project for user-facing docs");
-    Ok(1)
+    commands::doc_paths::check_doc_paths(repo_root, docs_dir)
 }
 
+#[cfg(test)]
 fn has_machine_specific_home_path(line: &str, home_user_path: &Regex) -> bool {
-    home_user_path.captures_iter(line).any(|captures| {
-        captures.get(1).is_some_and(|name| !name.as_str().eq_ignore_ascii_case("user"))
-    })
+    commands::doc_paths::has_machine_specific_home_path(line, home_user_path)
 }
 
+#[cfg(test)]
 fn has_machine_specific_users_path(line: &str, users_name_path: &Regex) -> bool {
-    users_name_path.captures_iter(line).any(|captures| {
-        captures.get(1).is_some_and(|name| {
-            let value = name.as_str();
-            !(value.eq_ignore_ascii_case("name") || value.eq_ignore_ascii_case("user"))
-        })
-    })
+    commands::doc_paths::has_machine_specific_users_path(line, users_name_path)
 }
 
 fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
@@ -5085,23 +4897,35 @@ mod tests {
 
     #[test]
     fn allowlisted_prod_panic_hit_matches_heredoc_regex_initializers() {
+        // Line content is the discriminator — path no longer matters after the
+        // heredoc anti-patterns module moved into perl-parser.
+        assert!(is_allowlisted_prod_panic_hit(
+            "crates/perl-parser/src/heredoc_anti_patterns.rs",
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+        ));
+        assert!(is_allowlisted_prod_panic_hit(
+            r"crates\perl-parser\src\heredoc_anti_patterns.rs",
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+        ));
+        // Old path still matches (line content drives the decision)
         assert!(is_allowlisted_prod_panic_hit(
             "crates/perl-heredoc-anti-patterns/src/lib.rs",
             r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
         ));
+        // "known-good static pattern" convention used in other LazyLock<Regex> initializers
         assert!(is_allowlisted_prod_panic_hit(
-            r"crates\perl-heredoc-anti-patterns\src\lib.rs",
-            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+            "crates/perl-lsp-rs/src/runtime/language/code_actions.rs",
+            r#"        Err(err) => unreachable!("GLOBAL_VAR_ASSIGNMENT_RE is a known-good static pattern: {err}"),"#
         ));
+        // Bare unreachable!() without a qualifying message is NOT allowlisted
         assert!(!is_allowlisted_prod_panic_hit(
             "crates/perl-lsp-diagnostics/src/lints/ffi_checklib.rs",
             r#"                        _ => unreachable!(),"#
         ));
     }
 
-    // Regression guard for issue #4245: is_allowlisted_prod_panic_hit() must pass
-    // all 7 unreachable!() calls in perl-heredoc-anti-patterns/src/lib.rs under
-    // both forward-slash and backslash path separators (Windows vs Unix).
+    // Regression guard for issue #4245: all unreachable!() calls in the heredoc
+    // anti-patterns module must be allowlisted regardless of which file they live in.
     #[test]
     fn allowlisted_prod_panic_hit_all_seven_patterns_both_separators() {
         let all_seven = [
@@ -5113,8 +4937,8 @@ mod tests {
             r#"        Err(_) => unreachable!("EVAL_HEREDOC_PATTERN regex failed to compile"),"#,
             r#"    Err(_) => unreachable!("TIE_PATTERN regex failed to compile"),"#,
         ];
-        let forward = "crates/perl-heredoc-anti-patterns/src/lib.rs";
-        let backward = r"crates\perl-heredoc-anti-patterns\src\lib.rs";
+        let forward = "crates/perl-parser/src/heredoc_anti_patterns.rs";
+        let backward = r"crates\perl-parser\src\heredoc_anti_patterns.rs";
         for line in &all_seven {
             assert!(
                 is_allowlisted_prod_panic_hit(forward, line),

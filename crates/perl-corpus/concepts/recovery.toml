@@ -1,0 +1,71 @@
+[[concept]]
+id = "parser.recovery.missing_closing_brace"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["error-recovery"] }
+fixtures = { floors = ["test_corpus/error_recovery.pl", "test_corpus/edge_cases/error_recovery_edge_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "recover" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.recovery.missing_paren"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["error-recovery"] }
+fixtures = { floors = ["test_corpus/error_recovery.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "recover" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.recovery.unclosed_quote"
+status = "seed"
+scope = { crates = ["perl-parser", "perl-lexer"], risk_tags = ["error-recovery", "quote-like"] }
+fixtures = { floors = ["test_corpus/error_recovery.pl", "test_corpus/string_ops_edge_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "recover" }
+snapshots = { tokens = true, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.recovery.malformed_signature"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["error-recovery", "signature"] }
+fixtures = { floors = ["test_corpus/signatures_prototypes.pl", "test_corpus/signatures_parameters_production_enhanced.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "recover" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.recovery.bad_ternary_colon"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["error-recovery", "expression"] }
+fixtures = { floors = ["test_corpus/ternary_expressions_comprehensive.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "recover" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = false, release = false }
+
+[[concept]]
+id = "parser.recovery.unterminated_heredoc"
+status = "seed"
+scope = { crates = ["perl-parser", "perl-lexer"], risk_tags = ["error-recovery", "heredoc"] }
+fixtures = { floors = ["test_corpus/heredoc_depth.pl", "test_corpus/edge_cases/error_recovery_edge_cases.pl"], variants = [] }
+expect = { panic = false, timeout = true, mode = "recover" }
+snapshots = { tokens = true, ast = true, spans = true }
+run = { pr = false, nightly = true, release = false }
+
+[[concept]]
+id = "parser.recovery.missing_format_dot"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["error-recovery", "format"] }
+fixtures = { floors = ["test_corpus/format_statements.pl", "test_corpus/format_comprehensive.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "recover" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.recovery.invalid_goto_target"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["error-recovery", "control-flow"] }
+fixtures = { floors = ["test_corpus/goto_statements_comprehensive.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "recover" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = true, release = false }

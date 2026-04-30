@@ -577,7 +577,7 @@ module.exports = grammar({
       const table = [
         [prec.right, binop.nonassoc, choice('..', '...'), TERMPREC.DOTDOT], // _DOTDOT
         [prec.right, binop, '**', TERMPREC.POWOP], // _POWOP
-        [prec.left, binop, choice('||', '//', '^^'), TERMPREC.OROR], // _OROR_DORDOR
+        [prec.left, binop, choice('||', '//'), TERMPREC.OROR], // _OROR_DORDOR
         [prec.left, binop, '&&', TERMPREC.ANDAND], // _ANDAND
         [prec.left, binop, choice('|', '^', '|.', '^.'), TERMPREC.BITOROP], // _BITORDOP
         [prec.left, binop, choice('&', '&.'), TERMPREC.BITANDOP], // _BITANDOP
@@ -598,7 +598,7 @@ module.exports = grammar({
     // perl.y calls this `termeqop`
     equality_expression: $ =>
       choice(
-        prec.left(TERMPREC.CHEQOP, binop(choice('==', '!=', 'eq', '===', 'equ', 'eqr', 'ne'), $._term)), // _CHEQOP
+        prec.left(TERMPREC.CHEQOP, binop(choice('==', '!=', 'eq', 'ne'), $._term)), // _CHEQOP
         prec.right(TERMPREC.CHEQOP, binop.nonassoc($, choice('<=>', 'cmp', '~~'), $._term)), // _NCEQOP
       ),
 

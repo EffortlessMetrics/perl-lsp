@@ -27,6 +27,22 @@ Breaking changes will follow semver.
 - The crate does not expose tree-sitter query helpers — use the
   `tree-sitter` crate directly with the `language()` return value.
 
+## Snapshot Governance
+
+The vendored C snapshot provenance is tracked in
+[`UPSTREAM_SNAPSHOT.md`](UPSTREAM_SNAPSHOT.md).
+
+That file is the canonical maintenance contract for:
+
+- upstream source reference
+- generator version pinning
+- local refresh procedure
+- required refresh validation checks (build, tests, query conformance,
+  benchmark sanity)
+
+Grammar fixes belong upstream in tree-sitter-perl. This crate only vendors,
+validates, and exposes the snapshot through a stable Rust wrapper API.
+
 ## Planned Work
 
 ### Maintenance (ongoing)

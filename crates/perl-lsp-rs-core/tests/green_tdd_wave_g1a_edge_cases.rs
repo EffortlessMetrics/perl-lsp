@@ -144,6 +144,7 @@ fn test_file_completion_uses_completion_item_types() -> Result<(), Box<dyn std::
         additional_edits: Vec::new(),
         text_edit_range: None,
         commit_characters: None,
+        label_details: None,
     };
     Ok(())
 }
@@ -200,6 +201,7 @@ fn test_completion_item_dedup_single() -> Result<(), Box<dyn std::error::Error>>
         additional_edits: Vec::new(),
         text_edit_range: None,
         commit_characters: None,
+        label_details: None,
     };
     let result = deduplicate_and_sort(vec![item.clone()]);
     assert_eq!(result.len(), 1);
@@ -225,6 +227,7 @@ fn test_completion_item_dedup_removes_duplicates() -> Result<(), Box<dyn std::er
         additional_edits: Vec::new(),
         text_edit_range: None,
         commit_characters: None,
+        label_details: None,
     };
 
     let items = vec![make("foo"), make("foo"), make("bar"), make("foo")];
@@ -251,6 +254,7 @@ fn test_completion_item_dedup_sorts_alphabetically() -> Result<(), Box<dyn std::
         additional_edits: Vec::new(),
         text_edit_range: None,
         commit_characters: None,
+        label_details: None,
     };
 
     let items = vec![make("zebra"), make("apple"), make("middle")];
