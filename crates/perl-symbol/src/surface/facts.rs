@@ -1,4 +1,5 @@
 use crate::surface::decl::SymbolDecl;
+use crate::surface::r#ref::{SymbolRef, SymbolRefKind};
 use crate::types::SymbolKind;
 use perl_semantic_facts::{
     AnchorFact, AnchorId, Confidence, EdgeFact, EdgeId, EdgeKind, EntityFact, EntityId, EntityKind,
@@ -20,6 +21,18 @@ pub struct SymbolDeclSemanticFacts {
     pub entities: Vec<EntityFact>,
     pub defines_edges: Vec<EdgeFact>,
     pub unsupported: Vec<UnsupportedDeclFact>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct SymbolRefFactIds {
+    pub anchor_id: AnchorId,
+    pub occurrence_id: perl_semantic_facts::OccurrenceId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SymbolRefOccurrenceFacts {
+    pub anchors: Vec<AnchorFact>,
+    pub occurrences: Vec<perl_semantic_facts::OccurrenceFact>,
 }
 
 pub fn symbol_decls_to_semantic_facts(
@@ -158,6 +171,51 @@ fn stable_id(namespace: &str, name: &str, start: usize, end: usize) -> u64 {
         hash = hash.wrapping_mul(1099511628211);
     }
     hash
+}
+
+pub fn symbol_ref_to_occurrence_facts(
+    symbol_refs: &[SymbolRef],
+    file_id: FileId,
+) -> SymbolRefOccurrenceFacts {
+    let mut anchors = Vec::with_capacity(symbol_refs.len());
+    let mut occurrences = Vec::with_capacity(symbol_refs.len());
+
+    for symbol_ref in symbol_refs {
+        let anchor_span = symbol_ref.anchor_span.unwrap_or(symbol_ref.full_span);
+        let anchor_id =
+            AnchorId(stable_id("ref-anchor", &symbol_ref.qualified_name, anchor_span.0, anchor_span.1));
+        anchors.push(AnchorFact {
+            id: anchor_id,
+            file_id,
+            span_start_byte: anchor_span.0 as u32,
+            span_end_byte: anchor_span.1 as u32,
+            scope_id: None,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+
+        let occurrence_kind = match symbol_ref.kind {
+            SymbolRefKind::Variable(_) => perl_semantic_facts::OccurrenceKind::Reference,
+            SymbolRefKind::SubroutineCall => perl_semantic_facts::OccurrenceKind::Call,
+        };
+        let occurrence_id = perl_semantic_facts::OccurrenceId(stable_id(
+            "ref-occurrence",
+            &symbol_ref.qualified_name,
+            symbol_ref.full_span.0,
+            symbol_ref.full_span.1,
+        ));
+        occurrences.push(perl_semantic_facts::OccurrenceFact {
+            id: occurrence_id,
+            kind: occurrence_kind,
+            entity_id: None,
+            anchor_id,
+            scope_id: None,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+    }
+
+    SymbolRefOccurrenceFacts { anchors, occurrences }
 }
 
 #[cfg(test)]
@@ -386,6 +444,40 @@ mod tests {
             d_edge.from_entity_id, c_entity.id,
             "Defines edge for A::B::C::D must come FROM A::B::C"
         );
+    }
+
+    #[test]
+    fn symbol_ref_adapter_emits_occurrence_and_anchor_facts() {
+        let refs = vec![
+            SymbolRef {
+                kind: SymbolRefKind::Variable(VarKind::Scalar),
+                name: "x".to_string(),
+                qualified_name: "x".to_string(),
+                sigil: Some("$".to_string()),
+                package_qualifier: None,
+                full_span: (3, 5),
+                anchor_span: Some((3, 5)),
+            },
+            SymbolRef {
+                kind: SymbolRefKind::SubroutineCall,
+                name: "run".to_string(),
+                qualified_name: "Pkg::run".to_string(),
+                sigil: None,
+                package_qualifier: Some("Pkg".to_string()),
+                full_span: (8, 17),
+                anchor_span: Some((8, 11)),
+            },
+        ];
+
+        let facts = symbol_ref_to_occurrence_facts(&refs, FileId(77));
+        assert_eq!(facts.anchors.len(), 2);
+        assert_eq!(facts.occurrences.len(), 2);
+        assert_eq!(
+            facts.occurrences[0].kind,
+            perl_semantic_facts::OccurrenceKind::Reference
+        );
+        assert_eq!(facts.occurrences[1].kind, perl_semantic_facts::OccurrenceKind::Call);
+        assert!(facts.occurrences.iter().all(|fact| fact.entity_id.is_none()));
     }
 
     #[test]
