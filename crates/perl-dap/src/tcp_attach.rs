@@ -151,9 +151,9 @@ impl TcpAttachSession {
     pub fn disconnect(&mut self) -> Result<()> {
         if let Some(stream) = self.stream.take() {
             stream.shutdown(std::net::Shutdown::Both)?;
-            *self.connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
             tracing::info!("Disconnected from Perl debugger");
         }
+        *self.connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
         Ok(())
     }
 
@@ -169,7 +169,12 @@ impl TcpAttachSession {
 
     /// Start reading messages from the debugger
     pub fn start_reader(&mut self) -> Result<()> {
-        let stream = self.stream.take().context("No stream available")?;
+        let stream = self
+            .stream
+            .as_ref()
+            .context("No stream available")?
+            .try_clone()
+            .context("Failed to clone TCP stream for reader thread")?;
 
         let connected = Arc::clone(&self.connected);
         let event_sender = self.event_sender.clone();
