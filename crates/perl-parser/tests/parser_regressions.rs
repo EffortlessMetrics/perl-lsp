@@ -318,6 +318,7 @@ fn probe_valid_constructs_for_clean_parse() {
         "my $x :shared = 1;",
         "our $x :shared;",
         "local $\" = ',';",
+        "my $guard = local $SIG{__WARN__} = sub { 1; };",
         "open my $fh, '<', $file or die $!;",
         "my $n = scalar @{ $arr_ref };",
         "my $n = $hash_ref->{k}->{nested};",
