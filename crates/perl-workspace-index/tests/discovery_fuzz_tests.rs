@@ -59,7 +59,9 @@ fn fuzz_randomized_workspace_layouts_preserve_discovery_invariants() -> TestResu
         ".cache/precompiled",
         ".git/hooks",
     ];
-    let extensions = ["pl", "pm", "t", "psgi", "xs", "txt", "md", "json", "rs"];
+    let extensions = [
+        "pl", "pm", "t", "psgi", "xs", "i", "tt", "tt2", "ep", "txt", "md", "json", "rs",
+    ];
 
     let mut rng = XorShift64::new(0xA11C_E55D_1234_5678);
 
@@ -68,12 +70,25 @@ fn fuzz_randomized_workspace_layouts_preserve_discovery_invariants() -> TestResu
         let root = tmp.path();
 
         let file_count = 8 + rng.next_usize(48);
+        let mut expected_perl_like_non_skipped = 0usize;
+
         for file_idx in 0..file_count {
             let directory = directories[rng.next_usize(directories.len())];
             let extension = extensions[rng.next_usize(extensions.len())];
             let suffix = rng.next_usize(10_000);
             let relative = format!("{directory}/f_{case_idx}_{file_idx}_{suffix}.{extension}");
             create_file(root, &relative)?;
+
+            let path = root.join(&relative);
+            let is_skipped_dir = Path::new(&relative).components().any(|component| {
+                component.as_os_str() == "node_modules"
+                    || component.as_os_str() == "target"
+                    || component.as_os_str() == ".cache"
+                    || component.as_os_str() == ".git"
+            });
+            if !is_skipped_dir && is_perl_discovery_path(&path) {
+                expected_perl_like_non_skipped += 1;
+            }
         }
 
         let result = discover_perl_files(root);
@@ -84,6 +99,12 @@ fn fuzz_randomized_workspace_layouts_preserve_discovery_invariants() -> TestResu
             assert!(is_perl_discovery_path(path));
             assert!(seen.insert(path.clone()));
         }
+
+        assert_eq!(
+            result.files.len(),
+            expected_perl_like_non_skipped,
+            "mismatch for case index {case_idx}"
+        );
     }
 
     Ok(())
