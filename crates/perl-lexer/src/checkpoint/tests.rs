@@ -53,6 +53,47 @@ fn test_checkpoint_edit_start_boundary_no_change()
 }
 
 #[test]
+fn test_checkpoint_helpers_and_validity() {
+    let start = LexerCheckpoint::new();
+    assert!(start.is_at_start());
+    assert!(start.is_valid_for("abc"));
+
+    let at_two = LexerCheckpoint::at_position(2);
+    assert!(!at_two.is_at_start());
+    assert!(at_two.is_valid_for("abc"));
+    assert!(!LexerCheckpoint::at_position(4).is_valid_for("abc"));
+}
+
+#[test]
+fn test_checkpoint_edit_overlap_resets_state_fields() {
+    let mut cp = LexerCheckpoint::at_position(15);
+    cp.mode = LexerMode::ExpectOperator;
+    cp.delimiter_stack = vec!['{', '('];
+    cp.in_prototype = true;
+    cp.prototype_depth = 2;
+    cp.after_sub = true;
+    cp.after_arrow = true;
+    cp.hash_brace_depth = 3;
+    cp.after_var_subscript = true;
+    cp.paren_depth = 4;
+    cp.context = CheckpointContext::Regex { delimiter: '/', flags_position: Some(1) };
+
+    cp.apply_edit(10, 10, 3);
+
+    assert_eq!(cp.position, 10);
+    assert_eq!(cp.mode, LexerMode::ExpectTerm);
+    assert!(cp.delimiter_stack.is_empty());
+    assert!(!cp.in_prototype);
+    assert_eq!(cp.prototype_depth, 0);
+    assert!(!cp.after_sub);
+    assert!(!cp.after_arrow);
+    assert_eq!(cp.hash_brace_depth, 0);
+    assert!(!cp.after_var_subscript);
+    assert_eq!(cp.paren_depth, 0);
+    assert_eq!(cp.context, CheckpointContext::Normal);
+}
+
+#[test]
 fn test_checkpoint_cache() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let mut cache = CheckpointCache::new(3);
     cache.add(LexerCheckpoint::at_position(10));
