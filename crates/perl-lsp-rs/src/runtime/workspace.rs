@@ -78,10 +78,6 @@ fn is_permission_denied_error(e: &std::io::Error) -> bool {
 }
 
 #[cfg(feature = "workspace")]
-use progress::{
-    send_progress_begin, send_progress_create, send_progress_end, send_progress_report,
-};
-#[cfg(feature = "workspace")]
 use text_decode::read_text_with_encoding_fallback;
 
 /// RAII guard that clears the `indexing_in_progress` flag on drop.

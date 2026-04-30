@@ -459,6 +459,38 @@ impl LspHarness {
         )
     }
 
+    pub fn document_symbols(&mut self, uri: &str) -> Result<Value, String> {
+        self.request(
+            "textDocument/documentSymbol",
+            json!({
+                "textDocument": { "uri": uri }
+            }),
+        )
+    }
+
+    pub fn completion_at(&mut self, uri: &str, line: u32, character: u32) -> Result<Value, String> {
+        self.request(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "context": { "triggerKind": 1 }
+            }),
+        )
+    }
+
+    /// Open an untitled document at the harness's canonical untitled URI.
+    pub fn open_untitled(&mut self, text: &str) -> Result<(), String> {
+        self.open(Self::UNTITLED_URI, text)
+    }
+
+    /// Return the URI of the most recently `open_untitled`'d document.
+    pub fn doc_uri(&self) -> &'static str {
+        Self::UNTITLED_URI
+    }
+
+    const UNTITLED_URI: &'static str = "file:///untitled-test.pl";
+
     /// Resolve a deferred document link using `documentLink/resolve`.
     pub fn resolve_document_link(&mut self, link: Value) -> Result<Value, String> {
         self.request("documentLink/resolve", link)
@@ -777,6 +809,28 @@ impl LspHarness {
             let mut guard = self.output_buffer.lock();
             self.output_signal.wait_for(&mut guard, remaining.min(Duration::from_millis(50)));
         }
+    }
+
+    /// Wait for an ordered sequence of `$/progress` kinds for `token`, sharing the
+    /// same overall `timeout` budget across all kinds in the sequence.
+    pub fn wait_for_progress_sequence(
+        &mut self,
+        token: &str,
+        kinds: &[&str],
+        timeout: Duration,
+    ) -> Result<Vec<Value>, String> {
+        let start = Instant::now();
+        let mut found = Vec::with_capacity(kinds.len());
+        for kind in kinds {
+            let remaining = timeout.saturating_sub(start.elapsed());
+            if remaining.is_zero() {
+                return Err(format!(
+                    "$/progress sequence for token '{token}' did not complete within {timeout:?}"
+                ));
+            }
+            found.push(self.wait_for_progress_kind(token, kind, remaining)?);
+        }
+        Ok(found)
     }
 
     /// Drain server-initiated requests from the buffer.

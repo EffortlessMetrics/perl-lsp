@@ -18,7 +18,6 @@ use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::json;
 use std::fs::write;
 
-mod common;
 use common::{DapWorkflowSession, perl_available, workflow_timeout};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
