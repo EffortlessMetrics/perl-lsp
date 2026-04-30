@@ -15,7 +15,7 @@ For each `required = true` check, the workflow must:
 - define `push` with `branches: [master]`
 - avoid top-level or event-level `paths` / `paths-ignore`
 - define event-aware concurrency:
-  - `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`
+  - `cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}`
 - exist at the configured path
 
 ## Commands
@@ -30,3 +30,5 @@ For each `required = true` check, the workflow must:
 ## CI workflow
 
 `.github/workflows/workflow-trigger-lint.yml` runs this lint on `pull_request`, `merge_group`, and `push` to `master` with no path filters. The job is currently advisory while legacy required workflows are migrated.
+
+- required workflows must not include `labeled` or `unlabeled` in `on.pull_request.types`

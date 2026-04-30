@@ -199,6 +199,15 @@ fn lint_workflow_file(path: &Path, is_fixture: bool, issues: &mut Vec<LintIssue>
         });
     }
 
+    if pull_request_label_trigger_cancels_pr_run(&workflow) {
+        issues.push(LintIssue {
+            level: "error",
+            code: "LABEL_EVENT_CANCELS_PR_RUN",
+            workflow: workflow_name.clone(),
+            message: "pull_request labeled/unlabeled workflows must not cancel in-progress PR runs; use github.event.action == 'synchronize' or remove label triggers".to_string(),
+        });
+    }
+
     if POLICY_WARN_UNPINNED_ACTIONS {
         for action in collect_unpinned_actions(&workflow) {
             issues.push(LintIssue {
@@ -423,6 +432,49 @@ fn blanket_cancel_in_progress(workflow: &Value) -> bool {
     map.get(Value::String("cancel-in-progress".to_string()))
         .and_then(Value::as_bool)
         .unwrap_or(false)
+}
+
+fn pull_request_label_trigger_cancels_pr_run(workflow: &Value) -> bool {
+    if !pull_request_has_label_triggers(workflow) {
+        return false;
+    }
+
+    let Some(concurrency) = workflow.get("concurrency") else {
+        return false;
+    };
+
+    if concurrency.as_bool().is_some_and(|value| value) {
+        return true;
+    }
+
+    let Some(map) = concurrency.as_mapping() else {
+        return false;
+    };
+
+    let Some(cancel) = map.get(Value::String("cancel-in-progress".to_string())) else {
+        return false;
+    };
+
+    cancel.as_bool().is_some_and(|value| value)
+        || cancel
+            .as_str()
+            .is_some_and(|value| value.trim() == "${{ github.event_name == 'pull_request' }}")
+}
+
+fn pull_request_has_label_triggers(workflow: &Value) -> bool {
+    workflow
+        .get("on")
+        .and_then(Value::as_mapping)
+        .and_then(|mapping| mapping.get(Value::String("pull_request".to_string())))
+        .and_then(Value::as_mapping)
+        .and_then(|mapping| mapping.get(Value::String("types".to_string())))
+        .and_then(Value::as_sequence)
+        .is_some_and(|types| {
+            types
+                .iter()
+                .filter_map(Value::as_str)
+                .any(|event| event == "labeled" || event == "unlabeled")
+        })
 }
 
 fn collect_unpinned_actions(workflow: &Value) -> Vec<String> {
