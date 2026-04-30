@@ -1,6 +1,7 @@
 use crate::utils::project_root;
 use color_eyre::eyre::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -40,6 +41,8 @@ pub struct PullRequestSnapshot {
 pub struct StatusCheck {
     pub name: String,
     pub state: String,
+    #[serde(default)]
+    pub head_sha: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -185,6 +188,11 @@ fn snapshot_from_gh_cli() -> Result<QueueSnapshot> {
                                 .and_then(serde_json::Value::as_str)
                                 .unwrap_or("UNKNOWN")
                                 .to_string(),
+                            head_sha: check
+                                .get("commit")
+                                .and_then(|commit| commit.get("oid"))
+                                .and_then(serde_json::Value::as_str)
+                                .map(ToString::to_string),
                         })
                         .collect::<Vec<_>>()
                 })
@@ -240,6 +248,7 @@ mod tests {
                 .map(|(name, state)| StatusCheck {
                     name: name.to_string(),
                     state: state.to_string(),
+                    head_sha: None,
                 })
                 .collect(),
             updated_at: "2026-04-26T00:00:00Z".to_string(),
@@ -284,21 +293,89 @@ mod tests {
         let buckets = derive_buckets(&prs);
         assert!(buckets.needs_ci_fix.contains(&5));
     }
+
+    #[test]
+    fn docs_only_skip_is_expected_skip() {
+        let required = HashSet::from(["ci / merge gate (pull_request)".to_string()]);
+        let status = normalize_check_status(
+            &StatusCheck { name: "ux-gate".to_string(), state: "SKIPPED".to_string(), head_sha: None },
+            "abc",
+            &required,
+        );
+        assert_eq!(status, NormalizedStatus::ExpectedSkip);
+    }
+
+    #[test]
+    fn required_skip_is_unexpected_skip() {
+        let required = HashSet::from(["ci / merge gate (pull_request)".to_string()]);
+        let status = normalize_check_status(
+            &StatusCheck {
+                name: "ci / merge gate (pull_request)".to_string(),
+                state: "SKIPPED".to_string(),
+                head_sha: None,
+            },
+            "abc",
+            &required,
+        );
+        assert_eq!(status, NormalizedStatus::UnexpectedSkip);
+    }
+
+    #[test]
+    fn stale_status_when_check_sha_differs_from_pr_head() {
+        let required = HashSet::new();
+        let status = normalize_check_status(
+            &StatusCheck {
+                name: "ci / merge gate (pull_request)".to_string(),
+                state: "SUCCESS".to_string(),
+                head_sha: Some("oldsha".to_string()),
+            },
+            "newsha",
+            &required,
+        );
+        assert_eq!(status, NormalizedStatus::Stale);
+    }
+
+    #[test]
+    fn failed_and_pending_statuses_normalize() {
+        let required = HashSet::new();
+        let failed = normalize_check_status(
+            &StatusCheck { name: "ci".to_string(), state: "FAILURE".to_string(), head_sha: None },
+            "abc",
+            &required,
+        );
+        let pending = normalize_check_status(
+            &StatusCheck {
+                name: "ci".to_string(),
+                state: "IN_PROGRESS".to_string(),
+                head_sha: None,
+            },
+            "abc",
+            &required,
+        );
+        assert_eq!(failed, NormalizedStatus::Failed);
+        assert_eq!(pending, NormalizedStatus::Pending);
+    }
 }
 
 pub fn derive_buckets(prs: &[PullRequestSnapshot]) -> DerivedBuckets {
+    let required_checks = load_required_checks().unwrap_or_default();
     let mut buckets = DerivedBuckets::default();
     for pr in prs {
-        let has_failing = pr.status_check_rollup.iter().any(|check| {
-            let s = check.state.to_ascii_uppercase();
-            s == "FAILURE" || s == "CANCELLED" || s == "TIMED_OUT" || s == "ACTION_REQUIRED"
-        });
-        let all_green = !pr.status_check_rollup.is_empty()
-            && pr.status_check_rollup.iter().all(|check| {
-                check.state.eq_ignore_ascii_case("success")
-                    || check.state.eq_ignore_ascii_case("neutral")
-                    || check.state.eq_ignore_ascii_case("skipped")
-            });
+        let normalized = normalize_rollup_statuses(pr, &required_checks);
+        let has_failing = normalized.iter().any(|status| *status == NormalizedStatus::Failed);
+        let has_pending = normalized.iter().any(|status| *status == NormalizedStatus::Pending);
+        let has_stale = normalized.iter().any(|status| *status == NormalizedStatus::Stale);
+        let has_unexpected_skip =
+            normalized.iter().any(|status| *status == NormalizedStatus::UnexpectedSkip);
+        let has_expected_skip =
+            normalized.iter().any(|status| *status == NormalizedStatus::ExpectedSkip);
+        let has_passed = normalized.iter().any(|status| *status == NormalizedStatus::Passed);
+        let all_green = !normalized.is_empty()
+            && !has_failing
+            && !has_pending
+            && !has_stale
+            && !has_unexpected_skip
+            && (has_passed || has_expected_skip);
         let labels = &pr.labels;
 
         if pr.is_draft {
@@ -317,10 +394,12 @@ pub fn derive_buckets(prs: &[PullRequestSnapshot]) -> DerivedBuckets {
             buckets.diff_audited_waiting_ci.push(pr.number);
         }
 
-        if has_failing {
+        if has_failing || has_unexpected_skip || has_stale {
             buckets.needs_ci_fix.push(pr.number);
         } else if all_green {
             buckets.ci_green.push(pr.number);
+        } else if has_pending {
+            buckets.blocked_unknown.push(pr.number);
         } else if pr.merge_state_status.as_deref() == Some("DIRTY")
             || pr.merge_state_status.as_deref() == Some("UNKNOWN")
         {
@@ -330,4 +409,71 @@ pub fn derive_buckets(prs: &[PullRequestSnapshot]) -> DerivedBuckets {
         }
     }
     buckets
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NormalizedStatus {
+    Passed,
+    Failed,
+    Pending,
+    ExpectedSkip,
+    UnexpectedSkip,
+    Stale,
+}
+
+fn normalize_rollup_statuses(
+    pr: &PullRequestSnapshot,
+    required_checks: &HashSet<String>,
+) -> Vec<NormalizedStatus> {
+    let mut normalized = Vec::with_capacity(pr.status_check_rollup.len());
+    for check in &pr.status_check_rollup {
+        normalized.push(normalize_check_status(check, &pr.head_sha, required_checks));
+    }
+    normalized
+}
+
+fn normalize_check_status(
+    check: &StatusCheck,
+    pr_head_sha: &str,
+    required_checks: &HashSet<String>,
+) -> NormalizedStatus {
+    if check.head_sha.as_deref().is_some_and(|head| head != pr_head_sha) {
+        return NormalizedStatus::Stale;
+    }
+
+    let state = check.state.to_ascii_uppercase();
+    match state.as_str() {
+        "SUCCESS" | "NEUTRAL" => NormalizedStatus::Passed,
+        "FAILURE" | "CANCELLED" | "TIMED_OUT" | "ACTION_REQUIRED" | "ERROR" => {
+            NormalizedStatus::Failed
+        }
+        "SKIPPED" => {
+            if required_checks.contains(&check.name) {
+                NormalizedStatus::UnexpectedSkip
+            } else {
+                NormalizedStatus::ExpectedSkip
+            }
+        }
+        "IN_PROGRESS" | "QUEUED" | "WAITING" | "PENDING" => NormalizedStatus::Pending,
+        _ => NormalizedStatus::Pending,
+    }
+}
+
+fn load_required_checks() -> Result<HashSet<String>> {
+    let root = project_root()?;
+    let policy_path = root.join(".ci/policies/required-checks.toml");
+    let raw = fs::read_to_string(&policy_path)
+        .with_context(|| format!("failed to read {}", policy_path.display()))?;
+    let value: toml::Value = toml::from_str(&raw)
+        .with_context(|| format!("failed to parse {}", policy_path.display()))?;
+
+    let mut checks = HashSet::new();
+    if let Some(array) = value.get("checks").and_then(toml::Value::as_array) {
+        for item in array {
+            if let Some(name) = item.get("name").and_then(toml::Value::as_str) {
+                checks.insert(name.to_string());
+            }
+        }
+    }
+    Ok(checks)
 }
