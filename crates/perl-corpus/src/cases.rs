@@ -1364,6 +1364,15 @@ fn select_by_seed<T>(items: &[T], seed: u64) -> Option<&T> {
     items.get(idx)
 }
 
+
+fn case_has_any_tag(case: &EdgeCase, tags: &[&str]) -> bool {
+    case.tags.iter().any(|tag| tags.contains(tag))
+}
+
+fn case_has_all_tags(case: &EdgeCase, tags: &[&str]) -> bool {
+    tags.iter().all(|tag| case.tags.iter().any(|candidate| candidate == tag))
+}
+
 /// Convenience helper for working with static edge cases.
 pub struct EdgeCaseGenerator;
 
@@ -1384,7 +1393,7 @@ impl EdgeCaseGenerator {
             return edge_cases().iter().collect();
         }
 
-        edge_cases().iter().filter(|case| case.tags.iter().any(|tag| tags.contains(tag))).collect()
+        edge_cases().iter().filter(|case| case_has_any_tag(case, tags)).collect()
     }
 
     /// Return edge cases that match all of the provided tags.
@@ -1395,7 +1404,7 @@ impl EdgeCaseGenerator {
 
         edge_cases()
             .iter()
-            .filter(|case| tags.iter().all(|tag| case.tags.iter().any(|t| t == tag)))
+            .filter(|case| case_has_all_tags(case, tags))
             .collect()
     }
 
@@ -1486,6 +1495,27 @@ mod tests {
     fn edge_cases_can_filter_by_all_tags() {
         let matches = EdgeCaseGenerator::by_tags_all(&["regex", "regex-code"]);
         assert!(matches.iter().any(|case| case.id == "regex.code"));
+    }
+
+    #[test]
+    fn edge_cases_filter_with_empty_tags_returns_all_cases() {
+        let any_matches = EdgeCaseGenerator::by_tags_any(&[]);
+        let all_matches = EdgeCaseGenerator::by_tags_all(&[]);
+
+        assert_eq!(any_matches.len(), edge_cases().len());
+        assert_eq!(all_matches.len(), edge_cases().len());
+    }
+
+    #[test]
+    fn edge_cases_filter_unknown_tags_returns_no_cases() {
+        assert!(EdgeCaseGenerator::by_tags_any(&["tag-does-not-exist"]).is_empty());
+        assert!(EdgeCaseGenerator::by_tags_all(&["tag-does-not-exist", "still-missing"]).is_empty());
+    }
+
+    #[test]
+    fn edge_case_sample_by_tags_returns_none_when_no_matches_exist() {
+        assert!(EdgeCaseGenerator::sample_by_tags_any(&["tag-does-not-exist"], 7).is_none());
+        assert!(EdgeCaseGenerator::sample_by_tags_all(&["tag-does-not-exist"], 7).is_none());
     }
 
     #[test]
