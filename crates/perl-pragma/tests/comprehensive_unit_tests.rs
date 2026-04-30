@@ -1675,6 +1675,35 @@ fn no_if_builtin_conditionally_removes_lexical_imports() -> Result<(), Box<dyn s
 }
 
 #[test]
+fn use_if_strict_with_single_quoted_whitespace_list_enables_selected_flags()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("if", &["$cond", "strict", "'vars subs'"], 0, 36)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(!state.strict_refs);
+    Ok(())
+}
+
+#[test]
+fn no_if_strict_with_single_quoted_whitespace_list_disables_selected_flags()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 11),
+        no_node("if", &["$cond", "strict", "'vars subs'"], 12, 48),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+
+    assert!(!state.strict_vars);
+    assert!(!state.strict_subs);
+    assert!(state.strict_refs);
+    Ok(())
+}
+
+#[test]
 fn no_version_declaration_has_no_features() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("strict", &[], 0, 12)]);
     let map = PragmaTracker::build(&ast);

@@ -313,6 +313,7 @@ impl LspServer {
                         additional_edits: Vec::new(),
                         text_edit_range,
                         commit_characters: None,
+                        label_details: None,
                     });
                 }
             }
@@ -522,11 +523,12 @@ impl LspServer {
                 let is_incomplete = completions.len() > cap;
                 completions.truncate(cap);
 
-                // Snapshot capability flag once before the loop to avoid
+                // Snapshot capability flags once before the loop to avoid
                 // acquiring client_capabilities lock per completion item
                 let client_caps = self.client_capabilities.lock();
                 let snippet_support = client_caps.snippet_support;
                 let commit_chars_support = client_caps.completion_commit_characters_support;
+                let label_details_support = client_caps.label_details_support;
 
                 let items: Vec<Value> = completions
                     .into_iter()
@@ -582,6 +584,21 @@ impl LspServer {
 
                         if let Some(sort_text) = c.sort_text {
                             item["sortText"] = json!(sort_text);
+                        }
+
+                        if label_details_support {
+                            if let Some(ld) = c.label_details {
+                                let mut obj = serde_json::Map::new();
+                                if let Some(d) = ld.detail {
+                                    obj.insert("detail".to_string(), json!(d));
+                                }
+                                if let Some(desc) = ld.description {
+                                    obj.insert("description".to_string(), json!(desc));
+                                }
+                                if !obj.is_empty() {
+                                    item["labelDetails"] = Value::Object(obj);
+                                }
+                            }
                         }
 
                         // Serialize additionalTextEdits (e.g. auto-import `use Module;`)
@@ -762,6 +779,7 @@ impl LspServer {
                 let client_caps = self.client_capabilities.lock();
                 let commit_chars_support = client_caps.completion_commit_characters_support;
                 let snippet_support = client_caps.snippet_support;
+                let label_details_support = client_caps.label_details_support;
 
                 let items: Vec<Value> = completions
                     .into_iter()
@@ -811,6 +829,21 @@ impl LspServer {
 
                         if let Some(sort_text) = c.sort_text {
                             item["sortText"] = json!(sort_text);
+                        }
+
+                        if label_details_support {
+                            if let Some(ld) = c.label_details {
+                                let mut obj = serde_json::Map::new();
+                                if let Some(d) = ld.detail {
+                                    obj.insert("detail".to_string(), json!(d));
+                                }
+                                if let Some(desc) = ld.description {
+                                    obj.insert("description".to_string(), json!(desc));
+                                }
+                                if !obj.is_empty() {
+                                    item["labelDetails"] = Value::Object(obj);
+                                }
+                            }
                         }
 
                         // Serialize additionalTextEdits (e.g. auto-import `use Module;`)
@@ -913,6 +946,7 @@ impl LspServer {
                         filter_text: None,
                         text_edit_range: None,
                         commit_characters: None,
+                        label_details: None,
                     });
                 }
             }
@@ -934,6 +968,7 @@ impl LspServer {
                         filter_text: None,
                         text_edit_range: None,
                         commit_characters: None,
+                        label_details: None,
                     });
                 }
             }
@@ -951,6 +986,7 @@ impl LspServer {
                         filter_text: None,
                         text_edit_range: None,
                         commit_characters: None,
+                        label_details: None,
                     });
                 }
                 if "_".starts_with(&prefix) || prefix.is_empty() {
@@ -965,6 +1001,7 @@ impl LspServer {
                         filter_text: None,
                         text_edit_range: None,
                         commit_characters: None,
+                        label_details: None,
                     });
                 }
             }
@@ -982,6 +1019,7 @@ impl LspServer {
                         filter_text: None,
                         text_edit_range: None,
                         commit_characters: None,
+                        label_details: None,
                     });
                 }
             }
@@ -1009,6 +1047,7 @@ impl LspServer {
                             filter_text: None,
                             text_edit_range: None,
                             commit_characters: None,
+                            label_details: None,
                         });
                     }
                 }
@@ -1035,6 +1074,7 @@ impl LspServer {
         let label = item.get("label").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let kind = item.get("kind").and_then(|v| v.as_u64()).unwrap_or(0);
         let has_doc = item.get("documentation").is_some();
+        let label_details_support = self.client_capabilities.lock().label_details_support;
 
         // Check if this is a built-in function and add documentation
         let builtin_signatures = crate::builtin_signatures::create_builtin_signatures();
@@ -1056,7 +1096,6 @@ impl LspServer {
 
             let documentation = doc_parts.join("\n");
 
-            // Add documentation to the completion item
             if let Some(obj) = item.as_object_mut() {
                 obj.insert(
                     "documentation".to_string(),
@@ -1065,6 +1104,20 @@ impl LspServer {
                         "value": documentation
                     }),
                 );
+                // Populate labelDetails for clients that declared labelDetailsSupport.
+                // detail = primary signature (inline after label), description = source tag.
+                if label_details_support && obj.get("labelDetails").is_none() {
+                    let sig_detail = sig.signatures.first().copied().unwrap_or("").to_string();
+                    if !sig_detail.is_empty() {
+                        obj.insert(
+                            "labelDetails".to_string(),
+                            json!({
+                                "detail": sig_detail,
+                                "description": "builtin"
+                            }),
+                        );
+                    }
+                }
             }
             return Ok(Some(item));
         }
@@ -1072,18 +1125,21 @@ impl LspServer {
         // For variables, add type hint documentation if available
         if kind == 6 && !has_doc {
             // Variable kind
-            let type_doc = if label.starts_with('$') {
-                Some("Scalar variable - holds a single value (string, number, or reference)")
+            let (type_doc, label_detail) = if label.starts_with('$') {
+                (
+                    Some("Scalar variable - holds a single value (string, number, or reference)"),
+                    Some("scalar"),
+                )
             } else if label.starts_with('@') {
-                Some("Array variable - holds an ordered list of scalars")
+                (Some("Array variable - holds an ordered list of scalars"), Some("array"))
             } else if label.starts_with('%') {
-                Some("Hash variable - holds a set of key-value pairs")
+                (Some("Hash variable - holds a set of key-value pairs"), Some("hash"))
             } else {
-                None
+                (None, None)
             };
 
-            if let Some(doc) = type_doc {
-                if let Some(obj) = item.as_object_mut() {
+            if let Some(obj) = item.as_object_mut() {
+                if let Some(doc) = type_doc {
                     obj.insert(
                         "documentation".to_string(),
                         json!({
@@ -1091,6 +1147,13 @@ impl LspServer {
                             "value": doc
                         }),
                     );
+                }
+                if label_details_support {
+                    if let Some(detail) = label_detail {
+                        if obj.get("labelDetails").is_none() {
+                            obj.insert("labelDetails".to_string(), json!({ "detail": detail }));
+                        }
+                    }
                 }
             }
             return Ok(Some(item));
@@ -1420,5 +1483,95 @@ mod tests {
     fn test_degrade_snippet_empty_string() {
         let result = LspServer::degrade_snippet_to_plaintext("");
         assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_completion_capability_advertises_label_details_support() {
+        use perl_lsp_rs_core::features::flags::BuildFlags;
+        use perl_lsp_rs_core::protocol::capabilities::capabilities_for;
+        use serde_json::to_value;
+
+        let caps = capabilities_for(BuildFlags::production());
+        let caps_json = to_value(&caps).expect("serialize ServerCapabilities");
+
+        let completion_item_opt = caps_json
+            .pointer("/completionProvider/completionItem")
+            .expect("completionProvider.completionItem must be present");
+        assert_eq!(
+            completion_item_opt.get("labelDetailsSupport").and_then(|v| v.as_bool()),
+            Some(true),
+            "server must advertise completionItem.labelDetailsSupport: true in capabilities"
+        );
+    }
+
+    #[test]
+    fn test_completion_builtin_function_has_label_details_on_resolve()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        // Simulate a client that declared labelDetailsSupport.
+        server.client_capabilities.lock().label_details_support = true;
+
+        let item = json!({
+            "label": "print",
+            "kind": 3  // Function
+        });
+        let resolved = server
+            .handle_completion_resolve(Some(item))
+            .map_err(|e| e.message.to_string())?
+            .ok_or("expected resolved value")?;
+
+        let ld =
+            resolved.get("labelDetails").ok_or("labelDetails must be present after resolve")?;
+        let detail = ld.get("detail").and_then(|v| v.as_str()).unwrap_or("");
+        assert!(
+            detail.contains("print"),
+            "labelDetails.detail should contain the primary signature; got: {detail:?}"
+        );
+        assert_eq!(
+            ld.get("description").and_then(|v| v.as_str()),
+            Some("builtin"),
+            "labelDetails.description should be 'builtin'"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_completion_builtin_no_label_details_without_client_support()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        // Default server has label_details_support = false.
+
+        let item = json!({ "label": "print", "kind": 3 });
+        let resolved = server
+            .handle_completion_resolve(Some(item))
+            .map_err(|e| e.message.to_string())?
+            .ok_or("expected resolved value")?;
+
+        assert!(
+            resolved.get("labelDetails").is_none(),
+            "labelDetails must NOT be populated when client did not declare labelDetailsSupport"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_completion_variable_has_label_details_on_resolve()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        server.client_capabilities.lock().label_details_support = true;
+
+        let item = json!({ "label": "$count", "kind": 6 });
+        let resolved = server
+            .handle_completion_resolve(Some(item))
+            .map_err(|e| e.message.to_string())?
+            .ok_or("expected resolved value")?;
+
+        let ld = resolved.get("labelDetails").ok_or("labelDetails must be present for variable")?;
+        assert_eq!(
+            ld.get("detail").and_then(|v| v.as_str()),
+            Some("scalar"),
+            "scalar variable should have labelDetails.detail = 'scalar'"
+        );
+        Ok(())
     }
 }

@@ -122,6 +122,14 @@ impl LspServer {
                     })
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
+                caps.label_details_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("textDocument"))
+                    .and_then(|td| td.get("completion"))
+                    .and_then(|comp| comp.get("completionItem"))
+                    .and_then(|ci| ci.get("labelDetailsSupport"))
+                    .and_then(|b| b.as_bool())
+                    .unwrap_or(false);
 
                 // Check if client supports markdown message content in diagnostics (LSP 3.18)
                 caps.markup_message_support = params

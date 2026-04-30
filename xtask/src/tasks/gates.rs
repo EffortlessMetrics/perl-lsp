@@ -27,6 +27,9 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::Duration;
 use std::time::Instant;
 
 use crate::tasks::ci_scope::{self, ScopeOutput};
@@ -1609,47 +1612,32 @@ fn run_single_gate(
         });
     }
 
-    // Run through the platform shell because gate commands are policy strings.
-    // Linux CI uses bash; Windows local runs use cmd.exe to keep `cargo`/`just`
-    // lookup and simple command chaining available without requiring Git Bash.
-    let result = shell_command(command).stderr_to_stdout().stdout_capture().unchecked().run();
-
+    let execution = run_shell_command_with_timeout(command, &log_path, timeout_secs);
     let duration_ms = start.elapsed().as_millis() as u64;
 
-    match result {
-        Ok(output) => {
-            let exit_code = output.status.code().unwrap_or(-1);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-
-            // Write log file
-            if let Err(e) = fs::write(&log_path, stdout.as_bytes()) {
-                eprintln!("Warning: Failed to write log file: {}", e);
-            }
-
-            // Check if timed out
-            let timed_out = duration_ms > (timeout_secs * 1000);
-
-            let status = if timed_out {
+    match execution {
+        Ok(execution) => {
+            let status = if execution.timed_out {
                 "timeout".to_string()
-            } else if exit_code == 0 {
+            } else if execution.exit_code == 0 {
                 "pass".to_string()
             } else {
                 "fail".to_string()
             };
 
             // Extract output summary (last 10 lines or error message)
-            let output_summary = extract_output_summary(&stdout, 10);
+            let output_summary = extract_output_summary(&execution.stdout, 10);
 
             // Parse metrics if this is a test gate
             let metrics = if gate.tags.contains(&"test".to_string()) {
-                parse_test_metrics(&stdout)
+                parse_test_metrics(&execution.stdout)
             } else {
                 None
             };
 
             // For failing cargo test gates, extract the first failure details
             let first_failure = if status == "fail" && is_cargo_test_command(command) {
-                parse_first_failure(&stdout, exit_code)
+                parse_first_failure(&execution.stdout, execution.exit_code)
             } else {
                 None
             };
@@ -1661,7 +1649,7 @@ fn run_single_gate(
                 required: Some(gate.required),
                 duration_ms,
                 command: command.to_string(),
-                exit_code: Some(exit_code),
+                exit_code: Some(execution.exit_code),
                 output_summary: Some(output_summary),
                 log_path: Some(format!("logs/{}.log", gate.name)),
                 metrics,
@@ -1693,14 +1681,58 @@ fn run_single_gate(
     }
 }
 
+struct ShellExecutionResult {
+    stdout: String,
+    exit_code: i32,
+    timed_out: bool,
+}
+
+fn run_shell_command_with_timeout(command: &str, log_path: &Path, timeout_secs: u64) -> Result<ShellExecutionResult> {
+    let log_file =
+        fs::File::create(log_path).with_context(|| format!("Failed to create log file: {}", log_path.display()))?;
+    let log_file_err = log_file
+        .try_clone()
+        .with_context(|| format!("Failed to clone log file handle: {}", log_path.display()))?;
+
+    let mut child = shell_command_process(command)
+        .stdout(Stdio::from(log_file))
+        .stderr(Stdio::from(log_file_err))
+        .spawn()
+        .with_context(|| format!("Failed to spawn gate command: {command}"))?;
+
+    let start = Instant::now();
+    let timeout = Duration::from_secs(timeout_secs);
+    let timed_out = loop {
+        if let Some(_status) = child.try_wait().context("Failed waiting on gate process")? {
+            break false;
+        }
+        if start.elapsed() >= timeout {
+            child.kill().ok();
+            child.wait().ok();
+            break true;
+        }
+        thread::sleep(Duration::from_millis(100));
+    };
+
+    let status = child.wait().context("Failed to read gate process exit status")?;
+    let stdout = fs::read_to_string(log_path).unwrap_or_default();
+    let exit_code = status.code().unwrap_or(if timed_out { 124 } else { -1 });
+
+    Ok(ShellExecutionResult { stdout, exit_code, timed_out })
+}
+
 #[cfg(windows)]
-fn shell_command(command: &str) -> duct::Expression {
-    cmd!("cmd", "/C", command)
+fn shell_command_process(command: &str) -> Command {
+    let mut cmd = Command::new("cmd");
+    cmd.args(["/C", command]);
+    cmd
 }
 
 #[cfg(not(windows))]
-fn shell_command(command: &str) -> duct::Expression {
-    cmd!("bash", "-lc", command)
+fn shell_command_process(command: &str) -> Command {
+    let mut cmd = Command::new("bash");
+    cmd.args(["-lc", command]);
+    cmd
 }
 
 fn run_internal_xtask_gate(
@@ -2504,10 +2536,11 @@ mod tests {
         PackageTargetIndex, Receipt, blocking_failure_gate_names, build_pr_fast_plan_from_scope,
         build_pr_fast_plan_from_scope_with_targets, compare_receipts, determine_overall_status,
         extend_plan_with_non_pr_fast_static_gates, extend_plan_with_static_tiers, failure_guidance,
-        is_blocking_gate_status, is_cargo_test_command, load_policy, parse_first_failure,
+        is_blocking_gate_status, is_cargo_test_command, load_policy_for_inspection,
+        parse_first_failure,
     };
     use crate::tasks::ci_scope::{
-        ArchWidener, DirectCrate, PlatformOverrides, RevDepCrate, ScopeOutput,
+        ArchWidener, DirectCrate, LaneDecisions, PlatformOverrides, RevDepCrate, ScopeOutput,
     };
 
     fn gate_result(name: &str, status: &str, required: bool) -> GateResult {
@@ -2611,7 +2644,7 @@ mod tests {
             platform_overrides: PlatformOverrides::default(),
             selected_lanes: Vec::new(),
             selected_heavy_lanes: Vec::new(),
-            lanes: BTreeMap::new(),
+            lanes: LaneDecisions::default(),
             explanations: BTreeMap::new(),
         }
     }
@@ -2839,7 +2872,7 @@ mod tests {
     fn pr_fast_policy_planning_roles_are_complete() -> color_eyre::eyre::Result<()> {
         let root = crate::utils::project_root()?;
         let policy_path = root.join(".ci/gate-policy.yaml");
-        let policy = load_policy(&policy_path)?;
+        let policy = load_policy_for_inspection(&policy_path)?;
 
         for gate in policy.gates.iter().filter(|gate| gate.tier == "pr_fast") {
             let Some(planning) = &gate.planning else {
