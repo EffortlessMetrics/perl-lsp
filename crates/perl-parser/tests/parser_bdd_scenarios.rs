@@ -307,7 +307,6 @@ fn bdd_given_labeled_loop_control_when_parsed_then_label_and_control_ops_are_ret
     Ok(())
 }
 
-
 #[test]
 fn bdd_given_loop_with_continue_block_when_parsed_then_continue_and_flow_nodes_are_preserved()
 -> TestResult {
@@ -331,6 +330,50 @@ fn bdd_given_loop_with_continue_block_when_parsed_then_continue_and_flow_nodes_a
     assert!(sexp.contains("(continue"), "Expected Continue node in: {sexp}");
     assert!(sexp.contains("(next"), "Expected Next loop-control node in: {sexp}");
     assert!(sexp.contains("(last"), "Expected Last loop-control node in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_state_vars_and_method_chaining_when_parsed_then_state_and_arrow_invocations_are_preserved()
+-> TestResult {
+    // Given: a developer caches constructor state and chains method calls.
+    let code = r#"
+        use feature 'state';
+        sub service_name {
+            state $svc = My::Service->new()->bootstrap();
+            return $svc->name();
+        }
+    "#;
+
+    // When: the parser reads state declarations and chained invocations.
+    let sexp = parse_sexp(code)?;
+
+    // Then: state declaration + arrow invocation structure should be represented cleanly.
+    assert!(sexp.contains("(state "), "Expected state declaration node in: {sexp}");
+    assert!(sexp.contains("bootstrap"), "Expected chained method call in: {sexp}");
+    assert!(sexp.contains("name"), "Expected terminal method call in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_map_and_grep_pipeline_when_parsed_then_higher_order_blocks_are_retained() -> TestResult {
+    // Given: a developer transforms and filters a list with map/grep blocks.
+    let code = r#"
+        my @nums = (1, 2, 3, 4, 5);
+        my @evens_squared = map { $_ * $_ } grep { $_ % 2 == 0 } @nums;
+    "#;
+
+    // When: the parser processes nested higher-order list operations.
+    let sexp = parse_sexp(code)?;
+
+    // Then: map/grep and their block structure should remain visible in AST output.
+    assert!(sexp.contains("(map"), "Expected map node in: {sexp}");
+    assert!(sexp.contains("(grep"), "Expected grep node in: {sexp}");
+    assert!(sexp.contains("binary_expression"), "Expected block expression nodes in: {sexp}");
     assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
 
     Ok(())
