@@ -115,18 +115,34 @@ jobs:
       - name: Run UX regression tests
         id: ux_tests
         if: steps.harness_check.outputs.harness_available == 'true'
+        shell: bash
         run: |
+          set +e
+          mkdir -p target/receipts/logs
           echo "Running UX regression tests..."
-          just ux-tests 2>&1 | tee /tmp/ux-test-output.txt
-          exit ${PIPESTATUS[0]}
+          just ux-tests 2>&1 | tee target/receipts/logs/ux-regression.log
+          status=${PIPESTATUS[0]}
+          echo "exit_code=${status}" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Emit structured UX regression receipt
-        if: failure() && steps.harness_check.outputs.harness_available == 'true'
+        if: always() && steps.harness_check.outputs.harness_available == 'true'
         run: |
           cargo xtask ux-regression-receipt \
-            --input /tmp/ux-test-output.txt \
-            --receipt .ci/receipts/ux-regression.json \
+            --input target/receipts/logs/ux-regression.log \
+            --receipt target/receipts/ux-regression.json \
             --sha "${{ github.sha }}"
+
+      - name: Upload UX regression receipt artifacts
+        if: always() && steps.harness_check.outputs.harness_available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ux-regression-receipt-${{ github.sha }}
+          path: |
+            target/receipts/ux-regression.json
+            target/receipts/logs/ux-regression.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Parse and summarize UX test results
         if: always() && steps.harness_check.outputs.harness_available == 'true'
@@ -134,14 +150,14 @@ jobs:
           python3 - <<'PY'
           import json, os, re, pathlib, sys
 
-          output_file = pathlib.Path("/tmp/ux-test-output.txt")
+          output_file = pathlib.Path("target/receipts/logs/ux-regression.log")
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
 
           if not summary_path:
               sys.exit(0)
 
           lines = output_file.read_text(encoding="utf-8").splitlines() if output_file.exists() else []
-          receipt_path = pathlib.Path(".ci/receipts/ux-regression.json")
+          receipt_path = pathlib.Path("target/receipts/ux-regression.json")
           receipt = None
           if receipt_path.exists():
               try:
@@ -307,7 +323,7 @@ jobs:
         with:
           name: ux-test-results-${{ github.sha }}
           path: |
-            /tmp/ux-test-output.txt
+            target/receipts/logs/ux-regression.log
             target/ux-test-results/
           if-no-files-found: warn
           retention-days: 7
@@ -319,6 +335,7 @@ jobs:
           script: |
             const harnessAvailable = '${{ steps.harness_check.outputs.harness_available }}' === 'true';
             const uxTestsOutcome = '${{ steps.ux_tests.outcome }}';
+            const uxTestsExitCode = '${{ steps.ux_tests.outputs.exit_code }}';
 
             let state, description;
 
@@ -326,10 +343,10 @@ jobs:
               // Harness not yet scaffolded — report as pending/neutral, not failure
               state = 'success';
               description = 'UX harness not yet scaffolded — gate inactive (skipped)';
-            } else if (uxTestsOutcome === 'success') {
+            } else if (uxTestsOutcome === 'success' && uxTestsExitCode === '0') {
               state = 'success';
               description = 'All UX regression scenarios passed';
-            } else if (uxTestsOutcome === 'failure') {
+            } else if (uxTestsOutcome === 'success' && uxTestsExitCode !== '0') {
               state = 'failure';
               description = 'UX regression detected — run "just ux-tests" locally to reproduce';
             } else {
@@ -348,3 +365,11 @@ jobs:
               description,
               target_url: `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
             });
+
+      - name: Enforce UX regression gate
+        if: steps.harness_check.outputs.harness_available == 'true'
+        run: |
+          if [ "${{ steps.ux_tests.outputs.exit_code }}" != "0" ]; then
+            echo "UX regression tests failed with exit code ${{ steps.ux_tests.outputs.exit_code }}"
+            exit 1
+          fi
