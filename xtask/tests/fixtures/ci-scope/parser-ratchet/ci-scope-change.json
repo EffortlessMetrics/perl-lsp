@@ -1,0 +1,11 @@
+{
+  "name": "ci_scope.rs change selects parser-ratchet",
+  "changed_files": [
+    "xtask/src/tasks/ci_scope.rs"
+  ],
+  "risk_tags": [],
+  "expected": {
+    "selected": true,
+    "selection_reason": "path matched xtask/src/tasks/ci_scope.rs"
+  }
+}

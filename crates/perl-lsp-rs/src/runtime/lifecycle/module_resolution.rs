@@ -10,8 +10,9 @@ use perl_module::resolution::{
     IncRoot, IncRootKind, ModuleUriResolution,
     resolve_module_path as resolve_workspace_module_path, resolve_module_uri_with_effective_inc,
 };
+use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::Once;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 /// A single resolution scope representing a workspace folder's search context.
@@ -39,13 +40,6 @@ pub struct ResolutionContext {
     /// Ordered search scopes (current folder first, then others)
     pub search_scopes: Vec<ResolutionScope>,
 }
-
-/// Fires a `tracing::warn!` the first time workspace root is found to be undetected.
-///
-/// Both `resolve_module_path` and `resolve_module_path_with_uri` share this sentinel
-/// because both sites indicate the same underlying problem: no workspace root was
-/// provided by the LSP client (single-file mode with no open folder).
-static WARN_ONCE_ROOT_UNDETECTED: Once = Once::new();
 
 /// Prepend `use lib` paths extracted from `doc_text` to `include_paths`.
 ///
@@ -112,10 +106,12 @@ fn resolution_root(server: &LspServer, doc_uri: Option<&str>) -> Option<PathBuf>
 
 fn build_effective_inc_roots(
     include_paths: &[String],
+    perl5lib_set: &HashSet<String>,
     lexical_paths: &[String],
     system_paths: &[PathBuf],
 ) -> Vec<IncRoot> {
     let mut roots = Vec::new();
+    let mut seen = HashSet::new();
     let mut precedence = 0usize;
 
     for path in lexical_paths {
@@ -125,6 +121,9 @@ fn build_effective_inc_roots(
         } else {
             IncRootKind::FileLocalLexical
         };
+        if !seen.insert(normalized_inc_key(&path_buf)) {
+            continue;
+        }
         roots.push(IncRoot {
             kind,
             path: path_buf,
@@ -136,21 +135,24 @@ fn build_effective_inc_roots(
 
     for path in include_paths {
         let path_buf = PathBuf::from(path);
-        let kind = if path_buf.is_absolute() {
-            IncRootKind::ExternalAbsolute
+        if !seen.insert(normalized_inc_key(&path_buf)) {
+            continue;
+        }
+        let (kind, source) = if perl5lib_set.contains(path) {
+            (IncRootKind::Perl5LibEnv, "perl5lib-env")
+        } else if path_buf.is_absolute() {
+            (IncRootKind::ExternalAbsolute, "workspace-include-paths")
         } else {
-            IncRootKind::WorkspaceRelative
+            (IncRootKind::WorkspaceRelative, "workspace-include-paths")
         };
-        roots.push(IncRoot {
-            kind,
-            path: path_buf,
-            precedence,
-            source: "workspace-include-paths".to_string(),
-        });
+        roots.push(IncRoot { kind, path: path_buf, precedence, source: source.to_string() });
         precedence += 1;
     }
 
     for path in system_paths {
+        if !seen.insert(normalized_inc_key(path)) {
+            continue;
+        }
         roots.push(IncRoot {
             kind: IncRootKind::InterpreterStartup,
             path: path.clone(),
@@ -161,6 +163,36 @@ fn build_effective_inc_roots(
     }
 
     roots
+}
+
+fn append_system_inc_paths(
+    config: &mut perl_lsp_rs_core::config::WorkspaceConfig,
+    include_paths: &mut Vec<String>,
+) {
+    if !config.use_system_inc {
+        return;
+    }
+
+    let mut seen: HashSet<String> = include_paths
+        .iter()
+        .map(|existing| normalized_inc_key(std::path::Path::new(existing)))
+        .collect();
+
+    for path in config.get_system_inc() {
+        let normalized = normalized_inc_key(path);
+        if normalized == "." {
+            continue;
+        }
+
+        if seen.insert(normalized) {
+            include_paths.push(path.to_string_lossy().to_string());
+        }
+    }
+}
+
+fn normalized_inc_key(path: &std::path::Path) -> String {
+    let normalized = path.to_string_lossy().replace('\\', "/");
+    if normalized == "/" { normalized } else { normalized.trim_end_matches('/').to_string() }
 }
 
 impl LspServer {
@@ -180,22 +212,24 @@ impl LspServer {
         let root = match resolution_root(self, None) {
             Some(r) => r,
             None => {
-                WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
-                    tracing::warn!(
+                if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
+                    let _ = self.show_message(
+                        MessageType::Warning,
                         "perl-lsp: workspace root not detected — module resolution disabled. \
                          To enable: open the project folder in your editor (File > Open Folder) \
-                         rather than individual files. This warning appears once per server session."
+                         rather than individual files. This warning appears once per server session.",
                     );
-                });
+                }
                 return None;
             }
         };
 
-        let config = workspace_config_for_doc(self, None);
+        let mut config = workspace_config_for_doc(self, None);
         let perl5lib_paths = std::env::var("PERL5LIB")
             .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
             .unwrap_or_default();
         let mut include_paths = config.effective_include_paths(&perl5lib_paths);
+        append_system_inc_paths(&mut config, &mut include_paths);
 
         if let Some(text) = doc_text {
             prepend_use_lib_paths(&mut include_paths, text, &root, None);
@@ -217,22 +251,24 @@ impl LspServer {
         let root = match resolution_root(self, doc_uri) {
             Some(r) => r,
             None => {
-                WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
-                    tracing::warn!(
+                if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
+                    let _ = self.show_message(
+                        MessageType::Warning,
                         "perl-lsp: workspace root not detected — module resolution disabled. \
                          To enable: open the project folder in your editor (File > Open Folder) \
-                         rather than individual files. This warning appears once per server session."
+                         rather than individual files. This warning appears once per server session.",
                     );
-                });
+                }
                 return None;
             }
         };
 
-        let config = workspace_config_for_doc(self, doc_uri);
+        let mut config = workspace_config_for_doc(self, doc_uri);
         let perl5lib_paths = std::env::var("PERL5LIB")
             .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
             .unwrap_or_default();
         let mut include_paths = config.effective_include_paths(&perl5lib_paths);
+        append_system_inc_paths(&mut config, &mut include_paths);
 
         if let Some(text) = doc_text {
             let file_dir = doc_uri
@@ -348,13 +384,14 @@ impl LspServer {
         let root = match resolution_root(self, doc_uri) {
             Some(r) => r,
             None => {
-                WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
-                    tracing::warn!(
+                if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
+                    let _ = self.show_message(
+                        MessageType::Warning,
                         "perl-lsp: workspace root not detected — module resolution disabled. \
                          To enable: open the project folder in your editor (File > Open Folder) \
-                         rather than individual files. This warning appears once per server session."
+                         rather than individual files. This warning appears once per server session.",
                     );
-                });
+                }
                 return None;
             }
         };
@@ -393,8 +430,13 @@ impl LspServer {
             Vec::new()
         };
 
+        let perl5lib_set: HashSet<String> = if config.use_perl5lib {
+            perl5lib_paths.iter().cloned().collect()
+        } else {
+            HashSet::new()
+        };
         let effective_inc =
-            build_effective_inc_roots(&include_paths, &lexical_paths, &system_paths);
+            build_effective_inc_roots(&include_paths, &perl5lib_set, &lexical_paths, &system_paths);
 
         match resolve_module_uri_with_effective_inc(
             module_name,
@@ -464,6 +506,113 @@ mod tests {
                 "resolve_module_path must consistently return None when workspace root unset"
             );
         }
+    }
+
+    #[test]
+    fn build_effective_inc_roots_dedupes_with_normalized_separators() {
+        let include_paths = vec!["lib".to_string(), "lib/".to_string(), "other".to_string()];
+        let lexical_paths = vec!["lib\\".to_string()];
+        let system_paths = vec![PathBuf::from("other/"), PathBuf::from("syslib")];
+        let no_perl5lib = HashSet::new();
+
+        let roots =
+            build_effective_inc_roots(&include_paths, &no_perl5lib, &lexical_paths, &system_paths);
+        let root_paths: Vec<String> =
+            roots.iter().map(|r| r.path.to_string_lossy().replace('\\', "/")).collect();
+
+        assert_eq!(root_paths, vec!["lib/".to_string(), "other".to_string(), "syslib".to_string()]);
+        assert_eq!(roots[0].source, "use-lib-lexical");
+        assert_eq!(roots[1].source, "workspace-include-paths");
+        assert_eq!(roots[2].source, "interpreter-startup-inc");
+    }
+
+    #[test]
+    fn append_system_inc_paths_skips_dot_and_dedupes_normalized_variants() -> TestResult {
+        let mut config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+        config.use_system_inc = true;
+        config.include_paths = vec!["lib".to_string()];
+
+        let temp = tempfile::tempdir()?;
+        let inc_path = temp.path().join("site_perl");
+        std::fs::create_dir_all(&inc_path)?;
+
+        let perl_path = std::env::var("PERL").unwrap_or_else(|_| "perl".to_string());
+        config.perl_path = Some(perl_path);
+        config.perl_args = vec![
+            "-I".to_string(),
+            ".".to_string(),
+            "-I".to_string(),
+            inc_path.to_string_lossy().to_string(),
+            "-I".to_string(),
+            format!("{}{}", inc_path.to_string_lossy(), std::path::MAIN_SEPARATOR),
+        ];
+
+        let mut include_paths = vec!["lib".to_string(), ".".to_string()];
+        append_system_inc_paths(&mut config, &mut include_paths);
+
+        let dot_count = include_paths.iter().filter(|path| path.as_str() == ".").count();
+        assert_eq!(dot_count, 1, "dot entry should not be duplicated from system @INC");
+
+        let inc_entries = include_paths
+            .iter()
+            .filter(|path| {
+                normalized_inc_key(std::path::Path::new(path)) == normalized_inc_key(&inc_path)
+            })
+            .count();
+        assert_eq!(inc_entries, 1, "normalized include path should be deduplicated");
+        Ok(())
+    }
+
+    #[test]
+    fn build_effective_inc_roots_preserves_precedence_for_first_occurrence() {
+        let include_paths = vec!["dup".to_string(), "late".to_string()];
+        let lexical_paths = vec!["dup".to_string()];
+        let system_paths = vec![PathBuf::from("late"), PathBuf::from("sys")];
+        let no_perl5lib = HashSet::new();
+
+        let roots =
+            build_effective_inc_roots(&include_paths, &no_perl5lib, &lexical_paths, &system_paths);
+
+        assert_eq!(roots.len(), 3);
+        assert_eq!(roots[0].path, PathBuf::from("dup"));
+        assert_eq!(roots[0].kind, IncRootKind::FileLocalLexical);
+        assert_eq!(roots[1].path, PathBuf::from("late"));
+        assert_eq!(roots[1].kind, IncRootKind::WorkspaceRelative);
+        assert_eq!(roots[2].path, PathBuf::from("sys"));
+        assert_eq!(roots[2].kind, IncRootKind::InterpreterStartup);
+        assert_eq!(roots[0].precedence, 0);
+        assert_eq!(roots[1].precedence, 1);
+        assert_eq!(roots[2].precedence, 2);
+    }
+
+    #[test]
+    fn build_effective_inc_roots_labels_perl5lib_paths() {
+        let perl5lib_path = "/home/user/perl5/lib/perl5".to_string();
+        let include_paths = vec![perl5lib_path.clone(), "lib".to_string()];
+        let perl5lib_set: HashSet<String> = std::iter::once(perl5lib_path.clone()).collect();
+        let roots = build_effective_inc_roots(&include_paths, &perl5lib_set, &[], &[]);
+
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots[0].path, PathBuf::from(&perl5lib_path));
+        assert_eq!(roots[0].kind, IncRootKind::Perl5LibEnv);
+        assert_eq!(roots[0].source, "perl5lib-env");
+        assert_eq!(roots[1].path, PathBuf::from("lib"));
+        assert_eq!(roots[1].kind, IncRootKind::WorkspaceRelative);
+        assert_eq!(roots[1].source, "workspace-include-paths");
+    }
+
+    #[test]
+    fn build_effective_inc_roots_empty_perl5lib_set_does_not_reclassify_workspace_paths() {
+        // Regression: when use_perl5lib=false the caller passes an empty set.
+        // A configured path like "lib" must remain WorkspaceRelative even if
+        // it coincidentally appears in $PERL5LIB.
+        let include_paths = vec!["lib".to_string()];
+        let empty_perl5lib: HashSet<String> = HashSet::new();
+        let roots = build_effective_inc_roots(&include_paths, &empty_perl5lib, &[], &[]);
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].kind, IncRootKind::WorkspaceRelative);
+        assert_eq!(roots[0].source, "workspace-include-paths");
     }
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -1011,11 +1160,14 @@ use Overlay::Live;
     }
 
     #[test]
-    fn test_resolve_module_path_use_lib_outside_workspace_honored() -> TestResult {
+    fn test_resolve_module_path_use_lib_outside_workspace_is_rejected() -> TestResult {
+        // Security: lexical `use lib` paths from untrusted document text must not resolve
+        // modules outside the workspace.  Absolute paths that don't live under the workspace
+        // root are silently dropped so the outside module is never reachable via the LSP.
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("workspace");
         fs::create_dir_all(&workspace)?;
-        // Place a module OUTSIDE the workspace and verify absolute use lib can find it.
+        // Place a module OUTSIDE the workspace — it must never be found.
         let outside_dir = temp.path().join("outside");
         let outside_module = outside_dir.join("Evil").join("Hack.pm");
         fs::create_dir_all(outside_module.parent().ok_or("no parent")?)?;
@@ -1028,15 +1180,16 @@ use Overlay::Live;
             config.include_paths = vec![];
         }
 
-        // Absolute paths in use lib should be honored literally.
+        // Absolute path outside workspace in `use lib` should NOT enable resolution of
+        // an out-of-workspace module; the path must be silently dropped.
         let outside_dir_str = outside_dir.to_string_lossy().to_string();
         let doc_text = format!("use lib '{outside_dir_str}';\n");
-        let result = server
-            .resolve_module_path("Evil::Hack", Some(&doc_text))
-            .ok_or("resolve_module_path returned None unexpectedly")?;
-        assert_eq!(
-            result, outside_module,
-            "absolute path outside workspace should resolve directly: {result:?}"
+        let result = server.resolve_module_path("Evil::Hack", Some(&doc_text));
+        // The result must not be the outside module path.
+        assert!(
+            result.as_ref().map_or(true, |p| p != &outside_module),
+            "absolute outside-workspace use lib path should not resolve the outside module, \
+             got: {result:?}"
         );
         Ok(())
     }
@@ -1149,6 +1302,199 @@ use Overlay::Live;
             // Must not panic
             let _result = server.resolve_module_path("Any::Module", Some(doc_text));
         }
+        Ok(())
+    }
+
+    // --- AC5: warns only once per LspServer instance ---
+
+    /// AC5: The first call to resolve_module_path when no workspace root is configured
+    /// must set root_undetected_shown to true. Subsequent calls must NOT reset it —
+    /// confirming that the warning fires exactly once per LspServer instance.
+    #[test]
+    fn root_undetected_shown_flag_is_set_on_first_failed_resolution() {
+        let server = LspServer::new();
+
+        // Flag must start false so the first warning can fire.
+        assert!(
+            !server.root_undetected_shown.load(std::sync::atomic::Ordering::SeqCst),
+            "root_undetected_shown must be false at server creation"
+        );
+
+        // First resolution attempt (no root set) → flag flips to true.
+        let _ = server.resolve_module_path("First::Module", None);
+        assert!(
+            server.root_undetected_shown.load(std::sync::atomic::Ordering::SeqCst),
+            "root_undetected_shown must be true after first failed resolution"
+        );
+    }
+
+    /// AC5 continued: a second resolution attempt with no root must see the flag already
+    /// set (suppressing a second warning). Verifies the atomic once-per-session contract.
+    #[test]
+    fn root_undetected_shown_flag_stays_set_on_subsequent_failed_resolutions() {
+        let server = LspServer::new();
+
+        // First call flips the flag.
+        let _ = server.resolve_module_path("First::Module", None);
+
+        // Manually snapshot old value to confirm the next call will suppress.
+        // fetch_or(true) returns the *previous* value: false on first, true on second.
+        // Here we test the cumulative: after two calls the flag is still true (not reset).
+        let _ = server.resolve_module_path("Second::Module", None);
+        assert!(
+            server.root_undetected_shown.load(std::sync::atomic::Ordering::SeqCst),
+            "root_undetected_shown must remain true after subsequent failed resolutions"
+        );
+    }
+
+    /// AC5: The Arc<AtomicBool> fetch_or semantics ensure the first call returns false
+    /// (enabling the warning) and subsequent calls return true (suppressing it).
+    /// This test validates the raw atomic protocol in isolation, independent of I/O.
+    #[test]
+    fn arc_atomic_fetch_or_warns_only_once_per_session() {
+        use std::sync::atomic::Ordering;
+
+        let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+        // First fetch_or: previous value is false → warning fires.
+        let first_was_false = !flag.fetch_or(true, Ordering::SeqCst);
+        assert!(first_was_false, "first fetch_or must return false (warning fires)");
+
+        // Second fetch_or: previous value is true → warning suppressed.
+        let second_was_true = flag.fetch_or(true, Ordering::SeqCst);
+        assert!(second_was_true, "second fetch_or must return true (warning suppressed)");
+
+        // Flag is still true regardless of subsequent calls.
+        assert!(
+            flag.load(Ordering::SeqCst),
+            "flag must remain true after multiple fetch_or(true) calls"
+        );
+    }
+
+    // --- AC8: window/showMessage payload uses MessageType::Warning ---
+
+    /// AC8: MessageType::Warning must have discriminant value 2 per the LSP specification.
+    /// The show_message call serializes `typ as i32` into the JSON payload —
+    /// this test verifies that the enum value the production code uses is correct.
+    #[test]
+    fn message_type_warning_has_lsp_discriminant_two() {
+        // LSP spec §3.16.1: MessageType.Warning = 2.
+        // Production code: `json!({ "type": typ as i32, ... })`.
+        assert_eq!(
+            MessageType::Warning as i32,
+            2,
+            "MessageType::Warning must serialize to 2 per LSP spec §3.16.1"
+        );
+    }
+
+    /// AC8: When workspace root is not detected, the outbound window/showMessage notification
+    /// must carry "type": 2 (Warning) and include actionable guidance text.
+    ///
+    /// Uses with_io() to capture the outbound stream and verifies the JSON payload
+    /// after the server is dropped (which joins the writer thread for a clean flush).
+    #[test]
+    fn show_message_on_root_undetected_uses_warning_type() -> TestResult {
+        use std::io::Cursor;
+
+        let output = std::sync::Arc::new(parking_lot::Mutex::new(Vec::<u8>::new()));
+
+        struct CaptureWriter(std::sync::Arc<parking_lot::Mutex<Vec<u8>>>);
+
+        impl std::io::Write for CaptureWriter {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let captured = std::sync::Arc::clone(&output);
+        let server = LspServer::with_io(
+            Box::new(Cursor::new(Vec::<u8>::new())),
+            Box::new(CaptureWriter(captured)),
+        );
+
+        // Trigger the first-run warning by calling resolve with no workspace root.
+        let _ = server.resolve_module_path("Warn::Me", None);
+
+        // Drop the server to flush and join the writer thread.
+        drop(server);
+
+        let bytes = output.lock().clone();
+        let text = String::from_utf8(bytes).map_err(|e| format!("output not valid UTF-8: {e}"))?;
+
+        assert!(
+            text.contains("window/showMessage"),
+            "expected window/showMessage notification in outbound stream, got: {text}"
+        );
+        assert!(
+            text.contains("\"type\":2"),
+            "expected MessageType::Warning (type:2) in window/showMessage payload, got: {text}"
+        );
+        assert!(
+            text.contains("workspace root not detected"),
+            "expected actionable guidance text in warning message, got: {text}"
+        );
+        assert!(
+            text.contains("Open Folder"),
+            "expected 'Open Folder' actionable text in warning message, got: {text}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_module_path_with_uri_honors_system_inc_opt_in() -> TestResult {
+        // This test shells out to `perl -I <path> -e 'print join("\n", @INC)'`.
+        // Skip gracefully on machines where perl is not installed.
+        let perl_available = std::process::Command::new("perl")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !perl_available {
+            eprintln!(
+                "SKIP: test_resolve_module_path_with_uri_honors_system_inc_opt_in — perl not found on PATH"
+            );
+            return Ok(());
+        }
+
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        fs::create_dir_all(&workspace)?;
+
+        let external_inc = temp.path().join("external-inc");
+        let module_file = external_inc.join("System").join("Inc.pm");
+        fs::create_dir_all(module_file.parent().ok_or("missing module parent")?)?;
+        fs::write(&module_file, "package System::Inc; 1;")?;
+
+        let doc_uri = Url::from_file_path(workspace.join("main.pl"))
+            .map_err(|_| "failed to create doc uri")?
+            .to_string();
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = Vec::new();
+            config.use_system_inc = true;
+            config.perl_path = Some("perl".to_string());
+            config.perl_args = vec!["-I".to_string(), external_inc.to_string_lossy().to_string()];
+        }
+
+        let resolved = server.resolve_module_path_with_uri(
+            "System::Inc",
+            Some("use System::Inc;\n"),
+            Some(&doc_uri),
+        );
+        assert_eq!(
+            resolved,
+            Some(module_file),
+            "opted-in system @INC should be searched by resolve_module_path_with_uri"
+        );
+
         Ok(())
     }
 }

@@ -226,6 +226,7 @@ pub fn add_xs_api_completions_for_prefix(
                 additional_edits: vec![],
                 text_edit_range: Some((prefix_start, position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }

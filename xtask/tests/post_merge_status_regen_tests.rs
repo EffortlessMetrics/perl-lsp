@@ -20,6 +20,22 @@ fn project_root() -> PathBuf {
     dir
 }
 
+fn assert_marker_count(
+    content: &str,
+    target_file: &str,
+    marker_name: &str,
+    expected_count: usize,
+    marker_kind: &str,
+    marker_text: &str,
+) {
+    let actual_count = content.matches(marker_text).count();
+    assert!(
+        actual_count == expected_count,
+        "status marker contract violation: {marker_kind} marker `{marker_name}` in `{target_file}` expected {expected_count} occurrence(s), found {actual_count}.\n\
+         expected {marker_kind} string: {marker_text}"
+    );
+}
+
 /// The `policy_checks` gate in gate-policy.yaml must not run
 /// `update-current-status.py --check` as part of a PR merge gate.
 /// That check is now handled post-merge by the dedicated workflow.
@@ -254,6 +270,10 @@ fn test_subsystem_files_have_markers() -> Result<(), Box<dyn std::error::Error>>
         parser.contains("<!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->"),
         "parser.md missing PARSER_STRICT_CLEAN_ROW block"
     );
+    assert!(
+        parser.contains("<!-- BEGIN: PARSER_PERFORMANCE_TABLE -->"),
+        "parser.md missing PARSER_PERFORMANCE_TABLE block"
+    );
 
     let quality = fs::read_to_string(status_dir.join("quality.md"))?;
     assert!(
@@ -292,6 +312,34 @@ fn test_subsystem_files_have_markers() -> Result<(), Box<dyn std::error::Error>>
         workspace_md.contains("<!-- BEGIN: WORKSPACE_METRICS_BULLETS -->"),
         "workspace.md missing WORKSPACE_METRICS_BULLETS block"
     );
+
+    Ok(())
+}
+
+/// Parser status marker contract: every marker used by parser status generation
+/// must appear exactly once as BEGIN and exactly once as END in parser.md.
+#[test]
+fn test_status_marker_parser_contract() -> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let parser_path = root.join("docs/project/status/parser.md");
+    let parser = fs::read_to_string(&parser_path)?;
+    let target_file = "docs/project/status/parser.md";
+    let parser_markers = [
+        "PARSER_TRACKING_TABLE",
+        "PARSER_PERFORMANCE_TABLE",
+        "PARSER_METRICS_BULLETS",
+        "TOKEN_HEALTH_TABLE",
+        "PARSER_NODEKIND_ROW",
+        "PARSER_RELIABILITY_ROW",
+        "PARSER_STRICT_CLEAN_ROW",
+    ];
+
+    for marker in parser_markers {
+        let begin = format!("<!-- BEGIN: {marker} -->");
+        let end = format!("<!-- END: {marker} -->");
+        assert_marker_count(&parser, target_file, marker, 1, "BEGIN", &begin);
+        assert_marker_count(&parser, target_file, marker, 1, "END", &end);
+    }
 
     Ok(())
 }

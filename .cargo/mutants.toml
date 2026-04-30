@@ -1,16 +1,28 @@
 timeout_multiplier = 1.25
 
-# Mutation hardening focus area: quote parsing logic now lives in perl-quote.
-# Keep this subset intentionally narrow so it stays usable in local/CI flows.
+# Mutation hardening focus areas:
+#   - quote parsing (perl-parser-core/src/syntax/quote.rs)
+#   - path traversal / workspace security (path_security.rs, path_normalize.rs)
+#   - qualified-name parsing (qualified_name.rs)
+#
+# Keep this subset intentionally bounded so it stays usable in local/CI flows.
 examine_globs = [
-    "crates/perl-quote/src/lib.rs",
+    "crates/perl-parser-core/src/syntax/quote.rs",
+    "crates/perl-parser-core/src/syntax/path_security.rs",
+    "crates/perl-parser-core/src/syntax/path_normalize.rs",
+    "crates/perl-parser-core/src/syntax/qualified_name.rs",
 ]
 
-# Exercise both direct crate tests and parser-level integration tests that consume
-# quote parsing helpers via re-exports.
+# Exercise both parser-core regressions and parser-level integration tests that
+# consume quote parsing helpers via re-exports.  Security-focused test files are
+# added so mutations in the path/qualified-name modules are caught promptly.
 additional_cargo_test_args = [
-    "-p", "perl-quote",
-    "--test", "comprehensive_unit_tests",
+    "-p", "perl-parser-core",
+    "--test", "fix_subst_unusual_delimiters_2732",
+    "--test", "fix_subst_squote_delimiter",
+    "--test", "path_security_mutation_hardening",
+    "--test", "path_normalize_mutation_hardening",
+    "--test", "qualified_name_mutation_hardening",
     "-p", "perl-parser",
     "--test", "quote_operator_tests",
     "--test", "quote_parser_mutation_survivors_elimination",

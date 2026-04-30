@@ -8,3 +8,5 @@ cc b4bd8b69eaaa58012fa53641811a82a317b08ee0577f6e4ae24786da17633e03 # shrinks to
 cc f1492843e9e1efe993e271639f9243f0fbce0239b907449e64c1534bfe240074 # shrinks to statements = ["\"\"\"\"A\"0]\u{a0}\u{1680}", "(\"''q\"aa\u{205f} "]
 cc 2731dc211cac1fd3d856d6a288509f665f43709d5a758dc1cc95da74bd47d6eb # shrinks to statements = ["'\"\"0a\u{1680}\"\t\u{1680}]", "\t\t\t\u{a0}A\u{205f}A]\u{3000}'"]
 cc 03e626626479356bc44521a0bae8d71842441a944e0be3cb034ae20877cb65b6 # shrinks to statements = ["q\u{205f}O\u{1680} \u{a0}\u{1680}A\u{2000}\u{205f}", "\"\"\"AA\u{a0}\t\u{2028}\u{85}(", "''''(((\"\"\"\""]
+cc 2467ed08508089e0132a4498c42940cebe1537bfac1cdbb4f9d9c57c3db69091 # shrinks to valid_code = "\u{85}_A\t\u{85}\u{205f}0\u{1680} \u{3000}\u{3000}\u{85}\u{202f}a0\u{205f}m \u{3000}\u{1680}", corruption = "\u{200b}"
+cc 7c43b83b52b410ea2070e18d5cae7f152b2e93b5627ba45aa513e2c12a28e061 # shrinks to statements = ["''0aAAA{0 ", "=A'}A\u{2000}aaaa"]

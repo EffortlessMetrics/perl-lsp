@@ -93,6 +93,7 @@ mod builtins;
 mod context;
 mod file_path;
 mod functions;
+mod import_map;
 mod items;
 mod keywords;
 mod methods;
@@ -113,15 +114,14 @@ pub use self::methods::get_dbi_method_documentation;
 pub use self::test_more::get_test_more_documentation;
 pub use self::xs_api::{add_xs_api_completions_for_prefix, get_xs_api_documentation, is_xs_source};
 
-use perl_module::import::resolve_known_export_tag;
 use perl_parser_core::ast::Node;
-use perl_parser_core::ast::NodeKind;
 use perl_semantic_analyzer::class_model::{ClassModel, ClassModelBuilder, Framework};
 use perl_semantic_analyzer::semantic::{BuiltinDoc, get_moose_type_documentation};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Maps module_name -> Set of explicitly imported symbol names.
@@ -170,6 +170,9 @@ pub struct CompletionProvider {
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
+    include_paths: Vec<PathBuf>,
+    system_inc_paths: Vec<PathBuf>,
+    include_system_inc: bool,
 }
 
 impl CompletionProvider {
@@ -200,7 +203,14 @@ impl CompletionProvider {
     /// ```
     /// Arguments: `ast`, `workspace_index`.
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
-        Self::new_with_index_and_source(ast, "", workspace_index)
+        Self::new_with_index_and_source_and_paths(
+            ast,
+            "",
+            workspace_index,
+            Vec::new(),
+            Vec::new(),
+            false,
+        )
     }
 
     /// Create a new completion provider from parsed AST and source with workspace integration
@@ -249,6 +259,25 @@ impl CompletionProvider {
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
+        Self::new_with_index_and_source_and_paths(
+            ast,
+            source,
+            workspace_index,
+            Vec::new(),
+            Vec::new(),
+            false,
+        )
+    }
+
+    /// Create a completion provider with explicit module completion search roots.
+    pub fn new_with_index_and_source_and_paths(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_paths: Vec<PathBuf>,
+        system_inc_paths: Vec<PathBuf>,
+        include_system_inc: bool,
+    ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
         let type_engine = workspace_index.as_ref().map(|_| {
@@ -256,306 +285,18 @@ impl CompletionProvider {
             let _ = type_engine.infer(ast);
             type_engine
         });
-        let import_map = Self::extract_import_map(ast);
+        let import_map = import_map::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
-    }
-
-    /// Walk the top-level AST and build an `ImportMap` from `use` statements.
-    ///
-    /// Only uppercase-starting module names are included (skips pragmas like
-    /// `strict`, `warnings`, `feature`, `constant`, `utf8`, `lib`, `parent`, `base`).
-    fn extract_import_map(ast: &Node) -> ImportMap {
-        let mut map: ImportMap = HashMap::new();
-
-        fn collect_import_symbols(
-            module: &str,
-            arg: &str,
-            symbols: &mut HashSet<String>,
-        ) -> (bool, bool) {
-            let trimmed = arg.trim();
-            if trimmed.is_empty() {
-                return (false, false);
-            }
-            if matches!(trimmed, "=>" | "," | "(" | ")" | "[" | "]" | "{" | "}") {
-                return (false, false);
-            }
-
-            let mut content = trimmed;
-            if let Some(inner) = content.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-                content = inner.trim();
-            }
-
-            if content.starts_with("qw") {
-                content = content
-                    .trim_start_matches("qw")
-                    .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                    .trim_end_matches(|c: char| ")]}/|!>".contains(c))
-                    .trim();
-
-                let mut unresolved_tag = false;
-                for word in content.split_whitespace() {
-                    if word.is_empty() {
-                        continue;
-                    }
-                    if word.starts_with(':') {
-                        if let Some(expanded) = resolve_known_export_tag(module, word) {
-                            symbols.extend(expanded.iter().map(|name| (*name).to_string()));
-                        } else {
-                            unresolved_tag = true;
-                        }
-                    } else {
-                        symbols.insert(word.to_string());
-                    }
-                }
-                return (!content.is_empty(), unresolved_tag);
-            }
-
-            let cleaned = content.trim_matches(|c: char| c == '\'' || c == '"');
-            if cleaned.is_empty() {
-                return (false, false);
-            }
-
-            let mut unresolved_tag = false;
-            for word in cleaned.split_whitespace() {
-                if word.is_empty() {
-                    continue;
-                }
-                if word.starts_with(':') {
-                    if let Some(expanded) = resolve_known_export_tag(module, word) {
-                        symbols.extend(expanded.iter().map(|name| (*name).to_string()));
-                    } else {
-                        unresolved_tag = true;
-                    }
-                } else {
-                    symbols.insert(word.to_string());
-                }
-            }
-            (true, unresolved_tag)
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            import_map,
+            include_paths,
+            system_inc_paths,
+            include_system_inc,
         }
-
-        fn collect_node_import_symbols(
-            module: &str,
-            arg: &Node,
-            symbols: &mut HashSet<String>,
-        ) -> (bool, bool) {
-            match &arg.kind {
-                NodeKind::String { value, .. } => collect_import_symbols(
-                    module,
-                    value.trim_matches('\'').trim_matches('"'),
-                    symbols,
-                ),
-                NodeKind::Identifier { name } => collect_import_symbols(module, name, symbols),
-                NodeKind::ArrayLiteral { elements } => {
-                    let mut has_symbols = false;
-                    let mut has_unresolved_tag = false;
-                    for element in elements {
-                        let (element_has_symbols, element_unresolved_tag) =
-                            collect_node_import_symbols(module, element, symbols);
-                        if element_has_symbols {
-                            has_symbols = true;
-                        }
-                        if element_unresolved_tag {
-                            has_unresolved_tag = true;
-                        }
-                    }
-                    (has_symbols, has_unresolved_tag)
-                }
-                _ => (false, false),
-            }
-        }
-
-        fn require_module_name(expr: &Node) -> Option<String> {
-            let NodeKind::FunctionCall { name, args } = &expr.kind else {
-                return None;
-            };
-            if name != "require" {
-                return None;
-            }
-            let first = args.first()?;
-            match &first.kind {
-                NodeKind::Identifier { name } => Some(name.clone()),
-                NodeKind::String { value, .. } => {
-                    let cleaned = value.trim_matches('\'').trim_matches('"').trim();
-                    Some(cleaned.trim_end_matches(".pm").replace('/', "::"))
-                }
-                _ => None,
-            }
-        }
-
-        fn module_runtime_alias(expr: &Node) -> Option<(String, String)> {
-            let (alias_name, call_node) = match &expr.kind {
-                NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
-                    let NodeKind::Variable { name, .. } = &lhs.kind else {
-                        return None;
-                    };
-                    (name.as_str(), rhs.as_ref())
-                }
-                NodeKind::VariableDeclaration { variable, initializer: Some(rhs), .. } => {
-                    let NodeKind::Variable { name, .. } = &variable.kind else {
-                        return None;
-                    };
-                    (name.as_str(), rhs.as_ref())
-                }
-                _ => return None,
-            };
-            let NodeKind::FunctionCall { name, args } = &call_node.kind else {
-                return None;
-            };
-            if !matches!(
-                name.as_str(),
-                "use_module"
-                    | "require_module"
-                    | "Module::Runtime::use_module"
-                    | "Module::Runtime::require_module"
-            ) {
-                return None;
-            }
-            let first = args.first()?;
-            let NodeKind::String { value, .. } = &first.kind else {
-                return None;
-            };
-            let module = value.trim_matches('\'').trim_matches('"').trim();
-            if module.is_empty() {
-                return None;
-            }
-            Some((alias_name.to_string(), module.to_string()))
-        }
-
-        fn inner_expr(node: &Node) -> &Node {
-            if let NodeKind::ExpressionStatement { expression } = &node.kind {
-                expression.as_ref()
-            } else {
-                node
-            }
-        }
-
-        fn collect(node: &Node, map: &mut ImportMap) {
-            match &node.kind {
-                NodeKind::Use { module, args, .. } => {
-                    // Skip pragmas: only process uppercase-starting module names
-                    let first_char: Option<char> = module.chars().next();
-                    if !first_char.is_some_and(|c: char| c.is_ascii_uppercase()) {
-                        return;
-                    }
-
-                    // `use Module` with no args at all — import all of @EXPORT, no filtering
-                    if args.is_empty() {
-                        return;
-                    }
-
-                    let mut symbols: HashSet<String> = HashSet::new();
-                    let mut has_symbol_args = false;
-                    let mut has_unresolved_tag = false;
-
-                    for arg in args {
-                        // Skip version numbers (e.g. "1.50" in `use List::Util 1.50 qw(sum)`)
-                        let first_byte = arg.as_bytes().first().copied().unwrap_or(0);
-                        if first_byte.is_ascii_digit() {
-                            continue;
-                        }
-                        // Skip flag args (e.g. "-norequire")
-                        if arg.starts_with('-') {
-                            continue;
-                        }
-                        let (has_symbols_in_arg, unresolved_tag) =
-                            collect_import_symbols(module, arg, &mut symbols);
-                        if has_symbols_in_arg {
-                            has_symbol_args = true;
-                        }
-                        if unresolved_tag {
-                            has_unresolved_tag = true;
-                        }
-                    }
-
-                    if has_unresolved_tag {
-                        return;
-                    }
-
-                    if has_symbol_args {
-                        map.entry(module.clone()).or_default().extend(symbols);
-                    } else {
-                        // Explicit empty import: `use Module qw()`
-                        map.entry(module.clone()).or_default();
-                    }
-                }
-                NodeKind::Program { statements } | NodeKind::Block { statements } => {
-                    let mut required_modules: Vec<String> = statements
-                        .iter()
-                        .filter_map(|stmt| require_module_name(inner_expr(stmt)))
-                        .collect();
-                    let mut aliases: HashMap<String, String> = HashMap::new();
-                    for stmt in statements {
-                        if let Some((alias, module)) = module_runtime_alias(inner_expr(stmt)) {
-                            aliases.insert(alias, module.clone());
-                            if !required_modules.contains(&module) {
-                                required_modules.push(module);
-                            }
-                        }
-                    }
-
-                    for stmt in statements {
-                        let expr = inner_expr(stmt);
-                        let NodeKind::MethodCall { object, method, args } = &expr.kind else {
-                            continue;
-                        };
-                        if method != "import" {
-                            continue;
-                        }
-                        let object_name = match &object.kind {
-                            NodeKind::Identifier { name } => Some(name.as_str()),
-                            NodeKind::Variable { name, .. } => {
-                                aliases.get(name).map(String::as_str)
-                            }
-                            _ => None,
-                        };
-                        let Some(object_name) = object_name else {
-                            continue;
-                        };
-                        if !required_modules.iter().any(|module| module == object_name) {
-                            continue;
-                        }
-
-                        // `Module->import()` with no args means default exports
-                        // (equivalent to `use Module;` — import all of @EXPORT).
-                        // We represent this by NOT adding an entry to the map,
-                        // which means the module stays in the "import all" tier.
-                        if args.is_empty() {
-                            continue;
-                        }
-
-                        let mut imported_symbols: HashSet<String> = HashSet::new();
-                        let mut has_symbols = false;
-                        let mut has_unresolved_tag = false;
-                        for arg in args {
-                            let (arg_has_symbols, arg_unresolved_tag) = collect_node_import_symbols(
-                                object_name,
-                                arg,
-                                &mut imported_symbols,
-                            );
-                            if arg_has_symbols {
-                                has_symbols = true;
-                            }
-                            if arg_unresolved_tag {
-                                has_unresolved_tag = true;
-                            }
-                        }
-                        if has_unresolved_tag || !has_symbols {
-                            continue;
-                        }
-                        map.entry(object_name.to_string()).or_default().extend(imported_symbols);
-                    }
-
-                    for stmt in statements {
-                        collect(stmt, map);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        collect(ast, &mut map);
-        map
     }
 
     /// Create a new completion provider from parsed AST without workspace context
@@ -774,6 +515,9 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.include_paths,
+                &self.system_inc_paths,
+                self.include_system_inc,
             );
         } else if self.is_has_type_value_context(source, position) {
             self.add_has_type_completions(&mut completions, &context);
@@ -1548,8 +1292,10 @@ impl CompletionProvider {
             let after_brace = &before[brace_pos + 1..];
             // Prefix is the alphanumeric+_ run from after `{` to position
             let non_ident = after_brace
-                .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-                .map(|p| p + 1)
+                .char_indices()
+                .rev()
+                .find(|(_, c)| !c.is_alphanumeric() && *c != '_')
+                .map(|(p, c)| p + c.len_utf8())
                 .unwrap_or(0);
             after_brace[non_ident..].to_string()
         };
@@ -1563,7 +1309,9 @@ impl CompletionProvider {
         }
 
         // Check for `->` immediately before the `{` (hashref deref — out of scope).
-        if brace_pos >= 2 && &source[brace_pos - 2..brace_pos] == "->" {
+        // Use byte comparison to avoid slicing at a non-char-boundary when a multi-byte
+        // character immediately precedes `{`.
+        if brace_pos >= 2 && source.as_bytes().get(brace_pos - 2..brace_pos) == Some(b"->") {
             return None;
         }
 
@@ -1576,8 +1324,10 @@ impl CompletionProvider {
         // Variable name ends right before the `{`, scan back for `$`.
         let var_end = before_brace.len();
         let var_name_start = before_brace
-            .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-            .map(|p| p + 1)
+            .char_indices()
+            .rev()
+            .find(|(_, c)| !c.is_alphanumeric() && *c != '_')
+            .map(|(p, c)| p + c.len_utf8())
             .unwrap_or(0);
         let var_name = &before_brace[var_name_start..var_end];
         if var_name.is_empty() {
@@ -1748,6 +1498,7 @@ impl CompletionProvider {
                 additional_edits: vec![],
                 text_edit_range: Some((context.position - key_prefix_len, context.position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }
@@ -1779,6 +1530,7 @@ impl CompletionProvider {
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
+                    label_details: None,
                 });
             };
 
@@ -1881,6 +1633,7 @@ impl CompletionProvider {
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
+                    label_details: None,
                 });
             }
         }
@@ -1917,6 +1670,7 @@ impl CompletionProvider {
                 additional_edits: vec![],
                 text_edit_range: Some((context.prefix_start, context.position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }
@@ -2147,7 +1901,10 @@ mod tests {
     use perl_parser_core::Parser;
     use perl_tdd_support::{must, must_some};
     use perl_workspace::workspace_index::WorkspaceIndex;
+    use std::fs;
+    use std::path::PathBuf;
     use std::sync::Arc;
+    use tempfile::TempDir;
     use url::Url;
 
     #[test]
@@ -2395,6 +2152,39 @@ $"#;
             "expected incomplete block variable to outrank parent variable, got block={:?} sub={:?}",
             block_item.sort_text,
             sub_item.sort_text
+        );
+    }
+
+    #[test]
+    fn test_variable_completion_prefers_nearest_parent_scope_over_name_order() {
+        let code = concat!(
+            "{\n",
+            "    my $v_a = 1;\n",
+            "    {\n",
+            "        my $v_z = 2;\n",
+            "        {\n",
+            "            $v_\n",
+            "        }\n",
+            "    }\n",
+            "}\n"
+        );
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+        // Use rfind to locate the standalone $v_ completion trigger (the LAST $v_ in
+        // the source), not the first occurrence which is inside $v_a or $v_z.
+        let trigger_pos = must_some(code.rfind("$v_")) + 3;
+        let completions = provider.get_completions(code, trigger_pos);
+
+        let v_a_idx =
+            must_some(completions.iter().position(|completion| completion.label == "$v_a"));
+        let v_z_idx =
+            must_some(completions.iter().position(|completion| completion.label == "$v_z"));
+
+        assert!(
+            v_z_idx < v_a_idx,
+            "expected one-hop parent variable ($v_z) to rank before two-hop parent ($v_a); indices: v_z={v_z_idx}, v_a={v_a_idx}"
         );
     }
 
@@ -3585,6 +3375,255 @@ sub helper { }
     }
 
     #[test]
+    fn test_path_to_module_name_maps_nested_pm_file() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        let root = temp.path().join("lib");
+        let module_file = root.join("File").join("Path").join("To").join("Module.pm");
+        fs::create_dir_all(module_file.parent().ok_or("missing parent")?)?;
+        fs::write(&module_file, "package File::Path::To::Module;\n1;\n")?;
+
+        let module_name = workspace::path_to_module_name(&root, &module_file);
+        assert_eq!(module_name.as_deref(), Some("File::Path::To::Module"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_completion_scans_include_paths() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        let include_root = temp.path().join("external");
+        let module_file = include_root.join("DB").join("Driver.pm");
+        fs::create_dir_all(module_file.parent().ok_or("missing parent")?)?;
+        fs::write(module_file, "package DB::Driver;\n1;\n")?;
+
+        let code = "use DB";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(Arc::new(WorkspaceIndex::new())),
+            vec![include_root],
+            Vec::new(),
+            false,
+        );
+        let completions = provider.get_completions(code, code.len());
+        assert!(completions.iter().any(|c| c.label == "DB::Driver"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_completion_workspace_first_and_dedupes_external()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        let include_root = temp.path().join("external");
+        let module_file = include_root.join("DBI.pm");
+        fs::create_dir_all(module_file.parent().ok_or("missing parent")?)?;
+        fs::write(module_file, "package DBI;\n1;\n")?;
+
+        let index = Arc::new(WorkspaceIndex::new());
+        index
+            .index_file(Url::parse("file:///workspace/lib/DBI.pm")?, "package DBI;\n1;\n".into())?;
+
+        let code = "use DB";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            vec![include_root],
+            Vec::new(),
+            false,
+        );
+        let completions = provider.get_completions(code, code.len());
+        let dbi_items: Vec<_> = completions.iter().filter(|c| c.label == "DBI").collect();
+        assert_eq!(dbi_items.len(), 1, "DBI should be deduplicated across workspace/external");
+        assert_eq!(dbi_items[0].detail.as_deref(), Some("module"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_completion_system_inc_opt_in() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        let system_root = temp.path().join("sys");
+        let module_file = system_root.join("Sys").join("Only.pm");
+        fs::create_dir_all(module_file.parent().ok_or("missing parent")?)?;
+        fs::write(module_file, "package Sys::Only;\n1;\n")?;
+
+        let code = "use Sys::O";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let disabled = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(Arc::new(WorkspaceIndex::new())),
+            Vec::<PathBuf>::new(),
+            vec![system_root.clone()],
+            false,
+        )
+        .get_completions(code, code.len());
+        assert!(!disabled.iter().any(|c| c.label == "Sys::Only"));
+
+        let enabled = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(Arc::new(WorkspaceIndex::new())),
+            Vec::<PathBuf>::new(),
+            vec![system_root],
+            true,
+        )
+        .get_completions(code, code.len());
+        let sys_only =
+            enabled.iter().find(|c| c.label == "Sys::Only").ok_or("missing Sys::Only")?;
+        assert_eq!(sys_only.detail.as_deref(), Some("system module"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_path_to_module_name_top_level_pm() -> Result<(), Box<dyn std::error::Error>> {
+        // DBI.pm directly in root → "DBI" (single-component name, no "::")
+        let temp = TempDir::new()?;
+        let root = temp.path().join("lib");
+        fs::create_dir_all(&root)?;
+        let module_file = root.join("DBI.pm");
+        fs::write(&module_file, "package DBI;\n1;\n")?;
+
+        let module_name = workspace::path_to_module_name(&root, &module_file);
+        assert_eq!(module_name.as_deref(), Some("DBI"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_path_to_module_name_non_pm_excluded() -> Result<(), Box<dyn std::error::Error>> {
+        // Only .pm files should be mapped; .pl, .pod, .so, no-ext must return None
+        let temp = TempDir::new()?;
+        let root = temp.path().join("lib");
+        fs::create_dir_all(&root)?;
+
+        for name in &["Script.pl", "Manual.pod", "XSHelper.so", "README"] {
+            let file = root.join(name);
+            fs::write(&file, "")?;
+            assert!(
+                workspace::path_to_module_name(&root, &file).is_none(),
+                "expected None for {}",
+                name
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_scan_excludes_non_pm_files() -> Result<(), Box<dyn std::error::Error>> {
+        // scan_directory_for_modules must not surface .pl or .pod files
+        let temp = TempDir::new()?;
+        let root = temp.path().join("lib");
+        fs::create_dir_all(&root)?;
+        fs::write(root.join("Good.pm"), "package Good;\n1;\n")?;
+        fs::write(root.join("Bad.pl"), "#!/usr/bin/perl\n")?;
+        fs::write(root.join("Doc.pod"), "=head1 NAME\n")?;
+
+        let modules = workspace::scan_directory_for_modules(&root, "");
+        assert!(modules.contains(&"Good".to_string()), "Good.pm should be included");
+        assert!(!modules.contains(&"Bad".to_string()), "Bad.pl should be excluded");
+        assert!(!modules.contains(&"Doc".to_string()), "Doc.pod should be excluded");
+        Ok(())
+    }
+
+    #[test]
+    fn test_scan_nonexistent_root_returns_empty() {
+        // A path that does not exist must silently return an empty list
+        let modules = workspace::scan_directory_for_modules(
+            std::path::Path::new("/nonexistent/path/that/cannot/exist/12345"),
+            "Module",
+        );
+        assert!(modules.is_empty());
+    }
+
+    #[test]
+    fn test_path_to_module_name_rejects_non_pm_extension() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // path_to_module_name must return None for files that are not .pm files,
+        // even if they look like module paths.  Without this guard the scanner
+        // would surface .pl scripts and .pod documentation as completable modules.
+        let temp = TempDir::new()?;
+        let root = temp.path().join("lib");
+        fs::create_dir_all(&root)?;
+        for name in &["Script.pl", "Doc.pod", "Archive.pm.bak", "README"] {
+            let file = root.join(name);
+            fs::write(&file, "")?;
+            assert!(
+                workspace::path_to_module_name(&root, &file).is_none(),
+                "expected None for {}",
+                name
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_scan_respects_max_depth() -> Result<(), Box<dyn std::error::Error>> {
+        // scan_directory_for_modules must not descend more than MAX_SCAN_DEPTH (8)
+        // levels below the root.  A directory exactly at depth 8 should be scanned;
+        // a directory at depth 9 should be silently skipped.
+        let temp = TempDir::new()?;
+        let root = temp.path().join("lib");
+
+        // Build a path 9 levels deep: root/a/b/c/d/e/f/g/h/
+        let deep_dir =
+            root.join("a").join("b").join("c").join("d").join("e").join("f").join("g").join("h"); // depth 8 — should be scanned
+        let too_deep = deep_dir.join("x"); // depth 9 — must be skipped
+        fs::create_dir_all(&too_deep)?;
+        fs::write(deep_dir.join("AtLimit.pm"), "package A::B::C::D::E::F::G::H::AtLimit;\n1;\n")?;
+        fs::write(too_deep.join("TooDeep.pm"), "package TooDeep;\n1;\n")?;
+
+        let modules = workspace::scan_directory_for_modules(&root, "");
+        assert!(
+            modules.iter().any(|m| m == "a::b::c::d::e::f::g::h::AtLimit"),
+            "depth-8 module should be found; got: {:?}",
+            modules
+        );
+        assert!(
+            !modules.iter().any(|m| m == "x::TooDeep" || m == "TooDeep"),
+            "depth-9 module must not appear; got: {:?}",
+            modules
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_completion_not_triggered_outside_use_statement()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Verify that the scan does NOT fire for general variable completion.
+        // If a large include_root were passed and the scan ran unconditionally,
+        // this test would be slow and surface module names for non-use positions.
+        let temp = TempDir::new()?;
+        let include_root = temp.path().join("external");
+        let module_file = include_root.join("SomeMod.pm");
+        fs::create_dir_all(&include_root)?;
+        fs::write(module_file, "package SomeMod;\n1;\n")?;
+
+        // Code that does NOT contain a `use` statement — cursor at a scalar
+        let code = "my $x = 1;\nprint $x";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(Arc::new(WorkspaceIndex::new())),
+            vec![include_root],
+            Vec::new(),
+            false,
+        );
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            !completions.iter().any(|c| c.label == "SomeMod"),
+            "external module should not appear outside `use` context"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_use_statement_past_semicolon_excluded() -> Result<(), Box<dyn std::error::Error>> {
         // Cursor at the end of `use Module;` — the semicolon guard in
         // is_use_statement_context must suppress module-name completions.
@@ -4038,5 +4077,149 @@ sub run {
             "keys from %%other must not leak into %%config completions; got: {:?}",
             completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_unicode_non_ident_after_brace_no_panic() {
+        let source = "$config{☃ho";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_unicode_non_ident_before_var_no_panic() {
+        let source = "☃config{ho";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_unicode_before_brace_no_panic() {
+        // ☃ (3 bytes) immediately before `{` — previously caused a panic in the
+        // `->` check which sliced source[brace_pos-2..brace_pos] across a
+        // non-char-boundary.
+        let source = "$config☃{key";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        // ☃ is not a valid Perl identifier char so the variable name scan will not
+        // find a `$` sigil — result must be None without panicking.
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_4byte_emoji_in_key_no_panic() {
+        // 4-byte emoji (U+1F600) mid-key-prefix — exercises the char_indices rev path
+        // with a surrogate-range codepoint.
+        let source = "$config{\u{1F600}ho";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_ascii_regression() {
+        // Plain ASCII must still work correctly after the Unicode fixes.
+        let source = "$config{key";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        assert_eq!(result, Some(("config".to_string(), "key".to_string())));
+    }
+
+    #[test]
+    fn test_provider_captures_include_and_system_inc_paths() {
+        let code = "use My::Module;\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let include_paths = vec![PathBuf::from("/workspace/lib"), PathBuf::from("t/lib")];
+        let system_inc_paths = vec![PathBuf::from("/usr/lib/perl5")];
+
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            None,
+            include_paths.clone(),
+            system_inc_paths.clone(),
+            false,
+        );
+
+        assert_eq!(provider.include_paths, include_paths);
+        assert_eq!(provider.system_inc_paths, system_inc_paths);
+    }
+
+    #[test]
+    fn test_use_module_completion_unchanged_with_empty_inc_vectors()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyApp.pm")?;
+        index.index_file(module_uri, "package MyApp;\n1;\n".to_string())?;
+
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let baseline_provider =
+            CompletionProvider::new_with_index_and_source(&ast, code, Some(Arc::clone(&index)));
+        let baseline = baseline_provider.get_completions_with_path(code, code.len(), None);
+
+        let with_empty_inc = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            Vec::new(),
+            Vec::new(),
+            false,
+        );
+        let with_empty_inc_results =
+            with_empty_inc.get_completions_with_path(code, code.len(), None);
+
+        let baseline_labels: std::collections::HashSet<String> =
+            baseline.into_iter().map(|item| item.label).collect();
+        let with_empty_labels: std::collections::HashSet<String> =
+            with_empty_inc_results.into_iter().map(|item| item.label).collect();
+
+        assert_eq!(
+            baseline_labels, with_empty_labels,
+            "empty include paths must not change completion results in phase 1"
+        );
+        Ok(())
+    }
+
+    /// Phase 1 contract: non-empty inc_paths are stored but do NOT alter completions
+    /// (no filesystem scanning until phase 2). If this test breaks it means someone
+    /// started using the paths without adding scan logic — a regression, not a feature.
+    #[test]
+    fn test_non_empty_inc_paths_do_not_change_phase1_completions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyApp.pm")?;
+        index.index_file(module_uri, "package MyApp;\n1;\n".to_string())?;
+
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let baseline =
+            CompletionProvider::new_with_index_and_source(&ast, code, Some(Arc::clone(&index)))
+                .get_completions_with_path(code, code.len(), None);
+
+        // Non-empty inc paths: completions must still be identical to workspace-only baseline.
+        let with_inc = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            vec![PathBuf::from("/usr/local/lib/perl5"), PathBuf::from("t/lib")],
+            vec![PathBuf::from("/usr/lib/perl5/5.38")],
+            false,
+        )
+        .get_completions_with_path(code, code.len(), None);
+
+        let baseline_labels: std::collections::HashSet<String> =
+            baseline.into_iter().map(|item| item.label).collect();
+        let with_inc_labels: std::collections::HashSet<String> =
+            with_inc.into_iter().map(|item| item.label).collect();
+
+        assert_eq!(
+            baseline_labels, with_inc_labels,
+            "non-empty include paths must not change completions in phase 1 (no filesystem scanning yet)"
+        );
+        Ok(())
     }
 }

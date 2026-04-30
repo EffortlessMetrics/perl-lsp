@@ -8,21 +8,28 @@ name: CI
 on:
   pull_request:
     branches: [ main, master ]
-    types: [opened, synchronize, reopened, labeled, ready_for_review, converted_to_draft]
+    # Deliberately exclude `labeled` / `unlabeled` — every label-add (e.g., applying
+    # `ci-green`, `merge-ready`, pipeline sign-off labels) would trigger a fresh CI run
+    # that cancels the prior in-progress run (see `cancel-in-progress` below). This
+    # caused a cascade observed across ~20 admin-merges: each pipeline label applied by
+    # agents killed the running CI, restarting from scratch and eating minutes of compute
+    # per label. The merge-ready-reconciler.yml applies the same exclusion for the same
+    # reason (infinite-loop guard). `ready_for_review` and `converted_to_draft` are kept
+    # because they change the draft-pr-check guard behavior and must trigger CI.
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+  merge_group: {}
   push:
     branches: [ main, master ]
   workflow_dispatch: {}
 
-# Coalesce-queue-tail: let the running CI complete; skip superseded SHAs at a
-# preflight gate instead of cancelling in-flight work mid-run.
+# Cancel in-progress runs for PR events on new pushes; let push/merge_group runs complete.
+# The preflight SHA-staleness check provides additional skip logic for superseded SHAs.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
-  contents: write
-  pull-requests: write
-  statuses: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -76,6 +83,32 @@ jobs:
             echo "::notice::Superseded by $LATEST — skipping remaining jobs to save cost"
           fi
 
+  # ── Conflict-marker guard: <1s, no toolchain needed ─────────────────
+  # Prevents committed conflict markers reaching master (see #7183).
+  # Two incidents on 2026-04-28 each cost 1-3h of orchestrator + builder time.
+  conflict-markers:
+    name: Conflict marker check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    needs: [draft-pr-check, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+      - name: Check for conflict markers
+        run: |
+          matches=$(git ls-files -z | xargs -0 grep -lP '^(<{7} |>{7} |={7}$)' 2>/dev/null || true)
+          if [ -n "$matches" ]; then
+            echo "❌ Conflict markers found in committed files:"
+            echo "$matches"
+            echo ""
+            echo "Run: grep -rn -P '^(<{7} |>{7} |={7}\$)' \$(git ls-files)"
+            echo "to locate exact lines, then resolve and re-commit."
+            exit 1
+          fi
+          echo "✅ No conflict markers found"
+
   # ── PR Smoke: fast feedback for every PR (~1-2 min) ──────────────────
   pr-smoke:
     name: PR Smoke (Fast Feedback)
@@ -88,8 +121,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
-          # Fetch enough history so ci-scope can diff against origin/master.
-          # 0 = full history; balances correctness vs. clone cost.
+          # Fetch full history so ci-scope can diff against the explicit PR-fast base.
           fetch-depth: 0
 
       - name: Install Rust toolchain
@@ -99,15 +131,9 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install just
-        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1  # v2.75.22
         with:
           tool: just
-
-      - name: Check formatting
-        run: cargo xtask fmt --check
-
-      - name: Check release history drift
-        run: bash scripts/check_release_history.sh
 
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
@@ -116,106 +142,22 @@ jobs:
           cache-all-crates: true
           shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
 
-      # Compute CI scope: classify the diff and select lanes.
-      # Falls back gracefully — if ci-scope fails, SCOPE_OK=false and we
-      # fall through to the hardcoded clippy-core / test-core baseline.
-      - name: Compute CI scope
-        id: scope
-        run: |
-          SCOPE_OK=true
-          SCOPE_JSON=$(cargo xtask ci-scope --base origin/master --format json 2>/dev/null) || SCOPE_OK=false
+      - name: Warm xtask
+        run: cargo build -p xtask --locked
 
-          if [ "$SCOPE_OK" = "false" ] || [ -z "$SCOPE_JSON" ]; then
-            echo "::warning::ci-scope failed or emitted empty output — falling back to clippy-core / test-core"
-            echo "scope_ok=false" >> "$GITHUB_OUTPUT"
-            echo "diff_class=unknown" >> "$GITHUB_OUTPUT"
-            echo "crates_args=" >> "$GITHUB_OUTPUT"
-          else
-            echo "scope_ok=true" >> "$GITHUB_OUTPUT"
+      - name: Run PR-fast via shared xtask gate runner
+        run: cargo xtask gates --tier pr-fast --base origin/master --receipt
 
-            # Extract diff_class
-            DIFF_CLASS=$(echo "$SCOPE_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('diff_class','unknown'))")
-            echo "diff_class=$DIFF_CLASS" >> "$GITHUB_OUTPUT"
-
-            # Build -p args from direct_crates + architecture_wideners (unique, non-empty)
-            CRATES_ARGS=$(echo "$SCOPE_JSON" | python3 -c "
-          import sys, json
-          d = json.load(sys.stdin)
-          names = set()
-          for c in d.get('direct_crates', []):
-              n = c.get('name', '').strip()
-              if n: names.add(n)
-          for c in d.get('architecture_wideners', []):
-              n = c.get('name', '').strip()
-              if n: names.add(n)
-          print(' '.join('-p ' + n for n in sorted(names)))
-          ")
-            echo "crates_args=$CRATES_ARGS" >> "$GITHUB_OUTPUT"
-
-            # Log the scope decision for debugging
-            echo "::notice::ci-scope diff_class=$DIFF_CLASS crates=$CRATES_ARGS"
-          fi
-
-      # Skip heavy lanes entirely for prose-only or CI-config-only diffs.
-      - name: Skip notice (prose-only / CI-config diff)
-        if: |
-          steps.scope.outputs.scope_ok == 'true' &&
-          (steps.scope.outputs.diff_class == 'prose_only' ||
-           steps.scope.outputs.diff_class == 'ci_config')
-        run: |
-          echo "::notice::Prose-only / CI-config diff — skipping Rust build lanes (no code changed)"
-
-      # ── Scoped clippy (scope-aware path) ─────────────────────────────────
-      # Runs when ci-scope succeeded AND diff is not prose/CI-config AND
-      # there are crates to check.
-      - name: Scoped clippy
-        if: |
-          steps.scope.outputs.scope_ok == 'true' &&
-          steps.scope.outputs.diff_class != 'prose_only' &&
-          steps.scope.outputs.diff_class != 'ci_config' &&
-          steps.scope.outputs.crates_args != ''
-        run: |
-          cargo clippy --locked ${{ steps.scope.outputs.crates_args }} -- -D warnings -A missing_docs
-
-      # ── Scoped test (scope-aware path) ───────────────────────────────────
-      - name: Scoped test
-        if: |
-          steps.scope.outputs.scope_ok == 'true' &&
-          steps.scope.outputs.diff_class != 'prose_only' &&
-          steps.scope.outputs.diff_class != 'ci_config' &&
-          steps.scope.outputs.crates_args != ''
-        run: |
-          cargo test --locked --lib ${{ steps.scope.outputs.crates_args }}
-
-      # Compile integration tests for scoped crates to catch tests/* bit-rot.
-      - name: Scoped integration-test compile
-        if: |
-          steps.scope.outputs.scope_ok == 'true' &&
-          steps.scope.outputs.diff_class != 'prose_only' &&
-          steps.scope.outputs.diff_class != 'ci_config' &&
-          steps.scope.outputs.crates_args != ''
-        run: |
-          cargo check --locked --tests ${{ steps.scope.outputs.crates_args }}
-
-      # ── Fallback: baseline clippy-core / test-core ────────────────────────
-      # Runs when: ci-scope failed (scope_ok=false), OR ci-scope returned no
-      # crates to check (empty crates_args on a non-prose diff — shouldn't
-      # happen but guards against gaps in the classifier).
-      - name: Fallback clippy-core
-        if: |
-          steps.scope.outputs.scope_ok == 'false' ||
-          (steps.scope.outputs.diff_class != 'prose_only' &&
-           steps.scope.outputs.diff_class != 'ci_config' &&
-           steps.scope.outputs.crates_args == '')
-        run: just clippy-core
-
-      - name: Fallback test-core
-        if: |
-          steps.scope.outputs.scope_ok == 'false' ||
-          (steps.scope.outputs.diff_class != 'prose_only' &&
-           steps.scope.outputs.diff_class != 'ci_config' &&
-           steps.scope.outputs.crates_args == '')
-        run: just test-core
+      - name: Upload PR-fast receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-fast-receipt-${{ github.sha }}
+          path: |
+            target/receipts/receipt.json
+            target/receipts/logs/*.log
+          if-no-files-found: warn
+          retention-days: 7
 
       # Note: workspace-wide integration-test compilation is covered by the
       # parallel check-all-targets job (just check-all-targets), which runs
@@ -227,8 +169,11 @@ jobs:
     name: CI Gate (Merge-Blocking)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: [draft-pr-check, pr-smoke, preflight-latest-check]
+    needs: [draft-pr-check, pr-smoke, conflict-markers, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
+    permissions:
+      contents: read
+      statuses: write
     # Run on every PR push and on push to main/master
     # Earlier gating > label-gated gating (see #4675)
     # Frequent commits will queue; preflight skips superseded SHAs.
@@ -245,7 +190,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install just
-        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1  # v2.75.22
         with:
           tool: just
 
@@ -355,15 +300,23 @@ jobs:
             console.log(`Setting PR status to: ${status}`);
             console.log(`Description: ${description}`);
 
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.sha,
-              state: status,
-              context: 'ci/merge-gate',
-              description,
-              target_url: `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
-            });
+            try {
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: context.sha,
+                state: status,
+                context: 'ci/merge-gate',
+                description,
+                target_url: `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+              });
+            } catch (error) {
+              if (error.status === 403) {
+                core.warning(`Could not create ci/merge-gate commit status from this workflow context: ${error.message}`);
+              } else {
+                throw error;
+              }
+            }
 
   # ── UX Tests: first-5-minutes scenario regression suite ──────────────
   ux-tests:
@@ -385,7 +338,7 @@ jobs:
           toolchain: 1.92.0
 
       - name: Install just
-        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1  # v2.75.22
         with:
           tool: just
 
@@ -424,7 +377,7 @@ jobs:
           toolchain: 1.92.0
 
       - name: Install just
-        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1  # v2.75.22
         with:
           tool: just
 

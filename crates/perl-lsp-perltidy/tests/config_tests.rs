@@ -21,7 +21,40 @@ fn pbp_preset_sets_best_practices_flag() {
 }
 
 #[test]
-fn config_with_profile_uses_only_profile_flag() {
+fn config_with_profile_uses_profile_flag_and_extra_args() {
+    let config = PerlTidyConfig {
+        profile: Some("/home/user/.perltidyrc".to_string()),
+        extra_args: vec!["--standard-output".to_string()],
+        ..PerlTidyConfig::default()
+    };
+    let args = config.to_args();
+
+    assert_eq!(args.len(), 2);
+    assert_eq!(args[0], "--profile=/home/user/.perltidyrc");
+    assert_eq!(args[1], "--standard-output");
+}
+
+#[test]
+fn config_with_profile_ignores_other_settings_but_keeps_extra_args() {
+    let config = PerlTidyConfig {
+        maximum_line_length: Some(120),
+        indent_columns: Some(8),
+        tabs: Some(true),
+        profile: Some(".perltidyrc".to_string()),
+        extra_args: vec!["--check-syntax".to_string()],
+        ..PerlTidyConfig::default()
+    };
+    let args = config.to_args();
+
+    // Only profile and explicit extra args should be present; other config suppressed
+    assert_eq!(args.len(), 2);
+    assert!(args[0].starts_with("--profile="));
+    assert_eq!(args[1], "--check-syntax");
+}
+
+#[test]
+fn config_with_profile_and_no_extra_args_produces_only_profile_flag() {
+    // Profile without extra_args should still yield exactly one arg.
     let config = PerlTidyConfig {
         profile: Some("/home/user/.perltidyrc".to_string()),
         ..PerlTidyConfig::default()
@@ -30,22 +63,6 @@ fn config_with_profile_uses_only_profile_flag() {
 
     assert_eq!(args.len(), 1);
     assert_eq!(args[0], "--profile=/home/user/.perltidyrc");
-}
-
-#[test]
-fn config_with_profile_ignores_other_settings() {
-    let config = PerlTidyConfig {
-        maximum_line_length: Some(120),
-        indent_columns: Some(8),
-        tabs: Some(true),
-        profile: Some(".perltidyrc".to_string()),
-        ..PerlTidyConfig::default()
-    };
-    let args = config.to_args();
-
-    // Only profile flag should be present; all others suppressed
-    assert_eq!(args.len(), 1);
-    assert!(args[0].starts_with("--profile="));
 }
 
 #[test]
@@ -232,8 +249,114 @@ fn builtin_formatter_handles_parens_and_brackets() {
 }
 
 #[test]
+fn builtin_formatter_indents_multiline_function_arguments() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("my $value = foo($a,\n$b,\n$c,\n);\n");
+
+    let lines: Vec<&str> = formatted.lines().collect();
+    assert_eq!(lines[0], "my $value = foo($a,");
+    assert_eq!(lines[1], "    $b,");
+    assert_eq!(lines[2], "    $c,");
+    assert_eq!(lines[3], ");");
+}
+
+#[test]
+fn builtin_formatter_ignores_delimiters_inside_strings_and_comments() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted =
+        formatter.format("if ($ok) {\nprint \"literal ) ] }\"; # comment )\nprint \"done\";\n}\n");
+
+    let lines: Vec<&str> = formatted.lines().collect();
+    assert_eq!(lines[0], "if ($ok) {");
+    assert_eq!(lines[1], "    print \"literal ) ] }\"; # comment )");
+    assert_eq!(lines[2], "    print \"done\";");
+    assert_eq!(lines[3], "}");
+}
+
+#[test]
 fn builtin_formatter_handles_empty_input() {
     let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
     let formatted = formatter.format("");
     assert_eq!(formatted, "");
+}
+
+#[test]
+fn builtin_formatter_preserves_missing_trailing_newline() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("if ($x) {\nprint $x;\n}");
+    assert_eq!(formatted, "if ($x) {\n    print $x;\n}");
+}
+
+#[test]
+fn builtin_formatter_preserves_trailing_newline_when_present() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("if ($x) {\nprint $x;\n}\n");
+    assert!(formatted.ends_with('\n'), "output must end with '\\n' when input does");
+}
+
+#[test]
+fn builtin_formatter_single_line_no_trailing_newline() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("print 1;");
+    assert_eq!(formatted, "print 1;");
+    assert!(!formatted.ends_with('\n'));
+}
+
+#[test]
+fn builtin_formatter_single_line_with_trailing_newline() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("print 1;\n");
+    assert_eq!(formatted, "print 1;\n");
+}
+
+#[test]
+fn builtin_formatter_closing_line_does_not_double_decrement() {
+    // Regression: leading closers were subtracted before printing AND again by
+    // net_delimiter_delta after printing, causing the next line to be under-indented.
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    // Two nested braces: the two closing lines should be at levels 1 and 0.
+    let formatted = formatter.format("if ($a) {\nif ($b) {\nprint $b;\n}\nprint $a;\n}\n");
+    let lines: Vec<&str> = formatted.lines().collect();
+    assert_eq!(lines[0], "if ($a) {");
+    assert_eq!(lines[1], "    if ($b) {");
+    assert_eq!(lines[2], "        print $b;");
+    assert_eq!(lines[3], "    }");
+    assert_eq!(lines[4], "    print $a;");
+    assert_eq!(lines[5], "}");
+}
+
+#[test]
+fn builtin_formatter_multi_closer_line_does_not_over_decrement() {
+    // Regression: a line like "})" has 2 leading closers; double-counting would
+    // subtract 4 from indent_level instead of 2, causing the line after it to
+    // be under-indented or pushed negative.
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    // Simple two-level close: outer if with a closing "}) style".
+    // Use a cleaner example: array ref in a block.
+    // After "}" the next line must be at level 0, not negative.
+    let formatted = formatter.format("if ($a) {\nif ($b) {\nprint 1;\n}\nprint 2;\n}\nprint 3;\n");
+    let lines: Vec<&str> = formatted.lines().collect();
+    assert_eq!(lines[0], "if ($a) {");
+    assert_eq!(lines[1], "    if ($b) {");
+    assert_eq!(lines[2], "        print 1;");
+    assert_eq!(lines[3], "    }"); // one closer — back to level 1
+    assert_eq!(lines[4], "    print 2;"); // still at level 1
+    assert_eq!(lines[5], "}"); // one closer — back to level 0
+    assert_eq!(lines[6], "print 3;"); // at level 0, not negative
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn with_os_runtime_clamps_zero_timeout() {
+    // OsSubprocessRuntime::with_timeout panics on 0; this must not panic.
+    let config = PerlTidyConfig { timeout_secs: 0, ..PerlTidyConfig::default() };
+    let _formatter = PerlTidyFormatter::with_os_runtime(config);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn with_os_runtime_accepts_minimum_valid_timeout() {
+    // timeout_secs = 1 is the minimum non-clamped value; must also not panic.
+    let config = PerlTidyConfig { timeout_secs: 1, ..PerlTidyConfig::default() };
+    let _formatter = PerlTidyFormatter::with_os_runtime(config);
 }

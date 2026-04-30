@@ -1,0 +1,22 @@
+{
+  "kind": "review",
+  "producer": "review-bot",
+  "pr": 6853,
+  "head_sha": "5555555555555555555555555555555555555555",
+  "base_sha": "6666666666666666666666666666666666666666",
+  "verdict": "needs_builder_fix",
+  "material_observations": [
+    "Builder route parser does not consume review verdicts"
+  ],
+  "negative_checks": [
+    "No fallback inference route available"
+  ],
+  "blockers": [
+    "State builder cannot apply needs_builder_fix"
+  ],
+  "next_routes": [
+    "builder_fix",
+    "signoff_clean"
+  ],
+  "supersedes": null
+}

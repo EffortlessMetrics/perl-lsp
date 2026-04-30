@@ -14,24 +14,19 @@ use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 use perl_parser_core::source_file::is_binary_content;
-use std::path::Path;
 
 const TEMPLATE_EXTENSIONS: [&str; 4] = ["ep", "tt", "tt2", "mason"];
 
 fn is_embedded_template_uri(uri: &str) -> bool {
-    let extension = url::Url::parse(uri)
-        .ok()
-        .and_then(|url| url.to_file_path().ok())
-        .and_then(|path| path.extension().and_then(|ext| ext.to_str()).map(str::to_owned))
-        .or_else(|| Path::new(uri).extension().and_then(|ext| ext.to_str()).map(str::to_owned));
-
-    extension.is_some_and(|ext| {
-        TEMPLATE_EXTENSIONS.iter().any(|candidate| candidate.eq_ignore_ascii_case(&ext))
-    })
+    perl_uri::uri_extension(uri)
+        .is_some_and(|ext| TEMPLATE_EXTENSIONS.iter().any(|t| t.eq_ignore_ascii_case(ext)))
 }
 
 fn is_perl_language_id(language_id: &str) -> bool {
-    matches!(language_id.to_ascii_lowercase().as_str(), "perl" | "perl5" | "perl-cpanfile")
+    matches!(
+        language_id.to_ascii_lowercase().as_str(),
+        "perl" | "perl5" | "perl-cpanfile" | "embedded-perl" | "mojolicious"
+    )
 }
 
 #[cfg(feature = "incremental")]
@@ -41,6 +36,14 @@ fn build_incremental_edit_set(
 ) -> Option<perl_parser::incremental::incremental_edit::IncrementalEditSet> {
     use crate::textdoc::{PosEnc, range_to_bytes, range_to_chars};
     use perl_parser::incremental::incremental_edit::{IncrementalEdit, IncrementalEditSet};
+
+    fn map_offset_to_original_space(evolving: usize, cumulative_shift: isize) -> Option<usize> {
+        if cumulative_shift >= 0 {
+            evolving.checked_sub(cumulative_shift as usize)
+        } else {
+            evolving.checked_add((-cumulative_shift) as usize)
+        }
+    }
 
     let mut working_rope = original_rope.clone();
     let mut edit_set = IncrementalEditSet::new();
@@ -63,8 +66,15 @@ fn build_incremental_edit_set(
 
         // Map back to original-document space by undoing the byte shift that
         // prior edits introduced into the working rope.
-        let orig_start = (evolving_start as isize - cumulative_shift) as usize;
-        let orig_end = (evolving_end as isize - cumulative_shift) as usize;
+        let (Some(orig_start), Some(orig_end)) = (
+            map_offset_to_original_space(evolving_start, cumulative_shift),
+            map_offset_to_original_space(evolving_end, cumulative_shift),
+        ) else {
+            tracing::debug!(
+                "Incremental edit batch cannot be mapped to original space; falling back to full reparse"
+            );
+            return None;
+        };
         edit_set.add(IncrementalEdit::new(orig_start, orig_end, change.text.clone()));
 
         // Apply this edit to the working rope so the next iteration's
@@ -84,6 +94,17 @@ fn build_incremental_edit_set(
 }
 
 impl LspServer {
+    fn reindex_document_symbols(&self, uri: &str, ast: &Node, source: &str) {
+        let extractor = crate::symbol::SymbolExtractor::new_with_source(source);
+        let table = extractor.extract(ast);
+        let symbols = table.symbols.keys().cloned().collect::<Vec<_>>();
+        self.symbol_index.lock().replace_document_symbols(uri, symbols);
+    }
+
+    fn clear_document_symbols(&self, uri: &str) {
+        self.symbol_index.lock().remove_document(uri);
+    }
+
     /// Handle textDocument/didOpen notification.
     ///
     /// Delegates to [`Self::handle_did_open_with_cancellation`] with no token.
@@ -160,6 +181,7 @@ impl LspServer {
                 ) {
                     tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                 }
+                self.clear_document_symbols(uri);
 
                 return Ok(());
             }
@@ -207,6 +229,7 @@ impl LspServer {
                 ) {
                     tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                 }
+                self.clear_document_symbols(uri);
 
                 return Ok(());
             }
@@ -262,6 +285,7 @@ impl LspServer {
                         e
                     );
                 }
+                self.clear_document_symbols(uri);
 
                 return Ok(());
             }
@@ -369,32 +393,8 @@ impl LspServer {
                 },
             );
 
-            // Index symbols for workspace search
-            // Note: Indexing is a MUTATION operation - use coordinator.index() directly
-            // This must happen BEFORE notify_parse_complete to keep work inside the tracking window
-            if let Some(ref _ast) = ast_arc {
-                // Update the fast symbol index with symbols from workspace index
-                #[cfg(feature = "workspace")]
-                if let Some(coordinator) = self.coordinator() {
-                    let workspace_index = coordinator.index();
-                    let index_symbols = workspace_index.find_symbols("");
-                    let symbols = index_symbols
-                        .into_iter()
-                        .filter(|s| s.uri == uri)
-                        .map(|s| s.name.clone())
-                        .collect::<Vec<_>>();
-
-                    let mut index = self.symbol_index.lock();
-                    for symbol in symbols {
-                        index.add_symbol(symbol);
-                    }
-                }
-                #[cfg(not(feature = "workspace"))]
-                {
-                    let _index = self.symbol_index.lock();
-                    // Just ensure the index exists even without workspace feature
-                }
-
+            if let Some(ref ast) = ast_arc {
+                self.reindex_document_symbols(uri, ast, text);
                 // Update the workspace-wide index for cross-file features.
                 // Indexing runs in a background task so the handler returns
                 // immediately without blocking on file I/O or symbol extraction.
@@ -454,6 +454,8 @@ impl LspServer {
                         return Ok(());
                     }
                 }
+            } else {
+                self.clear_document_symbols(uri);
             }
 
             // Notify coordinator that all work (parse + index) is complete (may trigger recovery)
@@ -659,6 +661,7 @@ impl LspServer {
                     ) {
                         tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                     }
+                    self.clear_document_symbols(uri);
 
                     return Ok(());
                 }
@@ -704,6 +707,7 @@ impl LspServer {
                     ) {
                         tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                     }
+                    self.clear_document_symbols(uri);
 
                     return Ok(());
                 }
@@ -757,6 +761,7 @@ impl LspServer {
                             e
                         );
                     }
+                    self.clear_document_symbols(uri);
 
                     return Ok(());
                 }
@@ -962,6 +967,12 @@ impl LspServer {
                 // Must drop the lock before calling publish_diagnostics
                 drop(documents);
 
+                if let Some(ref ast) = ast_arc {
+                    self.reindex_document_symbols(uri, ast, &text);
+                } else {
+                    self.clear_document_symbols(uri);
+                }
+
                 // Index symbols for workspace search.
                 // Indexing runs in a background task so the handler returns
                 // immediately; `notify_parse_complete` is called inside the task.
@@ -1072,6 +1083,8 @@ impl LspServer {
             if let Some(coordinator) = self.coordinator() {
                 coordinator.index().clear_file(uri);
             }
+
+            self.clear_document_symbols(uri);
 
             // Notify coordinator that cleanup is complete
             #[cfg(feature = "workspace")]
@@ -1358,6 +1371,92 @@ mod tests {
         //   2. apply edit[0] (start_byte=1):         "abcYZ"[1..1] ← "X"   ⟹ "aXbcYZ"
         let result = edit_set.apply_to_string(original_str);
         assert_eq!(result, "aXbcYZ", "apply_to_string must reproduce the client-intended document");
+    }
+
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_build_incremental_edits_returns_none_when_follow_up_edit_targets_inserted_text() {
+        use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
+
+        let original = ropey::Rope::from_str("abc");
+        let changes = vec![
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 1 },
+                    end: Position { line: 0, character: 1 },
+                }),
+                range_length: None,
+                text: "XYZ".to_string(),
+            },
+            // This second edit applies to the inserted text in the evolving
+            // document ("aXYZbc"), which cannot be represented with
+            // original-document byte offsets.
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 1 },
+                    end: Position { line: 0, character: 2 },
+                }),
+                range_length: None,
+                text: "_".to_string(),
+            },
+        ];
+
+        assert!(
+            build_incremental_edit_set(&original, &changes).is_none(),
+            "edits that target newly inserted content should fall back to full reparse"
+        );
+    }
+
+    /// After a deletion the cumulative_shift is negative; a second edit that targets
+    /// text AFTER the deleted region must be correctly mapped back via checked_add
+    /// (the negative-shift branch of map_offset_to_original_space).
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_build_incremental_edits_negative_shift_uses_checked_add() {
+        use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
+
+        // Original: "abcde" (5 bytes, all ASCII).
+        let original = ropey::Rope::from_str("abcde");
+        let changes = vec![
+            // Edit 0: delete [1,3) → removes "bc", leaving evolving doc "ade".
+            // cumulative_shift becomes 0 - (3-1) = -2.
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 1 },
+                    end: Position { line: 0, character: 3 },
+                }),
+                range_length: None,
+                text: String::new(),
+            },
+            // Edit 1: replace [1,2) on evolving "ade" (the 'd') with "D".
+            // evolving_start=1, evolving_end=2, cumulative_shift=-2.
+            // map_offset(1, -2) = 1.checked_add(2) = Some(3)  (in original-doc space: 'd' = byte 3).
+            // map_offset(2, -2) = 2.checked_add(2) = Some(4)  (in original-doc space: 'e' = byte 4).
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 1 },
+                    end: Position { line: 0, character: 2 },
+                }),
+                range_length: None,
+                text: "D".to_string(),
+            },
+        ];
+
+        let edit_set = build_incremental_edit_set(&original, &changes)
+            .expect("deletion batch followed by suffix edit should be mappable");
+        assert_eq!(edit_set.edits.len(), 2, "both edits should be in the set");
+
+        // Edit 0 maps 1..1 in original space (zero-length deletion start at byte 1 was already
+        // calculated with cumulative_shift=0).
+        assert_eq!(edit_set.edits[0].start_byte, 1);
+        assert_eq!(edit_set.edits[0].old_end_byte, 3);
+
+        // Edit 1: evolving [1,2) + cumulative_shift=-2 → original [3,4).
+        assert_eq!(
+            edit_set.edits[1].start_byte, 3,
+            "negative cumulative_shift must use checked_add to map back to original space"
+        );
+        assert_eq!(edit_set.edits[1].old_end_byte, 4);
     }
 
     /// Verify that a ranged didChange initializes and preserves incremental_doc.
@@ -1814,6 +1913,60 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_did_change_replaces_document_symbols_in_index() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let server = LspServer::new();
+        let uri = "file:///test_symbol_reindex.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "sub old_name { 1 }\n"
+            }
+        }))?;
+
+        assert!(server.symbol_index.lock().search_prefix("old_").contains(&"old_name".to_string()));
+
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{ "text": "sub new_name { 2 }\n" }]
+        })))?;
+
+        let index = server.symbol_index.lock();
+        assert!(index.search_prefix("old_").is_empty());
+        assert!(index.search_prefix("new_").contains(&"new_name".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_did_close_removes_document_symbols_from_index() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let server = LspServer::new();
+        let uri = "file:///test_symbol_close.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "sub close_me { 1 }\n"
+            }
+        }))?;
+
+        assert!(
+            server.symbol_index.lock().search_prefix("close_").contains(&"close_me".to_string())
+        );
+
+        server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+
+        assert!(server.symbol_index.lock().search_prefix("close_").is_empty());
+        Ok(())
+    }
+
     /// didClose must clear diagnostics using the client-provided URI string.
     ///
     /// This preserves exact URI identity for clients that key diagnostics by
@@ -2089,6 +2242,51 @@ mod tests {
             "template should remain in no-parse mode after didChange"
         );
         assert!(doc.ast.is_none(), "template should continue skipping parse on didChange");
+        Ok(())
+    }
+
+    #[test]
+    fn test_template_file_guard_parses_embedded_perl_language_id()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///app/templates/welcome.html.ep";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "embedded-perl",
+                "version": 1,
+                "text": "<%= my $name = 'world'; %>"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
+        assert!(
+            doc.ast.is_some(),
+            "template with embedded-perl languageId should be parsed as Perl"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_template_file_guard_parses_mojolicious_language_id()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///app/templates/index.html.ep";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "mojolicious",
+                "version": 1,
+                "text": "% my $title = 'Hello';"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
+        assert!(doc.ast.is_some(), "template with mojolicious languageId should be parsed as Perl");
         Ok(())
     }
 
@@ -2438,6 +2636,60 @@ mod tests {
         let doc = docs.get(uri).ok_or("document missing after didChange without version")?;
         assert_eq!(doc.version, 2, "missing-version didChange should advance version by one");
         assert_eq!(doc.text, "my $x = 2;\n", "didChange without version should apply content");
+        Ok(())
+    }
+
+    /// Legacy Windows URI form (`file://C:\...`) should normalize to canonical
+    /// `file:///c:/...` so follow-up requests using standard URI syntax still
+    /// resolve the open document.
+    #[test]
+    fn did_open_normalizes_legacy_windows_file_uri_form() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let server = LspServer::new();
+        let legacy_uri = r"file://C:\Users\dev\example.pl";
+        let canonical_uri = "file:///c:/Users/dev/example.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": legacy_uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $x = 1;\n"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        assert!(
+            docs.contains_key(canonical_uri),
+            "legacy URI should normalize to canonical key; keys: {:?}",
+            docs.keys().collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    /// Plain Windows paths (`C:\...`) are non-standard in LSP, but some editors
+    /// still emit them.  Normalize to `file:///c:/...` for resilient lookup keys.
+    #[test]
+    fn did_open_normalizes_plain_windows_path_uri() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let plain_path = r"C:\Users\dev\plain_path.pl";
+        let canonical_uri = "file:///c:/Users/dev/plain_path.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": plain_path,
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $y = 2;\n"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        assert!(
+            docs.contains_key(canonical_uri),
+            "plain Windows path should normalize to canonical key; keys: {:?}",
+            docs.keys().collect::<Vec<_>>()
+        );
         Ok(())
     }
 }
