@@ -459,6 +459,15 @@ impl LspHarness {
         )
     }
 
+    pub fn document_symbols(&mut self, uri: &str) -> Result<Value, String> {
+        self.request(
+            "textDocument/documentSymbol",
+            json!({
+                "textDocument": { "uri": uri }
+            }),
+        )
+    }
+
     /// Resolve a deferred document link using `documentLink/resolve`.
     pub fn resolve_document_link(&mut self, link: Value) -> Result<Value, String> {
         self.request("documentLink/resolve", link)
