@@ -468,6 +468,29 @@ impl LspHarness {
         )
     }
 
+    pub fn completion_at(&mut self, uri: &str, line: u32, character: u32) -> Result<Value, String> {
+        self.request(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "context": { "triggerKind": 1 }
+            }),
+        )
+    }
+
+    /// Open an untitled document at the harness's canonical untitled URI.
+    pub fn open_untitled(&mut self, text: &str) -> Result<(), String> {
+        self.open(Self::UNTITLED_URI, text)
+    }
+
+    /// Return the URI of the most recently `open_untitled`'d document.
+    pub fn doc_uri(&self) -> &'static str {
+        Self::UNTITLED_URI
+    }
+
+    const UNTITLED_URI: &'static str = "file:///untitled-test.pl";
+
     /// Resolve a deferred document link using `documentLink/resolve`.
     pub fn resolve_document_link(&mut self, link: Value) -> Result<Value, String> {
         self.request("documentLink/resolve", link)
