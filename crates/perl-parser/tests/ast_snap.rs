@@ -178,6 +178,22 @@ fn ast_attributes_and_prototype_sub() {
     assert_snapshot!(parse_sexp("sub run ($$) :lvalue { $_[0] = $_[1]; }"));
 }
 
+#[test]
+fn ast_hash_slice_and_exists_delete_flow() {
+    // Hash slices plus exists/delete are common in config/option munging code.
+    assert_snapshot!(parse_sexp(
+        "my %opts = (foo => 1, bar => 2); my @pick = @opts{qw(foo bar)}; delete $opts{bar} if exists $opts{bar};",
+    ));
+}
+
+#[test]
+fn ast_lexical_filehandles_and_chomp_loop() {
+    // Lexical filehandle open/while/chomp is a ubiquitous IO pattern.
+    assert_snapshot!(parse_sexp(
+        "open my $fh, '<', $path; while (my $line = <$fh>) { chomp $line; push @rows, $line; }",
+    ));
+}
+
 // ---------------------------------------------------------------------------
 // 2. Error recovery AST snapshots (malformed input)
 // ---------------------------------------------------------------------------
@@ -251,6 +267,12 @@ fn recovery_broken_regex_then_followup_statement() {
     assert_snapshot!(parse_sexp("if ($text =~ /abc) { print 1; }\nmy $ok = 1;"));
 }
 
+#[test]
+fn recovery_broken_open_arguments_then_followup_statement() {
+    // Incomplete builtin argument list should recover to following statements.
+    assert_snapshot!(parse_sexp("open my $fh, '<';\nmy $ok = 1;"));
+}
+
 // ---------------------------------------------------------------------------
 // 3. Error message format snapshots
 // ---------------------------------------------------------------------------
@@ -293,6 +315,11 @@ fn errors_broken_regex_delimiter() {
 #[test]
 fn errors_unterminated_heredoc() {
     assert_snapshot!(parse_errors("my $sql = <<'SQL';\nselect * from users;\n"));
+}
+
+#[test]
+fn errors_broken_open_arguments_then_followup() {
+    assert_snapshot!(parse_errors("open my $fh, '<';\nmy $ok = 1;"));
 }
 
 // ---------------------------------------------------------------------------

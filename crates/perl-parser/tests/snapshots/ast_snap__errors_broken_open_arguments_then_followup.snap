@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snap.rs
+expression: "parse_errors(\"open my $fh, '<';\\nmy $ok = 1;\")"
+---
+

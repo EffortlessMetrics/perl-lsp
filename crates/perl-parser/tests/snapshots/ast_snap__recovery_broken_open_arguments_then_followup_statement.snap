@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snap.rs
+expression: "parse_sexp(\"open my $fh, '<';\\nmy $ok = 1;\")"
+---
+(source_file (call open ((my_declaration (variable $ fh)) (string "'<'"))) (my_declaration (variable $ ok)(number 1)))
