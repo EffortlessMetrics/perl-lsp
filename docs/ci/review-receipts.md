@@ -79,3 +79,10 @@ Every review receipt includes:
   "supersedes": null
 }
 ```
+
+
+## Label ownership
+
+Reviewer agents emit structured review receipts/comments; they are not label authorities.
+The queue reconciler owns applying/stripping review labels from **current-SHA** receipts and repairing contradictions.
+Stale-SHA receipts are ignored.

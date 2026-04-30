@@ -86,6 +86,38 @@ const NEEDS_DEEP_REVIEW: &str = "needs-deep-review";
 const NEEDS_DIFF_FIX: &str = "needs-diff-fix";
 const NEEDS_BUILDER_FIX: &str = "needs-builder-fix";
 
+const REVIEW_RECEIPT_KIND: &str = "review_receipt";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewReceiptVerdict {
+    Approved,
+    NeedsBuilder,
+    NeedsDiff,
+    NeedsCi,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewDepth {
+    HaikuFirst,
+    Deep,
+    Security,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReviewReceipt {
+    pub kind: String,
+    pub schema_version: u32,
+    pub pr: u64,
+    pub sha: String,
+    pub verdict: ReviewReceiptVerdict,
+    pub review_depth: ReviewDepth,
+    pub fix_forward_applied: bool,
+    pub blocking_findings: Vec<String>,
+    pub labels_projected: Vec<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Data structures
 // ---------------------------------------------------------------------------
@@ -414,6 +446,69 @@ pub fn detect_contradictions(
     out
 }
 
+pub fn contradictions_from_current_review_receipt(
+    pr: &OpenPr,
+    receipt: Option<&ReviewReceipt>,
+) -> Vec<Contradiction> {
+    let Some(current) = receipt.filter(|r| {
+        r.kind == REVIEW_RECEIPT_KIND
+            && r.schema_version == 1
+            && r.sha == pr.head_ref_oid
+            && r.pr == pr.number
+    }) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let has = |name: &str| pr.labels.iter().any(|l| l == name);
+
+    match current.verdict {
+        ReviewReceiptVerdict::Approved => {
+            if has(NEEDS_BUILDER_FIX) {
+                out.push(Contradiction {
+                    keep: REVIEW_RECEIPT_KIND.to_string(),
+                    strip: NEEDS_BUILDER_FIX.to_string(),
+                    reason: "current approved review receipt strips stale needs-builder-fix"
+                        .to_string(),
+                });
+            }
+            if has(NEEDS_DIFF_FIX) {
+                out.push(Contradiction {
+                    keep: REVIEW_RECEIPT_KIND.to_string(),
+                    strip: NEEDS_DIFF_FIX.to_string(),
+                    reason: "current approved review receipt strips stale needs-diff-fix"
+                        .to_string(),
+                });
+            }
+        }
+        ReviewReceiptVerdict::NeedsBuilder => {
+            if has(REVIEW_REVIEWED) {
+                out.push(Contradiction {
+                    keep: NEEDS_BUILDER_FIX.to_string(),
+                    strip: REVIEW_REVIEWED.to_string(),
+                    reason: "current needs_builder receipt strips approval label".to_string(),
+                });
+            }
+            if has(DIFF_AUDITED) {
+                out.push(Contradiction {
+                    keep: NEEDS_BUILDER_FIX.to_string(),
+                    strip: DIFF_AUDITED.to_string(),
+                    reason: "current needs_builder receipt strips diff-audited".to_string(),
+                });
+            }
+        }
+        ReviewReceiptVerdict::NeedsDiff => {
+            if has(DIFF_AUDITED) {
+                out.push(Contradiction {
+                    keep: NEEDS_DIFF_FIX.to_string(),
+                    strip: DIFF_AUDITED.to_string(),
+                    reason: "current needs_diff receipt strips diff-audited".to_string(),
+                });
+            }
+        }
+        ReviewReceiptVerdict::NeedsCi => {}
+    }
+    out
+}
 /// Resolve a contradicting pair that has no live ground truth using timeline events.
 ///
 /// Rule: whichever label was applied later wins. If within the simultaneous threshold,
@@ -987,6 +1082,52 @@ mod tests {
         let c = detect_contradictions(&pr, &[], CiOutcome::Pending);
         let strips: Vec<_> = c.iter().filter(|x| x.strip == NEEDS_BUILDER_FIX).collect();
         assert_eq!(strips.len(), 1, "exactly one strip of needs-builder-fix");
+    }
+
+    fn make_review_receipt(pr: u64, sha: &str, verdict: ReviewReceiptVerdict) -> ReviewReceipt {
+        ReviewReceipt {
+            kind: REVIEW_RECEIPT_KIND.to_string(),
+            schema_version: 1,
+            pr,
+            sha: sha.to_string(),
+            verdict,
+            review_depth: ReviewDepth::Deep,
+            fix_forward_applied: false,
+            blocking_findings: Vec::new(),
+            labels_projected: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn current_approved_receipt_strips_needs_builder_fix() {
+        let pr = make_pr(7, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let receipt = make_review_receipt(7, "sha-7", ReviewReceiptVerdict::Approved);
+        let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
+        assert!(c.iter().any(|item| item.strip == NEEDS_BUILDER_FIX));
+    }
+
+    #[test]
+    fn current_needs_builder_receipt_strips_approval_labels() {
+        let pr = make_pr(8, &[REVIEW_REVIEWED, DIFF_AUDITED, NEEDS_BUILDER_FIX]);
+        let receipt = make_review_receipt(8, "sha-8", ReviewReceiptVerdict::NeedsBuilder);
+        let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
+        assert!(c.iter().any(|item| item.strip == REVIEW_REVIEWED));
+        assert!(c.iter().any(|item| item.strip == DIFF_AUDITED));
+    }
+
+    #[test]
+    fn stale_sha_receipt_is_ignored() {
+        let pr = make_pr(9, &[REVIEW_REVIEWED, DIFF_AUDITED, NEEDS_DIFF_FIX]);
+        let receipt = make_review_receipt(9, "different-sha", ReviewReceiptVerdict::NeedsDiff);
+        let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
+        assert!(c.is_empty());
+    }
+
+    #[test]
+    fn no_review_receipt_is_safe_noop() {
+        let pr = make_pr(10, &[REVIEW_REVIEWED, DIFF_AUDITED]);
+        let c = contradictions_from_current_review_receipt(&pr, None);
+        assert!(c.is_empty());
     }
 
     // -----------------------------------------------------------------------

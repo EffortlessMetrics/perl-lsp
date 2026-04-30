@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/review-projection.schema.json",
+  "title": "Review Projection Receipt",
+  "description": "Current-SHA review receipt consumed by reconciler to project/repair review labels.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schema_version",
+    "pr",
+    "sha",
+    "verdict",
+    "review_depth",
+    "fix_forward_applied",
+    "blocking_findings",
+    "labels_projected"
+  ],
+  "properties": {
+    "kind": { "const": "review_receipt" },
+    "schema_version": { "const": 1 },
+    "pr": { "type": "integer", "minimum": 1 },
+    "sha": { "type": "string", "minLength": 1 },
+    "verdict": {
+      "type": "string",
+      "enum": ["approved", "needs_builder", "needs_diff", "needs_ci"]
+    },
+    "review_depth": {
+      "type": "string",
+      "enum": ["haiku_first", "deep", "security"]
+    },
+    "fix_forward_applied": { "type": "boolean" },
+    "blocking_findings": { "type": "array", "items": { "type": "string" } },
+    "labels_projected": { "type": "array", "items": { "type": "string" } }
+  }
+}
