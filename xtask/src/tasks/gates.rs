@@ -1625,8 +1625,12 @@ fn run_single_gate(
                 "fail".to_string()
             };
 
-            // Extract output summary (last 10 lines or error message)
-            let output_summary = extract_output_summary(&execution.stdout, 10);
+            // Extract output summary (last 10 lines or timeout reason)
+            let output_summary = if execution.timed_out {
+                format!("Timed out after {}s", timeout_secs)
+            } else {
+                extract_output_summary(&execution.stdout, 10)
+            };
 
             // Parse metrics if this is a test gate
             let metrics = if gate.tags.contains(&"test".to_string()) {
@@ -2529,6 +2533,7 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, HashMap, HashSet};
+    use std::fs;
 
     use super::{
         DiffResult, FirstFailure, GateDefinition, GateMetrics, GatePlanningConfig,
@@ -2655,6 +2660,75 @@ mod tests {
 
     fn skipped_gate_names(plan: &super::GatePlan) -> Vec<String> {
         plan.skipped.iter().map(|skipped| skipped.name.clone()).collect()
+    }
+
+    #[cfg(windows)]
+    fn sleeping_command() -> &'static str {
+        "powershell -NoProfile -Command \"Start-Sleep -Milliseconds 600\""
+    }
+
+    #[cfg(not(windows))]
+    fn sleeping_command() -> &'static str {
+        "python3 -c 'import time; time.sleep(0.6)'"
+    }
+
+    #[test]
+    fn required_gate_timeout_is_reported_in_result_and_blocks_receipt() -> color_eyre::eyre::Result<()> {
+        let gate = GateDefinition {
+            timeout_seconds: 1,
+            command: sleeping_command().to_string(),
+            ..tier_gate("synthetic_timeout", "pr_fast", sleeping_command())
+        };
+        let policy = policy_with_gates(vec![gate.clone()]);
+        let config = super::GateRunnerConfig::default();
+        let log_dir = tempfile::tempdir()?;
+
+        let result = super::run_single_gate(&gate, &policy, log_dir.path(), &config)?;
+
+        assert_eq!(result.gate_name, "synthetic_timeout");
+        assert_eq!(result.status, "timeout");
+        assert_eq!(result.command, sleeping_command());
+        assert!(result.duration_ms >= 1_000);
+        assert_eq!(result.log_path.as_deref(), Some("logs/synthetic_timeout.log"));
+        assert_eq!(result.output_summary.as_deref(), Some("Timed out after 1s"));
+        assert_eq!(result.exit_code, Some(124));
+        assert!(result.first_failure.is_none());
+
+        let log_path = log_dir.path().join("synthetic_timeout.log");
+        assert!(log_path.exists(), "log file should exist at {}", log_path.display());
+        let _ = fs::read_to_string(log_path)?;
+
+        let receipt = Receipt {
+            schema_version: "1.0".to_string(),
+            metadata: super::ReceiptMetadata {
+                generated_at: chrono::Utc::now(),
+                commit_sha: "test-sha".to_string(),
+                branch: "test-branch".to_string(),
+                tier: "pr_fast".to_string(),
+                duration_ms: result.duration_ms,
+                runner: "test".to_string(),
+            },
+            gates: vec![result],
+            summary: super::ReceiptSummary {
+                overall_status: "fail".to_string(),
+                total_gates: 1,
+                passed: 0,
+                failed: 0,
+                skipped: 0,
+                timeout: Some(1),
+                error: None,
+                flaky: None,
+                total_duration_ms: 0,
+                blocking_failures: vec!["synthetic_timeout".to_string()],
+                warnings: None,
+                aggregate_metrics: None,
+            },
+            agent_receipt: None,
+            diff_config: None,
+        };
+
+        assert!(super::has_blocking_failures(&receipt));
+        Ok(())
     }
 
     #[test]
