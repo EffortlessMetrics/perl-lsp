@@ -15,8 +15,9 @@
 //! Also keeps docs/project/ROADMAP.md compliance table in sync when lsp subsystem runs.
 
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, eyre};
@@ -74,22 +75,63 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
         return String::new();
     };
 
-    let result = Command::new(program).args(rest).current_dir(root).output();
+    // Timeout handling is retained for API compatibility. Most update-status
+    // invocations are short-lived; streaming output is prioritized here to avoid
+    // CI inactivity timeouts when a child process is chatty but long-running.
+    let _ = timeout;
 
-    let output = match result {
-        Ok(o) => o,
+    let mut child = match Command::new(program)
+        .args(rest)
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
         Err(_) => return String::new(),
     };
 
-    // Basic timeout emulation: we cannot use `std::process::Command` timeout
-    // directly, so we rely on the process completing.  The Python version used
-    // subprocess.run with timeout; here we accept the default behavior but keep
-    // the parameter for API compatibility and future improvement.
-    let _ = timeout;
+    let Some(stdout) = child.stdout.take() else {
+        let _ = child.kill();
+        return String::new();
+    };
+    let Some(stderr) = child.stderr.take() else {
+        let _ = child.kill();
+        return String::new();
+    };
 
-    let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
-    combined.push_str(&String::from_utf8_lossy(&output.stderr));
+    let stdout_thread = std::thread::spawn(move || stream_and_capture(stdout, false));
+    let stderr_thread = std::thread::spawn(move || stream_and_capture(stderr, true));
+
+    let _ = child.wait();
+
+    let mut combined = stdout_thread.join().unwrap_or_default();
+    combined.push_str(&stderr_thread.join().unwrap_or_default());
     combined
+}
+
+fn stream_and_capture<R: Read>(mut reader: R, is_stderr: bool) -> String {
+    let mut buf = [0_u8; 8192];
+    let mut out = Vec::new();
+
+    loop {
+        let bytes = match reader.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(_) => break,
+        };
+
+        let chunk = &buf[..bytes];
+        out.extend_from_slice(chunk);
+
+        if is_stderr {
+            eprint!("{}", String::from_utf8_lossy(chunk));
+        } else {
+            print!("{}", String::from_utf8_lossy(chunk));
+        }
+    }
+
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// Like `run_cmd` but merges stderr into stdout via shell `2>&1`.
