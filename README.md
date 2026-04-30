@@ -25,18 +25,23 @@ Perl has decades of real production code, but editor tooling still struggles wit
 
 ## Status at a glance
 
+These are behavioral and corpus-backed signals, not feature-inventory counts. Protocol coverage and full capability catalogs live in the generated status docs.
+
 <!-- BEGIN: README_STATUS -->
 | Area | Current signal |
 |---|---:|
 | Release track | `v0.13.0-alpha` release prep |
-| Published crate surface | 31 published crates after the v0.13 collapse |
-| LSP advertised features | 60/60 |
-| LSP protocol / DAP catalog | 119/119 |
+| Published crate surface | 31 crates after the v0.13 collapse |
 | Ubuntu system Perl corpus | 94.5% clean (`2825/2990`) |
 | CPAN top 1000 corpus | 95.3% clean (`8931/9372`) |
-| Project corpus | 100.0% clean (`95/95`) |
+| Project parser corpus | 100.0% clean (`95/95`) |
 | Parser NodeKind coverage | 65/69 |
 | Parser reliability | 0 project-corpus timeouts / 0 panics |
+| Workspace stale-index defects | 0 / 7 tested scenarios |
+| Multi-root workspace tests | 8 / 8 |
+| Editor UX scenarios | 23 scenario files tracked |
+| First-five-minutes UX workflows | 21 workflows tracked |
+| Issue-regression UX workflows | 13 workflows tracked |
 <!-- END: README_STATUS -->
 
 See [project status](docs/project/status/index.md) for generated metrics and current release-readiness notes.
