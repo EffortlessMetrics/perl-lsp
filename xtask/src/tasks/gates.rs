@@ -2534,14 +2534,17 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
 mod tests {
     use std::collections::{BTreeMap, HashMap, HashSet};
 
+    use tempfile::tempdir;
+
     use super::{
         DiffResult, FirstFailure, GateDefinition, GateMetrics, GatePlanningConfig,
-        GatePlanningRole, GatePolicy, GateResult, GateTier, GlobalSettings, MetricChange,
-        PackageTargetIndex, Receipt, blocking_failure_gate_names, build_pr_fast_plan_from_scope,
-        build_pr_fast_plan_from_scope_with_targets, compare_receipts, determine_overall_status,
-        extend_plan_with_non_pr_fast_static_gates, extend_plan_with_static_tiers, failure_guidance,
-        is_blocking_gate_status, is_cargo_test_command, load_policy_for_inspection,
-        parse_first_failure,
+        GatePlanningRole, GatePolicy, GateResult, GateRunnerConfig, GateTier, GlobalSettings,
+        MetricChange, PackageTargetIndex, Receipt, blocking_failure_gate_names,
+        build_pr_fast_plan_from_scope, build_pr_fast_plan_from_scope_with_targets,
+        compare_receipts, determine_overall_status, extend_plan_with_non_pr_fast_static_gates,
+        extend_plan_with_static_tiers, failure_guidance, is_blocking_gate_status,
+        is_cargo_test_command, load_policy_for_inspection, parse_first_failure,
+        run_shell_command_with_timeout, run_single_gate,
     };
     use crate::tasks::ci_scope::{
         ArchWidener, DirectCrate, LaneDecisions, PlatformOverrides, RevDepCrate, ScopeOutput,
@@ -2965,6 +2968,77 @@ mod tests {
             selected_gate_names(&plan),
             vec!["fmt", "clippy_full", "nightly_corpus", "release_build"]
         );
+        Ok(())
+    }
+
+    #[test]
+    fn shell_command_timeout_marks_execution_and_writes_log() -> color_eyre::eyre::Result<()> {
+        let tmp = tempdir()?;
+        let log_path = tmp.path().join("timeout.log");
+        let command = if cfg!(windows) {
+            r#"powershell -NoProfile -Command "Start-Sleep -Seconds 2""#
+        } else {
+            "sleep 2"
+        };
+
+        let execution = run_shell_command_with_timeout(command, &log_path, 1)?;
+
+        assert!(execution.timed_out, "execution should time out");
+        assert_eq!(execution.exit_code, 124, "timed out commands map to synthetic 124");
+        assert!(log_path.exists(), "timeout log file should be created");
+        Ok(())
+    }
+
+    #[test]
+    fn required_gate_timeout_reports_receipt_fields_and_blocks_overall_status()
+    -> color_eyre::eyre::Result<()> {
+        let gate = GateDefinition {
+            name: "synthetic_timeout_gate".to_string(),
+            tier: "merge_gate".to_string(),
+            description: "Synthetic timeout gate for regression coverage".to_string(),
+            required: true,
+            command: if cfg!(windows) {
+                r#"powershell -NoProfile -Command "Start-Sleep -Seconds 2""#.to_string()
+            } else {
+                "sleep 2".to_string()
+            },
+            timeout_seconds: 1,
+            retry_count: 0,
+            budgets: None,
+            quarantine: false,
+            tags: Vec::new(),
+            artifacts: Vec::new(),
+            matrix: None,
+            planning: Some(GatePlanningConfig {
+                role: GatePlanningRole::AlwaysOn,
+                packages: Vec::new(),
+            }),
+        };
+        let policy = policy_with_gates(vec![gate.clone()]);
+        let tmp = tempdir()?;
+        let config = GateRunnerConfig::default();
+
+        let result = run_single_gate(&gate, &policy, tmp.path(), &config)?;
+
+        assert_eq!(result.gate_name, "synthetic_timeout_gate");
+        assert_eq!(result.status, "timeout");
+        assert_eq!(gate.timeout_seconds, 1, "timeout_seconds fixture must remain explicit");
+        assert!(result.duration_ms >= 1_000, "duration should include timeout window");
+        assert_eq!(result.command, gate.command);
+        assert_eq!(result.log_path.as_deref(), Some("logs/synthetic_timeout_gate.log"));
+        assert!(result.output_summary.is_some(), "timeout should preserve output summary context");
+
+        let blocking = blocking_failure_gate_names(std::slice::from_ref(&result));
+        assert_eq!(blocking, vec!["synthetic_timeout_gate"]);
+        assert_eq!(determine_overall_status(0, &blocking), "fail");
+
+        let (failures, _) = failure_guidance(&[result]);
+        assert_eq!(failures.len(), 1);
+        assert!(
+            failures[0].summary.contains("timeout"),
+            "first_failure summary should explain timeout classification"
+        );
+
         Ok(())
     }
 
