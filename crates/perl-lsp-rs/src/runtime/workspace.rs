@@ -21,6 +21,7 @@ use perl_parser_core::source_file::{is_perl_source_path, is_perl_source_uri};
 use perl_workspace::folder::extract_workspace_folder_change;
 #[cfg(feature = "workspace")]
 use perl_workspace::ignore::is_skipped_dir_name;
+use std::collections::HashSet;
 #[cfg(feature = "workspace")]
 use std::path::Path;
 use std::sync::Arc;
@@ -29,6 +30,11 @@ use std::time::Duration;
 use std::time::Instant;
 #[cfg(feature = "workspace")]
 use url::Url;
+
+#[cfg(feature = "workspace")]
+mod progress;
+#[cfg(feature = "workspace")]
+mod text_decode;
 
 const WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 // Note: WalkDir logic has been extracted to super::file_discovery.
@@ -56,81 +62,6 @@ fn send_index_ready_notification(outbound: &super::outbound::OutboundSender, rea
     }
 }
 
-/// Token used for workspace indexing progress notifications.
-#[cfg(feature = "workspace")]
-const WORKSPACE_INDEX_PROGRESS_TOKEN: &str = "workspace-index";
-
-/// Send `window/workDoneProgress/create` to register the indexing token.
-///
-/// This is a fire-and-forget request — the client response is not awaited.
-/// Per LSP 3.15+ the server must create the token before sending `$/progress`.
-#[cfg(feature = "workspace")]
-fn send_progress_create(outbound: &super::outbound::OutboundSender, request_id: i64) {
-    if let Err(e) = outbound.send_request(
-        request_id,
-        "window/workDoneProgress/create",
-        json!({ "token": WORKSPACE_INDEX_PROGRESS_TOKEN }),
-    ) {
-        tracing::warn!(error = %e, "Failed to send workDoneProgress/create");
-    }
-}
-
-/// Send a `$/progress` begin notification for workspace indexing.
-#[cfg(feature = "workspace")]
-fn send_progress_begin(outbound: &super::outbound::OutboundSender) {
-    if let Err(e) = outbound.send_notification(
-        "$/progress",
-        json!({
-            "token": WORKSPACE_INDEX_PROGRESS_TOKEN,
-            "value": {
-                "kind": "begin",
-                "title": "Indexing workspace",
-                "cancellable": false,
-                "percentage": 0
-            }
-        }),
-    ) {
-        tracing::warn!(error = %e, "Failed to send progress begin");
-    }
-}
-
-/// Send a `$/progress` report notification for workspace indexing.
-#[cfg(feature = "workspace")]
-fn send_progress_report(outbound: &super::outbound::OutboundSender, indexed: usize, total: usize) {
-    let percentage = if total > 0 { (indexed * 100 / total).min(99) as u32 } else { 0 };
-    let message = format!("Indexed {} of {} files", indexed, total);
-    if let Err(e) = outbound.send_notification(
-        "$/progress",
-        json!({
-            "token": WORKSPACE_INDEX_PROGRESS_TOKEN,
-            "value": {
-                "kind": "report",
-                "message": message,
-                "percentage": percentage
-            }
-        }),
-    ) {
-        tracing::warn!(error = %e, "Failed to send progress report");
-    }
-}
-
-/// Send a `$/progress` end notification for workspace indexing.
-#[cfg(feature = "workspace")]
-fn send_progress_end(outbound: &super::outbound::OutboundSender, message: &str) {
-    if let Err(e) = outbound.send_notification(
-        "$/progress",
-        json!({
-            "token": WORKSPACE_INDEX_PROGRESS_TOKEN,
-            "value": {
-                "kind": "end",
-                "message": message
-            }
-        }),
-    ) {
-        tracing::warn!(error = %e, "Failed to send progress end");
-    }
-}
-
 /// Returns `true` when an I/O error represents a permission-denied condition.
 ///
 /// Covers both the portable `ErrorKind::PermissionDenied` and the Windows
@@ -148,6 +79,13 @@ fn is_permission_denied_error(e: &std::io::Error) -> bool {
     }
     false
 }
+
+#[cfg(feature = "workspace")]
+use progress::{
+    send_progress_begin, send_progress_create, send_progress_end, send_progress_report,
+};
+#[cfg(feature = "workspace")]
+use text_decode::read_text_with_encoding_fallback;
 
 /// RAII guard that clears the `indexing_in_progress` flag on drop.
 ///
@@ -171,17 +109,6 @@ impl LspServer {
         }
 
         let now = std::time::Instant::now();
-        self.pending_workspace_configuration_requests.lock().retain(|request_id, pending| {
-            let still_fresh = now.saturating_duration_since(pending.created_at)
-                <= WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT;
-            if !still_fresh {
-                tracing::warn!(
-                    request_id = *request_id,
-                    "Dropping stale workspace/configuration request"
-                );
-            }
-            still_fresh
-        });
 
         let folder_uris: Vec<String> =
             self.workspace_folders.lock().iter().map(|folder| folder.uri.clone()).collect();
@@ -202,7 +129,32 @@ impl LspServer {
             return;
         }
 
-        self.pending_workspace_configuration_requests.lock().insert(
+        let mut pending = self.pending_workspace_configuration_requests.lock();
+
+        // Count cap backstop: keep at most 10 pending requests to prevent unbounded growth
+        // even if client responses are slow or missing.
+        if pending.len() >= 10 {
+            let to_remove = pending.len() - 9;
+            let mut entries: Vec<_> =
+                pending.iter().map(|(id, req)| (*id, req.created_at)).collect();
+            entries.sort_by_key(|(_, created_at)| *created_at);
+            for (id, _) in entries.iter().take(to_remove) {
+                tracing::debug!(
+                    request_id = *id,
+                    "Dropping excess workspace/configuration request (count cap)"
+                );
+                pending.remove(id);
+            }
+        }
+
+        if !pending.is_empty() {
+            tracing::debug!(
+                superseded_requests = pending.len(),
+                "Dropping older workspace/configuration requests in favor of latest snapshot"
+            );
+            pending.clear();
+        }
+        pending.insert(
             request_id,
             PendingWorkspaceConfigurationRequest {
                 folder_uris,
@@ -380,50 +332,48 @@ impl LspServer {
         query: &str,
         cap: usize,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let mut all_symbols = Vec::new();
-
-        // Collect lightweight snapshots without holding lock during iteration.
-        // Only clone the fields needed for symbol extraction (uri, text, ast Arc),
-        // avoiding expensive Rope, ParentMap, LineStartsCache, and parse_errors clones.
         let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
             let documents = self.documents.lock();
             documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
         };
 
-        // Pre-compute lowercased query once, outside the document loop
-        let query_lower = query.to_lowercase();
+        let mut provider =
+            perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolsProvider::new();
+        let mut source_map = std::collections::HashMap::new();
+        let mut text_fallback_symbols = Vec::new();
 
         for (i, (uri, text, ast)) in docs_snapshot.iter().enumerate() {
-            // Cooperative yield every 8 documents
             if i & 0x7 == 0 {
                 std::thread::yield_now();
             }
-
-            // Early exit if we've hit the result cap
-            if all_symbols.len() >= cap {
-                break;
-            }
-
+            source_map.insert(uri.clone(), text.clone());
             if let Some(ast) = ast {
-                let doc_symbols = self.extract_document_symbols(ast, text, uri);
-
-                for sym in doc_symbols {
-                    if sym.name.to_lowercase().contains(&query_lower) {
-                        all_symbols.push(sym);
-                        if all_symbols.len() >= cap {
-                            break;
-                        }
-                    }
-                }
+                provider.index_document(uri, ast, text);
             } else {
-                // Text-based fallback when AST is not available
-                let text_symbols = self.extract_text_based_symbols(text, uri, query);
-                let remaining = cap.saturating_sub(all_symbols.len());
-                all_symbols.extend(text_symbols.into_iter().take(remaining));
+                text_fallback_symbols.extend(self.extract_text_based_symbols(text, uri, query));
             }
         }
 
-        // Truncate to cap in case we went slightly over
+        let mut candidates = self.symbol_index.lock().search_prefix(query);
+        if candidates.is_empty() && !query.is_empty() {
+            candidates = self.symbol_index.lock().search_fuzzy(query);
+        }
+        let mut dedup = HashSet::new();
+        candidates.retain(|candidate| dedup.insert(candidate.clone()));
+
+        let mut provider_results = provider.search_with_candidates(query, &source_map, &candidates);
+        if provider_results.is_empty() && !query.is_empty() {
+            provider_results = provider.search(query, &source_map);
+        }
+        let mut all_symbols: Vec<Value> = provider_results
+            .into_iter()
+            .filter_map(|symbol| serde_json::to_value(symbol).ok())
+            .collect();
+        all_symbols.extend(
+            text_fallback_symbols
+                .into_iter()
+                .filter_map(|symbol| serde_json::to_value(symbol).ok()),
+        );
         all_symbols.truncate(cap);
         tracing::debug!(
             count = all_symbols.len(),
@@ -473,7 +423,17 @@ impl LspServer {
             source_map.insert(uri.clone(), text.clone());
         }
 
-        let mut symbols = provider.search(query, &source_map);
+        let mut candidates = self.symbol_index.lock().search_prefix(query);
+        if candidates.is_empty() && !query.is_empty() {
+            candidates = self.symbol_index.lock().search_fuzzy(query);
+        }
+        let mut dedup = HashSet::new();
+        candidates.retain(|candidate| dedup.insert(candidate.clone()));
+
+        let mut symbols = provider.search_with_candidates(query, &source_map, &candidates);
+        if symbols.is_empty() && !query.is_empty() {
+            symbols = provider.search(query, &source_map);
+        }
         symbols.truncate(cap);
 
         tracing::debug!(count = symbols.len(), cap, "Found symbols total");
@@ -629,6 +589,20 @@ impl LspServer {
                                 }
                                 "perl.workspace.useSystemInc" => {
                                     json!(workspace_config.use_system_inc)
+                                }
+                                "perl.workspace.usePerl5lib" => {
+                                    json!(workspace_config.use_perl5lib)
+                                }
+                                "perl.workspace.perl5libPrecedence" => {
+                                    let precedence = match workspace_config.perl5lib_precedence {
+                                        perl_lsp_rs_core::config::Perl5LibPrecedence::Prepend => {
+                                            "prepend"
+                                        }
+                                        perl_lsp_rs_core::config::Perl5LibPrecedence::Append => {
+                                            "append"
+                                        }
+                                    };
+                                    json!(precedence)
                                 }
                                 "perl.workspace.resolutionTimeout" => {
                                     json!(workspace_config.resolution_timeout_ms)
@@ -903,7 +877,7 @@ impl LspServer {
             let workspace_index = coordinator.index();
             if is_perl_source_uri(uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_text_with_encoding_fallback(&path) {
                         Ok(content) => {
                             if let Ok(url) = url::Url::parse(uri) {
                                 // Clear old index data before re-indexing
@@ -934,7 +908,7 @@ impl LspServer {
             let mut documents = self.documents.lock();
             if let Some(doc) = self.get_document_mut(&mut documents, uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_text_with_encoding_fallback(&path) {
                         Ok(content) => {
                             doc.text = content;
                             doc.version += 1;
@@ -1052,7 +1026,7 @@ impl LspServer {
                         let workspace_index = coordinator.index();
                         workspace_index.remove_file(old_uri);
                         if let Some(path) = uri_to_fs_path(new_uri) {
-                            if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Ok(content) = read_text_with_encoding_fallback(&path) {
                                 if let Ok(url) = url::Url::parse(new_uri) {
                                     if let Err(e) = workspace_index.index_file(url, content.clone())
                                     {
@@ -1303,7 +1277,7 @@ impl LspServer {
                     if let Some(coordinator) = self.coordinator() {
                         if is_perl_source_uri(uri) {
                             if let Some(path) = uri_to_fs_path(uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_text_with_encoding_fallback(&path) {
                                     Ok(content) => {
                                         coordinator.notify_change(uri);
                                         if let Ok(url) = url::Url::parse(uri) {
@@ -1376,7 +1350,7 @@ impl LspServer {
                         // Index new file if it's a Perl file
                         if is_perl_source_uri(new_uri) {
                             if let Some(path) = uri_to_fs_path(new_uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_text_with_encoding_fallback(&path) {
                                     Ok(content) => {
                                         if let Ok(url) = url::Url::parse(new_uri) {
                                             match coordinator.index().index_file(url, content) {
@@ -1626,7 +1600,7 @@ impl LspServer {
                     break;
                 }
 
-                let content = match std::fs::read_to_string(&path) {
+                let content = match read_text_with_encoding_fallback(&path) {
                     Ok(c) => c,
                     Err(e) => {
                         if is_permission_denied_error(&e) {
@@ -1859,17 +1833,27 @@ impl LspServer {
 
     #[cfg(feature = "workspace")]
     fn read_workspace_text(&self, uri: &str) -> Option<String> {
+        // Priority 1: actively-open document (editor is authoritative).
         if let Some(doc) = self.documents.lock().get(uri) {
             return Some(doc.text.clone());
         }
 
+        // Priority 2: workspace index document store (content from the last
+        // time the file was indexed; avoids a synchronous disk read for files
+        // that were open and then closed within the session).
         if let Some(coordinator) = self.coordinator() {
             if let Some(doc) = coordinator.index().document_store().get(uri) {
                 return Some(doc.text.clone());
             }
         }
 
-        uri_to_fs_path(uri).and_then(|path| std::fs::read_to_string(path).ok())
+        // Priority 3: read from disk.  `workspace/willRenameFiles` is a
+        // workspace-wide refactoring operation; returning edits for files not
+        // currently open in the editor is explicitly correct per LSP 3.17 §3.17
+        // (the client requests cross-file edits and applies them).  This path
+        // is restricted to workspace-root-relative paths by the caller and is
+        // bounded to files that `find_dependents` already knows about.
+        uri_to_fs_path(uri).and_then(|path| read_text_with_encoding_fallback(&path).ok())
     }
 }
 
@@ -2084,8 +2068,12 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "workspace")]
+    use super::read_text_with_encoding_fallback;
     use super::{LspServer, module_name_appears_in_text};
     use serde_json::json;
+    #[cfg(feature = "workspace")]
+    use std::io::Write;
 
     #[test]
     fn test_module_name_appears_exact_match() {
@@ -2162,5 +2150,101 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(server.pending_workspace_configuration_requests.lock().is_empty());
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_decodes_utf16le_bom()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("utf16le.pm");
+        let text = "my $x = \"π\";";
+        let mut bytes = vec![0xFF, 0xFE];
+        for unit in text.encode_utf16() {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        std::fs::File::create(&path)?.write_all(&bytes)?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert_eq!(read, text);
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_strips_utf8_bom() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("utf8_bom.pm");
+        std::fs::write(&path, [0xEF, 0xBB, 0xBF, b'p', b'a', b'c', b'k', b'a', b'g', b'e'])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert_eq!(read, "package");
+        Ok(())
+    }
+
+    /// Regression: a UTF-16 LE BOM followed by an odd number of payload
+    /// bytes must not panic or silently truncate. We fall back to lossy
+    /// UTF-8 of the original bytes so the caller still gets something
+    /// reasonable to index.
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_handles_odd_length_utf16le()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("odd_utf16le.pm");
+        // BOM (2 bytes) + 3 payload bytes = odd-length UTF-16 payload.
+        std::fs::write(&path, [0xFF, 0xFE, 0x6D, 0x00, 0x79])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        // Must return something (not panic) — the replacement string is
+        // lossy but deterministic.
+        assert!(!read.is_empty());
+        Ok(())
+    }
+
+    /// Regression: a UTF-16 BE BOM followed by an odd number of payload
+    /// bytes must not panic or silently truncate.
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_handles_odd_length_utf16be()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("odd_utf16be.pm");
+        // BOM (2 bytes) + 3 payload bytes = odd-length UTF-16 payload.
+        std::fs::write(&path, [0xFE, 0xFF, 0x00, 0x6D, 0x00])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert!(!read.is_empty());
+        Ok(())
+    }
+
+    /// Edge case: empty file should decode to an empty string without panic.
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_handles_empty_file()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("empty.pm");
+        std::fs::write(&path, [])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert_eq!(read, "", "Empty file should decode to empty string");
+        Ok(())
+    }
+
+    /// Edge case: file with only a UTF-8 BOM and no content should decode
+    /// to an empty string (BOM is stripped, nothing remains).
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_handles_bom_only_file()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("bom_only.pm");
+        std::fs::write(&path, [0xEF, 0xBB, 0xBF])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert_eq!(read, "", "BOM-only file should decode to empty string after BOM strip");
+        Ok(())
     }
 }

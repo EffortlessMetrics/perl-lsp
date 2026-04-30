@@ -39,6 +39,7 @@ fn test_providers_completion_item_module_exists() -> Result<(), Box<dyn std::err
         additional_edits: Vec::new(),
         text_edit_range: None,
         commit_characters: None,
+        label_details: None,
     };
     Ok(())
 }

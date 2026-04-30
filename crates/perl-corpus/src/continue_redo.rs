@@ -497,7 +497,7 @@ mod tests {
     #[test]
     fn can_find_by_id() {
         let case = find_case("continue.while.basic");
-        must_some(case);
+        let _ = must_some(case);
         assert_eq!(must_some(case).id, "continue.while.basic");
     }
 
@@ -547,11 +547,11 @@ mod tests {
     #[test]
     fn edge_cases_marked_correctly() {
         let bare_block = find_case("continue.bare.block");
-        must_some(bare_block);
+        let _ = must_some(bare_block);
         assert!(!must_some(bare_block).should_parse, "continue on bare block should be invalid");
 
         let redo_bare = find_case("redo.bare.block");
-        must_some(redo_bare);
+        let _ = must_some(redo_bare);
         assert!(!must_some(redo_bare).should_parse, "redo in bare block should be invalid");
     }
 }

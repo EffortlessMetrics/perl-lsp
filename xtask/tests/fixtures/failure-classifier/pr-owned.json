@@ -1,0 +1,29 @@
+{
+  "pr": {
+    "number": 7003,
+    "head_sha": "pr-head-333",
+    "master_sha": "master-ccc",
+    "behind_master": false,
+    "changed_files": [
+      "crates/perl-parser/src/recovery.rs",
+      "crates/perl-parser/src/errors.rs"
+    ]
+  },
+  "pr_checks": [
+    {
+      "name": "ci / parser-tests",
+      "signature": "ci / parser-tests: recovery edge case",
+      "sha": "pr-head-333",
+      "conclusion": "failure",
+      "files": ["crates/perl-parser/src/recovery.rs"]
+    }
+  ],
+  "master_checks": [
+    {
+      "name": "ci / parser-tests",
+      "signature": "ci / parser-tests: recovery edge case",
+      "sha": "master-ccc",
+      "conclusion": "success"
+    }
+  ]
+}
