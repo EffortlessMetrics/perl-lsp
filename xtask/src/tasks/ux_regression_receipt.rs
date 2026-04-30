@@ -4,6 +4,7 @@ use std::sync::LazyLock;
 
 use chrono::Utc;
 use color_eyre::eyre::{Context, Result};
+use perl_lsp_ux_tests::taxonomy::{UxComponent, UxFailureClass, UxRoute, route_for_failure_class};
 use regex::Regex;
 use serde::Serialize;
 
@@ -26,20 +27,6 @@ pub struct UxRegressionReceiptConfig {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum FailureClass {
-    MatrixDrift,
-    BaselineDrift,
-    TestRace,
-    NewTestBug,
-    ProviderRegression,
-    ServerCrash,
-    Timeout,
-    Infra,
-    Unknown,
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct UxRegressionReceipt {
     kind: &'static str,
     schema_version: u32,
@@ -50,11 +37,16 @@ pub struct UxRegressionReceipt {
     scenario: Option<String>,
     first_failing_test: Option<String>,
     result: String,
-    failure_class: FailureClass,
+    failure_class: UxFailureClass,
     panic_location: Option<String>,
-    repro: Option<String>,
+    canonical_repro: Option<String>,
+    friendly_repro: Option<String>,
     first_failing_line: Option<String>,
-    route: String,
+    route: UxRoute,
+    component: Option<UxComponent>,
+    run_id: Option<String>,
+    attempt: Option<u32>,
+    platform: Option<String>,
 }
 
 pub fn run(config: UxRegressionReceiptConfig) -> Result<()> {
@@ -90,11 +82,17 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
 
     let failure_class = infer_failure_class(raw);
 
-    let repro = first_failing_test.as_ref().map(|name| {
+    let canonical_repro = first_failing_test.as_ref().map(|name| {
         format!("cargo test -p perl-lsp-ux-tests {name} -- --test-threads=1 --nocapture")
     });
 
-    let route = route_for_class(&failure_class).to_string();
+    let friendly_repro = first_failing_test.as_ref().map(|name| {
+        // Extract just the test function name (after ::) for the shorthand command.
+        let short = name.split("::").last().unwrap_or(name);
+        format!("just ux-tests {short}")
+    });
+
+    let route = route_for_failure_class(failure_class);
 
     UxRegressionReceipt {
         kind: "ux_regression_receipt",
@@ -108,9 +106,14 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
         result: if raw.contains("test result: ok") { "pass" } else { "fail" }.to_string(),
         failure_class,
         panic_location,
-        repro,
+        canonical_repro,
+        friendly_repro,
         first_failing_line: first_fail_line,
         route,
+        component: None,
+        run_id: None,
+        attempt: None,
+        platform: None,
     }
 }
 
@@ -119,50 +122,37 @@ fn scenario_from_test_name(test: &str) -> Option<String> {
     if scenario.starts_with("ux_scenario_") { Some(format!("{scenario}.rs")) } else { None }
 }
 
-fn infer_failure_class(raw: &str) -> FailureClass {
+fn infer_failure_class(raw: &str) -> UxFailureClass {
     let lower = raw.to_ascii_lowercase();
     if lower.contains("fixture matrix") || lower.contains("matrix drift") {
-        FailureClass::MatrixDrift
+        UxFailureClass::MatrixDrift
     } else if lower.contains("baseline") || lower.contains("snapshot") {
-        FailureClass::BaselineDrift
+        UxFailureClass::BaselineDrift
     } else if lower.contains("timed out") || lower.contains("timeout") {
-        FailureClass::Timeout
+        UxFailureClass::Timeout
     } else if lower.contains("race") || lower.contains("flaky") {
-        FailureClass::TestRace
+        UxFailureClass::TestRace
     } else if lower.contains("panicked") && lower.contains("tests/ux_scenario_") {
-        FailureClass::NewTestBug
+        UxFailureClass::NewTestBug
     } else if lower.contains("no such file") || lower.contains("permission denied") {
-        FailureClass::Infra
+        UxFailureClass::Infra
     } else if lower.contains("assertion failed") {
         // Check ProviderRegression before the generic panicked/ServerCrash catch-all:
         // a typical assertion failure log contains both "panicked" and "assertion failed",
         // so this branch must precede the ServerCrash arm to remain reachable.
         // Note: we do NOT match on bare "expected" because it appears as a substring of
         // unrelated words like "unexpectedly", causing false positives on ServerCrash logs.
-        FailureClass::ProviderRegression
+        UxFailureClass::ProviderRegression
     } else if lower.contains("panicked") || lower.contains("server exited") {
-        FailureClass::ServerCrash
+        UxFailureClass::ServerCrash
     } else {
-        FailureClass::Unknown
+        UxFailureClass::Unknown
     }
 }
 
 fn workflow_from_test_name(test: &str) -> Option<String> {
     let workflow = test.split("::").nth(1)?;
     if workflow.is_empty() { None } else { Some(workflow.to_string()) }
-}
-
-fn route_for_class(class: &FailureClass) -> &'static str {
-    match class {
-        FailureClass::MatrixDrift => "needs-fixture-update",
-        FailureClass::BaselineDrift => "needs-baseline-update",
-        FailureClass::TestRace | FailureClass::NewTestBug => "needs-test-fix",
-        FailureClass::ProviderRegression => "needs-provider-fix",
-        FailureClass::ServerCrash => "needs-crash-fix",
-        FailureClass::Timeout => "needs-timeout-triage",
-        FailureClass::Infra => "needs-ci-investigation",
-        FailureClass::Unknown => "needs-triage",
-    }
 }
 
 #[cfg(test)]
@@ -192,7 +182,7 @@ mod tests {
             "test name should be extracted from log"
         );
         assert!(
-            matches!(receipt.failure_class, FailureClass::NewTestBug),
+            matches!(receipt.failure_class, UxFailureClass::NewTestBug),
             "failure_class should be NewTestBug for panicked test in ux_scenario"
         );
         assert_eq!(
@@ -200,75 +190,73 @@ mod tests {
             Some("crates/perl-lsp-ux-tests/tests/ux_scenario_19_diagnostics_lifecycle.rs:102:5"),
             "panic_location should be extracted from panic line (Rust 1.73+ format)"
         );
-        assert_eq!(receipt.route, "needs-test-fix", "race/new test bug routes to test fix");
+        assert_eq!(receipt.route, UxRoute::TestFix, "race/new test bug routes to test fix");
     }
 
     #[test]
-    fn classify_timeout_routes_to_ci_fix() {
+    fn classify_timeout_routes_to_timeout_triage() {
         let log = "running 1 test\ntest ux_scenario_01_startup::start_server ... FAILED\ntest timed out after 30s\ntest result: FAILED. 0 passed; 1 failed";
         let receipt = classify(log, Some("sha1".to_string()));
         assert!(
-            matches!(receipt.failure_class, FailureClass::Timeout),
+            matches!(receipt.failure_class, UxFailureClass::Timeout),
             "timed out log should classify as Timeout"
         );
-        assert_eq!(receipt.route, "needs-timeout-triage", "Timeout routes to timeout triage");
+        assert_eq!(receipt.route, UxRoute::TimeoutTriage, "Timeout routes to TimeoutTriage");
         assert_eq!(receipt.result, "fail");
     }
 
     #[test]
-    fn classify_server_crash_routes_to_provider_fix() {
+    fn classify_server_crash_routes_to_crash_fix() {
         // ServerCrash: panicked in non-ux_scenario path (e.g., the LSP server process itself).
         // Must not contain "tests/ux_scenario_" (NewTestBug) or "assertion failed" (ProviderRegression).
         let log = "running 1 test\ntest ux_scenario_02_open::open_file ... FAILED\nthread 'server' panicked at crates/perl-lsp-rs/src/provider.rs:55:9:\nserver crashed with SIGABRT\ntest result: FAILED. 0 passed; 1 failed";
         let receipt = classify(log, Some("sha2".to_string()));
         assert!(
-            matches!(receipt.failure_class, FailureClass::ServerCrash),
+            matches!(receipt.failure_class, UxFailureClass::ServerCrash),
             "non-ux_scenario panic should classify as ServerCrash, got {:?}",
             receipt.failure_class
         );
-        assert_eq!(receipt.route, "needs-crash-fix", "ServerCrash routes to needs-crash-fix");
+        assert_eq!(receipt.route, UxRoute::CrashFix, "ServerCrash routes to CrashFix");
     }
 
     #[test]
-    fn classify_server_exited_unexpectedly_is_server_crash_not_provider() {
+    fn classify_unexpected_exit_routes_to_crash_fix() {
         // "unexpectedly" contains the substring "expected", but ProviderRegression only
         // triggers on "assertion failed" — not bare "expected" — so this must classify
         // as ServerCrash, not ProviderRegression.
         let log = "running 1 test\ntest ux_scenario_03_diag::diag_test ... FAILED\nthread 'main' panicked at crates/perl-lsp-rs/src/server.rs:10:1:\nserver exited unexpectedly\ntest result: FAILED. 0 passed; 1 failed";
         let receipt = classify(log, Some("sha8".to_string()));
         assert!(
-            matches!(receipt.failure_class, FailureClass::ServerCrash),
+            matches!(receipt.failure_class, UxFailureClass::ServerCrash),
             "log with 'unexpectedly' (substring of 'expected') should be ServerCrash, got {:?}",
             receipt.failure_class
         );
-        assert_eq!(receipt.route, "needs-crash-fix", "ServerCrash routes to needs-crash-fix");
+        assert_eq!(receipt.route, UxRoute::CrashFix);
     }
 
     #[test]
-    fn classify_matrix_drift_routes_to_fixture_fix() {
+    fn classify_matrix_drift_routes_to_fixture_update() {
         let log = "running 2 tests\ntest ux_scenario_05_matrix::check_matrix ... FAILED\nfixture matrix mismatch: expected 3 items, got 4\ntest result: FAILED. 1 passed; 1 failed";
         let receipt = classify(log, Some("sha3".to_string()));
         assert!(
-            matches!(receipt.failure_class, FailureClass::MatrixDrift),
+            matches!(receipt.failure_class, UxFailureClass::MatrixDrift),
             "fixture matrix log should classify as MatrixDrift"
         );
-        assert_eq!(
-            receipt.route, "needs-fixture-update",
-            "MatrixDrift routes to needs-fixture-update"
-        );
+        assert_eq!(receipt.route, UxRoute::FixtureUpdate, "MatrixDrift routes to FixtureUpdate");
     }
 
     #[test]
-    fn classify_baseline_drift_routes_to_fixture_fix() {
+    fn classify_baseline_drift_routes_to_baseline_update() {
         let log = "running 1 test\ntest ux_scenario_10_hover::hover_type ... FAILED\nbaseline snapshot mismatch\ntest result: FAILED. 0 passed; 1 failed";
         let receipt = classify(log, Some("sha4".to_string()));
         assert!(
-            matches!(receipt.failure_class, FailureClass::BaselineDrift),
+            matches!(receipt.failure_class, UxFailureClass::BaselineDrift),
             "baseline snapshot log should classify as BaselineDrift"
         );
         assert_eq!(
-            receipt.route, "needs-baseline-update",
-            "BaselineDrift routes to needs-baseline-update"
+            receipt.route,
+            UxRoute::BaselineUpdate,
+            "BaselineDrift routes to BaselineUpdate"
         );
     }
 
@@ -279,14 +267,11 @@ mod tests {
         let log = "running 1 test\ntest ux_scenario_07_completion::completions ... FAILED\nassertion failed: left == right\n  left: 3\n right: 5\ntest result: FAILED. 0 passed; 1 failed";
         let receipt = classify(log, Some("sha5".to_string()));
         assert!(
-            matches!(receipt.failure_class, FailureClass::ProviderRegression),
+            matches!(receipt.failure_class, UxFailureClass::ProviderRegression),
             "assertion-failed log without panic-in-ux_scenario_ should classify as ProviderRegression, got {:?}",
             receipt.failure_class
         );
-        assert_eq!(
-            receipt.route, "needs-provider-fix",
-            "ProviderRegression routes to needs-provider-fix"
-        );
+        assert_eq!(receipt.route, UxRoute::ProviderFix, "ProviderRegression routes to ProviderFix");
     }
 
     #[test]
@@ -294,10 +279,10 @@ mod tests {
         let log = "running 1 test\ntest ux_scenario_99_misc::misc_test ... FAILED\nsome completely unrecognized error message\ntest result: FAILED. 0 passed; 1 failed";
         let receipt = classify(log, Some("sha6".to_string()));
         assert!(
-            matches!(receipt.failure_class, FailureClass::Unknown),
+            matches!(receipt.failure_class, UxFailureClass::Unknown),
             "unrecognized log should classify as Unknown"
         );
-        assert_eq!(receipt.route, "needs-triage", "Unknown routes to needs-triage");
+        assert_eq!(receipt.route, UxRoute::Triage, "Unknown routes to Triage");
     }
 
     #[test]
@@ -326,11 +311,228 @@ mod tests {
         assert_eq!(scenario_from_test_name("other_module::some_test"), None);
     }
 
+    /// Dual repro completeness: for representative test names, the receipt
+    /// contains both a non-empty `canonical_repro` (cargo test command) and
+    /// a non-empty `friendly_repro` (just ux-tests shorthand).
+    ///
+    /// Feature: ux-readiness-system, Property 2: Dual repro completeness
+    /// Validates: Requirements 0.4, 1.9
+    #[test]
+    fn dual_repro_completeness() -> Result<()> {
+        let representative_tests = [
+            ("ux_scenario_01_startup::start_server", "start_server"),
+            ("ux_scenario_07_completion::completions", "completions"),
+            (
+                "ux_scenario_14_inc_conformance::scenario_14_include_path_completion_external_module",
+                "scenario_14_include_path_completion_external_module",
+            ),
+            (
+                "ux_scenario_19_diagnostics_lifecycle::scenario_19_diagnostics_clear_after_fix",
+                "scenario_19_diagnostics_clear_after_fix",
+            ),
+        ];
+
+        for (full_test_name, expected_short) in representative_tests {
+            let log = format!(
+                "running 1 test\n\
+                 test {full_test_name} ... FAILED\n\
+                 assertion failed: left == right\n\
+                 test result: FAILED. 0 passed; 1 failed"
+            );
+
+            let receipt = classify(&log, Some("deadbeef".to_string()));
+
+            // canonical_repro must be Some and non-empty
+            let canonical = receipt.canonical_repro.as_deref().unwrap_or("");
+            assert!(
+                !canonical.is_empty(),
+                "canonical_repro should be non-empty for test {full_test_name}"
+            );
+            assert!(
+                canonical.contains("cargo test -p perl-lsp-ux-tests"),
+                "canonical_repro should contain 'cargo test -p perl-lsp-ux-tests', got: {canonical}"
+            );
+            assert!(
+                canonical.contains(full_test_name),
+                "canonical_repro should contain the full test name, got: {canonical}"
+            );
+
+            // friendly_repro must be Some and non-empty
+            let friendly = receipt.friendly_repro.as_deref().unwrap_or("");
+            assert!(
+                !friendly.is_empty(),
+                "friendly_repro should be non-empty for test {full_test_name}"
+            );
+            assert!(
+                friendly.contains("just ux-tests"),
+                "friendly_repro should contain 'just ux-tests', got: {friendly}"
+            );
+            assert!(
+                friendly.contains(expected_short),
+                "friendly_repro should contain the short test name '{expected_short}', got: {friendly}"
+            );
+        }
+
+        Ok(())
+    }
+
     #[test]
     fn panic_re_matches_modern_rust_format() {
         // Rust 1.73+ format: "panicked at path:row:col:" with no quoted message.
         let line = "thread 'test' panicked at crates/perl-lsp-rs/src/lib.rs:42:8:";
         let cap = PANIC_RE.captures(line).expect("should match modern panic format");
         assert_eq!(&cap[1], "crates/perl-lsp-rs/src/lib.rs:42:8");
+    }
+
+    // =========================================================================
+    // Scenario 14 / 19 classifier fixture tests (Task 0.4)
+    // =========================================================================
+
+    /// Scenario 14 — external module resolution via `includePaths` fails.
+    ///
+    /// When goto-definition returns empty for a module that should resolve via
+    /// `includePaths`, the test assertion produces an "assertion failed" log.
+    /// The classifier should identify this as `ProviderRegression` because the
+    /// LSP provider failed to resolve a module that the configuration says
+    /// should be resolvable.
+    #[test]
+    fn classifier_extracts_scenario_14_external_module_failure() -> Result<()> {
+        // Representative log: an assertion failure from scenario_14 when an
+        // external module configured via includePaths fails to resolve.
+        // The log contains "assertion failed" which the classifier maps to
+        // ProviderRegression (module resolution provider did not honour config).
+        let log = "\
+running 1 test\n\
+test ux_scenario_14_inc_conformance::scenario_14_include_path_completion_external_module ... FAILED\n\
+\n\
+failures:\n\
+\n\
+---- ux_scenario_14_inc_conformance::scenario_14_include_path_completion_external_module stdout ----\n\
+[conformance] mode=completion_external_module | PL701=PASS | goto-def=FAIL | hover=PASS\n\
+assertion failed: left == right\n\
+  left: false\n\
+ right: true\n\
+Expected goto-definition to resolve GreetModule from completion scenario; defs=[]\n\
+\n\
+failures:\n\
+    ux_scenario_14_inc_conformance::scenario_14_include_path_completion_external_module\n\
+\n\
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out";
+
+        let receipt = classify(log, Some("fix14a".to_string()));
+
+        assert!(
+            matches!(receipt.failure_class, UxFailureClass::ProviderRegression),
+            "scenario_14 external module failure should classify as ProviderRegression, got {:?}",
+            receipt.failure_class
+        );
+        assert_eq!(receipt.route, UxRoute::ProviderFix, "ProviderRegression routes to ProviderFix");
+        assert_eq!(
+            receipt.scenario.as_deref(),
+            Some("ux_scenario_14_inc_conformance.rs"),
+            "scenario file should be extracted"
+        );
+        assert_eq!(receipt.result, "fail");
+
+        Ok(())
+    }
+
+    /// Scenario 14 — system `@INC` opt-in via `PERL5LIB` / `useSystemInc` fails.
+    ///
+    /// When the server cannot resolve a module via system `@INC` despite
+    /// `useSystemInc: true`, the test assertion produces an "assertion failed"
+    /// log. The classifier should identify this as `ProviderRegression` because
+    /// the module resolution provider failed to honour the system `@INC`
+    /// configuration.
+    #[test]
+    fn classifier_extracts_scenario_14_system_inc_opt_in_failure() -> Result<()> {
+        // Representative log: an assertion failure from scenario_14 when the
+        // server cannot resolve a module via system @INC despite useSystemInc
+        // being enabled. The "assertion failed" content triggers ProviderRegression.
+        let log = "\
+running 1 test\n\
+test ux_scenario_14_inc_conformance::scenario_14_system_inc ... FAILED\n\
+\n\
+failures:\n\
+\n\
+---- ux_scenario_14_inc_conformance::scenario_14_system_inc stdout ----\n\
+[conformance] mode=system_inc | PL701=FAIL | goto-def=FAIL | hover=PASS\n\
+assertion failed: definition should resolve SystemModule.pm via system @INC (PERL5LIB); defs=[]\n\
+\n\
+failures:\n\
+    ux_scenario_14_inc_conformance::scenario_14_system_inc\n\
+\n\
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out";
+
+        let receipt = classify(log, Some("fix14b".to_string()));
+
+        assert!(
+            matches!(receipt.failure_class, UxFailureClass::ProviderRegression),
+            "scenario_14 system @INC failure should classify as ProviderRegression, got {:?}",
+            receipt.failure_class
+        );
+        assert_eq!(receipt.route, UxRoute::ProviderFix, "ProviderRegression routes to ProviderFix");
+        assert_eq!(
+            receipt.scenario.as_deref(),
+            Some("ux_scenario_14_inc_conformance.rs"),
+            "scenario file should be extracted"
+        );
+        assert_eq!(
+            receipt.first_failing_test.as_deref(),
+            Some("ux_scenario_14_inc_conformance::scenario_14_system_inc"),
+            "test name should be extracted"
+        );
+        assert_eq!(receipt.result, "fail");
+
+        Ok(())
+    }
+
+    /// Scenario 19 — diagnostics race condition during edit lifecycle.
+    ///
+    /// When the diagnostics clear-after-fix check fails due to a race between
+    /// pre-fix and post-fix diagnostic events, the log contains "race" in the
+    /// diagnostic context. The classifier should identify this as `TestRace`
+    /// because the failure is a non-deterministic timing issue in the test
+    /// harness, not a provider regression.
+    #[test]
+    fn classifier_extracts_scenario_19_diagnostics_race_failure() -> Result<()> {
+        let log = "\
+running 1 test\n\
+test ux_scenario_19_diagnostics_lifecycle::scenario_19_diagnostics_clear_after_fix ... FAILED\n\
+\n\
+failures:\n\
+\n\
+---- ux_scenario_19_diagnostics_lifecycle::scenario_19_diagnostics_clear_after_fix stdout ----\n\
+diagnostics race: pre-fix events leaked into post-fix window\n\
+Expected diagnostics to clear (or no new errors) after fixing the file; \
+events: [Diagnostics { uri: \"file:///tmp/ws/live.pl\", diagnostics: [{\"code\":\"PL001\"}] }]\n\
+note: this is a known flaky race condition in the diagnostics drain pipeline\n\
+\n\
+failures:\n\
+    ux_scenario_19_diagnostics_lifecycle::scenario_19_diagnostics_clear_after_fix\n\
+\n\
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out";
+
+        let receipt = classify(log, Some("fix19".to_string()));
+
+        assert!(
+            matches!(receipt.failure_class, UxFailureClass::TestRace),
+            "scenario_19 diagnostics race should classify as TestRace, got {:?}",
+            receipt.failure_class
+        );
+        assert_eq!(receipt.route, UxRoute::TestFix, "TestRace routes to TestFix");
+        assert_eq!(
+            receipt.scenario.as_deref(),
+            Some("ux_scenario_19_diagnostics_lifecycle.rs"),
+            "scenario file should be extracted"
+        );
+        assert_eq!(
+            receipt.first_failing_test.as_deref(),
+            Some("ux_scenario_19_diagnostics_lifecycle::scenario_19_diagnostics_clear_after_fix"),
+            "test name should be extracted"
+        );
+        assert_eq!(receipt.result, "fail");
+
+        Ok(())
     }
 }

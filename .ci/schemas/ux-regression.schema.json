@@ -8,9 +8,21 @@
     "schema_version",
     "measured_at",
     "sha",
+    "workflow",
+    "scenario_file",
+    "scenario",
+    "first_failing_test",
     "result",
     "failure_class",
-    "route"
+    "panic_location",
+    "canonical_repro",
+    "friendly_repro",
+    "first_failing_line",
+    "route",
+    "component",
+    "run_id",
+    "attempt",
+    "platform"
   ],
   "properties": {
     "kind": {
@@ -45,6 +57,12 @@
         "null"
       ]
     },
+    "first_failing_test": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "result": {
       "enum": [
         "pass",
@@ -53,14 +71,14 @@
     },
     "failure_class": {
       "enum": [
-        "matrix_drift",
-        "baseline_drift",
-        "test_race",
-        "new_test_bug",
         "provider_regression",
         "server_crash",
         "timeout",
+        "test_race",
         "infra",
+        "matrix_drift",
+        "baseline_drift",
+        "new_test_bug",
         "unknown"
       ]
     },
@@ -70,7 +88,13 @@
         "null"
       ]
     },
-    "repro": {
+    "canonical_repro": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "friendly_repro": {
       "type": [
         "string",
         "null"
@@ -84,17 +108,49 @@
     },
     "route": {
       "enum": [
-        "needs-fixture-update",
-        "needs-baseline-update",
-        "needs-test-fix",
-        "needs-provider-fix",
-        "needs-crash-fix",
-        "needs-timeout-triage",
-        "needs-ci-investigation",
-        "needs-triage"
+        "provider_fix",
+        "crash_fix",
+        "timeout_triage",
+        "ci_investigation",
+        "fixture_update",
+        "baseline_update",
+        "test_fix",
+        "triage"
       ]
     },
-    "first_failing_test": {
+    "component": {
+      "oneOf": [
+        {
+          "enum": [
+            "completion",
+            "diagnostics",
+            "module_resolution",
+            "workspace_symbols",
+            "rename",
+            "hover",
+            "goto_definition",
+            "infra"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "run_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "attempt": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "platform": {
       "type": [
         "string",
         "null"

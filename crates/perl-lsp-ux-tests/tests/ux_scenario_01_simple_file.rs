@@ -11,77 +11,124 @@
 //! - `textDocument/didOpen` is accepted (no error).
 //! - `textDocument/hover` on a variable returns something, or null in degraded mode.
 //! - No crash signatures in the event log.
+//! - Completion request does not crash.
 
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::{
+    ScenarioConfig, UxCiTier, UxComponent, UxHarness, UxScenarioSkip, run_ux_scenario,
+};
 
 fn binary_available() -> bool {
     perl_lsp_ux_tests::resolve_binary().is_ok()
 }
 
+fn missing_binary_skip() -> UxScenarioSkip {
+    UxScenarioSkip::infra("PERL_LSP_BIN not set and target/debug/perl-lsp not found")
+}
+
 #[test]
 fn scenario_01_server_starts_and_accepts_open() {
-    if !binary_available() {
-        eprintln!("SKIP scenario_01: perl-lsp binary not found");
-        return;
-    }
+    run_ux_scenario(
+        "simple_file_smoke",
+        "ux_scenario_01_simple_file.rs",
+        "scenario_01_server_starts_and_accepts_open",
+        UxCiTier::Pr,
+        Some(UxComponent::Completion),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
 
-    let source = "#!/usr/bin/env perl\nuse strict;\n\nprint \"Hello, world!\\n\";\n";
+            let source = "#!/usr/bin/env perl\nuse strict;\n\nprint \"Hello, world!\\n\";\n";
 
-    let harness = UxHarness::new(ScenarioConfig::default()).expect("Failed to create UX harness");
+            let harness = UxHarness::new(ScenarioConfig::default())?;
 
-    harness.open_file("hello.pl", source).expect("textDocument/didOpen should succeed");
+            harness.open_file("hello.pl", source)?;
 
-    harness.assert_no_crash();
+            recorder.check("didOpen accepted without error", true)?;
+
+            harness.assert_no_crash();
+            recorder.check("no crash signatures in event log", true)?;
+
+            Ok(())
+        },
+    );
 }
 
 #[test]
 fn scenario_01_hover_on_simple_variable() {
-    if !binary_available() {
-        eprintln!("SKIP scenario_01: perl-lsp binary not found");
-        return;
-    }
+    run_ux_scenario(
+        "simple_file_smoke",
+        "ux_scenario_01_simple_file.rs",
+        "scenario_01_hover_on_simple_variable",
+        UxCiTier::Pr,
+        Some(UxComponent::Completion),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
 
-    let source = "use strict;\nuse warnings;\n\nmy $x = 42;\nmy $y = $x + 1;\n";
+            let source = "use strict;\nuse warnings;\n\nmy $x = 42;\nmy $y = $x + 1;\n";
 
-    let harness = UxHarness::new(ScenarioConfig::default().with_file("test.pl", source))
-        .expect("Failed to create UX harness");
+            let harness = UxHarness::new(ScenarioConfig::default().with_file("test.pl", source))?;
 
-    harness.open_file("test.pl", source).expect("textDocument/didOpen should not fail");
+            harness.open_file("test.pl", source)?;
 
-    // Hover on `$x` (line 3, character 3).
-    let hover_result = harness.hover("test.pl", 3, 3);
+            // Hover on `$x` (line 3, character 3).
+            recorder.mark_request_start("hover");
+            let hover_result = harness.hover("test.pl", 3, 3);
 
-    match hover_result {
-        Ok(Some(result)) => {
-            assert!(
-                result.is_object() || result.is_string(),
-                "Hover result should be an object, got: {:?}",
-                result
-            );
-        }
-        Ok(None) => {
-            eprintln!("INFO scenario_01: hover returned null (degraded mode acceptable)");
-        }
-        Err(e) => {
-            panic!("Hover returned a JSON-RPC error — this is a UX regression: {}", e);
-        }
-    }
+            match hover_result {
+                Ok(Some(result)) => {
+                    recorder.mark_first_useful_result("hover");
+                    recorder.check(
+                        "hover result is an object or string",
+                        result.is_object() || result.is_string(),
+                    )?;
+                }
+                Ok(None) => {
+                    // Degraded mode — hover returned null. Still a useful
+                    // (expected-clean) result for timing purposes.
+                    recorder.mark_first_useful_result("hover");
+                    recorder.check("hover returned null (degraded mode acceptable)", true)?;
+                }
+                Err(e) => {
+                    recorder.check("hover should not return a JSON-RPC error", false)?;
+                    anyhow::bail!("Hover returned a JSON-RPC error — this is a UX regression: {e}");
+                }
+            }
 
-    harness.assert_no_crash();
+            harness.assert_no_crash();
+            recorder.check("no crash signatures in event log", true)?;
+
+            Ok(())
+        },
+    );
 }
 
 #[test]
 fn scenario_01_completion_on_keyword_does_not_crash() {
-    if !binary_available() {
-        eprintln!("SKIP scenario_01: perl-lsp binary not found");
-        return;
-    }
+    run_ux_scenario(
+        "simple_file_smoke",
+        "ux_scenario_01_simple_file.rs",
+        "scenario_01_completion_on_keyword_does_not_crash",
+        UxCiTier::Pr,
+        Some(UxComponent::Completion),
+        |recorder| {
+            if !binary_available() {
+                return Err(missing_binary_skip().into());
+            }
 
-    let source = "use str\n";
-    let harness = UxHarness::new(ScenarioConfig::default()).expect("Failed to create UX harness");
+            let source = "use str\n";
+            let harness = UxHarness::new(ScenarioConfig::default())?;
 
-    harness.open_file("complete.pl", source).expect("didOpen should succeed");
+            harness.open_file("complete.pl", source)?;
 
-    let result = harness.completion("complete.pl", 0, 7);
-    assert!(result.is_ok(), "completion should not crash: {:?}", result);
+            recorder.mark_request_start("completion");
+            let result = harness.completion("complete.pl", 0, 7);
+            recorder.check("completion request did not crash", result.is_ok())?;
+            recorder.mark_first_useful_result("completion");
+
+            Ok(())
+        },
+    );
 }

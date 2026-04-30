@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/schemas/ux-scenario-run.schema.json",
+  "title": "perl-lsp UX scenario run receipt",
+  "type": "object",
+  "required": [
+    "kind",
+    "schema_version",
+    "measured_at",
+    "run_identity",
+    "workflow_id",
+    "scenario_file",
+    "test_name",
+    "ci_tier",
+    "result",
+    "duration_ms",
+    "assertions",
+    "canonical_repro",
+    "friendly_repro"
+  ],
+  "properties": {
+    "kind": {
+      "const": "ux_scenario_run"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "measured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "run_identity": {
+      "type": "object",
+      "properties": {
+        "sha": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "workflow_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scenario_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "test_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "component": {
+      "enum": [
+        "completion",
+        "diagnostics",
+        "module_resolution",
+        "workspace_symbols",
+        "rename",
+        "hover",
+        "goto_definition",
+        "infra",
+        "ai_completion"
+      ]
+    },
+    "ci_tier": {
+      "enum": [
+        "pr",
+        "nightly",
+        "release"
+      ]
+    },
+    "result": {
+      "enum": [
+        "pass",
+        "fail",
+        "quarantined",
+        "skipped"
+      ]
+    },
+    "duration_ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "time_to_first_useful_result_ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "operation_timings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "operation"
+        ],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "time_to_first_useful_result_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "timing_status": {
+            "enum": [
+              "missing_request_start"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "assertions": {
+      "type": "object",
+      "required": [
+        "passed",
+        "failed",
+        "basis"
+      ],
+      "properties": {
+        "passed": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "failed": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "basis": {
+          "enum": [
+            "instrumented",
+            "not_yet_instrumented"
+          ]
+        },
+        "failed_check_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "failure_class": {
+      "enum": [
+        "provider_regression",
+        "server_crash",
+        "timeout",
+        "test_race",
+        "infra",
+        "matrix_drift",
+        "baseline_drift",
+        "new_test_bug",
+        "unknown"
+      ]
+    },
+    "route": {
+      "enum": [
+        "provider_fix",
+        "crash_fix",
+        "timeout_triage",
+        "ci_investigation",
+        "fixture_update",
+        "baseline_update",
+        "test_fix",
+        "triage"
+      ]
+    },
+    "skip_reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "canonical_repro": {
+      "type": "string",
+      "minLength": 1
+    },
+    "friendly_repro": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "skipped"
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "then": {
+        "required": [
+          "skip_reason"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": false
+}
