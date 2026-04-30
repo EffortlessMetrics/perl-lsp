@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/schemas/ux-flakes.schema.json",
+  "title": "perl-lsp UX flake ledger",
+  "description": "Registry of known-flaky or known-blocked UX scenario tests with quarantine support and accountability metadata.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "entries",
+    "summary"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/flakeEntry"
+      }
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    }
+  },
+  "$defs": {
+    "flakeEntry": {
+      "type": "object",
+      "required": [
+        "test",
+        "crate",
+        "subsystem",
+        "state",
+        "failure_mode",
+        "failure_class",
+        "component",
+        "first_seen",
+        "scope",
+        "quarantine_effect"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "test": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Fully qualified test name (module::function)."
+        },
+        "crate": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Crate containing the test."
+        },
+        "subsystem": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Subsystem owner for triage routing."
+        },
+        "state": {
+          "enum": ["active", "resolved"],
+          "description": "Whether the flake is currently active or has been resolved."
+        },
+        "failure_mode": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description of the failure behavior."
+        },
+        "failure_class": {
+          "enum": [
+            "provider_regression",
+            "server_crash",
+            "timeout",
+            "test_race",
+            "infra",
+            "matrix_drift",
+            "baseline_drift",
+            "new_test_bug",
+            "unknown"
+          ],
+          "description": "UxFailureClass enum value classifying the failure."
+        },
+        "component": {
+          "enum": [
+            "completion",
+            "diagnostics",
+            "module_resolution",
+            "workspace_symbols",
+            "rename",
+            "hover",
+            "goto_definition",
+            "infra"
+          ],
+          "description": "UxComponent enum value identifying the subsystem exercised."
+        },
+        "issue": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "GitHub issue number tracking the flake. Required for active entries."
+        },
+        "owner": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "GitHub handle of the responsible party. Required for active entries."
+        },
+        "first_seen": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO-8601 date when the flake was first observed."
+        },
+        "scope": {
+          "enum": ["pr", "nightly", "release"],
+          "description": "CI tier scope where the flake manifests."
+        },
+        "quarantine_effect": {
+          "enum": ["non_blocking_pr", "release_blocking", "advisory"],
+          "description": "How the quarantine affects CI gating."
+        },
+        "expires_after_days": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Optional auto-expiry in days from first_seen. Null means no auto-expiry."
+        },
+        "resolved_in": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "PR number that resolved the flake. Null while active."
+        },
+        "resolved_at": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "ISO-8601 date when the flake was resolved. Null while active."
+        },
+        "notes": {
+          "type": ["string", "null"],
+          "description": "Optional free-form notes about the flake."
+        }
+      },
+      "if": {
+        "properties": {
+          "state": { "const": "active" }
+        }
+      },
+      "then": {
+        "properties": {
+          "issue": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 1
+          },
+          "failure_class": {
+            "enum": [
+              "provider_regression",
+              "server_crash",
+              "timeout",
+              "test_race",
+              "infra",
+              "matrix_drift",
+              "baseline_drift",
+              "new_test_bug",
+              "unknown"
+            ]
+          }
+        },
+        "required": ["issue", "owner", "failure_class"]
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "total",
+        "active",
+        "resolved",
+        "by_subsystem"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of entries in the ledger."
+        },
+        "active": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of entries with state 'active'."
+        },
+        "resolved": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of entries with state 'resolved'."
+        },
+        "by_subsystem": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Entry counts grouped by subsystem."
+        }
+      }
+    }
+  }
+}
