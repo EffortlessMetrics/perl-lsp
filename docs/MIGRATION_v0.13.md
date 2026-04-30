@@ -7,7 +7,7 @@ This guide is for downstream users of perl-lsp crates who are upgrading to v0.13
 
 ## What's changing in v0.13.0
 
-v0.13.0 is a **clean break** release. The published crate count drops from 132 to **30**.
+v0.13.0 is a **clean break** release. The published crate count drops from 132 to **32**.
 Approximately 100 product-internal microcrates stop being published. Their code moves
 into subfolder modules inside the owning published crate. There are no bridge crates
 or re-export shims — old crate names will no longer appear on crates.io after this release.
@@ -21,20 +21,19 @@ This is a deliberate one-time cost to eliminate a permanent operational burden. 
 published under the same names. Their public APIs are not affected by the internal module
 reorganization.
 
-The same applies to the other 24 crates in the published set:
+The same applies to the other 28 crates in the published set:
 
 - `tree-sitter-perl-c`, `tree-sitter-perl-rs`
-- `perl-parser-pest`
-- `perl-lexer`, `perl-token`, `perl-line-index`, `perl-uri`, `perl-pod`
+- `perl-parser-pest`, `perl-parser-core`, `perl-parser-bench`
+- `perl-lexer`, `perl-token`, `perl-ast`, `perl-ast-v2`, `perl-pragma`
+- `perl-line-index`, `perl-uri`, `perl-pod`, `perl-regex`, `perl-position-tracking`
 - `perl-diagnostics` (renamed from `perl-diagnostics-codes`, see Wave E below)
-- `perl-lsp-protocol`, `perl-content-length-framing` (kept published — shared by LSP+DAP)
-- `perl-semantic-analyzer`, `perl-module`, `perl-workspace`
+- `perl-semantic-analyzer`, `perl-semantic-facts`, `perl-module`, `perl-workspace`
 - `perl-symbol`
 - `perl-lsp-rs-core` (new in v0.13.0 — implementation sibling of `perl-lsp-rs`)
 - `perl-lsp-perltidy`
-- `perl-subprocess-runtime`, `perl-lsp-text-utils`
+- `perl-subprocess-runtime`
 - `perl-corpus`, `perl-tdd-support`, `perl-test-must`, `perl-test-generators`
-- `perl-parser-core`
 
 ## If you depend on a retired crate
 
@@ -376,10 +375,6 @@ perl-lsp-rs-core = "0.13.0"
 | `perl-lsp-input-validation` | `perl-lsp-rs-core` | `use perl_lsp_input_validation::` | `use perl_lsp_rs_core::runtime::input_validation::` |
 | `perl-lsp-text-utils` | `perl-lsp-rs-core` | `use perl_lsp_text_utils::` | `use perl_lsp_rs_core::runtime::text_utils::` |
 
-> **Note:** `perl-lsp-text-utils` remains published at v0.13.0 for external consumers who use it
-> independently. The absorption into `perl-lsp-rs-core::runtime::text_utils` provides an
-> additional access path; the standalone crate is still published.
-
 **Cargo.toml change:**
 
 ```toml
@@ -589,9 +584,9 @@ downstream `impl` blocks:
 | Milestone | Published crates | Notes |
 |---|---|---|
 | v0.12.4 (baseline) | 132 | Before collapse |
-| v0.13.0 (final) | **30** | After all 10+ waves land |
+| v0.13.0 (final) | **32** | After all 10+ waves land |
 
-The collapse removed ~102 crates from the publish surface and added 2 new ones
+The collapse removed ~100 crates from the publish surface and added 2 new ones
 (`perl-symbol` and `perl-lsp-rs-core`), for a net reduction of 100.
 
 Waves that added a new crate: Wave B (perl-symbol NEW), Wave F (perl-lsp-rs-core NEW).

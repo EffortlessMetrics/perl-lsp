@@ -380,6 +380,7 @@ pub fn add_regex_flag_completions(
             additional_edits: vec![],
             text_edit_range: Some((context.position, context.position)),
             commit_characters: None,
+            label_details: None,
         });
     }
 }
@@ -416,6 +417,7 @@ pub fn add_regex_completions(
                 additional_edits: vec![],
                 text_edit_range: Some((replace_start, context.position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }

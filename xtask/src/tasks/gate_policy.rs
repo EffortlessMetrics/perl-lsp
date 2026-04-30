@@ -1,200 +1,181 @@
-use color_eyre::eyre::{Context, ContextCompat, Result, bail};
+use color_eyre::eyre::{Context, Result, bail};
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+use crate::tasks::gates::{GatePolicy, load_policy_for_inspection};
 use crate::utils::project_root;
 
-#[derive(clap::Subcommand, Debug)]
-pub enum GatePolicyCommand {
-    /// Validate policy invariants and detect stale gate-registry wiring.
-    Check,
-    /// Show the effective gate policy for a CI profile.
-    Effective {
-        /// CI profile to evaluate.
-        #[arg(long, value_enum, default_value = "pr")]
-        profile: GateProfile,
-    },
-}
-
-#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GateProfile {
-    /// Pull-request profile (pr_fast + merge_gate tiers).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum GatePolicyProfile {
     Pr,
-    /// Full merge-gate profile (same tier set as `pr`).
-    Merge,
-    /// Nightly profile (all tiers, informational depth).
     Nightly,
-    /// Release profile.
     Release,
 }
 
 #[derive(Debug, Deserialize)]
-struct GatePolicyDoc {
-    gates: Vec<PolicyGate>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct PolicyGate {
-    name: String,
-    tier: String,
-    #[serde(default = "default_true")]
-    required: bool,
+struct RegistryFile {
+    #[serde(rename = "gate", default)]
+    gates: Vec<RegistryGate>,
 }
 
 #[derive(Debug, Deserialize)]
-struct GateRegistryDoc {
-    gate: Vec<RegistryGate>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
 struct RegistryGate {
     id: String,
-    #[serde(default)]
     blocking: bool,
 }
 
-fn default_true() -> bool {
-    true
-}
-
-pub fn run(command: GatePolicyCommand) -> Result<()> {
-    match command {
-        GatePolicyCommand::Check => check(),
-        GatePolicyCommand::Effective { profile } => effective(profile),
-    }
-}
-
-fn check() -> Result<()> {
+pub fn check() -> Result<()> {
     let root = project_root()?;
-    let policy = load_policy(&root)?;
-    let registry = load_registry(&root)?;
+    let policy = load_policy_for_inspection(&root.join(".ci/gate-policy.yaml"))?;
+    let registry = load_registry(&root.join(".ci/GATE_REGISTRY.toml"))?;
 
-    let policy_by_name: BTreeMap<_, _> =
-        policy.gates.into_iter().map(|gate| (gate.name.clone(), gate)).collect();
-    let registry_by_id: BTreeMap<_, _> =
-        registry.gate.into_iter().map(|gate| (gate.id.clone(), gate)).collect();
+    // CI Gate runs `cargo xtask gates` using `.ci/gate-policy.yaml`.
+    // Ensure PR profile cannot be blocked by CPAN/parser ratchet wiring.
+    let pr_effective = effective_required_gate_names(&policy, GatePolicyProfile::Pr)?;
+    assert_required(&pr_effective, "common_corpus_clean")?;
+    assert_not_required(&pr_effective, "cpan_corpus_ratchet")?;
+    assert_not_required(&pr_effective, "parser_corpus_ratchet")?;
 
-    assert_required_flag(&policy_by_name, "common_corpus_clean", true)?;
-    assert_required_flag(&policy_by_name, "parser_corpus_ratchet", false)?;
-    assert_required_flag(&policy_by_name, "cpan_corpus_ratchet", false)?;
+    // Keep legacy registry aligned for human readers and secondary tooling.
+    assert_registry_not_blocking(&registry, "cpan-corpus-ratchet")?;
+    assert_registry_not_blocking(&registry, "parser-corpus-ratchet")?;
 
-    // Keep YAML policy and legacy TOML registry aligned for corpus gates.
-    assert_registry_alignment(
-        &policy_by_name,
-        &registry_by_id,
-        "parser_corpus_ratchet",
-        "parser-corpus-ratchet",
-    )?;
-    assert_registry_alignment(
-        &policy_by_name,
-        &registry_by_id,
-        "cpan_corpus_ratchet",
-        "cpan-corpus-ratchet",
-    )?;
-    assert_registry_alignment(
-        &policy_by_name,
-        &registry_by_id,
-        "parser_audit_closeout",
-        "parser-audit-closeout",
-    )?;
+    println!("✅ Gate policy check passed.");
+    println!("   Source of truth: .ci/gate-policy.yaml (used by `cargo xtask gates`).");
+    println!("   PR required includes common_corpus_clean, excludes CPAN/parser ratchets.");
 
-    println!("gate-policy check passed");
-    println!("- common_corpus_clean: required in PR merge-gate profile");
-    println!("- parser_corpus_ratchet: advisory (non-blocking)");
-    println!("- cpan_corpus_ratchet: advisory (non-blocking)");
     Ok(())
 }
 
-fn effective(profile: GateProfile) -> Result<()> {
+pub fn effective(profile: GatePolicyProfile) -> Result<()> {
     let root = project_root()?;
-    let policy = load_policy(&root)?;
-    let selected_tiers = profile_tiers(profile);
+    let policy = load_policy_for_inspection(&root.join(".ci/gate-policy.yaml"))?;
+    let required = effective_required_gate_names(&policy, profile)?;
+    let advisory = effective_advisory_gate_names(&policy, profile)?;
 
-    println!("profile={:?}", profile);
-    println!("gate | tier | required | effective_blocking");
+    println!("Source of truth: .ci/gate-policy.yaml");
+    println!("Profile: {}", profile_label(profile));
+    println!("Required gates ({}):", required.len());
+    for gate in &required {
+        println!("  - {gate}");
+    }
 
-    for gate in policy.gates.iter().filter(|gate| selected_tiers.contains(&gate.tier.as_str())) {
-        println!("{} | {} | {} | {}", gate.name, gate.tier, gate.required, gate.required);
+    println!("Advisory gates ({}):", advisory.len());
+    for gate in &advisory {
+        println!("  - {gate}");
     }
 
     Ok(())
 }
 
-fn profile_tiers(profile: GateProfile) -> &'static [&'static str] {
+fn profile_label(profile: GatePolicyProfile) -> &'static str {
     match profile {
-        GateProfile::Pr | GateProfile::Merge => &["pr_fast", "merge_gate"],
-        GateProfile::Nightly => &["pr_fast", "merge_gate", "nightly"],
-        GateProfile::Release => &["release"],
+        GatePolicyProfile::Pr => "pr",
+        GatePolicyProfile::Nightly => "nightly",
+        GatePolicyProfile::Release => "release",
     }
 }
 
-fn load_policy(root: &Path) -> Result<GatePolicyDoc> {
-    let path = root.join(".ci/gate-policy.yaml");
-    let content =
-        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
-    serde_yaml_ng::from_str(&content).with_context(|| format!("failed to parse {}", path.display()))
+fn load_registry(path: &Path) -> Result<RegistryFile> {
+    let content = fs::read_to_string(path)
+        .with_context(|| format!("Failed to read gate registry from {}", path.display()))?;
+    let registry: RegistryFile = toml::from_str(&content)
+        .with_context(|| format!("Failed to parse gate registry from {}", path.display()))?;
+    Ok(registry)
 }
 
-fn load_registry(root: &Path) -> Result<GateRegistryDoc> {
-    let path = root.join(".ci/GATE_REGISTRY.toml");
-    let content =
-        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
-    toml::from_str(&content).with_context(|| format!("failed to parse {}", path.display()))
+fn effective_required_gate_names(
+    policy: &GatePolicy,
+    profile: GatePolicyProfile,
+) -> Result<Vec<String>> {
+    let mut names = effective_gate_names(policy, profile, true)?;
+    names.sort();
+    Ok(names)
 }
 
-fn assert_required_flag(
-    gates: &BTreeMap<String, PolicyGate>,
-    gate: &str,
-    expected_required: bool,
-) -> Result<()> {
-    let policy_gate =
-        gates.get(gate).with_context(|| format!("missing gate-policy entry '{gate}'"))?;
-    if policy_gate.required != expected_required {
-        bail!(
-            "gate-policy mismatch for {gate}: expected required={}, got required={}",
-            expected_required,
-            policy_gate.required
-        );
-    }
-    Ok(())
+fn effective_advisory_gate_names(
+    policy: &GatePolicy,
+    profile: GatePolicyProfile,
+) -> Result<Vec<String>> {
+    let mut names = effective_gate_names(policy, profile, false)?;
+    names.sort();
+    Ok(names)
 }
 
-fn assert_registry_alignment(
-    policy: &BTreeMap<String, PolicyGate>,
-    registry: &BTreeMap<String, RegistryGate>,
-    policy_gate_name: &str,
-    registry_gate_id: &str,
-) -> Result<()> {
-    let policy_gate = policy
-        .get(policy_gate_name)
-        .with_context(|| format!("missing gate-policy entry '{policy_gate_name}'"))?;
-    let registry_gate = registry
-        .get(registry_gate_id)
-        .with_context(|| format!("missing gate-registry entry '{registry_gate_id}'"))?;
+fn effective_gate_names(
+    policy: &GatePolicy,
+    profile: GatePolicyProfile,
+    required: bool,
+) -> Result<Vec<String>> {
+    let allowed_tiers = match profile {
+        GatePolicyProfile::Pr => ["pr_fast", "merge_gate"].as_slice(),
+        GatePolicyProfile::Nightly => ["pr_fast", "merge_gate", "nightly"].as_slice(),
+        GatePolicyProfile::Release => ["release"].as_slice(),
+    };
 
-    if policy_gate.required != registry_gate.blocking {
-        bail!(
-            "policy mismatch: .ci/gate-policy.yaml gate '{}' required={} but .ci/GATE_REGISTRY.toml gate '{}' blocking={}",
-            policy_gate_name,
-            policy_gate.required,
-            registry_gate_id,
-            registry_gate.blocking
-        );
+    for tier in allowed_tiers {
+        if !policy.tiers.contains_key(*tier) {
+            bail!("Policy missing required tier '{tier}' for profile {}", profile_label(profile));
+        }
     }
 
-    Ok(())
+    Ok(policy
+        .gates
+        .iter()
+        .filter(|gate| allowed_tiers.contains(&gate.tier.as_str()) && gate.required == required)
+        .map(|gate| gate.name.clone())
+        .collect())
+}
+
+fn assert_required(required: &[String], gate_name: &str) -> Result<()> {
+    if required.iter().any(|name| name == gate_name) {
+        Ok(())
+    } else {
+        bail!("Gate '{gate_name}' must be required in PR profile")
+    }
+}
+
+fn assert_not_required(required: &[String], gate_name: &str) -> Result<()> {
+    if required.iter().any(|name| name == gate_name) {
+        bail!("Gate '{gate_name}' must not be required in PR profile")
+    } else {
+        Ok(())
+    }
+}
+
+fn assert_registry_not_blocking(registry: &RegistryFile, gate_id: &str) -> Result<()> {
+    let by_id: HashMap<&str, bool> =
+        registry.gates.iter().map(|gate| (gate.id.as_str(), gate.blocking)).collect();
+
+    match by_id.get(gate_id) {
+        Some(true) => bail!("Registry gate '{gate_id}' must be non-blocking"),
+        Some(false) => Ok(()),
+        None => bail!("Registry gate '{gate_id}' missing; keep registry aligned with policy"),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{GateProfile, profile_tiers};
+    use super::*;
 
     #[test]
-    fn pr_profile_contains_merge_gate_tiers() {
-        let tiers = profile_tiers(GateProfile::Pr);
-        assert!(tiers.contains(&"pr_fast"));
-        assert!(tiers.contains(&"merge_gate"));
+    fn check_enforces_cpan_non_blocking_for_pr_profile() -> Result<()> {
+        check()
+    }
+
+    #[test]
+    fn effective_pr_marks_common_required_and_cpan_advisory() -> Result<()> {
+        let root = project_root()?;
+        let policy = load_policy_for_inspection(&root.join(".ci/gate-policy.yaml"))?;
+
+        let required = effective_required_gate_names(&policy, GatePolicyProfile::Pr)?;
+        let advisory = effective_advisory_gate_names(&policy, GatePolicyProfile::Pr)?;
+
+        assert!(required.iter().any(|name| name == "common_corpus_clean"));
+        assert!(!required.iter().any(|name| name == "cpan_corpus_ratchet"));
+        assert!(advisory.iter().any(|name| name == "cpan_corpus_ratchet"));
+        Ok(())
     }
 }
