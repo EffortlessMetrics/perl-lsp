@@ -15,8 +15,9 @@
 //! Also keeps docs/project/ROADMAP.md compliance table in sync when lsp subsystem runs.
 
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, eyre};
@@ -116,6 +117,57 @@ fn run_cmd_merged(root: &Path, args: &[&str], timeout: Duration) -> String {
     }
 }
 
+/// Run command and stream merged stdout/stderr to stderr while capturing output.
+///
+/// This avoids long periods of CI silence for expensive status collectors.
+fn run_cmd_merged_streaming(root: &Path, args: &[&str], timeout: Duration) -> Result<String> {
+    let _ = timeout;
+    if args.is_empty() {
+        return Ok(String::new());
+    }
+    let shell_args: Vec<String> =
+        args.iter().map(|&a| format!("'{}'", a.replace('\'', "'\\''"))).collect();
+    let shell_cmd = format!("{} 2>&1", shell_args.join(" "));
+    eprintln!("[update-status] running: {shell_cmd}");
+    #[cfg(unix)]
+    let mut child = Command::new("sh")
+        .arg("-c")
+        .arg(&shell_cmd)
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("spawning command: {shell_cmd}"))?;
+    #[cfg(not(unix))]
+    let mut child = Command::new("cmd")
+        .args(["/C", &shell_cmd])
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("spawning command: {shell_cmd}"))?;
+
+    let stdout = child.stdout.take().ok_or_else(|| eyre!("missing child stdout pipe"))?;
+    let mut reader = BufReader::new(stdout);
+    let mut combined = String::new();
+    let mut line = String::new();
+    loop {
+        line.clear();
+        let bytes = reader.read_line(&mut line)?;
+        if bytes == 0 {
+            break;
+        }
+        eprint!("{line}");
+        combined.push_str(&line);
+    }
+    let status = child.wait()?;
+    if !status.success() {
+        return Err(eyre!(
+            "command failed with status {status}: {shell_cmd}\nrepro: (cd {} && {shell_cmd})",
+            root.display()
+        ));
+    }
+    Ok(combined)
+}
+
 /// Replace content between `begin_marker\n...\nend_marker` (inclusive of markers).
 fn replace_block(
     text: &str,
@@ -182,6 +234,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- LSP subsystem ---
     if need_lsp {
+        eprintln!("[update-status] subsystem start: lsp");
         let cov = lsp::count_lsp_coverage(&root)?;
         let compliance_table = lsp::compute_compliance_table(&root)?;
 
@@ -204,6 +257,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- Tests subsystem ---
     if need_tests {
+        eprintln!("[update-status] subsystem start: tests");
         let test_counts = tests::count_tests(&root);
         let missing_docs_current = tests::count_missing_docs_perl_parser(&root);
         let missing_docs_baseline = tests::read_missing_docs_baseline(&root);
@@ -224,6 +278,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- Parser subsystem ---
     if need_parser {
+        eprintln!("[update-status] subsystem start: parser");
         let parser_metrics = parser::collect_parser_metrics(&root);
 
         let parser_path = root.join("docs/project/status/parser.md");
@@ -237,6 +292,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- Quality subsystem ---
     if need_quality {
+        eprintln!("[update-status] subsystem start: quality");
         let quality_path = root.join("docs/project/status/quality.md");
         let original_quality =
             fs::read_to_string(&quality_path).context("reading docs/project/status/quality.md")?;
@@ -255,6 +311,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- DAP subsystem ---
     if need_dap {
+        eprintln!("[update-status] subsystem start: dap");
         let dap_counts = dap::count_dap_tests(&root);
 
         let dap_path = root.join("docs/project/status/dap.md");
@@ -268,6 +325,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- Workspace subsystem ---
     if need_workspace {
+        eprintln!("[update-status] subsystem start: workspace");
         let workspace_path = root.join("docs/project/status/workspace.md");
         let original_workspace = fs::read_to_string(&workspace_path)
             .context("reading docs/project/status/workspace.md")?;

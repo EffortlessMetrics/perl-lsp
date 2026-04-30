@@ -12,12 +12,12 @@ use std::path::Path;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Context, Result};
 use regex::Regex;
 
 use super::editor_ux::count_ux_scenarios;
 use super::flaky::{collect_flaky_test_summary, format_flaky_tests_section};
-use super::{replace_block, run_cmd_merged};
+use super::{replace_block, run_cmd_merged_streaming};
 
 static RUNNING_TEST_BINARY_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)")
@@ -55,16 +55,17 @@ pub(super) fn collect_per_crate_mutation(root: &Path) -> BTreeMap<String, usize>
 /// names to stdout.  `run_cmd_merged` (shell `2>&1`) ensures headers appear immediately
 /// before the test names they introduce, so the parser correctly associates each name with
 /// its crate.
-pub(super) fn collect_per_crate_test_counts(root: &Path) -> BTreeMap<String, usize> {
-    let output = run_cmd_merged(
+pub(super) fn collect_per_crate_test_counts(root: &Path) -> Result<BTreeMap<String, usize>> {
+    let output = run_cmd_merged_streaming(
         root,
         &["cargo", "test", "--workspace", "--lib", "--exclude", "tree-sitter-perl", "--", "--list"],
         Duration::from_secs(180),
-    );
+    )
+    .context("quality subsystem failed while collecting per-crate test counts")?;
     if output.is_empty() {
-        return BTreeMap::new();
+        return Ok(BTreeMap::new());
     }
-    parse_per_crate_test_counts(&output)
+    Ok(parse_per_crate_test_counts(&output))
 }
 
 fn parse_per_crate_test_counts(output: &str) -> BTreeMap<String, usize> {
@@ -120,7 +121,7 @@ pub(super) fn format_crate_quality_table(
 
 pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<String> {
     let mutation_by_crate = collect_per_crate_mutation(root);
-    let tests_by_crate = collect_per_crate_test_counts(root);
+    let tests_by_crate = collect_per_crate_test_counts(root)?;
     let ux_scenarios = count_ux_scenarios(root);
     let flaky = collect_flaky_test_summary(root);
 
