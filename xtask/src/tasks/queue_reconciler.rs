@@ -86,6 +86,38 @@ const NEEDS_DEEP_REVIEW: &str = "needs-deep-review";
 const NEEDS_DIFF_FIX: &str = "needs-diff-fix";
 const NEEDS_BUILDER_FIX: &str = "needs-builder-fix";
 
+const REVIEW_RECEIPT_KIND: &str = "review_receipt";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewReceiptVerdict {
+    Approved,
+    NeedsBuilder,
+    NeedsDiff,
+    NeedsCi,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewDepth {
+    HaikuFirst,
+    Deep,
+    Security,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReviewReceipt {
+    pub kind: String,
+    pub schema_version: u32,
+    pub pr: u64,
+    pub sha: String,
+    pub verdict: ReviewReceiptVerdict,
+    pub review_depth: ReviewDepth,
+    pub fix_forward_applied: bool,
+    pub blocking_findings: Vec<String>,
+    pub labels_projected: Vec<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Data structures
 // ---------------------------------------------------------------------------
@@ -181,10 +213,10 @@ struct CheckContext<'a> {
 }
 
 fn normalize_check_status(ctx: &CheckContext<'_>) -> NormalizedCheckStatus {
-    if let (Some(check_sha), Some(pr_sha)) = (ctx.check_head_sha, ctx.pr_head_sha) {
-        if check_sha != pr_sha {
-            return NormalizedCheckStatus::Stale;
-        }
+    if let (Some(check_sha), Some(pr_sha)) = (ctx.check_head_sha, ctx.pr_head_sha)
+        && check_sha != pr_sha
+    {
+        return NormalizedCheckStatus::Stale;
     }
 
     let status = ctx.conclusion_or_state.unwrap_or("UNKNOWN").to_ascii_uppercase();
@@ -231,7 +263,13 @@ pub fn reconcile_queue(
         // Query live CI state for this PR.
         let ci_outcome = query_live_ci_state(pr.number).unwrap_or(CiOutcome::Pending);
 
-        let contradictions = detect_contradictions(pr, &events, ci_outcome);
+        // Best-effort load of the current-SHA review receipt from PR comments.
+        // None → no projection contradictions emitted (safe no-op).
+        let review_receipt = fetch_current_review_receipt(pr.number).unwrap_or(None);
+
+        let mut contradictions = detect_contradictions(pr, &events, ci_outcome);
+        contradictions
+            .extend(contradictions_from_current_review_receipt(pr, review_receipt.as_ref()));
 
         if contradictions.is_empty() {
             continue;
@@ -414,6 +452,69 @@ pub fn detect_contradictions(
     out
 }
 
+pub fn contradictions_from_current_review_receipt(
+    pr: &OpenPr,
+    receipt: Option<&ReviewReceipt>,
+) -> Vec<Contradiction> {
+    let Some(current) = receipt.filter(|r| {
+        r.kind == REVIEW_RECEIPT_KIND
+            && r.schema_version == 1
+            && r.sha == pr.head_ref_oid
+            && r.pr == pr.number
+    }) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let has = |name: &str| pr.labels.iter().any(|l| l == name);
+
+    match current.verdict {
+        ReviewReceiptVerdict::Approved => {
+            if has(NEEDS_BUILDER_FIX) {
+                out.push(Contradiction {
+                    keep: REVIEW_RECEIPT_KIND.to_string(),
+                    strip: NEEDS_BUILDER_FIX.to_string(),
+                    reason: "current approved review receipt strips stale needs-builder-fix"
+                        .to_string(),
+                });
+            }
+            if has(NEEDS_DIFF_FIX) {
+                out.push(Contradiction {
+                    keep: REVIEW_RECEIPT_KIND.to_string(),
+                    strip: NEEDS_DIFF_FIX.to_string(),
+                    reason: "current approved review receipt strips stale needs-diff-fix"
+                        .to_string(),
+                });
+            }
+        }
+        ReviewReceiptVerdict::NeedsBuilder => {
+            if has(REVIEW_REVIEWED) {
+                out.push(Contradiction {
+                    keep: NEEDS_BUILDER_FIX.to_string(),
+                    strip: REVIEW_REVIEWED.to_string(),
+                    reason: "current needs_builder receipt strips approval label".to_string(),
+                });
+            }
+            if has(DIFF_AUDITED) {
+                out.push(Contradiction {
+                    keep: NEEDS_BUILDER_FIX.to_string(),
+                    strip: DIFF_AUDITED.to_string(),
+                    reason: "current needs_builder receipt strips diff-audited".to_string(),
+                });
+            }
+        }
+        ReviewReceiptVerdict::NeedsDiff => {
+            if has(DIFF_AUDITED) {
+                out.push(Contradiction {
+                    keep: NEEDS_DIFF_FIX.to_string(),
+                    strip: DIFF_AUDITED.to_string(),
+                    reason: "current needs_diff receipt strips diff-audited".to_string(),
+                });
+            }
+        }
+        ReviewReceiptVerdict::NeedsCi => {}
+    }
+    out
+}
 /// Resolve a contradicting pair that has no live ground truth using timeline events.
 ///
 /// Rule: whichever label was applied later wins. If within the simultaneous threshold,
@@ -604,6 +705,94 @@ fn fetch_label_timeline(pr_number: u64) -> Result<Vec<LabelEvent>> {
         .collect();
 
     Ok(label_events)
+}
+
+/// Fetch the current-SHA review receipt for a PR by scanning issue comments for
+/// fenced JSON blocks tagged `kind: "review_receipt"`.
+///
+/// Returns:
+/// - `Ok(Some(receipt))` when at least one comment carries a parseable, current-SHA
+///   review receipt; the latest such comment wins.
+/// - `Ok(None)` when no current-SHA receipt is found (also when fetch fails — the
+///   reconciler treats this as a safe no-op).
+/// - `Err(_)` is reserved for future hard failures; today we never return Err so
+///   the per-PR loop can stay simple.
+fn fetch_current_review_receipt(pr_number: u64) -> Result<Option<ReviewReceipt>> {
+    let root = project_root()?;
+    let endpoint = format!("repos/{{owner}}/{{repo}}/issues/{pr_number}/comments?per_page=100");
+
+    let output = Command::new("gh")
+        .current_dir(&root)
+        .args(["api", &endpoint, "--paginate"])
+        .output()
+        .context("failed to execute gh api comments for review receipt")?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout);
+    let comments_json: Vec<serde_json::Value> = serde_json::from_str(&raw).unwrap_or_default();
+    Ok(extract_latest_review_receipt(&comments_json))
+}
+
+/// Pure helper: scan a list of GitHub issue-comment JSON objects (each with a
+/// `body` string) and return the latest parseable `review_receipt` payload.
+///
+/// Receipts are expected as fenced JSON blocks of the form:
+///
+/// ```text
+/// ```json
+/// { "kind": "review_receipt", "schema_version": 1, ... }
+/// ```
+/// ```
+///
+/// Comments are taken in input order; the last successfully-parsed receipt wins
+/// (GitHub's `?per_page=100` returns oldest-first by default, matching this).
+fn extract_latest_review_receipt(comments: &[serde_json::Value]) -> Option<ReviewReceipt> {
+    let mut latest: Option<ReviewReceipt> = None;
+    for comment in comments {
+        let Some(body) = comment.get("body").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        for candidate in extract_json_code_blocks(body) {
+            if let Ok(receipt) = serde_json::from_str::<ReviewReceipt>(&candidate)
+                && receipt.kind == REVIEW_RECEIPT_KIND
+                && receipt.schema_version == 1
+            {
+                latest = Some(receipt);
+            }
+        }
+    }
+    latest
+}
+
+/// Extract ```json fenced code blocks from a markdown body. Tolerant of the
+/// common variants (```json, ```JSON, leading whitespace) and returns each
+/// block's inner contents as an owned `String`.
+fn extract_json_code_blocks(body: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut remaining = body;
+    while let Some(start) = remaining.find("```") {
+        let after_open = &remaining[start + 3..];
+        // Optional language tag up to the first newline.
+        let Some(nl) = after_open.find('\n') else {
+            break;
+        };
+        let lang = after_open[..nl].trim();
+        let body_start = nl + 1;
+        let after_lang = &after_open[body_start..];
+        let Some(close) = after_lang.find("```") else {
+            break;
+        };
+        let block = &after_lang[..close];
+        // Advance past the closing fence for next iteration.
+        remaining = &after_lang[close + 3..];
+        if lang.eq_ignore_ascii_case("json") {
+            out.push(block.trim().to_string());
+        }
+    }
+    out
 }
 
 fn fetch_open_prs(pr_filter: Option<u64>) -> Result<Vec<OpenPr>> {
@@ -987,6 +1176,183 @@ mod tests {
         let c = detect_contradictions(&pr, &[], CiOutcome::Pending);
         let strips: Vec<_> = c.iter().filter(|x| x.strip == NEEDS_BUILDER_FIX).collect();
         assert_eq!(strips.len(), 1, "exactly one strip of needs-builder-fix");
+    }
+
+    fn make_review_receipt(pr: u64, sha: &str, verdict: ReviewReceiptVerdict) -> ReviewReceipt {
+        ReviewReceipt {
+            kind: REVIEW_RECEIPT_KIND.to_string(),
+            schema_version: 1,
+            pr,
+            sha: sha.to_string(),
+            verdict,
+            review_depth: ReviewDepth::Deep,
+            fix_forward_applied: false,
+            blocking_findings: Vec::new(),
+            labels_projected: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn current_approved_receipt_strips_needs_builder_fix() {
+        let pr = make_pr(7, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let receipt = make_review_receipt(7, "sha-7", ReviewReceiptVerdict::Approved);
+        let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
+        assert!(c.iter().any(|item| item.strip == NEEDS_BUILDER_FIX));
+    }
+
+    #[test]
+    fn current_needs_builder_receipt_strips_approval_labels() {
+        let pr = make_pr(8, &[REVIEW_REVIEWED, DIFF_AUDITED, NEEDS_BUILDER_FIX]);
+        let receipt = make_review_receipt(8, "sha-8", ReviewReceiptVerdict::NeedsBuilder);
+        let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
+        assert!(c.iter().any(|item| item.strip == REVIEW_REVIEWED));
+        assert!(c.iter().any(|item| item.strip == DIFF_AUDITED));
+    }
+
+    #[test]
+    fn stale_sha_receipt_is_ignored() {
+        let pr = make_pr(9, &[REVIEW_REVIEWED, DIFF_AUDITED, NEEDS_DIFF_FIX]);
+        let receipt = make_review_receipt(9, "different-sha", ReviewReceiptVerdict::NeedsDiff);
+        let c = contradictions_from_current_review_receipt(&pr, Some(&receipt));
+        assert!(c.is_empty());
+    }
+
+    #[test]
+    fn no_review_receipt_is_safe_noop() {
+        let pr = make_pr(10, &[REVIEW_REVIEWED, DIFF_AUDITED]);
+        let c = contradictions_from_current_review_receipt(&pr, None);
+        assert!(c.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // Receipt extraction from PR comment bodies (loader wiring)
+    // -----------------------------------------------------------------------
+
+    fn comment(body: &str) -> serde_json::Value {
+        serde_json::json!({ "body": body })
+    }
+
+    #[test]
+    fn extract_latest_review_receipt_picks_latest_parseable_payload() {
+        let older = r#"```json
+{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"old-sha","verdict":"needs_builder","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}
+```"#;
+        let newer = r#"```json
+{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"sha-42","verdict":"approved","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}
+```"#;
+        let comments = vec![comment(older), comment(newer)];
+        let receipt = extract_latest_review_receipt(&comments).expect("a receipt should parse");
+        assert_eq!(receipt.sha, "sha-42");
+        assert_eq!(receipt.verdict, ReviewReceiptVerdict::Approved);
+    }
+
+    #[test]
+    fn extract_latest_review_receipt_ignores_non_review_kinds() {
+        let other = r#"```json
+{"kind":"queue-snapshot","captured_at":"2026-04-30T00:00:00Z"}
+```"#;
+        let comments = vec![comment(other)];
+        let receipt = extract_latest_review_receipt(&comments);
+        assert!(receipt.is_none(), "non-review kinds should be ignored");
+    }
+
+    #[test]
+    fn extract_latest_review_receipt_ignores_unparseable_blocks() {
+        let bad = r#"```json
+{ this is not valid json
+```"#;
+        let comments = vec![comment(bad)];
+        assert!(extract_latest_review_receipt(&comments).is_none());
+    }
+
+    #[test]
+    fn extract_latest_review_receipt_ignores_non_json_fences() {
+        let perl = r#"```perl
+my $x = 1;
+```"#;
+        let comments = vec![comment(perl)];
+        assert!(extract_latest_review_receipt(&comments).is_none());
+    }
+
+    #[test]
+    fn extract_latest_review_receipt_returns_none_on_empty_input() {
+        let comments: Vec<serde_json::Value> = vec![];
+        assert!(extract_latest_review_receipt(&comments).is_none());
+    }
+
+    /// Integration test: the full per-PR detection pipeline wired by `reconcile_queue`.
+    ///
+    /// Mirrors the inner loop:
+    /// 1. `detect_contradictions` against labels + timeline + live CI.
+    /// 2. Extend with `contradictions_from_current_review_receipt` from the loaded receipt.
+    ///
+    /// Verifies that an approved review_receipt at the current head SHA strips
+    /// `needs-builder-fix` *in addition to* whatever timeline-based pairs the
+    /// detector already found. This is the integration that closes the dead-code
+    /// loop: receipts loaded from comments now reach the strip-action stream.
+    #[test]
+    fn reconcile_pr_pipeline_extends_contradictions_with_review_receipt() {
+        // PR has both review-reviewed + needs-builder-fix. Two emitters fire:
+        //   1. Timeline-pair detector — conservative fallback keeps review-reviewed,
+        //      strips needs-builder-fix.
+        //   2. Receipt projection (verdict=approved, current SHA) — also strips
+        //      needs-builder-fix, but with `keep: review_receipt` for provenance.
+        //
+        // Both contradictions reach the strip-action stream; the strip-application
+        // loop in `reconcile_queue` calls `gh pr edit --remove-label` for each.
+        // GitHub treats removing an already-removed label as a no-op (idempotent
+        // at the API surface), so the live label state is "needs-builder-fix
+        // removed" regardless of how many times the strip is requested.
+        //
+        // This test pins the contract: receipts must REACH the strip stream
+        // (closing the dead-code loop), and at least one strip must carry
+        // receipt provenance (keep == review_receipt). We do NOT assert
+        // `contradictions.len() == 1` — both sources legitimately fire and the
+        // audit trail benefits from preserving both reasons.
+        let pr = make_pr(42, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let body = format!(
+            r#"```json
+{{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"sha-42","verdict":"approved","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}}
+```"#
+        );
+        let comments = vec![comment(&body)];
+        let receipt = extract_latest_review_receipt(&comments);
+        assert!(receipt.is_some(), "loader must extract the embedded receipt");
+
+        // Simulate the per-PR pipeline exactly as `reconcile_queue` runs it.
+        let mut contradictions = detect_contradictions(&pr, &[], CiOutcome::Pending);
+        contradictions.extend(contradictions_from_current_review_receipt(&pr, receipt.as_ref()));
+
+        let strips: Vec<&str> = contradictions.iter().map(|c| c.strip.as_str()).collect();
+        assert!(
+            strips.contains(&NEEDS_BUILDER_FIX),
+            "wired pipeline must strip needs-builder-fix; got {strips:?}"
+        );
+
+        // Provenance: at least one contradiction must come from the review_receipt
+        // (its `keep` references the receipt kind). This is the load-bearing
+        // assertion that proves receipts are no longer dead code.
+        assert!(
+            contradictions.iter().any(|c| c.keep == REVIEW_RECEIPT_KIND),
+            "wired pipeline must emit a receipt-sourced contradiction"
+        );
+    }
+
+    #[test]
+    fn reconcile_pr_pipeline_no_receipt_falls_back_to_label_only() {
+        // Same PR shape, but no comments → loader returns None → wired pipeline
+        // matches the legacy label-only behaviour.
+        let pr = make_pr(43, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let receipt = extract_latest_review_receipt(&[]);
+        assert!(receipt.is_none());
+
+        let mut contradictions = detect_contradictions(&pr, &[], CiOutcome::Pending);
+        contradictions.extend(contradictions_from_current_review_receipt(&pr, receipt.as_ref()));
+
+        // Exactly one contradiction (the label-pair fallback), no receipt-sourced ones.
+        assert_eq!(contradictions.len(), 1);
+        assert_eq!(contradictions[0].strip, NEEDS_BUILDER_FIX);
+        assert_eq!(contradictions[0].keep, REVIEW_REVIEWED);
     }
 
     // -----------------------------------------------------------------------

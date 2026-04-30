@@ -58,3 +58,9 @@ schema = ".ci/receipts/schemas/queue-snapshot.schema.json"
 description = "Captures the open PR queue into a stable JSON snapshot document."
 producer = "cargo xtask queue snapshot"
 required_fields = ["snapshot_id", "captured_at", "repository", "default_branch", "master_sha", "prs", "buckets"]
+
+[[receipt]]
+check = "review-projection"
+schema = ".ci/receipts/schemas/review-projection.schema.json"
+description = "Reviewer-emitted current-SHA receipt used by reconciler to project review labels."
+required_fields = ["sha", "verdict", "review_depth", "fix_forward_applied", "blocking_findings", "labels_projected"]
