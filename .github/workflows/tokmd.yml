@@ -1,0 +1,105 @@
+name: tokmd
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  tokmd:
+    name: tokmd Receipt and Gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Generate tokmd PR sensor comment
+        id: sensor
+        uses: EffortlessMetrics/tokmd@01f19c1c3a8a6b2ef498f52d424870dda4b98827
+        with:
+          version: '1.10.0'
+          mode: sensor
+          head: HEAD
+          artifact: 'false'
+          comment: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'true' || 'false' }}
+
+      - name: Generate tokmd repository receipt
+        id: receipt
+        uses: EffortlessMetrics/tokmd@01f19c1c3a8a6b2ef498f52d424870dda4b98827
+        with:
+          version: '1.10.0'
+          paths: |
+            crates
+            xtask
+            docs
+            book/src
+            scripts
+            .github/workflows
+            .ci/policies
+          module-roots: 'crates,xtask,docs,book,scripts'
+          top: '30'
+          format: 'json'
+          artifact: 'false'
+          comment: 'false'
+
+      - name: Run tokmd advisory gate
+        id: gate
+        uses: EffortlessMetrics/tokmd@01f19c1c3a8a6b2ef498f52d424870dda4b98827
+        with:
+          version: '1.10.0'
+          mode: gate
+          paths: .
+          artifact: 'false'
+          comment: 'false'
+
+      - name: Upload tokmd artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tokmd-${{ github.run_id }}
+          path: |
+            tokmd-*.json
+            tokmd-*.jsonl
+            tokmd-*.md
+            comment.md
+            extras/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Add tokmd summary to workflow run
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## tokmd"
+            echo
+            if [ -f comment.md ]; then
+              cat comment.md
+            elif [ -f tokmd-summary.md ]; then
+              cat tokmd-summary.md
+            else
+              echo "tokmd completed, but no Markdown summary was produced."
+            fi
+            echo
+            if [ -f tokmd-gate-verdict.json ]; then
+              echo "### Gate verdict"
+              echo
+              echo '```json'
+              cat tokmd-gate-verdict.json
+              echo
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
