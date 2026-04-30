@@ -1,0 +1,55 @@
+[scan]
+exclude = [
+  "target/**",
+  "target-tests/**",
+  ".runs/**",
+  ".codex-worktrees/**",
+  ".claude/worktrees/**",
+  ".ops-perl-lsp/**",
+  "tree-sitter-perl/**",
+  "fuzz/**",
+  "archive/**",
+  "book/book/**",
+  "docs/assets/recordings/**",
+  "test_corpus/workspaces/xlarge/lib/**",
+  "test_corpus/workspaces/xlarge/bin/**"
+]
+
+[module]
+roots = ["crates", "xtask", "docs", "book", "scripts"]
+depth = 2
+
+[gate]
+# Phase 1: advisory-only. fail_fast = false means the gate collects all rule
+# violations before exiting rather than stopping at the first failure.
+# Merge non-blocking: tokmd Advisory has no required = true in required-checks.toml,
+# so a gate exit 1 does not prevent merge. Promotion roadmap and baseline
+# acceptance criteria tracked in #4993 (Phase 2/3).
+# SHA pinning: locked to v1.10.0 commit SHA (01f19c1c...) as accepted Phase 1
+# tech debt. Refresh cadence: update SHA when a tokmd release contains a rule
+# or config change relevant to perl-lsp. No automated tracking; manual review.
+fail_fast = false
+
+[[gate.rules]]
+name = "receipt_has_files"
+pointer = "/derived/totals/files"
+op = "gte"
+value = 1
+level = "error"
+message = "tokmd did not find any files; check workflow checkout, paths, or ignore rules."
+
+[[gate.rules]]
+name = "token_budget_visibility"
+pointer = "/derived/totals/tokens"
+op = "lte"
+value = 20000000
+level = "warn"
+message = "Repository token estimate exceeded 20M; inspect tokmd artifacts before tightening gates."
+
+[[gate.rules]]
+name = "doc_density_visibility"
+pointer = "/derived/doc_density/total/ratio"
+op = "gte"
+value = 0.02
+level = "warn"
+message = "Documentation density is below the initial visibility floor; do not make this blocking until a baseline is accepted."

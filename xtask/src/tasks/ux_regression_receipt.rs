@@ -81,9 +81,8 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
     let lines: Vec<&str> = raw.lines().collect();
     let first_fail_line =
         lines.iter().find(|line| line.contains("FAILED")).map(|line| (*line).trim().to_string());
-    let first_failing_test = lines
-        .iter()
-        .find_map(|line| FAILED_TEST_RE.captures(line).map(|cap| cap[1].to_string()));
+    let first_failing_test =
+        lines.iter().find_map(|line| FAILED_TEST_RE.captures(line).map(|cap| cap[1].to_string()));
     let panic_location =
         lines.iter().find_map(|line| PANIC_RE.captures(line).map(|cap| cap[1].to_string()));
     let scenario = first_failing_test.as_ref().and_then(|name| scenario_from_test_name(name));
@@ -253,7 +252,10 @@ mod tests {
             matches!(receipt.failure_class, FailureClass::MatrixDrift),
             "fixture matrix log should classify as MatrixDrift"
         );
-        assert_eq!(receipt.route, "needs-fixture-update", "MatrixDrift routes to needs-fixture-update");
+        assert_eq!(
+            receipt.route, "needs-fixture-update",
+            "MatrixDrift routes to needs-fixture-update"
+        );
     }
 
     #[test]
@@ -264,7 +266,10 @@ mod tests {
             matches!(receipt.failure_class, FailureClass::BaselineDrift),
             "baseline snapshot log should classify as BaselineDrift"
         );
-        assert_eq!(receipt.route, "needs-baseline-update", "BaselineDrift routes to needs-baseline-update");
+        assert_eq!(
+            receipt.route, "needs-baseline-update",
+            "BaselineDrift routes to needs-baseline-update"
+        );
     }
 
     #[test]
