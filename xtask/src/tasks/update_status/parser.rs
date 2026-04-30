@@ -16,6 +16,29 @@ use super::token::TokenHealthMetrics;
 #[cfg(test)]
 use super::token;
 
+#[cfg(test)]
+const PARSER_STATUS_MARKER_NAMES: [&str; 7] = [
+    "PARSER_TRACKING_TABLE",
+    "PARSER_PERFORMANCE_TABLE",
+    "PARSER_METRICS_BULLETS",
+    "TOKEN_HEALTH_TABLE",
+    "PARSER_NODEKIND_ROW",
+    "PARSER_RELIABILITY_ROW",
+    "PARSER_STRICT_CLEAN_ROW",
+];
+
+fn parser_marker_bounds(marker_name: &str) -> (String, String) {
+    (
+        format!("<!-- BEGIN: {marker_name} -->"),
+        format!("<!-- END: {marker_name} -->"),
+    )
+}
+
+fn replace_parser_status_block(text: &str, marker_name: &str, new_content: &str) -> Result<String> {
+    let (begin_marker, end_marker) = parser_marker_bounds(marker_name);
+    replace_block(text, &begin_marker, &end_marker, new_content)
+}
+
 // ---------------------------------------------------------------------------
 // Parser metrics struct
 // ---------------------------------------------------------------------------
@@ -338,54 +361,14 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
     );
 
     let mut text = original.to_string();
-    text = replace_block(
-        &text,
-        "<!-- BEGIN: PARSER_TRACKING_TABLE -->",
-        "<!-- END: PARSER_TRACKING_TABLE -->",
-        &tracking_table,
-    )?;
-    text = replace_block(
-        &text,
-        "<!-- BEGIN: PARSER_PERFORMANCE_TABLE -->",
-        "<!-- END: PARSER_PERFORMANCE_TABLE -->",
-        &perf_table,
-    )?;
-    text = replace_block(
-        &text,
-        "<!-- BEGIN: PARSER_METRICS_BULLETS -->",
-        "<!-- END: PARSER_METRICS_BULLETS -->",
-        &parser_coverage_bullets,
-    )?;
-    text = replace_block(
-        &text,
-        "<!-- BEGIN: TOKEN_HEALTH_TABLE -->",
-        "<!-- END: TOKEN_HEALTH_TABLE -->",
-        &token_table,
-    )?;
-    text = replace_block(
-        &text,
-        "<!-- BEGIN: PARSER_NODEKIND_ROW -->",
-        "<!-- END: PARSER_NODEKIND_ROW -->",
-        &nodekind_row,
-    )?;
-    text = replace_block(
-        &text,
-        "<!-- BEGIN: PARSER_RELIABILITY_ROW -->",
-        "<!-- END: PARSER_RELIABILITY_ROW -->",
-        &reliability_row,
-    )?;
-    text = replace_block(
-        &text,
-        "<!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->",
-        "<!-- END: PARSER_STRICT_CLEAN_ROW -->",
-        &strict_clean_row,
-    )?;
-    text = replace_block(
-        &text,
-        "<!-- BEGIN: PARSER_FAILURE_WORKLIST -->",
-        "<!-- END: PARSER_FAILURE_WORKLIST -->",
-        &failure_worklist,
-    )?;
+    text = replace_parser_status_block(&text, "PARSER_TRACKING_TABLE", &tracking_table)?;
+    text = replace_parser_status_block(&text, "PARSER_PERFORMANCE_TABLE", &perf_table)?;
+    text = replace_parser_status_block(&text, "PARSER_METRICS_BULLETS", &parser_coverage_bullets)?;
+    text = replace_parser_status_block(&text, "TOKEN_HEALTH_TABLE", &token_table)?;
+    text = replace_parser_status_block(&text, "PARSER_NODEKIND_ROW", &nodekind_row)?;
+    text = replace_parser_status_block(&text, "PARSER_RELIABILITY_ROW", &reliability_row)?;
+    text = replace_parser_status_block(&text, "PARSER_STRICT_CLEAN_ROW", &strict_clean_row)?;
+    text = replace_parser_status_block(&text, "PARSER_FAILURE_WORKLIST", &failure_worklist)?;
     Ok(text)
 }
 
@@ -1055,36 +1038,25 @@ mod tests {
     }
 
     #[test]
-    fn status_marker_contract_parser_doc() -> Result<()> {
+    fn status_marker_contract_parser_md() -> Result<()> {
         let root = crate::utils::project_root()?;
-        let target_file = root.join("docs/project/status/parser.md");
-        let content = std::fs::read_to_string(&target_file).map_err(|err| {
-            color_eyre::eyre::eyre!("failed reading {}: {err}", target_file.display())
-        })?;
+        let target_file = "docs/project/status/parser.md";
+        let parser_status_doc = std::fs::read_to_string(root.join(target_file))?;
 
-        for marker in PARSER_STATUS_MARKERS {
-            let begin = format!("<!-- BEGIN: {marker} -->");
-            let end = format!("<!-- END: {marker} -->");
-            let begin_count = content.match_indices(&begin).count();
-            let end_count = content.match_indices(&end).count();
+        for marker_name in PARSER_STATUS_MARKER_NAMES {
+            let (begin_marker, end_marker) = parser_marker_bounds(marker_name);
+            let begin_count = parser_status_doc.matches(&begin_marker).count();
+            let end_count = parser_status_doc.matches(&end_marker).count();
 
             assert_eq!(
                 begin_count,
                 1,
-                "status marker contract violation: missing or duplicate marker in {} (BEGIN count = {}). expected BEGIN string: `{}`; expected END string: `{}`",
-                target_file.display(),
-                begin_count,
-                begin,
-                end,
+                "status marker contract violation: missing or duplicate BEGIN marker for {marker_name} in {target_file}; expected exactly one `{begin_marker}` and one `{end_marker}`",
             );
             assert_eq!(
                 end_count,
                 1,
-                "status marker contract violation: missing or duplicate marker in {} (END count = {}). expected BEGIN string: `{}`; expected END string: `{}`",
-                target_file.display(),
-                end_count,
-                begin,
-                end,
+                "status marker contract violation: missing or duplicate END marker for {marker_name} in {target_file}; expected exactly one `{begin_marker}` and one `{end_marker}`",
             );
         }
         Ok(())
