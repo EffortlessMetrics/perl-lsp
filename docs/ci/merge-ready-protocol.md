@@ -56,3 +56,5 @@ Verification statuses:
 ## Rollout mode
 
 Reconciliation defaults to advisory dry-run. Apply mode can be enabled explicitly.
+
+See also: [Merge-train protocol](./merge-train-protocol.md).
