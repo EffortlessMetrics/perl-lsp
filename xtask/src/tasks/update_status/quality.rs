@@ -20,8 +20,10 @@ use super::flaky::{collect_flaky_test_summary, format_flaky_tests_section};
 use super::{replace_block, run_cmd_merged};
 
 static RUNNING_TEST_BINARY_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)")
-        .expect("running-test regex is valid")
+    Regex::new(
+        r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+(?:\.exe)?\)",
+    )
+    .expect("running-test regex is valid")
 });
 
 static TEST_LIST_LINE_RE: LazyLock<Regex> =
@@ -249,7 +251,7 @@ mod tests {
             (target/debug/deps/perl_parser_core-abc123)\n\
             lexer_edge_case: test\nparser_smoke: test\n\
             Running unittests src/lib.rs \
-            (target\\debug\\deps\\perl_workspace_index-123def)\n\
+            (target\\debug\\deps\\perl_workspace_index-123def.exe)\n\
             index_builds: test\n";
         let counts = parse_per_crate_test_counts(output);
         assert_eq!(counts.get("perl-parser-core"), Some(&2));

@@ -163,9 +163,17 @@ fn run_cmd_merged(root: &Path, args: &[&str], timeout: Duration) -> String {
     if args.is_empty() {
         return String::new();
     }
-    let shell_args: Vec<String> =
-        args.iter().map(|&a| format!("'{}'", a.replace('\'', "'\\''"))).collect();
-    let shell_cmd = format!("{} 2>&1", shell_args.join(" "));
+    #[cfg(unix)]
+    let shell_cmd = {
+        let shell_args: Vec<String> =
+            args.iter().map(|&a| format!("'{}'", a.replace('\'', "'\\''"))).collect();
+        format!("{} 2>&1", shell_args.join(" "))
+    };
+    #[cfg(not(unix))]
+    let shell_cmd = {
+        let shell_args: Vec<String> = args.iter().map(|&a| a.to_owned()).collect();
+        format!("{} 2>&1", shell_args.join(" "))
+    };
     #[cfg(unix)]
     let merged = ["sh", "-c", &shell_cmd];
     #[cfg(not(unix))]

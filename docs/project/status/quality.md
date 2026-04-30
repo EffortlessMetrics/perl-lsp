@@ -8,8 +8,9 @@
 
 <!-- BEGIN: QUALITY_METRICS_BULLETS -->
 - **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing
-- **UX workflow harness**: 23 scenario files in `perl-lsp-ux-tests`; `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds the integration-only 10k-line large-file case; confidence signals (manual smoke, first-5-minutes coverage, issue-burndown regression guards) are tracked in `docs/project/status/editor_ux.json`
+- **UX workflow harness**: 27 scenario files in `perl-lsp-ux-tests`; `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds the integration-only 10k-line large-file case; confidence signals (manual smoke, first-5-minutes coverage, issue-burndown regression guards) are tracked in `docs/project/status/editor_ux.json`
 - **Mutation testing**: mutation data pending first nightly CI run — run `just mutation-subset` locally to populate
+- **Lexer performance scorecard**: `cargo bench -p perl-lexer --bench lexer_benchmarks` writes `benchmarks/results/lexer_scorecard.json` for trend comparisons
 - **Production Status**: LSP server public alpha (`just ci-gate` passing)
 <!-- END: QUALITY_METRICS_BULLETS -->
 
@@ -20,27 +21,32 @@
 |-------|---------------|-------------|
 | perl-ast | — | 2 |
 | perl-ast-v2 | — | 2 |
-| perl-corpus | — | 135 |
-| perl-dap | — | 378 |
+| perl-ci-hygiene | — | 18 |
+| perl-corpus | — | 158 |
+| perl-dap | — | 384 |
 | perl-diagnostics | — | 4 |
-| perl-lexer | — | 55 |
-| perl-lsp | — | 477 |
-| perl-lsp-rs-core | — | 955 |
-| perl-lsp-ux-tests | — | 18 |
-| perl-parser | — | 219 |
-| perl-parser-core | — | 583 |
+| perl-lexer | — | 88 |
+| perl-line-index | — | 7 |
+| perl-lsp | — | 512 |
+| perl-lsp-rs-core | — | 1010 |
+| perl-lsp-ux-tests | — | 67 |
+| perl-parser | — | 233 |
+| perl-parser-core | — | 584 |
 | perl-parser-pest | — | 10 |
 | perl-position-tracking | — | 33 |
-| perl-refactoring | — | 110 |
-| perl-semantic-analyzer | — | 132 |
-| perl-subprocess-runtime | — | 6 |
-| perl-symbol | — | 25 |
+| perl-refactoring | — | 113 |
+| perl-regex | — | 35 |
+| perl-semantic-analyzer | — | 154 |
+| perl-semantic-facts | — | 8 |
+| perl-subprocess-runtime | — | 16 |
+| perl-symbol | — | 31 |
 | perl-tdd-support | — | 15 |
 | perl-test-generators | — | 11 |
 | perl-test-must | — | 6 |
-| perl-uri | — | 23 |
-| perl-workspace | — | 254 |
-| tree-sitter-perl-c | — | 11 |
+| perl-token | — | 35 |
+| perl-uri | — | 33 |
+| perl-workspace | — | 276 |
+| tree-sitter-perl-c | — | 13 |
 | tree-sitter-perl-rs | — | 48 |
 <!-- END: QUALITY_CRATE_TABLE -->
 

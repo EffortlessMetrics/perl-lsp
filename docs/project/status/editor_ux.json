@@ -4,24 +4,24 @@
       "name": "manual_editor_smoke",
       "owner": "perl-lsp-ux-tests",
       "state": "tracked",
-      "workflow_count": 22
+      "workflow_count": 26
     },
     {
       "name": "first_five_minutes_harness",
       "owner": "perl-lsp-ux-tests",
       "state": "tracked",
-      "workflow_count": 21
+      "workflow_count": 25
     },
     {
       "name": "issue_burndown_regression_guard",
       "owner": "perl-lsp-ux-tests",
       "state": "tracked",
-      "workflow_count": 13
+      "workflow_count": 17
     }
   ],
   "harness": {
     "crate": "crates/perl-lsp-ux-tests",
-    "scenario_count": 23,
+    "scenario_count": 27,
     "scenario_files": [
       "crates/perl-lsp-ux-tests/tests/ux_scenario_01_simple_file.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_02_missing_perltidy.rs",
@@ -43,9 +43,13 @@
       "crates/perl-lsp-ux-tests/tests/ux_scenario_18_diagnostics_after_edit.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_18_goto_declaration.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_18_real_repo_perf.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_19_completion_core.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_19_diagnostics_lifecycle.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_19_incremental_text_sync.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_19_workspace_folder_addition.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_22_template_language_mode.rs",
-      "crates/perl-lsp-ux-tests/tests/ux_scenario_23_rename_workflow.rs"
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_23_rename_workflow.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_24_live_edit_feedback.rs"
     ]
   },
   "integration_points": {
@@ -54,24 +58,395 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
+  "known_blockers": [
+    {
+      "component": "module_resolution",
+      "failure_class": "provider_regression",
+      "issue": 7570,
+      "owner": "@maintainer",
+      "route": "provider_fix",
+      "state": "active",
+      "test_name": "ux_scenario_14_inc_conformance::scenario_14_relative_include_path"
+    },
+    {
+      "component": "module_resolution",
+      "failure_class": "provider_regression",
+      "issue": 7570,
+      "owner": "@maintainer",
+      "route": "provider_fix",
+      "state": "active",
+      "test_name": "ux_scenario_14_inc_conformance::scenario_14_include_path_completion_external_module"
+    },
+    {
+      "component": "module_resolution",
+      "failure_class": "provider_regression",
+      "issue": 7570,
+      "owner": "@maintainer",
+      "route": "provider_fix",
+      "state": "active",
+      "test_name": "ux_scenario_14_inc_conformance::scenario_14_use_lib_lexical"
+    },
+    {
+      "component": "module_resolution",
+      "failure_class": "provider_regression",
+      "issue": 7570,
+      "owner": "@maintainer",
+      "route": "provider_fix",
+      "state": "active",
+      "test_name": "ux_scenario_14_inc_conformance::scenario_14_absolute_include_path"
+    },
+    {
+      "component": "module_resolution",
+      "failure_class": "provider_regression",
+      "issue": 7570,
+      "owner": "@maintainer",
+      "route": "provider_fix",
+      "state": "active",
+      "test_name": "ux_scenario_14_inc_conformance::scenario_14_no_lib_cancellation"
+    },
+    {
+      "component": "module_resolution",
+      "failure_class": "provider_regression",
+      "issue": 7570,
+      "owner": "@maintainer",
+      "route": "provider_fix",
+      "state": "active",
+      "test_name": "ux_scenario_14_inc_conformance::scenario_14_findbin_relative"
+    },
+    {
+      "component": "module_resolution",
+      "failure_class": "provider_regression",
+      "issue": 7570,
+      "owner": "@maintainer",
+      "route": "provider_fix",
+      "state": "active",
+      "test_name": "ux_scenario_14_inc_conformance::scenario_14_system_inc"
+    },
+    {
+      "component": "module_resolution",
+      "failure_class": "provider_regression",
+      "issue": 7570,
+      "owner": "@maintainer",
+      "route": "provider_fix",
+      "state": "active",
+      "test_name": "ux_scenario_14_inc_conformance::scenario_14_nested_module_relative_include_path"
+    },
+    {
+      "component": "module_resolution",
+      "failure_class": "provider_regression",
+      "issue": 7570,
+      "owner": "@maintainer",
+      "route": "provider_fix",
+      "state": "active",
+      "test_name": "ux_scenario_14_inc_conformance::scenario_14_include_path_missing_module_consistency"
+    },
+    {
+      "component": "module_resolution",
+      "failure_class": "provider_regression",
+      "issue": 7570,
+      "owner": "@maintainer",
+      "route": "provider_fix",
+      "state": "active",
+      "test_name": "ux_scenario_14_inc_conformance::scenario_14_include_path_missing_module_completion_consistency"
+    },
+    {
+      "component": "module_resolution",
+      "failure_class": "provider_regression",
+      "issue": 7570,
+      "owner": "@maintainer",
+      "route": "provider_fix",
+      "state": "active",
+      "test_name": "ux_scenario_14_inc_conformance::scenario_14_system_inc_completion_opt_in_enabled"
+    }
+  ],
+  "receipt_kind": "measured_status",
   "schema_version": 1,
   "scorecard": "editor_ux",
   "top_line_metrics": [
     {
+      "assumptions": [
+        "insufficient data"
+      ],
+      "basis": [
+        "no eligible receipts"
+      ],
+      "confidence": "low",
+      "coverage": "receipts_included",
       "name": "workflow_pass_rate",
-      "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "insufficient_data",
+      "value": null
     },
     {
+      "assumptions": [
+        "insufficient data"
+      ],
+      "basis": [
+        "no workflows with sufficient data"
+      ],
+      "confidence": "low",
+      "coverage": "receipts_included",
       "name": "workflow_stability_rate",
-      "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "insufficient_data",
+      "value": null
     },
     {
+      "assumptions": [
+        "insufficient data"
+      ],
+      "basis": [
+        "no passing scenarios with timing data"
+      ],
+      "confidence": "low",
+      "coverage": "receipts_included",
+      "method": "p95",
       "name": "p95_time_to_first_useful_result_ms",
-      "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "insufficient_data",
+      "value_ms": null
+    }
+  ],
+  "workflow_results": [
+    {
+      "id": "simple_file_smoke",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_01_simple_file.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "editor_intelligence"
+    },
+    {
+      "id": "missing_perltidy_graceful_degradation",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_02_missing_perltidy.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "engineering_health"
+    },
+    {
+      "id": "missing_perl_graceful_degradation",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_03_missing_perl.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "engineering_health"
+    },
+    {
+      "id": "missing_perlcritic_graceful_degradation",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_04_missing_perlcritic.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "engineering_health"
+    },
+    {
+      "id": "bad_config_resilience",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_05_bad_config.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "engineering_health"
+    },
+    {
+      "id": "large_file_open",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_06_large_file.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "engineering_health"
+    },
+    {
+      "id": "multi_file_workspace_navigation",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_07_multi_file_workspace.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "workspace_indexing"
+    },
+    {
+      "id": "shebang_detection",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_08_shebang_detection.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "editor_intelligence"
+    },
+    {
+      "id": "encoding_and_bom_resilience",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_09_encoding.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "engineering_health"
+    },
+    {
+      "id": "goto_definition_core",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_10_goto_definition.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "editor_intelligence"
+    },
+    {
+      "id": "hover_core",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_11_hover.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "editor_intelligence"
+    },
+    {
+      "id": "strict_diagnostics",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_12_diagnostics_strict.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "diagnostics"
+    },
+    {
+      "id": "document_symbols_core",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_13_document_symbols.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "workspace_indexing"
+    },
+    {
+      "id": "inc_conformance",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_14_inc_conformance.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "module_resolution"
+    },
+    {
+      "id": "multi_root_workspace_symbols",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_15_workspace_symbols.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "workspace_indexing"
+    },
+    {
+      "id": "workspace_folder_removal_freshness",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_16_workspace_folder_removal.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "workspace_indexing"
+    },
+    {
+      "id": "deleted_file_churn_freshness",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_17_deleted_file_churn.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "workspace_indexing"
+    },
+    {
+      "id": "goto_declaration_core",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_18_goto_declaration.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "editor_intelligence"
+    },
+    {
+      "id": "template_language_mode_resilience",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_22_template_language_mode.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "editor_intelligence"
+    },
+    {
+      "id": "diagnostics_after_edit_refresh",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_18_diagnostics_after_edit.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "diagnostics"
+    },
+    {
+      "id": "real_repo_first_diagnostics_budget",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_18_real_repo_perf.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "diagnostics"
+    },
+    {
+      "id": "rename_workflow_core",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_23_rename_workflow.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "editor_intelligence"
+    },
+    {
+      "id": "workspace_folder_addition_freshness",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_19_workspace_folder_addition.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "workspace_indexing"
+    },
+    {
+      "id": "live_edit_feedback_loop",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_24_live_edit_feedback.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "text_sync"
+    },
+    {
+      "id": "completion_core",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_19_completion_core.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "editor_intelligence"
+    },
+    {
+      "id": "incremental_text_sync_recovery",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_19_incremental_text_sync.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "text_sync"
+    },
+    {
+      "id": "diagnostics_lifecycle_editing",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_19_diagnostics_lifecycle.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "diagnostics"
     }
   ]
 }
