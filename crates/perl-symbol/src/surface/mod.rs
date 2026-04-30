@@ -38,4 +38,3 @@ pub use facts::{
     symbol_refs_to_semantic_facts,
 };
 pub use r#ref::{SymbolRef, SymbolRefKind, extract_symbol_refs};
-pub use ref_facts::{SymbolRefSemanticFacts, symbol_refs_to_semantic_facts};
