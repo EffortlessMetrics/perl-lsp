@@ -7,6 +7,21 @@ user-invocable: false
 
 Think adversarially about the scout's recommended approach.
 
+## Synthesize with prior agents (do this BEFORE stress-testing)
+
+You run after accuracy, research, oppositional, diaboli, architecture, and maintainer-issue — the complete verification stack. You are the final synthesis point before the spec becomes builder-ready. Your stress-test must reflect what the full stack found, not just the original issue body.
+
+For each prior agent comment:
+
+- **accuracy-scout** — file paths and function names corrected? Build your stress-test around the *corrected* details. If accuracy-scout found the spec was targeting wrong locations, stress-test the corrected approach.
+- **research-verifier** — external claims verified or debunked? If Perl semantics, LSP spec, or crate API claims were debunked, the approach may need rethinking — surface that as a stress-test risk.
+- **oppositional-planner** — alternatives surfaced? If a scope-pivot or simpler alternative was proposed and not addressed, either confirm why the original is better or incorporate the pivot into the plan.
+- **architecture-reviewer** — ALIGNED / CONCERN / FAIL? If CONCERN or FAIL, the spec must resolve the structural issue before it can be builder-ready. If ALIGNED, the structural case is made — note it and move on.
+- **advocatus-diaboli** — BUILD / DEFER / CLOSE? If DEFER, the plan must explain what changed since the diaboli verdict to warrant proceeding. If CLOSE, consider whether a reduced scope still makes sense.
+- **maintainer-issue** — ALIGNED / DEFERRED / OUT OF SCOPE? If DEFERRED or OUT OF SCOPE, do not mark builder-ready — bounce to scout with the scope constraint.
+
+**Your synthesis note in the final plan-review comment should explicitly name:** which prior-agent finding most changed your assessment, and what the builder must know that isn't visible in the original issue body.
+
 ## Steps
 
 1. **What could go wrong with this fix?**

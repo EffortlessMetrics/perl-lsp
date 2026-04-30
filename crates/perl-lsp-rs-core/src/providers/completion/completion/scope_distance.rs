@@ -40,6 +40,37 @@ impl ScopeDistance {
     }
 }
 
+fn parent_hops_to_scope(
+    symbol_table: &SymbolTable,
+    cursor_scope: ScopeId,
+    symbol_scope: ScopeId,
+) -> Option<u32> {
+    if cursor_scope == symbol_scope {
+        return Some(0);
+    }
+
+    let mut current = cursor_scope;
+    let mut hops = 0u32;
+
+    while let Some(scope) = symbol_table.scopes.get(&current) {
+        let Some(parent_id) = scope.parent else {
+            break;
+        };
+
+        hops = hops.saturating_add(1);
+        if parent_id == symbol_scope {
+            return Some(hops);
+        }
+
+        current = parent_id;
+        if hops > 100 {
+            break;
+        }
+    }
+
+    None
+}
+
 fn last_unmatched_open_brace(source: &str) -> Option<usize> {
     let mut stack = Vec::new();
     for (idx, ch) in source.char_indices() {
@@ -172,6 +203,29 @@ pub fn compute_scope_distance(
     }
 
     ScopeDistance::Workspace
+}
+
+/// Return a stable sort fragment for completion ordering by lexical distance.
+///
+/// Format is `<tier><hops:02>`:
+/// - immediate scope: `a00`
+/// - parent scope at 1 hop: `b01` (2 hops: `b02`, etc.)
+/// - package/global: `c00`
+/// - workspace/other: `d00`
+pub fn compute_scope_sort_key(
+    symbol_table: &SymbolTable,
+    cursor_scope: ScopeId,
+    symbol_scope: ScopeId,
+) -> String {
+    let distance = compute_scope_distance(symbol_table, cursor_scope, symbol_scope);
+    let hops = parent_hops_to_scope(symbol_table, cursor_scope, symbol_scope).unwrap_or(0);
+    match distance {
+        ScopeDistance::Immediate => format!("{}00", distance.sort_key()),
+        ScopeDistance::Parent => format!("{}{:02}", distance.sort_key(), hops),
+        ScopeDistance::PackageLevel | ScopeDistance::Workspace => {
+            format!("{}00", distance.sort_key())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -371,5 +425,63 @@ mod tests {
         assert!(ScopeDistance::Immediate.sort_key() < ScopeDistance::Parent.sort_key());
         assert!(ScopeDistance::Parent.sort_key() < ScopeDistance::PackageLevel.sort_key());
         assert!(ScopeDistance::PackageLevel.sort_key() < ScopeDistance::Workspace.sort_key());
+    }
+
+    #[test]
+    fn test_scope_sort_key_prefers_nearer_parent_hops() {
+        let mut table = build_test_table();
+        table.scopes.insert(
+            4,
+            Scope {
+                id: 4,
+                parent: Some(3),
+                kind: ScopeKind::Block,
+                location: SourceLocation { start: 30, end: 40 },
+                symbols: HashSet::new(),
+            },
+        );
+
+        let one_hop = compute_scope_sort_key(&table, 4, 3);
+        let two_hops = compute_scope_sort_key(&table, 4, 2);
+        assert!(one_hop < two_hops, "expected one-hop parent to sort first");
+        // Verify exact format: tier letter + zero-padded hop count.
+        assert_eq!(one_hop, "b01", "one-hop key must be b01 (tier b, 01 hop)");
+        assert_eq!(two_hops, "b02", "two-hop key must be b02 (tier b, 02 hops)");
+    }
+
+    #[test]
+    fn test_scope_sort_key_tens_boundary_preserves_order() {
+        // Values at the decimal-digit boundary (9 hops → 10 hops) must still sort
+        // correctly with two-digit zero-padding.  {:02} formats 9 as "09" and 10
+        // as "10"; "09" < "10" lexicographically, so the ordering is preserved.
+        let mut table = SymbolTable::new();
+        table.scopes.insert(
+            0,
+            Scope {
+                id: 0,
+                parent: None,
+                kind: ScopeKind::Global,
+                location: SourceLocation { start: 0, end: 1000 },
+                symbols: HashSet::new(),
+            },
+        );
+        for i in 1usize..=11 {
+            table.scopes.insert(
+                i,
+                Scope {
+                    id: i,
+                    parent: Some(i - 1),
+                    kind: ScopeKind::Block,
+                    location: SourceLocation { start: i * 10, end: 1000 - i * 10 },
+                    symbols: HashSet::new(),
+                },
+            );
+        }
+
+        let nine_hops = compute_scope_sort_key(&table, 11, 2);
+        let ten_hops = compute_scope_sort_key(&table, 11, 1);
+        assert!(nine_hops < ten_hops, "9-hop key must sort before 10-hop key");
+        assert_eq!(nine_hops, "b09");
+        assert_eq!(ten_hops, "b10");
     }
 }

@@ -4023,13 +4023,15 @@ print get_value();
 
 #[test]
 fn require_inside_eval_block_is_runtime_not_static() -> Result<(), Box<dyn std::error::Error>> {
+    // Use bare `func` (no parens) so the identifier hits the UnquotedBareword check.
+    // require inside eval {} is runtime — it must not suppress strict 'subs'.
     let code = r#"
 use strict 'subs';
 eval {
     require Dynamic::Module;
     Dynamic::Module->import('func');
 };
-print func();
+print func;
 "#;
     let issues = scope_issues_strict(code);
     assert!(
@@ -4044,12 +4046,14 @@ print func();
 #[test]
 fn require_with_variable_target_does_not_match_static_import()
 -> Result<(), Box<dyn std::error::Error>> {
+    // `require $var` is a runtime load — it must not suppress strict 'subs'.
+    // Bare identifier (no parens) so the UnquotedBareword check actually fires.
     let code = r#"
 use strict 'subs';
 my $loader = 'MyLoader';
 require $loader;
 MyLoader->import('exported_func');
-print exported_func();
+print exported_func;
 "#;
     let issues = scope_issues_strict(code);
     assert!(
@@ -4106,10 +4110,12 @@ print exported();
 
 #[test]
 fn import_on_unrequired_module_does_not_suppress() -> Result<(), Box<dyn std::error::Error>> {
+    // `->import()` without a preceding `require` must not suppress strict 'subs'.
+    // Bare identifier (no parens) so the UnquotedBareword check actually fires.
     let code = r#"
 use strict 'subs';
 Unrelated::Module->import('orphaned_func');
-print orphaned_func();
+print orphaned_func;
 "#;
     let issues = scope_issues_strict(code);
     assert!(
@@ -4145,10 +4151,12 @@ print sym_two();
 
 #[test]
 fn require_without_subsequent_import_does_nothing() -> Result<(), Box<dyn std::error::Error>> {
+    // A bare `require` without a matching `->import()` must not suppress strict 'subs'.
+    // Bare identifier (no parens) so the UnquotedBareword check actually fires.
     let code = r#"
 use strict 'subs';
 require Some::Module;
-print unimported_symbol();
+print unimported_symbol;
 "#;
     let issues = scope_issues_strict(code);
     assert!(

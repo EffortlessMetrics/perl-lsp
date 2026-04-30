@@ -1,0 +1,17 @@
+[concept]
+id = "parser.heredoc.data_section_boundary"
+tier = "pr"
+
+[expect]
+panic = false
+timeout = false
+mode = "expected_error"
+
+[metrics]
+max_error_nodes = 1
+must_emit_node_kinds = ["Heredoc"]
+
+[snapshots]
+tokens = false
+ast = true
+spans = true

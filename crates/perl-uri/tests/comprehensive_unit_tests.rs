@@ -40,6 +40,12 @@ fn uri_key_returns_invalid_uri_as_is() {
 }
 
 #[test]
+fn uri_key_trims_surrounding_whitespace() {
+    assert_eq!(uri_key("  file:///tmp/test.pl  "), "file:///tmp/test.pl");
+    assert_eq!(uri_key("  C:\\Users\\dev\\file.pl  "), "file:///c:/Users/dev/file.pl");
+}
+
+#[test]
 fn uri_key_preserves_non_file_schemes() {
     let https = uri_key("https://example.com/path");
     assert!(https.starts_with("https://"));

@@ -13,17 +13,19 @@ use crate::protocol::InlineValueText;
 /// Regex for matching Perl variables (scalars, arrays, hashes).
 /// Stored as Option to avoid panics; if compilation fails, inline values are skipped.
 static PERL_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
-    Regex::new(r"[$@%][A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*").ok()
+    Regex::new(r"[$@%](?:::)?[A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*").ok()
 });
 
 /// Regex for braced Perl variables (`${name}`, `@{Pkg::arr}`, `%{cfg}`).
 static BRACED_PERL_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
-    Regex::new(r"([$@%])\{([A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*)\}").ok()
+    Regex::new(r"([$@%])\{((?:::)?[A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*)\}")
+        .ok()
 });
 
 /// Legacy regex for scalar-only matching (used by `DapDispatcher`).
-static SCALAR_VAR_RE: Lazy<Option<Regex>> =
-    Lazy::new(|| Regex::new(r"\$[A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*").ok());
+static SCALAR_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
+    Regex::new(r"\$(?:::)?[A-Za-z_][A-Za-z0-9_]*(?:(?:::|')[A-Za-z_][A-Za-z0-9_]*)*").ok()
+});
 
 /// Special Perl variables that should not be shown inline.
 const SPECIAL_VARS: &[&str] = &[
@@ -313,7 +315,7 @@ fn collect_line_variables(line: &str, include_non_scalars: bool) -> Vec<(usize, 
     let base_re = if include_non_scalars { PERL_VAR_RE.as_ref() } else { SCALAR_VAR_RE.as_ref() };
     if let Some(re) = base_re {
         for cap in re.captures_iter(line) {
-            if let Some(m) = cap.get(0) {
+            if let Some(m) = cap.iter().flatten().next() {
                 matches.push((m.start(), m.end(), m.as_str().to_string()));
             }
         }
@@ -322,7 +324,7 @@ fn collect_line_variables(line: &str, include_non_scalars: bool) -> Vec<(usize, 
     if let Some(re) = BRACED_PERL_VAR_RE.as_ref() {
         for cap in re.captures_iter(line) {
             let (Some(full_match), Some(sigil_match), Some(name_match)) =
-                (cap.get(0), cap.get(1), cap.get(2))
+                (cap.iter().flatten().next(), cap.get(1), cap.get(2))
             else {
                 continue;
             };
@@ -337,7 +339,8 @@ fn collect_line_variables(line: &str, include_non_scalars: bool) -> Vec<(usize, 
         }
     }
 
-    matches.sort_by_key(|(start, _, _)| *start);
+    matches.sort_by(|a, b| (a.0, a.1, &a.2).cmp(&(b.0, b.1, &b.2)));
+    matches.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1 && a.2 == b.2);
     matches
 }
 
@@ -709,6 +712,17 @@ mod tests {
     }
 
     #[test]
+    fn test_runtime_inline_value_for_main_namespaced_scalar() {
+        let source = "our $::bar = 1;";
+        let mut rv = HashMap::new();
+        rv.insert("$::bar".to_string(), "42".to_string());
+
+        let values = collect_inline_values_with_runtime(source, 1, 1, Some(&rv));
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].text, "$::bar = 42");
+    }
+
+    #[test]
     fn test_variable_like_tokens_in_strings_and_comments_are_ignored() {
         let source = "my $real = 1; my $msg = \"$fake\"; # $commented";
         let names = extract_variable_names(source, 1, 1);
@@ -791,6 +805,14 @@ mod tests {
         assert!(names.contains(&"$keep".to_string()));
         assert!(names.contains(&"$weird".to_string()));
         assert!(names.contains(&"$also_keep".to_string()));
+    }
+
+    #[test]
+    fn test_extract_variable_names_deduplicates_repeated_mentions() {
+        let source = "my $foo = ${foo};\n";
+        let names = extract_variable_names(source, 1, 1);
+
+        assert_eq!(names, vec!["$foo".to_string()]);
     }
 
     #[test]
