@@ -129,9 +129,7 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
         while heartbeat_flag.load(Ordering::Relaxed) {
             std::thread::sleep(Duration::from_secs(30));
             if heartbeat_flag.load(Ordering::Relaxed) {
-                eprintln!(
-                    "[update-status] still running (heartbeat): {command_name}"
-                );
+                eprintln!("[update-status] still running (heartbeat): {command_name}");
             }
         }
     });
