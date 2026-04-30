@@ -1,0 +1,71 @@
+[[concept]]
+id = "tree_sitter.parity.package_decl"
+status = "seed"
+scope = { crates = ["tree-sitter-perl-c", "tree-sitter-perl-rs", "perl-parser"], risk_tags = ["tree-sitter", "parity"] }
+fixtures = { floors = [], variants = [] }
+expect = { panic = false, timeout = false, mode = "parity" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = true, release = true }
+
+[[concept]]
+id = "tree_sitter.parity.sub_decl"
+status = "seed"
+scope = { crates = ["tree-sitter-perl-c", "tree-sitter-perl-rs", "perl-parser"], risk_tags = ["tree-sitter", "parity"] }
+fixtures = { floors = [], variants = [] }
+expect = { panic = false, timeout = false, mode = "parity" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = true, release = true }
+
+[[concept]]
+id = "tree_sitter.parity.method_call"
+status = "seed"
+scope = { crates = ["tree-sitter-perl-rs", "perl-parser"], risk_tags = ["tree-sitter", "parity", "oo"] }
+fixtures = { floors = ["test_corpus/method_class.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parity" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "tree_sitter.parity.signature"
+status = "seed"
+scope = { crates = ["tree-sitter-perl-rs", "perl-parser"], risk_tags = ["tree-sitter", "parity", "signature"] }
+fixtures = { floors = ["test_corpus/signatures_parameters_production_enhanced.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parity" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "tree_sitter.parity.heredoc"
+status = "seed"
+scope = { crates = ["tree-sitter-perl-rs", "perl-parser", "perl-lexer"], risk_tags = ["tree-sitter", "parity", "heredoc"] }
+fixtures = { floors = ["test_corpus/heredoc_depth.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parity" }
+snapshots = { tokens = true, ast = true, spans = false }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "tree_sitter.parity.regex"
+status = "seed"
+scope = { crates = ["tree-sitter-perl-rs", "perl-parser", "perl-lexer"], risk_tags = ["tree-sitter", "parity", "regex"] }
+fixtures = { floors = ["test_corpus/advanced_regex.pl"], variants = [] }
+expect = { panic = false, timeout = true, mode = "parity" }
+snapshots = { tokens = true, ast = true, spans = false }
+run = { pr = false, nightly = true, release = false }
+
+[[concept]]
+id = "tree_sitter.parity.given_when"
+status = "seed"
+scope = { crates = ["tree-sitter-perl-rs", "perl-parser"], risk_tags = ["tree-sitter", "parity", "control-flow"] }
+fixtures = { floors = ["test_corpus/given_when.pl", "test_corpus/clean_given_when.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parity" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "tree_sitter.parity.format"
+status = "seed"
+scope = { crates = ["tree-sitter-perl-rs", "perl-parser"], risk_tags = ["tree-sitter", "parity", "format"] }
+fixtures = { floors = ["test_corpus/format_comprehensive.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parity" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = false, release = false }

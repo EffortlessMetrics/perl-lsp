@@ -159,3 +159,10 @@ fn sub_with_isa_attr_still_warns() {
     let mentions_isa = errors.iter().any(|e| format!("{e}").contains("isa"));
     assert!(mentions_isa, "warning should mention 'isa', got: {:?}", errors);
 }
+
+#[test]
+fn bareword_class_call_is_not_forced_into_native_class_declaration() {
+    // Several DSLs export `class` as a normal function. This should parse as a
+    // call expression, not as `class Name { ... }`.
+    assert_clean_parse(r#"class("Widget::Role");"#);
+}

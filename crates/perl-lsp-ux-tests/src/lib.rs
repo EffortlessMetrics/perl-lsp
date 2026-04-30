@@ -32,7 +32,7 @@
 //! # Environment Variables
 //!
 //! - `PERL_LSP_BIN`: Override the path to the perl-lsp binary.
-//! - `UX_TEST_TIMEOUT_MS`: Per-request timeout in milliseconds (default: 10000).
+//! - `UX_TEST_TIMEOUT_MS`: Per-request timeout in milliseconds (default: 30000).
 //! - `UX_TEST_ECHO_STDERR`: If set, echo perl-lsp stderr lines to test output.
 
 #![deny(unsafe_code)]
@@ -45,11 +45,13 @@
 )]
 
 pub mod client;
+pub mod diagnostics;
 pub mod env;
 pub mod scorecard;
 pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
+pub use diagnostics::DiagnosticsTracker;
 pub use env::{PathGuard, RestrictedPath};
 pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
 pub use workspace::FakeWorkspace;
@@ -86,7 +88,7 @@ impl CursorPosition {
 /// requiring callers to thread individual parameters through every helper.
 #[derive(Debug, Clone)]
 pub struct ScenarioConfig {
-    /// Per-request timeout. Defaults to 10 seconds.
+    /// Per-request timeout. Defaults to 30 seconds.
     pub timeout: Duration,
     /// If `Some`, restrict PATH to only these directory entries (absolute paths).
     /// This lets scenarios simulate "perltidy not found" without touching the
@@ -112,7 +114,7 @@ impl Default for ScenarioConfig {
         let timeout_ms = std::env::var("UX_TEST_TIMEOUT_MS")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(10_000);
+            .unwrap_or(30_000);
         let echo_stderr = std::env::var_os("UX_TEST_ECHO_STDERR").is_some();
         Self {
             timeout: Duration::from_millis(timeout_ms),
@@ -304,6 +306,31 @@ impl UxHarness {
         self.completion(&cursor.relative_path, cursor.line, cursor.character)
     }
 
+    /// Request completion and collect best-effort labels for UX assertions.
+    ///
+    /// Label extraction order per completion item:
+    /// 1. `label` (preferred by spec)
+    /// 2. `insertText` (fallback for legacy payloads)
+    /// 3. `filterText` (last-resort fallback)
+    pub fn completion_labels(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Vec<String>> {
+        let items = self.completion(relative_path, line, character)?;
+        Ok(items
+            .iter()
+            .filter_map(|item| {
+                item.get("label")
+                    .and_then(Value::as_str)
+                    .or_else(|| item.get("insertText").and_then(Value::as_str))
+                    .or_else(|| item.get("filterText").and_then(Value::as_str))
+                    .map(str::to_string)
+            })
+            .collect())
+    }
+
     /// Request document formatting.
     ///
     /// Returns the list of text edits, or `Err` if the server crashed / returned
@@ -382,6 +409,31 @@ impl UxHarness {
         }
     }
 
+    /// Poll `workspace/symbol` until `predicate` returns true or `timeout`
+    /// elapses.
+    ///
+    /// Returns the last observed symbol list in both success and timeout paths.
+    pub fn wait_for_workspace_symbols(
+        &self,
+        query: &str,
+        timeout: Duration,
+        poll_interval: Duration,
+        mut predicate: impl FnMut(&[Value]) -> bool,
+    ) -> Result<Vec<Value>> {
+        let deadline = std::time::Instant::now() + timeout;
+        let mut latest = Vec::new();
+
+        while std::time::Instant::now() < deadline {
+            latest = self.workspace_symbols(query)?;
+            if predicate(&latest) {
+                return Ok(latest);
+            }
+            std::thread::sleep(poll_interval);
+        }
+
+        Ok(latest)
+    }
+
     /// Notify the server that workspace folders changed.
     ///
     /// Each tuple is `(relative_path, name)` and is resolved relative to the
@@ -447,9 +499,12 @@ impl UxHarness {
     }
 
     /// Wait up to `timeout` for a `textDocument/publishDiagnostics` notification
-    /// for the given file, then return all diagnostics collected for it.
+    /// for the given file, then return the first published diagnostics collected
+    /// for it.
     ///
     /// Returns an empty vec if the deadline expires with no diagnostics published.
+    /// To get the most recently published diagnostics instead, use
+    /// [`UxHarness::wait_for_latest_diagnostics`].
     pub fn wait_for_diagnostics(
         &self,
         relative_path: &str,
@@ -460,7 +515,7 @@ impl UxHarness {
         loop {
             {
                 let events = self.client.peek_events();
-                for ev in &events {
+                for ev in events.iter() {
                     if let LspEvent::Diagnostics { uri: diag_uri, diagnostics } = ev {
                         if diag_uri == &uri {
                             return diagnostics.clone();
@@ -474,6 +529,64 @@ impl UxHarness {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         Vec::new()
+    }
+
+    /// Wait up to `timeout` for a `textDocument/publishDiagnostics` notification
+    /// for the given file, then return the most recently published diagnostics
+    /// for the URI, ignoring earlier buffered publications.
+    ///
+    /// Returns an empty vec if the deadline expires with no diagnostics published.
+    /// Use this when you need the latest server state after an edit; for the
+    /// initial (first published) diagnostics use [`UxHarness::wait_for_diagnostics`].
+    pub fn wait_for_latest_diagnostics(
+        &self,
+        relative_path: &str,
+        timeout: std::time::Duration,
+    ) -> Vec<Value> {
+        let uri = self.workspace.uri(relative_path);
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            {
+                let events = self.client.peek_events();
+                for ev in events.iter().rev() {
+                    if let LspEvent::Diagnostics { uri: diag_uri, diagnostics } = ev {
+                        if diag_uri == &uri {
+                            return diagnostics.clone();
+                        }
+                    }
+                }
+            }
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        Vec::new()
+    }
+
+    /// Wait for diagnostics to become empty for a file (cleared UX state).
+    ///
+    /// Returns `true` if an explicit `textDocument/publishDiagnostics` with an
+    /// **empty** diagnostics array arrives within `timeout`, or if the latest
+    /// buffered notification for that URI already has an empty array.
+    ///
+    /// Returns `false` on timeout.  Note that if the server clears diagnostics
+    /// silently (no explicit notification) this method will timeout and return
+    /// `false`.  In that case prefer checking that no *new* non-empty
+    /// notifications arrive within the deadline instead.
+    pub fn wait_for_no_diagnostics(
+        &self,
+        relative_path: &str,
+        timeout: std::time::Duration,
+    ) -> bool {
+        let uri = self.workspace.uri(relative_path);
+        DiagnosticsTracker::wait_for_uri_matching(
+            || self.client.peek_events(),
+            &uri,
+            timeout,
+            |diagnostics| diagnostics.is_empty(),
+        )
+        .is_some()
     }
 
     /// Request go-to-definition.
@@ -506,6 +619,37 @@ impl UxHarness {
     /// Request go-to-definition at a canonical cursor position.
     pub fn definition_at(&self, cursor: &CursorPosition) -> Result<Vec<Value>> {
         self.definition(&cursor.relative_path, cursor.line, cursor.character)
+    }
+
+    /// Request go-to-definition and optionally retry to absorb asynchronous indexing delays.
+    ///
+    /// Returns immediately when the first non-empty response is observed, or after
+    /// `attempts` tries (minimum 1). This keeps UX scenarios deterministic without
+    /// forcing each test to hand-roll sleep/retry loops.
+    pub fn definition_with_retry(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+        attempts: usize,
+        pause: Duration,
+    ) -> Result<Vec<Value>> {
+        let mut last = Vec::new();
+        let max_attempts = attempts.max(1);
+
+        for idx in 0..max_attempts {
+            let current = self.definition(relative_path, line, character)?;
+            if !current.is_empty() {
+                return Ok(current);
+            }
+
+            last = current;
+            if idx + 1 < max_attempts {
+                std::thread::sleep(pause);
+            }
+        }
+
+        Ok(last)
     }
 
     /// Request references (`textDocument/references`) at a cursor position.

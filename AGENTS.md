@@ -1,6 +1,6 @@
 # AGENTS.md — Implementation Agent Operating Manual
 
-You are an **implementation agent** (Codex, Jules, or similar). Your job is to make a
+You are an **implementation agent** (Codex, Claude Code, Jules, or similar). Your job is to make a
 scoped change, test it, and open a PR. You are not the orchestrator. You will not be
 routing work or reading CI pipelines — just implement the thing you were asked to implement.
 
@@ -19,8 +19,18 @@ The orchestrator reads `CLAUDE.md`. This file is for you.
 | `docs/articles/CONTINUOUS_REVIEW_PATTERNS.md` | The orchestration pattern used here |
 | `docs/articles/ORCHESTRATION_COUNTERINTUITIONS.md` | Lessons where the obvious rule was wrong |
 
-**Before starting:** run `git log origin/master --oneline -20`. The orchestrator
-frequently merges fixes between sessions — your task may already be done.
+**Before starting:** check the latest upstream commits so you do not re-implement
+already-merged work.
+
+```bash
+# Preferred (when origin/master exists)
+git log origin/master --oneline -20
+
+# Fallback for local-only clones/worktrees
+git log --oneline -20
+```
+
+The orchestrator frequently merges fixes between sessions — your task may already be done.
 
 **Before stating facts** about workspace counts, release numbers, or metrics, verify
 against the truth sources below — do not hardcode them:
@@ -143,6 +153,8 @@ nix develop -c just ci-gate
   to discard changes, or `git commit -m "wip"` to save in-progress work.
 - Pre-push hook may hit a file-lock race on Windows; API-push workaround is acceptable.
   See `docs/project/FRICTION_LOG.md` for details.
+- If you are running via Codex CLI in a non-interactive environment, do not pause for
+  confirmation prompts. Run required checks/commands directly and report outcomes.
 
 ---
 

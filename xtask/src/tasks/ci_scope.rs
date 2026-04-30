@@ -57,6 +57,21 @@ pub struct HeavyLaneEntry {
     pub reason: String,
 }
 
+/// Decision payload for lane-selection metadata that is not yet enforced.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LaneDecision {
+    pub selected: bool,
+    pub profile: String,
+    pub reasons: Vec<String>,
+}
+
+/// Additional lane decisions emitted for consumers that need boolean selection
+/// plus provenance/reasons.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LaneDecisions {
+    pub parser_ratchet: LaneDecision,
+}
+
 /// Platform override flags.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlatformOverrides {
@@ -78,6 +93,7 @@ pub struct ScopeOutput {
     pub platform_overrides: PlatformOverrides,
     pub selected_lanes: Vec<LaneEntry>,
     pub selected_heavy_lanes: Vec<HeavyLaneEntry>,
+    pub lanes: LaneDecisions,
     pub explanations: BTreeMap<String, String>,
 }
 
@@ -158,6 +174,46 @@ fn is_docs_as_code_file(file: &str) -> bool {
     DOCS_AS_CODE_EXTENSIONS.iter().any(|ext| file.ends_with(ext))
         && !is_prose_file(file)
         && !is_ci_config_file(file)
+}
+
+fn parser_ratchet_decision(files: &[String], risk_tags: &[String]) -> LaneDecision {
+    let mut reasons: Vec<String> = files
+        .iter()
+        .filter(|file| is_parser_ratchet_path(file))
+        .map(|file| format!("changed_path:{file}"))
+        .collect();
+
+    if risk_tags.contains(&RISK_TAG_PARSER_RECOVERY.to_string()) {
+        reasons.push("risk_tag:parser-recovery".to_string());
+    }
+
+    LaneDecision { selected: !reasons.is_empty(), profile: "pr".to_string(), reasons }
+}
+
+fn is_parser_ratchet_path(file: &str) -> bool {
+    file.starts_with("crates/perl-token/")
+        || file.starts_with("crates/perl-lexer/")
+        || file.starts_with("crates/perl-parser-core/")
+        || file.starts_with("crates/perl-parser/")
+        || file.starts_with("crates/perl-position-tracking/")
+        || file.starts_with("crates/perl-line-index/")
+        || file.starts_with("crates/tree-sitter-perl-rs/")
+        || file.starts_with("crates/tree-sitter-perl-c/")
+        || file.starts_with("crates/perl-corpus/")
+        || file.starts_with("tests/parser/")
+        || file.starts_with("tests/perl-corpus/")
+        || file == ".ci/common-corpus-manifest.txt"
+        || file.starts_with("docs/project/status/parser")
+        || file == "xtask/src/tasks/ci_scope.rs"
+        || file == "xtask/src/tasks/gates.rs"
+        || (file.starts_with("xtask/src/tasks/")
+            && (file.contains("parser") || file.contains("corpus") || file.contains("ratchet")))
+        || file == ".ci/gate-policy.yaml"
+        || file == ".ci/GATE_REGISTRY.toml"
+        || file.starts_with(".ci/scope.d/")
+        || file.starts_with(".ci/gates.d/")
+        || file.starts_with(".github/workflows/")
+        || matches!(file, "Cargo.toml" | "Cargo.lock")
 }
 
 // ---------------------------------------------------------------------------
@@ -279,17 +335,17 @@ pub struct WidenerRule {
 /// All architectural widener rules. The order matters for lane generation
 /// (earlier rules fire first), but deduplication ensures idempotent output.
 pub static WIDENER_RULES: &[WidenerRule] = &[
-    // Rule 1: parser / lexer / parser-core → semantic, workspace-index, LSP, DAP
+    // Rule 1: parser / lexer / parser-core → semantic, workspace, LSP, DAP
     WidenerRule {
         trigger_prefixes: &["perl-parser", "perl-lexer", "perl-parser-core"],
-        targets: &["perl-semantic-analyzer", "perl-workspace-index", "perl-lsp-rs", "perl-dap"],
+        targets: &["perl-semantic-analyzer", "perl-workspace", "perl-lsp-rs", "perl-dap"],
         rule: "parser → DAP downstream smoke",
         lanes: &["lsp_smoke"],
         lane_reason: "architectural_widener",
     },
-    // Rule 2: semantic-analyzer / workspace-index → LSP providers
+    // Rule 2: semantic-analyzer / workspace → LSP providers
     WidenerRule {
-        trigger_prefixes: &["perl-semantic-analyzer", "perl-workspace-index"],
+        trigger_prefixes: &["perl-semantic-analyzer", "perl-workspace"],
         targets: &["perl-lsp-rs-core", "perl-lsp-rs"],
         rule: "semantic → LSP definition/references/rename",
         lanes: &["lsp_providers"],
@@ -515,6 +571,7 @@ pub fn classify_files(
 
     // Empty diff or prose-only → empty output (no lanes)
     if files.is_empty() || diff_class == "prose_only" {
+        let parser_ratchet = parser_ratchet_decision(files, &[]);
         return Ok(ScopeOutput {
             schema_version: 2,
             base: String::new(),
@@ -528,6 +585,7 @@ pub fn classify_files(
             platform_overrides: PlatformOverrides::default(),
             selected_lanes: vec![],
             selected_heavy_lanes: vec![],
+            lanes: LaneDecisions { parser_ratchet },
             explanations: BTreeMap::new(),
         });
     }
@@ -638,6 +696,7 @@ pub fn classify_files(
 
     // Platform overrides (currently static — can be extended)
     let platform_overrides = PlatformOverrides { windows_runner: false };
+    let parser_ratchet = parser_ratchet_decision(files, &risk_tags);
 
     Ok(ScopeOutput {
         schema_version: 2,
@@ -652,6 +711,7 @@ pub fn classify_files(
         platform_overrides,
         selected_lanes: lanes,
         selected_heavy_lanes: heavy_lanes,
+        lanes: LaneDecisions { parser_ratchet },
         explanations,
     })
 }
@@ -709,7 +769,7 @@ pub fn apply_wideners_v2(
 
 /// Configuration for the `ci-scope` subcommand.
 pub struct CiScopeConfig {
-    /// Base git ref to diff against (e.g. "origin/master").
+    /// Base git ref to diff against (e.g. "origin/main" or "auto").
     pub base: String,
     /// Output format: "json" or "text".
     pub format: String,
@@ -725,7 +785,7 @@ pub fn run(config: CiScopeConfig) -> Result<()> {
     let workspace_root = root.to_string_lossy().replace('\\', "/");
 
     let mut output = classify_files(&changed_files, &metadata, &workspace_root)?;
-    output.base = config.base.clone();
+    output.base = base_ref.clone();
     output.head_sha = head_sha;
     output.changed_files = changed_files;
 
@@ -748,20 +808,45 @@ pub fn run(config: CiScopeConfig) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 fn resolve_base_ref(base: &str, root: &Path) -> Result<String> {
-    let verify = cmd("git", &["rev-parse", "--verify", base])
+    let mut candidates = Vec::new();
+    if base != "auto" {
+        candidates.push(base.to_string());
+    }
+    // NOTE: HEAD is intentionally excluded from the fallback chain.
+    // Using HEAD as a base ref causes `git diff HEAD...HEAD` to return an
+    // empty file list, which silently reports zero changed files and causes
+    // all CI lanes to be skipped — a false-negative worse than an error.
+    candidates.extend(
+        ["origin/main", "origin/master", "main", "master", "HEAD~1"]
+            .into_iter()
+            .map(str::to_string),
+    );
+
+    for candidate in candidates {
+        if git_ref_exists(&candidate, root)? {
+            if base != "auto" && candidate != base {
+                eprintln!("Warning: base ref '{}' not found; using fallback '{}'", base, candidate);
+            }
+            return Ok(candidate);
+        }
+    }
+
+    Err(color_eyre::eyre::eyre!(
+        "Could not resolve a valid base ref from '{}', origin/main, origin/master, main, master, or HEAD~1. \
+         Ensure the repository has at least one commit and the remote is reachable.",
+        base
+    ))
+}
+
+fn git_ref_exists(candidate: &str, root: &Path) -> Result<bool> {
+    let verify = cmd("git", &["rev-parse", "--verify", candidate])
         .dir(root)
         .stdout_null()
         .stderr_null()
         .unchecked()
         .run()
         .context("Failed to run git rev-parse")?;
-
-    if verify.status.success() {
-        return Ok(base.to_string());
-    }
-
-    eprintln!("Warning: base ref '{}' not found; falling back to HEAD~1", base);
-    Ok("HEAD~1".to_string())
+    Ok(verify.status.success())
 }
 
 fn get_head_sha(root: &Path) -> Result<String> {
@@ -868,6 +953,11 @@ fn print_text_summary(output: &ScopeOutput) {
             println!("  {} — {}", l.lane, l.reason);
         }
     }
+
+    println!(
+        "Parser ratchet lane: {} ({})",
+        output.lanes.parser_ratchet.selected, output.lanes.parser_ratchet.profile
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1097,6 +1187,7 @@ mod tests {
         assert_eq!(output.diff_class, "prose_only");
         assert!(output.selected_lanes.is_empty());
         assert!(output.selected_heavy_lanes.is_empty());
+        assert!(!output.lanes.parser_ratchet.selected);
         Ok(())
     }
 
@@ -1107,6 +1198,55 @@ mod tests {
         let output = classify_files(&files, &metadata, "/workspace")?;
         assert_eq!(output.diff_class, "prose_only");
         assert!(output.selected_lanes.is_empty(), "docs-only should have no lanes");
+        assert!(
+            !output.lanes.parser_ratchet.selected,
+            "non-parser docs should not select parser ratchet"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_classify_files_parser_path_selects_parser_ratchet_lane() -> Result<()> {
+        let metadata = fake_metadata(&[("perl-parser-core", "crates/perl-parser-core")]);
+        let files = vec!["crates/perl-parser-core/src/recovery.rs".to_string()];
+        let output = classify_files(&files, &metadata, "/workspace")?;
+        assert!(
+            output.lanes.parser_ratchet.selected,
+            "parser path should select parser ratchet lane"
+        );
+        assert_eq!(output.lanes.parser_ratchet.profile, "pr");
+        assert!(
+            output
+                .lanes
+                .parser_ratchet
+                .reasons
+                .contains(&"changed_path:crates/perl-parser-core/src/recovery.rs".to_string()),
+            "path reason should be included"
+        );
+        assert!(
+            output.lanes.parser_ratchet.reasons.contains(&"risk_tag:parser-recovery".to_string()),
+            "parser-recovery risk tag reason should be included"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_classify_files_meta_change_selects_parser_ratchet_lane() -> Result<()> {
+        let metadata = fake_metadata(&[("perl-parser", "crates/perl-parser")]);
+        let files = vec!["xtask/src/tasks/ci_scope.rs".to_string()];
+        let output = classify_files(&files, &metadata, "/workspace")?;
+        assert!(
+            output.lanes.parser_ratchet.selected,
+            "meta/control-plane path should select parser ratchet lane"
+        );
+        assert!(
+            output
+                .lanes
+                .parser_ratchet
+                .reasons
+                .contains(&"changed_path:xtask/src/tasks/ci_scope.rs".to_string()),
+            "meta change reason should be included"
+        );
         Ok(())
     }
 
