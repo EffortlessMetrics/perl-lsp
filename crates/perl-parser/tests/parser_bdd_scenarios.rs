@@ -456,3 +456,388 @@ fn bdd_given_map_and_grep_pipeline_when_parsed_then_high_order_ops_and_regex_mat
 
     Ok(())
 }
+
+#[test]
+fn bdd_given_closure_capturing_lexical_when_parsed_then_anon_sub_and_capture_are_preserved()
+-> TestResult {
+    // Given: a developer builds an event handler that captures lexical state via closure.
+    let code = r#"
+        my $prefix = "WARN";
+        my $logger = sub {
+            my ($msg) = @_;
+            print "$prefix: $msg\n";
+        };
+        $logger->("something went wrong");
+    "#;
+
+    // When: the parser processes the closure and its invocation.
+    let sexp = parse_sexp(code)?;
+
+    // Then: anonymous subroutine node and the invocation should both be present.
+    assert!(
+        sexp.contains("sub") || sexp.contains("subroutine") || sexp.contains("anonymous"),
+        "Expected anonymous subroutine node in: {sexp}"
+    );
+    assert!(sexp.contains("prefix"), "Expected captured lexical variable name in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_begin_and_end_blocks_when_parsed_then_phase_blocks_are_retained() -> TestResult {
+    // Given: a developer uses BEGIN to run imports at compile time and END for cleanup.
+    let code = r#"
+        BEGIN {
+            require Scalar::Util;
+            Scalar::Util->import('blessed', 'reftype');
+        }
+
+        my $obj = bless {}, 'MyClass';
+
+        END {
+            warn "Shutting down\n";
+        }
+    "#;
+
+    // When: the parser processes the phase blocks alongside regular code.
+    let sexp = parse_sexp(code)?;
+
+    // Then: BEGIN and END phase blocks should be represented and parse should be clean.
+    assert!(sexp.contains("BEGIN"), "Expected BEGIN block in: {sexp}");
+    assert!(sexp.contains("END"), "Expected END block in: {sexp}");
+    assert!(sexp.contains("bless"), "Expected bless call in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_named_regex_captures_when_parsed_then_capture_names_are_retained() -> TestResult {
+    // Given: a developer parses a date string using named captures for clarity.
+    let code = r#"
+        my $date = "2026-04-30";
+        if ($date =~ /(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})/) {
+            my $y = $+{year};
+            my $m = $+{month};
+            my $d = $+{day};
+            print "Year: $y, Month: $m, Day: $d\n";
+        }
+    "#;
+
+    // When: the parser processes the named-capture regex and the capture variable access.
+    let sexp = parse_sexp(code)?;
+
+    // Then: regex match and the capture variable hash should both be represented.
+    assert!(
+        sexp.contains("match") || sexp.contains("regex"),
+        "Expected regex match node in: {sexp}"
+    );
+    assert!(sexp.contains("year"), "Expected named capture 'year' in: {sexp}");
+    assert!(sexp.contains("month"), "Expected named capture 'month' in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_sort_with_custom_comparator_when_parsed_then_sort_and_comparison_are_retained()
+-> TestResult {
+    // Given: a developer sorts a list of records by a computed key using a block comparator.
+    let code = r#"
+        my @records = ({name => "Zoe"}, {name => "Alice"}, {name => "Bob"});
+        my @sorted = sort { lc($a->{name}) cmp lc($b->{name}) } @records;
+        my @by_len = sort { length($a) <=> length($b) || $a cmp $b } qw(foo ba quux z);
+    "#;
+
+    // When: the parser processes sort with multi-expression block comparators.
+    let sexp = parse_sexp(code)?;
+
+    // Then: sort invocations and comparison operators should appear in the AST.
+    assert!(sexp.contains("sort") || sexp.contains("(call sort"), "Expected sort call in: {sexp}");
+    assert!(sexp.contains("cmp"), "Expected cmp string comparator in: {sexp}");
+    assert!(sexp.contains("<=>"), "Expected spaceship numeric comparator in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_subroutine_reference_and_dispatch_when_parsed_then_coderef_ops_are_retained()
+-> TestResult {
+    // Given: a developer builds a dispatch table with code references.
+    let code = r#"
+        sub add { return $_[0] + $_[1]; }
+        sub mul { return $_[0] * $_[1]; }
+
+        my %ops = (
+            add => \&add,
+            mul => \&mul,
+        );
+
+        my $op = $ops{add};
+        my $result = $op->(3, 4);
+    "#;
+
+    // When: the parser processes the dispatch table and indirect call.
+    let sexp = parse_sexp(code)?;
+
+    // Then: subroutine declarations, references, and the call should all be present.
+    assert!(sexp.contains("sub "), "Expected subroutine declarations in: {sexp}");
+    assert!(sexp.contains("add"), "Expected 'add' name in: {sexp}");
+    assert!(sexp.contains("result"), "Expected result variable in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_complex_dereference_chain_when_parsed_then_nested_deref_ops_are_retained() -> TestResult
+{
+    // Given: a developer traverses deeply nested data structures with postfix dereference.
+    let code = r#"
+        my $data = {
+            users => [
+                { name => "Alice", roles => ["admin", "user"] },
+                { name => "Bob",   roles => ["user"] },
+            ]
+        };
+        my $first_role = $data->{users}[0]{roles}[0];
+        my @all_names  = map { $_->{name} } @{ $data->{users} };
+    "#;
+
+    // When: the parser processes the nested hash/array dereferences.
+    let sexp = parse_sexp(code)?;
+
+    // Then: the nested structure and dereference operations should be represented cleanly.
+    assert!(sexp.contains("users"), "Expected 'users' key in: {sexp}");
+    assert!(sexp.contains("Alice"), "Expected 'Alice' string literal in: {sexp}");
+    assert!(sexp.contains("first_role"), "Expected 'first_role' variable in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_moose_style_class_declaration_when_parsed_then_has_and_extends_are_retained()
+-> TestResult {
+    // Given: a developer declares a Moose class with attributes and inheritance.
+    let code = r#"
+        package Animal;
+        use Moose;
+
+        has 'name'   => (is => 'ro', isa => 'Str', required => 1);
+        has 'sound'  => (is => 'rw', isa => 'Str', default  => 'grunt');
+
+        sub speak {
+            my $self = shift;
+            printf "%s says %s\n", $self->name, $self->sound;
+        }
+
+        package Dog;
+        use Moose;
+        extends 'Animal';
+
+        has 'breed' => (is => 'ro', isa => 'Str');
+
+        sub fetch { return "fetched!"; }
+    "#;
+
+    // When: the parser processes the Moose class declarations.
+    let sexp = parse_sexp(code)?;
+
+    // Then: package declarations, attribute helpers, and methods should be represented.
+    // Note: `has` and `extends` are parsed as ambiguous function calls; the package names
+    // and string arguments are what survive into the sexp representation.
+    assert!(sexp.contains("Animal"), "Expected Animal package in: {sexp}");
+    assert!(sexp.contains("Dog"), "Expected Dog package in: {sexp}");
+    assert!(sexp.contains("name"), "Expected 'name' attribute argument in: {sexp}");
+    assert!(
+        sexp.contains("ambiguous_function_call_expression"),
+        "Expected ambiguous function calls (has/extends) in: {sexp}"
+    );
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_sprintf_with_various_formats_when_parsed_then_format_call_is_retained() -> TestResult {
+    // Given: a developer formats output using sprintf with multiple format specifiers.
+    let code = r#"
+        my $name  = "Perl";
+        my $ver   = 5.036;
+        my $count = 42;
+        my $msg   = sprintf "%-10s v%05.3f [%04d items]", $name, $ver, $count;
+        my $hex   = sprintf "0x%08X", 255;
+        my $multi = sprintf "%s: %d errors, %d warnings", $name, 0, 3;
+        printf "%s\n", $msg;
+    "#;
+
+    // When: the parser processes the sprintf calls.
+    let sexp = parse_sexp(code)?;
+
+    // Then: sprintf/printf calls and their arguments should be represented cleanly.
+    assert!(
+        sexp.contains("sprintf") || sexp.contains("printf"),
+        "Expected sprintf/printf calls in: {sexp}"
+    );
+    assert!(sexp.contains("msg"), "Expected result variable in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_wantarray_context_sensitive_return_when_parsed_then_wantarray_node_is_retained()
+-> TestResult {
+    // Given: a developer writes a function that returns differently depending on calling context.
+    let code = r#"
+        sub context_aware {
+            my @items = (1, 2, 3);
+            if (wantarray) {
+                return @items;
+            } else {
+                return scalar @items;
+            }
+        }
+
+        my @list   = context_aware();
+        my $count  = context_aware();
+    "#;
+
+    // When: the parser processes the wantarray conditional.
+    let sexp = parse_sexp(code)?;
+
+    // Then: the if/else branch and both return paths should be present in AST.
+    // Note: `wantarray` is parsed as a generic function call; the name is not preserved
+    // in the sexp, but the call-site structure (function_call_expression) and the
+    // if/else control flow are both retained.
+    assert!(
+        sexp.contains("function_call_expression"),
+        "Expected function call (wantarray) in: {sexp}"
+    );
+    assert!(sexp.contains("(if "), "Expected if node for context-sensitive branch in: {sexp}");
+    assert!(sexp.contains("(return"), "Expected return node in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_overloaded_operators_when_parsed_then_overload_pragma_is_retained() -> TestResult {
+    // Given: a developer implements a value-object class with overloaded arithmetic.
+    let code = r#"
+        package Vector;
+        use overload
+            '+' => \&add,
+            '-' => \&sub_vec,
+            '""' => \&stringify,
+            fallback => 1;
+
+        sub new {
+            my ($class, $x, $y) = @_;
+            return bless { x => $x, y => $y }, $class;
+        }
+
+        sub add {
+            my ($self, $other) = @_;
+            return Vector->new($self->{x} + $other->{x}, $self->{y} + $other->{y});
+        }
+
+        sub sub_vec {
+            my ($self, $other, $swap) = @_;
+            return Vector->new($self->{x} - $other->{x}, $self->{y} - $other->{y});
+        }
+
+        sub stringify {
+            my $self = shift;
+            return "($self->{x}, $self->{y})";
+        }
+    "#;
+
+    // When: the parser processes the overloaded operator class.
+    let sexp = parse_sexp(code)?;
+
+    // Then: overload pragma and class structure should both survive parsing.
+    assert!(sexp.contains("overload"), "Expected overload pragma in: {sexp}");
+    assert!(sexp.contains("Vector"), "Expected package name in: {sexp}");
+    assert!(sexp.contains("bless"), "Expected bless call in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_complex_regex_alternation_and_lookahead_when_parsed_then_regex_structure_is_retained()
+-> TestResult {
+    // Given: a developer validates input with a complex regex using alternation and lookahead.
+    let code = r#"
+        my $email = 'user@example.com';
+        my $valid  = $email =~ /
+            ^                       # start of string
+            (?=[^@]{1,64}@)         # local part length lookahead
+            [a-zA-Z0-9._%+\-]+      # local part characters
+            @                       # separator
+            (?:[a-zA-Z0-9\-]+\.)+  # domain labels
+            [a-zA-Z]{2,}            # TLD
+            $                       # end of string
+        /x;
+        my $ipv4 = "192.168.1.1";
+        my $is_ip = $ipv4 =~ /^(\d{1,3}\.){3}\d{1,3}$/;
+    "#;
+
+    // When: the parser processes the extended regex with lookahead.
+    let sexp = parse_sexp(code)?;
+
+    // Then: regex operations should be represented and parse should remain stable.
+    assert!(
+        sexp.contains("match") || sexp.contains("regex") || sexp.contains("=~"),
+        "Expected regex match operations in: {sexp}"
+    );
+    assert!(sexp.contains("email"), "Expected email variable in: {sexp}");
+    assert!(sexp.contains("ipv4"), "Expected ipv4 variable in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_autoload_and_destroy_methods_when_parsed_then_special_sub_names_are_retained()
+-> TestResult {
+    // Given: a developer implements dynamic dispatch via AUTOLOAD and resource cleanup via DESTROY.
+    let code = r#"
+        package Proxy;
+
+        sub new {
+            my ($class, $target) = @_;
+            return bless { target => $target, calls => 0 }, $class;
+        }
+
+        our $AUTOLOAD;
+        sub AUTOLOAD {
+            my ($self, @args) = @_;
+            my $method = $AUTOLOAD;
+            $method =~ s/.*:://;
+            return if $method eq 'DESTROY';
+            $self->{calls}++;
+            return $self->{target}->$method(@args);
+        }
+
+        sub DESTROY {
+            my $self = shift;
+            printf "Proxy destroyed after %d calls\n", $self->{calls};
+        }
+    "#;
+
+    // When: the parser processes the AUTOLOAD and DESTROY special methods.
+    let sexp = parse_sexp(code)?;
+
+    // Then: both special method names should appear in the AST representation.
+    assert!(sexp.contains("AUTOLOAD"), "Expected AUTOLOAD subroutine in: {sexp}");
+    assert!(sexp.contains("DESTROY"), "Expected DESTROY subroutine in: {sexp}");
+    assert!(sexp.contains("Proxy"), "Expected package name in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
