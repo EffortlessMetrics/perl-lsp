@@ -348,6 +348,16 @@ codegen-units = 1
 inherits = "release"
 lto = "thin"
 
+
+[profile.agent]
+inherits = "dev"
+debug = "line-tables-only"
+incremental = false
+
+[profile.agent.build-override]
+debug = false
+incremental = false
+
 # Workspace lints
 [workspace.lints.clippy]
 collapsible_if = "allow"
