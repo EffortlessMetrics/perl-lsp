@@ -814,6 +814,9 @@ pub fn format_startup_banner(version: &str, profile: FeatureProfile, is_socket: 
 /// Fires before the LSP handshake begins. Writes directly to stderr, not through
 /// tracing, so it is visible regardless of whether `--log` is active.
 /// Suppressed when `PERL_LSP_QUIET` is set in the environment.
+// The startup banner is intentionally written to stderr before the tracing subscriber
+// is configured. This is the one permitted `eprintln!` in this crate.
+#[allow(clippy::print_stderr)]
 pub fn startup_banner(version: &str, profile: FeatureProfile, transport: TransportMode) {
     if std::env::var("PERL_LSP_QUIET").is_ok() {
         return;
