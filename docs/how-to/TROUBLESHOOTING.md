@@ -175,21 +175,10 @@ If the editor is using a helper extension or plugin, check its own logs too.
 If you are debugging with `perl-dap`, check the DAP guide:
 [DAP_USER_GUIDE.md](../tutorials/DAP_USER_GUIDE.md).
 
-## Amazon Kiro Does Not Start `perllsp`
 
-### Kiro IDE
+## Zed Does Not Start `perllsp`
 
-1. Confirm the `EffortlessMetrics.perl-lsp-rs` extension is installed and enabled.
-2. Confirm the active file language is Perl.
-3. If using extension-managed downloads, confirm:
-
-   ```json
-   {
-     "perl-lsp.autoDownload": true
-   }
-   ```
-
-4. If using a manual binary, run:
+1. Confirm `perllsp` works outside Zed:
 
    ```bash
    perllsp --version
@@ -197,27 +186,31 @@ If you are debugging with `perl-dap`, check the DAP guide:
    perllsp --info
    ```
 
-5. If Kiro cannot find the binary, set an absolute `perl-lsp.serverPath`.
+2. Confirm the installed Zed extension registers the same server ID used in
+   `settings.json`, for example `perl-lsp`.
 
-### Kiro CLI
+3. If Zed logs `no language server found matching 'perl-lsp'`, the server is
+   not registered. Installing `perllsp` alone is not enough.
 
-1. Run `/code init` in the project root.
-2. Edit the generated LSP configuration and add a Perl server entry launching `perllsp --stdio`.
-3. Restart LSP servers:
+4. If Zed cannot find the binary, start Zed from the project shell:
 
-   ```text
-   /code init -f
+   ```bash
+   zed .
    ```
 
-4. Check status and logs:
+   Or use an absolute `lsp.perl-lsp.binary.path`.
 
-   ```text
-   /code status
-   /code logs -l ERROR
-   /code logs -l DEBUG -n 100
+5. Check Zed logs with `zed: open log`. For more startup detail, relaunch Zed
+   from a terminal:
+
+   ```bash
+   zed --foreground .
    ```
-
-5. If diagnostics work but hover, definition, references, completion, or rename do not, verify whether your Kiro CLI build supports client-initiated operations for custom non-built-in languages.
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
 
 ## When To Escalate
 
