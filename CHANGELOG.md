@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0-rc1] - 2026-04-30
+
+Release notes: [v0.13.0-rc1](docs/releases/v0.13.0-rc1.md)
+
 ### Fixed
+
+- **CI cancellation cascade fix — label events no longer cancel active runs** —
+  `cancel-in-progress` now scopes to `pull_request.synchronize` only, so applying
+  labels (e.g. `merge-ready`, `ci-green`) does not abort an in-flight CI run on
+  the same PR. Adds a `LABEL_EVENT_CANCELS_PR_RUN` xtask lint to prevent the
+  failure mode from re-entering. Resolves a recurring queue-blocker that
+  surfaced as `exit 143` SIGTERM aborts on PR Smoke and CI Gate. (#7581)
 
 - **First-run error messaging now surfaces to users instead of silent logging** — When
   workspace root is not detected (e.g., opening a single file without opening a folder),
@@ -1240,4 +1251,5 @@ For the full cross-channel release history, see [RELEASE_HISTORY.md](RELEASE_HIS
 [0.9.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.9.1
 [0.9.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.9.0
 [0.8.8]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.8.8
-[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.4...HEAD
+[0.13.0-rc1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.4...v0.13.0-rc1
+[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.0-rc1...HEAD
