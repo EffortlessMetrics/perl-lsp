@@ -353,10 +353,59 @@ jobs:
         run: cargo build -p perl-lsp-rs
 
       - name: Run UX regression tests
+        id: ux_tests
         env:
           PERL_LSP_BIN: ${{ github.workspace }}/target/debug/perl-lsp
           RUST_TEST_THREADS: "1"
-        run: just ux-tests
+        run: |
+          mkdir -p target/receipts
+          just ux-tests 2>&1 | tee target/receipts/ux-test-output.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Emit structured UX regression receipt
+        if: always()
+        run: |
+          cargo xtask ux-regression-receipt \
+            --input target/receipts/ux-test-output.log \
+            --receipt target/receipts/ux-regression.json \
+            --sha "${{ github.sha }}"
+
+      - name: UX receipt summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if not summary_path:
+              raise SystemExit(0)
+
+          receipt_path = Path("target/receipts/ux-regression.json")
+          lines = ["### UX Regression Receipt", ""]
+          if receipt_path.exists():
+              data = json.loads(receipt_path.read_text(encoding="utf-8"))
+              lines.append(f"- Receipt: `{receipt_path}`")
+              lines.append(f"- Result: `{data.get('result', 'unknown')}`")
+              lines.append(f"- Failure class: `{data.get('failure_class') or 'none'}`")
+              lines.append(f"- First failing test: `{data.get('test') or 'n/a'}`")
+          else:
+              lines.append("- Receipt not found")
+
+          Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload UX regression receipt and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ux-regression-receipt-${{ github.sha }}
+          path: |
+            target/receipts/ux-regression.json
+            target/receipts/ux-test-output.log
+          if-no-files-found: warn
+          retention-days: 7
 
   # ── Compile All Targets: catch integration-test + bench bit-rot ───────
   check-all-targets:
