@@ -36,11 +36,9 @@ pub fn code_slice(text: &str) -> &str {
 /// The data section starts at a lexed `__DATA__` or `__END__` marker and includes
 /// the marker line itself.
 pub fn split_code_and_data(text: &str) -> (&str, Option<&str>) {
-    if let Some(marker_start) = find_data_marker_byte_lexed(text) {
+    find_data_marker_byte_lexed(text).map_or((text, None), |marker_start| {
         (&text[..marker_start], Some(&text[marker_start..]))
-    } else {
-        (text, None)
-    }
+    })
 }
 
 /// Find the byte offset of a __DATA__ or __END__ marker in the source text.
@@ -96,5 +94,17 @@ mod tests {
 
         let with_end = "code;\n__END__\nvalue";
         assert_eq!(split_code_and_data(with_end), ("code;\n", Some("__END__\nvalue")));
+    }
+
+    #[test]
+    fn test_split_code_and_data_marker_at_start() {
+        let src = "__DATA__\nvalue";
+        assert_eq!(split_code_and_data(src), ("", Some("__DATA__\nvalue")));
+    }
+
+    #[test]
+    fn test_split_code_and_data_ignores_marker_with_trailing_junk() {
+        let src = "code;\n__DATA__ trailing\nvalue";
+        assert_eq!(split_code_and_data(src), (src, None));
     }
 }
