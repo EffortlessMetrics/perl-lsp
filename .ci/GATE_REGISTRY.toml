@@ -1,5 +1,7 @@
 # Gate Registry for perl-lsp
-# Defines all merge-blocking gates with thresholds and enforcement
+# Legacy companion index for gate metadata.
+# Source of truth for effective CI gate enforcement is `.ci/gate-policy.yaml`
+# via `cargo xtask gates` (see `cargo xtask gate-policy check`).
 
 [metadata]
 version = "1.0"

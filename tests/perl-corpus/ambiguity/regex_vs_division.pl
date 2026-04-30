@@ -1,2 +1,2 @@
-my $regex = /foo/;
-my $ratio = $total / $count;
+my $ratio = $total / 2;
+my $ok = $text =~ /foo/;

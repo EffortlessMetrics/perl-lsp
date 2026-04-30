@@ -29,9 +29,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
-  contents: write
-  pull-requests: write
-  statuses: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -173,6 +171,9 @@ jobs:
     timeout-minutes: 30
     needs: [draft-pr-check, pr-smoke, conflict-markers, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
+    permissions:
+      contents: read
+      statuses: write
     # Run on every PR push and on push to main/master
     # Earlier gating > label-gated gating (see #4675)
     # Frequent commits will queue; preflight skips superseded SHAs.
