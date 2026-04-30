@@ -1324,9 +1324,7 @@ fn emit_gate_begin(gate: &GateDefinition) {
 }
 
 fn emit_gate_end(gate: &GateDefinition, result: &GateResult) {
-    let exit = result
-        .exit_code
-        .map_or_else(|| "none".to_string(), |code| code.to_string());
+    let exit = result.exit_code.map_or_else(|| "none".to_string(), |code| code.to_string());
     println!(
         "END gate={} status={} exit={} duration_ms={}",
         gate.name, result.status, exit, result.duration_ms
