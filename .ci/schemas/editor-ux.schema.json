@@ -160,6 +160,13 @@
             "low"
           ]
         },
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
         "method": {
           "type": "string"
         },

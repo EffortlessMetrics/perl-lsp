@@ -1,0 +1,1310 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-04-30T20:54:03.456684600+00:00",
+  "subsystem": "editor_ux",
+  "top_line": {
+    "workflow_pass_rate": {
+      "state": "insufficient_data",
+      "value": null,
+      "kind": "measured",
+      "basis": [
+        "no eligible receipts"
+      ],
+      "coverage": "receipts_included",
+      "confidence": "low",
+      "assumptions": [
+        "insufficient data"
+      ]
+    },
+    "workflow_stability_rate": {
+      "state": "insufficient_data",
+      "value": null,
+      "kind": "measured",
+      "basis": [
+        "no workflows with sufficient data"
+      ],
+      "coverage": "receipts_included",
+      "confidence": "low",
+      "assumptions": [
+        "insufficient data"
+      ]
+    },
+    "p95_time_to_first_useful_result_ms": {
+      "state": "insufficient_data",
+      "value": null,
+      "kind": "measured",
+      "basis": [
+        "no passing scenarios with timing data"
+      ],
+      "coverage": "receipts_included",
+      "confidence": "low",
+      "method": "p95",
+      "assumptions": [
+        "insufficient data"
+      ]
+    }
+  },
+  "components": {
+    "cross_file_definition_success_rate": {
+      "state": "insufficient_data",
+      "value": null,
+      "kind": "measured",
+      "basis": [
+        "no workflows measuring cross_file_definition_success_rate"
+      ],
+      "coverage": "receipts_included",
+      "confidence": "low",
+      "assumptions": [
+        "insufficient data"
+      ]
+    },
+    "module_resolution_workflow_success_rate": {
+      "state": "insufficient_data",
+      "value": null,
+      "kind": "measured",
+      "basis": [
+        "no workflows measuring module_resolution_workflow_success_rate"
+      ],
+      "coverage": "receipts_included",
+      "confidence": "low",
+      "assumptions": [
+        "insufficient data"
+      ]
+    },
+    "multi_root_workspace_navigation_success_rate": {
+      "state": "insufficient_data",
+      "value": null,
+      "kind": "measured",
+      "basis": [
+        "no workflows measuring multi_root_workspace_navigation_success_rate"
+      ],
+      "coverage": "receipts_included",
+      "confidence": "low",
+      "assumptions": [
+        "insufficient data"
+      ]
+    }
+  },
+  "workflows": [
+    {
+      "id": "simple_file_smoke",
+      "scenario": "ux_scenario_01_simple_file.rs",
+      "subsystem_owner": "editor_intelligence",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "missing_perltidy_graceful_degradation",
+      "scenario": "ux_scenario_02_missing_perltidy.rs",
+      "subsystem_owner": "engineering_health",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "missing_perl_graceful_degradation",
+      "scenario": "ux_scenario_03_missing_perl.rs",
+      "subsystem_owner": "engineering_health",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "missing_perlcritic_graceful_degradation",
+      "scenario": "ux_scenario_04_missing_perlcritic.rs",
+      "subsystem_owner": "engineering_health",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "bad_config_resilience",
+      "scenario": "ux_scenario_05_bad_config.rs",
+      "subsystem_owner": "engineering_health",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "large_file_open",
+      "scenario": "ux_scenario_06_large_file.rs",
+      "subsystem_owner": "engineering_health",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "multi_file_workspace_navigation",
+      "scenario": "ux_scenario_07_multi_file_workspace.rs",
+      "subsystem_owner": "workspace_indexing",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "shebang_detection",
+      "scenario": "ux_scenario_08_shebang_detection.rs",
+      "subsystem_owner": "editor_intelligence",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "encoding_and_bom_resilience",
+      "scenario": "ux_scenario_09_encoding.rs",
+      "subsystem_owner": "engineering_health",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "goto_definition_core",
+      "scenario": "ux_scenario_10_goto_definition.rs",
+      "subsystem_owner": "editor_intelligence",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "hover_core",
+      "scenario": "ux_scenario_11_hover.rs",
+      "subsystem_owner": "editor_intelligence",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "strict_diagnostics",
+      "scenario": "ux_scenario_12_diagnostics_strict.rs",
+      "subsystem_owner": "diagnostics",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "document_symbols_core",
+      "scenario": "ux_scenario_13_document_symbols.rs",
+      "subsystem_owner": "workspace_indexing",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "inc_conformance",
+      "scenario": "ux_scenario_14_inc_conformance.rs",
+      "subsystem_owner": "module_resolution",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "multi_root_workspace_symbols",
+      "scenario": "ux_scenario_15_workspace_symbols.rs",
+      "subsystem_owner": "workspace_indexing",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "workspace_folder_removal_freshness",
+      "scenario": "ux_scenario_16_workspace_folder_removal.rs",
+      "subsystem_owner": "workspace_indexing",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "deleted_file_churn_freshness",
+      "scenario": "ux_scenario_17_deleted_file_churn.rs",
+      "subsystem_owner": "workspace_indexing",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "goto_declaration_core",
+      "scenario": "ux_scenario_18_goto_declaration.rs",
+      "subsystem_owner": "editor_intelligence",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "template_language_mode_resilience",
+      "scenario": "ux_scenario_22_template_language_mode.rs",
+      "subsystem_owner": "editor_intelligence",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "diagnostics_after_edit_refresh",
+      "scenario": "ux_scenario_18_diagnostics_after_edit.rs",
+      "subsystem_owner": "diagnostics",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "real_repo_first_diagnostics_budget",
+      "scenario": "ux_scenario_18_real_repo_perf.rs",
+      "subsystem_owner": "diagnostics",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "rename_workflow_core",
+      "scenario": "ux_scenario_23_rename_workflow.rs",
+      "subsystem_owner": "editor_intelligence",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "workspace_folder_addition_freshness",
+      "scenario": "ux_scenario_19_workspace_folder_addition.rs",
+      "subsystem_owner": "workspace_indexing",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "live_edit_feedback_loop",
+      "scenario": "ux_scenario_24_live_edit_feedback.rs",
+      "subsystem_owner": "text_sync",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "completion_core",
+      "scenario": "ux_scenario_19_completion_core.rs",
+      "subsystem_owner": "editor_intelligence",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "incremental_text_sync_recovery",
+      "scenario": "ux_scenario_19_incremental_text_sync.rs",
+      "subsystem_owner": "text_sync",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "diagnostics_lifecycle_editing",
+      "scenario": "ux_scenario_19_diagnostics_lifecycle.rs",
+      "subsystem_owner": "diagnostics",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    }
+  ],
+  "provenance": {
+    "fixture_matrix": "H:\\Code\\Rust2\\perl-lsp\\crates\\perl-lsp-ux-tests\\fixtures\\editor_ux_fixture_matrix.json",
+    "harness": "crates/perl-lsp-ux-tests",
+    "tiers": []
+  }
+}
