@@ -1,4 +1,4 @@
-name: tokmd
+name: tokmd PR Review
 
 on:
   pull_request:
@@ -15,90 +15,60 @@ permissions:
   pull-requests: write
 
 jobs:
-  tokmd:
-    name: tokmd Receipt and Gate
+  review:
+    name: tokmd PR Review
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Generate tokmd PR sensor comment
-        id: sensor
-        uses: EffortlessMetrics/tokmd@01f19c1c3a8a6b2ef498f52d424870dda4b98827
+      - name: Run tokmd review cockpit
+        id: review
+        uses: EffortlessMetrics/tokmd@v1
         with:
-          version: '1.10.0'
-          mode: sensor
+          version: '1.11.0'
+          mode: review
+          base: origin/${{ github.base_ref }}
           head: HEAD
-          artifact: 'false'
-          comment: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'true' || 'false' }}
+          out-dir: .tokmd/review
+          config: tokmd.review.toml
+          gate-config: tokmd-review-gate.toml
+          comment: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'auto' || 'false' }}
+          artifact: 'true'
+          gate: advisory
+          near-dup: 'true'
+          detail-functions: 'true'
 
-      - name: Generate tokmd repository receipt
-        id: receipt
-        uses: EffortlessMetrics/tokmd@01f19c1c3a8a6b2ef498f52d424870dda4b98827
-        with:
-          version: '1.10.0'
-          paths: |
-            crates
-            xtask
-            docs
-            book/src
-            scripts
-            .github/workflows
-            .ci/policies
-          module-roots: 'crates,xtask,docs,book,scripts'
-          top: '30'
-          format: 'json'
-          artifact: 'false'
-          comment: 'false'
-
-      - name: Run tokmd advisory gate
-        id: gate
-        uses: EffortlessMetrics/tokmd@01f19c1c3a8a6b2ef498f52d424870dda4b98827
-        with:
-          version: '1.10.0'
-          mode: gate
-          paths: .
-          artifact: 'false'
-          comment: 'false'
-
-      - name: Upload tokmd artifacts
+      - name: Upload tokmd review artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: tokmd-${{ github.run_id }}
-          path: |
-            tokmd-*.json
-            tokmd-*.jsonl
-            tokmd-*.md
-            comment.md
-            extras/**
+          name: tokmd-review-${{ github.run_id }}
+          path: .tokmd/review/**
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Add tokmd summary to workflow run
+      - name: Add tokmd review summary to workflow run
         if: always()
         shell: bash
         run: |
           {
-            echo "## tokmd"
+            echo "## tokmd Review Cockpit"
             echo
-            if [ -f comment.md ]; then
-              cat comment.md
-            elif [ -f tokmd-summary.md ]; then
-              cat tokmd-summary.md
+            if [ -f .tokmd/review/comment.md ]; then
+              cat .tokmd/review/comment.md
             else
-              echo "tokmd completed, but no Markdown summary was produced."
+              echo "tokmd review completed, but comment.md was not generated."
             fi
             echo
-            if [ -f tokmd-gate-verdict.json ]; then
-              echo "### Gate verdict"
+            if [ -f .tokmd/review/manifest.json ]; then
+              echo "### Manifest"
               echo
               echo '```json'
-              cat tokmd-gate-verdict.json
+              cat .tokmd/review/manifest.json
               echo
               echo '```'
             fi
