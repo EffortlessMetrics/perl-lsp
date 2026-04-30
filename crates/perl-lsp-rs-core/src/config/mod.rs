@@ -11,6 +11,7 @@ use crate::platform::resolve_perl_path_with_toolchain;
 use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
+use std::{fs::File, io::Read};
 
 mod native_build_hints;
 
@@ -501,11 +502,7 @@ impl WorkspaceConfig {
     /// returned list contains only `self.include_paths` entries (trimmed and deduplicated).
     pub fn effective_include_paths(&self, perl5lib_paths: &[String]) -> Vec<String> {
         if !self.use_perl5lib || perl5lib_paths.is_empty() {
-            return dedupe_preserve_order(
-                self.include_paths
-                    .iter()
-                    .map(String::as_str),
-            );
+            return dedupe_preserve_order(self.include_paths.iter().map(String::as_str));
         }
         match self.perl5lib_precedence {
             Perl5LibPrecedence::Prepend => dedupe_preserve_order(
@@ -544,21 +541,11 @@ impl WorkspaceConfig {
                 }
                 self.use_system_inc = use_inc;
             }
-            if let Some(perl_path) = workspace.get("perlPath").and_then(|v| v.as_str()) {
-                let next = Some(perl_path.to_string());
-                if next != self.perl_path {
-                    self.system_inc_cache = None;
-                }
-                self.perl_path = next;
-            }
-            if let Some(perl_args) = workspace.get("perlArgs").and_then(|v| v.as_array()) {
-                let next: Vec<String> =
-                    perl_args.iter().filter_map(|v| v.as_str().map(str::to_string)).collect();
-                if next != self.perl_args {
-                    self.system_inc_cache = None;
-                }
-                self.perl_args = next;
-            }
+            // Security: do NOT honour workspace-supplied perlPath / perlArgs.
+            // Allowing arbitrary Perl interpreter / argv from workspace settings
+            // would let a hostile project execute arbitrary code via the @INC
+            // probe (issue #3729). The interpreter / args remain whatever the
+            // user (not the workspace) configured globally.
             if let Some(timeout) = workspace.get("resolutionTimeout").and_then(|v| v.as_u64()) {
                 self.resolution_timeout_ms = timeout;
             }
@@ -605,19 +592,35 @@ impl WorkspaceConfig {
         let output = command.args(["-e", "print join(\"\\n\", @INC)"]).output();
 
         match output {
-            Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty() && *line != ".")
-                .map(PathBuf::from)
-                .fold(Vec::new(), |mut acc, path| {
-                    if !acc.contains(&path) {
-                        acc.push(path);
-                    }
-                    acc
-                }),
+            Ok(out) if out.status.success() => {
+                Self::parse_perl_inc_output(&String::from_utf8_lossy(&out.stdout))
+            }
             _ => Vec::new(),
         }
+    }
+
+    fn parse_perl_inc_output(stdout: &str) -> Vec<PathBuf> {
+        stdout
+            .lines()
+            .map(str::trim)
+            .filter(|line| {
+                !line.is_empty()
+                    && *line != "."
+                    && !line.starts_with("CODE(")
+                    && !line.starts_with("ARRAY(")
+                    && !line.starts_with("HASH(")
+                    && !line.starts_with("SCALAR(")
+                    && !line.starts_with("REF(")
+                    && !line.starts_with("GLOB(")
+                    && !line.starts_with("IO::")
+            })
+            .map(PathBuf::from)
+            .fold(Vec::new(), |mut acc, path| {
+                if !acc.contains(&path) {
+                    acc.push(path);
+                }
+                acc
+            })
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -739,22 +742,72 @@ pub struct ProjectFormattingConfig {
 /// Load project config from `<workspace_root>/.perl-lsp.toml`.
 ///
 /// Returns `None` if the file does not exist (normal case — most projects won't have one).
-/// Returns `Err` only on TOML parse failure; caller should emit a `window/showMessage` warning.
+/// Returns `Err` on TOML parse failure, I/O errors, oversized files, or non-regular paths;
+/// caller should emit a `window/showMessage` warning and continue with defaults.
 pub fn load_project_config(
     workspace_root: &std::path::Path,
 ) -> Result<Option<ProjectConfig>, String> {
+    const MAX_PROJECT_CONFIG_BYTES: u64 = 1024 * 1024; // 1 MiB
+
     let path = workspace_root.join(".perl-lsp.toml");
-    match std::fs::read_to_string(&path) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(format!(
-            "Could not read .perl-lsp.toml: {}. \
-             Check that the file is readable and not locked by another process.",
-            e
-        )),
-        Ok(content) => toml::from_str::<ProjectConfig>(&content)
-            .map(Some)
-            .map_err(|e| format!(".perl-lsp.toml has a syntax error: {}", e)),
+    let metadata = match std::fs::metadata(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            return Err(format!(
+                "Could not read .perl-lsp.toml: {}. \
+                 Check that the file is readable and not locked by another process.",
+                e
+            ));
+        }
+        Ok(metadata) => metadata,
+    };
+
+    if !metadata.file_type().is_file() {
+        return Err(
+            "Could not read .perl-lsp.toml: path must be a regular file (not a directory, pipe, \
+             or device)."
+                .to_string(),
+        );
     }
+
+    if metadata.len() > MAX_PROJECT_CONFIG_BYTES {
+        return Err(format!(
+            "Could not read .perl-lsp.toml: file is too large ({} bytes, max {} bytes).",
+            metadata.len(),
+            MAX_PROJECT_CONFIG_BYTES
+        ));
+    }
+
+    // Open the file; guard against a TOCTOU race where the file is removed after
+    // the metadata check succeeds — treat a vanished file the same as not-found.
+    let file = match File::open(&path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            return Err(format!(
+                "Could not read .perl-lsp.toml: {}. \
+                 Check that the file is readable and not locked by another process.",
+                e
+            ));
+        }
+    };
+    let mut content = String::new();
+    file.take(MAX_PROJECT_CONFIG_BYTES + 1)
+        .read_to_string(&mut content)
+        .map_err(|e| format!("Could not read .perl-lsp.toml: {}", e))?;
+
+    if content.len() as u64 > MAX_PROJECT_CONFIG_BYTES {
+        return Err(format!(
+            "Could not read .perl-lsp.toml: file is too large ({} bytes, max {} bytes). \
+             The file may have grown between the size check and the read.",
+            content.len(),
+            MAX_PROJECT_CONFIG_BYTES
+        ));
+    }
+
+    toml::from_str::<ProjectConfig>(&content)
+        .map(Some)
+        .map_err(|e| format!(".perl-lsp.toml has a syntax error: {}", e))
 }
 
 impl ProjectConfig {
@@ -913,6 +966,58 @@ perltidy_extra_args = ["-noll"]
     }
 
     #[test]
+    fn load_project_config_rejects_non_regular_file() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        std::fs::create_dir(temp.path().join(".perl-lsp.toml"))?;
+
+        let err = load_project_config(temp.path())
+            .err()
+            .ok_or("expected non-regular config path to return an error")?;
+        assert!(err.contains("regular file"));
+        Ok(())
+    }
+
+    #[test]
+    fn load_project_config_rejects_oversized_file() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let oversized = vec![b'a'; (1024 * 1024) + 1];
+        std::fs::write(temp.path().join(".perl-lsp.toml"), oversized)?;
+
+        let err = load_project_config(temp.path())
+            .err()
+            .ok_or("expected oversized config file to return an error")?;
+        assert!(err.contains("too large"));
+        Ok(())
+    }
+
+    /// A 1 MiB file (exactly at the cap) must be accepted without error.
+    #[test]
+    fn load_project_config_accepts_file_at_size_limit() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        // Write a 1 MiB file containing only '#' comment chars — valid TOML, empty config.
+        let exactly_at_limit = vec![b'#'; 1024 * 1024];
+        std::fs::write(temp.path().join(".perl-lsp.toml"), exactly_at_limit)?;
+        // Should parse successfully and yield a default ProjectConfig (no sections set).
+        let config = load_project_config(temp.path())?;
+        assert!(config.is_some(), "1 MiB file at the limit must be accepted");
+        Ok(())
+    }
+
+    /// An error from File::open when the file is not found (TOCTOU: file removed after metadata
+    /// check) must be treated as absent, not as a hard error.
+    #[test]
+    fn load_project_config_returns_none_for_vanished_file() -> TestResult {
+        // We can't easily reproduce a true TOCTOU race, but we can verify the code path by
+        // directly exercising the condition: call load_project_config on a path where no file
+        // exists (metadata returns NotFound at the first check, so this also confirms the
+        // original not-found path still works under the restructured code).
+        let temp = tempfile::tempdir()?;
+        let result = load_project_config(temp.path())?;
+        assert!(result.is_none(), "missing file must yield None, not Err");
+        Ok(())
+    }
+
+    #[test]
     fn apply_to_server_config_clamps_perlcritic_severity() {
         let mut config = ServerConfig::default();
         let mut project = ProjectConfig::default();
@@ -973,6 +1078,11 @@ perltidy_extra_args = ["-noll"]
         #[cfg(not(windows))]
         let input = " lib :local/lib::lib: ";
         let parsed = WorkspaceConfig::parse_perl5lib(input);
+        // normalize_include_path round-trips through PathBuf, which emits the
+        // platform-native separator.  Gate the expected value accordingly.
+        #[cfg(windows)]
+        assert_eq!(parsed, vec!["lib", "local\\lib"]);
+        #[cfg(not(windows))]
         assert_eq!(parsed, vec!["lib", "local/lib"]);
     }
 
@@ -990,6 +1100,10 @@ perltidy_extra_args = ["-noll"]
             "vendor/lib".to_string(),
         ]);
 
+        // normalize_include_path uses PathBuf internally, so separators are platform-native.
+        #[cfg(windows)]
+        assert_eq!(paths, vec!["local\\lib", "vendor\\lib", "lib"]);
+        #[cfg(not(windows))]
         assert_eq!(paths, vec!["local/lib", "vendor/lib", "lib"]);
     }
 
@@ -1007,6 +1121,10 @@ perltidy_extra_args = ["-noll"]
             "lib".to_string(),
         ]);
 
+        // normalize_include_path uses PathBuf internally, so separators are platform-native.
+        #[cfg(windows)]
+        assert_eq!(paths, vec!["lib", "local\\lib", "vendor\\lib"]);
+        #[cfg(not(windows))]
         assert_eq!(paths, vec!["lib", "local/lib", "vendor/lib"]);
     }
 
@@ -1050,5 +1168,35 @@ perltidy_extra_args = ["-noll"]
 
         let paths = config.effective_include_paths(&["./lib/".to_string(), " ./ ".to_string()]);
         assert_eq!(paths, vec!["lib", "."]);
+    }
+
+    /// Security regression: workspace settings must not be able to redirect the
+    /// Perl interpreter / argv used for the @INC probe (issue #3729). A hostile
+    /// project could otherwise execute arbitrary code at config-load time.
+    #[test]
+    fn workspace_config_ignores_untrusted_perl_probe_settings() {
+        let mut config = WorkspaceConfig::default();
+        config.update_from_value(&serde_json::json!({
+            "workspace": {
+                "perlPath": "/opt/custom/perl",
+                "perlArgs": ["-I", "/tmp/custom/lib"]
+            }
+        }));
+        assert!(config.perl_path.is_none(), "perlPath from workspace must be ignored");
+        assert!(config.perl_args.is_empty(), "perlArgs from workspace must be ignored");
+    }
+    #[test]
+    fn parse_perl_inc_output_filters_dynamic_hook_entries() {
+        let parsed = WorkspaceConfig::parse_perl_inc_output(
+            "lib\nCODE(0x123)\nARRAY(0xabc)\nHASH(0xdef)\n/usr/lib/perl5\n",
+        );
+        assert_eq!(parsed, vec![PathBuf::from("lib"), PathBuf::from("/usr/lib/perl5")]);
+    }
+
+    #[test]
+    fn parse_perl_inc_output_dedupes_and_drops_dot() {
+        let parsed =
+            WorkspaceConfig::parse_perl_inc_output("lib\n.\nlib\n/usr/lib/perl5\n/usr/lib/perl5\n");
+        assert_eq!(parsed, vec![PathBuf::from("lib"), PathBuf::from("/usr/lib/perl5")]);
     }
 }

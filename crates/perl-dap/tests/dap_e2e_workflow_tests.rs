@@ -12,6 +12,7 @@
 mod common;
 
 use common::{DapWorkflowSession, perl_available, workflow_timeout};
+use serde_json::Value;
 use std::fs::write;
 use tempfile::tempdir;
 
@@ -440,5 +441,64 @@ fn test_e2e_globals_scope_inspection() -> TestResult {
 
     session.disconnect()?;
 
+    Ok(())
+}
+
+// ─── Test 8: locals payload contract for variables pane ───────────────────────
+
+/// Validates that locals inspection returns a complete variables payload shape
+/// in a real `perl -d` workflow.
+///
+/// This is high-impact because editor variable panes require `name`, `value`,
+/// and `variablesReference` to render and expand rows correctly.
+#[test]
+fn test_e2e_locals_scope_payload_contract() -> TestResult {
+    if !perl_available() {
+        eprintln!("Skipping test_e2e_locals_scope_payload_contract - perl not available");
+        return Ok(());
+    }
+
+    let workspace = tempdir()?;
+    let script = workspace.path().join("workflow_locals_contract.pl");
+    write(&script, workflow_script_content())?;
+
+    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+
+    let timeout = workflow_timeout();
+    let mut session = DapWorkflowSession::new(timeout)?;
+
+    session.launch(&script_str)?;
+    session.set_breakpoints(&script_str, &[BP_LINE_2])?;
+    session.configuration_done()?;
+
+    let stopped = session.wait_stopped()?;
+    assert_eq!(
+        stopped.reason, "breakpoint",
+        "stopped reason must be `breakpoint`, got `{}`",
+        stopped.reason
+    );
+
+    let (frame_id, _, _frame_line) = session.stack_trace(stopped.thread_id)?;
+
+    let locals_ref = session.scopes_locals_ref(frame_id)?;
+    let locals = session.variables(locals_ref)?;
+    assert!(!locals.is_empty(), "locals scope should not be empty at breakpoint");
+
+    for variable in &locals {
+        let name = variable.get("name").and_then(Value::as_str).unwrap_or("");
+        let value = variable.get("value").and_then(Value::as_str).unwrap_or("");
+        let vars_ref = variable.get("variablesReference").and_then(Value::as_i64).unwrap_or(-1);
+        assert!(!name.is_empty(), "locals variable must include a non-empty `name`: {variable:?}");
+        assert!(
+            !value.is_empty(),
+            "locals variable `{name}` must include a non-empty `value`: {variable:?}"
+        );
+        assert!(
+            vars_ref >= 0,
+            "locals variable `{name}` must include a numeric `variablesReference`: {variable:?}"
+        );
+    }
+
+    session.disconnect()?;
     Ok(())
 }

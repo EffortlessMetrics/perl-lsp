@@ -122,43 +122,55 @@ fn install_hint(program: &str) -> &'static str {
 }
 
 fn has_command(program: &str) -> bool {
-    if Path::new(program).exists() {
-        return true;
+    find_command_path(program).is_some()
+}
+
+fn command_path(program: &str) -> Option<String> {
+    find_command_path(program).map(|candidate| candidate.to_string_lossy().to_string())
+}
+
+fn find_command_path(program: &str) -> Option<std::path::PathBuf> {
+    let direct = Path::new(program);
+    if is_executable_file(direct) {
+        return Some(direct.to_path_buf());
     }
 
-    env::var_os("PATH").is_some_and(|paths| {
-        env::split_paths(&paths).any(|path| {
+    env::var_os("PATH").and_then(|paths| {
+        env::split_paths(&paths).find_map(|path| {
             #[cfg(windows)]
             {
-                let mut candidate = path.join(format!("{program}.exe"));
-                if candidate.exists() {
-                    return true;
+                for candidate in [
+                    path.join(program),
+                    path.join(format!("{program}.exe")),
+                    path.join(format!("{program}.bat")),
+                    path.join(format!("{program}.cmd")),
+                ] {
+                    if is_executable_file(&candidate) {
+                        return Some(candidate);
+                    }
                 }
-                candidate = path.join(format!("{program}.bat"));
-                if candidate.exists() {
-                    return true;
-                }
-                path.join(program).exists()
+                None
             }
 
             #[cfg(not(windows))]
             {
-                path.join(program).exists()
+                let candidate = path.join(program);
+                is_executable_file(&candidate).then_some(candidate)
             }
         })
     })
 }
 
-fn command_path(program: &str) -> Option<String> {
-    if Path::new(program).is_file() {
-        return Some(program.to_string());
-    }
-    env::var_os("PATH").and_then(|paths| {
-        env::split_paths(&paths)
-            .map(|path| path.join(program))
-            .find(|candidate| candidate.is_file())
-            .map(|candidate| candidate.to_string_lossy().to_string())
-    })
+#[cfg(unix)]
+fn is_executable_file(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    fs::metadata(path)
+        .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+fn is_executable_file(path: &Path) -> bool {
+    path.is_file()
 }
 
 fn get_installed_rustup_components() -> Option<String> {
@@ -341,7 +353,19 @@ fn fail(message: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_hook_text;
+    use super::{find_command_path, normalize_hook_text};
+    use std::fs;
+
+    #[cfg(unix)]
+    fn set_executable(path: &std::path::Path) {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(path).expect("metadata").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(path, perms).expect("set perms");
+    }
+
+    #[cfg(not(unix))]
+    fn set_executable(_path: &std::path::Path) {}
 
     #[test]
     fn normalize_hook_text_removes_crlf_and_trailing_blank_lines() {
@@ -355,5 +379,26 @@ mod tests {
         let input = "line1\n\nline3\n";
         let normalized = normalize_hook_text(input);
         assert_eq!(normalized, "line1\n\nline3");
+    }
+
+    #[test]
+    fn find_command_path_requires_executable_for_direct_paths() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let candidate = temp_dir.path().join("doctor-test");
+        fs::write(&candidate, "#!/usr/bin/env bash\nexit 0\n").expect("write file");
+
+        #[cfg(unix)]
+        {
+            assert!(find_command_path(candidate.to_str().expect("path")).is_none());
+
+            set_executable(&candidate);
+            assert!(find_command_path(candidate.to_str().expect("path")).is_some());
+        }
+
+        #[cfg(not(unix))]
+        {
+            set_executable(&candidate);
+            assert!(find_command_path(candidate.to_str().expect("path")).is_some());
+        }
     }
 }

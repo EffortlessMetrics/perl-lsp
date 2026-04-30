@@ -5,7 +5,7 @@
 pub fn format_command_args(args: &[String]) -> Vec<String> {
     args.iter()
         .map(|arg| {
-            if arg.contains(' ') {
+            if arg.is_empty() || arg.chars().any(char::is_whitespace) {
                 #[cfg(windows)]
                 {
                     format!("\"{}\"", arg.replace('"', "\\\""))
@@ -50,6 +50,17 @@ mod tests {
         let args: Vec<String> = vec![];
         let formatted = format_command_args(&args);
         assert!(formatted.is_empty());
+    }
+
+    #[test]
+    fn empty_arg_is_preserved_via_quotes() {
+        let args = vec![String::new()];
+        let formatted = format_command_args(&args);
+        assert_eq!(formatted.len(), 1);
+        #[cfg(windows)]
+        assert_eq!(formatted[0], "\"\"");
+        #[cfg(not(windows))]
+        assert_eq!(formatted[0], "''");
     }
 
     #[cfg(not(windows))]

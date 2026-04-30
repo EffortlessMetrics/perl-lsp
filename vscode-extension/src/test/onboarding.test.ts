@@ -13,11 +13,14 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import {
   OnboardingManager,
   HealthCheckResult,
   HealthCheckStatus,
   selectWindowsCommandCandidate,
+  resolveUnixShellInvocationFallback,
+  toPosixShellCommand,
   classifyStartupFailure,
 } from '../onboarding';
 
@@ -148,6 +151,48 @@ describe('OnboardingManager.checkPerltidyInstalled', () => {
   });
 });
 
+describe('OnboardingManager.checkPerlcriticSetup (tilde expansion)', () => {
+  // Use a unique temp file name to avoid collisions across parallel test runs.
+  // We write inside os.homedir() because resolveUserPath expands `~/` to
+  // os.homedir() and we need fs.existsSync to confirm the expansion is correct.
+  // The file is cleaned up in a `finally` block regardless of test outcome.
+  test('accepts ~/ profile path when file exists in the home directory', async () => {
+    const profileName = `.perlcritic-test-${Date.now()}-${process.pid}.rc`;
+    const profilePath = path.join(os.homedir(), profileName);
+    let profileWritten = false;
+    try {
+      fs.writeFileSync(profilePath, 'severity = 3\n');
+      profileWritten = true;
+
+      (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+        get: (key: string, defaultValue?: unknown) => {
+          if (key === 'perlcritic') {
+            return {
+              enabled: true,
+              profile: `~/${profileName}`,
+            };
+          }
+          return defaultValue;
+        },
+      }));
+
+      const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
+      mgr._execCheck = jest.fn(() =>
+        Promise.resolve({ stdout: 'Perl::Critic version 1.156', stderr: '' }),
+      );
+
+      const result = await mgr.checkPerlcriticSetup();
+      expect(result.ok).toBe(true);
+      expect(result.status).toBe(HealthCheckStatus.Ok);
+      expect(result.detail).toBe('perlcritic found');
+    } finally {
+      if (profileWritten) {
+        fs.rmSync(profilePath, { force: true });
+      }
+    }
+  });
+});
+
 describe('selectWindowsCommandCandidate', () => {
   test('prefers executable or wrapper paths over extensionless shims', () => {
     const selected = selectWindowsCommandCandidate(
@@ -163,6 +208,109 @@ describe('selectWindowsCommandCandidate', () => {
 
   test('returns null for empty where output', () => {
     expect(selectWindowsCommandCandidate(' \r\n \r\n')).toBeNull();
+  });
+});
+
+describe('toPosixShellCommand', () => {
+  test('quotes command and arguments for safe shell execution', () => {
+    const command = toPosixShellCommand(
+      'perl',
+      ['-e', "print q{can't fail}"],
+    );
+
+    expect(command).toBe("'perl' '-e' 'print q{can'\\''t fail}'");
+  });
+});
+
+describe('resolveUnixShellInvocationFallback', () => {
+  const originalPlatform = process.platform;
+  const originalShell = process.env.SHELL;
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform });
+    if (originalShell === undefined) {
+      delete process.env.SHELL;
+    } else {
+      process.env.SHELL = originalShell;
+    }
+  });
+
+  test('returns shell fallback invocation on unix ENOENT errors', () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+    process.env.SHELL = '/bin/zsh';
+
+    const fallback = resolveUnixShellInvocationFallback(
+      { command: 'perl', args: ['-e', 'print $]'] },
+      { code: 'ENOENT' },
+    );
+
+    expect(fallback).toEqual({
+      command: '/bin/zsh',
+      args: ['-lc', "'perl' '-e' 'print $]'"],
+    });
+  });
+
+  test('returns null when no shell is available', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    delete process.env.SHELL;
+
+    const fallback = resolveUnixShellInvocationFallback(
+      { command: 'perl', args: ['-e', 'print $]'] },
+      { code: 'ENOENT' },
+    );
+
+    expect(fallback).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkPerlcriticSetup
+// ---------------------------------------------------------------------------
+
+describe('OnboardingManager.checkPerlcriticSetup', () => {
+  const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+
+  afterEach(() => {
+    (vscode.workspace as any).workspaceFolders = originalWorkspaceFolders;
+    jest.restoreAllMocks();
+  });
+
+  test('resolves relative perlcritic profile paths from workspace root', async () => {
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ob-critic-'));
+    const configDir = path.join(workspaceRoot, 'config');
+    const profilePath = path.join(configDir, 'perlcriticrc');
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(profilePath, 'severity = 3\n');
+    (vscode.workspace as any).workspaceFolders = [{ uri: { fsPath: workspaceRoot } }];
+    jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+      get: jest.fn(() => ({ enabled: true, profile: 'config/perlcriticrc' })),
+    } as any);
+
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
+    mgr._execCheck = jest.fn(() => Promise.resolve({ stdout: 'perlcritic 1.148', stderr: '' }));
+    const result = await mgr.checkPerlcriticSetup();
+
+    expect(result.ok).toBe(true);
+    fs.rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  test('skips profile existence check when workspace is undefined and path is relative', async () => {
+    // When no workspace folder is open, a relative profile path cannot be resolved
+    // to an absolute location.  The health check must skip the fs.existsSync probe
+    // and proceed as if no profile is configured (i.e. not warn "profile not found").
+    (vscode.workspace as any).workspaceFolders = undefined;
+    jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+      get: jest.fn(() => ({ enabled: true, profile: 'config/perlcriticrc' })),
+    } as any);
+
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
+    mgr._execCheck = jest.fn(() => Promise.resolve({ stdout: 'perlcritic 1.148', stderr: '' }));
+    const result = await mgr.checkPerlcriticSetup();
+
+    // Must not return a "profile not found" warning — without a workspace root
+    // we cannot verify existence, so we should proceed to check the binary.
+    expect(result.ok).toBe(true);
+    expect(result.status).not.toBe('warning');
   });
 });
 

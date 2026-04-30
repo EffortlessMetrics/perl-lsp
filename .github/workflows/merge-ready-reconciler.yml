@@ -1,0 +1,86 @@
+name: Merge Ready Reconciler
+
+on:
+  schedule:
+    # Run every 15 minutes — apply mode by default.
+    - cron: '*/15 * * * *'
+  push:
+    branches:
+      - master
+  pull_request:
+    # Deliberately exclude `labeled` / `unlabeled` — the reconciler itself
+    # adds/removes labels via gh API, which would fire those events and
+    # re-trigger this workflow in an infinite feedback loop. `synchronize`
+    # covers commits-pushed-to-PR cases; `opened` / `reopened` cover entry.
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+    inputs:
+      advisory:
+        description: 'Emergency rollback: run in dry-run advisory mode (default false = apply)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+env:
+  # Set RECONCILER_DISABLED=true to globally disable apply mode without reverting this PR.
+  # Example: add `RECONCILER_DISABLED: 'true'` to repo variables or environment secrets.
+  RECONCILER_DISABLED: ${{ vars.RECONCILER_DISABLED || 'false' }}
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    # Job-level gate satisfies CI workflow spend audit
+    # (`cargo xtask ci-audit-workflows`). The reconciler is a queue-wide
+    # sweep and is intended to fire on every event listed in `on:` above —
+    # schedule, push to master, pull_request (open/reopen/sync), and
+    # workflow_dispatch. Naming each one keeps the surface explicit so a
+    # future trigger addition has to consciously opt the job in.
+    if: >
+      github.event_name == 'schedule' ||
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-xtask-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-xtask-
+
+      - name: Apply reconcile (default)
+        if: >
+          env.RECONCILER_DISABLED != 'true' &&
+          (github.event_name != 'workflow_dispatch' || inputs.advisory != 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: cargo xtask merge-ready reconcile-queue --apply
+
+      - name: Advisory dry-run (emergency rollback or manual override)
+        if: >
+          env.RECONCILER_DISABLED == 'true' ||
+          (github.event_name == 'workflow_dispatch' && inputs.advisory == 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: cargo xtask merge-ready reconcile-queue --dry-run
+
+      - name: Upload receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: queue-reconcile-receipt
+          path: target/receipts/queue-reconcile.json
+          if-no-files-found: ignore

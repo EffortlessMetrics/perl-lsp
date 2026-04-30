@@ -47,6 +47,18 @@ pub fn extract_pod_from_file(path: &Path) -> io::Result<PodDoc> {
 }
 
 /// Extract POD documentation from a string of Perl source code.
+///
+/// Parses POD markup from the source string and extracts structured documentation
+/// for the NAME, SYNOPSIS, DESCRIPTION sections, and method documentation (head2).
+///
+/// # Arguments
+///
+/// * `source` - Perl source code containing POD documentation
+///
+/// # Returns
+///
+/// A `PodDoc` containing the extracted documentation fields. Empty fields indicate
+/// the corresponding POD section was not present in the source.
 #[must_use]
 pub fn extract_pod(source: &str) -> PodDoc {
     let mut doc = PodDoc::default();
@@ -161,6 +173,22 @@ enum Section {
     Other(()),
 }
 
+/// Stores accumulated body text into the appropriate `PodDoc` field.
+///
+/// Called when a POD section ends (new section starts, `=cut`, or EOF).
+/// The body text is cleaned of POD formatting and stored based on section type:
+/// - `Name` → `PodDoc::name`
+/// - `Synopsis` → `PodDoc::synopsis`
+/// - `Description` → `PodDoc::description` (first paragraph only)
+/// - `Method(name)` → `PodDoc::methods` entry
+/// - `Other` → ignored
+///
+/// # Arguments
+///
+/// * `doc` - The `PodDoc` to store extracted content into
+/// * `section` - The section type being flushed
+/// * `body` - Accumulated raw text for the section
+/// * `_in_over` - Whether inside an `=over`/`=back` block (unused, for future expansion)
 fn flush_section(doc: &mut PodDoc, section: &Option<Section>, body: &str, _in_over: bool) {
     let section = match section {
         Some(s) => s,
@@ -271,7 +299,29 @@ fn strip_pod_formatting(text: &str) -> String {
 /// Encodes spaces (most common in POD section names like `L<Module/"Section Name">`)
 /// and other characters that would break the markdown `[text](url)` parser.
 fn encode_pod_link_target(target: &str) -> String {
-    target.replace(' ', "%20")
+    let mut encoded = String::with_capacity(target.len());
+    for byte in target.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b':' | b'/') {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    encoded
+}
+
+fn escape_markdown_link_text(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '\\' | '[' | ']' => {
+                escaped.push('\\');
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
 }
 
 /// Extract a markdown link from a POD `L<>` formatting code.
@@ -288,22 +338,32 @@ fn encode_pod_link_target(target: &str) -> String {
 fn extract_link_display(link: &str) -> String {
     // L<text|target> — explicit display text before the pipe
     if let Some(pipe_pos) = link.find('|') {
-        let display = strip_pod_formatting(&link[..pipe_pos]);
+        let display = escape_markdown_link_text(&strip_pod_formatting(&link[..pipe_pos]));
         let target = encode_pod_link_target(link[pipe_pos + 1..].trim());
         return format!("[{display}](perl-module://{target})");
     }
     // L<Module/section> — module + section, display is just the module part
     if let Some(slash_pos) = link.find('/') {
-        let module = strip_pod_formatting(&link[..slash_pos]);
+        let module = escape_markdown_link_text(&strip_pod_formatting(&link[..slash_pos]));
         let target = encode_pod_link_target(link.trim());
         return format!("[{module}](perl-module://{target})");
     }
     // L<Module::Name> — simple module reference
-    let display = strip_pod_formatting(link);
+    let display = escape_markdown_link_text(&strip_pod_formatting(link));
     let target = encode_pod_link_target(link.trim());
     format!("[{display}](perl-module://{target})")
 }
 
+/// Decodes a POD E<> entity to its corresponding character.
+///
+/// Handles standard POD escape sequences:
+/// - `E<lt>` → `<`
+/// - `E<gt>` → `>`
+/// - `E<amp>` → `&`
+/// - `E<quot>` → `"`
+/// - `E<apos>` → `'`
+///
+/// Unknown entities are returned as-is.
 fn decode_pod_entity(entity: &str) -> String {
     match entity {
         "lt" => "<".to_string(),
