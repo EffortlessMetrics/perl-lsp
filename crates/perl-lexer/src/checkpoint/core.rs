@@ -77,8 +77,8 @@ impl LexerCheckpoint {
     }
 
     /// Calculate the difference between two checkpoints
-    pub fn diff(&self, other: &Self) -> crate::checkpoint::CheckpointDiff {
-        crate::checkpoint::CheckpointDiff {
+    pub fn diff(&self, other: &Self) -> super::CheckpointDiff {
+        super::CheckpointDiff {
             position_delta: self.position as isize - other.position as isize,
             mode_changed: self.mode != other.mode,
             delimiter_stack_changed: self.delimiter_stack != other.delimiter_stack,
@@ -93,7 +93,22 @@ impl LexerCheckpoint {
         }
     }
 
-    /// Apply an edit to this checkpoint
+    /// Apply an edit to this checkpoint.
+    ///
+    /// # Behavior
+    ///
+    /// * Edit before the checkpoint and ending strictly before it: the byte
+    ///   `position` is shifted by `new_len - old_len`. The `current_pos`
+    ///   line/column tracker is reset to `Position::start()` because we
+    ///   cannot recompute line/column without rescanning the input.
+    /// * Edit overlapping the checkpoint: the checkpoint is invalidated --
+    ///   `position` is rewound to `start`, lexer mode and stacks are reset to
+    ///   defaults, and `current_pos` is reset to `Position::start()`.
+    /// * Edit at or after the checkpoint: no change.
+    ///
+    /// `current_pos` is intentionally reset in both the "shifted" and
+    /// "invalidated" branches so callers always observe a known sentinel value
+    /// and must rescan from `position` to recover accurate line/column data.
     pub fn apply_edit(&mut self, start: usize, old_len: usize, new_len: usize) {
         if self.position > start {
             if self.position >= start.saturating_add(old_len) {
