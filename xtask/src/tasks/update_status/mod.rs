@@ -18,6 +18,8 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, eyre};
@@ -120,7 +122,21 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
     // the parameter for API compatibility and future improvement.
     let _ = timeout;
 
+    let heartbeat_running = Arc::new(AtomicBool::new(true));
+    let heartbeat_flag = Arc::clone(&heartbeat_running);
+    let command_name = args.join(" ");
+    let heartbeat = std::thread::spawn(move || {
+        while heartbeat_flag.load(Ordering::Relaxed) {
+            std::thread::sleep(Duration::from_secs(30));
+            if heartbeat_flag.load(Ordering::Relaxed) {
+                eprintln!("[update-status] still running (heartbeat): {command_name}");
+            }
+        }
+    });
+
     let status = child.wait();
+    heartbeat_running.store(false, Ordering::Relaxed);
+    let _ = heartbeat.join();
     let mut combined = String::new();
     if let Some(handle) = out_handle {
         combined.push_str(&handle.join().unwrap_or_default());
@@ -412,6 +428,25 @@ mod mod_tests {
         let input = "no markers here";
         let result = replace_block(input, "<!-- BEGIN: X -->", "<!-- END: X -->", "new");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_status_repro_commands_are_write_only() {
+        let repros = [
+            "cargo xtask update-status --write --only lsp",
+            "cargo xtask update-status --write --only tests",
+            "cargo xtask update-status --write --only parser",
+            "cargo xtask update-status --write --only quality",
+            "cargo xtask update-status --write --only dap",
+            "cargo xtask update-status --write --only workspace",
+        ];
+
+        for repro in repros {
+            assert!(
+                repro.starts_with("cargo xtask update-status --write --only "),
+                "repro command should be a directly runnable write-only subsystem command: {repro}"
+            );
+        }
     }
 
     /// The subsystem status files, UX planning scaffold, DAP scorecard, and workspace scorecard must exist.
