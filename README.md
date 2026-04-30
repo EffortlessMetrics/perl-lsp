@@ -31,13 +31,13 @@ These are behavioral and corpus-backed signals, not feature inventory counts. Pr
 | Area | Current signal |
 |---|---:|
 | Release track | `v0.13.0-alpha` release prep |
-| Published crate surface | 31 crates after the v0.13 collapse |
+| Published crate surface | 34 crates after the v0.13 collapse |
 | Ubuntu system Perl corpus | 94.5% clean (`2825/2990`) |
 | CPAN top 1000 corpus | 95.3% clean (`8931/9372`) |
 | Project parser corpus | 100.0% clean (`95/95`) |
 | Parser NodeKind coverage | 65/69 |
 | Parser reliability | 0 project-corpus timeouts / 0 panics |
-| Editor UX scenarios | 23 scenario files tracked |
+| Editor UX scenarios | 27 scenario files tracked |
 | First-five-minutes UX workflows | 21 workflows tracked |
 | Issue-regression UX workflows | 13 workflows tracked |
 | Workspace stale-index defects | 0 / 7 tested scenarios |
