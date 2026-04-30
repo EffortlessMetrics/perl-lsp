@@ -378,3 +378,53 @@ fn bdd_given_map_and_grep_pipeline_when_parsed_then_higher_order_blocks_are_reta
 
     Ok(())
 }
+
+#[test]
+fn bdd_given_eval_block_with_localized_error_when_parsed_then_eval_and_local_nodes_are_preserved()
+-> TestResult {
+    // Given: a developer wraps risky logic in eval and localizes $@ handling.
+    let code = r#"
+        my $result;
+        {
+            local $@;
+            eval {
+                die "bad input";
+            };
+            if ($@) {
+                $result = "failed";
+            }
+        }
+    "#;
+
+    // When: the parser processes exception-prone code.
+    let sexp = parse_sexp(code)?;
+
+    // Then: eval/local/if structure should remain visible and parse should be clean.
+    assert!(sexp.contains("(eval"), "Expected Eval node in: {sexp}");
+    assert!(sexp.contains("(local"), "Expected Local node in: {sexp}");
+    assert!(sexp.contains("(if "), "Expected If node in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_map_and_grep_pipeline_when_parsed_then_high_order_ops_and_regex_match_are_retained()
+-> TestResult {
+    // Given: a developer transforms and filters a list using map/grep.
+    let code = r#"
+        my @values = qw(alpha beta gamma);
+        my @upper = map { uc $_ } grep { $_ =~ /a/ } @values;
+    "#;
+
+    // When: parser builds the AST for list-processing expressions.
+    let sexp = parse_sexp(code)?;
+
+    // Then: map/grep and regex matching should remain explicit in AST shape.
+    assert!(sexp.contains("(call map"), "Expected Map node in: {sexp}");
+    assert!(sexp.contains("(call grep"), "Expected Grep node in: {sexp}");
+    assert!(sexp.contains("(match"), "Expected RegexMatch node in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
