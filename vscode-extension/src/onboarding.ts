@@ -8,6 +8,8 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { execFile } from 'child_process';
 import * as vscode from 'vscode';
 
@@ -95,6 +97,19 @@ type ExecCheckFn = (
 interface ExecInvocation {
   command: string;
   args: string[];
+}
+
+function resolveUserPath(rawPath: string): string {
+  const trimmedPath = rawPath.trim();
+  if (trimmedPath === '~') {
+    return os.homedir();
+  }
+
+  if (trimmedPath.startsWith('~/') || trimmedPath.startsWith('~\\')) {
+    return path.join(os.homedir(), trimmedPath.slice(2));
+  }
+
+  return trimmedPath;
 }
 
 // ---------------------------------------------------------------------------
@@ -210,7 +225,10 @@ export class OnboardingManager {
     const label = 'perlcritic';
     const perlcriticConfig = vscode.workspace.getConfiguration('perl-lsp').get<any>('perlcritic', {});
     const enabled = Boolean(perlcriticConfig?.enabled);
-    const profile = typeof perlcriticConfig?.profile === 'string' ? perlcriticConfig.profile.trim() : '';
+    const profile =
+      typeof perlcriticConfig?.profile === 'string'
+        ? resolveUserPath(perlcriticConfig.profile)
+        : '';
 
     if (!enabled) {
       return {
@@ -221,12 +239,13 @@ export class OnboardingManager {
       };
     }
 
-    if (profile && !fs.existsSync(profile)) {
+    const resolvedProfile = this.resolvePerlcriticProfilePath(profile);
+    if (resolvedProfile && !fs.existsSync(resolvedProfile)) {
       return {
         label,
         ok: false,
         status: HealthCheckStatus.Warning,
-        detail: `Configured perlcritic profile was not found: ${profile}`,
+        detail: `Configured perlcritic profile was not found: ${resolvedProfile}`,
       };
     }
 
@@ -249,6 +268,23 @@ export class OnboardingManager {
           'Install via: cpanm Perl::Critic',
       };
     }
+  }
+
+  private resolvePerlcriticProfilePath(profile: string): string | undefined {
+    if (!profile) {
+      return undefined;
+    }
+
+    if (path.isAbsolute(profile)) {
+      return profile;
+    }
+
+    const primaryWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    // When no workspace folder is open we cannot resolve a relative path to a
+    // meaningful absolute location (CWD of the extension host is not the user's
+    // project directory).  Return `undefined` so the caller skips the existence
+    // check rather than silently probing the wrong location.
+    return primaryWorkspace ? path.resolve(primaryWorkspace, profile) : undefined;
   }
 
   /**
@@ -391,14 +427,23 @@ function defaultExecCheck(
 ): Promise<{ stdout: string; stderr: string }> {
   const initialInvocation = { command: cmd, args };
   return runExecInvocation(initialInvocation).catch(async (err: unknown) => {
-    const fallbackInvocation = await resolveWindowsInvocationFallback(
+    const windowsFallback = await resolveWindowsInvocationFallback(
       initialInvocation,
       err,
     );
-    if (!fallbackInvocation) {
-      throw err;
+    if (windowsFallback) {
+      return runExecInvocation(windowsFallback);
     }
-    return runExecInvocation(fallbackInvocation);
+
+    const unixShellFallback = resolveUnixShellInvocationFallback(
+      initialInvocation,
+      err,
+    );
+    if (unixShellFallback) {
+      return runExecInvocation(unixShellFallback);
+    }
+
+    throw err;
   });
 }
 
@@ -461,6 +506,40 @@ function resolveWindowsCommandCandidate(command: string): Promise<string | null>
       resolve(selectWindowsCommandCandidate(stdout));
     });
   });
+}
+
+export function resolveUnixShellInvocationFallback(
+  invocation: ExecInvocation,
+  err: unknown,
+): ExecInvocation | null {
+  if (
+    process.platform === 'win32' ||
+    !isSpawnNotFound(err) ||
+    invocation.command.includes('/') ||
+    invocation.command.includes('\\')
+  ) {
+    return null;
+  }
+
+  const shell = process.env.SHELL?.trim();
+  if (!shell) {
+    return null;
+  }
+
+  return {
+    command: shell,
+    // Warp and other terminals often expose PATH/tooling via shell startup
+    // scripts; using login-shell exec improves compatibility for health checks.
+    args: ['-lc', toPosixShellCommand(invocation.command, invocation.args)],
+  };
+}
+
+export function toPosixShellCommand(command: string, args: string[]): string {
+  return [command, ...args].map(escapePosixShellArg).join(' ');
+}
+
+function escapePosixShellArg(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 export function selectWindowsCommandCandidate(stdout: string): string | null {

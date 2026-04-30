@@ -209,6 +209,34 @@ fn initialize_with_legacy_root_path_fallback() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
+fn initialize_with_legacy_root_path_sets_workspace_folder_path()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (server, _buffer) = create_test_server();
+
+    let result = send_request(
+        &server,
+        "initialize",
+        Some(json!(1)),
+        json!({
+            "rootPath": "/legacy/workspace",
+            "capabilities": {}
+        }),
+    );
+
+    result.ok_or("Expected initialize result")?;
+
+    let folders = server.all_workspace_folders();
+    assert_eq!(folders.len(), 1, "expected one workspace folder from rootPath");
+    assert_eq!(
+        folders.first().and_then(|f| f.path.as_ref()).map(|p| p.to_string_lossy().to_string()),
+        Some("/legacy/workspace".to_string()),
+        "legacy rootPath should populate folder.path for downstream workspace features"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn initialize_windows_root_path_conversion() -> Result<(), Box<dyn std::error::Error>> {
     let (server, _buffer) = create_test_server();
 
@@ -332,6 +360,32 @@ fn configuration_returns_system_inc_disabled() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
+fn configuration_returns_perl5lib_defaults() -> Result<(), Box<dyn std::error::Error>> {
+    let (server, _buffer) = create_test_server();
+
+    initialize_server(&server);
+
+    let result = send_request(
+        &server,
+        "workspace/configuration",
+        Some(json!(2)),
+        json!({
+            "items": [
+                { "section": "perl.workspace.usePerl5lib" },
+                { "section": "perl.workspace.perl5libPrecedence" }
+            ]
+        }),
+    );
+
+    let items = result.ok_or("Expected configuration result")?;
+    let array = items.as_array().ok_or("Expected array")?;
+    assert_eq!(array.len(), 2);
+    assert_eq!(array[0], json!(true));
+    assert_eq!(array[1], json!("prepend"));
+    Ok(())
+}
+
+#[test]
 fn configuration_returns_resolution_timeout() -> Result<(), Box<dyn std::error::Error>> {
     let (server, _buffer) = create_test_server();
 
@@ -407,6 +461,50 @@ fn did_change_configuration_updates_workspace_settings() -> Result<(), Box<dyn s
     // Should now have custom paths
     assert!(paths.contains(&json!("custom/lib")));
     assert!(paths.contains(&json!("vendor")));
+    Ok(())
+}
+
+#[test]
+fn did_change_configuration_updates_perl5lib_workspace_settings()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (server, _buffer) = create_test_server();
+
+    initialize_server(&server);
+
+    let req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None,
+        method: "workspace/didChangeConfiguration".into(),
+        params: Some(json!({
+            "settings": {
+                "perl": {
+                    "workspace": {
+                        "usePerl5lib": false,
+                        "perl5libPrecedence": "append"
+                    }
+                }
+            }
+        })),
+    };
+    let _ = server.handle_request(req);
+
+    let result = send_request(
+        &server,
+        "workspace/configuration",
+        Some(json!(3)),
+        json!({
+            "items": [
+                { "section": "perl.workspace.usePerl5lib" },
+                { "section": "perl.workspace.perl5libPrecedence" }
+            ]
+        }),
+    );
+
+    let items = result.ok_or("Expected configuration result")?;
+    let array = items.as_array().ok_or("Expected array")?;
+    assert_eq!(array.len(), 2);
+    assert_eq!(array[0], json!(false));
+    assert_eq!(array[1], json!("append"));
     Ok(())
 }
 

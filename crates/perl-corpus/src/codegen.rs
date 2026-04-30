@@ -314,6 +314,7 @@ fn basic_statement() -> impl Strategy<Value = String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn generated_code_is_stable_for_seed() {
@@ -333,5 +334,114 @@ mod tests {
         };
         let code = generate_perl_code_with_options(options);
         assert!(code.is_empty());
+    }
+
+    #[test]
+    fn strategy_indices_cover_all_kinds_when_requested() {
+        let mut rng = StdRng::seed_from_u64(7);
+        let strategy_len = 6;
+        let statements = 30;
+
+        let indices = build_strategy_indices(strategy_len, statements, true, &mut rng);
+        assert_eq!(indices.len(), statements);
+
+        let unique: HashSet<usize> = indices.iter().copied().collect();
+        assert_eq!(
+            unique.len(),
+            strategy_len,
+            "expected all strategy indices to appear at least once"
+        );
+        assert!(unique.iter().all(|idx| *idx < strategy_len));
+    }
+
+    #[test]
+    fn strategy_indices_do_not_repeat_when_budget_is_smaller_than_kind_count() {
+        let mut rng = StdRng::seed_from_u64(11);
+        let strategy_len = 10;
+        let statements = 4;
+
+        let indices = build_strategy_indices(strategy_len, statements, true, &mut rng);
+        assert_eq!(indices.len(), statements);
+
+        let unique: HashSet<usize> = indices.iter().copied().collect();
+        assert_eq!(
+            unique.len(),
+            statements,
+            "expected unique indices when sampling fewer statements than kinds"
+        );
+    }
+
+    proptest! {
+        #[test]
+        fn prop_strategy_indices_stay_in_bounds(
+            strategy_len in 1usize..32,
+            statements in 1usize..128,
+            ensure_coverage in any::<bool>(),
+            seed in any::<u64>(),
+        ) {
+            let mut rng = StdRng::seed_from_u64(seed);
+            let indices = build_strategy_indices(strategy_len, statements, ensure_coverage, &mut rng);
+
+            prop_assert_eq!(indices.len(), statements);
+            prop_assert!(indices.iter().all(|idx| *idx < strategy_len));
+        }
+
+        #[test]
+        fn prop_strategy_indices_cover_all_when_requested(
+            strategy_len in 1usize..24,
+            extra_statements in 0usize..48,
+            seed in any::<u64>(),
+        ) {
+            let statements = strategy_len + extra_statements;
+            let mut rng = StdRng::seed_from_u64(seed);
+            let indices = build_strategy_indices(strategy_len, statements, true, &mut rng);
+
+            let mut seen = vec![false; strategy_len];
+            for idx in indices {
+                seen[idx] = true;
+            }
+
+            prop_assert!(seen.into_iter().all(|v| v));
+        }
+
+        #[test]
+        fn prop_seeded_codegen_is_deterministic_for_options(
+            statements in 0usize..40,
+            seed in any::<u64>(),
+            ensure_coverage in any::<bool>(),
+        ) {
+            let options = CodegenOptions {
+                statements,
+                seed,
+                preamble: Some("use strict;\n".to_string()),
+                ensure_coverage,
+                kinds: vec![
+                    StatementKind::Basic,
+                    StatementKind::ControlFlow,
+                    StatementKind::Regex,
+                ],
+            };
+
+            let first = generate_perl_code_with_options(options.clone());
+            let second = generate_perl_code_with_options(options);
+            prop_assert_eq!(first, second);
+        }
+
+        #[test]
+        fn prop_basic_only_codegen_emits_requested_statement_count(
+            statements in 0usize..50,
+            seed in any::<u64>(),
+        ) {
+            let code = generate_perl_code_with_options(CodegenOptions {
+                statements,
+                seed,
+                preamble: None,
+                ensure_coverage: true,
+                kinds: vec![StatementKind::Basic],
+            });
+
+            let non_empty_line_count = code.lines().filter(|line| !line.trim().is_empty()).count();
+            prop_assert_eq!(non_empty_line_count, statements);
+        }
     }
 }

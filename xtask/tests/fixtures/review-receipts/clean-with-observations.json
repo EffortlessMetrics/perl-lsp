@@ -1,0 +1,19 @@
+{
+  "kind": "review",
+  "producer": "review-bot",
+  "pr": 6853,
+  "head_sha": "1111111111111111111111111111111111111111",
+  "base_sha": "2222222222222222222222222222222222222222",
+  "verdict": "clean",
+  "material_observations": [
+    "Observed only review-receipt schema/docs/tests changes in this diff"
+  ],
+  "negative_checks": [
+    "Did not observe label mutation instructions"
+  ],
+  "blockers": [],
+  "next_routes": [
+    "signoff_clean"
+  ],
+  "supersedes": null
+}

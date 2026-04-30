@@ -1,0 +1,11 @@
+{
+  "name": "workflow change selects parser-ratchet",
+  "changed_files": [
+    ".github/workflows/ci.yml"
+  ],
+  "risk_tags": [],
+  "expected": {
+    "selected": true,
+    "selection_reason": "path matched .github/workflows/**"
+  }
+}

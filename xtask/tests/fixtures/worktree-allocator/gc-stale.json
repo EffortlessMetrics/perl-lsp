@@ -1,0 +1,26 @@
+{
+  "leases": [
+    {
+      "worktree_id": "wt-stale-1",
+      "path": "/tmp/.claude/worktrees/agent-wt-stale-1",
+      "task_id": "task-stale",
+      "pr": 201,
+      "branch": "agent/pr-201",
+      "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "owner": "agent-gc",
+      "lease_expiry": "2026-04-29T00:00:00Z",
+      "last_heartbeat": "2026-04-29T00:00:00Z"
+    },
+    {
+      "worktree_id": "wt-fresh-1",
+      "path": "/tmp/.claude/worktrees/agent-wt-fresh-1",
+      "task_id": "task-fresh",
+      "pr": 202,
+      "branch": "agent/pr-202",
+      "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "owner": "agent-gc",
+      "lease_expiry": "2026-05-01T00:00:00Z",
+      "last_heartbeat": "2026-04-30T12:00:00Z"
+    }
+  ]
+}
