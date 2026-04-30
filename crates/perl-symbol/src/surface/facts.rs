@@ -1,8 +1,11 @@
-use crate::surface::decl::SymbolDecl;
+use crate::surface::{
+    decl::SymbolDecl,
+    r#ref::{SymbolRef, SymbolRefKind},
+};
 use crate::types::SymbolKind;
 use perl_semantic_facts::{
     AnchorFact, AnchorId, Confidence, EdgeFact, EdgeId, EdgeKind, EntityFact, EntityId, EntityKind,
-    FileId, Provenance,
+    FileId, OccurrenceFact, OccurrenceId, OccurrenceKind, Provenance,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -160,6 +163,82 @@ fn stable_id(namespace: &str, name: &str, start: usize, end: usize) -> u64 {
     hash
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SymbolRefSemanticFacts {
+    pub anchors: Vec<AnchorFact>,
+    pub occurrences: Vec<OccurrenceFact>,
+    pub reference_edges: Vec<EdgeFact>,
+}
+
+pub fn symbol_refs_to_semantic_facts(
+    refs: &[SymbolRef],
+    file_id: FileId,
+    resolved_entities: &std::collections::BTreeMap<String, EntityId>,
+) -> SymbolRefSemanticFacts {
+    let mut anchors = Vec::with_capacity(refs.len());
+    let mut occurrences = Vec::with_capacity(refs.len());
+    let mut reference_edges = Vec::new();
+
+    for symbol_ref in refs {
+        let anchor_span = symbol_ref.anchor_span.unwrap_or(symbol_ref.full_span);
+        let anchor_id = AnchorId(stable_id(
+            "ref-anchor",
+            &symbol_ref.qualified_name,
+            anchor_span.0,
+            anchor_span.1,
+        ));
+        anchors.push(AnchorFact {
+            id: anchor_id,
+            file_id,
+            span_start_byte: anchor_span.0 as u32,
+            span_end_byte: anchor_span.1 as u32,
+            scope_id: None,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+
+        let kind = match symbol_ref.kind {
+            SymbolRefKind::Variable(_) => OccurrenceKind::Reference,
+            SymbolRefKind::SubroutineCall => OccurrenceKind::Call,
+        };
+        let entity_id = resolved_entities.get(&symbol_ref.qualified_name).copied();
+        let occurrence_id = OccurrenceId(stable_id(
+            "occurrence",
+            &symbol_ref.qualified_name,
+            symbol_ref.full_span.0,
+            symbol_ref.full_span.1,
+        ));
+        occurrences.push(OccurrenceFact {
+            id: occurrence_id,
+            kind,
+            entity_id,
+            anchor_id,
+            scope_id: None,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+
+        if let Some(to_entity_id) = entity_id {
+            let from_entity_id = to_entity_id;
+            reference_edges.push(EdgeFact {
+                id: EdgeId(stable_id(
+                    "references",
+                    &symbol_ref.qualified_name,
+                    symbol_ref.full_span.0,
+                    symbol_ref.full_span.1,
+                )),
+                kind: EdgeKind::References,
+                from_entity_id,
+                to_entity_id,
+                via_occurrence_id: Some(occurrence_id),
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            });
+        }
+    }
+
+    SymbolRefSemanticFacts { anchors, occurrences, reference_edges }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

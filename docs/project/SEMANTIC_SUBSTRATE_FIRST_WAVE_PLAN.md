@@ -118,7 +118,7 @@ This section is the migration receipt for what has landed versus what remains st
 
 ### Still staged
 
-- **`SymbolRef -> OccurrenceFact` adapter:** not landed; occurrence facts are not yet emitted from reference sites.
+- **`SymbolRef -> OccurrenceFact` adapter:** landed in `perl-symbol` for phase-1 variable/call refs; remaining expansion to later reference forms stays staged.
 - **`ExportInfo -> ExportSet` adapter:** not landed; export analysis remains in legacy format.
 - **Typed reference-edge global index:** not landed; typed-reference behavior is constrained to fixture/regression banks rather than a provider-facing global index.
 

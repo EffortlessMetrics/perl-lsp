@@ -1061,6 +1061,21 @@ pub struct SymbolReference {
     pub kind: ReferenceKind,
 }
 
+#[derive(Debug, Clone)]
+/// Typed global reference edge retained by the workspace index.
+pub struct ReferenceEdge {
+    /// Location of the reference site.
+    pub location: Location,
+    /// Occurrence classification for this edge.
+    pub occurrence_kind: perl_semantic_facts::OccurrenceKind,
+    /// Confidence for this edge classification.
+    pub confidence: perl_semantic_facts::Confidence,
+    /// Provenance used to derive this edge.
+    pub provenance: perl_semantic_facts::Provenance,
+    /// Stable symbol key used in the global reference map.
+    pub symbol_key: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Classification of how a symbol is referenced in Navigate/Analyze workflows.
 pub enum ReferenceKind {
@@ -1166,6 +1181,8 @@ pub struct WorkspaceIndex {
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
     /// Provides O(1) lookup for `find_references()` instead of iterating all files.
     global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
+    /// Global typed reference edges (symbol name -> semantic reference edges).
+    global_reference_edges: Arc<RwLock<HashMap<String, Vec<ReferenceEdge>>>>,
     /// Write-through semantic fact shards keyed by normalized URI.
     fact_shards: Arc<RwLock<HashMap<String, FileFactShard>>>,
     /// Document store for in-memory text
@@ -1509,6 +1526,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
             global_references: Arc::new(RwLock::new(HashMap::new())),
+            global_reference_edges: Arc::new(RwLock::new(HashMap::new())),
             fact_shards: Arc::new(RwLock::new(HashMap::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
@@ -1548,6 +1566,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
+            global_reference_edges: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
             fact_shards: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
@@ -1608,6 +1627,21 @@ impl WorkspaceIndex {
                 locs.retain(|loc| loc.uri != file_uri);
                 if locs.is_empty() {
                     global_refs.remove(name);
+                }
+            }
+        }
+    }
+
+    fn remove_file_global_reference_edges(
+        global_edges: &mut HashMap<String, Vec<ReferenceEdge>>,
+        file_index: &FileIndex,
+        file_uri: &str,
+    ) {
+        for name in file_index.references.keys() {
+            if let Some(edges) = global_edges.get_mut(name) {
+                edges.retain(|edge| edge.location.uri != file_uri);
+                if edges.is_empty() {
+                    global_edges.remove(name);
                 }
             }
         }
@@ -1704,6 +1738,8 @@ impl WorkspaceIndex {
             if let Some(old_index) = files.get(&key) {
                 let mut global_refs = self.global_references.write();
                 Self::remove_file_global_refs(&mut global_refs, old_index, &uri_str);
+                let mut global_edges = self.global_reference_edges.write();
+                Self::remove_file_global_reference_edges(&mut global_edges, old_index, &uri_str);
             }
 
             // Incrementally remove old symbols before inserting new file
@@ -1720,10 +1756,34 @@ impl WorkspaceIndex {
 
             if let Some(file_index) = files.get(&key) {
                 let mut global_refs = self.global_references.write();
+                let mut global_edges = self.global_reference_edges.write();
                 for (name, refs) in &file_index.references {
                     let entry = global_refs.entry(name.clone()).or_default();
+                    let edge_entry = global_edges.entry(name.clone()).or_default();
                     for reference in refs {
                         entry.push(Location { uri: reference.uri.clone(), range: reference.range });
+                        edge_entry.push(ReferenceEdge {
+                            location: Location {
+                                uri: reference.uri.clone(),
+                                range: reference.range,
+                            },
+                            occurrence_kind: match reference.kind {
+                                ReferenceKind::Definition => {
+                                    perl_semantic_facts::OccurrenceKind::Definition
+                                }
+                                ReferenceKind::Import => {
+                                    perl_semantic_facts::OccurrenceKind::Import
+                                }
+                                ReferenceKind::Read => perl_semantic_facts::OccurrenceKind::Read,
+                                ReferenceKind::Write => perl_semantic_facts::OccurrenceKind::Write,
+                                ReferenceKind::Usage => {
+                                    perl_semantic_facts::OccurrenceKind::Reference
+                                }
+                            },
+                            confidence: perl_semantic_facts::Confidence::High,
+                            provenance: perl_semantic_facts::Provenance::ExactAst,
+                            symbol_key: name.clone(),
+                        });
                     }
                 }
             }
@@ -1784,6 +1844,8 @@ impl WorkspaceIndex {
             // Remove from global reference index
             let mut global_refs = self.global_references.write();
             Self::remove_file_global_refs(&mut global_refs, &file_index, &uri_str);
+            let mut global_edges = self.global_reference_edges.write();
+            Self::remove_file_global_reference_edges(&mut global_edges, &file_index, &uri_str);
         }
     }
 
@@ -2192,50 +2254,35 @@ impl WorkspaceIndex {
     /// returning only actual usage sites. This is used by code lens to show
     /// "N references" where N means call sites, not the definition itself.
     pub fn count_usages(&self, symbol_name: &str) -> usize {
-        let files = self.files.read();
+        let global_edges = self.global_reference_edges.read();
         let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
-
-        for (_uri_key, file_index) in files.iter() {
-            if let Some(refs) = file_index.references.get(symbol_name) {
-                for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
-                    seen.insert((
-                        r.uri.clone(),
-                        r.range.start.line,
-                        r.range.start.column,
-                        r.range.end.line,
-                        r.range.end.column,
-                    ));
-                }
+        let mut collect = |edges: &Vec<ReferenceEdge>| {
+            for edge in edges
+                .iter()
+                .filter(|e| e.occurrence_kind != perl_semantic_facts::OccurrenceKind::Definition)
+            {
+                let r = &edge.location.range;
+                seen.insert((
+                    edge.location.uri.clone(),
+                    r.start.line,
+                    r.start.column,
+                    r.end.line,
+                    r.end.column,
+                ));
             }
-
-            if let Some(idx) = symbol_name.rfind("::") {
-                let bare_name = &symbol_name[idx + 2..];
-                if let Some(refs) = file_index.references.get(bare_name) {
-                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
-                        seen.insert((
-                            r.uri.clone(),
-                            r.range.start.line,
-                            r.range.start.column,
-                            r.range.end.line,
-                            r.range.end.column,
-                        ));
-                    }
-                }
-            } else {
-                for (name, refs) in &file_index.references {
-                    if !Self::is_qualified_variant_of(name, symbol_name) {
-                        continue;
-                    }
-
-                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
-                        seen.insert((
-                            r.uri.clone(),
-                            r.range.start.line,
-                            r.range.start.column,
-                            r.range.end.line,
-                            r.range.end.column,
-                        ));
-                    }
+        };
+        if let Some(edges) = global_edges.get(symbol_name) {
+            collect(edges);
+        }
+        if let Some(idx) = symbol_name.rfind("::") {
+            let bare_name = &symbol_name[idx + 2..];
+            if let Some(edges) = global_edges.get(bare_name) {
+                collect(edges);
+            }
+        } else {
+            for (name, edges) in global_edges.iter() {
+                if Self::is_qualified_variant_of(name, symbol_name) {
+                    collect(edges);
                 }
             }
         }
@@ -2333,6 +2380,7 @@ impl WorkspaceIndex {
         self.files.write().clear();
         self.symbols.write().clear();
         self.global_references.write().clear();
+        self.global_reference_edges.write().clear();
         self.fact_shards.write().clear();
     }
 
