@@ -56,3 +56,90 @@ Verification statuses:
 ## Rollout mode
 
 Reconciliation defaults to advisory dry-run. Apply mode can be enabled explicitly.
+
+## Merge-train operator protocol (bounded, no auto-merge)
+
+This protocol is for batch/admin throughput without making `master` the first integration branch.
+It is intentionally operator-driven and does **not** auto-merge PRs.
+
+### Candidate requirements
+
+Every PR candidate must be revalidated immediately before train planning with current API data
+(`gh pr view --json ...` + latest-per-check filter):
+
+- PR head SHA is captured and frozen in the plan.
+- No active `needs-*` routing label.
+- CI is green for the current head SHA, or green after expected-skip normalization (latest-per-check status only).
+- PR is mergeable now, or intentionally sequenced behind a dependency in the same train.
+
+### Train sizes
+
+Use bounded cluster sizes to limit blast radius:
+
+- **3 PRs**: overlapping/high-interaction changes.
+- **5 PRs**: normal code changes.
+- **10 PRs**: docs/leaf non-overlapping changes.
+
+### Train check procedure
+
+For each train, start from the latest known-green `master` SHA and execute in order:
+
+1. Confirm `master` is currently green (latest CI run on `master` is successful).
+2. Materialize an ordered candidate list with head SHA pins.
+3. Apply/simulate each PR in order (local branch/rehearsal path is acceptable).
+4. Run conflict-marker guard:
+   - `just check-conflict-markers`
+5. Run formatting gate:
+   - `cargo xtask fmt --check`
+6. Run fast merge gate:
+   - `cargo xtask gates --tier pr-fast --base origin/master --receipt`
+
+If simulation cannot be performed for a candidate (tooling/API limitation), mark the candidate as
+"not simulated" and do not treat it as merge-approved.
+
+### Stop conditions (hard halt)
+
+Stop the train immediately when any of the following is observed:
+
+- Conflict while applying candidate order.
+- Candidate head SHA changed from planned value (stale SHA).
+- Any required check fails.
+- Unexpected skip state (non-normalized skip, missing required signal, or ambiguous check outcome).
+- `master` turns red at any point in the train window.
+
+### Required output (train receipt)
+
+Each train execution must emit a markdown or JSON receipt containing:
+
+- Baseline green `master` SHA.
+- Candidate list with pinned head SHAs.
+- Planned order (and dependency notes when applicable).
+- Check commands executed and pass/fail verdict per step.
+- Final train verdict (`ready`, `blocked`, `partial`) and explicit stop reason when blocked.
+
+Minimum markdown template:
+
+```md
+## Merge Train Receipt
+Baseline master SHA: <sha>
+
+### Candidates
+1. #1234 @ <sha> (mergeable: yes)
+2. #1235 @ <sha> (depends on #1234)
+
+### Checks
+- conflict markers: pass/fail
+- fmt: pass/fail
+- pr-fast: pass/fail
+
+### Verdict
+- status: ready|blocked|partial
+- stop reason: <none|conflict|stale-sha|failed-check|unexpected-skip|red-master>
+```
+
+### Non-goals / guardrails
+
+- No automatic merges by default.
+- No requirement for `--admin` merges.
+- No CI policy weakening or bypass.
+- No global hooks or cron formatting as primary enforcement.
