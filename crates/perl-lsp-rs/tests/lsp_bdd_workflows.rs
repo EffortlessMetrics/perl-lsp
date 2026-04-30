@@ -9,30 +9,8 @@ use serde_json::{Value, json};
 use serial_test::serial;
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
+use support::bdd_diagnostics::{BddScenario, DocumentDiagnosticFlow};
 use support::lsp_harness::{LspHarness, TempWorkspace};
-
-struct BddScenario {
-    name: &'static str,
-}
-
-impl BddScenario {
-    fn new(name: &'static str) -> Self {
-        eprintln!("Scenario: {}", name);
-        Self { name }
-    }
-
-    fn given(&self, msg: &str) {
-        eprintln!("[{}] Given {}", self.name, msg);
-    }
-
-    fn when(&self, msg: &str) {
-        eprintln!("[{}] When {}", self.name, msg);
-    }
-
-    fn then(&self, msg: &str) {
-        eprintln!("[{}] Then {}", self.name, msg);
-    }
-}
 
 fn find_position(text: &str, needle: &str) -> (u32, u32) {
     perl_tdd_support::must_some(
@@ -279,6 +257,21 @@ fn completion_labels(response: &Value) -> BTreeSet<String> {
     labels
 }
 
+fn signature_labels(response: &Value) -> Vec<String> {
+    response
+        .get("signatures")
+        .and_then(Value::as_array)
+        .map(|signatures| {
+            signatures
+                .iter()
+                .filter_map(|signature| {
+                    signature.get("label").and_then(Value::as_str).map(ToOwned::to_owned)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn hover_text(hover: &Value) -> String {
     if let Some(text) = hover.pointer("/contents/value").and_then(Value::as_str) {
         return text.to_string();
@@ -374,6 +367,18 @@ fn code_action_titles(actions: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn code_lens_command_title(lens: &Value) -> Option<&str> {
+    lens.get("command").and_then(|command| command.get("title")).and_then(Value::as_str)
+}
+
+fn code_lens_command_id(lens: &Value) -> Option<&str> {
+    lens.get("command").and_then(|command| command.get("command")).and_then(Value::as_str)
+}
+
+fn code_lens_data_kind(lens: &Value) -> Option<&str> {
+    lens.get("data").and_then(|data| data.get("kind")).and_then(Value::as_str)
+}
+
 fn has_lsp_range(value: &Value) -> bool {
     let range = if value.get("start").is_some() && value.get("end").is_some() {
         value
@@ -402,6 +407,14 @@ fn inlay_labels(response: &Value) -> Vec<String> {
                 .filter_map(|item| item.get("label").and_then(Value::as_str).map(ToOwned::to_owned))
                 .collect()
         })
+        .unwrap_or_default()
+}
+
+fn semantic_token_data(response: &Value) -> Vec<u64> {
+    response
+        .get("data")
+        .and_then(Value::as_array)
+        .map(|data| data.iter().filter_map(Value::as_u64).collect())
         .unwrap_or_default()
 }
 
@@ -496,6 +509,97 @@ my $also = process_data();
 
 #[test]
 #[serial]
+fn bdd_imported_subroutine_navigation_across_modules() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Imported subroutine navigation across modules");
+
+    let utils_module = r#"package MyApp::Utils;
+use strict;
+use warnings;
+use Exporter 'import';
+
+our @EXPORT_OK = qw(format_date);
+
+sub format_date {
+    my ($value) = @_;
+    return $value;
+}
+
+1;
+"#;
+
+    let main_script = r#"use strict;
+use warnings;
+use lib './lib';
+use MyApp::Utils qw(format_date);
+
+my $result = format_date("2026-04-23");
+"#;
+
+    scenario.given("a workspace where a subroutine is imported from a module");
+    let (mut harness, workspace) =
+        setup_workspace(&[("lib/MyApp/Utils.pm", utils_module), ("bin/main.pl", main_script)])?;
+
+    let utils_uri = workspace.uri("lib/MyApp/Utils.pm");
+    let main_uri = workspace.uri("bin/main.pl");
+
+    harness.open(&utils_uri, utils_module)?;
+    harness.open(&main_uri, main_script)?;
+    harness.wait_for_symbol("format_date", Some(&utils_uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("requesting go-to-definition on the imported call site");
+    let (call_line, call_character) = find_position(main_script, "format_date(\"2026-04-23\")");
+    let definition = wait_for_definition_uri(
+        &mut harness,
+        &main_uri,
+        call_line,
+        call_character,
+        &utils_uri,
+        Duration::from_secs(10),
+    )?;
+
+    scenario.then("definition resolves to the exporter module");
+    assert_eq!(
+        first_location_uri(&definition),
+        Some(utils_uri.clone()),
+        "imported call should resolve to exporting module"
+    );
+
+    scenario.when("requesting workspace symbols for the imported function name");
+    let symbols = harness.request(
+        "workspace/symbol",
+        json!({
+            "query": "format_date"
+        }),
+    )?;
+
+    scenario.then("workspace symbols include the exporting module symbol");
+    let uris = ref_uris(&symbols);
+    assert!(
+        uri_set_contains(&uris, &utils_uri),
+        "workspace symbols should include exporter module; got {uris:?}"
+    );
+
+    scenario.when("requesting hover on the imported call site");
+    let hover = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": main_uri },
+            "position": { "line": call_line, "character": call_character }
+        }),
+    )?;
+
+    scenario.then("hover provides non-empty imported symbol information");
+    assert!(
+        !hover_text(&hover).is_empty(),
+        "hover over imported subroutine should contain details"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn bdd_rename_updates_workspace_edits() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Rename propagates across workspace");
 
@@ -558,6 +662,100 @@ my $also = process_data();
     assert!(
         main_texts.iter().any(|text| text.contains("process_records")),
         "main edits should contain new function name; got {main_texts:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_rename_is_scoped_to_target_package_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Rename stays scoped to the selected package symbol");
+
+    let foo_module = r#"package Foo;
+use strict;
+use warnings;
+
+sub process_data {
+    return "foo";
+}
+
+1;
+"#;
+
+    let bar_module = r#"package Bar;
+use strict;
+use warnings;
+
+sub process_data {
+    return "bar";
+}
+
+1;
+"#;
+
+    let main = r#"use strict;
+use warnings;
+use lib './lib';
+use Foo;
+use Bar;
+
+my $foo = Foo::process_data();
+my $bar = Bar::process_data();
+"#;
+
+    scenario.given("a workspace where two packages expose subroutines with the same name");
+    let (mut harness, workspace) = setup_workspace(&[
+        ("lib/Foo.pm", foo_module),
+        ("lib/Bar.pm", bar_module),
+        ("main.pl", main),
+    ])?;
+
+    let foo_uri = workspace.uri("lib/Foo.pm");
+    let bar_uri = workspace.uri("lib/Bar.pm");
+    let main_uri = workspace.uri("main.pl");
+
+    harness.open(&foo_uri, foo_module)?;
+    harness.open(&bar_uri, bar_module)?;
+    harness.open(&main_uri, main)?;
+
+    harness.wait_for_symbol("process_data", Some(&foo_uri), Duration::from_secs(10))?;
+    harness.wait_for_symbol("process_data", Some(&bar_uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("renaming Foo::process_data from the declaration in Foo.pm");
+    let (def_line, def_char) = find_position(foo_module, "process_data");
+    let edit = wait_for_rename_edit_uris(
+        &mut harness,
+        &foo_uri,
+        def_line,
+        def_char,
+        "process_records",
+        &[&foo_uri, &main_uri],
+        Duration::from_secs(10),
+    )?;
+
+    scenario.then("rename edits target Foo.pm and main.pl only");
+    let touched_uris = workspace_edit_uris(&edit);
+    assert!(touched_uris.contains(&foo_uri), "rename should edit Foo.pm");
+    assert!(touched_uris.contains(&main_uri), "rename should edit main.pl");
+    assert!(!touched_uris.contains(&bar_uri), "rename should not edit Bar.pm");
+
+    scenario.then("the edit payload rewrites Foo call sites but not Bar call sites");
+    let foo_texts = workspace_edit_new_texts_for_uri(&edit, &foo_uri);
+    let main_texts = workspace_edit_new_texts_for_uri(&edit, &main_uri);
+
+    assert!(
+        foo_texts.iter().any(|text| text.contains("process_records")),
+        "Foo edits should include the renamed symbol; got {foo_texts:?}"
+    );
+    assert!(
+        main_texts.iter().any(|text| text.contains("process_records")),
+        "main edits should include the renamed Foo call; got {main_texts:?}"
+    );
+    assert!(
+        !main_texts.iter().any(|text| text.contains("Bar::process_records")),
+        "main edits should not rename Bar::process_data call sites; got {main_texts:?}"
     );
 
     Ok(())
@@ -687,6 +885,51 @@ is(calculate_total(1, 2), 3, 'adds values');
     let signatures =
         signature_help.get("signatures").and_then(Value::as_array).cloned().unwrap_or_default();
     assert!(!signatures.is_empty(), "signature help should include signatures");
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_signature_help_tracks_active_parameter() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Signature help tracks active parameter");
+
+    let code = r#"use strict;
+use warnings;
+
+my $text = "Hello World";
+my $slice = substr($text, 6, );
+"#;
+
+    scenario.given("a workspace where the user is typing a built-in function call");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+
+    scenario.when("requesting signature help after typing the second comma in substr");
+    let (line, mut character) = find_position(code, "substr($text, 6,");
+    character += "substr($text, 6,".len() as u32;
+
+    let signature_help = harness.request(
+        "textDocument/signatureHelp",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        }),
+    )?;
+
+    scenario.then("signature help includes substr and marks the third parameter as active");
+    let labels = signature_labels(&signature_help);
+    assert!(
+        labels.iter().any(|label| label.contains("substr")),
+        "signature help should include substr label; got {labels:?}"
+    );
+
+    let active_parameter = signature_help
+        .get("activeParameter")
+        .and_then(Value::as_u64)
+        .ok_or("expected activeParameter in signature help response")?;
+    assert_eq!(active_parameter, 2, "expected LENGTH argument position");
 
     Ok(())
 }
@@ -1122,33 +1365,20 @@ sub healthy_sub {
     let uri = workspace.uri("stable.pl");
     harness.open(&uri, code)?;
 
+    let mut diagnostics = DocumentDiagnosticFlow::new(&mut harness, uri.clone());
+
     scenario.when("requesting pull diagnostics for the first time");
-    let first = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri }
-        }),
-    )?;
+    let first = diagnostics.request(None)?;
 
     scenario.then("the server returns a full diagnostic report with resultId");
-    assert_eq!(first.get("kind").and_then(Value::as_str), Some("full"));
-    let result_id = first
-        .get("resultId")
-        .and_then(Value::as_str)
-        .ok_or("first diagnostic report missing resultId")?
-        .to_string();
+    assert_eq!(DocumentDiagnosticFlow::kind(&first), Some("full"));
+    let result_id = DocumentDiagnosticFlow::result_id(&first)?;
 
     scenario.when("requesting diagnostics again with previousResultId");
-    let second = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri },
-            "previousResultId": result_id
-        }),
-    )?;
+    let second = diagnostics.request(Some(result_id.as_str()))?;
 
     scenario.then("the server replies with an unchanged report");
-    assert_eq!(second.get("kind").and_then(Value::as_str), Some("unchanged"));
+    assert_eq!(DocumentDiagnosticFlow::kind(&second), Some("unchanged"));
     assert_eq!(
         second.get("resultId").and_then(Value::as_str),
         Some(result_id.as_str()),
@@ -1188,45 +1418,26 @@ sub score {
     harness.open(&uri, healthy)?;
 
     scenario.when("requesting pull diagnostics to establish a baseline resultId");
-    let first = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri }
-        }),
-    )?;
+    let first = DocumentDiagnosticFlow::new(&mut harness, uri.clone()).request(None)?;
 
-    let baseline_result_id = first
-        .get("resultId")
-        .and_then(Value::as_str)
-        .ok_or("first diagnostic report missing resultId")?
-        .to_string();
+    let baseline_result_id = DocumentDiagnosticFlow::result_id(&first)?;
 
     scenario.when("requesting diagnostics again with previousResultId without edits");
-    let unchanged = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri },
-            "previousResultId": baseline_result_id.clone()
-        }),
-    )?;
+    let unchanged = DocumentDiagnosticFlow::new(&mut harness, uri.clone())
+        .request(Some(baseline_result_id.as_str()))?;
 
     scenario.then("the server reports unchanged diagnostics");
-    assert_eq!(unchanged.get("kind").and_then(Value::as_str), Some("unchanged"));
+    assert_eq!(DocumentDiagnosticFlow::kind(&unchanged), Some("unchanged"));
 
     scenario.when("introducing a syntax error via didChange");
     harness.change_full(&uri, 2, broken)?;
     harness.barrier();
 
-    let changed = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri },
-            "previousResultId": baseline_result_id.clone()
-        }),
-    )?;
+    let changed = DocumentDiagnosticFlow::new(&mut harness, uri.clone())
+        .request(Some(baseline_result_id.as_str()))?;
 
     scenario.then("the server emits a full report with a fresh resultId and parse errors");
-    assert_eq!(changed.get("kind").and_then(Value::as_str), Some("full"));
+    assert_eq!(DocumentDiagnosticFlow::kind(&changed), Some("full"));
 
     let changed_result_id = changed
         .get("resultId")
@@ -1240,6 +1451,98 @@ sub score {
     assert!(
         diagnostic_error_count(&changed) > 0,
         "syntax regression should produce error diagnostics"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_pull_diagnostics_tracks_result_ids_per_document() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Pull diagnostics keep per-document resultId caches isolated");
+
+    let healthy = r#"use strict;
+use warnings;
+
+sub ok {
+    return 1;
+}
+"#;
+
+    let broken = r#"use strict;
+use warnings;
+
+sub boom {
+    if (1 {
+        return 0;
+    }
+}
+"#;
+
+    scenario.given("a workspace with one healthy file and one file that later regresses");
+    let (mut harness, workspace) =
+        setup_workspace(&[("stable.pl", healthy), ("changing.pl", healthy)])?;
+    let stable_uri = workspace.uri("stable.pl");
+    let changing_uri = workspace.uri("changing.pl");
+    harness.open(&stable_uri, healthy)?;
+    harness.open(&changing_uri, healthy)?;
+
+    let (stable_id, changing_id) = {
+        let mut stable_diag = DocumentDiagnosticFlow::new(&mut harness, stable_uri.clone());
+        let stable_first = stable_diag.request(None)?;
+        let stable_id = DocumentDiagnosticFlow::result_id(&stable_first)?;
+
+        let mut changing_diag = DocumentDiagnosticFlow::new(&mut harness, changing_uri.clone());
+        let changing_first = changing_diag.request(None)?;
+        let changing_id = DocumentDiagnosticFlow::result_id(&changing_first)?;
+        (stable_id, changing_id)
+    };
+
+    scenario.when("requesting diagnostics with cached resultIds before any edits");
+    let (stable_unchanged, changing_unchanged) = {
+        let mut stable_diag = DocumentDiagnosticFlow::new(&mut harness, stable_uri.clone());
+        let stable_unchanged = stable_diag.request(Some(stable_id.as_str()))?;
+
+        let mut changing_diag = DocumentDiagnosticFlow::new(&mut harness, changing_uri.clone());
+        let changing_unchanged = changing_diag.request(Some(changing_id.as_str()))?;
+        (stable_unchanged, changing_unchanged)
+    };
+
+    scenario.then("both documents return unchanged reports");
+    assert_eq!(DocumentDiagnosticFlow::kind(&stable_unchanged), Some("unchanged"));
+    assert_eq!(DocumentDiagnosticFlow::kind(&changing_unchanged), Some("unchanged"));
+
+    scenario.when("introducing a syntax regression in only one document");
+    harness.change_full(&changing_uri, 2, broken)?;
+    harness.barrier();
+
+    let (stable_after_edit, changing_after_edit) = {
+        let mut stable_diag = DocumentDiagnosticFlow::new(&mut harness, stable_uri.clone());
+        let stable_after_edit = stable_diag.request(Some(stable_id.as_str()))?;
+
+        let mut changing_diag = DocumentDiagnosticFlow::new(&mut harness, changing_uri.clone());
+        let changing_after_edit = changing_diag.request(Some(changing_id.as_str()))?;
+        (stable_after_edit, changing_after_edit)
+    };
+
+    scenario
+        .then("the unchanged file stays unchanged while the edited file gets a new full report");
+    assert_eq!(DocumentDiagnosticFlow::kind(&stable_after_edit), Some("unchanged"));
+    assert_eq!(
+        stable_after_edit.get("resultId").and_then(Value::as_str),
+        Some(stable_id.as_str()),
+        "stable file should keep the same resultId"
+    );
+
+    assert_eq!(DocumentDiagnosticFlow::kind(&changing_after_edit), Some("full"));
+    let changed_result_id = DocumentDiagnosticFlow::result_id(&changing_after_edit)?;
+    assert_ne!(
+        changed_result_id, changing_id,
+        "edited file should receive a fresh diagnostic resultId"
+    );
+    assert!(
+        diagnostic_error_count(&changing_after_edit) > 0,
+        "edited file should report syntax errors"
     );
 
     Ok(())
@@ -1847,6 +2150,74 @@ my $value = cal
 
 #[test]
 #[serial]
+fn bdd_incremental_semantic_tokens_refresh_after_local_symbol_addition()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Incremental semantic tokens refresh after local symbol edit");
+
+    let before = r#"use strict;
+use warnings;
+
+my $value = 41;
+print $value;
+"#;
+
+    let after = r#"use strict;
+use warnings;
+
+my $value = 41;
+my $delta = $value + 1;
+print $value + $delta;
+"#;
+
+    scenario.given("an opened file with semantic tokens available for baseline content");
+    let (mut harness, workspace) = setup_workspace(&[("incremental_semantic_tokens.pl", before)])?;
+    let uri = workspace.uri("incremental_semantic_tokens.pl");
+    harness.open(&uri, before)?;
+    harness.barrier();
+
+    scenario.when("requesting semantic tokens before the incremental change");
+    let before_tokens = harness.request(
+        "textDocument/semanticTokens/full",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+    let before_data = semantic_token_data(&before_tokens);
+
+    scenario.when("editing the file to add a new local symbol and requesting tokens again");
+    harness.change_full(&uri, 2, after)?;
+    harness.barrier();
+    let after_tokens = harness.request(
+        "textDocument/semanticTokens/full",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+    let after_data = semantic_token_data(&after_tokens);
+
+    scenario.then("semantic tokens are recomputed and reflect the richer symbol set");
+    assert!(!before_data.is_empty(), "baseline semantic tokens should not be empty");
+    assert!(!after_data.is_empty(), "updated semantic tokens should not be empty");
+    assert_ne!(
+        before_data, after_data,
+        "semantic tokens should change after incremental edit; before={before_data:?} after={after_data:?}"
+    );
+    // The after content introduces $delta (appears twice: declaration and use), so the
+    // encoded token stream must be strictly longer — each token is 5 u64 values in
+    // LSP's relative-encoded format. A '>=' allows the degenerate case where tokens
+    // shrink to exactly the same count, so we require strict growth.
+    assert!(
+        after_data.len() > before_data.len(),
+        "adding two $delta references must grow the token payload; before={} after={}",
+        before_data.len(),
+        after_data.len()
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn bdd_prepare_rename_rejects_non_symbol_positions() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Prepare rename rejects non-symbol positions");
 
@@ -2181,6 +2552,83 @@ sub collect_metrics {
 
 #[test]
 #[serial]
+fn bdd_workspace_symbols_refresh_after_incremental_package_rename()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Workspace symbols refresh after incremental package rename");
+    scenario.given("a workspace containing a package that is renamed in-place");
+
+    let before = r#"package SymbolHub;
+use strict;
+use warnings;
+
+sub collect_metrics {
+    return 1;
+}
+
+1;
+"#;
+
+    let after = before.replace("SymbolHub", "MetricsHub");
+
+    let (mut harness, workspace) = setup_workspace(&[("lib/SymbolHub.pm", before)])?;
+    let module_uri = workspace.uri("lib/SymbolHub.pm");
+    harness.open(&module_uri, before)?;
+    harness.wait_for_symbol("SymbolHub", Some(&module_uri), Duration::from_secs(10)).ok();
+    harness.barrier();
+
+    scenario.when("querying workspace symbols before and after a didChange rename");
+    let before_result = harness.request(
+        "workspace/symbol",
+        json!({
+            "query": "SymbolHub"
+        }),
+    )?;
+
+    harness.change_full(&module_uri, 2, &after)?;
+    harness.wait_for_symbol("MetricsHub", Some(&module_uri), Duration::from_secs(10)).ok();
+    harness.barrier();
+
+    let after_result = harness.request(
+        "workspace/symbol",
+        json!({
+            "query": "MetricsHub"
+        }),
+    )?;
+
+    scenario.then("workspace symbol search reflects the updated package name");
+    let before_names: Vec<String> = before_result
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get("name").and_then(Value::as_str).map(ToOwned::to_owned))
+        .collect();
+    let after_names: Vec<String> = after_result
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get("name").and_then(Value::as_str).map(ToOwned::to_owned))
+        .collect();
+
+    assert!(
+        before_names.iter().any(|name| name == "SymbolHub"),
+        "pre-change workspace symbols should include SymbolHub; got {before_names:?}"
+    );
+    assert!(
+        after_names.iter().any(|name| name == "MetricsHub"),
+        "post-change workspace symbols should include MetricsHub; got {after_names:?}"
+    );
+    // Verify stale index entry is removed — a correct implementation must evict
+    // the old package name after an incremental didChange, not just append the new one.
+    assert!(
+        !after_names.iter().any(|name| name == "SymbolHub"),
+        "post-change workspace symbols should NOT include stale SymbolHub; got {after_names:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn bdd_folding_ranges_cover_package_and_subroutine_blocks() -> Result<(), Box<dyn std::error::Error>>
 {
     let scenario = BddScenario::new("Folding ranges cover package and subroutine blocks");
@@ -2252,6 +2700,10 @@ sub t_subtraction {
     is(4 - 1, 3, "subtraction works");
 }
 
+subtest "math block" => sub {
+    ok(1, "subtest works");
+};
+
 done_testing();
 "#;
 
@@ -2275,14 +2727,51 @@ done_testing();
         lenses.iter().all(has_lsp_range),
         "all code lenses should include a valid range; got {lenses:?}"
     );
+
+    let command_titles: Vec<&str> = lenses.iter().filter_map(code_lens_command_title).collect();
     assert!(
-        lenses.iter().any(|lens| {
-            lens.get("command")
-                .and_then(|command| command.get("title"))
-                .and_then(Value::as_str)
-                .is_some_and(|title| title.contains("Run Test"))
-        }),
-        "expected at least one Run Test code lens; got {lenses:?}"
+        command_titles.iter().any(|title| title.contains("Run All Tests")),
+        "expected Run All Tests lens for a .t file; got {command_titles:?}"
+    );
+    assert!(
+        command_titles.iter().any(|title| title.contains("Run Test")),
+        "expected Run Test lens; got {command_titles:?}"
+    );
+    assert!(
+        command_titles.iter().any(|title| title.contains("Debug Test")),
+        "expected Debug Test lens; got {command_titles:?}"
+    );
+    assert!(
+        command_titles.iter().any(|title| title.contains("Run Subtest")),
+        "expected Run Subtest lens; got {command_titles:?}"
+    );
+
+    scenario.when("resolving an unresolved references lens");
+    let unresolved = lenses
+        .iter()
+        .find(|lens| lens.get("command").is_none() && code_lens_data_kind(lens).is_some())
+        .ok_or("expected at least one unresolved references lens with data.kind")?;
+    let resolved = harness.request("codeLens/resolve", unresolved.clone())?;
+
+    scenario.then("resolved lens provides find-references command with editor coordinates");
+    assert_eq!(
+        code_lens_command_id(&resolved),
+        Some("editor.action.findReferences"),
+        "resolved references lens should use editor findReferences command; got {resolved:?}"
+    );
+    let resolved_title = code_lens_command_title(&resolved).unwrap_or_default();
+    assert!(
+        resolved_title.contains("reference"),
+        "resolved references lens title should include reference count; got {resolved_title:?}"
+    );
+    let args = resolved
+        .pointer("/command/arguments")
+        .and_then(Value::as_array)
+        .ok_or("resolved references lens should include command arguments")?;
+    assert_eq!(args.len(), 2, "expected [line, character] arguments; got {args:?}");
+    assert!(
+        args.iter().all(Value::is_number),
+        "resolved references lens arguments should be numeric editor coordinates; got {args:?}"
     );
 
     Ok(())
@@ -2483,6 +2972,118 @@ my $value = combine("a", "b");
     assert!(
         entries.iter().all(|entry| selection_range_depth(entry) >= 2),
         "each entry should include nested parent expansion; got {entries:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_mojolicious_embedded_template_reports_no_parse_errors()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Mojolicious embedded templates avoid Perl parse errors");
+
+    let app = r#"use Mojolicious::Lite;
+
+get '/' => sub {
+    my $c = shift;
+    $c->stash(title => 'BDD');
+    $c->render(template => 'index');
+};
+
+app->start;
+
+__DATA__
+@@ index.html.ep
+% my $name = 'Perl';
+<h1><%= $title %> <%= $name %></h1>
+"#;
+
+    scenario.given("a Mojolicious::Lite app with an __DATA__ template section");
+    let (mut harness, workspace) = setup_workspace(&[("app.pl", app)])?;
+    let uri = workspace.uri("app.pl");
+    harness.open(&uri, app)?;
+    harness.barrier();
+
+    scenario.when("requesting pull diagnostics for the app file");
+    let report = harness.request(
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+
+    scenario.then("the embedded template does not produce parse-error diagnostics");
+    let parse_errors = diagnostic_items(&report)
+        .iter()
+        .filter(|diag| diag.get("code").and_then(Value::as_str) == Some("PL001"))
+        .count();
+    assert_eq!(
+        parse_errors, 0,
+        "Mojolicious __DATA__ templates should not be parsed as Perl code; report={report:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_mojolicious_dashed_route_resolves_to_nested_controller_definition()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Mojolicious dashed routes resolve to nested controllers");
+
+    let app = r##"package MyApp;
+use Mojo::Base 'Mojolicious';
+
+sub startup {
+    my $self = shift;
+    my $r = $self->routes;
+    $r->get('/admin/users')->to('admin-user#list');
+}
+
+1;
+"##;
+
+    let controller = r#"package MyApp::Controller::Admin::User;
+use Mojo::Base 'Mojolicious::Controller';
+
+sub list {
+    return 'ok';
+}
+
+1;
+"#;
+
+    scenario.given("a nested controller and a Mojolicious route using a dashed target");
+    let (mut harness, workspace) = setup_workspace(&[
+        ("lib/MyApp.pm", app),
+        ("lib/MyApp/Controller/Admin/User.pm", controller),
+    ])?;
+
+    let app_uri = workspace.uri("lib/MyApp.pm");
+    let controller_uri = workspace.uri("lib/MyApp/Controller/Admin/User.pm");
+
+    harness.open(&controller_uri, controller)?;
+    harness.open(&app_uri, app)?;
+    harness.wait_for_symbol("list", Some(&controller_uri), Duration::from_secs(10)).ok();
+
+    let (line, character) = find_position(app, "admin-user#list");
+
+    scenario.when("requesting go-to-definition on the dashed route target");
+    let definition = wait_for_definition_uri(
+        &mut harness,
+        &app_uri,
+        line,
+        character,
+        &controller_uri,
+        Duration::from_secs(10),
+    )?;
+
+    scenario.then("definition resolves to the nested controller file");
+    assert_eq!(
+        first_location_uri(&definition).as_deref(),
+        Some(controller_uri.as_str()),
+        "expected dashed route target to resolve to nested controller; got {definition:?}"
     );
 
     Ok(())

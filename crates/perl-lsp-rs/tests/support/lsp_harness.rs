@@ -447,6 +447,17 @@ impl LspHarness {
         self.send_request_with_timeout(request, timeout)
     }
 
+    /// Request `textDocument/completion` at the provided LSP position.
+    pub fn completion_at(&mut self, uri: &str, line: u32, character: u32) -> Result<Value, String> {
+        self.request(
+            "textDocument/completion",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
     /// Send a didSave notification
     pub fn did_save(&mut self, uri: &str) -> Result<(), String> {
         self.notify(
@@ -762,6 +773,37 @@ impl LspHarness {
         }
     }
 
+    /// Wait for an ordered `$/progress` lifecycle for a token.
+    ///
+    /// This helper is intended for UX-style tests where we want to assert the
+    /// observable progress contract from the client's perspective.
+    ///
+    /// Example sequence: `["begin", "end"]` or `["begin", "report", "end"]`.
+    pub fn wait_for_progress_sequence(
+        &mut self,
+        token: &str,
+        sequence: &[&str],
+        timeout: Duration,
+    ) -> Result<Vec<Value>, String> {
+        let start = Instant::now();
+        let mut events = Vec::with_capacity(sequence.len());
+
+        for expected_kind in sequence {
+            let remaining = timeout.saturating_sub(start.elapsed());
+            if remaining.is_zero() {
+                return Err(format!(
+                    "$/progress sequence {:?} for token '{token}' timed out after {timeout:?}",
+                    sequence
+                ));
+            }
+
+            let event = self.wait_for_progress_kind(token, expected_kind, remaining)?;
+            events.push(event);
+        }
+
+        Ok(events)
+    }
+
     /// Drain server-initiated requests from the buffer.
     ///
     /// Server-to-client requests (e.g., `window/workDoneProgress/create`) are
@@ -978,6 +1020,79 @@ impl LspHarness {
         }
 
         Err("No response received".to_string())
+    }
+
+    /// Get definition locations at a position
+    pub fn definition(&mut self, uri: &str, line: u32, character: u32) -> Result<Value, String> {
+        self.request(
+            "textDocument/definition",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
+    /// Get references at a position
+    pub fn references(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+        include_declaration: bool,
+    ) -> Result<Value, String> {
+        self.request(
+            "textDocument/references",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "context": { "includeDeclaration": include_declaration }
+            }),
+        )
+    }
+
+    /// Prepare rename at a position.
+    pub fn prepare_rename(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Value, String> {
+        self.request(
+            "textDocument/prepareRename",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        )
+    }
+
+    /// Request rename edits at a position.
+    pub fn rename(
+        &mut self,
+        uri: &str,
+        line: u32,
+        character: u32,
+        new_name: &str,
+    ) -> Result<Value, String> {
+        self.request(
+            "textDocument/rename",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "newName": new_name
+            }),
+        )
+    }
+
+    /// Get document symbols for a document URI.
+    pub fn document_symbols(&mut self, uri: &str) -> Result<Value, String> {
+        self.request(
+            "textDocument/documentSymbol",
+            json!({
+                "textDocument": { "uri": uri }
+            }),
+        )
     }
 
     /// Get type definition at a position

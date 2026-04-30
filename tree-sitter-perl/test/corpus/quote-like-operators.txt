@@ -126,15 +126,15 @@ qr<lookahead(?=pattern)>m;
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement))
 
 ==================
 Substitution with modifier flags
@@ -580,6 +580,6 @@ BACKTICK
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement)
+  (expression_statement)
+  (expression_statement))

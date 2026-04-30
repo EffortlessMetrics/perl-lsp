@@ -62,6 +62,41 @@ fn regex_suggestions() -> &'static [RegexSuggestion] {
             sort_key: "0_charclass_S",
         },
         RegexSuggestion {
+            label: "\\h",
+            insert: "\\h",
+            detail: "character class",
+            doc: "Match a horizontal whitespace character",
+            sort_key: "0_charclass_h",
+        },
+        RegexSuggestion {
+            label: "\\H",
+            insert: "\\H",
+            detail: "character class",
+            doc: "Match a non-horizontal whitespace character",
+            sort_key: "0_charclass_H",
+        },
+        RegexSuggestion {
+            label: "\\v",
+            insert: "\\v",
+            detail: "character class",
+            doc: "Match a vertical whitespace character",
+            sort_key: "0_charclass_v",
+        },
+        RegexSuggestion {
+            label: "\\V",
+            insert: "\\V",
+            detail: "character class",
+            doc: "Match a non-vertical whitespace character",
+            sort_key: "0_charclass_V",
+        },
+        RegexSuggestion {
+            label: "\\R",
+            insert: "\\R",
+            detail: "character class",
+            doc: "Match a Unicode linebreak sequence",
+            sort_key: "0_charclass_R",
+        },
+        RegexSuggestion {
             label: "[...]",
             insert: "[${1}]",
             detail: "character class",
@@ -345,10 +380,16 @@ pub fn add_regex_flag_completions(
             additional_edits: vec![],
             text_edit_range: Some((context.position, context.position)),
             commit_characters: None,
+            label_details: None,
         });
     }
 }
 
+/// Append regex-aware completion items to `completions` based on the cursor context.
+///
+/// Detects whether the cursor is inside a regex literal and, if so, contributes
+/// modifier flags, character-class names, and quantifier snippets appropriate
+/// for the current regex prefix.
 pub fn add_regex_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
@@ -376,6 +417,7 @@ pub fn add_regex_completions(
                 additional_edits: vec![],
                 text_edit_range: Some((replace_start, context.position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }

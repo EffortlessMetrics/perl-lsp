@@ -80,8 +80,17 @@ impl<'a> PositionTracker<'a> {
 
     /// Calculate column number accounting for UTF-8
     fn calculate_column(&self, line_start: usize, byte: usize) -> u32 {
-        let line_slice = &self.source[line_start..byte.min(self.source.len())];
+        let byte = self.clamp_to_char_boundary(byte);
+        let line_slice = &self.source[line_start..byte];
         (line_slice.chars().count() + 1) as u32
+    }
+
+    fn clamp_to_char_boundary(&self, byte: usize) -> usize {
+        let mut clamped = byte.min(self.source.len());
+        while clamped > 0 && !self.source.is_char_boundary(clamped) {
+            clamped -= 1;
+        }
+        clamped
     }
 
     /// Wrap a token with position information
@@ -129,5 +138,19 @@ mod tests {
         assert_eq!(wrapped.start_pos.line, 1);
         assert_eq!(wrapped.start_pos.column, 1);
         assert_eq!(wrapped.end_pos.column, 3);
+    }
+
+    #[test]
+    fn test_byte_to_position_handles_non_char_boundary_offsets() {
+        let source = "éa\n";
+        let tracker = PositionTracker::new(source);
+
+        let pos = tracker.byte_to_position(1);
+        assert_eq!(pos.line, 1);
+        assert_eq!(pos.column, 1);
+
+        let pos = tracker.byte_to_position(2);
+        assert_eq!(pos.line, 1);
+        assert_eq!(pos.column, 2);
     }
 }
