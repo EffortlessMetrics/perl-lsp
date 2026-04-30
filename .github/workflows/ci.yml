@@ -353,10 +353,69 @@ jobs:
         run: cargo build -p perl-lsp-rs
 
       - name: Run UX regression tests
+        id: ux_tests
+        continue-on-error: true
         env:
           PERL_LSP_BIN: ${{ github.workspace }}/target/debug/perl-lsp
           RUST_TEST_THREADS: "1"
-        run: just ux-tests
+        run: |
+          mkdir -p target/receipts
+          just ux-tests 2>&1 | tee target/receipts/ux-regression.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Emit UX regression receipt
+        if: always()
+        run: |
+          cargo xtask ux-regression-receipt \
+            --input target/receipts/ux-regression.log \
+            --receipt target/receipts/ux-regression.json \
+            --sha "${{ github.sha }}"
+
+      - name: Upload UX regression artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ux-regression-receipt-${{ github.sha }}
+          path: |
+            target/receipts/ux-regression.json
+            target/receipts/ux-regression.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: UX regression summary
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          receipt_path = Path("target/receipts/ux-regression.json")
+          log_path = Path("target/receipts/ux-regression.log")
+          lines = ["### UX Regression Receipt", ""]
+          lines.append(f"- Receipt: `{receipt_path}`")
+          lines.append(f"- Log: `{log_path}`")
+
+          if receipt_path.exists():
+              data = json.loads(receipt_path.read_text(encoding="utf-8"))
+              lines.append(f"- Result: `{data.get('result', 'unknown')}`")
+              if data.get("failure_class"):
+                  lines.append(f"- Failure class: `{data.get('failure_class')}`")
+              if data.get("first_failing_test"):
+                  lines.append(f"- First failing test: `{data.get('first_failing_test')}`")
+              if data.get("first_failing_line"):
+                  lines.append(f"- First failing line: `{data.get('first_failing_line')}`")
+          else:
+              lines.append("- Receipt unavailable.")
+
+          summary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+      - name: Fail UX regression gate on test failures
+        if: steps.ux_tests.outcome == 'failure'
+        run: exit 1
 
   # ── Compile All Targets: catch integration-test + bench bit-rot ───────
   check-all-targets:

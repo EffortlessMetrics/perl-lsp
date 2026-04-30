@@ -114,19 +114,32 @@ jobs:
 
       - name: Run UX regression tests
         id: ux_tests
+        continue-on-error: true
         if: steps.harness_check.outputs.harness_available == 'true'
         run: |
           echo "Running UX regression tests..."
-          just ux-tests 2>&1 | tee /tmp/ux-test-output.txt
+          mkdir -p target/receipts
+          just ux-tests 2>&1 | tee target/receipts/ux-regression.log
           exit ${PIPESTATUS[0]}
 
       - name: Emit structured UX regression receipt
-        if: failure() && steps.harness_check.outputs.harness_available == 'true'
+        if: always() && steps.harness_check.outputs.harness_available == 'true'
         run: |
           cargo xtask ux-regression-receipt \
-            --input /tmp/ux-test-output.txt \
-            --receipt .ci/receipts/ux-regression.json \
+            --input target/receipts/ux-regression.log \
+            --receipt target/receipts/ux-regression.json \
             --sha "${{ github.sha }}"
+
+      - name: Upload UX regression artifacts
+        if: always() && steps.harness_check.outputs.harness_available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ux-regression-gate-receipt-${{ github.sha }}
+          path: |
+            target/receipts/ux-regression.json
+            target/receipts/ux-regression.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Parse and summarize UX test results
         if: always() && steps.harness_check.outputs.harness_available == 'true'
@@ -134,14 +147,14 @@ jobs:
           python3 - <<'PY'
           import json, os, re, pathlib, sys
 
-          output_file = pathlib.Path("/tmp/ux-test-output.txt")
+          output_file = pathlib.Path("target/receipts/ux-regression.log")
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
 
           if not summary_path:
               sys.exit(0)
 
           lines = output_file.read_text(encoding="utf-8").splitlines() if output_file.exists() else []
-          receipt_path = pathlib.Path(".ci/receipts/ux-regression.json")
+          receipt_path = pathlib.Path("target/receipts/ux-regression.json")
           receipt = None
           if receipt_path.exists():
               try:
@@ -301,17 +314,6 @@ jobs:
           pathlib.Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
 
-      - name: Upload UX test results on failure
-        if: failure() && steps.harness_check.outputs.harness_available == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: ux-test-results-${{ github.sha }}
-          path: |
-            /tmp/ux-test-output.txt
-            target/ux-test-results/
-          if-no-files-found: warn
-          retention-days: 7
-
       - name: Set commit status
         if: always()
         uses: actions/github-script@v9
@@ -348,3 +350,7 @@ jobs:
               description,
               target_url: `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
             });
+
+      - name: Fail UX regression gate on test failures
+        if: steps.harness_check.outputs.harness_available == 'true' && steps.ux_tests.outcome == 'failure'
+        run: exit 1
