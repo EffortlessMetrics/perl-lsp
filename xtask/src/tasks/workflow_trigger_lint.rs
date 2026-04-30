@@ -275,7 +275,6 @@ fn has_path_filters(workflow: &Value) -> bool {
     })
 }
 
-
 fn pull_request_has_label_triggers(workflow: &Value) -> bool {
     get_on(workflow)
         .and_then(Value::as_mapping)
@@ -284,9 +283,10 @@ fn pull_request_has_label_triggers(workflow: &Value) -> bool {
         .and_then(|pr| pr.get(Value::String("types".to_string())))
         .and_then(Value::as_sequence)
         .is_some_and(|types| {
-            types.iter().filter_map(Value::as_str).any(|event| {
-                event == "labeled" || event == "unlabeled"
-            })
+            types
+                .iter()
+                .filter_map(Value::as_str)
+                .any(|event| event == "labeled" || event == "unlabeled")
         })
 }
 
@@ -380,10 +380,7 @@ mod tests {
             Some(&fixture),
         );
         assert!(!eval.ok);
-        assert!(eval
-            .violations
-            .iter()
-            .any(|item| item.contains("labeled/unlabeled")));
+        assert!(eval.violations.iter().any(|item| item.contains("labeled/unlabeled")));
         Ok(())
     }
 

@@ -199,7 +199,8 @@ fn lint_workflow_file(path: &Path, is_fixture: bool, issues: &mut Vec<LintIssue>
         });
     }
 
-    if pull_request_has_label_triggers(&workflow) && cancel_in_progress_cancels_all_pr_events(&workflow)
+    if pull_request_has_label_triggers(&workflow)
+        && cancel_in_progress_cancels_all_pr_events(&workflow)
     {
         issues.push(LintIssue {
             level: "error",
