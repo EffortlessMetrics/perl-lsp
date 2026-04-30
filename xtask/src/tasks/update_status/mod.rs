@@ -15,8 +15,11 @@
 //! Also keeps docs/project/ROADMAP.md compliance table in sync when lsp subsystem runs.
 
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, eyre};
@@ -74,22 +77,22 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
         return String::new();
     };
 
-    let result = Command::new(program).args(rest).current_dir(root).output();
+    let result = Command::new(program)
+        .args(rest)
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn();
 
-    let output = match result {
-        Ok(o) => o,
+    let mut child = match result {
+        Ok(child) => child,
         Err(_) => return String::new(),
     };
 
-    // Basic timeout emulation: we cannot use `std::process::Command` timeout
-    // directly, so we rely on the process completing.  The Python version used
-    // subprocess.run with timeout; here we accept the default behavior but keep
-    // the parameter for API compatibility and future improvement.
+    let output = stream_child_output(&mut child);
+    // Timeout remains compatibility-only in this helper.
     let _ = timeout;
-
-    let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
-    combined.push_str(&String::from_utf8_lossy(&output.stderr));
-    combined
+    output
 }
 
 /// Like `run_cmd` but merges stderr into stdout via shell `2>&1`.
@@ -107,13 +110,57 @@ fn run_cmd_merged(root: &Path, args: &[&str], timeout: Duration) -> String {
         args.iter().map(|&a| format!("'{}'", a.replace('\'', "'\\''"))).collect();
     let shell_cmd = format!("{} 2>&1", shell_args.join(" "));
     #[cfg(unix)]
-    let result = Command::new("sh").arg("-c").arg(&shell_cmd).current_dir(root).output();
+    let result = Command::new("sh")
+        .arg("-c")
+        .arg(&shell_cmd)
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .spawn();
     #[cfg(not(unix))]
-    let result = Command::new("cmd").args(["/C", &shell_cmd]).current_dir(root).output();
-    match result {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
+    let result = Command::new("cmd")
+        .args(["/C", &shell_cmd])
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .spawn();
+    let mut child = match result {
+        Ok(child) => child,
         Err(_) => String::new(),
+    };
+    stream_child_output(&mut child)
+}
+
+fn stream_child_output(child: &mut std::process::Child) -> String {
+    let (tx, rx) = mpsc::channel::<String>();
+
+    if let Some(stdout) = child.stdout.take() {
+        let tx_out = tx.clone();
+        thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines().map_while(Result::ok) {
+                let _ = tx_out.send(line);
+            }
+        });
     }
+
+    if let Some(stderr) = child.stderr.take() {
+        let tx_err = tx.clone();
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines().map_while(Result::ok) {
+                let _ = tx_err.send(line);
+            }
+        });
+    }
+    drop(tx);
+
+    let mut combined = String::new();
+    for line in rx {
+        eprintln!("{line}");
+        combined.push_str(&line);
+        combined.push('\n');
+    }
+    let _ = child.wait();
+    combined
 }
 
 /// Replace content between `begin_marker\n...\nend_marker` (inclusive of markers).
