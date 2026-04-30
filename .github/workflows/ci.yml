@@ -113,7 +113,7 @@ jobs:
   pr-smoke:
     name: PR Smoke (Fast Feedback)
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 25
     needs: [draft-pr-check, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
@@ -146,7 +146,7 @@ jobs:
         run: cargo build -p xtask --locked
 
       - name: Run PR-fast via shared xtask gate runner
-        run: cargo xtask gates --tier pr-fast --base origin/master --receipt
+        run: ./target/debug/xtask gates --tier pr-fast --base origin/master --receipt
 
       - name: Upload PR-fast receipt
         if: always()

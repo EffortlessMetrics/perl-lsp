@@ -1724,6 +1724,7 @@ fn run_shell_command_with_timeout(
         .with_context(|| format!("Failed to spawn gate command: {command}"))?;
 
     let start = Instant::now();
+    let mut last_heartbeat = start;
     let timeout = Duration::from_secs(timeout_secs);
 
     // Poll until the process exits or the deadline elapses.
@@ -1738,6 +1739,14 @@ fn run_shell_command_with_timeout(
             child.kill().ok();
             child.wait().ok();
             break (true, 124_i32);
+        }
+        if last_heartbeat.elapsed() >= Duration::from_secs(30) {
+            println!(
+                "gate command still running elapsed_ms={} timeout_seconds={}",
+                start.elapsed().as_millis(),
+                timeout_secs
+            );
+            last_heartbeat = Instant::now();
         }
         thread::sleep(Duration::from_millis(100));
     };
