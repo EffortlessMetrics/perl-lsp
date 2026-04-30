@@ -403,8 +403,8 @@ jobs:
               lines.append(f"- Result: `{data.get('result', 'unknown')}`")
               if data.get("failure_class"):
                   lines.append(f"- Failure class: `{data.get('failure_class')}`")
-              if data.get("test"):
-                  lines.append(f"- First failing test: `{data.get('test')}`")
+              if data.get("first_failing_test"):
+                  lines.append(f"- First failing test: `{data.get('first_failing_test')}`")
               if data.get("first_failing_line"):
                   lines.append(f"- First failing line: `{data.get('first_failing_line')}`")
           else:
