@@ -121,6 +121,14 @@ impl LspServer {
             }
         }
 
+        if !include_system_inc {
+            include_system_inc = self
+                .workspace_folders
+                .lock()
+                .iter()
+                .any(|folder| folder.effective_workspace_config.use_system_inc);
+        }
+
         // For system @INC, call get_system_inc() through the locked folder so the lazy
         // subprocess result is written back to the authoritative cache and not discarded
         // when the clone is dropped.  Without this, every completion request with
@@ -133,6 +141,19 @@ impl LspServer {
                 for path in folder.effective_workspace_config.get_system_inc() {
                     if seen_system.insert(path.clone()) {
                         system_inc_paths.push(path.clone());
+                    }
+                }
+            } else {
+                // Fallback for non-workspace URIs: collect startup @INC from all opted-in folders
+                // so completion still has system module roots.
+                for folder in folders.iter_mut() {
+                    if !folder.effective_workspace_config.use_system_inc {
+                        continue;
+                    }
+                    for path in folder.effective_workspace_config.get_system_inc() {
+                        if seen_system.insert(path.clone()) {
+                            system_inc_paths.push(path.clone());
+                        }
                     }
                 }
             }
@@ -1230,6 +1251,40 @@ mod tests {
             include_paths.contains(&lib_dir),
             "use lib path should be in include_paths; got: {include_paths:?}",
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_module_completion_roots_system_inc_fallback_for_non_workspace_uri()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use perl_lsp_rs_core::config::WorkspaceConfig;
+
+        let server = LspServer::default();
+        let mut cfg = WorkspaceConfig::default();
+        cfg.use_system_inc = true;
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(
+                "file:///workspace/project".to_string(),
+            )
+            .with_effective_workspace_config(cfg),
+        );
+
+        let (include_paths, system_inc_paths, include_system_inc) = server
+            .module_completion_roots_for_doc(
+                "file:///tmp/outside_workspace.pl",
+                "use strict;",
+                0,
+                None,
+            );
+
+        assert!(include_system_inc, "use_system_inc should be propagated");
+        assert!(include_paths.is_empty(), "no configured include paths expected");
+        assert!(
+            !system_inc_paths.is_empty(),
+            "fallback system @INC roots should be available for non-workspace URIs"
+        );
+
         Ok(())
     }
 

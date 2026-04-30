@@ -1,17 +1,17 @@
 [concept]
-id = "parser.ambiguity.regex_vs_division"
+id = "parser.quote_like.custom_delimiter_pair"
 tier = "pr"
 
 [expect]
 panic = false
 timeout = false
-mode = "parse_clean"
+mode = "token_only"
 
 [metrics]
 max_error_nodes = 0
-must_emit_node_kinds = ["BinaryExpression", "RegexMatch"]
+must_emit_node_kinds = ["QuoteLike", "RegexQuoteLike"]
 
 [snapshots]
 tokens = true
-ast = true
+ast = false
 spans = false

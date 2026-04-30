@@ -617,8 +617,9 @@ impl<'a> PerlLexer<'a> {
                 // Fast path for ASCII characters
                 Arc::from(&self.input[start..self.position])
             } else {
-                // Slower path for Unicode
-                Arc::from(ch.to_string())
+                // Unicode path without intermediate heap allocation
+                let mut buf = [0_u8; 4];
+                Arc::from(ch.encode_utf8(&mut buf))
             };
 
             return Some(Token {

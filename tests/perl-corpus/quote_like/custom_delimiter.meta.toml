@@ -1,5 +1,5 @@
 [concept]
-id = "parser.ambiguity.regex_vs_division"
+id = "parser.quote_like.custom_delimiter"
 tier = "pr"
 
 [expect]
@@ -9,9 +9,9 @@ mode = "parse_clean"
 
 [metrics]
 max_error_nodes = 0
-must_emit_node_kinds = ["BinaryExpression", "RegexMatch"]
+must_emit_node_kinds = ["StringLiteral"]
 
 [snapshots]
 tokens = true
 ast = true
-spans = false
+spans = true

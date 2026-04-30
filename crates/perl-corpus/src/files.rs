@@ -188,6 +188,37 @@ mod tests {
         Ok(root)
     }
 
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<std::ffi::OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: &Path) -> Self {
+            let previous = env::var_os(key);
+            // SAFETY: Tests in this module set process environment variables in a
+            // controlled way and restore them on drop.
+            unsafe { env::set_var(key, value) };
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(previous) => {
+                    // SAFETY: This restores the original value captured by the
+                    // guard when it was created.
+                    unsafe { env::set_var(self.key, previous) };
+                }
+                None => {
+                    // SAFETY: The guard created this variable and now removes it.
+                    unsafe { env::remove_var(self.key) };
+                }
+            }
+        }
+    }
+
     #[test]
     fn collect_files_filters_extensions_and_skips_hidden() -> Result<(), Box<dyn std::error::Error>>
     {
@@ -300,17 +331,13 @@ mod tests {
     #[test]
     fn corpus_paths_discover_prefers_env_root() -> Result<(), Box<dyn std::error::Error>> {
         let root = temp_root("perl_corpus_env_root")?;
-        // SAFETY: This test sets and restores process environment state and does
-        // not spawn threads that read the same variable.
-        unsafe { env::set_var(CORPUS_ROOT_ENV, &root) };
+        let _env_guard = EnvVarGuard::set(CORPUS_ROOT_ENV, &root);
 
         let discovered = CorpusPaths::discover();
         assert_eq!(discovered.root, root);
         assert_eq!(discovered.test_corpus, discovered.root.join("test_corpus"));
         assert_eq!(discovered.fuzz, discovered.root.join("crates/perl-corpus/fuzz"));
 
-        // SAFETY: This restores the environment variable set by this test.
-        unsafe { env::remove_var(CORPUS_ROOT_ENV) };
         fs::remove_dir_all(&root)?;
         Ok(())
     }
@@ -335,13 +362,8 @@ mod tests {
         all.dedup();
 
         let mut from_api = {
-            // SAFETY: This test sets and restores process environment state and
-            // does not spawn threads that read the same variable.
-            unsafe { env::set_var(CORPUS_ROOT_ENV, &root) };
-            let files = get_all_test_files();
-            // SAFETY: This restores the environment variable set by this test.
-            unsafe { env::remove_var(CORPUS_ROOT_ENV) };
-            files
+            let _env_guard = EnvVarGuard::set(CORPUS_ROOT_ENV, &root);
+            get_all_test_files()
         };
         from_api.sort();
         from_api.dedup();
