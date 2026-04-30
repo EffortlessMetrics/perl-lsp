@@ -86,6 +86,29 @@ const NEEDS_DEEP_REVIEW: &str = "needs-deep-review";
 const NEEDS_DIFF_FIX: &str = "needs-diff-fix";
 const NEEDS_BUILDER_FIX: &str = "needs-builder-fix";
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewReceiptVerdict {
+    Approved,
+    NeedsBuilder,
+    NeedsDiff,
+    NeedsCi,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ReviewReceipt {
+    pub kind: String,
+    pub schema_version: u32,
+    pub pr: u64,
+    pub sha: String,
+    pub verdict: ReviewReceiptVerdict,
+    pub review_depth: String,
+    pub fix_forward_applied: bool,
+    pub blocking_findings: Vec<String>,
+    pub labels_projected: Vec<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Data structures
 // ---------------------------------------------------------------------------
@@ -283,9 +306,24 @@ pub fn detect_contradictions(
     events: &[LabelEvent],
     ci_outcome: CiOutcome,
 ) -> Vec<Contradiction> {
+    detect_contradictions_with_review_receipt(pr, events, ci_outcome, None)
+}
+
+pub fn detect_contradictions_with_review_receipt(
+    pr: &OpenPr,
+    events: &[LabelEvent],
+    ci_outcome: CiOutcome,
+    review_receipt: Option<&ReviewReceipt>,
+) -> Vec<Contradiction> {
     let mut out = Vec::new();
 
     let has = |name: &str| pr.labels.iter().any(|l| l == name);
+
+    for contradiction in detect_review_receipt_contradictions(pr, review_receipt) {
+        if !out.iter().any(|existing: &Contradiction| existing.strip == contradiction.strip) {
+            out.push(contradiction);
+        }
+    }
 
     // --- CI-specific: live state is ground truth ---
 
@@ -367,6 +405,72 @@ pub fn detect_contradictions(
     }
 
     out
+}
+
+fn detect_review_receipt_contradictions(
+    pr: &OpenPr,
+    review_receipt: Option<&ReviewReceipt>,
+) -> Vec<Contradiction> {
+    let Some(receipt) = review_receipt else { return Vec::new() };
+    if receipt.kind != "review_receipt" || receipt.schema_version != 1 || receipt.pr != pr.number {
+        return Vec::new();
+    }
+    if receipt.sha != pr.head_ref_oid {
+        return Vec::new();
+    }
+
+    let mut contradictions = Vec::new();
+    let has = |name: &str| pr.labels.iter().any(|l| l == name);
+    match receipt.verdict {
+        ReviewReceiptVerdict::Approved => {
+            if has(NEEDS_BUILDER_FIX) {
+                contradictions.push(Contradiction {
+                    keep: REVIEW_REVIEWED.to_string(),
+                    strip: NEEDS_BUILDER_FIX.to_string(),
+                    reason: "current review receipt verdict=approved supersedes needs-builder-fix"
+                        .to_string(),
+                });
+            }
+            if has(NEEDS_DIFF_FIX) {
+                contradictions.push(Contradiction {
+                    keep: DIFF_AUDITED.to_string(),
+                    strip: NEEDS_DIFF_FIX.to_string(),
+                    reason: "current review receipt verdict=approved supersedes needs-diff-fix"
+                        .to_string(),
+                });
+            }
+        }
+        ReviewReceiptVerdict::NeedsBuilder => {
+            if has(REVIEW_REVIEWED) {
+                contradictions.push(Contradiction {
+                    keep: NEEDS_BUILDER_FIX.to_string(),
+                    strip: REVIEW_REVIEWED.to_string(),
+                    reason: "current review receipt verdict=needs_builder strips approval labels"
+                        .to_string(),
+                });
+            }
+            if has(MAINTAINER_PR_REVIEWED) {
+                contradictions.push(Contradiction {
+                    keep: NEEDS_BUILDER_FIX.to_string(),
+                    strip: MAINTAINER_PR_REVIEWED.to_string(),
+                    reason: "current review receipt verdict=needs_builder strips approval labels"
+                        .to_string(),
+                });
+            }
+        }
+        ReviewReceiptVerdict::NeedsDiff => {
+            if has(DIFF_AUDITED) {
+                contradictions.push(Contradiction {
+                    keep: NEEDS_DIFF_FIX.to_string(),
+                    strip: DIFF_AUDITED.to_string(),
+                    reason: "current review receipt verdict=needs_diff strips diff-audited"
+                        .to_string(),
+                });
+            }
+        }
+        ReviewReceiptVerdict::NeedsCi => {}
+    }
+    contradictions
 }
 
 /// Resolve a contradicting pair that has no live ground truth using timeline events.
@@ -740,6 +844,20 @@ mod tests {
 
     const TEST_TS: &str = "2026-04-27T00:00:00Z";
 
+    fn make_review_receipt(pr: u64, sha: &str, verdict: ReviewReceiptVerdict) -> ReviewReceipt {
+        ReviewReceipt {
+            kind: "review_receipt".to_string(),
+            schema_version: 1,
+            pr,
+            sha: sha.to_string(),
+            verdict,
+            review_depth: "deep".to_string(),
+            fix_forward_applied: false,
+            blocking_findings: Vec::new(),
+            labels_projected: Vec::new(),
+        }
+    }
+
     // -----------------------------------------------------------------------
     // CI-specific detection (live state is ground truth)
     // -----------------------------------------------------------------------
@@ -931,6 +1049,43 @@ mod tests {
         assert_eq!(c.len(), 1);
         assert_eq!(c[0].keep, REVIEW_REVIEWED);
         assert_eq!(c[0].strip, NEEDS_BUILDER_FIX);
+    }
+
+    #[test]
+    fn approved_review_receipt_current_sha_projects_positive_repair() {
+        let pr = make_pr(1, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let receipt = make_review_receipt(1, "sha-1", ReviewReceiptVerdict::Approved);
+        let c =
+            detect_contradictions_with_review_receipt(&pr, &[], CiOutcome::Pending, Some(&receipt));
+        assert!(c.iter().any(|item| item.strip == NEEDS_BUILDER_FIX));
+    }
+
+    #[test]
+    fn needs_builder_review_receipt_current_sha_strips_approval_labels() {
+        let pr = make_pr(1, &[REVIEW_REVIEWED, MAINTAINER_PR_REVIEWED, NEEDS_BUILDER_FIX]);
+        let receipt = make_review_receipt(1, "sha-1", ReviewReceiptVerdict::NeedsBuilder);
+        let c =
+            detect_contradictions_with_review_receipt(&pr, &[], CiOutcome::Pending, Some(&receipt));
+        assert!(c.iter().any(|item| item.strip == REVIEW_REVIEWED));
+        assert!(c.iter().any(|item| item.strip == MAINTAINER_PR_REVIEWED));
+    }
+
+    #[test]
+    fn stale_sha_review_receipt_is_ignored() {
+        let pr = make_pr(1, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let receipt = make_review_receipt(1, "different-sha", ReviewReceiptVerdict::NeedsBuilder);
+        let c =
+            detect_contradictions_with_review_receipt(&pr, &[], CiOutcome::Pending, Some(&receipt));
+        assert!(c.iter().all(|item| item.strip != REVIEW_REVIEWED));
+    }
+
+    #[test]
+    fn needs_diff_review_receipt_repairs_contradictory_diff_labels() {
+        let pr = make_pr(1, &[DIFF_AUDITED, NEEDS_DIFF_FIX]);
+        let receipt = make_review_receipt(1, "sha-1", ReviewReceiptVerdict::NeedsDiff);
+        let c =
+            detect_contradictions_with_review_receipt(&pr, &[], CiOutcome::Pending, Some(&receipt));
+        assert!(c.iter().any(|item| item.strip == DIFF_AUDITED));
     }
 
     #[test]

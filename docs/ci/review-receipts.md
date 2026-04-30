@@ -3,6 +3,11 @@
 Review receipts are **evidence-only** JSON artifacts emitted by review agents. They document what was checked, what was not observed, and what route should happen next. They do not mutate labels and they do not implement state-building logic.
 
 Schema: `.ci/receipts/schemas/review.schema.json`.
+Projection contract for reconciler-owned labels: `.ci/receipts/schemas/review-receipt.schema.json`.
+
+## Label authority
+
+Reviewer agents emit review receipts/comments only; they are not label authorities. The queue reconciler consumes current-SHA `review_receipt` evidence and projects/removes labels (`review-reviewed`, `diff-audited`, `needs-builder-fix`, `needs-diff-fix`) to repair contradictions.
 
 ## Required fields
 
