@@ -25,23 +25,23 @@ Perl has decades of real production code, but editor tooling still struggles wit
 
 ## Status at a glance
 
-These are behavioral and corpus-backed signals, not feature inventory counts. Protocol coverage and full feature catalogs live in the generated status docs.
+These are behavioral and corpus-backed signals, not feature-inventory counts. Protocol coverage and full capability catalogs live in the generated status docs.
 
 <!-- BEGIN: README_STATUS -->
 | Area | Current signal |
 |---|---:|
 | Release track | `v0.13.0-alpha` release prep |
-| Published crate surface | 34 crates after the v0.13 collapse |
+| Published crate surface | 31 crates |
 | Ubuntu system Perl corpus | 94.5% clean (`2825/2990`) |
 | CPAN top 1000 corpus | 95.3% clean (`8931/9372`) |
 | Project parser corpus | 100.0% clean (`95/95`) |
 | Parser NodeKind coverage | 65/69 |
 | Parser reliability | 0 project-corpus timeouts / 0 panics |
-| Editor UX scenarios | 27 scenario files tracked |
-| First-five-minutes UX workflows | 21 workflows tracked |
-| Issue-regression UX workflows | 13 workflows tracked |
 | Workspace stale-index defects | 0 / 7 tested scenarios |
 | Multi-root workspace tests | 8 / 8 |
+| Editor UX harness | 23 scenario files tracked |
+| First-five-minutes UX workflows | 21 workflows tracked |
+| Issue-regression UX workflows | 13 workflows tracked |
 <!-- END: README_STATUS -->
 
 See [project status](docs/project/status/index.md), [parser status](docs/project/status/parser.md), [workspace status](docs/project/status/workspace.md), and [quality metrics](docs/project/status/quality.md) for generated details.
@@ -50,7 +50,7 @@ See [project status](docs/project/status/index.md), [parser status](docs/project
 
 - **Editor workflows**: completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic tokens, inlay hints, code actions, code lens, and workspace symbols.
 - **Parser stack**: native lexer, parser-core, parser facade, corpus ratchets, and tree-sitter integration.
-- **UX testing**: 27 tracked editor UX scenarios, including first-five-minutes flows, issue-regression guards, cross-file navigation, diagnostics-after-edit, workspace churn, and rename.
+- **UX testing**: 23 tracked editor UX scenario files, including first-five-minutes flows, issue-regression guards, cross-file navigation, diagnostics-after-edit, workspace churn, and rename.
 - **Workspace intelligence**: module resolution, symbol indexing, stale-index guards, multi-root workspaces, and workspace-aware rename.
 - **Debug adapter**: breakpoints, stepping, stack frames, variables, evaluate, and launch/attach flows.
 - **Editor support**: VS Code, Open VSX, Neovim, Vim, Emacs, Helix, Zed, Sublime, and any editor with LSP support.
