@@ -44,9 +44,10 @@ Anti-pattern to avoid: "the failure looks shared/systemic so I'll merge anyway."
 
 ```
 1. /ops-check-queue — find merge-ready PRs
-2. /ops-merge-batch — merge up to 3
-3. /verify-master-green — confirm master CI
-4. /ops-post-merge — ratchet corpus, update status
-5. /ops-cleanup — worktrees, drift, branches
-6. /agent-wrapup — retrospective and handoff
+2. /ops-merge-train — pre-merge train plan/check + receipt
+3. /ops-merge-batch — merge up to 3
+4. /verify-master-green — confirm master CI
+5. /ops-post-merge — ratchet corpus, update status
+6. /ops-cleanup — worktrees, drift, branches
+7. /agent-wrapup — retrospective and handoff
 ```
