@@ -601,12 +601,10 @@ With lsp-mode or eglot:
 # Check if perllsp is in PATH
 command -v perllsp
 
-# Verify server health and metadata
+# Check CLI diagnostics and metadata commands
 perllsp --version
 perllsp --health
 perllsp --info
-
-# Validate a file directly
 perllsp --check path/to/file.pl
 ```
 
