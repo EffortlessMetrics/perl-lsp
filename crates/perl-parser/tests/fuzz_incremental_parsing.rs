@@ -225,6 +225,39 @@ proptest! {
                 // - Validate UTF-8 safety in symbol names
             }
     }
+
+    #[test]
+    fn fuzz_incremental_edit_sequences_preserve_no_panic(
+        base in "[ -~\n\t]{1,120}",
+        edits in proptest::collection::vec((0usize..120, "[ -~\n\t]{0,24}"), 1..12),
+    ) {
+        let mut script = base;
+
+        for (index_hint, payload) in edits {
+            let insertion_at = index_hint.min(script.len());
+            script.insert_str(insertion_at, &payload);
+
+            // Exercise delete/replace-like mutations without invalid byte indices.
+            if !script.is_empty() {
+                let delete_start = (index_hint / 2).min(script.len().saturating_sub(1));
+                let delete_end = (delete_start + payload.len() / 2).min(script.len());
+
+                if delete_start < delete_end {
+                    script.replace_range(delete_start..delete_end, "");
+                }
+            }
+
+            let mut parser = Parser::new(&script);
+            let parse_result =
+                std::panic::catch_unwind(AssertUnwindSafe(|| parser.parse()));
+
+            prop_assert!(
+                parse_result.is_ok(),
+                "incremental edit sequence caused parser panic for script: {:?}",
+                script
+            );
+        }
+    }
 }
 
 /// Test memory and performance characteristics under stress
