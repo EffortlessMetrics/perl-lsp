@@ -343,6 +343,16 @@ inherits = "release"
 lto = true
 codegen-units = 1
 
+
+[profile.agent]
+inherits = "dev"
+debug = "line-tables-only"
+incremental = false
+
+[profile.agent.build-override]
+debug = false
+incremental = false
+
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"

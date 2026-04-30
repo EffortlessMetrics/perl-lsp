@@ -1,0 +1,37 @@
+# .cargo/config.local.toml.example
+#
+# Copy to .cargo/config.local.toml for this checkout, or put equivalent
+# settings in ~/.cargo/config.toml / parent worktree-farm .cargo/config.toml.
+#
+# Do not commit .cargo/config.local.toml.
+
+[build]
+target-dir = "/mnt/devplane/perl-lsp/target/agent"
+build-dir = "/mnt/devplane/perl-lsp/build/agent"
+jobs = 2
+incremental = false
+rustc-wrapper = "sccache"
+
+[env]
+TMPDIR = { value = "/mnt/devplane/perl-lsp/tmp", force = false }
+SCCACHE_DIR = { value = "/mnt/devplane/perl-lsp/sccache", force = false }
+SCCACHE_CACHE_SIZE = { value = "15G", force = false }
+
+# Linux/macOS use colon separators.
+SCCACHE_BASEDIRS = { value = "/mnt/work/perl-lsp-worktrees:/mnt/devplane/worktrees", force = false }
+
+# Windows native example:
+#
+# [build]
+# target-dir = "D:/devplane/perl-lsp/target/agent"
+# build-dir = "D:/devplane/perl-lsp/build/agent"
+# jobs = 2
+# incremental = false
+# rustc-wrapper = "sccache"
+#
+# [env]
+# TEMP = { value = "D:\\devplane\\perl-lsp\\tmp", force = false }
+# TMP = { value = "D:\\devplane\\perl-lsp\\tmp", force = false }
+# SCCACHE_DIR = { value = "D:\\devplane\\perl-lsp\\sccache", force = false }
+# SCCACHE_CACHE_SIZE = { value = "15G", force = false }
+# SCCACHE_BASEDIRS = { value = "D:\\w\\perl-lsp-worktrees;D:\\devplane\\worktrees", force = false }

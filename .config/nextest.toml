@@ -1,9 +1,22 @@
 # Nextest configuration for LSP test stabilization
 # Phase 1: Retries and threading configuration for CI reliability
 
+# Nextest configuration for LSP test stabilization
+# Phase 1: Retries and threading configuration for CI reliability
+
+[store]
+dir = ".tmp/nextest/store"
+
 [profile.default]
 # Default profile for local development
 retries = 0
+
+[profile.agent]
+inherits = "default"
+test-threads = 2
+fail-fast = true
+status-level = "fail"
+final-status-level = "fail"
 
 [profile.ci]
 # CI profile with retry support for flaky tests
@@ -17,7 +30,7 @@ leak-timeout = "10s"
 
 [profile.ci.junit]
 # Generate JUnit reports for CI integration
-path = "target/nextest/ci/junit.xml"
+path = ".tmp/nextest/ci/junit.xml"
 
 [[profile.ci.overrides]]
 # LSP integration tests may need more time in CI
