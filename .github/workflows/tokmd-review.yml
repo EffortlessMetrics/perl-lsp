@@ -1,0 +1,202 @@
+name: tokmd PR Review
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  cockpit:
+    name: tokmd Review Cockpit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install tokmd
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="1.10.0"
+          asset="tokmd-linux-amd64"
+          url="https://github.com/EffortlessMetrics/tokmd/releases/download/v${version}/${asset}"
+          checksums_url="https://github.com/EffortlessMetrics/tokmd/releases/download/v${version}/checksums.txt"
+
+          curl -fsSL "$url" -o "$asset"
+          curl -fsSL "$checksums_url" -o checksums.txt
+
+          expected="$(grep -E "^[a-f0-9]+[[:space:]]+\*?${asset}$" checksums.txt | awk '{print $1}')"
+          actual="$(sha256sum "$asset" | awk '{print $1}')"
+
+          if [ -z "$expected" ]; then
+            echo "::error::Checksum for ${asset} not found in checksums.txt"
+            exit 1
+          fi
+
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::tokmd checksum mismatch"
+            echo "expected=$expected"
+            echo "actual=$actual"
+            exit 1
+          fi
+
+          install -m 0755 "$asset" /usr/local/bin/tokmd
+          tokmd --version
+
+      - name: Generate cockpit review
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p .tokmd/cockpit
+
+          # Ensure the base branch ref is available even on odd checkout states.
+          git fetch --no-tags origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+
+          tokmd cockpit \
+            --base "origin/${{ github.base_ref }}" \
+            --head HEAD \
+            --diff-range three-dot \
+            --format md \
+            --output .tokmd/cockpit/review.md \
+            --artifacts-dir .tokmd/cockpit
+
+      - name: Generate risk, complexity, and duplication analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p .tokmd/analysis
+
+          tokmd analyze . \
+            --preset risk \
+            --format json \
+            --git \
+            --detail-functions \
+            --near-dup \
+            --near-dup-threshold 0.86 \
+            --near-dup-scope module \
+            --near-dup-max-files 2000 \
+            --near-dup-max-pairs 2000 \
+            --output-dir .tokmd/analysis
+
+      - name: Run advisory review gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p .tokmd/gate
+
+          if [ -f .ci/policies/tokmd-review.toml ]; then
+            set +e
+            tokmd gate .tokmd/cockpit/cockpit.json \
+              --policy .ci/policies/tokmd-review.toml \
+              --format json \
+              > .tokmd/gate/review-gate.json
+            status=$?
+            set -e
+
+            if [ "$status" -ne 0 ]; then
+              echo "::warning::tokmd advisory review gate reported warnings/failures. See .tokmd/gate/review-gate.json."
+            fi
+          else
+            echo "::notice::No .ci/policies/tokmd-review.toml found; skipping advisory tokmd review gate."
+          fi
+
+      - name: Write workflow summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## tokmd Review Cockpit"
+            echo
+            if [ -f .tokmd/cockpit/review.md ]; then
+              cat .tokmd/cockpit/review.md
+            elif [ -f .tokmd/cockpit/comment.md ]; then
+              cat .tokmd/cockpit/comment.md
+            else
+              echo "No tokmd cockpit markdown was produced."
+            fi
+
+            if [ -f .tokmd/gate/review-gate.json ]; then
+              echo
+              echo "## Advisory Review Gate"
+              echo
+              echo '```json'
+              cat .tokmd/gate/review-gate.json
+              echo
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post cockpit PR comment
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+
+            const marker = '<!-- tokmd-review-cockpit -->';
+            const path = fs.existsSync('.tokmd/cockpit/comment.md')
+              ? '.tokmd/cockpit/comment.md'
+              : '.tokmd/cockpit/review.md';
+
+            if (!fs.existsSync(path)) {
+              core.warning(`No tokmd comment file found at ${path}`);
+              return;
+            }
+
+            const body = `${marker}\n${fs.readFileSync(path, 'utf8')}`;
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            const comments = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.data.find((comment) =>
+              comment.body && comment.body.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
+      - name: Upload tokmd review artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tokmd-review-${{ github.run_id }}
+          path: .tokmd/
+          if-no-files-found: warn
+          retention-days: 14
