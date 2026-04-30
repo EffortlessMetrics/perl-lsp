@@ -65,6 +65,9 @@ impl Policy for RequireUseWarnings {
 /// Prohibit bareword filehandles in `open`.
 struct ProhibitBarewordFileHandles;
 
+/// Prohibit two-argument `open`.
+struct ProhibitTwoArgOpen;
+
 /// Prohibit string-based eval
 struct ProhibitStringyEval;
 
@@ -87,6 +90,34 @@ impl Policy for ProhibitBarewordFileHandles {
                 severity: self.severity(),
                 range,
                 file: String::new(),
+            })
+            .collect()
+    }
+}
+
+impl Policy for ProhibitTwoArgOpen {
+    fn name(&self) -> &str {
+        "InputOutput::ProhibitTwoArgOpen"
+    }
+
+    fn severity(&self) -> Severity {
+        Severity::Harsh
+    }
+
+    fn analyze(&self, _ast: &Node, content: &str) -> Vec<Violation> {
+        extract_open_statements(content)
+            .into_iter()
+            .filter(|(_, statement)| has_two_arg_open(statement))
+            .map(|(start, _)| {
+                let r = range_for_match(content, start, start + 4);
+                Violation {
+                    policy: self.name().to_string(),
+                    description: "Code uses two-argument open".to_string(),
+                    explanation: "Use three-argument open with an explicit mode to avoid shell interpolation hazards".to_string(),
+                    severity: self.severity(),
+                    range: r,
+                    file: String::new(),
+                }
             })
             .collect()
     }
@@ -126,6 +157,7 @@ impl Default for BuiltInAnalyzer {
                 Box::new(RequireUseStrict),
                 Box::new(RequireUseWarnings),
                 Box::new(ProhibitBarewordFileHandles),
+                Box::new(ProhibitTwoArgOpen),
                 Box::new(ProhibitStringyEval),
             ],
         }
@@ -159,7 +191,7 @@ fn missing_use_statement_violation(
     feature: &str,
     explanation: &str,
 ) -> Vec<Violation> {
-    if content.contains(&format!("use {feature}")) {
+    if has_use_statement(content, feature) {
         return Vec::new();
     }
 
@@ -171,6 +203,25 @@ fn missing_use_statement_violation(
         range: insertion_range(),
         file: String::new(),
     }]
+}
+
+fn has_use_statement(content: &str, feature: &str) -> bool {
+    content.lines().any(|line| has_use_statement_line(line, feature))
+}
+
+fn has_use_statement_line(line: &str, feature: &str) -> bool {
+    let code_portion = line.split('#').next().unwrap_or_default();
+    let mut tokens = code_portion.split_whitespace();
+    let Some(first) = tokens.next() else {
+        return false;
+    };
+    if first != "use" {
+        return false;
+    }
+    let Some(module) = tokens.next() else {
+        return false;
+    };
+    module.trim_end_matches(';') == feature
 }
 
 fn find_bareword_open_filehandles(content: &str) -> Vec<Range> {
@@ -254,6 +305,66 @@ fn skip_ascii_whitespace(bytes: &[u8], mut cursor: usize) -> usize {
         cursor += 1;
     }
     cursor
+}
+
+/// Extract `open` statements from `content`, returning (byte_offset, &str) pairs.
+/// The byte offset points to the start of the `open` keyword on the line.
+/// Works correctly with both LF and CRLF line endings.
+fn extract_open_statements(content: &str) -> Vec<(usize, &str)> {
+    let mut statements = Vec::new();
+    let mut offset = 0usize;
+
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        let leading = line.len().saturating_sub(trimmed.len());
+        if let Some(open_idx) = trimmed.find("open") {
+            let absolute_open = offset + leading + open_idx;
+            let before = trimmed[..open_idx].chars().last();
+            let after = trimmed[open_idx + 4..].chars().next();
+            let word_boundary_before =
+                before.is_none_or(|ch| !(ch.is_ascii_alphanumeric() || ch == '_'));
+            let word_boundary_after =
+                after.is_none_or(|ch| !(ch.is_ascii_alphanumeric() || ch == '_'));
+            if word_boundary_before && word_boundary_after {
+                let statement = &trimmed[open_idx..];
+                statements.push((absolute_open, statement));
+            }
+        }
+        // Advance offset past the line bytes plus any line-ending byte(s).
+        let after_line = offset + line.len();
+        if content.as_bytes().get(after_line) == Some(&b'\r') {
+            offset = after_line + 2; // CRLF
+        } else if content.as_bytes().get(after_line) == Some(&b'\n') {
+            offset = after_line + 1; // LF
+        } else {
+            offset = after_line; // EOF — no trailing newline
+        }
+    }
+
+    statements
+}
+
+/// Return `true` when `open_stmt` (starting with `open`) uses the two-argument form.
+fn has_two_arg_open(open_stmt: &str) -> bool {
+    if !open_stmt.starts_with("open") {
+        return false;
+    }
+    let comment_free = open_stmt.split('#').next().unwrap_or(open_stmt);
+    if !comment_free.contains(',') {
+        return false;
+    }
+
+    let mut comma_count = 0usize;
+    for ch in comment_free.chars() {
+        if ch == ',' {
+            comma_count += 1;
+        }
+        if ch == ';' || ch == ')' {
+            break;
+        }
+    }
+
+    comma_count == 1
 }
 
 fn has_stringy_eval(content: &str) -> bool {
@@ -402,6 +513,90 @@ eval $code;
         assert!(
             violations.iter().any(|v| v.policy == "BuiltinFunctions::ProhibitStringyEval"),
             "expected ProhibitStringyEval violation for eval '...'"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn builtin_analyzer_flags_two_arg_open() -> TestResult {
+        // Two-argument open: `open FH, $path;` — one comma, no explicit mode.
+        let source = "use strict;\nuse warnings;\nopen FH, $path;\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        let has_two_arg_violation =
+            violations.iter().any(|v| v.policy == "InputOutput::ProhibitTwoArgOpen");
+        assert!(has_two_arg_violation, "expected InputOutput::ProhibitTwoArgOpen violation");
+        Ok(())
+    }
+
+    #[test]
+    fn builtin_analyzer_accepts_three_arg_open() -> TestResult {
+        // Three-argument open: `open(my $fh, '<', $path);` — two commas, explicit mode.
+        let source = "use strict;\nuse warnings;\nopen(my $fh, '<', $path);\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        let has_two_arg_violation =
+            violations.iter().any(|v| v.policy == "InputOutput::ProhibitTwoArgOpen");
+        assert!(
+            !has_two_arg_violation,
+            "three-argument open should not be flagged as two-argument open"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn two_arg_open_violation_has_correct_line() -> TestResult {
+        // The violation must point to line 2 (zero-indexed), not line 0.
+        let source = "use strict;\nuse warnings;\nopen FH, $path;\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        let v = violations
+            .iter()
+            .find(|v| v.policy == "InputOutput::ProhibitTwoArgOpen")
+            .ok_or("expected InputOutput::ProhibitTwoArgOpen violation")?;
+
+        assert_eq!(v.range.start.line, 2, "violation should be on line 2 (zero-indexed)");
+        Ok(())
+    }
+
+    #[test]
+    fn comments_do_not_satisfy_use_statement_requirements() -> TestResult {
+        let source = "# use strict;\n# use warnings;\nmy $x = 1;\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseStrict"));
+        assert!(violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseWarnings"));
+        Ok(())
+    }
+
+    #[test]
+    fn use_strictures_does_not_satisfy_use_strict_requirement() -> TestResult {
+        // "use strictures;" must NOT suppress RequireUseStrict — it is a different module.
+        // A substring check ("use strict" in "use strictures") would false-negative here.
+        let source = "use strictures;\nuse warnings;\nmy $x = 1;\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+        let analyzer = BuiltInAnalyzer::new();
+        let violations = analyzer.analyze(&ast, source);
+
+        assert!(
+            violations.iter().any(|v| v.policy == "TestingAndDebugging::RequireUseStrict"),
+            "use strictures should not satisfy RequireUseStrict — they are different modules"
         );
         Ok(())
     }

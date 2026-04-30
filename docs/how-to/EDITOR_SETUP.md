@@ -24,15 +24,14 @@ perllsp --health
 | Editor | Fast path | Detailed guide |
 | --- | --- | --- |
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
-| Trae (ByteDance) | install the VS Code-compatible extension or set command to `perllsp --stdio` | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
-| Neovim | define a custom `perllsp` config with `vim.lsp.config()` and enable via `vim.lsp.enable()` (legacy `nvim-lspconfig` supported for older Neovim) | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
-| Vim | use `vim-lsp` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
-| coc.nvim | configure `languageserver.perl-lsp` in `coc-settings.json` to launch `perllsp --stdio`; works in Neovim and Vim when the buffer filetype is `perl` | [docs/EDITORS/COC_NEOVIM_SETUP.md](../EDITORS/COC_NEOVIM_SETUP.md) |
+| Trae (ByteDance) | install the VS Code-compatible `EffortlessMetrics.perl-lsp-rs` extension; use `perl-lsp.serverPath` only for manual/offline `perllsp` deployments | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
+| Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
+| Vim | use `vim-lsp` or `coc.nvim` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
-| Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
+| Helix | override the built-in Perl language server from `perlnavigator` to `perllsp --stdio` in `languages.toml` | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
-| Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
-| Amazon Kiro | use OpenVSX `EffortlessMetrics.perl-lsp-rs` in Kiro IDE; for Kiro CLI configure custom LSP `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
+| Sublime Text | install Sublime's `LSP` package and add a custom `perl-lsp` server in `LanguageServers.sublime-settings` using `perllsp --stdio` | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
 | Codex CLI | configure an MCP bridge such as `lsp-mcp`; the bridge exposes tools to Codex and launches `perllsp --stdio` internally | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
 | Codex Desktop | add a custom Perl server command `perllsp --stdio` | [docs/EDITORS/CODEX_DESKTOP_SETUP.md](../EDITORS/CODEX_DESKTOP_SETUP.md) |
@@ -130,15 +129,29 @@ It must be `perl`.
 
 ### Helix
 
-```toml
-[[language]]
-name = "perl"
-language-servers = ["perllsp"]
+Helix already has a Perl language entry, but its default server is
+`perlnavigator`. To use `perllsp`, define a new language server and attach it to
+the `perl` language:
 
-[language-server.perllsp]
+```toml
+[language-server.perl-lsp]
 command = "perllsp"
 args = ["--stdio"]
+
+[[language]]
+name = "perl"
+language-servers = ["perl-lsp"]
 ```
+
+Check setup with:
+
+```bash
+hx --health perl
+perllsp --health
+perllsp --info
+```
+
+See [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) for a full example.
 
 ### Zed
 
@@ -163,9 +176,21 @@ See [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) for full setup details.
 
 ### Sublime Text
 
-Register a client with `command: ["perllsp", "--stdio"]`, use a selector such as
-`source.perl | text.perl`, and set `syntaxes` to Perl/Pod syntax files so `.pm`,
-`.pl`, `.t`, and Pod buffers consistently attach to the server.
+Install the `LSP` package, then open `Preferences: LSP Server Configurations`
+and add:
+
+```json
+{
+  "perl-lsp": {
+    "enabled": true,
+    "command": ["perllsp", "--stdio"],
+    "selector": "source.perl"
+  }
+}
+```
+
+For project-specific server settings, use `.perl-lsp.toml` or add Sublime
+`initialization_options` under the `perl-lsp` server configuration.
 
 ### Amazon Kiro
 
