@@ -50,7 +50,7 @@ See [project status](docs/project/status/index.md), [parser status](docs/project
 
 - **Editor workflows**: completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic tokens, inlay hints, code actions, code lens, and workspace symbols.
 - **Parser stack**: native lexer, parser-core, parser facade, corpus ratchets, and tree-sitter integration.
-- **UX testing**: 23 tracked editor UX scenarios, including first-five-minutes flows, issue-regression guards, cross-file navigation, diagnostics-after-edit, workspace churn, and rename.
+- **UX testing**: 27 tracked editor UX scenarios, including first-five-minutes flows, issue-regression guards, cross-file navigation, diagnostics-after-edit, workspace churn, and rename.
 - **Workspace intelligence**: module resolution, symbol indexing, stale-index guards, multi-root workspaces, and workspace-aware rename.
 - **Debug adapter**: breakpoints, stepping, stack frames, variables, evaluate, and launch/attach flows.
 - **Editor support**: VS Code, Open VSX, Neovim, Vim, Emacs, Helix, Zed, Sublime, and any editor with LSP support.
