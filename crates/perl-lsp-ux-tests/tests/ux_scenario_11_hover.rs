@@ -133,3 +133,83 @@ fn scenario_11_hover_on_sub_name_does_not_crash() {
 
     harness.assert_no_crash();
 }
+
+#[test]
+fn scenario_11_hover_range_contains_cursor_when_present() {
+    if !binary_available() {
+        eprintln!("SKIP scenario_11: perl-lsp binary not found");
+        return;
+    }
+
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(15), ..Default::default() }
+            .with_file("calc.pl", HOVER_SOURCE),
+    )
+    .expect("Failed to create UX harness");
+
+    harness.open_file("calc.pl", HOVER_SOURCE).expect("didOpen should succeed");
+
+    std::thread::sleep(Duration::from_millis(300));
+
+    // Hover on function call site `calculate_sum` — line 8, char 14.
+    match harness.hover("calc.pl", 8, 14) {
+        Ok(Some(result)) => {
+            if let Some(range) = result.get("range") {
+                let start_line = range["start"]["line"].as_u64();
+                let start_char = range["start"]["character"].as_u64();
+                let end_line = range["end"]["line"].as_u64();
+                let end_char = range["end"]["character"].as_u64();
+
+                assert!(start_line.is_some(), "Hover range.start.line must be numeric");
+                assert!(start_char.is_some(), "Hover range.start.character must be numeric");
+                assert!(end_line.is_some(), "Hover range.end.line must be numeric");
+                assert!(end_char.is_some(), "Hover range.end.character must be numeric");
+
+                let (start_line, start_char, end_line, end_char) = (
+                    start_line.unwrap_or_default(),
+                    start_char.unwrap_or_default(),
+                    end_line.unwrap_or_default(),
+                    end_char.unwrap_or_default(),
+                );
+
+                assert!(
+                    start_line <= end_line,
+                    "Hover range start line must be <= end line: {:?}",
+                    range
+                );
+                if start_line == end_line {
+                    assert!(
+                        start_char <= end_char,
+                        "Hover range start char must be <= end char on same line: {:?}",
+                        range
+                    );
+                }
+
+                let cursor_line: u64 = 8;
+                let cursor_char: u64 = 14;
+                let starts_before_cursor =
+                    start_line < cursor_line || (start_line == cursor_line && start_char <= cursor_char);
+                let ends_after_cursor =
+                    end_line > cursor_line || (end_line == cursor_line && end_char >= cursor_char);
+                assert!(
+                    starts_before_cursor && ends_after_cursor,
+                    "Hover range should contain the cursor when provided: range={:?}, cursor=({}, {})",
+                    range,
+                    cursor_line,
+                    cursor_char
+                );
+            }
+        }
+        Ok(None) => {
+            eprintln!("INFO scenario_11: hover returned null (degraded mode acceptable)");
+        }
+        Err(e) => {
+            panic!(
+                "Hover returned a JSON-RPC error at function call site — feature grid regression: {}",
+                e
+            );
+        }
+    }
+
+    harness.assert_no_crash();
+}
