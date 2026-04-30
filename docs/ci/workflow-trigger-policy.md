@@ -16,6 +16,10 @@ For each `required = true` check, the workflow must:
 - avoid top-level or event-level `paths` / `paths-ignore`
 - define event-aware concurrency:
   - `cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}`
+- not declare `pull_request` `types: [labeled]` or `[unlabeled]` —
+  required workflows must run on code events only; label events should
+  not re-trigger required CI (defense-in-depth on top of the
+  synchronize-only `cancel-in-progress` rule above)
 - exist at the configured path
 
 ## Commands
