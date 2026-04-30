@@ -2992,6 +2992,24 @@ mod tests {
     }
 
     #[test]
+    fn shell_command_natural_exit_preserves_actual_exit_code() -> color_eyre::eyre::Result<()> {
+        let tmp = tempdir()?;
+        let log_path = tmp.path().join("natural_exit.log");
+        // A command that exits quickly with a non-zero code.
+        // On Windows `cmd /C exit 42` is reliable; on Unix `bash -lc "exit 42"`.
+        let command = if cfg!(windows) { "exit 42" } else { "exit 42" };
+
+        let execution = run_shell_command_with_timeout(command, &log_path, 30)?;
+
+        assert!(!execution.timed_out, "process that exits naturally must not be marked timed_out");
+        assert_eq!(
+            execution.exit_code, 42,
+            "natural exit code must be preserved (not overwritten with 124)"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn required_gate_timeout_reports_receipt_fields_and_blocks_overall_status()
     -> color_eyre::eyre::Result<()> {
         let gate = GateDefinition {
