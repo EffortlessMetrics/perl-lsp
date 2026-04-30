@@ -341,9 +341,43 @@ my $value = gre
         "hover after bogus cancelRequest returned error: {post_cancel_response:#}"
     );
 
+
+    // ── Step 10: textDocument/rename ─────────────────────────────────────
+    let (rename_line, rename_col) = line_col(fixture_v2, 6, "greet()")?;
+    let rename_response = send_request_with_timeout(
+        &server,
+        10,
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": rename_line, "character": rename_col },
+            "newName": "salute"
+        }),
+        timeout,
+    )?;
+    assert!(
+        rename_response.get("error").is_none(),
+        "rename returned error: {rename_response:#}"
+    );
+    let rename_result = rename_response
+        .get("result")
+        .ok_or("rename result should be present")?;
+    let rename_changes = rename_result
+        .get("changes")
+        .and_then(Value::as_object)
+        .ok_or("rename changes should be an object")?;
+    let this_file_edits = rename_changes
+        .get(uri)
+        .and_then(Value::as_array)
+        .ok_or("rename should contain edits for opened document")?;
+    assert!(
+        this_file_edits.len() >= 2,
+        "rename should update both declaration and call site, edits: {this_file_edits:#?}"
+    );
+
     // ── Shutdown ────────────────────────────────────────────────────────
     let shutdown_response =
-        send_request_with_timeout(&server, 10, "shutdown", json!(null), timeout)?;
+        send_request_with_timeout(&server, 11, "shutdown", json!(null), timeout)?;
     assert!(
         shutdown_response.get("error").is_none(),
         "shutdown returned error: {shutdown_response:#}"
