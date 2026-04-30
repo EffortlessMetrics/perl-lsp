@@ -1,0 +1,11 @@
+{
+  "name": "docs-only non-parser docs do not select parser-ratchet",
+  "changed_files": [
+    "docs/ci/LOCAL_CI_PROTOCOL.md"
+  ],
+  "risk_tags": [],
+  "expected": {
+    "selected": false,
+    "reason": "no parser-relevant path or risk tag matched"
+  }
+}

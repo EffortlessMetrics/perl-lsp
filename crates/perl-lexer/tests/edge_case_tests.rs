@@ -200,6 +200,30 @@ fn heredoc_with_trailing_whitespace_on_terminator() -> R {
     Ok(())
 }
 
+#[test]
+fn heredoc_indented_terminator_with_tabs() -> R {
+    let input = "<<~EOF\n\t\tpayload\n\tEOF\n";
+    assert_terminates(input);
+    let sig = significant(input);
+    assert!(
+        sig.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart)),
+        "expected HeredocStart"
+    );
+    Ok(())
+}
+
+#[test]
+fn heredoc_quoted_label_requires_exact_terminator() -> R {
+    let input = "<<'EOF'\nbody\neof\n";
+    assert_terminates(input);
+    let toks = tokens(input);
+    assert!(
+        toks.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest)),
+        "expected UnknownRest when quoted label terminator differs by case"
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // 2. Regex delimiters
 // ===========================================================================
@@ -654,6 +678,45 @@ fn q_with_escaped_delimiter() -> R {
         first.token_type
     );
     assert_eq!(first.text.as_ref(), r"q|hello \| world|");
+    Ok(())
+}
+
+#[test]
+fn quote_like_optional_whitespace_before_paired_delimiter() -> R {
+    let input = "qq {hello {nested} world}";
+    assert_terminates(input);
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::QuoteDouble),
+        "Expected QuoteDouble for qq {{...}}, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "qq {hello {nested} world}");
+    Ok(())
+}
+
+#[test]
+fn substitution_with_whitespace_and_mixed_paired_delimiters() -> R {
+    let input = "s {old} [new]ge";
+    assert_terminates(input);
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::Substitution),
+        "Expected Substitution for s {{...}} [...], got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "s {old} [new]ge");
+    Ok(())
+}
+
+#[test]
+fn malformed_quote_like_constructs_do_not_panic() -> R {
+    let cases = ["q{unterminated", "s{a}{b", "tr{a}[b", "qr{foo"];
+    for case in cases {
+        assert_terminates(case);
+    }
     Ok(())
 }
 
@@ -1285,6 +1348,52 @@ fn sub_forward_declaration_does_not_leak() -> R {
         !var_tokens.is_empty(),
         "Expected $^W after forward declaration to be lexed correctly, got tokens: {:?}",
         sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Regression: sigil deref with chained hash subscript (PR #6497 fix)
+//
+// Before the fix, the two `is_deref` / backtrack paths in the sigil scanner
+// did NOT set `after_var_subscript = true`, so a following `{` was treated as
+// a block opener rather than a subscript dereference.  These tests lock the
+// correct behaviour.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn sigil_deref_scalar_chained_hash_subscript_terminates() -> R {
+    // `${$ref}{key}` — scalar deref then hash subscript.
+    // The lexer must not hang or produce a span overrun.
+    assert_terminates(r#"my $v = ${$ref}{key};"#);
+    Ok(())
+}
+
+#[test]
+fn sigil_deref_array_chained_slice_terminates() -> R {
+    // `@{$aref}[0]` — array deref then index subscript.
+    assert_terminates(r#"my @s = @{$aref}[0, 1];"#);
+    Ok(())
+}
+
+#[test]
+fn sigil_deref_hash_chained_subscript_terminates() -> R {
+    // `%{$href}{key}` — hash deref then key subscript.
+    assert_terminates(r#"my %h = %{$href}{key};"#);
+    Ok(())
+}
+
+#[test]
+fn sigil_deref_chained_does_not_suppress_regex_after_brace() -> R {
+    // After `${$ref}{key}`, a following `/` must still be a regex delimiter,
+    // not a division operator.  This guards against context-flag pollution
+    // from the dereference path.
+    let toks = significant(r#"${$ref}{key}; /pattern/"#);
+    let has_regex = toks.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    assert!(
+        has_regex,
+        "expected a Regex token after sigil-deref chain, got: {:?}",
+        toks.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
     );
     Ok(())
 }

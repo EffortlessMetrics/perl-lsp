@@ -913,3 +913,17 @@ fn test_error_message_clarity_user_facing() {
         assert!(msg.len() > 20, "Should be descriptive (>20 chars)");
     }
 }
+
+#[test]
+fn test_unexpected_unicode_character_preserves_token_text() {
+    use perl_lexer::{PerlLexer, TokenType};
+
+    let mut lexer = PerlLexer::new("🧪");
+    let token = lexer.next_token();
+
+    assert!(token.is_some(), "expected token for unexpected unicode input");
+    if let Some(token) = token {
+        assert_eq!(&*token.text, "🧪");
+        assert!(!matches!(token.token_type, TokenType::EOF));
+    }
+}

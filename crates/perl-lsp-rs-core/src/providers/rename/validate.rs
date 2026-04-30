@@ -45,13 +45,13 @@ pub fn validate_name(
 
     // Check if it starts with a number
     if let Some(first_char) = name.chars().next()
-        && first_char.is_numeric()
+        && first_char.is_ascii_digit()
     {
         return Err("Name cannot start with a number".to_string());
     }
 
     // Check if it contains only valid characters
-    if !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+    if !name.is_ascii() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
         return Err("Name can only contain letters, numbers, and underscores".to_string());
     }
 

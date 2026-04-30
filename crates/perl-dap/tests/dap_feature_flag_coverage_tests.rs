@@ -1,11 +1,12 @@
 //! DAP Feature Flag Coverage Tests
 //!
-//! Explicit test coverage for 8 DAP features that previously had no dedicated
+//! Explicit test coverage for DAP features that previously had no dedicated
 //! feature-gate validation:
 //!
 //! - AC0: dap.core
 //! - AC1: dap.breakpoints.basic
 //! - AC2: dap.breakpoints.hit_condition
+//! - AC2b: dap.breakpoints.function (function breakpoints with condition expressions)
 //! - AC3: dap.breakpoints.logpoints
 //! - AC4: dap.completions
 //! - AC5: dap.exceptions.die
@@ -17,7 +18,7 @@
 //! 2. Capability test: initialize response advertises the feature correctly
 //! 3. Functional test: feature-gated code path works when enabled
 //!
-//! Related issues: #2784, #435, #2783
+//! Related issues: #2784, #435, #2783, #5498
 
 use perl_dap::feature_catalog::has_feature;
 use perl_dap::{DapMessage, DebugAdapter};
@@ -355,6 +356,150 @@ fn test_functional_dap_breakpoints_hit_condition_modulo() -> TestResult {
     assert!(!h2.should_stop, "hit 2 must not stop for `%3`");
     assert!(h3.should_stop, "hit 3 must stop for `%3`");
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// AC2b: dap.breakpoints.function
+// ---------------------------------------------------------------------------
+
+/// Feature gate: dap.breakpoints.function is registered in the catalog.
+#[test]
+fn test_feature_gate_dap_breakpoints_function() {
+    assert!(
+        has_feature("dap.breakpoints.function"),
+        "dap.breakpoints.function must be registered in the feature catalog"
+    );
+}
+
+/// Capability test: initialize advertises supportsFunctionBreakpoints.
+///
+/// `supportsFunctionBreakpoints` is tied to `dap.core` in the adapter
+/// (function breakpoints are a core DAP capability, not a separately-gated
+/// extension).  This test asserts the advertised capability matches the
+/// feature-catalog state.
+#[test]
+fn test_capability_dap_breakpoints_function_initialize_response() -> TestResult {
+    let body = get_initialize_body()?;
+    let supports =
+        body.get("supportsFunctionBreakpoints").and_then(|v| v.as_bool()).unwrap_or(false);
+    assert!(supports, "supportsFunctionBreakpoints must be true in the initialize response");
+    Ok(())
+}
+
+/// Functional test: setFunctionBreakpoints accepts a Perl variable as condition.
+///
+/// The DAP spec permits any string expression as a breakpoint condition; the
+/// adapter stores it without semantic validation.  A valid function name with
+/// a Perl-variable condition must return `success: true` and `verified: true`.
+#[test]
+fn test_functional_dap_function_breakpoints_with_condition() -> TestResult {
+    if !has_feature("dap.breakpoints.function") {
+        return Ok(());
+    }
+
+    let mut adapter = initialize_adapter();
+    let response = adapter.handle_request(
+        2,
+        "setFunctionBreakpoints",
+        Some(json!({
+            "breakpoints": [{
+                "name": "test_func",
+                "condition": "$debug_flag"
+            }]
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success: true, command, body: Some(body), .. }
+            if command == "setFunctionBreakpoints" =>
+        {
+            let bps = body["breakpoints"].as_array().ok_or("missing breakpoints array")?;
+            assert_eq!(bps.len(), 1, "expected exactly one breakpoint record");
+            assert!(
+                bps[0]["verified"].as_bool().unwrap_or(false),
+                "function breakpoint 'test_func' must be verified"
+            );
+            Ok(())
+        }
+        other => Err(format!("unexpected response: {other:?}").into()),
+    }
+}
+
+/// Functional test: setFunctionBreakpoints accepts a scalar variable condition ($count).
+///
+/// Perl scalars are truthy/falsy at runtime; the adapter must store the
+/// condition string as-is without rejecting non-boolean expressions.
+#[test]
+fn test_functional_dap_function_breakpoints_scalar_condition() -> TestResult {
+    if !has_feature("dap.breakpoints.function") {
+        return Ok(());
+    }
+
+    let mut adapter = initialize_adapter();
+    let response = adapter.handle_request(
+        3,
+        "setFunctionBreakpoints",
+        Some(json!({
+            "breakpoints": [{
+                "name": "my_sub",
+                "condition": "$count"
+            }]
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success: true, command, body: Some(body), .. }
+            if command == "setFunctionBreakpoints" =>
+        {
+            let bps = body["breakpoints"].as_array().ok_or("missing breakpoints array")?;
+            assert_eq!(bps.len(), 1, "expected exactly one breakpoint record");
+            assert!(
+                bps[0]["verified"].as_bool().unwrap_or(false),
+                "function breakpoint 'my_sub' must be verified"
+            );
+            Ok(())
+        }
+        other => Err(format!("unexpected response: {other:?}").into()),
+    }
+}
+
+/// Functional test: setFunctionBreakpoints accepts a compound boolean expression as condition.
+///
+/// Complex Perl expressions (e.g., `defined($ENV{DEBUG}) && $ENV{DEBUG} > 0`)
+/// are valid breakpoint conditions.  The adapter stores them for the debugger
+/// to evaluate at runtime.
+#[test]
+fn test_functional_dap_function_breakpoints_complex_condition() -> TestResult {
+    if !has_feature("dap.breakpoints.function") {
+        return Ok(());
+    }
+
+    let mut adapter = initialize_adapter();
+    let response = adapter.handle_request(
+        4,
+        "setFunctionBreakpoints",
+        Some(json!({
+            "breakpoints": [{
+                "name": "handler",
+                "condition": "defined($ENV{DEBUG}) && $ENV{DEBUG} > 0"
+            }]
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success: true, command, body: Some(body), .. }
+            if command == "setFunctionBreakpoints" =>
+        {
+            let bps = body["breakpoints"].as_array().ok_or("missing breakpoints array")?;
+            assert_eq!(bps.len(), 1, "expected exactly one breakpoint record");
+            assert!(
+                bps[0]["verified"].as_bool().unwrap_or(false),
+                "function breakpoint 'handler' must be verified"
+            );
+            Ok(())
+        }
+        other => Err(format!("unexpected response: {other:?}").into()),
+    }
 }
 
 // ---------------------------------------------------------------------------

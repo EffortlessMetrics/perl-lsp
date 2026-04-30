@@ -11,61 +11,124 @@
 use regex::Regex;
 use std::sync::LazyLock;
 
+/// Source location of a detected anti-pattern.
+///
+/// All three coordinates are provided so callers can serve both LSP (line/column)
+/// and byte-level (offset) consumers without re-computing positions.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Location {
+    /// Zero-based line number within the scanned source fragment.
     pub line: usize,
+    /// Zero-based column (byte offset from the start of the line).
     pub column: usize,
+    /// Absolute byte offset from the start of the scanned source fragment.
     pub offset: usize,
 }
 
+/// Diagnostic severity level for a detected anti-pattern.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Severity {
-    Error,   // Code will likely fail
-    Warning, // Code works but is problematic
-    Info,    // Code could be improved
+    /// The construct will likely cause a runtime or parse failure.
+    Error,
+    /// The construct works but is fragile or difficult to analyze statically.
+    Warning,
+    /// The construct is valid but could be improved for readability or tooling support.
+    Info,
 }
 
+/// A specific category of heredoc-related anti-pattern found in Perl source.
+///
+/// Each variant captures the [`Location`] of the offending construct plus any
+/// context needed to produce a useful diagnostic message.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AntiPattern {
+    /// A heredoc declared inside a `format` body.
     FormatHeredoc { location: Location, format_name: String, heredoc_delimiter: String },
+    /// A heredoc declared inside a `BEGIN { ... }` block, evaluated at compile time.
     BeginTimeHeredoc { location: Location, heredoc_content: String, side_effects: Vec<String> },
+    /// A heredoc whose terminator is determined by a variable or expression at runtime.
     DynamicHeredocDelimiter { location: Location, expression: String },
+    /// A `use Filter::*` statement that may rewrite source before static analysis runs.
     SourceFilterHeredoc { location: Location, module: String },
+    /// A heredoc embedded inside a `(?{ ... })` regex code block.
     RegexCodeBlockHeredoc { location: Location },
+    /// A heredoc embedded inside a string argument to `eval`.
     EvalStringHeredoc { location: Location },
+    /// A heredoc written to a filehandle that has been `tie`d to a custom class.
     TiedHandleHeredoc { location: Location, handle_name: String },
 }
 
+/// A fully-formed diagnostic produced by the anti-pattern detector.
+///
+/// Contains everything needed to display a problem in an IDE or report:
+/// the severity, the matched pattern (with location), a human-readable message,
+/// a longer explanation, an optional suggested fix, and `perldoc` references.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Diagnostic {
+    /// How serious the problem is.
     pub severity: Severity,
+    /// The specific anti-pattern that triggered this diagnostic.
     pub pattern: AntiPattern,
+    /// Short one-line summary suitable for an IDE problem marker.
     pub message: String,
+    /// Longer explanation of why the construct is problematic.
     pub explanation: String,
+    /// Optional concrete suggestion for fixing the problem.
     pub suggested_fix: Option<String>,
+    /// Relevant `perldoc` pages or documentation references.
     pub references: Vec<String>,
 }
 
+/// Scans Perl source for heredoc-related anti-patterns and produces [`Diagnostic`]s.
+///
+/// Construct with [`AntiPatternDetector::new`], then call [`detect_all`] with the
+/// source text.  The detector runs all seven built-in pattern checkers and returns
+/// the results sorted by byte offset so callers receive problems in source order.
+///
+/// [`detect_all`]: AntiPatternDetector::detect_all
 pub struct AntiPatternDetector {
     patterns: Vec<Box<dyn PatternDetector>>,
 }
 
 trait PatternDetector: Send + Sync {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)>;
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)>;
     fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic>;
 }
 
-fn location_from_start(code: &str, offset: usize, start: usize) -> Location {
-    let line = code[..start].lines().count();
-    let column = match code[..start].rfind('\n') {
-        Some(last_newline) => start.saturating_sub(last_newline + 1),
-        None => start,
-    };
+fn build_line_starts(code: &str) -> Vec<usize> {
+    let mut line_starts = Vec::new();
+    line_starts.push(0);
+
+    for (idx, byte) in code.bytes().enumerate() {
+        if byte == b'\n' {
+            line_starts.push(idx + 1);
+        }
+    }
+
+    line_starts
+}
+
+fn location_from_start(line_starts: &[usize], offset: usize, start: usize) -> Location {
+    let insertion = line_starts.partition_point(|&line_start| line_start <= start);
+    let line = insertion.saturating_sub(1);
+    let line_start = line_starts.get(line).copied().unwrap_or(0);
+    let column = start.saturating_sub(line_start);
 
     Location { line, column, offset: offset + start }
 }
 
 fn mask_non_code_regions(code: &str) -> String {
+    fn push_masked_char(masked: &mut String, ch: char) {
+        for _ in 0..ch.len_utf8() {
+            masked.push(' ');
+        }
+    }
+
     let mut masked = String::with_capacity(code.len());
     let mut in_single_quote = false;
     let mut in_double_quote = false;
@@ -78,7 +141,7 @@ fn mask_non_code_regions(code: &str) -> String {
                 in_line_comment = false;
                 masked.push('\n');
             } else {
-                masked.push(' ');
+                push_masked_char(&mut masked, ch);
             }
             continue;
         }
@@ -91,7 +154,7 @@ fn mask_non_code_regions(code: &str) -> String {
             } else if ch == '\'' {
                 in_single_quote = false;
             }
-            masked.push(' ');
+            push_masked_char(&mut masked, ch);
             continue;
         }
 
@@ -103,22 +166,22 @@ fn mask_non_code_regions(code: &str) -> String {
             } else if ch == '"' {
                 in_double_quote = false;
             }
-            masked.push(' ');
+            push_masked_char(&mut masked, ch);
             continue;
         }
 
         match ch {
             '#' => {
                 in_line_comment = true;
-                masked.push(' ');
+                push_masked_char(&mut masked, ch);
             }
             '\'' => {
                 in_single_quote = true;
-                masked.push(' ');
+                push_masked_char(&mut masked, ch);
             }
             '"' => {
                 in_double_quote = true;
-                masked.push(' ');
+                push_masked_char(&mut masked, ch);
             }
             _ => masked.push(ch),
         }
@@ -138,14 +201,19 @@ static FORMAT_PATTERN: LazyLock<Regex> =
     });
 
 impl PatternDetector for FormatHeredocDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
         for cap in FORMAT_PATTERN.captures_iter(&scan_code) {
             if let (Some(match_pos), Some(name_match)) = (cap.get(0), cap.get(1)) {
                 let format_name = name_match.as_str().to_string();
-                let location = location_from_start(code, offset, match_pos.start());
+                let location = location_from_start(line_starts, offset, match_pos.start());
 
                 // Look for heredoc marker inside format body (simplified)
                 let body_start = match_pos.end();
@@ -248,7 +316,12 @@ fn find_matching_brace(code: &str, opening_brace_idx: usize) -> Option<usize> {
 }
 
 impl PatternDetector for BeginTimeHeredocDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
@@ -266,7 +339,7 @@ impl PatternDetector for BeginTimeHeredocDetector {
                 continue;
             }
 
-            let location = location_from_start(code, offset, begin_match.start());
+            let location = location_from_start(line_starts, offset, begin_match.start());
 
             results.push((
                 AntiPattern::BeginTimeHeredoc {
@@ -308,14 +381,19 @@ static DYNAMIC_DELIMITER_PATTERN: LazyLock<Regex> =
     });
 
 impl PatternDetector for DynamicDelimiterDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
         for cap in DYNAMIC_DELIMITER_PATTERN.captures_iter(&scan_code) {
             if let Some(match_pos) = cap.get(0) {
                 let expression = match_pos.as_str().to_string();
-                let location = location_from_start(code, offset, match_pos.start());
+                let location = location_from_start(line_starts, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::DynamicHeredocDelimiter { location: location.clone(), expression },
@@ -355,14 +433,19 @@ static SOURCE_FILTER_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 impl PatternDetector for SourceFilterDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
         for cap in SOURCE_FILTER_PATTERN.captures_iter(&scan_code) {
             if let (Some(match_pos), Some(module_match)) = (cap.get(0), cap.get(1)) {
                 let filter_module = module_match.as_str().to_string();
-                let location = location_from_start(code, offset, match_pos.start());
+                let location = location_from_start(line_starts, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::SourceFilterHeredoc {
@@ -404,13 +487,18 @@ static REGEX_HEREDOC_PATTERN: LazyLock<Regex> =
     });
 
 impl PatternDetector for RegexHeredocDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
         for cap in REGEX_HEREDOC_PATTERN.captures_iter(&scan_code) {
             if let Some(match_pos) = cap.get(0) {
-                let location = location_from_start(code, offset, match_pos.start());
+                let location = location_from_start(line_starts, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::RegexCodeBlockHeredoc { location: location.clone() },
@@ -449,12 +537,17 @@ static EVAL_HEREDOC_PATTERN: LazyLock<Regex> =
     });
 
 impl PatternDetector for EvalHeredocDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
 
         for cap in EVAL_HEREDOC_PATTERN.captures_iter(code) {
             if let Some(match_pos) = cap.get(0) {
-                let location = location_from_start(code, offset, match_pos.start());
+                let location = location_from_start(line_starts, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::EvalStringHeredoc { location: location.clone() },
@@ -492,7 +585,12 @@ static TIE_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"tie\s+
 });
 
 impl PatternDetector for TiedHandleDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
@@ -513,7 +611,7 @@ impl PatternDetector for TiedHandleDetector {
             let usage_pattern = format!(r"print\s+{}\s+<<", regex::escape(handle_to_search));
             if let Ok(re) = Regex::new(&usage_pattern) {
                 for usage_match in re.find_iter(&scan_code) {
-                    let location = location_from_start(code, offset, usage_match.start());
+                    let location = location_from_start(line_starts, offset, usage_match.start());
 
                     results.push((
                         AntiPattern::TiedHandleHeredoc {
@@ -552,6 +650,7 @@ impl Default for AntiPatternDetector {
 }
 
 impl AntiPatternDetector {
+    /// Create a detector pre-loaded with all seven built-in pattern checkers.
     pub fn new() -> Self {
         Self {
             patterns: vec![
@@ -566,11 +665,13 @@ impl AntiPatternDetector {
         }
     }
 
+    /// Run all pattern checkers against `code` and return diagnostics sorted by offset.
     pub fn detect_all(&self, code: &str) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
+        let line_starts = build_line_starts(code);
 
         for detector in &self.patterns {
-            let patterns = detector.detect(code, 0);
+            let patterns = detector.detect(code, 0, &line_starts);
             for (pattern, _) in patterns {
                 if let Some(diagnostic) = detector.diagnose(&pattern) {
                     diagnostics.push(diagnostic);
@@ -591,6 +692,10 @@ impl AntiPatternDetector {
         diagnostics
     }
 
+    /// Format a list of diagnostics as a human-readable plain-text report.
+    ///
+    /// Prints a header, a count, and one entry per diagnostic including its
+    /// severity, location, explanation, optional suggested fix, and references.
     pub fn format_report(&self, diagnostics: &[Diagnostic]) -> String {
         let mut report = String::from("Anti-Pattern Analysis Report\n");
         report.push_str("============================\n\n");
@@ -838,6 +943,60 @@ SECOND
     }
 
     #[test]
+    fn test_location_first_byte_is_line_zero_column_zero() {
+        // A match at byte offset 0 must report line=0, column=0.
+        let detector = AntiPatternDetector::new();
+        let code = "use Filter::Simple;\n";
+
+        let diagnostics = detector.detect_all(code);
+        assert_eq!(diagnostics.len(), 1);
+        let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
+            unreachable!("expected SourceFilterHeredoc");
+        };
+        assert_eq!(location.line, 0, "first-byte match must be on line 0");
+        assert_eq!(location.column, 0, "first-byte match must be at column 0");
+        assert_eq!(location.offset, 0);
+    }
+
+    #[test]
+    fn test_location_third_line_accurate() {
+        // Three-line file — match on line 2, column 0.
+        let detector = AntiPatternDetector::new();
+        // Line 0: "my $a = 1;\n"  (11 bytes, \n at index 10)
+        // Line 1: "my $b = 2;\n"  (11 bytes, \n at index 21)
+        // Line 2: "use Filter::Simple;\n"
+        let code = "my $a = 1;\nmy $b = 2;\nuse Filter::Simple;\n";
+
+        let diagnostics = detector.detect_all(code);
+        assert_eq!(diagnostics.len(), 1);
+        let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
+            unreachable!("expected SourceFilterHeredoc");
+        };
+        assert_eq!(location.line, 2, "match on third line must report line 2");
+        assert_eq!(location.column, 0, "match at start of line must report column 0");
+        assert_eq!(location.offset, 22, "byte offset of third-line start");
+    }
+
+    #[test]
+    fn test_location_mid_line_column_nonzero() {
+        // Match that does not start at column 0 must report the correct column.
+        // Line 0: "# comment\n"      (10 bytes, \n at index 9)
+        // Line 1: "    use Filter::Simple;\n"  — 4 leading spaces, match at column 4
+        let detector = AntiPatternDetector::new();
+        let code = "# comment\n    use Filter::Simple;\n";
+
+        let diagnostics = detector.detect_all(code);
+        // The comment is masked; only SourceFilterHeredoc on line 1 should fire.
+        assert_eq!(diagnostics.len(), 1);
+        let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
+            unreachable!("expected SourceFilterHeredoc");
+        };
+        assert_eq!(location.line, 1);
+        assert_eq!(location.column, 4, "mid-line match must report correct column");
+        assert_eq!(location.offset, 14, "byte offset = 10 (first line) + 4 spaces");
+    }
+
+    #[test]
     fn test_source_filter_detection_ignores_comments_and_strings() {
         let detector = AntiPatternDetector::new();
         let code = r#"
@@ -859,5 +1018,24 @@ my $s = "BEGIN { my $x = <<'END'; END }";
 
         let diagnostics = detector.detect_all(code);
         assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_format_detection_handles_utf8_in_masked_regions() {
+        let detector = AntiPatternDetector::new();
+        let code = r#"# comment with emoji 😀
+format REPORT =
+<<'END'
+Body
+END
+.
+"#;
+
+        let diagnostics = detector.detect_all(code);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diag| matches!(diag.pattern, AntiPattern::FormatHeredoc { .. }))
+        );
     }
 }

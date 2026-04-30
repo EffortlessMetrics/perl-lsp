@@ -730,15 +730,14 @@ fn scenario_14_system_inc() {
         );
     }
 
-    // Both consumers must agree on resolution outcome (either both resolve or both don't).
-    // We log but don't hard-fail if the system_inc mode isn't plumbed end-to-end yet.
-    if !def_resolves && pl701_absent {
-        eprintln!(
-            "INFO scenario_14_system_inc: both consumers agree module doesn't resolve \
-             (def empty + no PL701). PERL5LIB pickup may require additional server config. \
-             This is a known gap if usePerl5lib hasn't been applied to this request."
-        );
-    }
+    assert!(
+        def_resolves,
+        "scenario_14_system_inc: definition should resolve SystemModule.pm via system @INC (PERL5LIB); defs={defs:?}"
+    );
+    assert!(
+        pl701_absent,
+        "scenario_14_system_inc: PL701 should not fire when module resolves via system @INC; diagnostics={diags:?}"
+    );
 
     if let Some(hover) = hover_result {
         assert!(hover.get("contents").is_some(), "Hover result must have 'contents': {:?}", hover);
