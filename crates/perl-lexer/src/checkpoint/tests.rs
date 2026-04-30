@@ -1,5 +1,5 @@
 use super::*;
-use crate::LexerMode;
+use crate::{LexerMode, Position};
 
 #[test]
 fn test_checkpoint_creation() -> std::result::Result<(), Box<dyn std::error::Error>> {
@@ -283,4 +283,53 @@ fn test_checkpoint_cache_apply_edit_resorts_positions()
     assert_eq!(after.position, 15);
 
     Ok(())
+}
+
+#[test]
+fn test_checkpoint_start_and_input_validity_helpers() {
+    let start = LexerCheckpoint::new();
+    assert!(start.is_at_start());
+    assert!(start.is_valid_for("abc"));
+
+    let later = LexerCheckpoint::at_position(4);
+    assert!(!later.is_at_start());
+    assert!(!later.is_valid_for("abc"));
+}
+
+#[test]
+fn test_checkpoint_diff_state_change_detection() {
+    let base = LexerCheckpoint::at_position(8);
+    let unchanged = base.diff(&base);
+    assert!(!unchanged.has_state_changes());
+
+    let mut changed = base.clone();
+    changed.after_arrow = true;
+    changed.context = CheckpointContext::Regex { delimiter: '/', flags_position: Some(9) };
+
+    let diff = changed.diff(&base);
+    assert!(diff.prototype_state_changed);
+    assert!(diff.context_changed);
+    assert!(diff.has_state_changes());
+}
+
+#[test]
+fn test_checkpoint_apply_edit_resets_position_tracking_on_shift_and_invalidate() {
+    let mut shifted = LexerCheckpoint::at_position(10);
+    shifted.current_pos.line = 3;
+    shifted.current_pos.column = 7;
+    shifted.apply_edit(2, 2, 5);
+    assert_eq!(shifted.position, 13);
+    assert_eq!(shifted.current_pos, Position::start());
+
+    let mut invalidated = LexerCheckpoint::at_position(10);
+    invalidated.current_pos.line = 4;
+    invalidated.current_pos.column = 11;
+    invalidated.mode = LexerMode::ExpectOperator;
+    invalidated.context = CheckpointContext::Regex { delimiter: '/', flags_position: Some(12) };
+    invalidated.apply_edit(9, 4, 1);
+
+    assert_eq!(invalidated.position, 9);
+    assert_eq!(invalidated.current_pos, Position::start());
+    assert_eq!(invalidated.mode, LexerMode::ExpectTerm);
+    assert_eq!(invalidated.context, CheckpointContext::Normal);
 }
