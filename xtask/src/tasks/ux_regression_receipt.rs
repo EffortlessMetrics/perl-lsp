@@ -242,7 +242,7 @@ mod tests {
             "log with 'unexpectedly' (substring of 'expected') should be ServerCrash, got {:?}",
             receipt.failure_class
         );
-        assert_eq!(receipt.route, "needs-provider-fix");
+        assert_eq!(receipt.route, "needs-crash-fix", "ServerCrash routes to needs-crash-fix");
     }
 
     #[test]
