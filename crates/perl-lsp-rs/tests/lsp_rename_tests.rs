@@ -32,53 +32,115 @@ fn test_rename_variable() -> TestResult {
     )?;
 
     // Rename $count to $total at its declaration (line 1, character 7)
-    let response = harness
-        .request(
-            "textDocument/rename",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "position": { "line": 1, "character": 7 },
-                "newName": "$total"
-            }),
-        )
-        .unwrap_or(json!(null));
+    let response = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 7 },
+            "newName": "$total"
+        }),
+    )?;
 
-    if !response.is_null() {
-        // Response should be a WorkspaceEdit with changes
-        assert!(
-            response.is_object(),
-            "rename should return a WorkspaceEdit object, got: {:?}",
-            response
-        );
+    assert!(
+        response.is_object(),
+        "rename should return a WorkspaceEdit object, got: {:?}",
+        response
+    );
 
-        // WorkspaceEdit should have "changes" or "documentChanges"
-        let has_changes = response.get("changes").is_some();
-        let has_doc_changes = response.get("documentChanges").is_some();
-        assert!(
-            has_changes || has_doc_changes,
-            "WorkspaceEdit should have 'changes' or 'documentChanges'. Got: {:?}",
-            response
-        );
-
-        if let Some(changes) = response.get("changes") {
-            // changes is a map from URI to TextEdit[]
-            assert!(changes.is_object(), "changes should be an object mapping URIs to edits");
-            if let Some(uri_edits) = changes.get(doc_uri) {
-                let edits = uri_edits.as_array().ok_or("edits should be an array")?;
-                // Should have multiple edits (one for each occurrence of $count)
-                assert!(!edits.is_empty(), "Should have at least one edit for renamed variable");
-                for edit in edits {
-                    assert!(edit["range"].is_object(), "Each edit should have a range");
-                    let new_text = edit["newText"].as_str().ok_or("newText should be a string")?;
-                    assert!(
-                        new_text.contains("total"),
-                        "newText should contain the new name 'total', got: {}",
-                        new_text
-                    );
-                }
-            }
-        }
+    let changes = response
+        .get("changes")
+        .and_then(serde_json::Value::as_object)
+        .ok_or("rename response should include `changes` object")?;
+    let edits = changes
+        .get(doc_uri)
+        .and_then(serde_json::Value::as_array)
+        .ok_or("rename response should include edits for the current document")?;
+    assert!(
+        edits.len() >= 3,
+        "expected at least 3 edits (declaration + usages), got {}: {:?}",
+        edits.len(),
+        edits
+    );
+    for edit in edits {
+        assert!(edit["range"].is_object(), "Each edit should have a range");
+        let new_text = edit["newText"].as_str().ok_or("newText should be a string")?;
+        assert_eq!(new_text, "$total", "variable rename should preserve sigil");
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_rename_variable_without_sigil_infers_original_sigil() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_rename_infer_sigil.pl";
+    harness.open(
+        doc_uri,
+        r#"sub process {
+    my $count = 0;
+    $count++;
+    return $count;
+}
+"#,
+    )?;
+
+    let response = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 7 },
+            "newName": "total"
+        }),
+    )?;
+
+    let changes = response
+        .get("changes")
+        .and_then(serde_json::Value::as_object)
+        .ok_or("rename response should include `changes` object")?;
+    let edits = changes
+        .get(doc_uri)
+        .and_then(serde_json::Value::as_array)
+        .ok_or("rename response should include edits for current document")?;
+
+    assert!(!edits.is_empty(), "rename should produce at least one edit");
+    for edit in edits {
+        assert_eq!(edit["newText"], json!("$total"));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_prepare_rename_on_sigil_returns_symbol_range() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_prepare_on_sigil.pl";
+    harness.open(
+        doc_uri,
+        r#"sub calculate {
+    my $value = 10;
+    return $value;
+}
+"#,
+    )?;
+
+    let response = harness.request(
+        "textDocument/prepareRename",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 7 }
+        }),
+    )?;
+
+    assert!(response.is_object(), "prepareRename should return a range payload");
+    assert_eq!(
+        response.get("placeholder"),
+        Some(&json!("$value")),
+        "prepareRename on sigil should include full variable token"
+    );
 
     Ok(())
 }
@@ -263,6 +325,260 @@ sub caller {
     Ok(())
 }
 
+/// Test that renaming with a mismatched sigil is rejected.
+///
+/// The PR's `normalize_rename_target` must reject `@foo` as a new name when
+/// the symbol under the cursor is `$foo` — cross-sigil rename would silently
+/// change variable semantics (scalar -> array).
+#[test]
+fn test_rename_mismatched_sigil_is_rejected() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_rename_mismatched_sigil.pl";
+    harness.open(
+        doc_uri,
+        r#"sub process {
+    my $count = 0;
+    $count++;
+    return $count;
+}
+"#,
+    )?;
+
+    // Cursor on `$count` declaration; request rename to `@count` (array sigil).
+    let result = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 7 },
+            "newName": "@count"
+        }),
+    );
+
+    // Expect an error (invalid-params -32602) OR an empty workspace edit.
+    // The PR returns JsonRpcError(-32602), which harness surfaces as Err.
+    match result {
+        Err(e) => {
+            let msg = format!("{e}");
+            assert!(
+                msg.contains("sigil") || msg.contains("Invalid") || msg.contains("32602"),
+                "error should mention sigil mismatch or invalid identifier, got: {msg}"
+            );
+        }
+        Ok(response) => {
+            // If it didn't error, the edits must not contain the mismatched sigil.
+            if let Some(changes) = response.get("changes").and_then(|v| v.as_object()) {
+                if let Some(edits) = changes.get(doc_uri).and_then(|v| v.as_array()) {
+                    for edit in edits {
+                        let new_text = edit["newText"].as_str().unwrap_or("");
+                        assert!(
+                            !new_text.starts_with('@'),
+                            "mismatched-sigil rename must not produce @-prefixed edits, got: {new_text}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Test that renaming with an empty newName is rejected.
+#[test]
+fn test_rename_empty_new_name_is_rejected() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_rename_empty.pl";
+    harness.open(
+        doc_uri,
+        r#"my $x = 1;
+print $x;
+"#,
+    )?;
+
+    let result = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 0, "character": 4 },
+            "newName": ""
+        }),
+    );
+
+    match result {
+        Err(e) => {
+            let msg = format!("{e}");
+            assert!(
+                msg.contains("empty") || msg.contains("Invalid") || msg.contains("32602"),
+                "empty newName should error with invalid-identifier, got: {msg}"
+            );
+        }
+        Ok(response) => {
+            // If the server accepted it, the edits must not have empty newText.
+            if let Some(changes) = response.get("changes").and_then(|v| v.as_object()) {
+                for (_uri, edits) in changes {
+                    if let Some(arr) = edits.as_array() {
+                        for edit in arr {
+                            let new_text = edit["newText"].as_str().unwrap_or("");
+                            assert!(
+                                !new_text.is_empty(),
+                                "empty newName must not yield empty edits"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Test that renaming with an invalid identifier (digit-leading) is rejected.
+#[test]
+fn test_rename_invalid_identifier_is_rejected() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_rename_invalid_ident.pl";
+    harness.open(
+        doc_uri,
+        r#"sub process {
+    my $count = 0;
+    return $count;
+}
+"#,
+    )?;
+
+    // `$1bad` — after sigil, identifier starts with a digit, which is invalid.
+    let result = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 7 },
+            "newName": "$1bad"
+        }),
+    );
+
+    match result {
+        Err(e) => {
+            let msg = format!("{e}");
+            assert!(
+                msg.contains("Invalid") || msg.contains("32602"),
+                "digit-leading identifier should error, got: {msg}"
+            );
+        }
+        Ok(response) => {
+            if let Some(changes) = response.get("changes").and_then(|v| v.as_object()) {
+                for (_uri, edits) in changes {
+                    if let Some(arr) = edits.as_array() {
+                        assert!(
+                            arr.is_empty(),
+                            "invalid identifier should produce no edits, got: {:?}",
+                            arr
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Test renaming an array variable preserves the `@` sigil.
+#[test]
+fn test_rename_array_preserves_at_sigil() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_rename_array.pl";
+    harness.open(
+        doc_uri,
+        r#"sub collect {
+    my @items = (1, 2, 3);
+    push @items, 4;
+    return @items;
+}
+"#,
+    )?;
+
+    // Rename `@items` -> `@values` at declaration (line 1, character 7).
+    let response = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 7 },
+            "newName": "@values"
+        }),
+    )?;
+
+    if let Some(changes) = response.get("changes").and_then(|v| v.as_object()) {
+        if let Some(edits) = changes.get(doc_uri).and_then(|v| v.as_array()) {
+            assert!(!edits.is_empty(), "array rename should produce edits");
+            for edit in edits {
+                let new_text = edit["newText"].as_str().unwrap_or("");
+                // `@values` or bare `values` after workspace-rename-edit adjustments
+                // — whichever comes back must be `@`-sigiled, never `$`.
+                assert!(
+                    new_text.starts_with('@') || new_text == "values",
+                    "array rename must preserve or omit `@` sigil, never swap to `$`, got: {new_text}"
+                );
+                assert!(
+                    !new_text.starts_with('$'),
+                    "array rename must NOT produce a `$`-prefixed edit: {new_text}"
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Test that bare identifier rename of an array variable infers the `@` sigil.
+#[test]
+fn test_rename_array_bare_infers_at_sigil() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///test_rename_array_bare.pl";
+    harness.open(
+        doc_uri,
+        r#"sub collect {
+    my @items = (1, 2, 3);
+    return @items;
+}
+"#,
+    )?;
+
+    // Bare `values` as newName; current symbol is `@items`, so result must be `@values`.
+    let response = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "position": { "line": 1, "character": 7 },
+            "newName": "values"
+        }),
+    )?;
+
+    if let Some(changes) = response.get("changes").and_then(|v| v.as_object()) {
+        if let Some(edits) = changes.get(doc_uri).and_then(|v| v.as_array()) {
+            for edit in edits {
+                let new_text = edit["newText"].as_str().unwrap_or("");
+                assert!(
+                    !new_text.starts_with('$') && !new_text.starts_with('%'),
+                    "bare-name array rename must not accidentally get wrong sigil, got: {new_text}"
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Test rename at an out-of-bounds position returns null gracefully
 #[test]
 fn test_rename_out_of_bounds() -> TestResult {
@@ -299,6 +615,70 @@ fn test_rename_out_of_bounds() -> TestResult {
             }
         }
     }
+
+    Ok(())
+}
+
+/// Workspace rename of an unqualified cross-package call must return a JSON-RPC
+/// error (AmbiguousIdentity) rather than silently renaming the wrong symbol.
+#[test]
+fn test_workspace_rename_refuses_ambiguous_symbol_identity() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let foo_uri = "file:///Foo.pm";
+    let bar_uri = "file:///Bar.pm";
+
+    harness.open(foo_uri, "package Foo;\nsub process_data { return 1; }\n1;\n")?;
+    // Bar calls process_data without qualification — ambiguous cross-package reference.
+    harness.open(bar_uri, "package Bar;\nsub run { return process_data(); }\n1;\n")?;
+
+    let result = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": foo_uri },
+            "position": { "line": 1, "character": 5 },
+            "newName": "process_records"
+        }),
+    );
+
+    // The rename must refuse with an error — NOT silently rename the wrong call site.
+    let error = result.expect_err("rename should refuse ambiguous workspace identity");
+    assert!(
+        error.contains("ambiguous symbol identity"),
+        "expected ambiguous-identity refusal, got: {error}"
+    );
+
+    Ok(())
+}
+
+/// Workspace rename of a fully qualified cross-package call must succeed and
+/// include edits in both the definition file and the usage file.
+#[test]
+fn test_workspace_rename_returns_multi_file_workspace_edit() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let lib_uri = "file:///A.pm";
+    let app_uri = "file:///B.pm";
+
+    harness.open(lib_uri, "package A;\nsub target_name { return 1; }\n1;\n")?;
+    // B.pm uses a fully qualified call — unambiguous, safe to rename.
+    harness.open(app_uri, "package B;\nuse A;\nsub run { return A::target_name(); }\n1;\n")?;
+
+    let response = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": lib_uri },
+            "position": { "line": 1, "character": 5 },
+            "newName": "renamed_target"
+        }),
+    )?;
+
+    let changes =
+        response["changes"].as_object().ok_or("workspace rename should return changes map")?;
+    assert!(changes.contains_key(lib_uri), "workspace rename must include definition file edits");
+    assert!(changes.contains_key(app_uri), "workspace rename must include usage file edits");
 
     Ok(())
 }

@@ -1,0 +1,89 @@
+[[concept]]
+id = "lexer.regex.literal_vs_division"
+status = "seed"
+scope = { crates = ["perl-lexer", "perl-parser"], risk_tags = ["regex", "ambiguous-token"] }
+fixtures = { floors = ["test_corpus/advanced_regex.pl", "test_corpus/clean_regex_substitution.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "tokenize" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = true, nightly = true, release = true }
+
+[[concept]]
+id = "lexer.regex.substitution_delimiters"
+status = "seed"
+scope = { crates = ["perl-lexer"], risk_tags = ["regex", "delimiter"] }
+fixtures = { floors = ["test_corpus/clean_regex_substitution.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "tokenize" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "lexer.quote_like.q_braces"
+status = "seed"
+scope = { crates = ["perl-lexer", "perl-parser"], risk_tags = ["quote-like"] }
+fixtures = { floors = ["test_corpus/string_ops_edge_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "tokenize" }
+snapshots = { tokens = true, ast = false, spans = false }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "lexer.quote_like.qq_parens"
+status = "seed"
+scope = { crates = ["perl-lexer"], risk_tags = ["quote-like"] }
+fixtures = { floors = ["test_corpus/string_ops_edge_cases.pl", "test_corpus/basic_constructs.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "tokenize" }
+snapshots = { tokens = true, ast = false, spans = false }
+run = { pr = true, nightly = false, release = false }
+
+[[concept]]
+id = "lexer.heredoc.basic"
+status = "seed"
+scope = { crates = ["perl-lexer", "perl-parser"], risk_tags = ["heredoc"] }
+fixtures = { floors = ["test_corpus/heredoc_depth.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "tokenize" }
+snapshots = { tokens = true, ast = true, spans = true }
+run = { pr = true, nightly = true, release = true }
+
+[[concept]]
+id = "lexer.heredoc.indented"
+status = "seed"
+scope = { crates = ["perl-lexer"], risk_tags = ["heredoc", "layout"] }
+fixtures = { floors = ["test_corpus/heredoc_depth.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "tokenize" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "lexer.data_section.double_underscore_data"
+status = "seed"
+scope = { crates = ["perl-lexer", "perl-parser"], risk_tags = ["data-section"] }
+fixtures = { floors = ["test_corpus/data_end_sections.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "tokenize" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = true, nightly = false, release = true }
+
+[[concept]]
+id = "lexer.data_section.double_underscore_end"
+status = "seed"
+scope = { crates = ["perl-lexer"], risk_tags = ["data-section"] }
+fixtures = { floors = ["test_corpus/end_section.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "tokenize" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = true, nightly = false, release = false }
+
+[[concept]]
+id = "lexer.readline.diamond_operator"
+status = "seed"
+scope = { crates = ["perl-lexer", "perl-parser"], risk_tags = ["readline", "ambiguous-token"] }
+fixtures = { floors = ["test_corpus/readline_diamond_operator_comprehensive.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "tokenize" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "lexer.special_vars.contextual"
+status = "seed"
+scope = { crates = ["perl-lexer"], risk_tags = ["sigil", "special-var"] }
+fixtures = { floors = ["test_corpus/builtins_context_sensitive.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "tokenize" }
+snapshots = { tokens = true, ast = false, spans = false }
+run = { pr = true, nightly = true, release = false }

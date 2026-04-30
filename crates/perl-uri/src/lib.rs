@@ -78,7 +78,8 @@ pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
     // Convert to filesystem path using the url crate's built-in method.
     // On Windows, accept rooted file URIs like file:///tmp/test.pl as \tmp\test.pl
     // so cross-platform tests and internal helpers stay permissive.
-    url.to_file_path().ok().or_else(|| windows_rooted_file_uri_to_path(&url))
+    let path = url.to_file_path().ok().or_else(|| windows_rooted_file_uri_to_path(&url))?;
+    Some(repair_path_mojibake(path))
 }
 
 /// Convert a filesystem path to a `file://` URI.
@@ -182,6 +183,52 @@ fn windows_rooted_file_uri_to_path(_url: &Url) -> Option<std::path::PathBuf> {
     None
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn repair_path_mojibake(path: std::path::PathBuf) -> std::path::PathBuf {
+    let Some(path_text) = path.to_str() else {
+        return path;
+    };
+
+    let repaired = repair_mojibake_text(path_text);
+    if repaired == path_text { path } else { std::path::PathBuf::from(repaired) }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn repair_mojibake_text(text: &str) -> String {
+    if !looks_like_mojibake(text) {
+        return text.to_string();
+    }
+
+    let mut bytes = Vec::with_capacity(text.len());
+    for ch in text.chars() {
+        let code = u32::from(ch);
+        let Ok(byte) = u8::try_from(code) else {
+            return text.to_string();
+        };
+        bytes.push(byte);
+    }
+
+    let Ok(candidate) = String::from_utf8(bytes) else {
+        return text.to_string();
+    };
+
+    if mojibake_marker_count(&candidate) < mojibake_marker_count(text) {
+        candidate
+    } else {
+        text.to_string()
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn looks_like_mojibake(text: &str) -> bool {
+    mojibake_marker_count(text) > 0
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn mojibake_marker_count(text: &str) -> usize {
+    text.chars().filter(|ch| matches!(ch, 'Ã' | 'Â' | 'â' | 'ð' | '�')).count()
+}
+
 /// Normalize a URI to a consistent form.
 ///
 /// This function handles various URI formats and normalizes them:
@@ -227,7 +274,18 @@ pub fn normalize_uri(uri: &str) -> String {
 
     // Try to parse as URL first
     if let Ok(url) = Url::parse(uri) {
-        // Already a valid URI, return as-is
+        // Canonicalize local file URIs through filesystem conversion so legacy
+        // forms like `file://C:/...` normalize to `file:///c:/...` on Windows
+        // and `file:///tmp/...` on Unix while preserving non-local authorities.
+        if url.scheme() == "file"
+            && url.host_str() == Some("localhost")
+            && let Some(fs_path) = uri_to_fs_path(uri)
+            && let Ok(normalized) = fs_path_to_uri(&fs_path)
+        {
+            return normalized;
+        }
+
+        // Already a valid non-file URI, return as-is.
         return url.to_string();
     }
 
@@ -333,6 +391,13 @@ mod tests {
         }
 
         #[test]
+        fn test_uri_to_fs_path_repairs_common_mojibake() {
+            let path = must_some(uri_to_fs_path("file:///tmp/caf%C3%83%C2%A9.pl"));
+            let path_str = path.to_string_lossy();
+            assert!(path_str.contains("café.pl"), "expected repaired UTF-8 path, got {path_str}");
+        }
+
+        #[test]
         fn test_fs_path_to_uri_basic() {
             let uri = must(fs_path_to_uri("/tmp/test.pl"));
             assert!(uri.starts_with("file:///"));
@@ -349,6 +414,11 @@ mod tests {
         fn test_normalize_uri_valid() {
             let uri = normalize_uri("file:///tmp/test.pl");
             assert_eq!(uri, "file:///tmp/test.pl");
+        }
+
+        #[test]
+        fn test_normalize_uri_canonicalizes_localhost_authority() {
+            assert_eq!(normalize_uri("file://localhost/tmp/test.pl"), "file:///tmp/test.pl");
         }
 
         #[test]

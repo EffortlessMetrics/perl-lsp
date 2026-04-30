@@ -201,6 +201,36 @@ fn test_modifiers_attached_to_s_operator() {
 }
 
 #[test]
+fn test_s_operator_paired_with_mixed_replacement_delimiter() {
+    let code = r#"s{old}[new]ger"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected 2 tokens (subst + EOF)");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::Substitution),
+        "Expected Substitution token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), "s{old}[new]ger");
+}
+
+#[test]
+fn test_tr_operator_paired_with_mixed_replacement_delimiter() {
+    let code = r#"tr{abc}<xyz>cds"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected 2 tokens (tr + EOF)");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::Transliteration),
+        "Expected Transliteration token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), "tr{abc}<xyz>cds");
+}
+
+#[test]
 fn test_various_non_standard_delimiters() {
     let test_cases = vec![
         ("m~pattern~", TokenType::RegexMatch, "tilde"),
@@ -255,4 +285,72 @@ fn test_m_vs_bareword_disambiguation() {
         "m followed by space then delimiter should be regex match, got: {:?}",
         tokens2[0].token_type
     );
+}
+
+#[test]
+fn test_slash_regex_with_character_class_containing_slash() {
+    let code = r#"/[\/]/"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected regex token and EOF");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::RegexMatch),
+        "Expected RegexMatch token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), code, "Regex text should include full character class");
+}
+
+#[test]
+fn test_slash_regex_with_url_character_class() {
+    let code = r#"/[a-z/]+/i"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected regex token and EOF");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::RegexMatch),
+        "Expected RegexMatch token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), code, "Regex token should include trailing modifier");
+}
+
+#[test]
+fn test_slash_regex_with_negated_character_class_containing_slash() {
+    // /[^/]+/ - negated class with slash — should not terminate at the / inside [^...]
+    let code = r#"/[^/]+/"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected regex token and EOF");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::RegexMatch),
+        "Expected RegexMatch for [^/] class, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(
+        tokens[0].text.as_ref(),
+        code,
+        "Regex text should span the full negated character class"
+    );
+}
+
+#[test]
+fn test_slash_regex_escaped_bracket_does_not_open_class() {
+    // /\[/ - escaped bracket should not start a character class
+    // so the / after \[ terminates the regex at position 3, not 4
+    let code = r"/\[/";
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected regex token and EOF");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::RegexMatch),
+        "Expected RegexMatch for escaped bracket regex, got: {:?}",
+        tokens[0].token_type
+    );
+    // /\[/ should be recognized as a complete regex matching a literal [
+    assert_eq!(tokens[0].text.as_ref(), code, "Escaped bracket regex text mismatch");
 }

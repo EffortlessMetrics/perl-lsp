@@ -27,6 +27,8 @@ pub enum Framework {
     NativeClass,
     /// Plain OO via `use parent`, `use base`, or `@ISA` (no framework)
     PlainOO,
+    /// `use Role::Tiny;` (package is a role) or `use Role::Tiny::With;` (package consumes roles)
+    RoleTiny,
     /// No OO framework detected
     None,
 }
@@ -579,6 +581,7 @@ impl ClassModelBuilder {
             "Moose" | "Moose::Role" => Framework::Moose,
             "Moo" | "Moo::Role" => Framework::Moo,
             "Mouse" | "Mouse::Role" => Framework::Mouse,
+            "Role::Tiny" | "Role::Tiny::With" => Framework::RoleTiny,
             "Class::Accessor" => Framework::ClassAccessor,
             "Object::Pad" => Framework::ObjectPad,
             "base" | "parent" => {

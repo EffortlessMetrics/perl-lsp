@@ -13,8 +13,8 @@
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
 
-use perl_parser_core::Parser;
 use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
+use perl_parser_core::{Parser, classify_recovery_salvage};
 
 // ──────────────────────────────────────────────────────────────
 // Helpers
@@ -178,6 +178,43 @@ fn truncated_arrow_chain_at_eof_does_not_crash() {
     assert!(result.is_ok(), "Parser must not crash on truncated method chain at EOF");
 }
 
+#[test]
+fn missing_rhs_classifies_as_structured_recovery_only() {
+    let mut parser = Parser::new("my $x = $a +;");
+    let result = parser.parse();
+    assert!(result.is_ok(), "Unexpected catastrophic parse failure for recoverable input");
+    let Ok(ast) = result else {
+        return;
+    };
+    let metrics = classify_recovery_salvage(&ast, parser.errors());
+    assert!(
+        metrics.is_structured_recovery_only(),
+        "Expected structured recovery only: {metrics:?}"
+    );
+    assert_eq!(metrics.error_node_count, 0, "No unrecovered ERROR nodes expected");
+}
+
+/// When a file has BOTH structured recovery diagnostics AND unrecovered ERROR
+/// nodes, it must NOT be classified as `structured_recovery_only`. It must be
+/// dirty (`is_dirty = true`) and have `error_node_count > 0`.
+#[test]
+fn mixed_recovery_and_error_node_is_not_structured_recovery_only() {
+    // `} my $x = $a +;` has two problems:
+    //  1. A stray `}` that the parser cannot match to an opening brace,
+    //     likely producing an Error node.
+    //  2. A truncated infix `+;` that should produce a Recovered diagnostic.
+    // Together they should NOT be classified as structured-recovery-only.
+    let code = "} my $x = $a +;";
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().expect("parser should not catastrophically fail");
+    let metrics = classify_recovery_salvage(&ast, parser.errors());
+
+    assert!(metrics.is_dirty(), "file with Error node and recovery is dirty: {metrics:?}");
+    assert!(
+        !metrics.is_structured_recovery_only(),
+        "file with Error nodes must not be structured-recovery-only: {metrics:?}"
+    );
+}
 // ──────────────────────────────────────────────────────────────
 // Regression: clean Perl must NOT emit InfixRhs or TruncatedChain
 // ──────────────────────────────────────────────────────────────

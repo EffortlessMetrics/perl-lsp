@@ -106,3 +106,59 @@ fn scenario_hover_text_summarizes_captures_and_modifiers() -> Result<(), Box<dyn
     assert!(hover.contains("global"));
     Ok(())
 }
+
+#[test]
+fn scenario_hover_text_lists_extended_perl_modifiers() -> Result<(), Box<dyn std::error::Error>> {
+    // Given: modifiers that are valid in Perl but were historically omitted from notes.
+    let hover = RegexAnalyzer::hover_text_for_regex(r"(?<word>\w+)", "anu");
+
+    // Then: hover text explains the Perl-specific semantics.
+    assert!(hover.contains("ASCII-safe character classes"));
+    assert!(hover.contains("non-capturing by default"));
+    assert!(hover.contains("Unicode character semantics"));
+    Ok(())
+}
+
+#[test]
+fn scenario_hover_text_deduplicates_and_reports_unknown_modifiers()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Given: repeated modifiers and unknown flags.
+    let hover = RegexAnalyzer::hover_text_for_regex(r"\w+", "iizzz");
+
+    // Then: duplicate notes are removed and unknown flags are reported once.
+    assert_eq!(hover.matches("case-insensitive matching").count(), 1);
+    assert!(hover.contains("Unknown modifiers: `z`"));
+    Ok(())
+}
+
+#[test]
+fn scenario_hover_text_covers_substitution_specific_modifiers()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Given: modifiers that are only meaningful on s///.
+    let hover = RegexAnalyzer::hover_text_for_regex(r"foo", "re");
+
+    // Then: hover explains non-destructive result (r) and eval replacement (e).
+    assert!(hover.contains("non-destructive substitution result"), "expected /r description");
+    assert!(hover.contains("evaluate replacement as code"), "expected /e description");
+    Ok(())
+}
+
+#[test]
+fn scenario_hover_text_deduplicates_repeated_known_modifier()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Given: the same known modifier repeated twice (e.g. //xx for Perl 5.26 extended).
+    let hover = RegexAnalyzer::hover_text_for_regex(r"\s+", "xx");
+
+    // Then: the modifier note appears exactly once, not duplicated.
+    assert_eq!(
+        hover.matches("extended mode: whitespace and comments allowed").count(),
+        1,
+        "duplicate /x should produce exactly one note"
+    );
+    // And there must be no Unknown modifiers section (x is known).
+    assert!(
+        !hover.contains("Unknown modifiers"),
+        "repeated known modifier must not appear in unknown section"
+    );
+    Ok(())
+}

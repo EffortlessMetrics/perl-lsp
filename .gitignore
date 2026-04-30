@@ -229,3 +229,5 @@ docs/assets/recordings/*.webm
 # The README.md in that directory is tracked; the generated Perl files are not.
 test_corpus/workspaces/xlarge/lib/
 test_corpus/workspaces/xlarge/bin/
+# Runtime scheduler lock file — ephemeral, never committed.
+/.claude/scheduled_tasks.lock
