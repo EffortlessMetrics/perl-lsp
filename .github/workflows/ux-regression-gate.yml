@@ -115,17 +115,22 @@ jobs:
       - name: Run UX regression tests
         id: ux_tests
         if: steps.harness_check.outputs.harness_available == 'true'
+        continue-on-error: true
         run: |
+          set +e
           echo "Running UX regression tests..."
-          just ux-tests 2>&1 | tee /tmp/ux-test-output.txt
-          exit ${PIPESTATUS[0]}
+          mkdir -p target/receipts
+          just ux-tests 2>&1 | tee target/receipts/ux-regression.log
+          ux_status=${PIPESTATUS[0]}
+          echo "ux_exit_code=${ux_status}" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Emit structured UX regression receipt
-        if: failure() && steps.harness_check.outputs.harness_available == 'true'
+        if: always() && steps.harness_check.outputs.harness_available == 'true'
         run: |
           cargo xtask ux-regression-receipt \
-            --input /tmp/ux-test-output.txt \
-            --receipt .ci/receipts/ux-regression.json \
+            --input target/receipts/ux-regression.log \
+            --receipt target/receipts/ux-regression.json \
             --sha "${{ github.sha }}"
 
       - name: Parse and summarize UX test results
@@ -134,14 +139,14 @@ jobs:
           python3 - <<'PY'
           import json, os, re, pathlib, sys
 
-          output_file = pathlib.Path("/tmp/ux-test-output.txt")
+          output_file = pathlib.Path("target/receipts/ux-regression.log")
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
 
           if not summary_path:
               sys.exit(0)
 
           lines = output_file.read_text(encoding="utf-8").splitlines() if output_file.exists() else []
-          receipt_path = pathlib.Path(".ci/receipts/ux-regression.json")
+          receipt_path = pathlib.Path("target/receipts/ux-regression.json")
           receipt = None
           if receipt_path.exists():
               try:
@@ -301,13 +306,33 @@ jobs:
           pathlib.Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
 
+
+      - name: Upload UX regression receipt and log
+        if: always() && steps.harness_check.outputs.harness_available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ux-regression-receipt-${{ github.sha }}
+          path: |
+            target/receipts/ux-regression.json
+            target/receipts/ux-regression.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce UX gate result
+        if: always() && steps.harness_check.outputs.harness_available == 'true'
+        run: |
+          if [ "${{ steps.ux_tests.outputs.ux_exit_code }}" != "0" ]; then
+            echo "::error::UX regression tests failed (exit ${{ steps.ux_tests.outputs.ux_exit_code }}). See target/receipts/ux-regression.log and target/receipts/ux-regression.json."
+            exit 1
+          fi
+
       - name: Upload UX test results on failure
         if: failure() && steps.harness_check.outputs.harness_available == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ux-test-results-${{ github.sha }}
           path: |
-            /tmp/ux-test-output.txt
+            target/receipts/ux-regression.log
             target/ux-test-results/
           if-no-files-found: warn
           retention-days: 7
