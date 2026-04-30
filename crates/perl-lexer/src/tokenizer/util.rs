@@ -97,4 +97,31 @@ mod tests {
         let with_end = "code;\n__END__\nvalue";
         assert_eq!(split_code_and_data(with_end), ("code;\n", Some("__END__\nvalue")));
     }
+
+    #[test]
+    fn test_find_data_marker_ignores_pod_and_heredoc_content() {
+        let pod = "=head1 NAME\n__DATA__\n=cut\nprint 'done';\n";
+        assert_eq!(find_data_marker_byte_lexed(pod), None);
+
+        let heredoc = "my $text = <<\"TXT\";\n__END__\nTXT\nprint $text;\n";
+        assert_eq!(find_data_marker_byte_lexed(heredoc), None);
+    }
+
+    #[test]
+    fn test_split_code_and_data_prefers_first_lexed_marker() {
+        let src = "print 'prelude';\n__DATA__\nchunk\n__END__\nignored";
+        assert_eq!(
+            split_code_and_data(src),
+            ("print 'prelude';\n", Some("__DATA__\nchunk\n__END__\nignored"))
+        );
+    }
+
+    #[test]
+    // Allow deprecated call to verify compatibility wrapper behavior.
+    #[allow(deprecated)]
+    fn test_find_data_marker_deprecated_matches_lexed_helper() {
+        let src = "say 1;\n__END__\ntrailer";
+        assert_eq!(find_data_marker_byte(src), find_data_marker_byte_lexed(src));
+    }
+
 }
