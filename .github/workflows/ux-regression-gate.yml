@@ -128,6 +128,14 @@ jobs:
             --receipt .ci/receipts/ux-regression.json \
             --sha "${{ github.sha }}"
 
+      - name: Upload UX regression receipt artifact
+        if: failure() && steps.harness_check.outputs.harness_available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-regression-receipt
+          path: .ci/receipts/ux-regression.json
+          if-no-files-found: warn
+
       - name: Parse and summarize UX test results
         if: always() && steps.harness_check.outputs.harness_available == 'true'
         run: |
@@ -229,10 +237,11 @@ jobs:
                       "",
                       f"- Receipt path: `{receipt_path}`",
                       f"- Failure class: `{receipt.get('failure_class') or 'unknown'}`",
-                      f"- First failing test: `{receipt.get('test') or 'unknown'}`",
+                      f"- First failing test: `{receipt.get('first_failing_test') or 'unknown'}`",
                       f"- Panic location: `{receipt.get('panic_location') or 'n/a'}`",
                       f"- Repro command: `{receipt.get('repro') or 'just ux-tests'}`",
                       f"- Route: `{receipt.get('route') or 'needs-triage'}`",
+                      "- Receipt artifact: `ux-regression-receipt` (Actions artifacts)",
                   ]
           else:
               summary_lines.append("All UX scenarios passed.")
