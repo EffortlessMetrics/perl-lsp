@@ -400,6 +400,11 @@ mod tests {
         assert_eq!(try_get_param_names("print"), Some(["FILEHANDLE", "LIST"].as_slice()));
         assert_eq!(try_get_param_names("not_a_builtin"), None);
     }
+
+    #[test]
+    fn get_param_names_returns_empty_slice_for_unknown_builtin() {
+        assert!(get_param_names("not_a_builtin").is_empty());
+    }
     #[test]
     fn returns_open_param_names() {
         assert_eq!(get_param_names("open"), ["FILEHANDLE", "MODE", "FILENAME"]);
@@ -411,6 +416,19 @@ mod tests {
         let targets =
             ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
         for name in &targets {
+            assert!(
+                BUILTIN_FULL_SIGS.contains_key(name),
+                "BUILTIN_FULL_SIGS should contain '{}'",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn shorthand_signature_entries_have_full_signature_coverage() {
+        let targets = ["printf", "system", "exec", "mkdir", "unlink", "stat"];
+        for name in &targets {
+            assert!(try_get_param_names(name).is_some(), "BUILTIN_SIGS should contain '{}'", name);
             assert!(
                 BUILTIN_FULL_SIGS.contains_key(name),
                 "BUILTIN_FULL_SIGS should contain '{}'",

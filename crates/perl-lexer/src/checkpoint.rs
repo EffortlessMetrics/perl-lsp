@@ -489,6 +489,56 @@ mod tests {
     }
 
     #[test]
+    fn test_find_after_binary_search() -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let mut cache = CheckpointCache::new(10);
+        for pos in [10usize, 20, 30, 40] {
+            cache.add(LexerCheckpoint::at_position(pos));
+        }
+
+        let exact = cache.find_after(20).ok_or("find_after(20) should return exact checkpoint")?;
+        assert_eq!(exact.position, 20);
+
+        let between = cache.find_after(21).ok_or("find_after(21) should return next checkpoint")?;
+        assert_eq!(between.position, 30);
+
+        let before_first =
+            cache.find_after(0).ok_or("find_after(0) should return first checkpoint")?;
+        assert_eq!(before_first.position, 10);
+
+        assert!(cache.find_after(41).is_none(), "find_after after last checkpoint should be None");
+        Ok(())
+    }
+
+    #[test]
+    fn test_checkpoint_cache_apply_edit_repositions_and_invalidates()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let mut cache = CheckpointCache::new(4);
+
+        let mut inside_edit = LexerCheckpoint::at_position(12);
+        inside_edit.context = CheckpointContext::Regex { delimiter: '/', flags_position: None };
+        cache.add(inside_edit);
+
+        cache.add(LexerCheckpoint::at_position(30));
+
+        // Edit [10, 15) -> len 5 replaced by len 2:
+        // - checkpoint at 30 shifts left to 27
+        // - checkpoint at 12 falls inside edit and resets to position 10 with Normal context.
+        cache.apply_edit(10, 5, 2);
+
+        let reset =
+            cache.find_before(10).ok_or("checkpoint inside edit should reset to edit start")?;
+        assert_eq!(reset.position, 10);
+        assert_eq!(reset.context, CheckpointContext::Normal);
+        assert_eq!(reset.mode, LexerMode::ExpectTerm);
+
+        let shifted = cache
+            .find_after(11)
+            .ok_or("checkpoint after edit should still be present and shifted")?;
+        assert_eq!(shifted.position, 27);
+        Ok(())
+    }
+
+    #[test]
     fn test_checkpoint_cache_capacity_one_keeps_latest()
     -> std::result::Result<(), Box<dyn std::error::Error>> {
         let mut cache = CheckpointCache::new(1);

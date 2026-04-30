@@ -417,6 +417,7 @@ pub fn add_snippet_completions(completions: &mut Vec<CompletionItem>, context: &
                 additional_edits: vec![],
                 text_edit_range: Some((context.prefix_start, context.position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }
