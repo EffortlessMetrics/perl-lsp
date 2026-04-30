@@ -103,7 +103,12 @@ pub fn expected_fixture_path(sidecar_path: &Path) -> Result<PathBuf> {
         bail!("sidecar filename must end with .meta.toml: {}", sidecar_path.display());
     }
 
-    let fixture_name = file_name.trim_end_matches(".meta.toml").to_string() + ".pl";
+    let fixture_stem = file_name.trim_end_matches(".meta.toml");
+    if fixture_stem.is_empty() {
+        bail!("fixture stem must not be empty: {}", sidecar_path.display());
+    }
+
+    let fixture_name = fixture_stem.to_string() + ".pl";
     let parent = sidecar_path.parent().unwrap_or_else(|| Path::new("."));
     Ok(parent.join(fixture_name))
 }
@@ -210,6 +215,7 @@ fn collect_concept_ids(value: &toml::Value, concept_ids: &mut HashSet<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn expectation_mode_rejects_unknown_value() {
@@ -226,5 +232,21 @@ mode = "mystery"
 
         let parsed = toml::from_str::<FixtureExpectationSidecar>(raw);
         assert!(parsed.is_err());
+    }
+
+    #[test]
+    fn expected_fixture_path_rejects_empty_fixture_stem() {
+        let result = expected_fixture_path(Path::new(".meta.toml"));
+        assert!(result.is_err(), "empty fixture stem should be rejected");
+        let error = result.err().map(|err| err.to_string()).unwrap_or_default();
+        assert!(error.contains("fixture stem must not be empty"));
+    }
+
+    #[test]
+    fn expected_fixture_path_resolves_valid_sidecar_name() {
+        let result = expected_fixture_path(Path::new("quote_like/delimiter.meta.toml"));
+        assert!(result.is_ok(), "valid sidecar name should resolve to fixture path");
+        let path = result.ok().unwrap_or_default();
+        assert_eq!(path, Path::new("quote_like/delimiter.pl"));
     }
 }
