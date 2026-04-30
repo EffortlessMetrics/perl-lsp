@@ -1612,7 +1612,8 @@ fn run_single_gate(
         });
     }
 
-    let execution = run_shell_command_with_timeout(command, &log_path, timeout_secs);
+    println!("[gate:{}] running external command; log: {}", gate.name, log_path.display());
+    let execution = run_shell_command_with_timeout(&gate.name, command, &log_path, timeout_secs);
     let duration_ms = start.elapsed().as_millis() as u64;
 
     match execution {
@@ -1688,6 +1689,7 @@ struct ShellExecutionResult {
 }
 
 fn run_shell_command_with_timeout(
+    gate_name: &str,
     command: &str,
     log_path: &Path,
     timeout_secs: u64,
@@ -1706,6 +1708,8 @@ fn run_shell_command_with_timeout(
 
     let start = Instant::now();
     let timeout = Duration::from_secs(timeout_secs);
+    let heartbeat_interval = Duration::from_secs(60);
+    let mut next_heartbeat = heartbeat_interval;
 
     // Poll until the process exits or the deadline elapses.
     // Capture exit_code inside the loop so the timed-out branch never calls
@@ -1715,10 +1719,19 @@ fn run_shell_command_with_timeout(
         if let Some(status) = child.try_wait().context("Failed waiting on gate process")? {
             break (false, status.code().unwrap_or(-1));
         }
-        if start.elapsed() >= timeout {
+        let elapsed = start.elapsed();
+        if elapsed >= timeout {
             child.kill().ok();
             child.wait().ok();
             break (true, 124_i32);
+        }
+        if elapsed >= next_heartbeat {
+            println!(
+                "[gate:{gate_name}] still running after {}s; output is captured in {}",
+                elapsed.as_secs(),
+                log_path.display()
+            );
+            next_heartbeat += heartbeat_interval;
         }
         thread::sleep(Duration::from_millis(100));
     };
@@ -3125,7 +3138,7 @@ mod tests {
         // as a portable delay that works through cmd.exe without quote issues.
         let command = if cfg!(windows) { "ping -n 4 127.0.0.1" } else { "sleep 3" };
 
-        let execution = run_shell_command_with_timeout(command, &log_path, 1)?;
+        let execution = run_shell_command_with_timeout("timeout_test", command, &log_path, 1)?;
 
         assert!(execution.timed_out, "execution should time out");
         assert_eq!(execution.exit_code, 124, "timed out commands map to synthetic 124");
@@ -3141,7 +3154,7 @@ mod tests {
         // On Windows `cmd /C exit 42` is reliable; on Unix `bash -lc "exit 42"`.
         let command = if cfg!(windows) { "exit 42" } else { "exit 42" };
 
-        let execution = run_shell_command_with_timeout(command, &log_path, 30)?;
+        let execution = run_shell_command_with_timeout("success_test", command, &log_path, 30)?;
 
         assert!(!execution.timed_out, "process that exits naturally must not be marked timed_out");
         assert_eq!(
