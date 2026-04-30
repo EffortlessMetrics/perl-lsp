@@ -168,6 +168,43 @@ fn generate_pathological_inputs() -> Vec<String> {
     inputs
 }
 
+/// Generate deterministic pseudo-fuzz inputs for substitution parsing.
+///
+/// This expands coverage beyond hand-authored regressions while still keeping
+/// the test run deterministic and debuggable.
+fn generate_deterministic_pseudo_fuzz_inputs() -> Vec<String> {
+    let delimiters = ['/', '!', '#', '%', '~', '{', '[', '(', '<'];
+    let mut inputs = Vec::new();
+
+    for seed in 0..64_u8 {
+        let delimiter = delimiters[(seed as usize) % delimiters.len()];
+        let (open_delim, close_delim) = match delimiter {
+            '{' => ('{', '}'),
+            '[' => ('[', ']'),
+            '(' => ('(', ')'),
+            '<' => ('<', '>'),
+            d => (d, d),
+        };
+
+        let escaped = format!("\\{}{}", open_delim, close_delim);
+        let pattern = format!("p{seed:02x}{escaped}");
+        let replacement = format!("r{seed:02x}{}", escaped.chars().rev().collect::<String>());
+
+        let modifiers = match seed % 4 {
+            0 => "g",
+            1 => "im",
+            2 => "xer",
+            _ => "",
+        };
+
+        inputs.push(format!(
+            "s{open_delim}{pattern}{close_delim}{open_delim}{replacement}{close_delim}{modifiers}"
+        ));
+    }
+
+    inputs
+}
+
 /// Run systematic property-based testing
 fn run_substitution_fuzz_tests() -> Result<(), Vec<String>> {
     let mut all_crashes = Vec::new();
@@ -285,4 +322,16 @@ fn test_substitution_comprehensive_fuzz() -> Result<(), Box<dyn std::error::Erro
         }
     }
     Ok(())
+}
+
+#[test]
+fn test_substitution_deterministic_pseudo_fuzz_inputs() {
+    let inputs = generate_deterministic_pseudo_fuzz_inputs();
+    let input_refs: Vec<&str> = inputs.iter().map(String::as_str).collect();
+    let crashes = test_substitution_batch(&input_refs);
+    assert!(
+        crashes.is_empty(),
+        "Found crashes in deterministic pseudo fuzz cases: {:?}",
+        crashes
+    );
 }
