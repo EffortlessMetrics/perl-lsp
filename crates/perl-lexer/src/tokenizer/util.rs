@@ -123,5 +123,4 @@ mod tests {
         let src = "say 1;\n__END__\ntrailer";
         assert_eq!(find_data_marker_byte(src), find_data_marker_byte_lexed(src));
     }
-
 }
