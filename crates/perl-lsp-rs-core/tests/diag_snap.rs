@@ -108,3 +108,16 @@ fn snapshot_syntax_error_with_follow_on_statement() {
     let snapshot = normalize(diagnostics_for(source));
     assert_snapshot!("syntax_error_with_follow_on_statement", snapshot);
 }
+
+#[test]
+fn snapshot_multiple_missing_pragmas_and_eval() {
+    let source = concat!(
+        "package Legacy::Script;\n",
+        "my $payload = q{print \"hello\\n\"};\n",
+        "eval $payload;\n",
+        "my $unused = 42;\n",
+        "1;\n",
+    );
+    let snapshot = normalize(diagnostics_for(source));
+    assert_snapshot!("multiple_missing_pragmas_and_eval", snapshot);
+}
