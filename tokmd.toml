@@ -1,0 +1,47 @@
+[scan]
+exclude = [
+  "target/**",
+  "target-tests/**",
+  ".runs/**",
+  ".codex-worktrees/**",
+  ".claude/worktrees/**",
+  ".ops-perl-lsp/**",
+  "tree-sitter-perl/**",
+  "fuzz/**",
+  "archive/**",
+  "book/book/**",
+  "docs/assets/recordings/**",
+  "test_corpus/workspaces/xlarge/lib/**",
+  "test_corpus/workspaces/xlarge/bin/**"
+]
+
+[module]
+roots = ["crates", "xtask", "docs", "book", "scripts"]
+depth = 2
+
+[gate]
+fail_fast = false
+
+[[gate.rules]]
+name = "receipt_has_files"
+pointer = "/derived/totals/files"
+op = "gte"
+value = 1
+level = "error"
+message = "tokmd did not find any files; check workflow checkout, paths, or ignore rules."
+
+[[gate.rules]]
+name = "token_budget_visibility"
+pointer = "/derived/totals/tokens"
+op = "lte"
+value = 20000000
+level = "warn"
+message = "Repository token estimate exceeded 20M; inspect tokmd artifacts before tightening gates."
+
+[[gate.rules]]
+name = "doc_density_visibility"
+pointer = "/derived/doc_density/total/ratio"
+op = "gte"
+value = 0.02
+level = "warn"
+message = "Documentation density is below the initial visibility floor; do not make this blocking until a baseline is accepted."
