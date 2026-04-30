@@ -9,13 +9,23 @@ use std::fs;
 fn extension_strategy() -> impl Strategy<Value = String> {
     prop_oneof![
         Just("pl".to_string()),
+        Just("PL".to_string()),
         Just("pm".to_string()),
+        Just("Pm".to_string()),
         Just("t".to_string()),
+        Just("T".to_string()),
         Just("psgi".to_string()),
+        Just("PSGI".to_string()),
+        Just("i".to_string()),
+        Just("I".to_string()),
         Just("xs".to_string()),
+        Just("XS".to_string()),
         Just("ep".to_string()),
+        Just("EP".to_string()),
         Just("tt".to_string()),
+        Just("TT".to_string()),
         Just("tt2".to_string()),
+        Just("TT2".to_string()),
         Just("md".to_string()),
         Just("txt".to_string()),
         Just("json".to_string()),
@@ -55,7 +65,7 @@ proptest! {
             prop_assert!(fs::create_dir_all(parent).is_ok());
             prop_assert!(fs::write(&path, "# generated\n").is_ok());
 
-            if matches!(ext.as_str(), "pl" | "pm" | "t" | "psgi" | "xs" | "ep" | "tt" | "tt2") {
+            if is_perl_discovery_path(&path) {
                 expected.insert(path);
             }
         }
