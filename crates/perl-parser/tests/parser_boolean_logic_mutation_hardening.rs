@@ -316,7 +316,6 @@ fn test_statement_modifier_parsing_mutations() {
     }
 }
 
-
 /// Test block/terminator boundaries with trailing control tokens.
 /// This specifically targets statement terminator boolean mutations around `}` and EOF.
 #[test]
@@ -327,11 +326,7 @@ fn test_block_boundary_terminator_mutations() {
             true,
             "Braced if/else should terminate statements at closing braces",
         ),
-        (
-            r"while ($ready) { last if $done; }",
-            true,
-            "Loop body should terminate at closing brace",
-        ),
+        (r"while ($ready) { last if $done; }", true, "Loop body should terminate at closing brace"),
         (
             r"sub f { return 1; } f();",
             true,
@@ -342,16 +337,8 @@ fn test_block_boundary_terminator_mutations() {
             true,
             "Dangling else must fail quickly instead of looping",
         ),
-        (
-            r"sub g { my $x = 1; ",
-            true,
-            "Unclosed block at EOF must be handled without hanging",
-        ),
-        (
-            r"for my $i (1..3) { print $i; } }",
-            true,
-            "Extra closing brace must fail cleanly",
-        ),
+        (r"sub g { my $x = 1; ", true, "Unclosed block at EOF must be handled without hanging"),
+        (r"for my $i (1..3) { print $i; } }", true, "Extra closing brace must fail cleanly"),
     ];
 
     for (perl_code, should_succeed, description) in boundary_cases {
@@ -377,12 +364,7 @@ fn test_block_boundary_terminator_mutations() {
             perl_code
         );
 
-        assert_eq!(
-            parse_result.is_ok(),
-            should_succeed,
-            "{}",
-            description
-        );
+        assert_eq!(parse_result.is_ok(), should_succeed, "{}", description);
     }
 }
 

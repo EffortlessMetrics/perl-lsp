@@ -3091,7 +3091,8 @@ sub list {
 
 #[test]
 #[serial]
-fn bdd_document_highlight_marks_read_and_write_occurrences() -> Result<(), Box<dyn std::error::Error>> {
+fn bdd_document_highlight_marks_read_and_write_occurrences()
+-> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Document highlight includes read and write occurrences");
 
     let script = r#"use strict;
