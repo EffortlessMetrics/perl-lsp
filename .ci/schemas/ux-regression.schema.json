@@ -13,15 +13,44 @@
     "route"
   ],
   "properties": {
-    "kind": {"const": "ux_regression_receipt"},
-    "schema_version": {"const": 1},
-    "measured_at": {"type": "string", "format": "date-time"},
-    "sha": {"type": "string", "minLength": 1},
-    "workflow": {"type": ["string", "null"]},
-    "scenario_file": {"type": ["string", "null"]},
-    "scenario": {"type": ["string", "null"]},
-    "test": {"type": ["string", "null"]},
-    "result": {"enum": ["pass", "fail"]},
+    "kind": {
+      "const": "ux_regression_receipt"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "measured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sha": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workflow": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scenario_file": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scenario": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "result": {
+      "enum": [
+        "pass",
+        "fail"
+      ]
+    },
     "failure_class": {
       "enum": [
         "matrix_drift",
@@ -35,10 +64,42 @@
         "unknown"
       ]
     },
-    "panic_location": {"type": ["string", "null"]},
-    "repro": {"type": ["string", "null"]},
-    "first_failing_line": {"type": ["string", "null"]},
-    "route": {"type": "string", "minLength": 1}
+    "panic_location": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "repro": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "first_failing_line": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "route": {
+      "enum": [
+        "needs-fixture-update",
+        "needs-baseline-update",
+        "needs-test-fix",
+        "needs-provider-fix",
+        "needs-crash-fix",
+        "needs-timeout-triage",
+        "needs-ci-investigation",
+        "needs-triage"
+      ]
+    },
+    "first_failing_test": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
   },
   "additionalProperties": false
 }
