@@ -79,3 +79,13 @@ Every review receipt includes:
   "supersedes": null
 }
 ```
+
+## Label ownership
+
+Reviewer agents should emit review receipts (typically as PR comments) and must not treat labels as the source of truth.
+
+- Reviewers emit structured review receipts (`kind: review_receipt`, schema version `1`).
+- The queue reconciler reads only **current-head SHA** review receipts when projecting label repairs.
+- If no current review receipt exists, reconciler falls back to existing conservative label/timeline logic.
+
+This keeps labels as a projection of receipts rather than an agent-authored authority.

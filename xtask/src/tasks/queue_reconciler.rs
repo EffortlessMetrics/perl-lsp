@@ -86,6 +86,19 @@ const NEEDS_DEEP_REVIEW: &str = "needs-deep-review";
 const NEEDS_DIFF_FIX: &str = "needs-diff-fix";
 const NEEDS_BUILDER_FIX: &str = "needs-builder-fix";
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ReviewReceiptProjection {
+    pub kind: String,
+    pub schema_version: u32,
+    pub pr: u64,
+    pub sha: String,
+    pub verdict: String,
+    pub review_depth: String,
+    pub fix_forward_applied: bool,
+    pub blocking_findings: Vec<String>,
+    pub labels_projected: Vec<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Data structures
 // ---------------------------------------------------------------------------
@@ -284,6 +297,9 @@ pub fn detect_contradictions(
     ci_outcome: CiOutcome,
 ) -> Vec<Contradiction> {
     let mut out = Vec::new();
+    if let Some(c) = detect_review_receipt_projection(pr) {
+        out.push(c);
+    }
 
     let has = |name: &str| pr.labels.iter().any(|l| l == name);
 
@@ -367,6 +383,99 @@ pub fn detect_contradictions(
     }
 
     out
+}
+
+fn detect_review_receipt_projection(pr: &OpenPr) -> Option<Contradiction> {
+    let receipt = fetch_current_review_receipt(pr).ok().flatten()?;
+    detect_review_receipt_projection_for_test(pr, Some(receipt))
+}
+
+fn detect_review_receipt_projection_for_test(
+    pr: &OpenPr,
+    receipt: Option<ReviewReceiptProjection>,
+) -> Option<Contradiction> {
+    let receipt = receipt?;
+    if receipt.sha != pr.head_ref_oid {
+        return None;
+    }
+
+    match receipt.verdict.as_str() {
+        "approved" => {
+            if pr.labels.iter().any(|label| label == NEEDS_BUILDER_FIX) {
+                Some(Contradiction {
+                    keep: REVIEW_REVIEWED.to_string(),
+                    strip: NEEDS_BUILDER_FIX.to_string(),
+                    reason: "current review receipt verdict=approved contradicts needs-builder-fix; stripping needs-builder-fix".to_string(),
+                })
+            } else if pr.labels.iter().any(|label| label == NEEDS_DIFF_FIX) {
+                Some(Contradiction {
+                    keep: DIFF_AUDITED.to_string(),
+                    strip: NEEDS_DIFF_FIX.to_string(),
+                    reason: "current review receipt verdict=approved contradicts needs-diff-fix; stripping needs-diff-fix".to_string(),
+                })
+            } else {
+                None
+            }
+        }
+        "needs_builder" => {
+            if pr.labels.iter().any(|label| label == REVIEW_REVIEWED) {
+                Some(Contradiction {
+                    keep: NEEDS_BUILDER_FIX.to_string(),
+                    strip: REVIEW_REVIEWED.to_string(),
+                    reason: "current review receipt verdict=needs_builder requires needs-builder-fix routing; stripping review-reviewed".to_string(),
+                })
+            } else {
+                None
+            }
+        }
+        "needs_diff" => {
+            if pr.labels.iter().any(|label| label == DIFF_AUDITED) {
+                Some(Contradiction {
+                    keep: NEEDS_DIFF_FIX.to_string(),
+                    strip: DIFF_AUDITED.to_string(),
+                    reason: "current review receipt verdict=needs_diff requires needs-diff-fix routing; stripping diff-audited".to_string(),
+                })
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn fetch_current_review_receipt(pr: &OpenPr) -> Result<Option<ReviewReceiptProjection>> {
+    let root = project_root()?;
+    let pr_str = pr.number.to_string();
+    let output = Command::new("gh")
+        .current_dir(&root)
+        .args(["pr", "view", &pr_str, "--json", "comments"])
+        .output()
+        .context("failed to execute gh pr view for review receipt")?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout);
+    let val: serde_json::Value = serde_json::from_str(&raw)?;
+    let comments =
+        val.get("comments").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+
+    for comment in comments.into_iter().rev() {
+        let Some(body) = comment.get("body").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        if let Ok(receipt) = serde_json::from_str::<ReviewReceiptProjection>(body) {
+            if receipt.kind == "review_receipt"
+                && receipt.schema_version == 1
+                && receipt.pr == pr.number
+            {
+                return Ok(Some(receipt));
+            }
+        }
+    }
+
+    Ok(None)
 }
 
 /// Resolve a contradicting pair that has no live ground truth using timeline events.
@@ -1010,6 +1119,81 @@ mod tests {
         ]);
         let pass1 = apply_pass(&mut state, &[], CiOutcome::Success);
         assert!(pass1.is_empty(), "clean PR should produce no strips");
+    }
+
+    #[test]
+    fn approved_current_sha_strips_needs_builder_fix() {
+        let pr = OpenPr {
+            number: 1,
+            labels: labels(&[NEEDS_BUILDER_FIX, REVIEW_REVIEWED]),
+            head_ref_oid: "sha-1".to_string(),
+        };
+        let receipt = ReviewReceiptProjection {
+            kind: "review_receipt".to_string(),
+            schema_version: 1,
+            pr: 1,
+            sha: "sha-1".to_string(),
+            verdict: "approved".to_string(),
+            review_depth: "deep".to_string(),
+            fix_forward_applied: true,
+            blocking_findings: vec![],
+            labels_projected: vec![],
+        };
+        let c = detect_review_receipt_projection_for_test(&pr, Some(receipt))
+            .expect("should project contradiction");
+        assert_eq!(c.strip, NEEDS_BUILDER_FIX);
+    }
+
+    #[test]
+    fn needs_builder_current_sha_strips_review_reviewed() {
+        let pr = OpenPr {
+            number: 1,
+            labels: labels(&[NEEDS_BUILDER_FIX, REVIEW_REVIEWED]),
+            head_ref_oid: "sha-1".to_string(),
+        };
+        let receipt = ReviewReceiptProjection {
+            kind: "review_receipt".to_string(),
+            schema_version: 1,
+            pr: 1,
+            sha: "sha-1".to_string(),
+            verdict: "needs_builder".to_string(),
+            review_depth: "deep".to_string(),
+            fix_forward_applied: true,
+            blocking_findings: vec!["x".to_string()],
+            labels_projected: vec![],
+        };
+        let c = detect_review_receipt_projection_for_test(&pr, Some(receipt))
+            .expect("should project contradiction");
+        assert_eq!(c.strip, REVIEW_REVIEWED);
+    }
+
+    #[test]
+    fn stale_sha_review_receipt_is_ignored() {
+        let pr = OpenPr {
+            number: 1,
+            labels: labels(&[NEEDS_BUILDER_FIX, REVIEW_REVIEWED]),
+            head_ref_oid: "sha-new".to_string(),
+        };
+        let receipt = ReviewReceiptProjection {
+            kind: "review_receipt".to_string(),
+            schema_version: 1,
+            pr: 1,
+            sha: "sha-old".to_string(),
+            verdict: "approved".to_string(),
+            review_depth: "deep".to_string(),
+            fix_forward_applied: false,
+            blocking_findings: vec![],
+            labels_projected: vec![],
+        };
+        let c = detect_review_receipt_projection_for_test(&pr, Some(receipt));
+        assert!(c.is_none(), "stale sha must be ignored");
+    }
+
+    #[test]
+    fn no_review_receipt_keeps_existing_behavior_safe() {
+        let pr = make_pr(1, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let c = detect_review_receipt_projection_for_test(&pr, None);
+        assert!(c.is_none());
     }
 
     // -----------------------------------------------------------------------
