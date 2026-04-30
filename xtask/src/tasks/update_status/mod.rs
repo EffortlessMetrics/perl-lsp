@@ -15,8 +15,9 @@
 //! Also keeps docs/project/ROADMAP.md compliance table in sync when lsp subsystem runs.
 
 use std::fs;
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, eyre};
@@ -69,17 +70,49 @@ impl StatusSubsystem {
 // ---------------------------------------------------------------------------
 
 /// Run a command with a timeout, returning combined stdout+stderr or empty string on failure.
+fn stream_reader<R: Read>(reader: R, log_prefix: &'static str) -> String {
+    let mut captured = String::new();
+    let mut buf = BufReader::new(reader);
+    let mut line = String::new();
+    loop {
+        line.clear();
+        let Ok(bytes) = buf.read_line(&mut line) else {
+            break;
+        };
+        if bytes == 0 {
+            break;
+        }
+        eprint!("[{log_prefix}] {line}");
+        captured.push_str(&line);
+    }
+    captured
+}
+
 fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
     let Some((&program, rest)) = args.split_first() else {
         return String::new();
     };
 
-    let result = Command::new(program).args(rest).current_dir(root).output();
+    eprintln!("[update-status] running: {}", args.join(" "));
+    let result = Command::new(program)
+        .args(rest)
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn();
 
-    let output = match result {
-        Ok(o) => o,
-        Err(_) => return String::new(),
+    let mut child = match result {
+        Ok(c) => c,
+        Err(err) => {
+            eprintln!("[update-status] failed to start `{}`: {err}", args.join(" "));
+            return String::new();
+        }
     };
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+
+    let out_handle = stdout.map(|out| std::thread::spawn(move || stream_reader(out, "stdout")));
+    let err_handle = stderr.map(|err| std::thread::spawn(move || stream_reader(err, "stderr")));
 
     // Basic timeout emulation: we cannot use `std::process::Command` timeout
     // directly, so we rely on the process completing.  The Python version used
@@ -87,8 +120,19 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
     // the parameter for API compatibility and future improvement.
     let _ = timeout;
 
-    let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
-    combined.push_str(&String::from_utf8_lossy(&output.stderr));
+    let status = child.wait();
+    let mut combined = String::new();
+    if let Some(handle) = out_handle {
+        combined.push_str(&handle.join().unwrap_or_default());
+    }
+    if let Some(handle) = err_handle {
+        combined.push_str(&handle.join().unwrap_or_default());
+    }
+    if let Ok(status) = status {
+        if !status.success() {
+            eprintln!("[update-status] command exited with {status}: {}", args.join(" "));
+        }
+    }
     combined
 }
 
@@ -107,12 +151,25 @@ fn run_cmd_merged(root: &Path, args: &[&str], timeout: Duration) -> String {
         args.iter().map(|&a| format!("'{}'", a.replace('\'', "'\\''"))).collect();
     let shell_cmd = format!("{} 2>&1", shell_args.join(" "));
     #[cfg(unix)]
-    let result = Command::new("sh").arg("-c").arg(&shell_cmd).current_dir(root).output();
+    let merged = ["sh", "-c", &shell_cmd];
     #[cfg(not(unix))]
-    let result = Command::new("cmd").args(["/C", &shell_cmd]).current_dir(root).output();
+    let merged = ["cmd", "/C", &shell_cmd];
+    run_cmd(root, &merged, timeout)
+}
+
+fn run_subsystem<T>(name: &str, repro: &str, action: impl FnOnce() -> Result<T>) -> Result<T> {
+    eprintln!("[update-status] starting subsystem: {name}");
+    let result = action();
     match result {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
-        Err(_) => String::new(),
+        Ok(value) => {
+            eprintln!("[update-status] completed subsystem: {name}");
+            Ok(value)
+        }
+        Err(err) => {
+            eprintln!("[update-status] subsystem failed: {name}");
+            eprintln!("[update-status] repro: {repro}");
+            Err(err)
+        }
     }
 }
 
@@ -182,103 +239,130 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- LSP subsystem ---
     if need_lsp {
-        let cov = lsp::count_lsp_coverage(&root)?;
-        let compliance_table = lsp::compute_compliance_table(&root)?;
+        run_subsystem("lsp", "cargo xtask update-status --write --only lsp", || {
+            let cov = lsp::count_lsp_coverage(&root)?;
+            let compliance_table = lsp::compute_compliance_table(&root)?;
 
-        let lsp_path = root.join("docs/project/status/lsp.md");
-        let original_lsp =
-            fs::read_to_string(&lsp_path).context("reading docs/project/status/lsp.md")?;
-        let updated_lsp = lsp::generate_lsp_status(&cov, &compliance_table, &original_lsp)?;
-        if updated_lsp != original_lsp {
-            files_to_update.push(("docs/project/status/lsp.md", lsp_path, updated_lsp));
-        }
+            let lsp_path = root.join("docs/project/status/lsp.md");
+            let original_lsp =
+                fs::read_to_string(&lsp_path).context("reading docs/project/status/lsp.md")?;
+            let updated_lsp = lsp::generate_lsp_status(&cov, &compliance_table, &original_lsp)?;
+            if updated_lsp != original_lsp {
+                files_to_update.push(("docs/project/status/lsp.md", lsp_path, updated_lsp));
+            }
 
-        let roadmap_path = root.join("docs/project/ROADMAP.md");
-        let original_roadmap =
-            fs::read_to_string(&roadmap_path).context("reading docs/project/ROADMAP.md")?;
-        let updated_roadmap = lsp::update_roadmap(&root, &original_roadmap)?;
-        if updated_roadmap != original_roadmap {
-            files_to_update.push(("docs/project/ROADMAP.md", roadmap_path, updated_roadmap));
-        }
+            let roadmap_path = root.join("docs/project/ROADMAP.md");
+            let original_roadmap =
+                fs::read_to_string(&roadmap_path).context("reading docs/project/ROADMAP.md")?;
+            let updated_roadmap = lsp::update_roadmap(&root, &original_roadmap)?;
+            if updated_roadmap != original_roadmap {
+                files_to_update.push(("docs/project/ROADMAP.md", roadmap_path, updated_roadmap));
+            }
+            Ok(())
+        })?;
     }
 
     // --- Tests subsystem ---
     if need_tests {
-        let test_counts = tests::count_tests(&root);
-        let missing_docs_current = tests::count_missing_docs_perl_parser(&root);
-        let missing_docs_baseline = tests::read_missing_docs_baseline(&root);
+        run_subsystem("tests", "cargo xtask update-status --write --only tests", || {
+            let test_counts = tests::count_tests(&root);
+            let missing_docs_current = tests::count_missing_docs_perl_parser(&root);
+            let missing_docs_baseline = tests::read_missing_docs_baseline(&root);
 
-        let tests_path = root.join("docs/project/status/tests.md");
-        let original_tests =
-            fs::read_to_string(&tests_path).context("reading docs/project/status/tests.md")?;
-        let updated_tests = tests::generate_tests_status(
-            &test_counts,
-            missing_docs_current,
-            missing_docs_baseline,
-            &original_tests,
-        )?;
-        if updated_tests != original_tests {
-            files_to_update.push(("docs/project/status/tests.md", tests_path, updated_tests));
-        }
+            let tests_path = root.join("docs/project/status/tests.md");
+            let original_tests =
+                fs::read_to_string(&tests_path).context("reading docs/project/status/tests.md")?;
+            let updated_tests = tests::generate_tests_status(
+                &test_counts,
+                missing_docs_current,
+                missing_docs_baseline,
+                &original_tests,
+            )?;
+            if updated_tests != original_tests {
+                files_to_update.push(("docs/project/status/tests.md", tests_path, updated_tests));
+            }
+            Ok(())
+        })?;
     }
 
     // --- Parser subsystem ---
     if need_parser {
-        let parser_metrics = parser::collect_parser_metrics(&root);
+        run_subsystem("parser", "cargo xtask update-status --write --only parser", || {
+            let parser_metrics = parser::collect_parser_metrics(&root);
 
-        let parser_path = root.join("docs/project/status/parser.md");
-        let original_parser =
-            fs::read_to_string(&parser_path).context("reading docs/project/status/parser.md")?;
-        let updated_parser = parser::generate_parser_status(&parser_metrics, &original_parser)?;
-        if updated_parser != original_parser {
-            files_to_update.push(("docs/project/status/parser.md", parser_path, updated_parser));
-        }
+            let parser_path = root.join("docs/project/status/parser.md");
+            let original_parser = fs::read_to_string(&parser_path)
+                .context("reading docs/project/status/parser.md")?;
+            let updated_parser = parser::generate_parser_status(&parser_metrics, &original_parser)?;
+            if updated_parser != original_parser {
+                files_to_update.push((
+                    "docs/project/status/parser.md",
+                    parser_path,
+                    updated_parser,
+                ));
+            }
+            Ok(())
+        })?;
     }
 
     // --- Quality subsystem ---
     if need_quality {
-        let quality_path = root.join("docs/project/status/quality.md");
-        let original_quality =
-            fs::read_to_string(&quality_path).context("reading docs/project/status/quality.md")?;
-        let updated_quality = quality::generate_quality_status(&root, &original_quality)?;
-        if updated_quality != original_quality {
-            files_to_update.push(("docs/project/status/quality.md", quality_path, updated_quality));
-        }
+        run_subsystem("quality", "cargo xtask update-status --write --only quality", || {
+            let quality_path = root.join("docs/project/status/quality.md");
+            let original_quality = fs::read_to_string(&quality_path)
+                .context("reading docs/project/status/quality.md")?;
+            let updated_quality = quality::generate_quality_status(&root, &original_quality)?;
+            if updated_quality != original_quality {
+                files_to_update.push((
+                    "docs/project/status/quality.md",
+                    quality_path,
+                    updated_quality,
+                ));
+            }
 
-        let ux_path = root.join("docs/project/status/editor_ux.json");
-        let original_ux = fs::read_to_string(&ux_path).unwrap_or_default();
-        let updated_ux = editor_ux::generate_editor_ux_receipt(&root)?;
-        if updated_ux != original_ux {
-            files_to_update.push(("docs/project/status/editor_ux.json", ux_path, updated_ux));
-        }
+            let ux_path = root.join("docs/project/status/editor_ux.json");
+            let original_ux = fs::read_to_string(&ux_path).unwrap_or_default();
+            let updated_ux = editor_ux::generate_editor_ux_receipt(&root)?;
+            if updated_ux != original_ux {
+                files_to_update.push(("docs/project/status/editor_ux.json", ux_path, updated_ux));
+            }
+            Ok(())
+        })?;
     }
 
     // --- DAP subsystem ---
     if need_dap {
-        let dap_counts = dap::count_dap_tests(&root);
+        run_subsystem("dap", "cargo xtask update-status --write --only dap", || {
+            let dap_counts = dap::count_dap_tests(&root);
 
-        let dap_path = root.join("docs/project/status/dap.md");
-        let original_dap =
-            fs::read_to_string(&dap_path).context("reading docs/project/status/dap.md")?;
-        let updated_dap = dap::generate_dap_status(&root, &dap_counts, &original_dap)?;
-        if updated_dap != original_dap {
-            files_to_update.push(("docs/project/status/dap.md", dap_path, updated_dap));
-        }
+            let dap_path = root.join("docs/project/status/dap.md");
+            let original_dap =
+                fs::read_to_string(&dap_path).context("reading docs/project/status/dap.md")?;
+            let updated_dap = dap::generate_dap_status(&root, &dap_counts, &original_dap)?;
+            if updated_dap != original_dap {
+                files_to_update.push(("docs/project/status/dap.md", dap_path, updated_dap));
+            }
+            Ok(())
+        })?;
     }
 
     // --- Workspace subsystem ---
     if need_workspace {
-        let workspace_path = root.join("docs/project/status/workspace.md");
-        let original_workspace = fs::read_to_string(&workspace_path)
-            .context("reading docs/project/status/workspace.md")?;
-        let updated_workspace = workspace::generate_workspace_status(&root, &original_workspace)?;
-        if updated_workspace != original_workspace {
-            files_to_update.push((
-                "docs/project/status/workspace.md",
-                workspace_path,
-                updated_workspace,
-            ));
-        }
+        run_subsystem("workspace", "cargo xtask update-status --write --only workspace", || {
+            let workspace_path = root.join("docs/project/status/workspace.md");
+            let original_workspace = fs::read_to_string(&workspace_path)
+                .context("reading docs/project/status/workspace.md")?;
+            let updated_workspace =
+                workspace::generate_workspace_status(&root, &original_workspace)?;
+            if updated_workspace != original_workspace {
+                files_to_update.push((
+                    "docs/project/status/workspace.md",
+                    workspace_path,
+                    updated_workspace,
+                ));
+            }
+            Ok(())
+        })?;
     }
 
     if files_to_update.is_empty() {
