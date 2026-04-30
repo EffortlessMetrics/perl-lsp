@@ -1,0 +1,6 @@
+---
+source: crates/perl-parser/tests/ast_snap.rs
+assertion_line: 178
+expression: "parse_sexp(\"sub run ($$) :lvalue { $_[0] = $_[1]; }\")"
+---
+(source_file (sub run :lvalue ((prototype)) (block (expression_statement (assignment_assign (binary_[] (variable $ _) (number 0)) (binary_[] (variable $ _) (number 1)))))))

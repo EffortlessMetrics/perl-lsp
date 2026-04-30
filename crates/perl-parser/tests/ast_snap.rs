@@ -166,6 +166,18 @@ fn ast_state_variable_and_default_operator() {
     assert_snapshot!(parse_sexp("state $counter = 0; $counter //= 1;"));
 }
 
+#[test]
+fn ast_here_doc_assignment() {
+    // Heredocs are pervasive in tests/config emitters and stress multiline lexing.
+    assert_snapshot!(parse_sexp("my $sql = <<'SQL';\nselect * from users;\nSQL\n"));
+}
+
+#[test]
+fn ast_attributes_and_prototype_sub() {
+    // Sub prototypes + attributes appear in older CPAN modules and parser pragmas.
+    assert_snapshot!(parse_sexp("sub run ($$) :lvalue { $_[0] = $_[1]; }"));
+}
+
 // ---------------------------------------------------------------------------
 // 2. Error recovery AST snapshots (malformed input)
 // ---------------------------------------------------------------------------
@@ -276,6 +288,11 @@ fn errors_unclosed_hash_subscript_and_followup() {
 #[test]
 fn errors_broken_regex_delimiter() {
     assert_snapshot!(parse_errors("if ($text =~ /abc) { print 1; }\nmy $ok = 1;"));
+}
+
+#[test]
+fn errors_unterminated_heredoc() {
+    assert_snapshot!(parse_errors("my $sql = <<'SQL';\nselect * from users;\n"));
 }
 
 // ---------------------------------------------------------------------------
