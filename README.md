@@ -7,114 +7,107 @@
 <p align="center">
   <a href="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml"><img src="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://crates.io/crates/perl-lsp-rs"><img src="https://img.shields.io/crates/v/perl-lsp-rs.svg" alt="crates.io" /></a>
-  <a href="https://crates.io/crates/perl-lsp-rs"><img src="https://img.shields.io/crates/d/perl-lsp-rs.svg" alt="Downloads" /></a>
   <a href="https://docs.rs/perl-lsp-rs"><img src="https://docs.rs/perl-lsp-rs/badge.svg" alt="docs.rs" /></a>
   <a href="https://github.com/EffortlessMetrics/perl-lsp/releases"><img src="https://img.shields.io/github/v/release/EffortlessMetrics/perl-lsp?display_name=tag" alt="GitHub release" /></a>
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg" alt="License: MIT OR Apache-2.0" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/MSRV-1.92-blue" alt="MSRV" /></a>
-  <a href="https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs"><img src="https://img.shields.io/badge/VS%20Marketplace-180%20installs-0078D4" alt="VSCode Marketplace" /></a>
-  <a href="https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs"><img src="https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs" alt="Open VSX" /></a>
 </p>
 
 ---
 
-A native Rust LSP server and debug adapter for Perl 5. Fast completions, reliable navigation, and full debugger integration — no Perl runtime required for IDE features.
+`perl-lsp` is a native Rust language server, parser stack, and debug adapter for Perl 5.
+
+## The problem
+
+Perl has decades of real production code, but editor tooling still struggles with the parts that matter in daily work: incomplete code while typing, cross-file navigation, package and module resolution, diagnostics, refactoring, and debugger integration.
+
+`perl-lsp` is built around a native parser, semantic analysis layer, workspace index, LSP server, and DAP implementation designed for real editor use.
+
+## Status at a glance
+
+<!-- BEGIN: README_STATUS -->
+| Area | Current signal |
+|---|---:|
+| Release track | `v0.13.0-alpha` release prep |
+| Published crate surface | 31 published crates after the v0.13 collapse |
+| LSP advertised features | 60/60 |
+| LSP protocol / DAP catalog | 119/119 |
+| Ubuntu system Perl corpus | 94.5% clean (`2825/2990`) |
+| CPAN top 1000 corpus | 95.3% clean (`8931/9372`) |
+| Project corpus | 100.0% clean (`95/95`) |
+| Parser NodeKind coverage | 65/69 |
+| Parser reliability | 0 project-corpus timeouts / 0 panics |
+<!-- END: README_STATUS -->
+
+See [project status](docs/project/status/index.md) for generated metrics and current release-readiness notes.
+
+## What works
+
+- **Language server**: completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic tokens, inlay hints, code actions, code lens, and workspace symbols.
+- **Parser stack**: native lexer, parser-core, parser facade, corpus ratchets, and tree-sitter integration.
+- **Workspace intelligence**: module resolution, symbol indexing, cross-file navigation, and workspace-aware rename.
+- **Debug adapter**: breakpoints, stepping, stack frames, variables, evaluate, and launch/attach flows.
+- **Editor support**: VS Code, Open VSX, Neovim, Vim, Emacs, Helix, Zed, Sublime, and any editor with LSP support.
 
 ## Install
 
-**VS Code** — install from the marketplace and you're done:
+Install and editor setup live in [Install and Editor Setup](docs/how-to/EDITOR_SETUP.md).
 
-```bash
-code --install-extension effortlessmetrics.perl-lsp-rs
-```
+The VS Code extension downloads the matching `perllsp` binary automatically. Other editors use the `perllsp --stdio` server command after installing a release binary.
 
-The extension auto-downloads the matching `perllsp` binary for your platform.
+Do not install `perl-lsp` from crates.io; that is a different project.
 
-**Other editors** — download a prebuilt binary from [Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), add it to `PATH`, then point your LSP client at it:
+## Crate surface
 
-```lua
--- Neovim (nvim-lspconfig)
-local capabilities = vim.lsp.protocol.make_client_capabilities()
-local ok_cmp, cmp_lsp = pcall(require, "cmp_nvim_lsp")
-if ok_cmp then
-  capabilities = cmp_lsp.default_capabilities(capabilities)
-end
+The v0.13 architecture collapsed the old microcrate graph into a smaller published surface. Most implementation detail now lives in modules behind focused public crates.
 
-require("lspconfig").perl_lsp.setup({
-  cmd = { "perllsp", "--stdio" },
-  capabilities = capabilities,
-})
-```
-
-```elisp
-;; Emacs (eglot) — perl-ts-mode is a third-party package, omit if not installed
-(add-to-list 'eglot-server-programs
-             '((perl-mode cperl-mode perl-ts-mode) . ("perllsp" "--stdio")))
-```
-
-See [Editor Setup](docs/how-to/EDITOR_SETUP.md) for Zed, Helix, and other editors.
-
-Verify the install:
-
-```bash
-perllsp --health
-```
-
-> **Note:** Use `cargo install --path crates/perllsp` to build from source. Do not use `cargo install perl-lsp` — that name is an unrelated project on crates.io.
-
-For a full walkthrough, see [Getting Started](docs/tutorials/GETTING_STARTED.md).
-
-## Features
-
-- **Complete LSP surface** — completions, diagnostics, hover, go-to-definition, find references, rename, formatting, semantic tokens, inlay hints, code actions, code lens, workspace symbols (88 LSP + 24 DAP + 7 extension capabilities)
-- **Native debug adapter** — DAP breakpoints, stepping, stack frames, variable inspection, evaluate; no wrapper script
-- **Semantic analysis** — symbol resolution, scope tracking, Moose/Moo method modifiers and role composition
-- **Refactoring** — extract variable, extract subroutine, workspace-scoped rename, subroutine inlining
-- **Diagnostics** — dead code, strict/warnings, perlcritic with walk-up discovery
-- **Fast native parser** — recursive-descent v3 parser validated against a curated CPAN corpus
-- **Windows, macOS, Linux** — first-class on all platforms
+| Need | Crate |
+|---|---|
+| Binary language server | `perllsp` |
+| LSP library facade | `perl-lsp-rs` |
+| LSP implementation core | `perl-lsp-rs-core` |
+| Parser facade | `perl-parser` |
+| Parser engine | `perl-parser-core` |
+| Lexer | `perl-lexer` |
+| Semantic analysis | `perl-semantic-analyzer` |
+| Workspace index | `perl-workspace-index` |
+| Diagnostics catalog | `perl-diagnostics` |
+| Debug adapter | `perl-dap` |
+| Tree-sitter integration | `tree-sitter-perl-rs`, `tree-sitter-perl-c` |
 
 ## Documentation
 
-| | |
+| Task | Link |
 |---|---|
-| First-time setup | [Getting Started](docs/tutorials/GETTING_STARTED.md) |
-| Editor-specific config | [Editor Setup](docs/how-to/EDITOR_SETUP.md) |
-| All configuration options | [Config Reference](docs/reference/CONFIG.md) |
-| Troubleshooting | [Troubleshooting](docs/how-to/TROUBLESHOOTING.md) |
-| Upgrading | [Upgrade Guide](docs/how-to/UPGRADING.md) |
-| Commands reference | [Commands Reference](docs/reference/COMMANDS_REFERENCE.md) |
-| Status and metrics | [docs/project/status/index.md](docs/project/status/index.md) |
-| Roadmap | [ROADMAP.md](docs/project/ROADMAP.md) |
+| Install and editor setup | [docs/how-to/EDITOR_SETUP.md](docs/how-to/EDITOR_SETUP.md) |
+| Getting started | [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md) |
+| Configuration | [docs/reference/CONFIG.md](docs/reference/CONFIG.md) |
+| Troubleshooting | [docs/how-to/TROUBLESHOOTING.md](docs/how-to/TROUBLESHOOTING.md) |
+| Project status and metrics | [docs/project/status/index.md](docs/project/status/index.md) |
+| Roadmap | [docs/project/ROADMAP.md](docs/project/ROADMAP.md) |
 | Release history | [RELEASE_HISTORY.md](RELEASE_HISTORY.md) |
-| Full docs index | [docs/INDEX.md](docs/INDEX.md) |
+| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Agent workflow | [AGENTS.md](AGENTS.md) |
 
-## Using as a Library
+## How this project is built
 
-| Use case | Crate |
+This repository uses a documented AI-assisted development conveyor: candidate generation, ensemble curation, layered verification, CI evidence, fix-forward, and release ratchets.
+
+Start here:
+
+| Topic | Link |
 |---|---|
-| Parse Perl from Rust | [`perl-parser`](crates/perl-parser) + [`perl-lexer`](crates/perl-lexer) |
-| Tokenize only | [`perl-lexer`](crates/perl-lexer) |
-| Symbol resolution and scope tracking | [`perl-semantic-analyzer`](crates/perl-semantic-analyzer) |
-| Cross-file symbol index | [`perl-workspace-index`](crates/perl-workspace-index) |
-| Tree-sitter consumers (Neovim, Helix, GitHub) | [`tree-sitter-perl-c`](crates/tree-sitter-perl-c) |
-| Regex safety and complexity analysis | [`perl-regex`](crates/perl-regex) |
-| Debug adapter | [`perl-dap`](crates/perl-dap) |
+| Pipeline state machine | [docs/articles/PIPELINE_STATE_MACHINE.md](docs/articles/PIPELINE_STATE_MACHINE.md) |
+| Forensics / learning archive | [docs/forensics/](docs/forensics/) |
+| Dispatch index | [docs/forensics/dispatch-index.toml](docs/forensics/dispatch-index.toml) |
+| Agent workflow | [AGENTS.md](AGENTS.md) |
+| Contributor workflow | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-## Status
-
-**v0.13.0-rc1** — release candidate 1. See [status](docs/project/status/index.md) for live metrics and [roadmap](docs/project/ROADMAP.md) for the v0.13.0 milestone.
+The short version: bad PRs should fail cheaply, duplicate PRs should close quickly, good PRs should merge safely, master should stay healthy, and every cycle should improve both the codebase and the conveyor.
 
 ## Contributing
 
-```bash
-cargo test --workspace --lib
-cargo xtask fmt
-cargo clippy --workspace
-nix develop -c just ci-gate   # required before merge
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow. AI implementation agents: read [AGENTS.md](AGENTS.md) first.
+See [CONTRIBUTING.md](CONTRIBUTING.md). AI implementation agents should read [AGENTS.md](AGENTS.md) first.
 
 ## Security
 
@@ -122,4 +115,4 @@ Release artifacts include SBOM generation and provenance attestations. See [Supp
 
 ## License
 
-Dual licensed under MIT or Apache-2.0: [LICENSE-MIT](LICENSE-MIT) / [LICENSE-APACHE](LICENSE-APACHE)
+Dual licensed under MIT or Apache-2.0: [LICENSE-MIT](LICENSE-MIT) / [LICENSE-APACHE](LICENSE-APACHE).
