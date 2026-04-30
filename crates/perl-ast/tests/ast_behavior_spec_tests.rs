@@ -167,3 +167,67 @@ fn when_traversing_for_node_without_optional_parts_then_only_body_is_visited() {
 
     assert_eq!(visited, 1);
 }
+
+#[test]
+fn when_checking_contains_offset_then_start_is_inclusive_and_end_is_exclusive() {
+    let node = Node::new(NodeKind::Identifier { name: "foo".to_string() }, loc(3, 7));
+
+    assert!(node.contains_offset(3));
+    assert!(node.contains_offset(6));
+    assert!(!node.contains_offset(7));
+    assert!(!node.contains_offset(2));
+}
+
+#[test]
+fn when_requesting_span_len_then_it_matches_location_width() {
+    let node = Node::new(NodeKind::Identifier { name: "foo".to_string() }, loc(10, 14));
+    assert_eq!(node.span_len(), 4);
+}
+
+#[test]
+fn when_requesting_last_child_on_leaf_node_then_none_is_returned() {
+    let leaf = number("9");
+
+    assert!(leaf.last_child().is_none());
+}
+
+#[test]
+fn when_requesting_last_child_on_single_child_node_then_that_child_is_returned() {
+    let node = Node::new(
+        NodeKind::Unary { op: "-".to_string(), operand: Box::new(number("1")) },
+        loc(0, 2),
+    );
+
+    let child = node.last_child();
+
+    assert!(child.is_some());
+    assert_eq!(child.map(|c| c.kind.kind_name()), Some("Number"));
+}
+
+#[test]
+fn when_requesting_last_child_on_binary_node_then_right_operand_is_returned() {
+    let node = Node::new(
+        NodeKind::Binary {
+            op: "+".to_string(),
+            left: Box::new(ident("a")),
+            right: Box::new(number("2")),
+        },
+        loc(0, 3),
+    );
+
+    let child = node.last_child();
+
+    assert_eq!(child.map(|c| c.kind.kind_name()), Some("Number"));
+}
+
+#[test]
+fn when_requesting_last_child_on_program_then_last_statement_is_returned() {
+    let node = Node::new(
+        NodeKind::Program { statements: vec![number("1"), number("2"), ident("last")] },
+        loc(0, 10),
+    );
+
+    let child = node.last_child();
+
+    assert_eq!(child.map(|c| c.kind.kind_name()), Some("Identifier"));
+}

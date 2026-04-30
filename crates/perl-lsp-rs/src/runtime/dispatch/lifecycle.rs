@@ -170,61 +170,227 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
+    type TestResult = Result<(), String>;
+
+    // ── BDD lifecycle dispatch scenarios ────────────────────────────────────
+
     #[test]
-    fn initialized_requires_initialize_request_first() {
+    fn given_fresh_server_when_initialized_notification_arrives_then_server_not_initialized_error_returned()
+    -> TestResult {
+        // Given
         let server = LspServer::new();
 
+        // When
         let result = server.handle_initialized_dispatch();
 
-        assert!(result.is_err(), "initialized before initialize must error");
+        // Then
+        let error =
+            result.err().ok_or("expected initialized to fail, but it succeeded".to_string())?;
+        assert_eq!(error.code, -32002, "must be ServerNotInitialized (-32002) per LSP spec");
         assert!(!server.is_initialized(), "server must remain uninitialized");
-    }
-
-    #[test]
-    fn initialized_can_only_be_sent_once() -> Result<(), JsonRpcError> {
-        let server = LspServer::new();
-        server.handle_initialize(None)?;
-
-        let first = server.handle_initialized_dispatch();
-        let second = server.handle_initialized_dispatch();
-
-        assert!(first.is_ok(), "first initialized must succeed");
-        assert!(second.is_err(), "second initialized must error");
         Ok(())
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() -> Result<(), JsonRpcError> {
+    fn given_initialized_server_when_initialized_notification_sent_twice_then_second_request_is_invalid()
+    -> TestResult {
+        // Given
         let server = LspServer::new();
-        server.handle_initialize(None)?;
+        server
+            .handle_initialize(None)
+            .map_err(|e| format!("initialize request should succeed: {e}"))?;
 
+        // When
+        let first = server.handle_initialized_dispatch();
+        let second = server.handle_initialized_dispatch();
+
+        // Then
+        assert!(first.is_ok(), "first initialized must succeed");
+        let second_error = second
+            .err()
+            .ok_or("expected second initialized to fail, but it succeeded".to_string())?;
+        assert_eq!(second_error.code, -32600, "must be InvalidRequest (-32600) per LSP spec");
+        Ok(())
+    }
+
+    #[test]
+    fn given_initialize_request_without_initialized_when_compat_mode_runs_then_server_becomes_initialized()
+    -> TestResult {
+        // Given
+        let server = LspServer::new();
+        server
+            .handle_initialize(None)
+            .map_err(|e| format!("initialize request should succeed: {e}"))?;
+
+        // When
         server.auto_initialize_for_compat("textDocument/hover");
 
+        // Then
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
         Ok(())
     }
 
     #[test]
-    fn set_trace_invalid_value_defaults_to_off() -> Result<(), JsonRpcError> {
+    fn given_server_not_in_initialize_phase_when_compat_mode_runs_then_server_stays_uninitialized()
+    {
+        // Given
         let server = LspServer::new();
-        server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })))?;
-        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_VERBOSE);
 
-        server.handle_set_trace_dispatch(Some(json!({ "value": "invalid-value" })))?;
-        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_OFF);
+        // When
+        server.auto_initialize_for_compat("textDocument/hover");
+
+        // Then
+        assert!(!server.is_initialized(), "compat mode must no-op before initialize request");
+    }
+
+    #[test]
+    fn given_server_receives_shutdown_when_shutdown_dispatch_runs_then_shutdown_flag_and_null_response_are_set()
+    -> TestResult {
+        // Given — fully initialize so shutdown is valid per LSP spec
+        let server = LspServer::new();
+        server
+            .handle_initialize(None)
+            .map_err(|e| format!("initialize request should succeed: {e}"))?;
+        server
+            .handle_initialized_dispatch()
+            .map_err(|e| format!("initialized notification should succeed: {e}"))?;
+
+        // When
+        let response = server
+            .handle_shutdown_dispatch()
+            .map_err(|e| format!("shutdown should succeed: {e}"))?;
+
+        // Then
+        assert_eq!(response, Some(json!(null)), "shutdown returns JSON null per LSP spec");
+        assert!(
+            server.shutdown_received.load(Ordering::Acquire),
+            "shutdown_received must be set (exit will use code 0)"
+        );
         Ok(())
     }
 
     #[test]
-    fn set_trace_missing_value_key_preserves_current_level() -> Result<(), JsonRpcError> {
-        // LSP spec: "value" is required in $/setTrace params. A malformed notification that
-        // omits the key should be silently ignored — server must not reset to "off".
+    fn given_shutdown_already_received_when_shutdown_sent_again_then_invalid_request_error_returned()
+    -> TestResult {
+        // Given
         let server = LspServer::new();
-        server.handle_set_trace_dispatch(Some(json!({ "value": "messages" })))?;
-        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_MESSAGES);
+        server
+            .handle_initialize(None)
+            .map_err(|e| format!("initialize request should succeed: {e}"))?;
 
-        // Malformed: params present but "value" key absent — level must be preserved
-        server.handle_set_trace_dispatch(Some(json!({})))?;
+        // When
+        let first = server.handle_shutdown_dispatch();
+        let second = server.handle_shutdown_dispatch();
+
+        // Then
+        assert!(first.is_ok(), "first shutdown must succeed");
+        let second_error =
+            second.err().ok_or("expected second shutdown to fail, but it succeeded".to_string())?;
+        assert_eq!(
+            second_error.code, -32600,
+            "second shutdown must return InvalidRequest (-32600) per LSP spec"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn given_trace_notification_with_unknown_level_when_set_trace_dispatch_runs_then_trace_defaults_to_off()
+    -> TestResult {
+        // Given
+        let server = LspServer::new();
+
+        // When
+        server
+            .handle_set_trace_dispatch(Some(json!({"value": "unexpected"})))
+            .map_err(|e| format!("setTrace should succeed: {e}"))?;
+
+        // Then
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            TRACE_LEVEL_OFF,
+            "unknown trace value must default to 'off'"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn given_trace_notification_with_verbose_level_when_set_trace_dispatch_runs_then_trace_level_is_updated()
+    -> TestResult {
+        // Given
+        let server = LspServer::new();
+
+        // When
+        server
+            .handle_set_trace_dispatch(Some(json!({"value": "verbose"})))
+            .map_err(|e| format!("setTrace should succeed: {e}"))?;
+
+        // Then
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            TRACE_LEVEL_VERBOSE,
+            "verbose is a valid LSP TraceValue and must be stored exactly"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn given_trace_notification_with_messages_level_when_set_trace_dispatch_runs_then_trace_level_is_messages()
+    -> TestResult {
+        // Given
+        let server = LspServer::new();
+
+        // When
+        server
+            .handle_set_trace_dispatch(Some(json!({"value": "messages"})))
+            .map_err(|e| format!("setTrace should succeed: {e}"))?;
+
+        // Then
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            TRACE_LEVEL_MESSAGES,
+            "messages is a valid LSP TraceValue and must be stored exactly"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn given_set_trace_with_no_params_when_dispatch_runs_then_trace_level_is_unchanged()
+    -> TestResult {
+        // Given — establish a non-default level first
+        let server = LspServer::new();
+        server
+            .handle_set_trace_dispatch(Some(json!({"value": "verbose"})))
+            .map_err(|e| format!("setTrace should succeed: {e}"))?;
+
+        // When — params=None (malformed/missing notification body)
+        server
+            .handle_set_trace_dispatch(None)
+            .map_err(|e| format!("setTrace with no params should not error: {e}"))?;
+
+        // Then — level must be preserved; None params must not reset to "off"
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            TRACE_LEVEL_VERBOSE,
+            "missing params must not reset trace level"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn given_set_trace_with_missing_value_key_when_dispatch_runs_then_trace_level_is_unchanged()
+    -> TestResult {
+        // Given — LSP spec: "value" is required in $/setTrace params; absent key must be ignored.
+        let server = LspServer::new();
+        server
+            .handle_set_trace_dispatch(Some(json!({"value": "messages"})))
+            .map_err(|e| format!("setTrace should succeed: {e}"))?;
+
+        // When — params present but "value" key absent
+        server
+            .handle_set_trace_dispatch(Some(json!({})))
+            .map_err(|e| format!("setTrace with empty params should not error: {e}"))?;
+
+        // Then — level must be preserved
         assert_eq!(
             server.trace_level.lock().as_str(),
             TRACE_LEVEL_MESSAGES,
@@ -234,69 +400,30 @@ mod tests {
     }
 
     #[test]
-    fn set_trace_null_params_preserves_current_level() -> Result<(), JsonRpcError> {
-        // params=None (notification with no params) must not mutate trace level.
+    fn given_all_valid_trace_values_when_set_trace_runs_then_each_is_roundtripped() -> TestResult {
+        // Given
         let server = LspServer::new();
-        server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })))?;
-        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_VERBOSE);
 
-        server.handle_set_trace_dispatch(None)?;
+        // When / Then for each spec-defined TraceValue
+        server
+            .handle_set_trace_dispatch(Some(json!({"value": "off"})))
+            .map_err(|e| format!("setTrace off should succeed: {e}"))?;
+        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_OFF, "'off' roundtrip");
+
+        server
+            .handle_set_trace_dispatch(Some(json!({"value": "messages"})))
+            .map_err(|e| format!("setTrace messages should succeed: {e}"))?;
         assert_eq!(
             server.trace_level.lock().as_str(),
-            TRACE_LEVEL_VERBOSE,
-            "null params must not reset trace level"
+            TRACE_LEVEL_MESSAGES,
+            "'messages' roundtrip"
         );
-        Ok(())
-    }
 
-    #[test]
-    fn set_trace_all_valid_values_roundtrip() -> Result<(), JsonRpcError> {
-        // Verify each spec-defined TraceValue is accepted and stored exactly.
-        let server = LspServer::new();
+        server
+            .handle_set_trace_dispatch(Some(json!({"value": "verbose"})))
+            .map_err(|e| format!("setTrace verbose should succeed: {e}"))?;
+        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_VERBOSE, "'verbose' roundtrip");
 
-        server.handle_set_trace_dispatch(Some(json!({ "value": "off" })))?;
-        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_OFF);
-
-        server.handle_set_trace_dispatch(Some(json!({ "value": "messages" })))?;
-        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_MESSAGES);
-
-        server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })))?;
-        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_VERBOSE);
-
-        Ok(())
-    }
-
-    #[test]
-    fn shutdown_sets_shutdown_received_flag() -> Result<(), JsonRpcError> {
-        let server = LspServer::new();
-        server.handle_initialize(None)?;
-
-        let result = server.handle_shutdown_dispatch()?;
-
-        assert_eq!(result, Some(json!(null)), "shutdown must return JSON null");
-        assert!(
-            server.shutdown_received.load(Ordering::Acquire),
-            "shutdown_received must be true after successful shutdown (exit will use code 0)"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn shutdown_can_only_be_requested_once() -> Result<(), JsonRpcError> {
-        let server = LspServer::new();
-        server.handle_initialize(None)?;
-
-        let first = server.handle_shutdown_dispatch();
-        let second = server.handle_shutdown_dispatch();
-
-        assert!(first.is_ok(), "first shutdown must succeed");
-        assert!(second.is_err(), "second shutdown must error");
-        if let Err(second_err) = second {
-            assert_eq!(
-                second_err.code, -32600,
-                "second shutdown must return InvalidRequest (-32600) per LSP spec"
-            );
-        }
         Ok(())
     }
 

@@ -93,6 +93,7 @@ mod builtins;
 mod context;
 mod file_path;
 mod functions;
+mod import_map;
 mod items;
 mod keywords;
 mod methods;
@@ -113,9 +114,7 @@ pub use self::methods::get_dbi_method_documentation;
 pub use self::test_more::get_test_more_documentation;
 pub use self::xs_api::{add_xs_api_completions_for_prefix, get_xs_api_documentation, is_xs_source};
 
-use perl_module::import::resolve_known_export_tag;
 use perl_parser_core::ast::Node;
-use perl_parser_core::ast::NodeKind;
 use perl_semantic_analyzer::class_model::{ClassModel, ClassModelBuilder, Framework};
 use perl_semantic_analyzer::semantic::{BuiltinDoc, get_moose_type_documentation};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
@@ -286,7 +285,7 @@ impl CompletionProvider {
             let _ = type_engine.infer(ast);
             type_engine
         });
-        let import_map = Self::extract_import_map(ast);
+        let import_map = import_map::extract_import_map(ast);
 
         CompletionProvider {
             symbol_table,
@@ -298,303 +297,6 @@ impl CompletionProvider {
             system_inc_paths,
             include_system_inc,
         }
-    }
-
-    /// Walk the top-level AST and build an `ImportMap` from `use` statements.
-    ///
-    /// Only uppercase-starting module names are included (skips pragmas like
-    /// `strict`, `warnings`, `feature`, `constant`, `utf8`, `lib`, `parent`, `base`).
-    fn extract_import_map(ast: &Node) -> ImportMap {
-        let mut map: ImportMap = HashMap::new();
-
-        fn collect_import_symbols(
-            module: &str,
-            arg: &str,
-            symbols: &mut HashSet<String>,
-        ) -> (bool, bool) {
-            let trimmed = arg.trim();
-            if trimmed.is_empty() {
-                return (false, false);
-            }
-            if matches!(trimmed, "=>" | "," | "(" | ")" | "[" | "]" | "{" | "}") {
-                return (false, false);
-            }
-
-            let mut content = trimmed;
-            if let Some(inner) = content.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-                content = inner.trim();
-            }
-
-            if content.starts_with("qw") {
-                content = content
-                    .trim_start_matches("qw")
-                    .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                    .trim_end_matches(|c: char| ")]}/|!>".contains(c))
-                    .trim();
-
-                let mut unresolved_tag = false;
-                for word in content.split_whitespace() {
-                    if word.is_empty() {
-                        continue;
-                    }
-                    if word.starts_with(':') {
-                        if let Some(expanded) = resolve_known_export_tag(module, word) {
-                            symbols.extend(expanded.iter().map(|name| (*name).to_string()));
-                        } else {
-                            unresolved_tag = true;
-                        }
-                    } else {
-                        symbols.insert(word.to_string());
-                    }
-                }
-                return (!content.is_empty(), unresolved_tag);
-            }
-
-            let cleaned = content.trim_matches(|c: char| c == '\'' || c == '"');
-            if cleaned.is_empty() {
-                return (false, false);
-            }
-
-            let mut unresolved_tag = false;
-            for word in cleaned.split_whitespace() {
-                if word.is_empty() {
-                    continue;
-                }
-                if word.starts_with(':') {
-                    if let Some(expanded) = resolve_known_export_tag(module, word) {
-                        symbols.extend(expanded.iter().map(|name| (*name).to_string()));
-                    } else {
-                        unresolved_tag = true;
-                    }
-                } else {
-                    symbols.insert(word.to_string());
-                }
-            }
-            (true, unresolved_tag)
-        }
-
-        fn collect_node_import_symbols(
-            module: &str,
-            arg: &Node,
-            symbols: &mut HashSet<String>,
-        ) -> (bool, bool) {
-            match &arg.kind {
-                NodeKind::String { value, .. } => collect_import_symbols(
-                    module,
-                    value.trim_matches('\'').trim_matches('"'),
-                    symbols,
-                ),
-                NodeKind::Identifier { name } => collect_import_symbols(module, name, symbols),
-                NodeKind::ArrayLiteral { elements } => {
-                    let mut has_symbols = false;
-                    let mut has_unresolved_tag = false;
-                    for element in elements {
-                        let (element_has_symbols, element_unresolved_tag) =
-                            collect_node_import_symbols(module, element, symbols);
-                        if element_has_symbols {
-                            has_symbols = true;
-                        }
-                        if element_unresolved_tag {
-                            has_unresolved_tag = true;
-                        }
-                    }
-                    (has_symbols, has_unresolved_tag)
-                }
-                _ => (false, false),
-            }
-        }
-
-        fn require_module_name(expr: &Node) -> Option<String> {
-            let NodeKind::FunctionCall { name, args } = &expr.kind else {
-                return None;
-            };
-            if name != "require" {
-                return None;
-            }
-            let first = args.first()?;
-            match &first.kind {
-                NodeKind::Identifier { name } => Some(name.clone()),
-                NodeKind::String { value, .. } => {
-                    let cleaned = value.trim_matches('\'').trim_matches('"').trim();
-                    Some(cleaned.trim_end_matches(".pm").replace('/', "::"))
-                }
-                _ => None,
-            }
-        }
-
-        fn module_runtime_alias(expr: &Node) -> Option<(String, String)> {
-            let (alias_name, call_node) = match &expr.kind {
-                NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
-                    let NodeKind::Variable { name, .. } = &lhs.kind else {
-                        return None;
-                    };
-                    (name.as_str(), rhs.as_ref())
-                }
-                NodeKind::VariableDeclaration { variable, initializer: Some(rhs), .. } => {
-                    let NodeKind::Variable { name, .. } = &variable.kind else {
-                        return None;
-                    };
-                    (name.as_str(), rhs.as_ref())
-                }
-                _ => return None,
-            };
-            let NodeKind::FunctionCall { name, args } = &call_node.kind else {
-                return None;
-            };
-            if !matches!(
-                name.as_str(),
-                "use_module"
-                    | "require_module"
-                    | "Module::Runtime::use_module"
-                    | "Module::Runtime::require_module"
-            ) {
-                return None;
-            }
-            let first = args.first()?;
-            let NodeKind::String { value, .. } = &first.kind else {
-                return None;
-            };
-            let module = value.trim_matches('\'').trim_matches('"').trim();
-            if module.is_empty() {
-                return None;
-            }
-            Some((alias_name.to_string(), module.to_string()))
-        }
-
-        fn inner_expr(node: &Node) -> &Node {
-            if let NodeKind::ExpressionStatement { expression } = &node.kind {
-                expression.as_ref()
-            } else {
-                node
-            }
-        }
-
-        fn collect(node: &Node, map: &mut ImportMap) {
-            match &node.kind {
-                NodeKind::Use { module, args, .. } => {
-                    // Skip pragmas: only process uppercase-starting module names
-                    let first_char: Option<char> = module.chars().next();
-                    if !first_char.is_some_and(|c: char| c.is_ascii_uppercase()) {
-                        return;
-                    }
-
-                    // `use Module` with no args at all — import all of @EXPORT, no filtering
-                    if args.is_empty() {
-                        return;
-                    }
-
-                    let mut symbols: HashSet<String> = HashSet::new();
-                    let mut has_symbol_args = false;
-                    let mut has_unresolved_tag = false;
-
-                    for arg in args {
-                        // Skip version numbers (e.g. "1.50" in `use List::Util 1.50 qw(sum)`)
-                        let first_byte = arg.as_bytes().first().copied().unwrap_or(0);
-                        if first_byte.is_ascii_digit() {
-                            continue;
-                        }
-                        // Skip flag args (e.g. "-norequire")
-                        if arg.starts_with('-') {
-                            continue;
-                        }
-                        let (has_symbols_in_arg, unresolved_tag) =
-                            collect_import_symbols(module, arg, &mut symbols);
-                        if has_symbols_in_arg {
-                            has_symbol_args = true;
-                        }
-                        if unresolved_tag {
-                            has_unresolved_tag = true;
-                        }
-                    }
-
-                    if has_unresolved_tag {
-                        return;
-                    }
-
-                    if has_symbol_args {
-                        map.entry(module.clone()).or_default().extend(symbols);
-                    } else {
-                        // Explicit empty import: `use Module qw()`
-                        map.entry(module.clone()).or_default();
-                    }
-                }
-                NodeKind::Program { statements } | NodeKind::Block { statements } => {
-                    let mut required_modules: Vec<String> = statements
-                        .iter()
-                        .filter_map(|stmt| require_module_name(inner_expr(stmt)))
-                        .collect();
-                    let mut aliases: HashMap<String, String> = HashMap::new();
-                    for stmt in statements {
-                        if let Some((alias, module)) = module_runtime_alias(inner_expr(stmt)) {
-                            aliases.insert(alias, module.clone());
-                            if !required_modules.contains(&module) {
-                                required_modules.push(module);
-                            }
-                        }
-                    }
-
-                    for stmt in statements {
-                        let expr = inner_expr(stmt);
-                        let NodeKind::MethodCall { object, method, args } = &expr.kind else {
-                            continue;
-                        };
-                        if method != "import" {
-                            continue;
-                        }
-                        let object_name = match &object.kind {
-                            NodeKind::Identifier { name } => Some(name.as_str()),
-                            NodeKind::Variable { name, .. } => {
-                                aliases.get(name).map(String::as_str)
-                            }
-                            _ => None,
-                        };
-                        let Some(object_name) = object_name else {
-                            continue;
-                        };
-                        if !required_modules.iter().any(|module| module == object_name) {
-                            continue;
-                        }
-
-                        // `Module->import()` with no args means default exports
-                        // (equivalent to `use Module;` — import all of @EXPORT).
-                        // We represent this by NOT adding an entry to the map,
-                        // which means the module stays in the "import all" tier.
-                        if args.is_empty() {
-                            continue;
-                        }
-
-                        let mut imported_symbols: HashSet<String> = HashSet::new();
-                        let mut has_symbols = false;
-                        let mut has_unresolved_tag = false;
-                        for arg in args {
-                            let (arg_has_symbols, arg_unresolved_tag) = collect_node_import_symbols(
-                                object_name,
-                                arg,
-                                &mut imported_symbols,
-                            );
-                            if arg_has_symbols {
-                                has_symbols = true;
-                            }
-                            if arg_unresolved_tag {
-                                has_unresolved_tag = true;
-                            }
-                        }
-                        if has_unresolved_tag || !has_symbols {
-                            continue;
-                        }
-                        map.entry(object_name.to_string()).or_default().extend(imported_symbols);
-                    }
-
-                    for stmt in statements {
-                        collect(stmt, map);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        collect(ast, &mut map);
-        map
     }
 
     /// Create a new completion provider from parsed AST without workspace context
@@ -1796,6 +1498,7 @@ impl CompletionProvider {
                 additional_edits: vec![],
                 text_edit_range: Some((context.position - key_prefix_len, context.position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }
@@ -1827,6 +1530,7 @@ impl CompletionProvider {
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
+                    label_details: None,
                 });
             };
 
@@ -1929,6 +1633,7 @@ impl CompletionProvider {
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
+                    label_details: None,
                 });
             }
         }
@@ -1965,6 +1670,7 @@ impl CompletionProvider {
                 additional_edits: vec![],
                 text_edit_range: Some((context.prefix_start, context.position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }
@@ -2446,6 +2152,39 @@ $"#;
             "expected incomplete block variable to outrank parent variable, got block={:?} sub={:?}",
             block_item.sort_text,
             sub_item.sort_text
+        );
+    }
+
+    #[test]
+    fn test_variable_completion_prefers_nearest_parent_scope_over_name_order() {
+        let code = concat!(
+            "{\n",
+            "    my $v_a = 1;\n",
+            "    {\n",
+            "        my $v_z = 2;\n",
+            "        {\n",
+            "            $v_\n",
+            "        }\n",
+            "    }\n",
+            "}\n"
+        );
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+        // Use rfind to locate the standalone $v_ completion trigger (the LAST $v_ in
+        // the source), not the first occurrence which is inside $v_a or $v_z.
+        let trigger_pos = must_some(code.rfind("$v_")) + 3;
+        let completions = provider.get_completions(code, trigger_pos);
+
+        let v_a_idx =
+            must_some(completions.iter().position(|completion| completion.label == "$v_a"));
+        let v_z_idx =
+            must_some(completions.iter().position(|completion| completion.label == "$v_z"));
+
+        assert!(
+            v_z_idx < v_a_idx,
+            "expected one-hop parent variable ($v_z) to rank before two-hop parent ($v_a); indices: v_z={v_z_idx}, v_a={v_a_idx}"
         );
     }
 
@@ -4381,5 +4120,106 @@ sub run {
         let source = "$config{key";
         let result = CompletionProvider::detect_hash_key_context(source, source.len());
         assert_eq!(result, Some(("config".to_string(), "key".to_string())));
+    }
+
+    #[test]
+    fn test_provider_captures_include_and_system_inc_paths() {
+        let code = "use My::Module;\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let include_paths = vec![PathBuf::from("/workspace/lib"), PathBuf::from("t/lib")];
+        let system_inc_paths = vec![PathBuf::from("/usr/lib/perl5")];
+
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            None,
+            include_paths.clone(),
+            system_inc_paths.clone(),
+            false,
+        );
+
+        assert_eq!(provider.include_paths, include_paths);
+        assert_eq!(provider.system_inc_paths, system_inc_paths);
+    }
+
+    #[test]
+    fn test_use_module_completion_unchanged_with_empty_inc_vectors()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyApp.pm")?;
+        index.index_file(module_uri, "package MyApp;\n1;\n".to_string())?;
+
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let baseline_provider =
+            CompletionProvider::new_with_index_and_source(&ast, code, Some(Arc::clone(&index)));
+        let baseline = baseline_provider.get_completions_with_path(code, code.len(), None);
+
+        let with_empty_inc = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            Vec::new(),
+            Vec::new(),
+            false,
+        );
+        let with_empty_inc_results =
+            with_empty_inc.get_completions_with_path(code, code.len(), None);
+
+        let baseline_labels: std::collections::HashSet<String> =
+            baseline.into_iter().map(|item| item.label).collect();
+        let with_empty_labels: std::collections::HashSet<String> =
+            with_empty_inc_results.into_iter().map(|item| item.label).collect();
+
+        assert_eq!(
+            baseline_labels, with_empty_labels,
+            "empty include paths must not change completion results in phase 1"
+        );
+        Ok(())
+    }
+
+    /// Phase 1 contract: non-empty inc_paths are stored but do NOT alter completions
+    /// (no filesystem scanning until phase 2). If this test breaks it means someone
+    /// started using the paths without adding scan logic — a regression, not a feature.
+    #[test]
+    fn test_non_empty_inc_paths_do_not_change_phase1_completions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyApp.pm")?;
+        index.index_file(module_uri, "package MyApp;\n1;\n".to_string())?;
+
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let baseline =
+            CompletionProvider::new_with_index_and_source(&ast, code, Some(Arc::clone(&index)))
+                .get_completions_with_path(code, code.len(), None);
+
+        // Non-empty inc paths: completions must still be identical to workspace-only baseline.
+        let with_inc = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            vec![PathBuf::from("/usr/local/lib/perl5"), PathBuf::from("t/lib")],
+            vec![PathBuf::from("/usr/lib/perl5/5.38")],
+            false,
+        )
+        .get_completions_with_path(code, code.len(), None);
+
+        let baseline_labels: std::collections::HashSet<String> =
+            baseline.into_iter().map(|item| item.label).collect();
+        let with_inc_labels: std::collections::HashSet<String> =
+            with_inc.into_iter().map(|item| item.label).collect();
+
+        assert_eq!(
+            baseline_labels, with_inc_labels,
+            "non-empty include paths must not change completions in phase 1 (no filesystem scanning yet)"
+        );
+        Ok(())
     }
 }

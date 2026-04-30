@@ -122,6 +122,14 @@ impl LspServer {
                     })
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
+                caps.label_details_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("textDocument"))
+                    .and_then(|td| td.get("completion"))
+                    .and_then(|comp| comp.get("completionItem"))
+                    .and_then(|ci| ci.get("labelDetailsSupport"))
+                    .and_then(|b| b.as_bool())
+                    .unwrap_or(false);
 
                 // Check if client supports markdown message content in diagnostics (LSP 3.18)
                 caps.markup_message_support = params
@@ -263,13 +271,70 @@ impl LspServer {
                 self.set_root_uri(root_uri);
             } else if let Some(root_path) = params.get("rootPath").and_then(|p| p.as_str()) {
                 // Legacy fallback: rootPath is deprecated since LSP 3.0 but still sent by some clients
+                // (including older JetBrains LSP clients).
                 tracing::debug!(root_path, "Initialized with legacy rootPath");
                 let root_uri = root_path_to_file_uri(root_path);
+                let mut folder =
+                    super::super::workspace_folder::WorkspaceFolderState::new(root_uri.clone());
+                // Preserve filesystem path metadata so project-config loading and other
+                // path-based workflows behave the same as rootUri/workspaceFolders initialization.
+                folder = folder.with_path(std::path::PathBuf::from(root_path));
                 let mut folders = self.workspace_folders.lock();
-                folders.push(super::super::workspace_folder::WorkspaceFolderState::new(
-                    root_uri.clone(),
-                ));
+                folders.push(folder);
                 self.set_root_uri(&root_uri);
+            } else if let Some(init_options) = params.get("initializationOptions") {
+                // Compatibility fallback for clients that place workspace roots in
+                // initializationOptions instead of top-level initialize params.
+                if let Some(workspace_folders) =
+                    init_options.get("workspaceFolders").and_then(|f| f.as_array())
+                {
+                    let uris = extract_workspace_folder_uris(workspace_folders);
+                    // Mirror top-level workspaceFolders: set root URI from first folder.
+                    if let Some(first_uri) = uris.first() {
+                        self.set_root_uri(first_uri);
+                    }
+                    let mut folders = self.workspace_folders.lock();
+                    for uri in uris {
+                        tracing::debug!(
+                            uri,
+                            "Initialized with workspace folder from initializationOptions"
+                        );
+                        let mut folder =
+                            super::super::workspace_folder::WorkspaceFolderState::new(uri.clone());
+                        if let Some(path) = super::super::source_path_from_uri(&uri) {
+                            folder = folder.with_path(path);
+                        }
+                        folders.push(folder);
+                    }
+                } else if let Some(root_uri) = init_options.get("rootUri").and_then(|u| u.as_str())
+                {
+                    let mut folders = self.workspace_folders.lock();
+                    tracing::debug!(
+                        root_uri,
+                        "Initialized with root URI from initializationOptions"
+                    );
+                    let mut folder = super::super::workspace_folder::WorkspaceFolderState::new(
+                        root_uri.to_string(),
+                    );
+                    if let Some(path) = super::super::source_path_from_uri(root_uri) {
+                        folder = folder.with_path(path);
+                    }
+                    folders.push(folder);
+                    self.set_root_uri(root_uri);
+                } else if let Some(root_path) =
+                    init_options.get("rootPath").and_then(|p| p.as_str())
+                {
+                    tracing::debug!(
+                        root_path,
+                        "Initialized with legacy rootPath from initializationOptions"
+                    );
+                    let root_uri = root_path_to_file_uri(root_path);
+                    let mut folders = self.workspace_folders.lock();
+                    folders.push(super::super::workspace_folder::WorkspaceFolderState::new(
+                        root_uri.clone(),
+                    ));
+                    self.set_root_uri(&root_uri);
+                }
             } else if let Ok(cwd) = std::env::current_dir() {
                 // Compatibility fallback for lightweight clients (for example Aider)
                 // that initialize without workspaceFolders/rootUri/rootPath.
@@ -575,11 +640,35 @@ mod tests {
 
     #[test]
     fn initialize_with_workspace_folders_sets_root_path_from_first_folder() {
+        use std::path::Path;
+
         let server = LspServer::new();
+
+        // Create platform-appropriate URIs for workspace folders using Url::from_file_path
+        #[cfg(windows)]
+        let (primary_uri, secondary_uri) = {
+            let primary = Path::new("C:\\tmp\\primary");
+            let secondary = Path::new("C:\\tmp\\secondary");
+            (
+                url::Url::from_file_path(primary).unwrap().to_string(),
+                url::Url::from_file_path(secondary).unwrap().to_string(),
+            )
+        };
+
+        #[cfg(not(windows))]
+        let (primary_uri, secondary_uri) = {
+            let primary_path = Path::new("/tmp/primary");
+            let secondary_path = Path::new("/tmp/secondary");
+            (
+                url::Url::from_file_path(primary_path).unwrap().to_string(),
+                url::Url::from_file_path(secondary_path).unwrap().to_string(),
+            )
+        };
+
         let params = json!({
             "workspaceFolders": [
-                { "uri": "file:///primary", "name": "primary" },
-                { "uri": "file:///secondary", "name": "secondary" }
+                { "uri": primary_uri, "name": "primary" },
+                { "uri": secondary_uri, "name": "secondary" }
             ],
             "capabilities": {}
         });
@@ -590,7 +679,8 @@ mod tests {
         let root_path = server.root_path.lock();
         assert!(
             root_path.as_ref().is_some_and(|path| path.ends_with("primary")),
-            "root path should come from first workspace folder"
+            "root path should come from first workspace folder. Got: {:?}",
+            root_path
         );
     }
 
@@ -778,6 +868,107 @@ mod tests {
         assert!(
             server.client_supports_pull_diags.load(Ordering::Relaxed),
             "non-opencode clients with textDocument.diagnostic should enable pull diagnostics"
+        );
+    }
+
+    #[test]
+    fn initialize_reads_root_uri_from_initialization_options() {
+        let server = LspServer::new();
+        let params = json!({
+            "initializationOptions": {
+                "rootUri": "file:///tmp/claude-workspace"
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(
+            folders.len(),
+            1,
+            "must create one workspace folder from initializationOptions.rootUri"
+        );
+        assert_eq!(folders[0].uri, "file:///tmp/claude-workspace");
+    }
+
+    /// Precedence guard: top-level `rootUri` must take priority over
+    /// `initializationOptions.rootUri` when both are present.
+    #[test]
+    fn initialize_top_level_root_uri_takes_precedence_over_initialization_options() {
+        let server = LspServer::new();
+        let params = json!({
+            "rootUri": "file:///top-level-workspace",
+            "initializationOptions": {
+                "rootUri": "file:///init-options-workspace"
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(folders.len(), 1, "must create exactly one workspace folder");
+        assert_eq!(
+            folders[0].uri, "file:///top-level-workspace",
+            "top-level rootUri must take precedence over initializationOptions.rootUri"
+        );
+    }
+
+    /// Parity guard: initializationOptions.workspaceFolders must also call set_root_uri
+    /// for the first folder, matching the behavior of the top-level workspaceFolders branch.
+    #[test]
+    fn initialize_init_options_workspace_folders_sets_root_path() {
+        use std::path::Path;
+
+        let server = LspServer::new();
+
+        // Use platform-appropriate real file URIs so source_path_from_uri can convert them.
+        #[cfg(windows)]
+        let (primary_uri, secondary_uri) = {
+            let primary = Path::new("C:\\tmp\\init-opts-primary");
+            let secondary = Path::new("C:\\tmp\\init-opts-secondary");
+            (
+                url::Url::from_file_path(primary).unwrap().to_string(),
+                url::Url::from_file_path(secondary).unwrap().to_string(),
+            )
+        };
+        #[cfg(not(windows))]
+        let (primary_uri, secondary_uri) = {
+            let primary = Path::new("/tmp/init-opts-primary");
+            let secondary = Path::new("/tmp/init-opts-secondary");
+            (
+                url::Url::from_file_path(primary).unwrap().to_string(),
+                url::Url::from_file_path(secondary).unwrap().to_string(),
+            )
+        };
+
+        let params = json!({
+            "initializationOptions": {
+                "workspaceFolders": [
+                    { "uri": primary_uri, "name": "primary" },
+                    { "uri": secondary_uri, "name": "secondary" }
+                ]
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        // Workspace folders must be populated
+        let folders = server.workspace_folders.lock();
+        assert_eq!(
+            folders.len(),
+            2,
+            "both workspace folders from initializationOptions must be registered"
+        );
+        drop(folders);
+
+        // root_path must be set from the first folder (module resolution depends on this).
+        // This is the parity check — the top-level workspaceFolders branch calls
+        // set_root_uri; the initializationOptions branch must do the same.
+        let root_path = server.root_path.lock();
+        assert!(
+            root_path.as_ref().is_some_and(|p| p.ends_with("init-opts-primary")),
+            "root_path must be set from first initializationOptions.workspaceFolders entry. Got: {:?}",
+            root_path
         );
     }
 }
