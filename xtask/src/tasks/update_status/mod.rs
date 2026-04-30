@@ -15,8 +15,11 @@
 //! Also keeps docs/project/ROADMAP.md compliance table in sync when lsp subsystem runs.
 
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, eyre};
@@ -74,12 +77,72 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
         return String::new();
     };
 
-    let result = Command::new(program).args(rest).current_dir(root).output();
+    let result = Command::new(program)
+        .args(rest)
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn();
 
-    let output = match result {
-        Ok(o) => o,
+    let mut child = match result {
+        Ok(child) => child,
         Err(_) => return String::new(),
     };
+    let combined: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let stdout_handle = child.stdout.take().map(|mut stdout| {
+        let combined_stdout = Arc::clone(&combined);
+        thread::spawn(move || {
+            let mut buf = [0_u8; 8192];
+            loop {
+                let bytes_read = match stdout.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => n,
+                    Err(_) => break,
+                };
+                let chunk = &buf[..bytes_read];
+                {
+                    let mut locked = match combined_stdout.lock() {
+                        Ok(guard) => guard,
+                        Err(_) => return,
+                    };
+                    locked.extend_from_slice(chunk);
+                }
+                eprint!("{}", String::from_utf8_lossy(chunk));
+            }
+        })
+    });
+
+    let stderr_handle = child.stderr.take().map(|mut stderr| {
+        let combined_stderr = Arc::clone(&combined);
+        thread::spawn(move || {
+            let mut buf = [0_u8; 8192];
+            loop {
+                let bytes_read = match stderr.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => n,
+                    Err(_) => break,
+                };
+                let chunk = &buf[..bytes_read];
+                {
+                    let mut locked = match combined_stderr.lock() {
+                        Ok(guard) => guard,
+                        Err(_) => return,
+                    };
+                    locked.extend_from_slice(chunk);
+                }
+                eprint!("{}", String::from_utf8_lossy(chunk));
+            }
+        })
+    });
+
+    let _ = child.wait();
+    if let Some(handle) = stdout_handle {
+        let _ = handle.join();
+    }
+    if let Some(handle) = stderr_handle {
+        let _ = handle.join();
+    }
 
     // Basic timeout emulation: we cannot use `std::process::Command` timeout
     // directly, so we rely on the process completing.  The Python version used
@@ -87,9 +150,10 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
     // the parameter for API compatibility and future improvement.
     let _ = timeout;
 
-    let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
-    combined.push_str(&String::from_utf8_lossy(&output.stderr));
-    combined
+    match combined.lock() {
+        Ok(output) => String::from_utf8_lossy(&output).into_owned(),
+        Err(_) => String::new(),
+    }
 }
 
 /// Like `run_cmd` but merges stderr into stdout via shell `2>&1`.
