@@ -2163,6 +2163,9 @@ fuzz-regression duration='30':
     @just fuzz lsp_navigation {{duration}} || true
     @just fuzz utf16_roundtrip {{duration}} || true
     @just fuzz unicode_positions {{duration}} || true
+    @just fuzz lexer_tokenization {{duration}} || true
+    @just fuzz dap_eval_validator {{duration}} || true
+    @just fuzz dap_stack_parser {{duration}} || true
     @just fuzz-check-crashes
     @echo "✅ Fuzz regression testing complete"
 
