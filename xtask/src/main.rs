@@ -12,6 +12,7 @@ mod types;
 mod utils;
 use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
+use tasks::gate_policy::GatePolicyProfile;
 use tasks::gates::{GateTier, OutputFormat as GatesOutputFormat};
 use tasks::methodology_gate::MethodologyOutputFormat;
 use tasks::metrics;
@@ -409,10 +410,10 @@ enum Commands {
     /// selected CI lanes with reasons. Deterministic given the same diff and
     /// `cargo metadata` output.
     ///
-    /// Example: `cargo xtask ci-scope --base origin/master --format json`
+    /// Example: `cargo xtask ci-scope --base auto --format json`
     CiScope {
-        /// Base git reference to diff against (default: origin/master).
-        #[arg(long, default_value = "origin/master")]
+        /// Base git reference to diff against (default: auto-detect).
+        #[arg(long, default_value = "auto")]
         base: String,
 
         /// Output format: `json` or `text` (default: json).
@@ -860,6 +861,12 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Emit parser-ratchet scaffold receipts.
+    ParserRatchet {
+        #[command(subcommand)]
+        command: ParserRatchetCommand,
+    },
+
     /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
     CpanCorpus {
         #[command(subcommand)]
@@ -998,6 +1005,12 @@ enum Commands {
         command: AgentCommand,
     },
 
+    /// Classify failed CI receipts into typed fix-forward playbooks.
+    FixForward {
+        #[command(subcommand)]
+        command: FixForwardCommand,
+    },
+
     /// Update derived metrics in docs/project/status/ subsystem files.
     ///
     /// Computes workspace test counts, ignored test counts, feature catalog
@@ -1123,6 +1136,10 @@ enum Commands {
         #[arg(long, short)]
         gate: Option<String>,
 
+        /// Base git ref used for scope-aware PR-fast planning
+        #[arg(long)]
+        base: Option<String>,
+
         /// List available gates without running them
         #[arg(long, short)]
         list: bool,
@@ -1154,6 +1171,12 @@ enum Commands {
         /// Verbose output (include quarantined gates)
         #[arg(long, short)]
         verbose: bool,
+    },
+
+    /// Inspect and validate effective gate policy profiles.
+    GatePolicy {
+        #[command(subcommand)]
+        command: GatePolicyCommand,
     },
 
     /// Detect contradictory PR label states and emit a methodology receipt.
@@ -1198,8 +1221,8 @@ enum Commands {
     /// and runs clippy and/or tests only for those crates. This gives
     /// fast feedback during active development.
     TargetedChecks {
-        /// Base git reference for diff (default: origin/master)
-        #[arg(long, default_value = "origin/master")]
+        /// Base git reference for diff (default: auto-detect)
+        #[arg(long, default_value = "auto")]
         base: String,
 
         /// Check mode: clippy, test, or all (default: all)
@@ -1276,6 +1299,37 @@ enum Commands {
         /// Current receipt JSON path.
         current: PathBuf,
     },
+
+    /// Validate generated-file ownership and associated receipts.
+    GeneratedFiles {
+        #[command(subcommand)]
+        command: GeneratedFilesCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum GeneratedFilesCommand {
+    /// List generated-file ownership rules.
+    List {
+        /// Optional fixture JSON for deterministic tests.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+    /// Check changed generated files for matching generator receipts.
+    Check {
+        /// Path where generated-file receipt JSON is written.
+        #[arg(long, default_value = "target/receipts/generated-files.json")]
+        receipt: PathBuf,
+        /// Optional fixture JSON for deterministic tests.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+        /// Path(s) to generator receipt JSON artifacts.
+        #[arg(long = "generator-receipt")]
+        generator_receipt: Vec<PathBuf>,
+        /// Explicit override for manual edits in this run.
+        #[arg(long)]
+        allow_manual_edits: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1344,6 +1398,32 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum ParserRatchetCommand {
+    /// Produce an initial parser-ratchet scaffold receipt.
+    Run {
+        /// Ratchet execution profile.
+        #[arg(long, value_enum)]
+        profile: parser_ratchet::RatchetProfile,
+
+        /// Explicit git revision for the base side.
+        #[arg(long)]
+        base: String,
+
+        /// Explicit git revision for the head side.
+        #[arg(long)]
+        head: String,
+
+        /// Output path for the receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+
+        /// Force selection in scaffold mode.
+        #[arg(long)]
+        force_selected: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum GateReceiptsCommand {
     /// List registered receipt schemas.
     List {
@@ -1366,6 +1446,18 @@ enum GateReceiptsCommand {
         /// Output format (default: human).
         #[arg(long, value_enum, default_value = "human")]
         format: GateReceiptsFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GatePolicyCommand {
+    /// Validate policy/registry invariants for PR safety.
+    Check,
+    /// Show effective required/advisory gates for a profile.
+    Effective {
+        /// Profile to evaluate (pr/nightly/release).
+        #[arg(long, value_enum, default_value = "pr")]
+        profile: GatePolicyProfile,
     },
 }
 
@@ -1403,6 +1495,25 @@ enum MergeReadyCommand {
         /// Force dry-run mode.
         #[arg(long)]
         dry_run: bool,
+    },
+    /// Scan all open PRs and resolve label contradictions queue-wide.
+    ///
+    /// Uses live CI state for ci-green/needs-ci-fix decisions, and
+    /// "later-applied wins" timeline logic for other contradiction pairs.
+    /// Apply mode is the default; pass --dry-run for advisory mode.
+    ReconcileQueue {
+        /// Apply label changes (default when neither flag given).
+        #[arg(long)]
+        apply: bool,
+        /// Dry-run: report what would change without applying.
+        #[arg(long, conflicts_with = "apply")]
+        dry_run: bool,
+        /// Limit to a single PR number (useful for testing).
+        #[arg(long)]
+        pr: Option<u64>,
+        /// Output path for the queue-reconcile.json receipt.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
     },
 }
 
@@ -1453,6 +1564,23 @@ enum ReleaseCommand {
         #[arg(long)]
         bundle_dir: Option<PathBuf>,
     },
+}
+
+#[derive(Subcommand)]
+enum FixForwardCommand {
+    /// Classify a failing receipt into a typed fix-forward playbook.
+    Classify {
+        /// Path to a CI receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+
+        /// Output path for fix-forward receipt JSON.
+        #[arg(long)]
+        output: PathBuf,
+    },
+
+    /// List configured fix-forward playbooks.
+    ListPlaybooks,
 }
 
 #[derive(Subcommand)]
@@ -1856,6 +1984,17 @@ fn main() -> Result<()> {
                 receipt,
             })
         }
+        Commands::ParserRatchet { command } => match command {
+            ParserRatchetCommand::Run { profile, base, head, receipt, force_selected } => {
+                parser_ratchet::run(parser_ratchet::ParserRatchetRunConfig {
+                    profile,
+                    base,
+                    head,
+                    receipt,
+                    force_selected,
+                })
+            }
+        },
         Commands::CpanCorpus { command } => {
             let mut config = cpan_corpus::CpanCorpusConfig::default();
             match command {
@@ -1923,6 +2062,11 @@ fn main() -> Result<()> {
                 let run_dry = !apply || dry_run;
                 merge_ready::reconcile(run_dry)
             }
+            MergeReadyCommand::ReconcileQueue { apply: _, dry_run, pr, receipt } => {
+                // Apply is the default. Only switch to dry-run when --dry-run is explicitly passed.
+                let do_apply = !dry_run;
+                queue_reconciler::reconcile_queue(do_apply, pr, receipt)
+            }
         },
         Commands::IgnoredTests { update, check, verbose } => {
             ignored_tests::run(update, check, verbose)
@@ -1957,6 +2101,12 @@ fn main() -> Result<()> {
                 AgentReceiptCommand::Validate { receipt } => agent_receipt::validate(&receipt),
             },
             AgentCommand::Worktree { command } => worktree_allocator::run(command),
+        },
+        Commands::FixForward { command } => match command {
+            FixForwardCommand::Classify { receipt, output } => {
+                fix_forward::classify(receipt, output)
+            }
+            FixForwardCommand::ListPlaybooks => fix_forward::list_playbooks(),
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
@@ -2003,6 +2153,7 @@ fn main() -> Result<()> {
         Commands::Gates {
             tier,
             gate,
+            base,
             list,
             format,
             receipt,
@@ -2014,6 +2165,7 @@ fn main() -> Result<()> {
         } => gates::run(gates::GateRunnerConfig {
             tier,
             gate_filter: gate,
+            base_ref: base,
             output_format: format,
             emit_receipt: receipt,
             receipt_path,
@@ -2023,6 +2175,10 @@ fn main() -> Result<()> {
             parallel,
             verbose,
         }),
+        Commands::GatePolicy { command } => match command {
+            GatePolicyCommand::Check => tasks::gate_policy::check(),
+            GatePolicyCommand::Effective { profile } => tasks::gate_policy::effective(profile),
+        },
         Commands::GateReceipts { command } => match command {
             GateReceiptsCommand::List { format } => {
                 gate_receipts::list(convert_gate_receipts_format(format))
@@ -2070,6 +2226,15 @@ fn main() -> Result<()> {
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }
+        Commands::GeneratedFiles { command } => match command {
+            GeneratedFilesCommand::List { fixture } => generated_files::list(fixture),
+            GeneratedFilesCommand::Check {
+                receipt,
+                fixture,
+                generator_receipt,
+                allow_manual_edits,
+            } => generated_files::check(receipt, fixture, generator_receipt, allow_manual_edits),
+        },
     }
 }
 

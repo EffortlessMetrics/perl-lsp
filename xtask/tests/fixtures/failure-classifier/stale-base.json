@@ -1,0 +1,26 @@
+{
+  "pr": {
+    "number": 7002,
+    "head_sha": "pr-head-222",
+    "master_sha": "master-bbb",
+    "behind_master": true,
+    "changed_files": ["docs/README.md"]
+  },
+  "pr_checks": [
+    {
+      "name": "ci / test",
+      "signature": "ci / test: dependency graph mismatch",
+      "sha": "pr-head-222",
+      "conclusion": "failure",
+      "files": ["Cargo.lock"]
+    }
+  ],
+  "master_checks": [
+    {
+      "name": "ci / test",
+      "signature": "ci / test: dependency graph mismatch",
+      "sha": "master-bbb",
+      "conclusion": "success"
+    }
+  ]
+}

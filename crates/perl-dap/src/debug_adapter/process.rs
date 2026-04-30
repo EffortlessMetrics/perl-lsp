@@ -80,27 +80,45 @@ fn detect_perl_info() -> String {
     }
 }
 
-fn format_perl_spawn_error(error: &std::io::Error) -> String {
+fn is_valid_perl_interpreter(perl_interpreter: &str) -> bool {
+    let trimmed = perl_interpreter.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    let candidate = Path::new(trimmed)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(trimmed)
+        .to_ascii_lowercase();
+
+    let candidate = candidate.strip_suffix(".exe").unwrap_or(&candidate);
+    candidate == "perl" || candidate.starts_with("perl")
+}
+
+fn format_perl_spawn_error(perl_interpreter: &str, error: &std::io::Error) -> String {
     if error.kind() == std::io::ErrorKind::NotFound {
         #[cfg(windows)]
         {
-            return "Perl executable ('perl') is not available on PATH. Install Perl from \
+            return format!(
+                "Perl executable ('{perl_interpreter}') is not available on PATH. Install Perl from \
                     https://strawberryperl.com (or ActivePerl), then reload VS Code. \
                     You can also set `perl-lsp.perl.path` or launch.json `perl` to a full Perl path."
-                .to_string();
+            );
         }
         #[cfg(not(windows))]
         {
-            return "Perl executable ('perl') is not available on PATH. Install Perl with your package manager \
+            return format!(
+                "Perl executable ('{perl_interpreter}') is not available on PATH. Install Perl with your package manager \
                     (for example `brew install perl`, `apt install perl`, or your distro equivalent), \
                     then reload VS Code. You can also set `perl-lsp.perl.path` or launch.json `perl` \
                     to a full Perl path."
-                .to_string();
+            );
         }
     }
 
     format!(
-        "Perl executable ('perl') could not be started: {}. \
+        "Perl executable ('{perl_interpreter}') could not be started: {}. \
          Check file permissions, antivirus/AppLocker policy, and sandbox restrictions.",
         error
     )
@@ -208,6 +226,7 @@ impl DebugAdapter {
                 Some(args.clone());
 
             let program = args.get("program").and_then(|p| p.as_str()).unwrap_or("");
+            let perl_interpreter = args.get("perl").and_then(|p| p.as_str()).unwrap_or("perl");
 
             // Set workspace root for path validation (prefer cwd, fall back to program's parent)
             let workspace = args
@@ -244,7 +263,13 @@ impl DebugAdapter {
                 .unwrap_or_default();
 
             // Launch Perl debugger
-            match self.launch_debugger(program, perl_args, stop_on_entry, env_overrides) {
+            match self.launch_debugger(
+                program,
+                perl_interpreter,
+                perl_args,
+                stop_on_entry,
+                env_overrides,
+            ) {
                 Ok(thread_id) => {
                     // Send stopped event if stop on entry
                     if stop_on_entry {
@@ -306,6 +331,7 @@ impl DebugAdapter {
     pub(super) fn launch_debugger(
         &mut self,
         program: &str,
+        perl_interpreter: &str,
         args: Vec<String>,
         stop_on_entry: bool,
         env_overrides: HashMap<String, String>,
@@ -365,13 +391,20 @@ impl DebugAdapter {
             })?;
         }
 
+        if !is_valid_perl_interpreter(perl_interpreter) {
+            return Err(format!(
+                "Invalid Perl interpreter '{}'. Set launch.json `perl` to a Perl executable path (for example, `perl` or `/usr/bin/perl`).",
+                perl_interpreter
+            ));
+        }
+
         // Pre-launch syntax check: run `perl -c <script>` before spawning the
         // debugger.  This catches syntax errors early and surfaces a clear,
         // actionable message to the user instead of a generic "Cannot start
         // Perl debugger" failure after `perl -d` exits immediately.
-        Self::check_syntax(program, &env_overrides)?;
+        Self::check_syntax(perl_interpreter, program, &env_overrides)?;
 
-        let mut cmd = Command::new("perl");
+        let mut cmd = Command::new(perl_interpreter);
         cmd.arg("-d");
 
         // Perl debugger stops on the first line by default
@@ -428,7 +461,7 @@ impl DebugAdapter {
 
                 Ok(thread_id)
             }
-            Err(e) => Err(format_perl_spawn_error(&e)),
+            Err(e) => Err(format_perl_spawn_error(perl_interpreter, &e)),
         }
     }
 
@@ -443,10 +476,11 @@ impl DebugAdapter {
     /// and `Ok(())` is returned so that the subsequent `perl -d` launch
     /// produces the correct "perl not on PATH" error to the user.
     pub(super) fn check_syntax(
+        perl_interpreter: &str,
         program: &str,
         env_overrides: &HashMap<String, String>,
     ) -> Result<(), String> {
-        let output = match Command::new("perl")
+        let output = match Command::new(perl_interpreter)
             .arg("-c")
             .arg("--")
             .arg(program)
@@ -1742,7 +1776,9 @@ impl DebugAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::{DebugAdapter, detect_perl_info, format_perl_spawn_error};
+    use super::{
+        DebugAdapter, detect_perl_info, format_perl_spawn_error, is_valid_perl_interpreter,
+    };
 
     #[test]
     fn missing_module_name_parses_standard_module_path() {
@@ -1856,9 +1892,30 @@ mod tests {
     }
 
     #[test]
+    fn validates_perl_interpreter_names() {
+        assert!(is_valid_perl_interpreter("perl"));
+        assert!(is_valid_perl_interpreter("/usr/bin/perl"));
+        assert!(is_valid_perl_interpreter("C:/Strawberry/perl/bin/perl.exe"));
+        assert!(is_valid_perl_interpreter("perl5.38.2"));
+
+        assert!(!is_valid_perl_interpreter("/bin/sh"));
+        assert!(!is_valid_perl_interpreter("python3"));
+        assert!(!is_valid_perl_interpreter("   "));
+    }
+    #[test]
+    fn format_perl_spawn_error_includes_custom_interpreter_name() {
+        let error = std::io::Error::new(std::io::ErrorKind::NotFound, "No such file or directory");
+        let message = format_perl_spawn_error("/custom/perl", &error);
+
+        assert!(
+            message.contains("/custom/perl"),
+            "expected interpreter path in message, got: {message}"
+        );
+    }
+    #[test]
     fn format_perl_spawn_error_for_missing_perl_is_actionable() {
         let error = std::io::Error::new(std::io::ErrorKind::NotFound, "No such file or directory");
-        let message = format_perl_spawn_error(&error);
+        let message = format_perl_spawn_error("perl", &error);
 
         assert!(message.contains("Install Perl"), "expected install guidance, got: {message}");
         assert!(
