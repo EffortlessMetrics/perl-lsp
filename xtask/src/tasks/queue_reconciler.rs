@@ -160,6 +160,51 @@ pub enum CiOutcome {
     Skipped,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NormalizedCheckStatus {
+    Passed,
+    Failed,
+    Pending,
+    ExpectedSkip,
+    UnexpectedSkip,
+    Stale,
+}
+
+#[derive(Debug, Clone)]
+struct CheckContext<'a> {
+    check_name: &'a str,
+    required: bool,
+    conclusion_or_state: Option<&'a str>,
+    event_type: Option<&'a str>,
+    check_head_sha: Option<&'a str>,
+    pr_head_sha: Option<&'a str>,
+}
+
+fn normalize_check_status(ctx: &CheckContext<'_>) -> NormalizedCheckStatus {
+    if let (Some(check_sha), Some(pr_sha)) = (ctx.check_head_sha, ctx.pr_head_sha) {
+        if check_sha != pr_sha {
+            return NormalizedCheckStatus::Stale;
+        }
+    }
+
+    let status = ctx.conclusion_or_state.unwrap_or("UNKNOWN").to_ascii_uppercase();
+    match status.as_str() {
+        "SUCCESS" | "NEUTRAL" => NormalizedCheckStatus::Passed,
+        "IN_PROGRESS" | "QUEUED" | "WAITING" | "PENDING" => NormalizedCheckStatus::Pending,
+        "SKIPPED" => {
+            if !ctx.required
+                || ctx.event_type == Some("pull_request")
+                || ctx.check_name.contains("UX")
+            {
+                NormalizedCheckStatus::ExpectedSkip
+            } else {
+                NormalizedCheckStatus::UnexpectedSkip
+            }
+        }
+        _ => NormalizedCheckStatus::Failed,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -471,7 +516,7 @@ pub fn query_live_ci_state(pr_number: u64) -> Result<CiOutcome> {
     }
 
     let mut any_definitive_success = false;
-    let mut any_failure = false;
+    let mut saw_expected_skip = false;
 
     for check in &checks {
         // GitHub uses `conclusion` for completed runs (SUCCESS, FAILURE, SKIPPED, etc.)
@@ -483,30 +528,31 @@ pub fn query_live_ci_state(pr_number: u64) -> Result<CiOutcome> {
         } else {
             conclusion_val
         };
-        let state = state_val.and_then(serde_json::Value::as_str).unwrap_or("UNKNOWN");
+        let state = state_val.and_then(serde_json::Value::as_str);
+        let status = normalize_check_status(&CheckContext {
+            check_name: check.get("name").and_then(serde_json::Value::as_str).unwrap_or("unknown"),
+            required: true,
+            conclusion_or_state: state,
+            event_type: Some("pull_request"),
+            check_head_sha: None,
+            pr_head_sha: None,
+        });
 
-        match state.to_uppercase().as_str() {
-            "SUCCESS" | "NEUTRAL" => {
-                any_definitive_success = true;
-            }
-            "SKIPPED" => {
-                // Path-conditioned skip — counts neither as success nor failure.
-                // If ALL checks land here we return Skipped below.
-            }
-            "IN_PROGRESS" | "QUEUED" | "WAITING" | "PENDING" => {
-                return Ok(CiOutcome::Pending);
-            }
-            _ => {
-                any_failure = true;
-            }
+        match status {
+            NormalizedCheckStatus::Passed => any_definitive_success = true,
+            NormalizedCheckStatus::Pending => return Ok(CiOutcome::Pending),
+            NormalizedCheckStatus::ExpectedSkip => saw_expected_skip = true,
+            NormalizedCheckStatus::Failed
+            | NormalizedCheckStatus::UnexpectedSkip
+            | NormalizedCheckStatus::Stale => return Ok(CiOutcome::Failure),
         }
     }
 
-    if any_failure {
-        return Ok(CiOutcome::Failure);
-    }
     if any_definitive_success {
         return Ok(CiOutcome::Success);
+    }
+    if saw_expected_skip {
+        return Ok(CiOutcome::Skipped);
     }
     // No failures, no pending, no explicit successes: all present checks were
     // SKIPPED (path-conditioning). Report as Skipped — not applicable.
@@ -1056,6 +1102,71 @@ mod tests {
         let comment = build_comment(&contradictions, &strips, TEST_TS);
         let count = comment.matches("## Reconciler action").count();
         assert_eq!(count, 2, "one section per strip");
+    }
+
+    #[test]
+    fn normalizer_docs_only_skip_is_expected() {
+        let status = normalize_check_status(&CheckContext {
+            check_name: "UX Regression Tests",
+            required: false,
+            conclusion_or_state: Some("skipped"),
+            event_type: Some("pull_request"),
+            check_head_sha: Some("abc"),
+            pr_head_sha: Some("abc"),
+        });
+        assert_eq!(status, NormalizedCheckStatus::ExpectedSkip);
+    }
+
+    #[test]
+    fn normalizer_required_skip_is_unexpected() {
+        let status = normalize_check_status(&CheckContext {
+            check_name: "CI Gate",
+            required: true,
+            conclusion_or_state: Some("skipped"),
+            event_type: Some("push"),
+            check_head_sha: Some("abc"),
+            pr_head_sha: Some("abc"),
+        });
+        assert_eq!(status, NormalizedCheckStatus::UnexpectedSkip);
+    }
+
+    #[test]
+    fn normalizer_sha_mismatch_is_stale() {
+        let status = normalize_check_status(&CheckContext {
+            check_name: "CI Gate",
+            required: true,
+            conclusion_or_state: Some("success"),
+            event_type: Some("pull_request"),
+            check_head_sha: Some("old"),
+            pr_head_sha: Some("new"),
+        });
+        assert_eq!(status, NormalizedCheckStatus::Stale);
+    }
+
+    #[test]
+    fn normalizer_failed_check_is_failed() {
+        let status = normalize_check_status(&CheckContext {
+            check_name: "CI Gate",
+            required: true,
+            conclusion_or_state: Some("failure"),
+            event_type: Some("pull_request"),
+            check_head_sha: None,
+            pr_head_sha: None,
+        });
+        assert_eq!(status, NormalizedCheckStatus::Failed);
+    }
+
+    #[test]
+    fn normalizer_in_progress_is_pending() {
+        let status = normalize_check_status(&CheckContext {
+            check_name: "CI Gate",
+            required: true,
+            conclusion_or_state: Some("in_progress"),
+            event_type: Some("pull_request"),
+            check_head_sha: None,
+            pr_head_sha: None,
+        });
+        assert_eq!(status, NormalizedCheckStatus::Pending);
     }
 
     // -----------------------------------------------------------------------
