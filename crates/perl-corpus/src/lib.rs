@@ -233,6 +233,7 @@ pub mod index;
 pub mod inventory;
 pub mod lint;
 pub mod meta;
+pub mod sidecar;
 pub mod tie_interface;
 
 use anyhow::{Context, Result};
@@ -270,11 +271,16 @@ pub use gold::{
     load_gold_fixtures_from, load_goto_gold_fixtures, load_hover_gold_fixtures,
 };
 pub use inventory::{
-    CorpusInventory, InventoryIds, InventoryTags, inventory_from_corpus_dir,
-    inventory_json_from_corpus_dir,
+    CorpusInventory, InventoryIds, InventoryMarkers, InventoryTags, build_inventory,
+    build_inventory_from_paths, generator_families, inventory_from_sections,
 };
 use meta::Section;
 use regex::Regex;
+pub use sidecar::{
+    ConceptRegistry, ExpectationMode, FixtureExpectationSidecar, SidecarConcept, SidecarExpect,
+    SidecarMetrics, SidecarSnapshots, SidecarValidation, discover_sidecars, expected_fixture_path,
+    load_and_validate_sidecar, parse_sidecar, validate_sidecar,
+};
 use std::collections::HashMap;
 use std::{fs, path::Path};
 pub use tie_interface::{

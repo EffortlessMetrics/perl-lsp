@@ -592,19 +592,35 @@ impl WorkspaceConfig {
         let output = command.args(["-e", "print join(\"\\n\", @INC)"]).output();
 
         match output {
-            Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty() && *line != ".")
-                .map(PathBuf::from)
-                .fold(Vec::new(), |mut acc, path| {
-                    if !acc.contains(&path) {
-                        acc.push(path);
-                    }
-                    acc
-                }),
+            Ok(out) if out.status.success() => {
+                Self::parse_perl_inc_output(&String::from_utf8_lossy(&out.stdout))
+            }
             _ => Vec::new(),
         }
+    }
+
+    fn parse_perl_inc_output(stdout: &str) -> Vec<PathBuf> {
+        stdout
+            .lines()
+            .map(str::trim)
+            .filter(|line| {
+                !line.is_empty()
+                    && *line != "."
+                    && !line.starts_with("CODE(")
+                    && !line.starts_with("ARRAY(")
+                    && !line.starts_with("HASH(")
+                    && !line.starts_with("SCALAR(")
+                    && !line.starts_with("REF(")
+                    && !line.starts_with("GLOB(")
+                    && !line.starts_with("IO::")
+            })
+            .map(PathBuf::from)
+            .fold(Vec::new(), |mut acc, path| {
+                if !acc.contains(&path) {
+                    acc.push(path);
+                }
+                acc
+            })
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -1168,5 +1184,19 @@ perltidy_extra_args = ["-noll"]
         }));
         assert!(config.perl_path.is_none(), "perlPath from workspace must be ignored");
         assert!(config.perl_args.is_empty(), "perlArgs from workspace must be ignored");
+    }
+    #[test]
+    fn parse_perl_inc_output_filters_dynamic_hook_entries() {
+        let parsed = WorkspaceConfig::parse_perl_inc_output(
+            "lib\nCODE(0x123)\nARRAY(0xabc)\nHASH(0xdef)\n/usr/lib/perl5\n",
+        );
+        assert_eq!(parsed, vec![PathBuf::from("lib"), PathBuf::from("/usr/lib/perl5")]);
+    }
+
+    #[test]
+    fn parse_perl_inc_output_dedupes_and_drops_dot() {
+        let parsed =
+            WorkspaceConfig::parse_perl_inc_output("lib\n.\nlib\n/usr/lib/perl5\n/usr/lib/perl5\n");
+        assert_eq!(parsed, vec![PathBuf::from("lib"), PathBuf::from("/usr/lib/perl5")]);
     }
 }

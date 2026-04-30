@@ -60,7 +60,9 @@ fn from_workspace(symbol: &WorkspaceSymbol) -> DeclView {
         // normalize sigil-prefixed variable names for direct comparison
         name: symbol.name.trim_start_matches(['$', '@', '%']).to_string(),
         qualified_name: symbol.qualified_name.clone().or_else(|| {
-            symbol.container_name.as_ref().map(|container| format!("{container}::{}", symbol.name))
+            symbol.container_name.as_ref().map(|container| {
+                format!("{container}::{}", symbol.name.trim_start_matches(['$', '@', '%']))
+            })
         }),
         container: symbol.container_name.clone(),
         kind: symbol.kind,
@@ -95,62 +97,72 @@ fn surface_workspace_parity_bank() -> Result<()> {
             label: "method declaration",
             src: "class Clock { method tick () { 1 } }",
             symbol_name: "tick",
-            expect_core_match: false,
-            actionable_divergence: Some(
-                "workspace index currently misses methods declared inside `class { ... }` bodies",
-            ),
+            expect_core_match: true,
+            actionable_divergence: None,
         },
         ParityCase {
             label: "my variable declaration",
             src: "my $count = 1;",
             symbol_name: "count",
-            expect_core_match: false,
+            expect_core_match: true,
             actionable_divergence: Some(
-                "workspace index does not preserve variable declarator (`my` vs `our`)",
+                "workspace index keeps core identity but does not preserve variable declarator (`my` vs `our`)",
             ),
         },
         ParityCase {
             label: "our variable declaration",
             src: "our $VERSION = '1.0';",
             symbol_name: "VERSION",
-            expect_core_match: false,
+            expect_core_match: true,
             actionable_divergence: Some(
-                "workspace index does not preserve variable declarator (`my` vs `our`)",
+                "workspace index keeps core identity but does not preserve variable declarator (`my` vs `our`)",
+            ),
+        },
+        ParityCase {
+            label: "my array variable declaration",
+            src: "my @items = ();",
+            symbol_name: "items",
+            expect_core_match: true,
+            actionable_divergence: Some(
+                "workspace index keeps core identity but does not preserve variable declarator (`my` vs `our`)",
+            ),
+        },
+        ParityCase {
+            label: "my hash variable declaration",
+            src: "my %opts = ();",
+            symbol_name: "opts",
+            expect_core_match: true,
+            actionable_divergence: Some(
+                "workspace index keeps core identity but does not preserve variable declarator (`my` vs `our`)",
             ),
         },
         ParityCase {
             label: "use constant",
             src: "package C; use constant PI => 3.14;",
             symbol_name: "PI",
-            expect_core_match: false,
-            actionable_divergence: Some("workspace index emits `use constant` as Subroutine kind"),
+            expect_core_match: true,
+            actionable_divergence: None,
         },
         ParityCase {
             label: "Const::Fast wrapper",
             src: "use Const::Fast; const my $MAX => 3;",
             symbol_name: "MAX",
-            expect_core_match: false,
-            actionable_divergence: Some(
-                "workspace index extracts Const::Fast as Variable, not Constant",
-            ),
+            expect_core_match: true,
+            actionable_divergence: None,
         },
         ParityCase {
             label: "Readonly wrapper",
             src: "use Readonly; Readonly my $NAME => 'x';",
             symbol_name: "NAME",
-            expect_core_match: false,
-            actionable_divergence: Some(
-                "workspace index extracts Readonly as Variable, not Constant",
-            ),
+            expect_core_match: true,
+            actionable_divergence: None,
         },
         ParityCase {
             label: "class declaration",
             src: "class Worker { }",
             symbol_name: "Worker",
-            expect_core_match: false,
-            actionable_divergence: Some(
-                "class container/qualification differs: surface seeds `main`, workspace stores top-level class",
-            ),
+            expect_core_match: true,
+            actionable_divergence: None,
         },
     ];
 
@@ -220,7 +232,7 @@ fn surface_workspace_divergence_details_are_actionable() -> Result<()> {
     let w_const = find(&workspace_const, "PI").ok_or_else(|| anyhow!("workspace PI missing"))?;
 
     assert_eq!(s_const.kind, SymbolKind::Constant);
-    assert_eq!(w_const.kind, SymbolKind::Subroutine);
+    assert_eq!(w_const.kind, SymbolKind::Constant);
 
     let const_fast_surface = surface_views("use Const::Fast; const my $MAX => 3;")?;
     let const_fast_workspace = workspace_views("use Const::Fast; const my $MAX => 3;")?;
@@ -228,7 +240,7 @@ fn surface_workspace_divergence_details_are_actionable() -> Result<()> {
     let w_fast =
         find(&const_fast_workspace, "MAX").ok_or_else(|| anyhow!("workspace MAX missing"))?;
     assert_eq!(s_fast.kind, SymbolKind::Constant);
-    assert_eq!(w_fast.kind, SymbolKind::Variable(perl_symbol::VarKind::Scalar));
+    assert_eq!(w_fast.kind, SymbolKind::Constant);
 
     let readonly_surface = surface_views("use Readonly; Readonly my $NAME => 'x';")?;
     let readonly_workspace = workspace_views("use Readonly; Readonly my $NAME => 'x';")?;
@@ -237,7 +249,7 @@ fn surface_workspace_divergence_details_are_actionable() -> Result<()> {
     let w_readonly =
         find(&readonly_workspace, "NAME").ok_or_else(|| anyhow!("workspace NAME missing"))?;
     assert_eq!(s_readonly.kind, SymbolKind::Constant);
-    assert_eq!(w_readonly.kind, SymbolKind::Variable(perl_symbol::VarKind::Scalar));
+    assert_eq!(w_readonly.kind, SymbolKind::Constant);
 
     Ok(())
 }
