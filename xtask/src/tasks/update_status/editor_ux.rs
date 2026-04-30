@@ -10,6 +10,10 @@ use std::path::Path;
 use color_eyre::eyre::{Context, Result};
 use serde::Deserialize;
 
+use crate::tasks::metrics::lsp_stats::{
+    LatencyMetric, MeasuredEditorUxScorecard, RateMetric, WorkflowResult,
+};
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -26,6 +30,27 @@ struct EditorUxWorkflow {
     #[allow(dead_code)]
     ci_tier: String,
     confidence_signals: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UxFlakeLedger {
+    entries: Vec<UxFlakeEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UxFlakeEntry {
+    test: String,
+    state: String,
+    #[serde(default)]
+    failure_class: Option<String>,
+    #[serde(default)]
+    component: Option<String>,
+    #[serde(default)]
+    route: Option<String>,
+    #[serde(default)]
+    issue: Option<u64>,
+    #[serde(default)]
+    owner: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -85,21 +110,21 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
     let confidence_counts = collect_editor_ux_confidence_counts(root)?;
+    let measured_scorecard = load_measured_scorecard(root)?;
+    let known_blockers = load_active_known_blockers(root)?;
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": if measured_scorecard.is_some() { "measured_status" } else { "planning_scaffold" },
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
         },
-        "top_line_metrics": [
-            { "name": "workflow_pass_rate", "state": "planned", "owner": "perl-lsp-ux-tests" },
-            { "name": "workflow_stability_rate", "state": "planned", "owner": "perl-lsp-ux-tests" },
-            { "name": "p95_time_to_first_useful_result_ms", "state": "planned", "owner": "perl-lsp-ux-tests" },
-        ],
+        "top_line_metrics": top_line_metric_rows(measured_scorecard.as_ref()),
+        "workflow_results": workflow_rows(measured_scorecard.as_ref()),
+        "known_blockers": known_blockers,
         "confidence_signals": [
             {
                 "name": "manual_editor_smoke",
@@ -131,6 +156,137 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
 }
 
+fn load_measured_scorecard(root: &Path) -> Result<Option<MeasuredEditorUxScorecard>> {
+    let path = root.join(".ci/metrics/editor_ux.json");
+    if !path.exists() {
+        return Ok(None);
+    }
+    let raw = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let scorecard: MeasuredEditorUxScorecard =
+        serde_json::from_str(&raw).with_context(|| format!("parsing {}", path.display()))?;
+    Ok(Some(scorecard))
+}
+
+fn load_active_known_blockers(root: &Path) -> Result<Vec<serde_json::Value>> {
+    let path = root.join(".ci/ux-flakes.json");
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let raw = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let ledger: UxFlakeLedger =
+        serde_json::from_str(&raw).with_context(|| format!("parsing {}", path.display()))?;
+    let blockers = ledger
+        .entries
+        .into_iter()
+        .filter(|entry| entry.state == "active")
+        .map(|entry| {
+            let route =
+                entry.route.or_else(|| route_for_failure_class(entry.failure_class.as_deref()));
+            serde_json::json!({
+                "test_name": entry.test,
+                "state": entry.state,
+                "failure_class": entry.failure_class,
+                "component": entry.component,
+                "route": route,
+                "issue": entry.issue,
+                "owner": entry.owner,
+            })
+        })
+        .collect();
+    Ok(blockers)
+}
+
+fn top_line_metric_rows(scorecard: Option<&MeasuredEditorUxScorecard>) -> Vec<serde_json::Value> {
+    let Some(scorecard) = scorecard else {
+        return vec![
+            planned_metric_row("workflow_pass_rate"),
+            planned_metric_row("workflow_stability_rate"),
+            planned_metric_row("p95_time_to_first_useful_result_ms"),
+        ];
+    };
+
+    vec![
+        rate_metric_row("workflow_pass_rate", &scorecard.top_line.workflow_pass_rate),
+        rate_metric_row("workflow_stability_rate", &scorecard.top_line.workflow_stability_rate),
+        latency_metric_row(
+            "p95_time_to_first_useful_result_ms",
+            &scorecard.top_line.p95_time_to_first_useful_result_ms,
+        ),
+    ]
+}
+
+fn workflow_rows(scorecard: Option<&MeasuredEditorUxScorecard>) -> Vec<serde_json::Value> {
+    scorecard
+        .map(|scorecard| scorecard.workflows.iter().map(workflow_row).collect())
+        .unwrap_or_default()
+}
+
+fn planned_metric_row(name: &str) -> serde_json::Value {
+    serde_json::json!({
+        "name": name,
+        "state": "planned",
+        "owner": "perl-lsp-ux-tests",
+    })
+}
+
+fn rate_metric_row(name: &str, metric: &RateMetric) -> serde_json::Value {
+    serde_json::json!({
+        "name": name,
+        "state": metric_state(&metric.confidence),
+        "value": metric.value,
+        "basis": metric.basis,
+        "coverage": metric.coverage,
+        "confidence": metric.confidence,
+        "assumptions": metric.assumptions,
+    })
+}
+
+fn latency_metric_row(name: &str, metric: &LatencyMetric) -> serde_json::Value {
+    serde_json::json!({
+        "name": name,
+        "state": metric_state(&metric.confidence),
+        "value_ms": metric.value,
+        "basis": metric.basis,
+        "coverage": metric.coverage,
+        "confidence": metric.confidence,
+        "method": metric.method,
+        "assumptions": metric.assumptions,
+    })
+}
+
+fn workflow_row(workflow: &WorkflowResult) -> serde_json::Value {
+    serde_json::json!({
+        "id": workflow.id,
+        "scenario": workflow.scenario,
+        "subsystem_owner": workflow.subsystem_owner,
+        "pass_rate_state": metric_state(&workflow.pass_rate.confidence),
+        "stability_rate_state": metric_state(&workflow.stability_rate.confidence),
+        "p95_time_to_first_useful_result_state": metric_state(
+            &workflow.p95_time_to_first_useful_result_ms.confidence
+        ),
+        "quarantine_age_days": workflow.quarantine_age_days,
+    })
+}
+
+fn metric_state(confidence: &str) -> &'static str {
+    if confidence == "low" { "insufficient_data" } else { "measured" }
+}
+
+fn route_for_failure_class(failure_class: Option<&str>) -> Option<String> {
+    let route = match failure_class? {
+        "provider_regression" => "provider_fix",
+        "server_crash" => "crash_fix",
+        "timeout" => "timeout_triage",
+        "infra" => "ci_investigation",
+        "matrix_drift" => "fixture_update",
+        "baseline_drift" => "baseline_update",
+        "test_race" | "new_test_bug" => "test_fix",
+        "unknown" => "triage",
+        _ => return None,
+    };
+    Some(route.to_owned())
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -146,7 +302,10 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert!(
+            receipt["receipt_kind"] == "planning_scaffold"
+                || receipt["receipt_kind"] == "measured_status"
+        );
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -168,6 +327,8 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert!(receipt["workflow_results"].is_array());
+        assert!(receipt["known_blockers"].is_array());
         let confidence_signals = receipt["confidence_signals"]
             .as_array()
             .ok_or_else(|| eyre!("confidence_signals must be an array"))?;
@@ -197,6 +358,24 @@ mod tests {
             );
             assert!(receipt_count > 0, "signal `{name}` has zero workflow coverage");
         }
+        Ok(())
+    }
+
+    #[test]
+    fn active_known_blockers_are_rendered_from_flake_ledger() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let blockers = load_active_known_blockers(&root)?;
+        assert!(
+            blockers.iter().any(|entry| {
+                entry["test_name"]
+                    == "ux_scenario_14_inc_conformance::scenario_14_system_inc_completion_opt_in_enabled"
+                    && entry["failure_class"] == "provider_regression"
+                    && entry["component"] == "module_resolution"
+                    && entry["route"] == "provider_fix"
+                    && entry["issue"] == 7570
+            }),
+            "scenario_14 known blocker should remain visible"
+        );
         Ok(())
     }
 }
