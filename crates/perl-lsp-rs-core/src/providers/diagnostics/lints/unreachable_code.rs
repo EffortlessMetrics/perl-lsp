@@ -98,8 +98,12 @@ fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 visit_continue_block(cb, diagnostics);
             }
         }
-        NodeKind::For { body, .. } | NodeKind::Foreach { body, .. } => {
+        NodeKind::For { body, continue_block, .. }
+        | NodeKind::Foreach { body, continue_block, .. } => {
             visit_node(body, diagnostics);
+            if let Some(cb) = continue_block {
+                visit_continue_block(cb, diagnostics);
+            }
         }
 
         // Given/when/default

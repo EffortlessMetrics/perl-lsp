@@ -172,6 +172,68 @@ fn while_loop_with_continue(body: Node, continue_body: Node) -> Node {
     )
 }
 
+fn for_loop_with_continue(body: Node, continue_body: Node) -> Node {
+    Node::new(
+        NodeKind::For {
+            init: Some(Box::new(Node::new(
+                NodeKind::VariableDeclaration {
+                    declarator: "my".to_string(),
+                    variable: Box::new(Node::new(
+                        NodeKind::Variable { sigil: "$".to_string(), name: "i".to_string() },
+                        loc(5, 7),
+                    )),
+                    attributes: vec![],
+                    initializer: Some(Box::new(Node::new(
+                        NodeKind::Number { value: "0".to_string() },
+                        loc(8, 9),
+                    ))),
+                },
+                loc(0, 9),
+            ))),
+            condition: Some(Box::new(Node::new(
+                NodeKind::Number { value: "1".to_string() },
+                loc(10, 11),
+            ))),
+            update: Some(Box::new(Node::new(
+                NodeKind::Unary {
+                    op: "++".to_string(),
+                    operand: Box::new(Node::new(
+                        NodeKind::Variable { sigil: "$".to_string(), name: "i".to_string() },
+                        loc(12, 14),
+                    )),
+                },
+                loc(12, 14),
+            ))),
+            body: Box::new(body),
+            continue_block: Some(Box::new(continue_body)),
+        },
+        loc(0, 140),
+    )
+}
+
+fn foreach_loop_with_continue(body: Node, continue_body: Node) -> Node {
+    Node::new(
+        NodeKind::Foreach {
+            variable: Box::new(Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+                loc(8, 10),
+            )),
+            list: Box::new(Node::new(
+                NodeKind::ArrayLiteral {
+                    elements: vec![
+                        Node::new(NodeKind::Number { value: "1".to_string() }, loc(15, 16)),
+                        Node::new(NodeKind::Number { value: "2".to_string() }, loc(18, 19)),
+                    ],
+                },
+                loc(14, 20),
+            )),
+            body: Box::new(body),
+            continue_block: Some(Box::new(continue_body)),
+        },
+        loc(0, 140),
+    )
+}
+
 fn has_pl406(diagnostics: &[Diagnostic]) -> bool {
     diagnostics.iter().any(|d| d.code.as_deref() == Some("PL406"))
 }
@@ -479,6 +541,62 @@ fn t_continue_10_confess_in_continue_block() -> Result<(), Box<dyn std::error::E
         count_pl406(&diagnostics),
         1,
         "T-continue-10: Expected exactly 1 PL406 diagnostic, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// --------------------------------------------------------------------------
+// T-continue-11: die in for-loop continue block followed by statement
+// "for (...) { } continue { die 'err'; print 'dead'; }"
+// expect: 1 PL406 diagnostic on the print statement
+// --------------------------------------------------------------------------
+
+#[test]
+fn t_continue_11_die_in_for_continue_block() -> Result<(), Box<dyn std::error::Error>> {
+    let continue_body = block(vec![die_call(20, 35), print_stmt(37, 57)]);
+    let ast = program(vec![for_loop_with_continue(block(vec![]), continue_body)]);
+
+    let mut diagnostics = vec![];
+    check_unreachable_code(&ast, &mut diagnostics);
+
+    assert!(
+        has_pl406(&diagnostics),
+        "T-continue-11: Expected PL406 for statement after die in for-loop continue block, got: {:?}",
+        diagnostics
+    );
+    assert_eq!(
+        count_pl406(&diagnostics),
+        1,
+        "T-continue-11: Expected exactly 1 PL406 diagnostic, got: {:?}",
+        diagnostics
+    );
+    Ok(())
+}
+
+// --------------------------------------------------------------------------
+// T-continue-12: die in foreach-loop continue block followed by statement
+// "foreach (...) { } continue { die 'err'; print 'dead'; }"
+// expect: 1 PL406 diagnostic on the print statement
+// --------------------------------------------------------------------------
+
+#[test]
+fn t_continue_12_die_in_foreach_continue_block() -> Result<(), Box<dyn std::error::Error>> {
+    let continue_body = block(vec![die_call(20, 35), print_stmt(37, 57)]);
+    let ast = program(vec![foreach_loop_with_continue(block(vec![]), continue_body)]);
+
+    let mut diagnostics = vec![];
+    check_unreachable_code(&ast, &mut diagnostics);
+
+    assert!(
+        has_pl406(&diagnostics),
+        "T-continue-12: Expected PL406 for statement after die in foreach-loop continue block, got: {:?}",
+        diagnostics
+    );
+    assert_eq!(
+        count_pl406(&diagnostics),
+        1,
+        "T-continue-12: Expected exactly 1 PL406 diagnostic, got: {:?}",
         diagnostics
     );
     Ok(())
