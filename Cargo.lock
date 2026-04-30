@@ -1709,8 +1709,10 @@ name = "perl-lsp-ux-tests"
 version = "0.13.0-rc1"
 dependencies = [
  "anyhow",
+ "serde",
  "serde_json",
  "tempfile",
+ "tracing",
  "url",
  "which",
 ]
