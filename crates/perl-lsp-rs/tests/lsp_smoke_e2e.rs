@@ -341,7 +341,6 @@ my $value = gre
         "hover after bogus cancelRequest returned error: {post_cancel_response:#}"
     );
 
-
     // ── Step 10: textDocument/rename ─────────────────────────────────────
     let (rename_line, rename_col) = line_col(fixture_v2, 6, "greet()")?;
     let rename_response = send_request_with_timeout(
@@ -355,13 +354,8 @@ my $value = gre
         }),
         timeout,
     )?;
-    assert!(
-        rename_response.get("error").is_none(),
-        "rename returned error: {rename_response:#}"
-    );
-    let rename_result = rename_response
-        .get("result")
-        .ok_or("rename result should be present")?;
+    assert!(rename_response.get("error").is_none(), "rename returned error: {rename_response:#}");
+    let rename_result = rename_response.get("result").ok_or("rename result should be present")?;
     let rename_changes = rename_result
         .get("changes")
         .and_then(Value::as_object)
