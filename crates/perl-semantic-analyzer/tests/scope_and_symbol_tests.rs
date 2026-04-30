@@ -1693,8 +1693,8 @@ print "Hello, $name!\n";
 }
 
 #[test]
-fn qualified_var_in_string_interpolation_registers_reference() -> Result<(), Box<dyn std::error::Error>>
-{
+fn qualified_var_in_string_interpolation_registers_reference()
+-> Result<(), Box<dyn std::error::Error>> {
     // Verify that the SymbolExtractor records a reference for $Foo::name when it
     // appears inside a double-quoted string.  The old scalar-interpolation regex
     // only matched bare names (\w+) and silently dropped package-qualified forms.
@@ -1710,8 +1710,8 @@ my $greeting = "Hello, $Foo::name!";
 }
 
 #[test]
-fn nested_qualified_var_in_string_interpolation_registers_reference() -> Result<(), Box<dyn std::error::Error>>
-{
+fn nested_qualified_var_in_string_interpolation_registers_reference()
+-> Result<(), Box<dyn std::error::Error>> {
     // Three-level package qualifier: $Foo::Bar::x.
     let code = r#"
 my $msg = "value: $Foo::Bar::x";
@@ -1725,8 +1725,8 @@ my $msg = "value: $Foo::Bar::x";
 }
 
 #[test]
-fn braced_qualified_var_in_string_interpolation_registers_reference() -> Result<(), Box<dyn std::error::Error>>
-{
+fn braced_qualified_var_in_string_interpolation_registers_reference()
+-> Result<(), Box<dyn std::error::Error>> {
     // Braced form: ${Foo::name}.
     let code = r#"
 my $msg = "value: ${Foo::name}";

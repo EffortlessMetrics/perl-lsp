@@ -12,11 +12,11 @@
 #![allow(clippy::collapsible_if)]
 
 use parking_lot::{Condvar, Mutex};
-use perl_lsp_rs_core::transport::framing::{frame, ContentLengthFramer};
-use serde_json::{json, Value};
+use perl_lsp_rs_core::transport::framing::{ContentLengthFramer, frame};
+use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::io::{Cursor, Write};
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 

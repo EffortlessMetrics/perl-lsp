@@ -28,10 +28,7 @@ const PARSER_STATUS_MARKER_NAMES: [&str; 7] = [
 ];
 
 fn parser_marker_bounds(marker_name: &str) -> (String, String) {
-    (
-        format!("<!-- BEGIN: {marker_name} -->"),
-        format!("<!-- END: {marker_name} -->"),
-    )
+    (format!("<!-- BEGIN: {marker_name} -->"), format!("<!-- END: {marker_name} -->"))
 }
 
 fn replace_parser_status_block(text: &str, marker_name: &str, new_content: &str) -> Result<String> {
@@ -1049,13 +1046,11 @@ mod tests {
             let end_count = parser_status_doc.matches(&end_marker).count();
 
             assert_eq!(
-                begin_count,
-                1,
+                begin_count, 1,
                 "status marker contract violation: missing or duplicate BEGIN marker for {marker_name} in {target_file}; expected exactly one `{begin_marker}` and one `{end_marker}`",
             );
             assert_eq!(
-                end_count,
-                1,
+                end_count, 1,
                 "status marker contract violation: missing or duplicate END marker for {marker_name} in {target_file}; expected exactly one `{begin_marker}` and one `{end_marker}`",
             );
         }

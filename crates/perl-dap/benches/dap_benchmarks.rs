@@ -21,13 +21,13 @@
 //! cargo bench -p perl-dap --bench dap_benchmarks -- --measurement-time 5
 //! ```
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use perl_dap::configuration::LaunchConfiguration;
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use perl_dap::platform::{
     format_command_args, normalize_path, resolve_perl_path, setup_environment,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::hint::black_box;
 use std::io::Write;
@@ -489,11 +489,7 @@ fn benchmark_live_session_paths(c: &mut Criterion) {
 
     let fixture = tempdir().ok().and_then(|dir| {
         let path = dir.path().join("live_session_bench.pl");
-        if write_script(&path, 300).is_ok() {
-            Some((dir, path))
-        } else {
-            None
-        }
+        if write_script(&path, 300).is_ok() { Some((dir, path)) } else { None }
     });
 
     let Some((fixture_dir, program_path)) = fixture else {

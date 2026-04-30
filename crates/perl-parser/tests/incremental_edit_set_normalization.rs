@@ -105,8 +105,8 @@ fn optional_no_op_filter_only_removes_empty_zero_width_edit()
 
 /// `allow_overlaps = true` must succeed even when edits overlap.
 #[test]
-fn normalize_allow_overlaps_succeeds_for_overlapping_edits()
--> Result<(), IncrementalEditBatchError> {
+fn normalize_allow_overlaps_succeeds_for_overlapping_edits() -> Result<(), IncrementalEditBatchError>
+{
     let mut edits = IncrementalEditSet {
         edits: vec![
             IncrementalEdit::new(2, 6, "alpha".to_string()),

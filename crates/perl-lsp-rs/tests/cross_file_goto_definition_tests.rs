@@ -3061,5 +3061,3 @@ $store->fetch_session();
 
     Ok(())
 }
-
-

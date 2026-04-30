@@ -30,11 +30,7 @@ fn rewrites_imports_and_qualified_references_across_multiple_consumers()
         .iter()
         .find(|edit| edit.file_path == PathBuf::from("lib/ConsumerOne.pm"))
         .ok_or("missing ConsumerOne.pm edits")?;
-    let first_text = first
-        .edits
-        .iter()
-        .map(|edit| edit.new_text.as_str())
-        .collect::<String>();
+    let first_text = first.edits.iter().map(|edit| edit.new_text.as_str()).collect::<String>();
     assert!(first_text.contains("use New::Name qw(run);"));
     assert!(first_text.contains("sub call { New::Name::run(); }"));
 
@@ -42,17 +38,11 @@ fn rewrites_imports_and_qualified_references_across_multiple_consumers()
         .iter()
         .find(|edit| edit.file_path == PathBuf::from("lib/ConsumerTwo.pm"))
         .ok_or("missing ConsumerTwo.pm edits")?;
-    let second_text = second
-        .edits
-        .iter()
-        .map(|edit| edit.new_text.as_str())
-        .collect::<String>();
+    let second_text = second.edits.iter().map(|edit| edit.new_text.as_str()).collect::<String>();
     assert!(second_text.contains("use New::Name;"));
     assert!(second_text.contains("my $value = New::Name::helper();"));
 
-    assert!(edits
-        .iter()
-        .all(|edit| edit.file_path != PathBuf::from("lib/Ambiguous.pm")));
+    assert!(edits.iter().all(|edit| edit.file_path != PathBuf::from("lib/Ambiguous.pm")));
 
     Ok(())
 }

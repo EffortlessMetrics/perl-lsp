@@ -90,7 +90,8 @@ impl ExportMetadataBuilder {
             resolved
         };
 
-        let exports = resolve_names(&self.current.export_names, &self.current.subroutines, &mut seen);
+        let exports =
+            resolve_names(&self.current.export_names, &self.current.subroutines, &mut seen);
         let export_ok =
             resolve_names(&self.current.export_ok_names, &self.current.subroutines, &mut seen);
 
@@ -142,7 +143,9 @@ impl ExportMetadataBuilder {
             NodeKind::Use { module, args, .. } => {
                 if module == "Exporter"
                     || ((module == "parent" || module == "base")
-                        && args.iter().any(|arg| parse_argument_names(arg).iter().any(|i| i == "Exporter")))
+                        && args
+                            .iter()
+                            .any(|arg| parse_argument_names(arg).iter().any(|i| i == "Exporter")))
                 {
                     self.current.uses_exporter = true;
                 }
@@ -274,10 +277,7 @@ fn parse_qw_list(raw: &str) -> Vec<String> {
         return Vec::new();
     }
 
-    raw[start + 1..end]
-        .split_whitespace()
-        .filter_map(normalize_name)
-        .collect()
+    raw[start + 1..end].split_whitespace().filter_map(normalize_name).collect()
 }
 
 fn parse_argument_names(raw: &str) -> Vec<String> {
@@ -294,7 +294,9 @@ mod tests {
     use super::*;
     use crate::Parser;
 
-    fn parse_export_metadata(source: &str) -> Result<FileExportMetadata, Box<dyn std::error::Error>> {
+    fn parse_export_metadata(
+        source: &str,
+    ) -> Result<FileExportMetadata, Box<dyn std::error::Error>> {
         let mut parser = Parser::new(source);
         let ast = parser.parse()?;
         Ok(ExportMetadataBuilder::new().build(&ast))
@@ -308,18 +310,25 @@ mod tests {
 
         let package = &metadata.packages[0];
         assert_eq!(package.package, "Demo");
-        assert_eq!(package.exports.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(), vec!["foo", "bar"]);
+        assert_eq!(
+            package.exports.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(),
+            vec!["foo", "bar"]
+        );
         Ok(())
     }
 
     #[test]
-    fn captures_export_ok_and_ignores_missing_definitions() -> Result<(), Box<dyn std::error::Error>> {
+    fn captures_export_ok_and_ignores_missing_definitions() -> Result<(), Box<dyn std::error::Error>>
+    {
         let metadata = parse_export_metadata(
             "package Demo;\nuse Exporter 'import';\nour @EXPORT_OK = qw(alpha missing);\nsub alpha {}\n1;",
         )?;
 
         let package = &metadata.packages[0];
-        assert_eq!(package.export_ok.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(), vec!["alpha"]);
+        assert_eq!(
+            package.export_ok.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(),
+            vec!["alpha"]
+        );
         Ok(())
     }
 

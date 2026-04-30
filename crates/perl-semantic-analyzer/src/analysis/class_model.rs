@@ -1196,7 +1196,8 @@ impl ClassModelBuilder {
             .collect();
 
         let (exports, unresolved_exports) = resolve_exports(&self.current_exports, &method_map);
-        let (export_ok, unresolved_export_ok) = resolve_exports(&self.current_export_ok, &method_map);
+        let (export_ok, unresolved_export_ok) =
+            resolve_exports(&self.current_export_ok, &method_map);
 
         let mut export_tags: HashMap<String, Vec<ResolvedExport>> = HashMap::new();
         let mut unresolved = unresolved_exports;
@@ -1383,10 +1384,7 @@ fn flatten_comma_expression<'a>(node: &'a Node, out: &mut Vec<&'a Node>) {
 }
 
 fn expand_export_name_list(raw: &str) -> Vec<String> {
-    expand_symbol_list(raw)
-        .into_iter()
-        .filter_map(|name| normalize_export_name(&name))
-        .collect()
+    expand_symbol_list(raw).into_iter().filter_map(|name| normalize_export_name(&name)).collect()
 }
 
 fn normalize_export_name(raw: &str) -> Option<String> {
@@ -2336,7 +2334,10 @@ sub bar { 1 }
         let model = find_model(&models, "MyUtils").expect("MyUtils model");
         let metadata = model.exporter_metadata.as_ref().expect("exporter metadata");
 
-        assert_eq!(metadata.exports.iter().map(|item| item.name.as_str()).collect::<Vec<_>>(), vec!["foo"]);
+        assert_eq!(
+            metadata.exports.iter().map(|item| item.name.as_str()).collect::<Vec<_>>(),
+            vec!["foo"]
+        );
         assert_eq!(
             metadata.export_ok.iter().map(|item| item.name.as_str()).collect::<Vec<_>>(),
             vec!["bar"]

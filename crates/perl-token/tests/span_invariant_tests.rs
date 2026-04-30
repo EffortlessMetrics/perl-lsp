@@ -29,7 +29,6 @@ fn new_checked_allows_empty_eof_tokens() -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-
 #[test]
 fn new_checked_allows_empty_unknown_tokens() -> Result<(), Box<dyn std::error::Error>> {
     let tok = Token::new_checked(TokenKind::Unknown, "<synthetic>", 11, 11)?;
