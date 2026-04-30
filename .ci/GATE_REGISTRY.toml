@@ -1,10 +1,14 @@
 # Gate Registry for perl-lsp
-# Defines all merge-blocking gates with thresholds and enforcement
+# Legacy companion index for gate metadata.
+# Source of truth for effective CI gate enforcement is `.ci/gate-policy.yaml`
+# via `cargo xtask gates` (see `cargo xtask gate-policy check`).
 
 [metadata]
 version = "1.0"
 last_updated = "2026-01-29"
 blocking_policy = "all-gates-must-pass"
+# NOTE: CI Gate source of truth is .ci/gate-policy.yaml (consumed by `cargo xtask gates`).
+# Keep this registry aligned for legacy scripts and receipt tooling.
 
 # ============================================================================
 # Merge-Blocking Gates (REQUIRED for all PRs)
@@ -105,6 +109,54 @@ description = "Prevents ungated expensive jobs from running on every PR"
 docs_url = "scripts/ci-audit-workflows.py"
 cost_tier = "low"  # <5 seconds
 failure_impact = "medium"  # Cost control
+
+[[gate]]
+id = "parser-corpus-ratchet"
+name = "Parser Corpus Ratchet (System)"
+type = "correctness"
+blocking = false
+timeout_seconds = 180
+command = "cargo run -p xtask -- parser-corpus-sweep --baseline .ci/parser-corpus-baseline.json --enforce --receipt"
+evidence_pattern = "Ratchet: all checks passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Prevents parser clean-rate, error-node, and bucket regressions on the system corpus"
+docs_url = "justfile#corpus-sweep-check"
+cost_tier = "medium"
+failure_impact = "high"
+
+[[gate]]
+id = "cpan-corpus-ratchet"
+name = "Parser Corpus Ratchet (CPAN)"
+type = "correctness"
+blocking = false
+timeout_seconds = 300
+command = "cargo run -p xtask -- cpan-corpus sweep --enforce"
+evidence_pattern = "Ratchet: all checks passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Prevents parser regressions on the CPAN corpus and known-clean manifest"
+docs_url = "justfile#cpan-corpus-check"
+cost_tier = "high"
+failure_impact = "high"
+
+[[gate]]
+id = "parser-audit-closeout"
+name = "Parser Closeout Audit Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 180
+command = "cargo run -p xtask -- corpus-audit --fresh --corpus-path . --check"
+evidence_pattern = "CI gate passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Defends parser closeout floors for valid-gap count, NodeKind coverage, and recovery salvage"
+docs_url = "justfile#parser-audit"
+cost_tier = "medium"
+failure_impact = "high"
 
 [[gate]]
 id = "todo-compliance"

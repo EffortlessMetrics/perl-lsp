@@ -1,0 +1,71 @@
+[[concept]]
+id = "incremental.edit_inside_expression"
+status = "seed"
+scope = { crates = ["perl-incremental-parsing", "perl-parser"], risk_tags = ["incremental", "expression"] }
+fixtures = { floors = ["test_corpus/expressions_and_refs.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "incremental" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "incremental.edit_shifts_following_nodes"
+status = "seed"
+scope = { crates = ["perl-incremental-parsing", "perl-parser"], risk_tags = ["incremental", "position-shift"] }
+fixtures = { floors = ["test_corpus/parser_stress_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "incremental" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "incremental.edit_package_header"
+status = "seed"
+scope = { crates = ["perl-incremental-parsing", "perl-parser"], risk_tags = ["incremental", "declaration"] }
+fixtures = { floors = ["test_corpus/package_production_enhanced.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "incremental" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = false, release = false }
+
+[[concept]]
+id = "incremental.edit_signature_list"
+status = "seed"
+scope = { crates = ["perl-incremental-parsing", "perl-parser"], risk_tags = ["incremental", "signature"] }
+fixtures = { floors = ["test_corpus/signatures_prototypes.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "incremental" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "incremental.edit_regex_literal"
+status = "seed"
+scope = { crates = ["perl-incremental-parsing", "perl-lexer"], risk_tags = ["incremental", "regex"] }
+fixtures = { floors = ["test_corpus/advanced_regex.pl"], variants = [] }
+expect = { panic = false, timeout = true, mode = "incremental" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = false, nightly = true, release = false }
+
+[[concept]]
+id = "incremental.edit_heredoc_marker"
+status = "seed"
+scope = { crates = ["perl-incremental-parsing", "perl-lexer"], risk_tags = ["incremental", "heredoc"] }
+fixtures = { floors = ["test_corpus/heredoc_depth.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "incremental" }
+snapshots = { tokens = true, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "incremental.edit_method_chain"
+status = "seed"
+scope = { crates = ["perl-incremental-parsing", "perl-parser"], risk_tags = ["incremental", "method-call"] }
+fixtures = { floors = ["test_corpus/method_class.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "incremental" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = false, release = false }
+
+[[concept]]
+id = "incremental.edit_error_recovery"
+status = "seed"
+scope = { crates = ["perl-incremental-parsing", "perl-parser"], risk_tags = ["incremental", "error-recovery"] }
+fixtures = { floors = ["test_corpus/error_recovery.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "incremental" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }

@@ -1,0 +1,263 @@
+# Forensics Fragment Index for Agent Dispatch
+#
+# Maps situation_id to the most-relevant forensics doc paths for that dispatch context.
+# Designed for prompt-loadable consumption: an orchestrator (or future dispatch wrapper)
+# looks up the situation_id when spawning an agent and includes the listed fragment
+# paths in the agent's prompt context.
+#
+# See `docs/forensics/2026-04-25-forensics-as-prompt-fragments-architecture.md`
+# for the architectural rationale and ingestion model.
+#
+# When adding a new forensics doc:
+#   1. Identify which situation_ids it's relevant to (or add a new one)
+#   2. Add it under each relevant situation, sorted by specificity then recency
+#   3. Cap each situation at 4 fragments — composability constraint
+#
+# When a fragment is retired or consolidated:
+#   1. Remove its entries here
+#   2. The recalibrator agent should also flag it during periodic passes
+
+# ============================================================================
+# Dispatch situations — when spawning a specific agent class
+# ============================================================================
+
+[dispatch.green-ci]
+fragments = [
+  "docs/forensics/2026-04-25-failure-mode-catalog.md",
+  "docs/forensics/2026-04-25-orchestration-anatomy.md",
+  "docs/forensics/2026-04-24-extended-throughput-session-retrospective.md",
+]
+description = "When spawning green-CI verification — covers stale CI rollup artifacts, false-positive label patterns, master bit-rot detection heuristics, and status-check filtering logic."
+
+[dispatch.builder]
+fragments = [
+  "docs/forensics/2026-04-11-pragma-phase-block-case-study.md",
+  "docs/forensics/2026-04-25-failure-mode-catalog.md",
+  "docs/forensics/2026-04-19-wave-g1-collapse-retrospective.md",
+]
+description = "When spawning a builder — covers verification principles (reference-impl vs internal consistency), red-TDD API-shape misses, and when to cherry-pick vs rebase."
+
+[dispatch.reviewer-deep]
+fragments = [
+  "docs/forensics/2026-04-11-pragma-phase-block-case-study.md",
+  "docs/forensics/2026-04-24-extended-throughput-session-retrospective.md",
+  "docs/forensics/2026-04-25-operator-playbook-templates.md",
+]
+description = "When spawning deep review — covers fix-forward authorization (when to push vs REQUEST CHANGES), bug catalogs that pass standards review, and ROI data justifying the investment."
+
+[dispatch.diff-auditor]
+fragments = [
+  "docs/forensics/2026-04-25-failure-mode-catalog.md",
+  "docs/forensics/2026-04-25-process-meta-learnings.md",
+  "docs/forensics/2026-04-25-3day-arc-economics-and-learnings.md",
+]
+description = "When spawning diff audit — covers .hermes attribution policy (work-id matching), scope-drift thresholds, and cross-PR contamination patterns."
+
+[dispatch.ensemble-curator]
+fragments = [
+  "docs/forensics/2026-04-22-continuous-codex-review-session.md",
+  "docs/forensics/2026-04-25-operator-playbook-templates.md",
+  "docs/forensics/2026-04-25-process-meta-learnings.md",
+]
+description = "When triaging Codex burst clusters — covers conservative-close bias (DO NOT close where uncertain), file-path-coherence sorting, and verifier-of-verifier pattern for cheap-model verdicts."
+
+[dispatch.spec-test-code-match]
+fragments = [
+  "docs/forensics/2026-04-25-bdd-grid-as-architectural-pattern.md",
+  "docs/forensics/2026-04-25-verification-economics-push-upstream.md",
+  "docs/forensics/2026-04-25-defense-in-depth-verification-architecture.md",
+]
+description = "When spawning the spec-test-code three-way-match agent — covers the grid-walk architectural pattern, why this layer is mechanical-not-interpretive, and how it fits the defense-in-depth ladder."
+
+[dispatch.tooling-debt-scout]
+fragments = [
+  "docs/forensics/2026-04-25-methodology-blind-spots-conways-law.md",
+  "docs/forensics/2026-04-25-failure-mode-catalog.md",
+  "docs/forensics/2026-04-25-process-meta-learnings.md",
+]
+description = "When spawning a tooling-debt scout — covers the Conway's-law blind spot framing, recurring friction patterns, and the existing tooling-debt issues filed 2026-04-25 (#6791-#6794)."
+
+[dispatch.memory-recalibrator]
+fragments = [
+  "docs/forensics/2026-04-25-substrate-shift-and-two-timescale-calibration.md",
+  "docs/forensics/2026-04-25-forensics-as-prompt-fragments-architecture.md",
+  "docs/forensics/2026-04-25-forensics-and-memory-authoring-conventions.md",
+]
+description = "When spawning a memory recalibrator — covers half-life awareness, substrate-shift signals, and the authoring conventions that determine which fragments are recalibration candidates."
+
+[dispatch.orchestrator-direct]
+fragments = [
+  "docs/forensics/2026-04-25-orchestration-anatomy.md",
+  "docs/forensics/2026-04-25-multi-axis-scaling-design.md",
+  "docs/forensics/2026-04-25-operator-playbook-templates.md",
+]
+description = "When orchestrator executes directly (no sub-agents) — covers wave-design taxonomy, multi-axis scaling design, policy elicitation timing, and cheap finisher patterns."
+
+# ============================================================================
+# Event situations — when investigating or handling a specific event class
+# ============================================================================
+
+[event.fmt-cascade]
+fragments = [
+  "docs/forensics/2026-04-25-failure-mode-catalog.md",
+  "docs/forensics/2026-04-25-process-meta-learnings.md",
+  "docs/forensics/2026-04-25-operator-playbook-templates.md",
+]
+description = "When fmt failures look like a cascade — covers per-PR drift vs real master cascade distinction, the 5/12 false-positive rate, and the underlying xtask fmt error message issue (#6791)."
+
+[event.master-bit-rot]
+fragments = [
+  "docs/forensics/2026-04-24-extended-throughput-session-retrospective.md",
+  "docs/forensics/2026-04-25-failure-mode-catalog.md",
+  "docs/forensics/2026-04-26-session-priorities.md",
+]
+description = "When investigating master bit-rot cascades — covers the four-independent-bit-rot pattern, Windows path canonicalization, timeout margins (p95 + 30-50%), and master-clean-before-merge protocol."
+
+[event.cluster-collision]
+fragments = [
+  "docs/forensics/2026-04-22-continuous-codex-review-session.md",
+  "docs/forensics/2026-04-25-3day-arc-economics-and-learnings.md",
+  "docs/forensics/2026-04-25-operator-playbook-templates.md",
+]
+description = "When multiple PRs collide on the same files — covers cluster-fix patterns, the perl-dap UX cluster example, and how second-day winners differ from first-day."
+
+[event.label-drift]
+fragments = [
+  "docs/forensics/2026-04-25-failure-mode-catalog.md",
+  "docs/forensics/2026-04-25-operator-playbook-templates.md",
+  "docs/forensics/2026-04-26-session-priorities.md",
+]
+description = "When labels are out of sync with state — covers stale ci-green on cascade, statusCheckRollup filtering, green-ci false-positive pattern, and label-verify protocol."
+
+[event.branch-contamination]
+fragments = [
+  "docs/forensics/2026-04-25-3day-arc-economics-and-learnings.md",
+  "docs/forensics/2026-04-25-failure-mode-catalog.md",
+  "docs/forensics/2026-04-26-session-priorities.md",
+]
+description = "When investigating branch contamination — covers the fresh root rebuild pattern (cherry-pick vs rebase), REST-API authoritative diff-size checks, and merge-commit detection."
+
+[event.substrate-shift]
+fragments = [
+  "docs/forensics/2026-04-25-substrate-shift-and-two-timescale-calibration.md",
+  "docs/forensics/2026-04-25-defense-in-depth-verification-architecture.md",
+  "docs/forensics/2026-04-25-verification-economics-push-upstream.md",
+]
+description = "When the upstream substrate changes (Codex version, ChatGPT-Pro, plan family activated) — covers two-timescale calibration, expected ladder thinning, and recalibration scheduling."
+
+# ============================================================================
+# Policy situations — when applying a methodology-level policy
+# ============================================================================
+
+[policy.hermes-attribution]
+fragments = [
+  "docs/forensics/2026-04-25-failure-mode-catalog.md",
+  "docs/forensics/2026-04-25-process-meta-learnings.md",
+  "docs/forensics/2026-04-26-session-priorities.md",
+]
+description = "For .hermes/.spec/ folder policies — covers work-id attribution matching (keep self-attributed, strip cross-contamination), per-file inspection required, and the corrected mid-session policy."
+
+[policy.no-thumb-on-scale]
+fragments = [
+  "docs/forensics/2026-04-11-pragma-phase-block-case-study.md",
+  "docs/forensics/2026-04-25-process-meta-learnings.md",
+  "docs/forensics/2026-04-25-orchestration-anatomy.md",
+]
+description = "For synthesis agent / orchestration decisions — covers options-preservation, the verifier-of-verifier pattern, and policy elicitation timing."
+
+[policy.layer-add-or-retire]
+fragments = [
+  "docs/forensics/2026-04-25-defense-in-depth-verification-architecture.md",
+  "docs/forensics/2026-04-25-verification-economics-push-upstream.md",
+  "docs/forensics/2026-04-25-substrate-shift-and-two-timescale-calibration.md",
+]
+description = "For decisions about adding or retiring verification layers — covers the principled retirement criterion, layer ordering by marginal cost, and substrate-shift impact on layer relevance."
+
+[policy.dispatch-granularity]
+fragments = [
+  "docs/forensics/2026-04-25-bdd-grid-as-architectural-pattern.md",
+  "docs/forensics/2026-04-25-methodology-blind-spots-conways-law.md",
+  "docs/forensics/2026-04-25-defense-in-depth-verification-architecture.md",
+]
+description = "For decisions about agent dispatch granularity — covers the grid-row dispatch proposal, Conway's-law blind spots from PR-only dispatch, and infrastructure cost trade-offs."
+
+# ============================================================================
+# Quality situations — general principles, not tied to a specific dispatch
+# ============================================================================
+
+[quality.reference-implementation]
+fragments = [
+  "docs/forensics/2026-04-11-pragma-phase-block-case-study.md",
+  "docs/forensics/2026-04-19-wave-g1-collapse-retrospective.md",
+]
+description = "General quality principles — covers why reference-implementation verification is the differentiator, the difference between invocation and diagnostic experiments, and when mental models fail."
+
+[quality.deep-review-roi]
+fragments = [
+  "docs/forensics/2026-04-24-extended-throughput-session-retrospective.md",
+  "docs/forensics/2026-04-25-memory-effectiveness-review.md",
+  "docs/forensics/2026-04-25-process-meta-learnings.md",
+]
+description = "Deep-review justification — covers the high catch rate on real bugs (coordinate-space mixing, double-parse, sort non-determinism, floor division, silent field drops), why standards review misses them, and ROI data."
+
+# ============================================================================
+# Catalog situations — pointers to comprehensive references
+# ============================================================================
+
+[catalog.failure-modes]
+fragments = [
+  "docs/forensics/2026-04-25-failure-mode-catalog.md",
+]
+description = "Comprehensive failure-mode reference — 25 distinct failure modes from F1 (fmt cascade) through F25 (org monthly cap), tiered by frequency/impact, with mitigations."
+
+[catalog.underselling]
+fragments = [
+  "docs/forensics/2026-04-11-underselling-pattern-analysis.md",
+]
+description = "Capability catalog drift — the gap between shipped features and public story, root causes (no forcing function, no audit, hand-edited surfaces), and structural fixes (same-commit rule, automated audit, regenerated files)."
+
+# ============================================================================
+# Economics situations
+# ============================================================================
+
+[economics.continuous-review]
+fragments = [
+  "docs/forensics/2026-04-22-continuous-codex-review-session.md",
+  "docs/forensics/2026-04-25-3day-arc-economics-and-learnings.md",
+  "docs/forensics/2026-04-25-multi-axis-scaling-design.md",
+]
+description = "Economics of continuous Codex review + Anthropic orchestration — covers matched-intensity asymmetry, cost-per-outcome envelope, and multi-axis scaling design."
+
+# ============================================================================
+# Coverage notes
+# ============================================================================
+
+[coverage]
+strong = [
+  "dispatch.reviewer-deep",
+  "event.master-bit-rot",
+  "event.cluster-collision",
+  "policy.hermes-attribution",
+  "quality.deep-review-roi",
+  "dispatch.spec-test-code-match",
+  "policy.layer-add-or-retire",
+]
+adequate = [
+  "dispatch.green-ci",
+  "dispatch.builder",
+  "dispatch.ensemble-curator",
+  "event.fmt-cascade",
+  "event.label-drift",
+  "policy.no-thumb-on-scale",
+  "dispatch.tooling-debt-scout",
+  "dispatch.memory-recalibrator",
+]
+under-covered = [
+  "dispatch.plan-reviewer",
+  "dispatch.scout",
+  "dispatch.ops",
+]
+note = """
+Under-covered situations should have dedicated forensics docs written when a recurring pattern surfaces.
+Currently covered as gaps: plan-reviewer (no dedicated playbook), scout (only pragma case study covers it deeply), ops (cascading updates and merge batching scattered across docs).
+"""

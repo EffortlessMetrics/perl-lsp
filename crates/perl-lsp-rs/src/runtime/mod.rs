@@ -121,6 +121,19 @@ use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use crate::fallback::text::extract_text_based_symbols;
 
 pub(super) fn source_path_from_uri(uri: &str) -> Option<PathBuf> {
+    // On Windows, filesystem paths like `C:\file` can be misparsed by Url::parse()
+    // as having scheme `C`. Check for Windows drive letters first.
+    // Drive letter pattern: exactly one letter, followed by `:`, not followed by `//` (which would be a URL).
+    if uri.len() > 2 && uri.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
+        if uri.chars().nth(1) == Some(':') && !uri.starts_with("file://") {
+            // Looks like a Windows path (e.g., `C:\...`). Try to parse as path, not URL.
+            let path = Path::new(uri);
+            if path.is_absolute() {
+                return Some(path.to_path_buf());
+            }
+        }
+    }
+
     if let Ok(value) = Url::parse(uri) {
         return if value.scheme() == "file" { value.to_file_path().ok() } else { None };
     }
@@ -295,6 +308,14 @@ pub struct LspServer {
     /// by this flag — it repeats for every affected file.
     #[cfg(feature = "workspace")]
     permission_denied_shown: Arc<AtomicBool>,
+    /// One-time guard for the `window/showMessage` workspace-root-undetected warning.
+    ///
+    /// Set to `true` after the first module resolution attempt when no workspace
+    /// root is configured, so the user is warned once per server session rather
+    /// than on every resolution call.  Uses an instance-level flag (not a
+    /// process-level `Once`) so that each `LspServer` instance tracks its own
+    /// session independently.
+    pub(crate) root_undetected_shown: Arc<AtomicBool>,
     /// Shared Perl::Critic analyzer for the diagnostic pipeline.
     ///
     /// Lazily initialized on first use and reused across diagnostic cycles so
@@ -365,6 +386,32 @@ unsafe impl Sync for LspServer {}
 
 #[allow(dead_code)]
 impl LspServer {
+    fn resolve_ai_api_key(
+        ai_config: &perl_lsp_rs_core::config::AiCompletionConfig,
+    ) -> Option<String> {
+        Self::resolve_ai_api_key_with(ai_config, |name| {
+            std::env::var(name).ok().filter(|value| !value.is_empty())
+        })
+    }
+
+    fn resolve_ai_api_key_with<F>(
+        ai_config: &perl_lsp_rs_core::config::AiCompletionConfig,
+        mut read_env: F,
+    ) -> Option<String>
+    where
+        F: FnMut(&str) -> Option<String>,
+    {
+        let configured = read_env(&ai_config.api_key_env);
+        if configured.is_some() {
+            return configured;
+        }
+
+        // Compatibility fallback: many OpenAI-compatible clients (including Gemini CLI setups)
+        // export provider-specific key names instead of OPENAI_API_KEY.
+        const FALLBACK_API_KEY_ENVS: [&str; 2] = ["GEMINI_API_KEY", "GOOGLE_API_KEY"];
+        FALLBACK_API_KEY_ENVS.iter().find_map(|name| read_env(name))
+    }
+
     /// Active feature profile for this server instance.
     pub(crate) const fn feature_profile(&self) -> FeatureProfile {
         self.feature_profile
@@ -397,13 +444,13 @@ impl LspServer {
             return;
         }
 
-        // Resolve API key from environment variable
-        let api_key = std::env::var(&ai_config.api_key_env).unwrap_or_default();
-        if api_key.is_empty() {
-            tracing::warn!(env_var = %ai_config.api_key_env, "AI completion enabled but env var is empty or unset");
+        // Resolve API key from configured env var with compatibility aliases for
+        // common OpenAI-compatible providers.
+        let Some(api_key) = Self::resolve_ai_api_key(&ai_config) else {
+            tracing::warn!(env_var = %ai_config.api_key_env, "AI completion enabled but API key env var is empty or unset");
             *self.ai_inline_backend.lock() = None;
             return;
-        }
+        };
 
         let provider_config = perl_lsp_rs_core::providers::ai::OpenAiConfig {
             endpoint: ai_config.endpoint.clone(),
@@ -487,30 +534,38 @@ impl LspServer {
 
     /// Get all include paths for a document (from its folder and others).
     ///
-    /// Returns a vector of include paths from all workspace folders, with the
-    /// current folder's paths first. This ordering is useful for module resolution
-    /// where the current folder should take precedence.
+    /// Returns a vector of resolved absolute include paths from all workspace folders,
+    /// with the current folder's paths first. Merges `PERL5LIB` entries according to
+    /// each folder's `use_perl5lib` / `perl5lib_precedence` settings so that module
+    /// resolution and diagnostics agree on which paths are searchable.
     #[must_use]
     pub fn include_paths_for_doc(&self, doc_uri: &str) -> Vec<std::path::PathBuf> {
+        let perl5lib_paths = std::env::var("PERL5LIB")
+            .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
+            .unwrap_or_default();
+
         let mut paths = Vec::new();
         let folders = self.workspace_folders.lock();
 
-        // Add current folder's include paths first
+        // Resolve one effective include path string to an absolute PathBuf.
+        let resolve_one = |include_path: &str, folder: &WorkspaceFolderState| -> PathBuf {
+            if std::path::Path::new(include_path).is_absolute() {
+                PathBuf::from(include_path)
+            } else if let Some(folder_path) = workspace_folder_path(folder) {
+                folder_path.join(include_path)
+            } else {
+                PathBuf::from(include_path)
+            }
+        };
+
+        // Add current folder's paths first (effective_include_paths merges PERL5LIB)
         if let Some(current_folder) =
             folders.iter().find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
         {
-            for include_path in &current_folder.effective_workspace_config.include_paths {
-                // Resolve relative paths against the folder path
-                let resolved = if let Some(folder_path) = workspace_folder_path(current_folder) {
-                    if std::path::Path::new(include_path).is_absolute() {
-                        std::path::PathBuf::from(include_path)
-                    } else {
-                        folder_path.join(include_path)
-                    }
-                } else {
-                    std::path::PathBuf::from(include_path)
-                };
-
+            let effective =
+                current_folder.effective_workspace_config.effective_include_paths(&perl5lib_paths);
+            for include_path in &effective {
+                let resolved = resolve_one(include_path, current_folder);
                 if !paths.contains(&resolved) {
                     paths.push(resolved);
                 }
@@ -520,17 +575,10 @@ impl LspServer {
         // Add other folders' include paths
         for folder in folders.iter() {
             if !workspace_folder_matches_doc_uri(folder, doc_uri) {
-                for include_path in &folder.effective_workspace_config.include_paths {
-                    let resolved = if let Some(folder_path) = workspace_folder_path(folder) {
-                        if std::path::Path::new(include_path).is_absolute() {
-                            std::path::PathBuf::from(include_path)
-                        } else {
-                            folder_path.join(include_path)
-                        }
-                    } else {
-                        std::path::PathBuf::from(include_path)
-                    };
-
+                let effective =
+                    folder.effective_workspace_config.effective_include_paths(&perl5lib_paths);
+                for include_path in &effective {
+                    let resolved = resolve_one(include_path, folder);
                     if !paths.contains(&resolved) {
                         paths.push(resolved);
                     }
@@ -840,6 +888,7 @@ pub(crate) fn location_from_path(p: &Path) -> serde_json::Value {
 mod tests {
     use super::*;
     use crate::features::formatting::FormatRange;
+    use perl_lsp_rs_core::config::AiCompletionConfig;
 
     #[test]
     fn workspace_folder_matching_supports_non_file_uri_schemes() {
@@ -951,5 +1000,164 @@ mod tests {
             assert_eq!(range.end.line, line as u32);
             assert_eq!(range.end.character, character as u32);
         }
+    }
+
+    #[test]
+    fn resolve_ai_api_key_prefers_configured_env_var() {
+        let config = AiCompletionConfig {
+            api_key_env: "OPENAI_API_KEY".to_string(),
+            ..AiCompletionConfig::default()
+        };
+        let read_env = |name: &str| match name {
+            "OPENAI_API_KEY" => Some("openai-key".to_string()),
+            "GEMINI_API_KEY" => Some("gemini-key".to_string()),
+            _ => None,
+        };
+
+        assert_eq!(
+            LspServer::resolve_ai_api_key_with(&config, read_env).as_deref(),
+            Some("openai-key")
+        );
+    }
+
+    #[test]
+    fn resolve_ai_api_key_uses_gemini_fallback_when_configured_var_missing() {
+        let config = AiCompletionConfig::default();
+        let read_env = |name: &str| match name {
+            "OPENAI_API_KEY" => None,
+            "GEMINI_API_KEY" => Some("gemini-key".to_string()),
+            _ => None,
+        };
+
+        assert_eq!(
+            LspServer::resolve_ai_api_key_with(&config, read_env).as_deref(),
+            Some("gemini-key")
+        );
+    }
+
+    // --- include_paths_for_doc tests ---
+
+    #[test]
+    fn include_paths_for_doc_resolves_relative_paths_against_folder_root()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        std::fs::create_dir_all(&workspace)?;
+        let doc_uri = url::Url::from_file_path(workspace.join("script.pl"))
+            .map_err(|_| "bad uri")?
+            .to_string();
+
+        let server = LspServer::new();
+        let workspace_uri =
+            url::Url::from_directory_path(&workspace).map_err(|_| "bad folder uri")?.to_string();
+        {
+            let mut folders = server.workspace_folders.lock();
+            let mut config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+            config.include_paths = vec!["lib".to_string(), "t/lib".to_string()];
+            config.use_perl5lib = false;
+            folders.push(
+                WorkspaceFolderState::new(workspace_uri)
+                    .with_path(workspace.clone())
+                    .with_effective_workspace_config(config),
+            );
+        }
+
+        let paths = server.include_paths_for_doc(&doc_uri);
+        assert!(
+            paths.contains(&workspace.join("lib")),
+            "expected workspace/lib in paths, got: {paths:?}"
+        );
+        assert!(
+            paths.contains(&workspace.join("t/lib")),
+            "expected workspace/t/lib in paths, got: {paths:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn include_paths_for_doc_deduplicates_across_folders() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let temp = tempfile::tempdir()?;
+        let folder_a = temp.path().join("a");
+        let folder_b = temp.path().join("b");
+        std::fs::create_dir_all(&folder_a)?;
+        std::fs::create_dir_all(&folder_b)?;
+
+        let doc_uri = url::Url::from_file_path(folder_a.join("script.pl"))
+            .map_err(|_| "bad uri")?
+            .to_string();
+
+        let server = LspServer::new();
+        {
+            let mut folders = server.workspace_folders.lock();
+            let mut config_a = perl_lsp_rs_core::config::WorkspaceConfig::default();
+            config_a.include_paths = vec!["lib".to_string()];
+            config_a.use_perl5lib = false;
+            let mut config_b = perl_lsp_rs_core::config::WorkspaceConfig::default();
+            config_b.include_paths = vec!["lib".to_string()];
+            config_b.use_perl5lib = false;
+            folders.push(
+                WorkspaceFolderState::new(
+                    url::Url::from_directory_path(&folder_a).map_err(|_| "bad uri")?.to_string(),
+                )
+                .with_path(folder_a.clone())
+                .with_effective_workspace_config(config_a),
+            );
+            folders.push(
+                WorkspaceFolderState::new(
+                    url::Url::from_directory_path(&folder_b).map_err(|_| "bad uri")?.to_string(),
+                )
+                .with_path(folder_b.clone())
+                .with_effective_workspace_config(config_b),
+            );
+        }
+
+        let paths = server.include_paths_for_doc(&doc_uri);
+        let lib_a = folder_a.join("lib");
+        let lib_b = folder_b.join("lib");
+        // Both resolved, but they're different absolute paths — no dedup expected here
+        assert!(paths.contains(&lib_a), "expected folder_a/lib");
+        assert!(paths.contains(&lib_b), "expected folder_b/lib");
+        // No duplicates in the result
+        assert_eq!(
+            paths.len(),
+            paths.iter().collect::<std::collections::HashSet<_>>().len(),
+            "include_paths_for_doc must not contain duplicate entries"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn include_paths_for_doc_respects_use_perl5lib_false() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // When use_perl5lib=false, effective_include_paths must not inject PERL5LIB entries.
+        // We verify this by building a WorkspaceConfig with an explicit include_paths list and
+        // use_perl5lib=false, then ensuring the result matches exactly that list (resolved).
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        std::fs::create_dir_all(&workspace)?;
+        let doc_uri = url::Url::from_file_path(workspace.join("script.pl"))
+            .map_err(|_| "bad uri")?
+            .to_string();
+
+        let server = LspServer::new();
+        let workspace_uri =
+            url::Url::from_directory_path(&workspace).map_err(|_| "bad folder uri")?.to_string();
+        {
+            let mut folders = server.workspace_folders.lock();
+            let mut config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+            config.include_paths = vec!["lib".to_string()];
+            config.use_perl5lib = false; // env PERL5LIB must be ignored
+            folders.push(
+                WorkspaceFolderState::new(workspace_uri)
+                    .with_path(workspace.clone())
+                    .with_effective_workspace_config(config),
+            );
+        }
+
+        let paths = server.include_paths_for_doc(&doc_uri);
+        // Only the configured "lib" path should appear; no PERL5LIB injections.
+        assert_eq!(paths, vec![workspace.join("lib")]);
+        Ok(())
     }
 }

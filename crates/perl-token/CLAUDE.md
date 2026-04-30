@@ -38,10 +38,10 @@ This is a pure definition crate with no external dependencies.
 
 `TokenKind` variants are organized into categories:
 
-- **Keywords** (34): `My`, `Sub`, `If`, `While`, `For`, `Package`, `Use`, `Class`, `Method`, `Try`, `Catch`, etc.
-- **Operators** (47): `Assign`, `Plus`, `Arrow`, `FatArrow`, `Match`, `SmartMatch`, `Range`, `Ellipsis`, etc.
+- **Keywords** (41): `My`, `Sub`, `If`, `While`, `For`, `Package`, `Use`, `Class`, `Method`, `Try`, `Catch`, `Defer`, etc.
+- **Operators** (58): `Assign`, `Plus`, `Arrow`, `FatArrow`, `Match`, `SmartMatch`, `Range`, `Ellipsis`, etc.
 - **Delimiters** (8): `LeftParen`, `RightParen`, `LeftBrace`, `RightBrace`, `LeftBracket`, `RightBracket`, `Semicolon`, `Comma`
-- **Literals** (14): `Number`, `String`, `Regex`, `Substitution`, `HeredocStart`, `HeredocBody`, `DataMarker`, etc.
+- **Literals** (17): `Number`, `String`, `Regex`, `Substitution`, `HeredocStart`, `HeredocBody`, `DataMarker`, `UnknownRest`, `HeredocDepthLimit`, etc.
 - **Identifiers/Sigils** (6): `Identifier`, `ScalarSigil`, `ArraySigil`, `HashSigil`, `SubSigil`, `GlobSigil`
 - **Special** (2): `Eof`, `Unknown`
 

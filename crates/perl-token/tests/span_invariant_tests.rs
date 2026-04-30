@@ -29,6 +29,16 @@ fn new_checked_allows_empty_eof_tokens() -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
+
+#[test]
+fn new_checked_allows_empty_unknown_tokens() -> Result<(), Box<dyn std::error::Error>> {
+    let tok = Token::new_checked(TokenKind::Unknown, "<synthetic>", 11, 11)?;
+    assert_eq!(tok.kind, TokenKind::Unknown);
+    assert_eq!(tok.start, 11);
+    assert_eq!(tok.end, 11);
+    assert!(tok.is_empty());
+    Ok(())
+}
 #[test]
 fn eof_at_preserves_position() -> Result<(), Box<dyn std::error::Error>> {
     let eof = Token::eof_at(123);
@@ -64,9 +74,11 @@ fn unknown_at_clamps_inverted_span_to_start() -> Result<(), Box<dyn std::error::
 #[test]
 fn token_span_try_new_rejects_end_before_start() -> Result<(), Box<dyn std::error::Error>> {
     // TokenSpan::try_new is the span-level checked constructor (separate from Token::try_new).
-    let err =
-        TokenSpan::try_new(100, 50).expect_err("span-level try_new should reject end < start");
-    assert_eq!(err, TokenSpanError::EndBeforeStart { start: 100, end: 50 });
+    let result = TokenSpan::try_new(100, 50);
+    assert!(result.is_err(), "span-level try_new should reject end < start");
+    if let Err(err) = result {
+        assert_eq!(err, TokenSpanError::EndBeforeStart { start: 100, end: 50 });
+    }
     Ok(())
 }
 

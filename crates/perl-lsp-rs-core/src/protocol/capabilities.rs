@@ -92,7 +92,9 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
             trigger_characters: Some(completion_trigger_characters()),
             all_commit_characters: None,
             work_done_progress_options: WorkDoneProgressOptions::default(),
-            completion_item: None,
+            completion_item: Some(CompletionOptionsCompletionItem {
+                label_details_support: Some(true),
+            }),
         });
     }
 
