@@ -1,0 +1,49 @@
+fail_fast = false
+allow_missing = false
+
+[[rules]]
+name = "review_path_exists"
+pointer = "/review_map/review_path/0/path"
+op = "exists"
+level = "warn"
+message = "No review path was generated."
+
+[[rules]]
+name = "critical_risk_visible"
+pointer = "/review_map/overall/risk_score"
+op = "lte"
+value = 89
+level = "warn"
+message = "Critical-risk PR. Review P1 items before merge."
+
+[[rules]]
+name = "complexity_findings_visible"
+pointer = "/review_map/overall/complexity_findings"
+op = "lte"
+value = 0
+level = "warn"
+message = "Complexity findings detected. Inspect review-map complexity section."
+
+[[rules]]
+name = "duplication_findings_visible"
+pointer = "/review_map/overall/duplication_findings"
+op = "lte"
+value = 0
+level = "warn"
+message = "Near-duplicate findings detected. Inspect review-map duplication section."
+
+[[rules]]
+name = "evidence_gaps_visible"
+pointer = "/review_map/overall/evidence_gaps"
+op = "lte"
+value = 0
+level = "warn"
+message = "Evidence gaps detected. Inspect review-map evidence section."
+
+[[rules]]
+name = "health_not_f"
+pointer = "/cockpit/code_health/grade"
+op = "ne"
+value = "F"
+level = "warn"
+message = "Code health is F. Inspect the generated review path."

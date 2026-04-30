@@ -1,0 +1,85 @@
+[review]
+max_items = 12
+include_evidence_gaps = true
+include_duplication = true
+include_complexity = true
+include_hotspots = true
+include_contracts = true
+
+[review.thresholds]
+high_risk_score = 70
+critical_risk_score = 90
+large_file_lines = 500
+high_complexity = 15
+near_dup_similarity = 0.86
+max_priority_items = 8
+
+[review.commands]
+parser = "cargo test -p perl-parser -p perl-parser-core -p perl-lexer"
+lsp = "cargo test -p perl-lsp-rs-core -p perl-lsp-rs"
+workspace = "cargo test -p perl-workspace-index -p perl-module -p perl-semantic-analyzer -p perl-semantic-facts"
+dap = "cargo test -p perl-dap"
+ci = "cargo xtask workflow-policy-lint --receipt target/receipts/workflow-policy.json"
+
+[[review.area]]
+name = "parser"
+paths = [
+  "crates/perl-parser/**",
+  "crates/perl-parser-core/**",
+  "crates/perl-lexer/**",
+  "crates/perl-token/**",
+  "crates/tree-sitter-perl-rs/**",
+  "crates/tree-sitter-perl-c/**"
+]
+weight = 1.4
+suggested_command = "parser"
+
+[[review.area]]
+name = "lsp"
+paths = [
+  "crates/perl-lsp-rs/**",
+  "crates/perl-lsp-rs-core/**",
+  "crates/perl-lsp-perltidy/**"
+]
+weight = 1.3
+suggested_command = "lsp"
+
+[[review.area]]
+name = "workspace"
+paths = [
+  "crates/perl-workspace-index/**",
+  "crates/perl-module/**",
+  "crates/perl-semantic-analyzer/**",
+  "crates/perl-semantic-facts/**"
+]
+weight = 1.2
+suggested_command = "workspace"
+
+[[review.area]]
+name = "dap"
+paths = ["crates/perl-dap/**"]
+weight = 1.1
+suggested_command = "dap"
+
+[[review.area]]
+name = "ci"
+paths = [
+  ".github/workflows/**",
+  ".ci/**",
+  "xtask/**",
+  "justfile",
+  "scripts/**"
+]
+weight = 1.2
+suggested_command = "ci"
+
+[[review.area]]
+name = "docs"
+paths = [
+  "docs/**",
+  "book/src/**",
+  "README.md",
+  "CONTRIBUTING.md",
+  "AGENTS.md"
+]
+weight = 0.7
