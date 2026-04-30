@@ -7,12 +7,14 @@ use color_eyre::eyre::{Context, Result};
 use regex::Regex;
 use serde::Serialize;
 
+#[allow(clippy::expect_used, reason = "static LazyLock regex with known-good pattern")]
 static FAILED_TEST_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"test\s+([^\s]+)\s+\.\.\.\s+FAILED").expect("failed test regex must compile")
 });
 // Matches both pre-1.73 format ("panicked at 'msg', path:row:col") and
 // post-1.73 format ("panicked at path:row:col:") where the location appears
 // directly after "panicked at " without a quoted message.
+#[allow(clippy::expect_used, reason = "static LazyLock regex with known-good pattern")]
 static PANIC_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"panicked at (?:'[^']*',\s*)?([a-zA-Z][^:\s][^:]*:\d+:\d+)")
         .expect("panic regex must compile")

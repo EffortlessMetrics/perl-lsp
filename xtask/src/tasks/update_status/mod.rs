@@ -144,10 +144,10 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
     if let Some(handle) = err_handle {
         combined.push_str(&handle.join().unwrap_or_default());
     }
-    if let Ok(status) = status {
-        if !status.success() {
-            eprintln!("[update-status] command exited with {status}: {}", args.join(" "));
-        }
+    if let Ok(status) = status
+        && !status.success()
+    {
+        eprintln!("[update-status] command exited with {status}: {}", args.join(" "));
     }
     combined
 }
