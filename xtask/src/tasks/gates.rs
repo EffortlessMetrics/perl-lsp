@@ -2768,8 +2768,7 @@ mod tests {
     }
 
     #[test]
-    fn pr_fast_docs_as_code_keeps_always_on_and_skips_rust_lanes() -> color_eyre::eyre::Result<()>
-    {
+    fn pr_fast_docs_as_code_keeps_always_on_and_skips_rust_lanes() -> color_eyre::eyre::Result<()> {
         let gates = vec![
             pr_gate("fmt", GatePlanningRole::AlwaysOn, "cargo xtask fmt --check"),
             pr_gate("clippy_scoped", GatePlanningRole::RustScoped, "cargo clippy {package_args}"),
