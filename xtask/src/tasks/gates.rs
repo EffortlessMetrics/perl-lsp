@@ -2988,6 +2988,65 @@ mod tests {
         assert_eq!(blocking, vec!["req-timeout", "req-error", "req-fail"]);
     }
 
+    #[cfg(windows)]
+    fn timeout_test_command() -> &'static str {
+        "powershell -NoProfile -Command \"Start-Sleep -Seconds 2\""
+    }
+
+    #[cfg(not(windows))]
+    fn timeout_test_command() -> &'static str {
+        "sleep 2"
+    }
+
+    #[test]
+    fn required_gate_timeout_is_reported_in_gate_result_and_blocks_run() -> color_eyre::eyre::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let log_dir = temp.path().join("logs");
+        fs::create_dir_all(&log_dir)?;
+
+        let gate = GateDefinition {
+            name: "synthetic_timeout_gate".to_string(),
+            tier: "pr_fast".to_string(),
+            description: "Synthetic gate timeout coverage".to_string(),
+            required: true,
+            command: timeout_test_command().to_string(),
+            timeout_seconds: 1,
+            retry_count: 0,
+            budgets: None,
+            quarantine: false,
+            tags: vec!["test".to_string()],
+            artifacts: Vec::new(),
+            matrix: None,
+            planning: Some(GatePlanningConfig {
+                role: GatePlanningRole::AlwaysOn,
+                packages: Vec::new(),
+            }),
+        };
+        let policy = policy_with_gates(vec![gate.clone()]);
+        let config = GateRunnerConfig::default();
+
+        let result = run_single_gate(&gate, &policy, &log_dir, &config)?;
+
+        assert_eq!(result.gate_name, "synthetic_timeout_gate");
+        assert_eq!(result.status, "timeout");
+        assert_eq!(result.required, Some(true));
+        assert_eq!(result.command, timeout_test_command());
+        assert_eq!(result.exit_code, Some(124));
+        assert!(result.duration_ms >= 1_000, "duration should include timeout window");
+        assert!(result.first_failure.is_none(), "timeouts are not cargo-test assertion failures");
+        assert_eq!(result.log_path.as_deref(), Some("logs/synthetic_timeout_gate.log"));
+        assert!(
+            result.output_summary.as_deref().is_some(),
+            "timeout gate should still produce an output summary"
+        );
+
+        let blocking = blocking_failure_gate_names(&[result]);
+        assert_eq!(blocking, vec!["synthetic_timeout_gate"]);
+        assert_eq!(determine_overall_status(0, &blocking), "fail");
+
+        Ok(())
+    }
+
     #[test]
     fn overall_status_is_fail_when_required_timeout_exists_even_without_fail_count() {
         let blocking_failures = vec!["req-timeout".to_string()];
