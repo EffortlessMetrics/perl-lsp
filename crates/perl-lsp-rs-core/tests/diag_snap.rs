@@ -121,3 +121,30 @@ fn snapshot_multiple_missing_pragmas_and_eval() {
     let snapshot = normalize(diagnostics_for(source));
     assert_snapshot!("multiple_missing_pragmas_and_eval", snapshot);
 }
+
+#[test]
+fn snapshot_duplicate_declaration_and_shadowing() {
+    let source = concat!(
+        "use strict;\n",
+        "use warnings;\n",
+        "my $value = 1;\n",
+        "my $value = 2;\n",
+        "print $value;\n",
+    );
+    let snapshot = normalize(diagnostics_for(source));
+    assert_snapshot!("duplicate_declaration_and_shadowing", snapshot);
+}
+
+#[test]
+fn snapshot_suspicious_regex_and_tainted_system_call() {
+    let source = concat!(
+        "use strict;\n",
+        "use warnings;\n",
+        "my $input = <STDIN>;\n",
+        "if ($input =~ /^(a+)+$/) {\n",
+        "    system($input);\n",
+        "}\n",
+    );
+    let snapshot = normalize(diagnostics_for(source));
+    assert_snapshot!("suspicious_regex_and_tainted_system_call", snapshot);
+}
