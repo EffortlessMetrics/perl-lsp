@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snap.rs
+expression: "parse_sexp(\"my %opts = (foo => 1, bar => 2); my @pick = @opts{qw(foo bar)}; delete $opts{bar} if exists $opts{bar};\",)"
+---
+(source_file (my_declaration (variable % opts)(hash ((string "foo") (number 1)) ((string "bar") (number 2)))) (my_declaration (variable @ pick)(binary_{} (variable @ opts) (array (string "'foo'") (string "'bar'")))) (statement_modifier_if (expression_statement (ambiguous_function_call_expression (function) (binary_{} (variable $ opts) (identifier bar)))) (ambiguous_function_call_expression (function) (binary_{} (variable $ opts) (identifier bar)))))
