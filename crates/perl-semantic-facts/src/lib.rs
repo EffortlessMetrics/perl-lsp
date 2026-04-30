@@ -61,6 +61,64 @@ pub enum OccurrenceKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum ImportKind {
+    Use,
+    UseEmpty,
+    UseExplicitList,
+    UseTag,
+    Require,
+    RequireThenImport,
+    UseConstant,
+    DynamicRequire,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ImportSymbols {
+    Default,
+    None,
+    Explicit(Vec<String>),
+    Tags(Vec<String>),
+    Mixed { tags: Vec<String>, names: Vec<String> },
+    Dynamic,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportSpec {
+    pub importer_entity_id: Option<EntityId>,
+    pub module_name: String,
+    pub kind: ImportKind,
+    pub symbols: ImportSymbols,
+    pub anchor_id: Option<AnchorId>,
+    pub scope_id: Option<ScopeId>,
+    pub provenance: Provenance,
+    pub confidence: Confidence,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum VisibleSymbolSource {
+    LocalLexical,
+    LocalPackage,
+    ExplicitImport,
+    DefaultExport,
+    ExportTag,
+    Constant,
+    Generated,
+    External,
+    DynamicUnknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VisibleSymbol {
+    pub name: String,
+    pub entity_id: Option<EntityId>,
+    pub source: VisibleSymbolSource,
+    pub import_anchor_id: Option<AnchorId>,
+    pub scope_id: Option<ScopeId>,
+    pub provenance: Provenance,
+    pub confidence: Confidence,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum EdgeKind {
     Defines,
     References,
@@ -273,6 +331,48 @@ mod tests {
         let serialized = serde_json::to_string(&id)?;
         let decoded: EntityId = serde_json::from_str(&serialized)?;
         assert_eq!(decoded, id);
+        Ok(())
+    }
+
+    #[test]
+    fn import_spec_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let spec = ImportSpec {
+            importer_entity_id: Some(EntityId(50)),
+            module_name: "Exporter".to_string(),
+            kind: ImportKind::UseExplicitList,
+            symbols: ImportSymbols::Mixed {
+                tags: vec!["all".to_string()],
+                names: vec!["foo".to_string(), "bar".to_string()],
+            },
+            anchor_id: Some(AnchorId(9)),
+            scope_id: Some(ScopeId(4)),
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        };
+
+        let serialized = serde_json::to_string(&spec)?;
+        let decoded: ImportSpec = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, spec);
+        Ok(())
+    }
+
+    #[test]
+    fn visible_symbol_pretty_json_is_stable() -> Result<(), serde_json::Error> {
+        let symbol = VisibleSymbol {
+            name: "foo".to_string(),
+            entity_id: None,
+            source: VisibleSymbolSource::DynamicUnknown,
+            import_anchor_id: None,
+            scope_id: Some(ScopeId(99)),
+            provenance: Provenance::ImportExportInference,
+            confidence: Confidence::Medium,
+        };
+
+        let json = serde_json::to_string_pretty(&symbol)?;
+        assert_eq!(
+            json,
+            "{\n  \"name\": \"foo\",\n  \"entity_id\": null,\n  \"source\": \"DynamicUnknown\",\n  \"import_anchor_id\": null,\n  \"scope_id\": 99,\n  \"provenance\": \"ImportExportInference\",\n  \"confidence\": \"Medium\"\n}"
+        );
         Ok(())
     }
 }
