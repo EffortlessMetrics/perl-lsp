@@ -1,8 +1,9 @@
 use crate::surface::decl::SymbolDecl;
+use crate::surface::r#ref::{SymbolRef, SymbolRefKind};
 use crate::types::SymbolKind;
 use perl_semantic_facts::{
     AnchorFact, AnchorId, Confidence, EdgeFact, EdgeId, EdgeKind, EntityFact, EntityId, EntityKind,
-    FileId, Provenance,
+    FileId, OccurrenceFact, OccurrenceId, OccurrenceKind, Provenance,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -20,6 +21,90 @@ pub struct SymbolDeclSemanticFacts {
     pub entities: Vec<EntityFact>,
     pub defines_edges: Vec<EdgeFact>,
     pub unsupported: Vec<UnsupportedDeclFact>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SymbolRefSemanticFacts {
+    pub anchors: Vec<AnchorFact>,
+    pub occurrences: Vec<OccurrenceFact>,
+    pub reference_edges: Vec<EdgeFact>,
+}
+
+pub fn symbol_refs_to_semantic_facts(
+    refs: &[SymbolRef],
+    file_id: FileId,
+    entity_ids_by_name: &BTreeMap<String, EntityId>,
+) -> SymbolRefSemanticFacts {
+    let mut anchors = Vec::with_capacity(refs.len());
+    let mut occurrences = Vec::with_capacity(refs.len());
+    let mut reference_edges = Vec::new();
+
+    for symbol_ref in refs {
+        let anchor_span = symbol_ref.anchor_span.unwrap_or(symbol_ref.full_span);
+        let anchor_id = AnchorId(stable_id(
+            "ref-anchor",
+            &symbol_ref.qualified_name,
+            anchor_span.0,
+            anchor_span.1,
+        ));
+        anchors.push(AnchorFact {
+            id: anchor_id,
+            file_id,
+            span_start_byte: anchor_span.0 as u32,
+            span_end_byte: anchor_span.1 as u32,
+            scope_id: None,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+
+        let occurrence_id = OccurrenceId(stable_id(
+            "occurrence",
+            &symbol_ref.qualified_name,
+            symbol_ref.full_span.0,
+            symbol_ref.full_span.1,
+        ));
+        let entity_id = entity_ids_by_name
+            .get(&symbol_ref.qualified_name)
+            .copied()
+            .or_else(|| entity_ids_by_name.get(&symbol_ref.name).copied());
+        let occurrence_kind = match symbol_ref.kind {
+            SymbolRefKind::Variable(_) => OccurrenceKind::Read,
+            SymbolRefKind::SubroutineCall => OccurrenceKind::Call,
+        };
+        occurrences.push(OccurrenceFact {
+            id: occurrence_id,
+            kind: occurrence_kind,
+            entity_id,
+            anchor_id,
+            scope_id: None,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+
+        if let Some(to_entity_id) = entity_id {
+            let from_entity_id = entity_ids_by_name
+                .get(&symbol_ref.package_qualifier.clone().unwrap_or_else(|| "main".to_string()))
+                .copied()
+                .or_else(|| entity_ids_by_name.get("main").copied())
+                .unwrap_or(to_entity_id);
+            reference_edges.push(EdgeFact {
+                id: EdgeId(stable_id(
+                    "references",
+                    &symbol_ref.qualified_name,
+                    from_entity_id.0 as usize,
+                    to_entity_id.0 as usize,
+                )),
+                kind: EdgeKind::References,
+                from_entity_id,
+                to_entity_id,
+                via_occurrence_id: Some(occurrence_id),
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            });
+        }
+    }
+
+    SymbolRefSemanticFacts { anchors, occurrences, reference_edges }
 }
 
 pub fn symbol_decls_to_semantic_facts(
@@ -164,6 +249,7 @@ fn stable_id(namespace: &str, name: &str, start: usize, end: usize) -> u64 {
 mod tests {
     use super::*;
     use crate::types::VarKind;
+    use std::collections::BTreeMap;
 
     #[test]
     fn adapter_is_deterministic_for_mixed_decls() {
@@ -409,5 +495,42 @@ mod tests {
             facts.unsupported[0].reason,
             "symbol kind is not yet representable as EntityFact"
         );
+    }
+
+    #[test]
+    fn symbol_refs_emit_occurrence_facts_and_optional_reference_edges() {
+        let refs = vec![
+            SymbolRef {
+                kind: SymbolRefKind::SubroutineCall,
+                name: "run".to_string(),
+                qualified_name: "Demo::run".to_string(),
+                sigil: None,
+                package_qualifier: Some("Demo".to_string()),
+                full_span: (10, 20),
+                anchor_span: Some((10, 13)),
+            },
+            SymbolRef {
+                kind: SymbolRefKind::Variable(VarKind::Scalar),
+                name: "local".to_string(),
+                qualified_name: "local".to_string(),
+                sigil: Some("$".to_string()),
+                package_qualifier: None,
+                full_span: (30, 36),
+                anchor_span: Some((30, 36)),
+            },
+        ];
+        let entity_ids_by_name = BTreeMap::from([
+            ("Demo".to_string(), EntityId(1)),
+            ("Demo::run".to_string(), EntityId(2)),
+        ]);
+
+        let facts = symbol_refs_to_semantic_facts(&refs, FileId(99), &entity_ids_by_name);
+        assert_eq!(facts.anchors.len(), 2);
+        assert_eq!(facts.occurrences.len(), 2);
+        assert_eq!(facts.reference_edges.len(), 1);
+        assert_eq!(facts.occurrences[0].kind, OccurrenceKind::Call);
+        assert_eq!(facts.occurrences[1].kind, OccurrenceKind::Read);
+        assert_eq!(facts.occurrences[0].entity_id, Some(EntityId(2)));
+        assert_eq!(facts.occurrences[1].entity_id, None);
     }
 }
