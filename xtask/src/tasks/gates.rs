@@ -1221,12 +1221,14 @@ fn run_gate_plan(
 
     for (idx, planned_gate) in plan.selected.iter().enumerate() {
         let gate = &planned_gate.gate;
+        emit_gate_begin(gate);
         if let Some(ref pb) = spinner {
             pb.set_position(idx as u64);
             pb.set_message(format!("Running {}...", gate.name));
         }
 
         let result = run_single_gate(gate, policy, &log_dir, config)?;
+        emit_gate_end(gate, &result);
 
         // Update tier summary
         let tier_summary = tier_summaries.entry(gate.tier.clone()).or_default();
@@ -1310,6 +1312,25 @@ fn run_gate_plan(
         agent_receipt,
         diff_config: None,
     })
+}
+
+fn emit_gate_begin(gate: &GateDefinition) {
+    println!(
+        "BEGIN gate={} timeout={} command={}",
+        gate.name,
+        gate.timeout_seconds,
+        gate.command.trim()
+    );
+}
+
+fn emit_gate_end(gate: &GateDefinition, result: &GateResult) {
+    let exit = result
+        .exit_code
+        .map_or_else(|| "none".to_string(), |code| code.to_string());
+    println!(
+        "END gate={} status={} exit={} duration_ms={}",
+        gate.name, result.status, exit, result.duration_ms
+    );
 }
 
 /// Phase-1 agent-facing receipt shape contract (Issue #5020):
