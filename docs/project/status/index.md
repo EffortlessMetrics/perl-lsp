@@ -25,6 +25,7 @@
 | DAP debugger scorecard | [dap.md](dap.md) | Generator | Every DAP-touching merge |
 | Release readiness | [release.md](release.md) | Human | Ship readiness changes |
 | Workspace & indexing scorecard | [workspace.md](workspace.md) | Generator | Every workspace-touching merge |
+| CI hardening operability snapshot | [ci_hardening.md](ci_hardening.md) | Human | CI/control-plane wave updates |
 
 ## What's Next
 
