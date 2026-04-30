@@ -11,6 +11,10 @@
 use super::*;
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::workspace_progress::{
+    send_index_ready_notification, send_progress_begin, send_progress_create, send_progress_end,
+    send_progress_report,
+};
 use crate::state::workspace_symbol_cap;
 use perl_module::path::file_path_to_module_name;
 use perl_module::rename::{apply_module_rename_edits, plan_module_rename_edits};
@@ -53,13 +57,6 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
         return false;
     }
     is_skipped_dir_name(&entry.file_name().to_string_lossy())
-}
-
-#[cfg(feature = "workspace")]
-fn send_index_ready_notification(outbound: &super::outbound::OutboundSender, ready: bool) {
-    if let Err(e) = outbound.send_notification("perl-lsp/index-ready", json!({ "ready": ready })) {
-        tracing::warn!(error = %e, "Failed to send index-ready notification");
-    }
 }
 
 /// Returns `true` when an I/O error represents a permission-denied condition.
