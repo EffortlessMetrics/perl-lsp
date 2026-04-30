@@ -160,6 +160,53 @@ pub enum CiOutcome {
     Skipped,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NormalizedStatus {
+    Passed,
+    Failed,
+    Pending,
+    ExpectedSkip,
+    UnexpectedSkip,
+    Stale,
+}
+
+#[derive(Debug, Clone)]
+struct CheckObservation {
+    name: String,
+    state: String,
+    head_sha: Option<String>,
+}
+
+fn normalize_check_status(
+    check: &CheckObservation,
+    required_checks: &[String],
+    current_head_sha: &str,
+    diff_class: Option<&str>,
+) -> NormalizedStatus {
+    if let Some(check_sha) = &check.head_sha {
+        if !check_sha.is_empty() && check_sha != current_head_sha {
+            return NormalizedStatus::Stale;
+        }
+    }
+
+    let is_required = required_checks.iter().any(|name| name == &check.name);
+    let upper = check.state.to_ascii_uppercase();
+    match upper.as_str() {
+        "SUCCESS" | "NEUTRAL" => NormalizedStatus::Passed,
+        "IN_PROGRESS" | "QUEUED" | "WAITING" | "PENDING" => NormalizedStatus::Pending,
+        "SKIPPED" => {
+            if is_required
+                && !matches!(diff_class, Some("prose_only" | "docs_as_code" | "ci_config"))
+            {
+                NormalizedStatus::UnexpectedSkip
+            } else {
+                NormalizedStatus::ExpectedSkip
+            }
+        }
+        _ => NormalizedStatus::Failed,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -184,7 +231,7 @@ pub fn reconcile_queue(
         let events = fetch_label_timeline(pr.number).unwrap_or_default();
 
         // Query live CI state for this PR.
-        let ci_outcome = query_live_ci_state(pr.number).unwrap_or(CiOutcome::Pending);
+        let ci_outcome = query_live_ci_state(pr.number, &pr.head_ref_oid).unwrap_or(CiOutcome::Pending);
 
         let contradictions = detect_contradictions(pr, &events, ci_outcome);
 
@@ -441,7 +488,7 @@ pub fn detect_contradictions_from_labels(labels: &[String]) -> Vec<Contradiction
 /// Returns `CiOutcome::Pending` when any check is still in progress or on error.
 /// Returns `CiOutcome::Failure` when any check definitively failed.
 /// Returns `CiOutcome::Success` when all checks passed.
-pub fn query_live_ci_state(pr_number: u64) -> Result<CiOutcome> {
+pub fn query_live_ci_state(pr_number: u64, head_sha: &str) -> Result<CiOutcome> {
     let root = project_root()?;
     let pr_str = pr_number.to_string();
 
@@ -466,12 +513,13 @@ pub fn query_live_ci_state(pr_number: u64) -> Result<CiOutcome> {
         .cloned()
         .unwrap_or_default();
 
+    let required_checks = vec!["CI Gate".to_string(), "Merge Gate".to_string()];
+
     if checks.is_empty() {
         return Ok(CiOutcome::Pending);
     }
 
-    let mut any_definitive_success = false;
-    let mut any_failure = false;
+    let mut statuses = Vec::new();
 
     for check in &checks {
         // GitHub uses `conclusion` for completed runs (SUCCESS, FAILURE, SKIPPED, etc.)
@@ -483,33 +531,41 @@ pub fn query_live_ci_state(pr_number: u64) -> Result<CiOutcome> {
         } else {
             conclusion_val
         };
-        let state = state_val.and_then(serde_json::Value::as_str).unwrap_or("UNKNOWN");
-
-        match state.to_uppercase().as_str() {
-            "SUCCESS" | "NEUTRAL" => {
-                any_definitive_success = true;
-            }
-            "SKIPPED" => {
-                // Path-conditioned skip — counts neither as success nor failure.
-                // If ALL checks land here we return Skipped below.
-            }
-            "IN_PROGRESS" | "QUEUED" | "WAITING" | "PENDING" => {
-                return Ok(CiOutcome::Pending);
-            }
-            _ => {
-                any_failure = true;
-            }
-        }
+        let state = state_val.and_then(serde_json::Value::as_str).unwrap_or("UNKNOWN").to_string();
+        let name = check
+            .get("name")
+            .or_else(|| check.get("context"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("unknown")
+            .to_string();
+        let check_sha = check
+            .get("commit")
+            .and_then(|v| v.get("oid"))
+            .or_else(|| check.get("headSha"))
+            .and_then(serde_json::Value::as_str)
+            .map(std::string::ToString::to_string);
+        let normalized = normalize_check_status(
+            &CheckObservation { name, state, head_sha: check_sha },
+            &required_checks,
+            head_sha,
+            None,
+        );
+        statuses.push(normalized);
     }
 
-    if any_failure {
+    if statuses.iter().any(|s| matches!(s, NormalizedStatus::Pending)) {
+        return Ok(CiOutcome::Pending);
+    }
+    if statuses
+        .iter()
+        .any(|s| matches!(s, NormalizedStatus::Failed | NormalizedStatus::UnexpectedSkip))
+    {
         return Ok(CiOutcome::Failure);
     }
-    if any_definitive_success {
+    if statuses.iter().any(|s| matches!(s, NormalizedStatus::Passed)) {
         return Ok(CiOutcome::Success);
     }
-    // No failures, no pending, no explicit successes: all present checks were
-    // SKIPPED (path-conditioning). Report as Skipped — not applicable.
+
     Ok(CiOutcome::Skipped)
 }
 
@@ -855,6 +911,61 @@ mod tests {
         let mut state = labels(&[MERGE_READY, CI_GREEN, DEEP_REVIEWED, DIFF_AUDITED]);
         let pass1 = apply_pass(&mut state, &[], CiOutcome::Skipped);
         assert!(pass1.is_empty(), "clean path-conditioned PR should produce no strips");
+    }
+
+    #[test]
+    fn normalizer_marks_docs_only_required_skip_as_expected_skip() {
+        let check = CheckObservation {
+            name: "CI Gate".to_string(),
+            state: "SKIPPED".to_string(),
+            head_sha: Some("abc".to_string()),
+        };
+        let status = normalize_check_status(&check, &["CI Gate".to_string()], "abc", Some("prose_only"));
+        assert_eq!(status, NormalizedStatus::ExpectedSkip);
+    }
+
+    #[test]
+    fn normalizer_marks_code_required_skip_as_unexpected_skip() {
+        let check = CheckObservation {
+            name: "CI Gate".to_string(),
+            state: "SKIPPED".to_string(),
+            head_sha: Some("abc".to_string()),
+        };
+        let status = normalize_check_status(&check, &["CI Gate".to_string()], "abc", Some("code"));
+        assert_eq!(status, NormalizedStatus::UnexpectedSkip);
+    }
+
+    #[test]
+    fn normalizer_marks_stale_head_sha() {
+        let check = CheckObservation {
+            name: "CI Gate".to_string(),
+            state: "SUCCESS".to_string(),
+            head_sha: Some("old-sha".to_string()),
+        };
+        let status = normalize_check_status(&check, &["CI Gate".to_string()], "new-sha", Some("code"));
+        assert_eq!(status, NormalizedStatus::Stale);
+    }
+
+    #[test]
+    fn normalizer_marks_failed_and_pending() {
+        let failed = CheckObservation {
+            name: "CI Gate".to_string(),
+            state: "FAILURE".to_string(),
+            head_sha: Some("sha".to_string()),
+        };
+        let pending = CheckObservation {
+            name: "CI Gate".to_string(),
+            state: "IN_PROGRESS".to_string(),
+            head_sha: Some("sha".to_string()),
+        };
+        assert_eq!(
+            normalize_check_status(&failed, &["CI Gate".to_string()], "sha", Some("code")),
+            NormalizedStatus::Failed
+        );
+        assert_eq!(
+            normalize_check_status(&pending, &["CI Gate".to_string()], "sha", Some("code")),
+            NormalizedStatus::Pending
+        );
     }
 
     // -----------------------------------------------------------------------
