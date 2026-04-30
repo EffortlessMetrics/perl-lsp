@@ -15,8 +15,11 @@
 //! Also keeps docs/project/ROADMAP.md compliance table in sync when lsp subsystem runs.
 
 use std::fs;
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, eyre};
@@ -74,21 +77,38 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
         return String::new();
     };
 
-    let result = Command::new(program).args(rest).current_dir(root).output();
-
-    let output = match result {
-        Ok(o) => o,
+    let mut child = match Command::new(program)
+        .args(rest)
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
         Err(_) => return String::new(),
     };
 
-    // Basic timeout emulation: we cannot use `std::process::Command` timeout
-    // directly, so we rely on the process completing.  The Python version used
-    // subprocess.run with timeout; here we accept the default behavior but keep
-    // the parameter for API compatibility and future improvement.
-    let _ = timeout;
+    let stdout = match child.stdout.take() {
+        Some(stdout) => stdout,
+        None => return String::new(),
+    };
+    let stderr = match child.stderr.take() {
+        Some(stderr) => stderr,
+        None => return String::new(),
+    };
 
-    let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
-    combined.push_str(&String::from_utf8_lossy(&output.stderr));
+    let (tx, rx) = mpsc::channel();
+    stream_reader(stdout, false, tx.clone());
+    stream_reader(stderr, true, tx);
+
+    let mut combined = String::new();
+    for chunk in rx {
+        combined.push_str(&chunk);
+    }
+
+    let _ = child.wait();
+
+    let _ = timeout;
     combined
 }
 
@@ -99,21 +119,29 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
 /// can never associate a name with its crate.  Single-quote-escapes each argument to
 /// avoid shell injection while preserving flags like `--`.
 fn run_cmd_merged(root: &Path, args: &[&str], timeout: Duration) -> String {
-    let _ = timeout;
-    if args.is_empty() {
-        return String::new();
-    }
-    let shell_args: Vec<String> =
-        args.iter().map(|&a| format!("'{}'", a.replace('\'', "'\\''"))).collect();
-    let shell_cmd = format!("{} 2>&1", shell_args.join(" "));
-    #[cfg(unix)]
-    let result = Command::new("sh").arg("-c").arg(&shell_cmd).current_dir(root).output();
-    #[cfg(not(unix))]
-    let result = Command::new("cmd").args(["/C", &shell_cmd]).current_dir(root).output();
-    match result {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
-        Err(_) => String::new(),
-    }
+    run_cmd(root, args, timeout)
+}
+
+fn stream_reader<R>(reader: R, is_stderr: bool, tx: mpsc::Sender<String>)
+where
+    R: Read + Send + 'static,
+{
+    thread::spawn(move || {
+        let reader = BufReader::new(reader);
+        for line in reader.lines() {
+            let Ok(line) = line else {
+                break;
+            };
+            if is_stderr {
+                eprintln!("{line}");
+            } else {
+                println!("{line}");
+            }
+            if tx.send(format!("{line}\n")).is_err() {
+                break;
+            }
+        }
+    });
 }
 
 /// Replace content between `begin_marker\n...\nend_marker` (inclusive of markers).
