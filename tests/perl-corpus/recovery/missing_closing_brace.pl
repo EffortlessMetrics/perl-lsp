@@ -1,2 +1,2 @@
 sub broken {
-    my $x = 42;
+    my $value = 42;

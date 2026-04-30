@@ -103,7 +103,7 @@ For a full walkthrough, see [Getting Started](docs/tutorials/GETTING_STARTED.md)
 
 ## Status
 
-**v0.12.4** — public alpha. See [status](docs/project/status/index.md) for live metrics and [roadmap](docs/project/ROADMAP.md) for the v0.13.0 milestone.
+**v0.13.0-rc1** — release candidate 1. See [status](docs/project/status/index.md) for live metrics and [roadmap](docs/project/ROADMAP.md) for the v0.13.0 milestone.
 
 ## Contributing
 
