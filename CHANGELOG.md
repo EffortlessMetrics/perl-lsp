@@ -13,6 +13,13 @@ Release notes: [v0.13.0-rc1](docs/releases/v0.13.0-rc1.md)
 
 ### Fixed
 
+- **CI cancellation cascade fix — label events no longer cancel active runs** —
+  `cancel-in-progress` now scopes to `pull_request.synchronize` only, so applying
+  labels (e.g. `merge-ready`, `ci-green`) does not abort an in-flight CI run on
+  the same PR. Adds a `LABEL_EVENT_CANCELS_PR_RUN` xtask lint to prevent the
+  failure mode from re-entering. Resolves a recurring queue-blocker that
+  surfaced as `exit 143` SIGTERM aborts on PR Smoke and CI Gate. (#7581)
+
 - **First-run error messaging now surfaces to users instead of silent logging** — When
   workspace root is not detected (e.g., opening a single file without opening a folder),
   perl-lsp now sends a `window/showMessage` notification with actionable guidance:
