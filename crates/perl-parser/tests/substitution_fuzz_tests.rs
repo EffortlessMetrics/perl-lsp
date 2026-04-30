@@ -329,9 +329,5 @@ fn test_substitution_deterministic_pseudo_fuzz_inputs() {
     let inputs = generate_deterministic_pseudo_fuzz_inputs();
     let input_refs: Vec<&str> = inputs.iter().map(String::as_str).collect();
     let crashes = test_substitution_batch(&input_refs);
-    assert!(
-        crashes.is_empty(),
-        "Found crashes in deterministic pseudo fuzz cases: {:?}",
-        crashes
-    );
+    assert!(crashes.is_empty(), "Found crashes in deterministic pseudo fuzz cases: {:?}", crashes);
 }

@@ -360,7 +360,8 @@ fn bdd_given_state_vars_and_method_chaining_when_parsed_then_state_and_arrow_inv
 }
 
 #[test]
-fn bdd_given_map_and_grep_pipeline_when_parsed_then_higher_order_blocks_are_retained() -> TestResult {
+fn bdd_given_map_and_grep_pipeline_when_parsed_then_higher_order_blocks_are_retained() -> TestResult
+{
     // Given: a developer transforms and filters a list with map/grep blocks.
     let code = r#"
         my @nums = (1, 2, 3, 4, 5);
