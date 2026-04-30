@@ -263,7 +263,13 @@ pub fn reconcile_queue(
         // Query live CI state for this PR.
         let ci_outcome = query_live_ci_state(pr.number).unwrap_or(CiOutcome::Pending);
 
-        let contradictions = detect_contradictions(pr, &events, ci_outcome);
+        // Best-effort load of the current-SHA review receipt from PR comments.
+        // None → no projection contradictions emitted (safe no-op).
+        let review_receipt = fetch_current_review_receipt(pr.number).unwrap_or(None);
+
+        let mut contradictions = detect_contradictions(pr, &events, ci_outcome);
+        contradictions
+            .extend(contradictions_from_current_review_receipt(pr, review_receipt.as_ref()));
 
         if contradictions.is_empty() {
             continue;
@@ -701,6 +707,94 @@ fn fetch_label_timeline(pr_number: u64) -> Result<Vec<LabelEvent>> {
     Ok(label_events)
 }
 
+/// Fetch the current-SHA review receipt for a PR by scanning issue comments for
+/// fenced JSON blocks tagged `kind: "review_receipt"`.
+///
+/// Returns:
+/// - `Ok(Some(receipt))` when at least one comment carries a parseable, current-SHA
+///   review receipt; the latest such comment wins.
+/// - `Ok(None)` when no current-SHA receipt is found (also when fetch fails — the
+///   reconciler treats this as a safe no-op).
+/// - `Err(_)` is reserved for future hard failures; today we never return Err so
+///   the per-PR loop can stay simple.
+fn fetch_current_review_receipt(pr_number: u64) -> Result<Option<ReviewReceipt>> {
+    let root = project_root()?;
+    let endpoint = format!("repos/{{owner}}/{{repo}}/issues/{pr_number}/comments?per_page=100");
+
+    let output = Command::new("gh")
+        .current_dir(&root)
+        .args(["api", &endpoint, "--paginate"])
+        .output()
+        .context("failed to execute gh api comments for review receipt")?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout);
+    let comments_json: Vec<serde_json::Value> = serde_json::from_str(&raw).unwrap_or_default();
+    Ok(extract_latest_review_receipt(&comments_json))
+}
+
+/// Pure helper: scan a list of GitHub issue-comment JSON objects (each with a
+/// `body` string) and return the latest parseable `review_receipt` payload.
+///
+/// Receipts are expected as fenced JSON blocks of the form:
+///
+/// ```text
+/// ```json
+/// { "kind": "review_receipt", "schema_version": 1, ... }
+/// ```
+/// ```
+///
+/// Comments are taken in input order; the last successfully-parsed receipt wins
+/// (GitHub's `?per_page=100` returns oldest-first by default, matching this).
+fn extract_latest_review_receipt(comments: &[serde_json::Value]) -> Option<ReviewReceipt> {
+    let mut latest: Option<ReviewReceipt> = None;
+    for comment in comments {
+        let Some(body) = comment.get("body").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        for candidate in extract_json_code_blocks(body) {
+            if let Ok(receipt) = serde_json::from_str::<ReviewReceipt>(&candidate)
+                && receipt.kind == REVIEW_RECEIPT_KIND
+                && receipt.schema_version == 1
+            {
+                latest = Some(receipt);
+            }
+        }
+    }
+    latest
+}
+
+/// Extract ```json fenced code blocks from a markdown body. Tolerant of the
+/// common variants (```json, ```JSON, leading whitespace) and returns each
+/// block's inner contents as an owned `String`.
+fn extract_json_code_blocks(body: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut remaining = body;
+    while let Some(start) = remaining.find("```") {
+        let after_open = &remaining[start + 3..];
+        // Optional language tag up to the first newline.
+        let Some(nl) = after_open.find('\n') else {
+            break;
+        };
+        let lang = after_open[..nl].trim();
+        let body_start = nl + 1;
+        let after_lang = &after_open[body_start..];
+        let Some(close) = after_lang.find("```") else {
+            break;
+        };
+        let block = &after_lang[..close];
+        // Advance past the closing fence for next iteration.
+        remaining = &after_lang[close + 3..];
+        if lang.eq_ignore_ascii_case("json") {
+            out.push(block.trim().to_string());
+        }
+    }
+    out
+}
+
 fn fetch_open_prs(pr_filter: Option<u64>) -> Result<Vec<OpenPr>> {
     let root = project_root()?;
 
@@ -1128,6 +1222,124 @@ mod tests {
         let pr = make_pr(10, &[REVIEW_REVIEWED, DIFF_AUDITED]);
         let c = contradictions_from_current_review_receipt(&pr, None);
         assert!(c.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // Receipt extraction from PR comment bodies (loader wiring)
+    // -----------------------------------------------------------------------
+
+    fn comment(body: &str) -> serde_json::Value {
+        serde_json::json!({ "body": body })
+    }
+
+    #[test]
+    fn extract_latest_review_receipt_picks_latest_parseable_payload() {
+        let older = r#"```json
+{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"old-sha","verdict":"needs_builder","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}
+```"#;
+        let newer = r#"```json
+{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"sha-42","verdict":"approved","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}
+```"#;
+        let comments = vec![comment(older), comment(newer)];
+        let receipt = extract_latest_review_receipt(&comments).expect("a receipt should parse");
+        assert_eq!(receipt.sha, "sha-42");
+        assert_eq!(receipt.verdict, ReviewReceiptVerdict::Approved);
+    }
+
+    #[test]
+    fn extract_latest_review_receipt_ignores_non_review_kinds() {
+        let other = r#"```json
+{"kind":"queue-snapshot","captured_at":"2026-04-30T00:00:00Z"}
+```"#;
+        let comments = vec![comment(other)];
+        let receipt = extract_latest_review_receipt(&comments);
+        assert!(receipt.is_none(), "non-review kinds should be ignored");
+    }
+
+    #[test]
+    fn extract_latest_review_receipt_ignores_unparseable_blocks() {
+        let bad = r#"```json
+{ this is not valid json
+```"#;
+        let comments = vec![comment(bad)];
+        assert!(extract_latest_review_receipt(&comments).is_none());
+    }
+
+    #[test]
+    fn extract_latest_review_receipt_ignores_non_json_fences() {
+        let perl = r#"```perl
+my $x = 1;
+```"#;
+        let comments = vec![comment(perl)];
+        assert!(extract_latest_review_receipt(&comments).is_none());
+    }
+
+    #[test]
+    fn extract_latest_review_receipt_returns_none_on_empty_input() {
+        let comments: Vec<serde_json::Value> = vec![];
+        assert!(extract_latest_review_receipt(&comments).is_none());
+    }
+
+    /// Integration test: the full per-PR detection pipeline wired by `reconcile_queue`.
+    ///
+    /// Mirrors the inner loop:
+    /// 1. `detect_contradictions` against labels + timeline + live CI.
+    /// 2. Extend with `contradictions_from_current_review_receipt` from the loaded receipt.
+    ///
+    /// Verifies that an approved review_receipt at the current head SHA strips
+    /// `needs-builder-fix` *in addition to* whatever timeline-based pairs the
+    /// detector already found. This is the integration that closes the dead-code
+    /// loop: receipts loaded from comments now reach the strip-action stream.
+    #[test]
+    fn reconcile_pr_pipeline_extends_contradictions_with_review_receipt() {
+        // PR has both review-reviewed + needs-builder-fix (the timeline-pair detector
+        // will keep review-reviewed, strip needs-builder-fix once via the conservative
+        // fallback). Then the approved receipt also fires a strip — but the dedupe
+        // in the strip-application stream means the final stripped set is exactly
+        // {needs-builder-fix}, applied at most once.
+        let pr = make_pr(42, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let body = format!(
+            r#"```json
+{{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"sha-42","verdict":"approved","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}}
+```"#
+        );
+        let comments = vec![comment(&body)];
+        let receipt = extract_latest_review_receipt(&comments);
+        assert!(receipt.is_some(), "loader must extract the embedded receipt");
+
+        // Simulate the per-PR pipeline exactly as `reconcile_queue` runs it.
+        let mut contradictions = detect_contradictions(&pr, &[], CiOutcome::Pending);
+        contradictions.extend(contradictions_from_current_review_receipt(&pr, receipt.as_ref()));
+
+        let strips: Vec<&str> = contradictions.iter().map(|c| c.strip.as_str()).collect();
+        assert!(
+            strips.contains(&NEEDS_BUILDER_FIX),
+            "wired pipeline must strip needs-builder-fix; got {strips:?}"
+        );
+
+        // Provenance: at least one contradiction must come from the review_receipt
+        // (its `keep` references the receipt kind).
+        assert!(
+            contradictions.iter().any(|c| c.keep == REVIEW_RECEIPT_KIND),
+            "wired pipeline must emit a receipt-sourced contradiction"
+        );
+    }
+
+    #[test]
+    fn reconcile_pr_pipeline_no_receipt_falls_back_to_label_only() {
+        // Same PR shape, but no comments → loader returns None → wired pipeline
+        // matches the legacy label-only behaviour.
+        let pr = make_pr(43, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
+        let receipt = extract_latest_review_receipt(&[]);
+        assert!(receipt.is_none());
+
+        let mut contradictions = detect_contradictions(&pr, &[], CiOutcome::Pending);
+        contradictions.extend(contradictions_from_current_review_receipt(&pr, receipt.as_ref()));
+
+        // Exactly one contradiction (the label-pair fallback), no receipt-sourced ones.
+        assert_eq!(contradictions.len(), 1);
+        assert_eq!(contradictions[0].strip, NEEDS_BUILDER_FIX);
+        assert_eq!(contradictions[0].keep, REVIEW_REVIEWED);
     }
 
     // -----------------------------------------------------------------------
