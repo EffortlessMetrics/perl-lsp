@@ -217,12 +217,12 @@ fn test_ac3_balanced_delimiters() -> Result<(), Box<dyn std::error::Error>> {
 
     for (code, expected_delimiter, _expected_pattern, _expected_replacement) in test_cases {
         let mut parser = Parser::new(code);
-        let result = parser.parse();
-
-        // This should fail until substitution parsing is implemented
-        if let Ok(ast) = result {
-            assert!(!has_proper_balanced_delimiter_parsing(&ast, expected_delimiter));
-        }
+        let ast = parser.parse()?;
+        assert!(
+            has_proper_balanced_delimiter_parsing(&ast, expected_delimiter),
+            "balanced delimiter parsing failed for: {}",
+            code
+        );
     }
     Ok(())
 }
@@ -299,12 +299,8 @@ fn test_ac5_complex_replacements() -> Result<(), Box<dyn std::error::Error>> {
 
     for code in complex_cases {
         let mut parser = Parser::new(code);
-        let result = parser.parse();
-
-        // These should all fail until backreference parsing is implemented
-        if let Ok(ast) = result {
-            assert!(!has_backreference_support(&ast));
-        }
+        let ast = parser.parse()?;
+        assert!(has_backreference_support(&ast), "Backreference handling failed for: {}", code);
     }
     Ok(())
 }
@@ -404,12 +400,26 @@ fn has_proper_delimiter_parsing(_ast: &perl_parser::ast::Node, _expected_delimit
 }
 
 fn has_proper_balanced_delimiter_parsing(
-    _ast: &perl_parser::ast::Node,
-    _expected_delimiter: char,
+    ast: &perl_parser::ast::Node,
+    expected_delimiter: char,
 ) -> bool {
-    // Check if balanced delimiters are properly handled
-    // This is a placeholder - actual implementation will depend on AST structure
-    false
+    fn find_substitution(node: &perl_parser::ast::Node) -> Option<(&str, &str)> {
+        match &node.kind {
+            NodeKind::Program { statements } => statements.iter().find_map(find_substitution),
+            NodeKind::ExpressionStatement { expression } => find_substitution(expression),
+            NodeKind::Substitution { pattern, replacement, .. } => Some((pattern, replacement)),
+            _ => None,
+        }
+    }
+
+    let Some((pattern, replacement)) = find_substitution(ast) else {
+        return false;
+    };
+
+    match expected_delimiter {
+        '(' | '{' | '[' | '<' => !pattern.is_empty() && !replacement.is_empty(),
+        _ => false,
+    }
 }
 
 fn has_complete_ast_structure(_ast: &perl_parser::ast::Node) -> bool {
@@ -430,10 +440,18 @@ fn has_regex_pattern_integration(_ast: &perl_parser::ast::Node) -> bool {
     false
 }
 
-fn has_backreference_support(_ast: &perl_parser::ast::Node) -> bool {
-    // Check if backreferences in replacement text are supported
-    // This is a placeholder - actual implementation will depend on AST structure
-    false
+fn has_backreference_support(ast: &perl_parser::ast::Node) -> bool {
+    fn find_replacement(node: &perl_parser::ast::Node) -> Option<&str> {
+        match &node.kind {
+            NodeKind::Program { statements } => statements.iter().find_map(find_replacement),
+            NodeKind::ExpressionStatement { expression } => find_replacement(expression),
+            NodeKind::Substitution { replacement, .. } => Some(replacement),
+            _ => None,
+        }
+    }
+
+    find_replacement(ast)
+        .is_some_and(|replacement| replacement.contains('$') || replacement.contains('&'))
 }
 
 fn has_documented_behavior(_ast: &perl_parser::ast::Node) -> bool {
