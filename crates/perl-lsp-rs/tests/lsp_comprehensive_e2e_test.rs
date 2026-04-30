@@ -964,7 +964,8 @@ sub {symbol_name} {{
             "query": "lifecycle_unique_symbol"
         })),
     );
-    let opened_symbols = opened_result.ok_or("No workspace symbol result after opening document")?;
+    let opened_symbols =
+        opened_result.ok_or("No workspace symbol result after opening document")?;
     let opened_matches = opened_symbols
         .as_array()
         .ok_or("Expected workspace/symbol array after opening document")?
@@ -980,7 +981,8 @@ sub {symbol_name} {{
             "query": "lifecycle_unique_symbol"
         })),
     );
-    let closed_symbols = closed_result.ok_or("No workspace symbol result after closing document")?;
+    let closed_symbols =
+        closed_result.ok_or("No workspace symbol result after closing document")?;
     let closed_matches = closed_symbols
         .as_array()
         .ok_or("Expected workspace/symbol array after closing document")?

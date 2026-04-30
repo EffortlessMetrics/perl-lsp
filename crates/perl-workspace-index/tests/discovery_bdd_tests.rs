@@ -223,7 +223,8 @@ fn given_git_workspace_with_perl_adjacent_extensions_when_discovering_then_git_s
 }
 
 #[test]
-fn given_walk_discovery_with_only_skipped_dirs_when_discovering_then_sources_are_excluded() -> TestResult {
+fn given_walk_discovery_with_only_skipped_dirs_when_discovering_then_sources_are_excluded()
+-> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 

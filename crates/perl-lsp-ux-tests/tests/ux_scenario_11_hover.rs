@@ -187,8 +187,8 @@ fn scenario_11_hover_range_contains_cursor_when_present() {
 
                 let cursor_line: u64 = 8;
                 let cursor_char: u64 = 14;
-                let starts_before_cursor =
-                    start_line < cursor_line || (start_line == cursor_line && start_char <= cursor_char);
+                let starts_before_cursor = start_line < cursor_line
+                    || (start_line == cursor_line && start_char <= cursor_char);
                 let ends_after_cursor =
                     end_line > cursor_line || (end_line == cursor_line && end_char >= cursor_char);
                 assert!(
