@@ -1,8 +1,9 @@
-name: Valid Required Workflow
+name: Invalid Required Workflow (Label Trigger)
 
 on:
   pull_request:
     branches: [master]
+    types: [opened, synchronize, labeled]
   merge_group:
     types: [checks_requested]
   push:
