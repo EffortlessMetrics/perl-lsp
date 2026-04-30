@@ -19,8 +19,7 @@
     "sha": {"type": "string", "minLength": 1},
     "workflow": {"type": ["string", "null"]},
     "scenario_file": {"type": ["string", "null"]},
-    "scenario": {"type": ["string", "null"]},
-    "test": {"type": ["string", "null"]},
+    "first_failing_test": {"type": ["string", "null"]},
     "result": {"enum": ["pass", "fail"]},
     "failure_class": {
       "enum": [
@@ -37,7 +36,6 @@
     },
     "panic_location": {"type": ["string", "null"]},
     "repro": {"type": ["string", "null"]},
-    "first_failing_line": {"type": ["string", "null"]},
     "route": {"type": "string", "minLength": 1}
   },
   "additionalProperties": false

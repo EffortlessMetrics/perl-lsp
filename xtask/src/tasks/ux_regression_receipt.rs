@@ -47,13 +47,11 @@ pub struct UxRegressionReceipt {
     sha: String,
     workflow: Option<String>,
     scenario_file: Option<String>,
-    scenario: Option<String>,
-    test: Option<String>,
+    first_failing_test: Option<String>,
     result: String,
     failure_class: FailureClass,
     panic_location: Option<String>,
     repro: Option<String>,
-    first_failing_line: Option<String>,
     route: String,
 }
 
@@ -79,18 +77,16 @@ pub fn run(config: UxRegressionReceiptConfig) -> Result<()> {
 
 fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
     let lines: Vec<&str> = raw.lines().collect();
-    let first_fail_line =
-        lines.iter().find(|line| line.contains("FAILED")).map(|line| (*line).trim().to_string());
-    let test =
+    let first_failing_test =
         lines.iter().find_map(|line| FAILED_TEST_RE.captures(line).map(|cap| cap[1].to_string()));
     let panic_location =
         lines.iter().find_map(|line| PANIC_RE.captures(line).map(|cap| cap[1].to_string()));
-    let scenario = test.as_ref().and_then(|name| scenario_from_test_name(name));
-    let workflow = test.as_ref().and_then(|name| workflow_from_test_name(name));
+    let scenario = first_failing_test.as_ref().and_then(|name| scenario_from_test_name(name));
+    let workflow = first_failing_test.as_ref().and_then(|name| workflow_from_test_name(name));
 
     let failure_class = infer_failure_class(raw);
 
-    let repro = test.as_ref().map(|name| {
+    let repro = first_failing_test.as_ref().map(|name| {
         format!("cargo test -p perl-lsp-ux-tests {name} -- --test-threads=1 --nocapture")
     });
 
@@ -103,13 +99,11 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
         sha: sha.unwrap_or_else(|| "unknown".to_string()),
         workflow,
         scenario_file: scenario.clone(),
-        scenario,
-        test,
+        first_failing_test,
         result: if raw.contains("test result: ok") { "pass" } else { "fail" }.to_string(),
         failure_class,
         panic_location,
         repro,
-        first_failing_line: first_fail_line,
         route,
     }
 }
@@ -154,10 +148,13 @@ fn workflow_from_test_name(test: &str) -> Option<String> {
 
 fn route_for_class(class: &FailureClass) -> &'static str {
     match class {
-        FailureClass::MatrixDrift | FailureClass::BaselineDrift => "needs-fixture-fix",
+        FailureClass::MatrixDrift => "needs-fixture-update",
+        FailureClass::BaselineDrift => "needs-baseline-update",
         FailureClass::TestRace | FailureClass::NewTestBug => "needs-test-fix",
-        FailureClass::ProviderRegression | FailureClass::ServerCrash => "needs-provider-fix",
-        FailureClass::Timeout | FailureClass::Infra => "needs-ci-fix",
+        FailureClass::ProviderRegression => "needs-provider-fix",
+        FailureClass::ServerCrash => "needs-crash-fix",
+        FailureClass::Timeout => "needs-timeout-triage",
+        FailureClass::Infra => "needs-ci-investigation",
         FailureClass::Unknown => "needs-triage",
     }
 }
@@ -173,18 +170,14 @@ mod tests {
         let log = "running 1 test\ntest ux_scenario_19_diagnostics_lifecycle::scenario_19_diagnostics_clear_after_fix ... FAILED\nthread 'x' panicked at crates/perl-lsp-ux-tests/tests/ux_scenario_19_diagnostics_lifecycle.rs:102:5:\nboom\ntest result: FAILED. 0 passed; 1 failed";
         let receipt = classify(log, Some("abc123".to_string()));
         assert_eq!(receipt.sha, "abc123", "sha should match input");
-        assert_eq!(
-            receipt.scenario.as_deref(),
-            Some("ux_scenario_19_diagnostics_lifecycle.rs"),
-            "scenario should be extracted from test name"
-        );
+        assert_eq!(receipt.scenario_file.as_deref(), Some("ux_scenario_19_diagnostics_lifecycle.rs"));
         assert_eq!(
             receipt.workflow.as_deref(),
             Some("scenario_19_diagnostics_clear_after_fix"),
             "workflow should map to test function name"
         );
         assert_eq!(
-            receipt.test.as_deref(),
+            receipt.first_failing_test.as_deref(),
             Some("ux_scenario_19_diagnostics_lifecycle::scenario_19_diagnostics_clear_after_fix"),
             "test name should be extracted from log"
         );
@@ -208,7 +201,7 @@ mod tests {
             matches!(receipt.failure_class, FailureClass::Timeout),
             "timed out log should classify as Timeout"
         );
-        assert_eq!(receipt.route, "needs-ci-fix", "Timeout routes to needs-ci-fix");
+        assert_eq!(receipt.route, "needs-timeout-triage", "Timeout routes to needs-timeout-triage");
         assert_eq!(receipt.result, "fail");
     }
 
@@ -223,7 +216,7 @@ mod tests {
             "non-ux_scenario panic should classify as ServerCrash, got {:?}",
             receipt.failure_class
         );
-        assert_eq!(receipt.route, "needs-provider-fix", "ServerCrash routes to needs-provider-fix");
+        assert_eq!(receipt.route, "needs-crash-fix", "ServerCrash routes to needs-crash-fix");
     }
 
     #[test]
@@ -238,7 +231,7 @@ mod tests {
             "log with 'unexpectedly' (substring of 'expected') should be ServerCrash, got {:?}",
             receipt.failure_class
         );
-        assert_eq!(receipt.route, "needs-provider-fix");
+        assert_eq!(receipt.route, "needs-crash-fix");
     }
 
     #[test]
@@ -249,7 +242,10 @@ mod tests {
             matches!(receipt.failure_class, FailureClass::MatrixDrift),
             "fixture matrix log should classify as MatrixDrift"
         );
-        assert_eq!(receipt.route, "needs-fixture-fix", "MatrixDrift routes to needs-fixture-fix");
+        assert_eq!(
+            receipt.route, "needs-fixture-update",
+            "MatrixDrift routes to needs-fixture-update"
+        );
     }
 
     #[test]
@@ -260,7 +256,10 @@ mod tests {
             matches!(receipt.failure_class, FailureClass::BaselineDrift),
             "baseline snapshot log should classify as BaselineDrift"
         );
-        assert_eq!(receipt.route, "needs-fixture-fix", "BaselineDrift routes to needs-fixture-fix");
+        assert_eq!(
+            receipt.route, "needs-baseline-update",
+            "BaselineDrift routes to needs-baseline-update"
+        );
     }
 
     #[test]

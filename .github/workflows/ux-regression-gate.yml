@@ -229,10 +229,11 @@ jobs:
                       "",
                       f"- Receipt path: `{receipt_path}`",
                       f"- Failure class: `{receipt.get('failure_class') or 'unknown'}`",
-                      f"- First failing test: `{receipt.get('test') or 'unknown'}`",
+                      f"- First failing test: `{receipt.get('first_failing_test') or 'unknown'}`",
                       f"- Panic location: `{receipt.get('panic_location') or 'n/a'}`",
                       f"- Repro command: `{receipt.get('repro') or 'just ux-tests'}`",
                       f"- Route: `{receipt.get('route') or 'needs-triage'}`",
+                      "- Receipt artifact: `ux-test-results-<sha>` (download from this workflow run)",
                   ]
           else:
               summary_lines.append("All UX scenarios passed.")
@@ -308,6 +309,7 @@ jobs:
           name: ux-test-results-${{ github.sha }}
           path: |
             /tmp/ux-test-output.txt
+            .ci/receipts/ux-regression.json
             target/ux-test-results/
           if-no-files-found: warn
           retention-days: 7
