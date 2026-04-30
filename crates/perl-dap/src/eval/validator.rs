@@ -410,6 +410,33 @@ mod tests {
     }
 
     #[test]
+    fn test_comparison_operators_not_misclassified_as_assignments() {
+        let evaluator = SafeEvaluator::new();
+
+        assert!(evaluator.validate("$x == 1").is_ok());
+        assert!(evaluator.validate("$x != 1").is_ok());
+        assert!(evaluator.validate("$x <= 1").is_ok());
+        assert!(evaluator.validate("$x >= 1").is_ok());
+    }
+
+    #[test]
+    fn test_core_qualified_dangerous_operations_are_blocked() {
+        let evaluator = SafeEvaluator::new();
+
+        assert!(evaluator.validate("CORE::print 'hello'").is_err());
+        assert!(evaluator.validate("CORE::GLOBAL::system('ls')").is_err());
+    }
+
+    #[test]
+    fn test_code_dereference_and_method_call_with_sigils_are_blocked() {
+        let evaluator = SafeEvaluator::new();
+
+        assert!(evaluator.validate("&$system").is_err());
+        assert!(evaluator.validate("$obj->$print").is_err());
+        assert!(evaluator.validate("&{ $exec }").is_err());
+    }
+
+    #[test]
     fn test_single_quoted_strings() {
         let evaluator = SafeEvaluator::new();
 
