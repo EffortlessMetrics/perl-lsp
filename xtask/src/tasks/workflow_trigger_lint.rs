@@ -10,7 +10,8 @@ use serde_yaml_ng::Value;
 
 use crate::utils::project_root;
 
-const REQUIRED_CANCEL_IN_PROGRESS: &str = "${{ github.event_name == 'pull_request' }}";
+const REQUIRED_CANCEL_IN_PROGRESS: &str =
+    "${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}";
 
 #[derive(Debug, Clone, Deserialize)]
 struct RequiredChecksPolicy {
@@ -159,6 +160,12 @@ fn evaluate_required_entry(
                     "concurrency.cancel-in-progress must be `{REQUIRED_CANCEL_IN_PROGRESS}`"
                 ));
             }
+            if pull_request_has_label_triggers(yaml) {
+                violations.push(
+                    "required CI workflows must not trigger on pull_request labeled/unlabeled"
+                        .to_string(),
+                );
+            }
         }
     }
 
@@ -266,6 +273,22 @@ fn has_path_filters(workflow: &Value) -> bool {
             _ => false,
         }
     })
+}
+
+fn pull_request_has_label_triggers(workflow: &Value) -> bool {
+    workflow
+        .get("on")
+        .and_then(Value::as_mapping)
+        .and_then(|on| on.get(Value::String("pull_request".to_string())))
+        .and_then(Value::as_mapping)
+        .and_then(|pr| pr.get(Value::String("types".to_string())))
+        .and_then(Value::as_sequence)
+        .is_some_and(|types| {
+            types
+                .iter()
+                .filter_map(Value::as_str)
+                .any(|event| event == "labeled" || event == "unlabeled")
+        })
 }
 
 fn has_event_aware_concurrency(workflow: &Value) -> bool {

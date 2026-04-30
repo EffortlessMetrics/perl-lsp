@@ -15,7 +15,7 @@ For each `required = true` check, the workflow must:
 - define `push` with `branches: [master]`
 - avoid top-level or event-level `paths` / `paths-ignore`
 - define event-aware concurrency:
-  - `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`
+  - `cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}`
 - exist at the configured path
 
 ## Commands
