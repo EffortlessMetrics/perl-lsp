@@ -9,30 +9,8 @@ use serde_json::{Value, json};
 use serial_test::serial;
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
+use support::bdd_diagnostics::{BddScenario, DocumentDiagnosticFlow};
 use support::lsp_harness::{LspHarness, TempWorkspace};
-
-struct BddScenario {
-    name: &'static str,
-}
-
-impl BddScenario {
-    fn new(name: &'static str) -> Self {
-        eprintln!("Scenario: {}", name);
-        Self { name }
-    }
-
-    fn given(&self, msg: &str) {
-        eprintln!("[{}] Given {}", self.name, msg);
-    }
-
-    fn when(&self, msg: &str) {
-        eprintln!("[{}] When {}", self.name, msg);
-    }
-
-    fn then(&self, msg: &str) {
-        eprintln!("[{}] Then {}", self.name, msg);
-    }
-}
 
 fn find_position(text: &str, needle: &str) -> (u32, u32) {
     perl_tdd_support::must_some(
@@ -387,6 +365,18 @@ fn code_action_titles(actions: &Value) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn code_lens_command_title(lens: &Value) -> Option<&str> {
+    lens.get("command").and_then(|command| command.get("title")).and_then(Value::as_str)
+}
+
+fn code_lens_command_id(lens: &Value) -> Option<&str> {
+    lens.get("command").and_then(|command| command.get("command")).and_then(Value::as_str)
+}
+
+fn code_lens_data_kind(lens: &Value) -> Option<&str> {
+    lens.get("data").and_then(|data| data.get("kind")).and_then(Value::as_str)
 }
 
 fn has_lsp_range(value: &Value) -> bool {
@@ -1375,33 +1365,20 @@ sub healthy_sub {
     let uri = workspace.uri("stable.pl");
     harness.open(&uri, code)?;
 
+    let mut diagnostics = DocumentDiagnosticFlow::new(&mut harness, uri.clone());
+
     scenario.when("requesting pull diagnostics for the first time");
-    let first = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri }
-        }),
-    )?;
+    let first = diagnostics.request(None)?;
 
     scenario.then("the server returns a full diagnostic report with resultId");
-    assert_eq!(first.get("kind").and_then(Value::as_str), Some("full"));
-    let result_id = first
-        .get("resultId")
-        .and_then(Value::as_str)
-        .ok_or("first diagnostic report missing resultId")?
-        .to_string();
+    assert_eq!(DocumentDiagnosticFlow::kind(&first), Some("full"));
+    let result_id = DocumentDiagnosticFlow::result_id(&first)?;
 
     scenario.when("requesting diagnostics again with previousResultId");
-    let second = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri },
-            "previousResultId": result_id
-        }),
-    )?;
+    let second = diagnostics.request(Some(result_id.as_str()))?;
 
     scenario.then("the server replies with an unchanged report");
-    assert_eq!(second.get("kind").and_then(Value::as_str), Some("unchanged"));
+    assert_eq!(DocumentDiagnosticFlow::kind(&second), Some("unchanged"));
     assert_eq!(
         second.get("resultId").and_then(Value::as_str),
         Some(result_id.as_str()),
@@ -1441,45 +1418,26 @@ sub score {
     harness.open(&uri, healthy)?;
 
     scenario.when("requesting pull diagnostics to establish a baseline resultId");
-    let first = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri }
-        }),
-    )?;
+    let first = DocumentDiagnosticFlow::new(&mut harness, uri.clone()).request(None)?;
 
-    let baseline_result_id = first
-        .get("resultId")
-        .and_then(Value::as_str)
-        .ok_or("first diagnostic report missing resultId")?
-        .to_string();
+    let baseline_result_id = DocumentDiagnosticFlow::result_id(&first)?;
 
     scenario.when("requesting diagnostics again with previousResultId without edits");
-    let unchanged = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri },
-            "previousResultId": baseline_result_id.clone()
-        }),
-    )?;
+    let unchanged = DocumentDiagnosticFlow::new(&mut harness, uri.clone())
+        .request(Some(baseline_result_id.as_str()))?;
 
     scenario.then("the server reports unchanged diagnostics");
-    assert_eq!(unchanged.get("kind").and_then(Value::as_str), Some("unchanged"));
+    assert_eq!(DocumentDiagnosticFlow::kind(&unchanged), Some("unchanged"));
 
     scenario.when("introducing a syntax error via didChange");
     harness.change_full(&uri, 2, broken)?;
     harness.barrier();
 
-    let changed = harness.request(
-        "textDocument/diagnostic",
-        json!({
-            "textDocument": { "uri": uri },
-            "previousResultId": baseline_result_id.clone()
-        }),
-    )?;
+    let changed = DocumentDiagnosticFlow::new(&mut harness, uri.clone())
+        .request(Some(baseline_result_id.as_str()))?;
 
     scenario.then("the server emits a full report with a fresh resultId and parse errors");
-    assert_eq!(changed.get("kind").and_then(Value::as_str), Some("full"));
+    assert_eq!(DocumentDiagnosticFlow::kind(&changed), Some("full"));
 
     let changed_result_id = changed
         .get("resultId")
@@ -1493,6 +1451,98 @@ sub score {
     assert!(
         diagnostic_error_count(&changed) > 0,
         "syntax regression should produce error diagnostics"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_pull_diagnostics_tracks_result_ids_per_document() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Pull diagnostics keep per-document resultId caches isolated");
+
+    let healthy = r#"use strict;
+use warnings;
+
+sub ok {
+    return 1;
+}
+"#;
+
+    let broken = r#"use strict;
+use warnings;
+
+sub boom {
+    if (1 {
+        return 0;
+    }
+}
+"#;
+
+    scenario.given("a workspace with one healthy file and one file that later regresses");
+    let (mut harness, workspace) =
+        setup_workspace(&[("stable.pl", healthy), ("changing.pl", healthy)])?;
+    let stable_uri = workspace.uri("stable.pl");
+    let changing_uri = workspace.uri("changing.pl");
+    harness.open(&stable_uri, healthy)?;
+    harness.open(&changing_uri, healthy)?;
+
+    let (stable_id, changing_id) = {
+        let mut stable_diag = DocumentDiagnosticFlow::new(&mut harness, stable_uri.clone());
+        let stable_first = stable_diag.request(None)?;
+        let stable_id = DocumentDiagnosticFlow::result_id(&stable_first)?;
+
+        let mut changing_diag = DocumentDiagnosticFlow::new(&mut harness, changing_uri.clone());
+        let changing_first = changing_diag.request(None)?;
+        let changing_id = DocumentDiagnosticFlow::result_id(&changing_first)?;
+        (stable_id, changing_id)
+    };
+
+    scenario.when("requesting diagnostics with cached resultIds before any edits");
+    let (stable_unchanged, changing_unchanged) = {
+        let mut stable_diag = DocumentDiagnosticFlow::new(&mut harness, stable_uri.clone());
+        let stable_unchanged = stable_diag.request(Some(stable_id.as_str()))?;
+
+        let mut changing_diag = DocumentDiagnosticFlow::new(&mut harness, changing_uri.clone());
+        let changing_unchanged = changing_diag.request(Some(changing_id.as_str()))?;
+        (stable_unchanged, changing_unchanged)
+    };
+
+    scenario.then("both documents return unchanged reports");
+    assert_eq!(DocumentDiagnosticFlow::kind(&stable_unchanged), Some("unchanged"));
+    assert_eq!(DocumentDiagnosticFlow::kind(&changing_unchanged), Some("unchanged"));
+
+    scenario.when("introducing a syntax regression in only one document");
+    harness.change_full(&changing_uri, 2, broken)?;
+    harness.barrier();
+
+    let (stable_after_edit, changing_after_edit) = {
+        let mut stable_diag = DocumentDiagnosticFlow::new(&mut harness, stable_uri.clone());
+        let stable_after_edit = stable_diag.request(Some(stable_id.as_str()))?;
+
+        let mut changing_diag = DocumentDiagnosticFlow::new(&mut harness, changing_uri.clone());
+        let changing_after_edit = changing_diag.request(Some(changing_id.as_str()))?;
+        (stable_after_edit, changing_after_edit)
+    };
+
+    scenario
+        .then("the unchanged file stays unchanged while the edited file gets a new full report");
+    assert_eq!(DocumentDiagnosticFlow::kind(&stable_after_edit), Some("unchanged"));
+    assert_eq!(
+        stable_after_edit.get("resultId").and_then(Value::as_str),
+        Some(stable_id.as_str()),
+        "stable file should keep the same resultId"
+    );
+
+    assert_eq!(DocumentDiagnosticFlow::kind(&changing_after_edit), Some("full"));
+    let changed_result_id = DocumentDiagnosticFlow::result_id(&changing_after_edit)?;
+    assert_ne!(
+        changed_result_id, changing_id,
+        "edited file should receive a fresh diagnostic resultId"
+    );
+    assert!(
+        diagnostic_error_count(&changing_after_edit) > 0,
+        "edited file should report syntax errors"
     );
 
     Ok(())
@@ -2650,6 +2700,10 @@ sub t_subtraction {
     is(4 - 1, 3, "subtraction works");
 }
 
+subtest "math block" => sub {
+    ok(1, "subtest works");
+};
+
 done_testing();
 "#;
 
@@ -2673,14 +2727,51 @@ done_testing();
         lenses.iter().all(has_lsp_range),
         "all code lenses should include a valid range; got {lenses:?}"
     );
+
+    let command_titles: Vec<&str> = lenses.iter().filter_map(code_lens_command_title).collect();
     assert!(
-        lenses.iter().any(|lens| {
-            lens.get("command")
-                .and_then(|command| command.get("title"))
-                .and_then(Value::as_str)
-                .is_some_and(|title| title.contains("Run Test"))
-        }),
-        "expected at least one Run Test code lens; got {lenses:?}"
+        command_titles.iter().any(|title| title.contains("Run All Tests")),
+        "expected Run All Tests lens for a .t file; got {command_titles:?}"
+    );
+    assert!(
+        command_titles.iter().any(|title| title.contains("Run Test")),
+        "expected Run Test lens; got {command_titles:?}"
+    );
+    assert!(
+        command_titles.iter().any(|title| title.contains("Debug Test")),
+        "expected Debug Test lens; got {command_titles:?}"
+    );
+    assert!(
+        command_titles.iter().any(|title| title.contains("Run Subtest")),
+        "expected Run Subtest lens; got {command_titles:?}"
+    );
+
+    scenario.when("resolving an unresolved references lens");
+    let unresolved = lenses
+        .iter()
+        .find(|lens| lens.get("command").is_none() && code_lens_data_kind(lens).is_some())
+        .ok_or("expected at least one unresolved references lens with data.kind")?;
+    let resolved = harness.request("codeLens/resolve", unresolved.clone())?;
+
+    scenario.then("resolved lens provides find-references command with editor coordinates");
+    assert_eq!(
+        code_lens_command_id(&resolved),
+        Some("editor.action.findReferences"),
+        "resolved references lens should use editor findReferences command; got {resolved:?}"
+    );
+    let resolved_title = code_lens_command_title(&resolved).unwrap_or_default();
+    assert!(
+        resolved_title.contains("reference"),
+        "resolved references lens title should include reference count; got {resolved_title:?}"
+    );
+    let args = resolved
+        .pointer("/command/arguments")
+        .and_then(Value::as_array)
+        .ok_or("resolved references lens should include command arguments")?;
+    assert_eq!(args.len(), 2, "expected [line, character] arguments; got {args:?}");
+    assert!(
+        args.iter().all(Value::is_number),
+        "resolved references lens arguments should be numeric editor coordinates; got {args:?}"
     );
 
     Ok(())

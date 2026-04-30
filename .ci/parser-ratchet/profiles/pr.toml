@@ -1,0 +1,5 @@
+selected = "perl-corpus"
+selection_reason = "PR mode default; compare base and candidate against the same manifest"
+clean_parse_rate_epsilon = 0.0005
+error_node_material_delta = 5
+runtime_gate = "advisory"

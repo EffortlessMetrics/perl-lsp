@@ -107,12 +107,14 @@ fn parse_file_uri_fallback(workspace_folder: &str) -> Option<PathBuf> {
 pub fn extract_workspace_folder_uris(workspace_folders: &[Value]) -> Vec<String> {
     workspace_folders
         .iter()
-        .filter_map(|folder| {
-            folder
+        .filter_map(|folder| match folder {
+            Value::String(uri) => Some(uri.clone()),
+            Value::Object(_) => folder
                 .get("uri")
                 .and_then(Value::as_str)
                 .map(std::string::ToString::to_string)
-                .or_else(|| folder.get("path").and_then(Value::as_str).map(root_path_to_file_uri))
+                .or_else(|| folder.get("path").and_then(Value::as_str).map(root_path_to_file_uri)),
+            _ => None,
         })
         .collect()
 }
@@ -221,10 +223,36 @@ mod tests {
             json!({"uri": "file:///one"}),
             json!({"uri": "file:///two"}),
             json!({"path": "/three"}),
+            json!("file:///four"),
             json!({"name": "invalid"}),
         ];
         let uris = extract_workspace_folder_uris(&entries);
-        assert_eq!(uris, vec!["file:///one", "file:///two", "file:///three"]);
+        assert_eq!(uris, vec!["file:///one", "file:///two", "file:///three", "file:///four"]);
+    }
+
+    #[test]
+    fn string_form_uri_passes_through_without_normalization() {
+        // Value::String arm passes the string through as-is, matching the behavior
+        // of the Value::Object{"uri": ...} arm which also does not normalize.
+        let entries = vec![json!("file:///a/b/c"), json!("file:///C:/Users/foo")];
+        let uris = extract_workspace_folder_uris(&entries);
+        assert_eq!(uris, vec!["file:///a/b/c", "file:///C:/Users/foo"]);
+    }
+
+    #[test]
+    fn non_file_and_non_object_entries_are_dropped() {
+        // Null, arrays, booleans, and numbers should all be silently skipped.
+        let entries = vec![json!(null), json!(42), json!(true), json!([])];
+        let uris = extract_workspace_folder_uris(&entries);
+        assert!(uris.is_empty(), "expected empty result, got {uris:?}");
+    }
+
+    #[test]
+    fn object_uri_key_takes_precedence_over_path_key() {
+        // When an object contains both "uri" and "path", "uri" wins.
+        let entries = vec![json!({"uri": "file:///from-uri", "path": "/from-path"})];
+        let uris = extract_workspace_folder_uris(&entries);
+        assert_eq!(uris, vec!["file:///from-uri"]);
     }
 
     #[test]

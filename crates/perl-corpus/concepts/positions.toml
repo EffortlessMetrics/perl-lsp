@@ -1,0 +1,71 @@
+[[concept]]
+id = "position.byte_span.basic"
+status = "seed"
+scope = { crates = ["perl-position-tracking", "perl-parser"], risk_tags = ["span"] }
+fixtures = { floors = ["test_corpus/basic_constructs.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "spans" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = true, nightly = true, release = true }
+
+[[concept]]
+id = "position.utf16.non_ascii"
+status = "seed"
+scope = { crates = ["perl-position-tracking", "perl-line-index"], risk_tags = ["utf16", "unicode"] }
+fixtures = { floors = ["test_corpus/edge_cases/unicode_encoding_edge_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "spans" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "position.crlf.line_index"
+status = "seed"
+scope = { crates = ["perl-line-index", "perl-position-tracking"], risk_tags = ["crlf", "line-index"] }
+fixtures = { floors = ["test_corpus/parser_stress_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "spans" }
+snapshots = { tokens = false, ast = false, spans = true }
+run = { pr = true, nightly = false, release = true }
+
+[[concept]]
+id = "position.multiline.heredoc"
+status = "seed"
+scope = { crates = ["perl-position-tracking", "perl-parser"], risk_tags = ["span", "heredoc"] }
+fixtures = { floors = ["test_corpus/heredoc_depth.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "spans" }
+snapshots = { tokens = true, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "position.method_chain.arrow"
+status = "seed"
+scope = { crates = ["perl-position-tracking", "perl-parser"], risk_tags = ["span", "method-call"] }
+fixtures = { floors = ["test_corpus/method_class.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "spans" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = false, release = false }
+
+[[concept]]
+id = "position.regex.capture_offsets"
+status = "seed"
+scope = { crates = ["perl-position-tracking", "perl-lexer"], risk_tags = ["span", "regex"] }
+fixtures = { floors = ["test_corpus/advanced_regex.pl", "test_corpus/regex_timeout_hardening.pl"], variants = [] }
+expect = { panic = false, timeout = true, mode = "spans" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = false, nightly = true, release = false }
+
+[[concept]]
+id = "position.data_end_boundaries"
+status = "seed"
+scope = { crates = ["perl-position-tracking", "perl-lexer"], risk_tags = ["span", "data-section"] }
+fixtures = { floors = ["test_corpus/data_end_sections.pl", "test_corpus/end_section.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "spans" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = true, nightly = false, release = true }
+
+[[concept]]
+id = "position.signature.parameter_offsets"
+status = "seed"
+scope = { crates = ["perl-position-tracking", "perl-parser"], risk_tags = ["span", "signature"] }
+fixtures = { floors = ["test_corpus/signatures_parameters_production_enhanced.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "spans" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }

@@ -37,3 +37,24 @@ check = "review"
 schema = ".ci/receipts/schemas/review.schema.json"
 description = "Agent sign-off receipt with material observations and negative checks."
 required_fields = ["material_observations", "negative_checks", "verdict"]
+
+[[receipt]]
+check = "label-projection"
+schema = ".ci/receipts/schemas/label-projection.schema.json"
+description = "Projects label changes from canonical PR state for queue management."
+producer = "cargo xtask queue project-labels"
+required_fields = ["dry_run", "verdict", "projections"]
+
+[[receipt]]
+check = "queue-health"
+schema = ".ci/receipts/schemas/queue-health.schema.json"
+description = "Classifies master queue health into GREEN/PENDING/RED modes for orchestrator merge safety."
+producer = "cargo xtask queue health"
+required_fields = ["master_sha", "mode", "allowed_lanes", "blocked_lanes", "reasons", "verdict"]
+
+[[receipt]]
+check = "queue-snapshot"
+schema = ".ci/receipts/schemas/queue-snapshot.schema.json"
+description = "Captures the open PR queue into a stable JSON snapshot document."
+producer = "cargo xtask queue snapshot"
+required_fields = ["snapshot_id", "captured_at", "repository", "default_branch", "master_sha", "prs", "buckets"]
