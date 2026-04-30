@@ -106,6 +106,15 @@ fn token_ref_new_checked_rejects_empty_non_eof() -> TestResult {
 }
 
 #[test]
+fn token_ref_new_checked_allows_empty_unknown() -> TestResult {
+    let token = TokenRef::new_checked(TokenKind::Unknown, "<synthetic>", 21, 21)?;
+    assert_eq!(token.kind, TokenKind::Unknown);
+    assert_eq!(token.span(), (21, 21));
+    assert!(token.is_empty());
+    Ok(())
+}
+
+#[test]
 fn token_ref_new_checked_allows_empty_eof() -> TestResult {
     let token = TokenRef::new_checked(TokenKind::Eof, "", 12, 12)?;
     assert_eq!(token.kind, TokenKind::Eof);
