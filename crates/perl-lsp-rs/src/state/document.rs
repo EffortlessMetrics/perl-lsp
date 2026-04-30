@@ -284,6 +284,8 @@ pub struct ClientCapabilities {
     pub dynamic_registration_support: bool,
     /// Supports `workspace/configuration` reverse requests from server.
     pub workspace_configuration_support: bool,
+    /// Supports `workspaceFolders` capability negotiation/events.
+    pub workspace_folders_support: bool,
     /// Supports snippet syntax in completion items
     pub snippet_support: bool,
     /// Supports `completionItem.commitCharacters` in completion results
@@ -318,4 +320,9 @@ pub struct ClientCapabilities {
     /// client has declared that property here.  A `None` value means the client
     /// sent no `resolveSupport` entry at all (i.e. resolve is unsupported).
     pub inlay_hint_resolve_support: Option<std::collections::HashSet<String>>,
+    /// Client supports `completionItem.labelDetails` (LSP 3.17+).
+    ///
+    /// When true the server may include a `labelDetails` object in completion
+    /// items and in `completionItem/resolve` responses.
+    pub label_details_support: bool,
 }

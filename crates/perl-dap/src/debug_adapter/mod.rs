@@ -40,7 +40,7 @@ use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use crate::types::{Source, StackFrame, Variable};
 use crate::variables::{PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer};
 use perl_lexer::DAP_COMPLETION_KEYWORDS;
-use perl_lsp_rs_core::transport::framing::{ContentLengthFramer, frame};
+use perl_lsp_rs_core::transport::framing::ContentLengthFramer;
 use perl_module::path::module_path_to_name;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -111,6 +111,7 @@ const RECENT_OUTPUT_MAX_LINES: usize = 2048;
 const DEBUG_SESSION_TERMINATE_WAIT_MS: u64 = 250;
 const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
 const DEBUGGER_FRAME_POLL_MS: u64 = 10;
+const MAX_DEBUGGER_IDENTIFIER_LEN: usize = 512;
 
 #[derive(Debug, Clone)]
 struct RecentOutputLine {
@@ -381,7 +382,8 @@ fn set_variable_name_re() -> Option<&'static Regex> {
 
 /// Validate DAP setVariable names (e.g. `$x`, `%ENV`, `$Package::value`) for safe passthrough.
 fn is_valid_set_variable_name(name: &str) -> bool {
-    set_variable_name_re().is_some_and(|re| re.is_match(name))
+    name.len() <= MAX_DEBUGGER_IDENTIFIER_LEN
+        && set_variable_name_re().is_some_and(|re| re.is_match(name))
 }
 
 fn function_breakpoint_name_re() -> Option<&'static Regex> {
@@ -392,7 +394,8 @@ fn function_breakpoint_name_re() -> Option<&'static Regex> {
 }
 
 fn is_valid_function_breakpoint_name(name: &str) -> bool {
-    function_breakpoint_name_re().is_some_and(|re| re.is_match(name))
+    name.len() <= MAX_DEBUGGER_IDENTIFIER_LEN
+        && function_breakpoint_name_re().is_some_and(|re| re.is_match(name))
 }
 
 fn inc_re() -> Option<&'static Regex> {
@@ -470,12 +473,67 @@ struct DebugSession {
     state: DebugState,
     /// Stack frames
     stack_frames: Vec<StackFrame>,
-    /// Variables in current scope
-    variables: HashMap<i32, Vec<Variable>>,
+    /// Variables in current scope, including root scopes and child expansions.
+    variable_cache: VariableCache,
     /// Thread ID
     thread_id: i32,
     /// Last resume command issued while running.
     last_resume_mode: ResumeMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VariableCacheKind {
+    Root,
+    Child,
+}
+
+#[derive(Debug, Clone)]
+struct VariableCacheEntry {
+    kind: VariableCacheKind,
+    full: Vec<Variable>,
+    page_slices: HashMap<(usize, usize), Vec<Variable>>,
+}
+
+#[derive(Debug, Default)]
+struct VariableCache {
+    entries: HashMap<i32, VariableCacheEntry>,
+}
+
+impl VariableCache {
+    fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    fn upsert(&mut self, reference: i32, kind: VariableCacheKind, variables: Vec<Variable>) {
+        let _ = self.entries.insert(
+            reference,
+            VariableCacheEntry { kind, full: variables, page_slices: HashMap::new() },
+        );
+    }
+
+    fn get_page(&mut self, reference: i32, start: usize, count: usize) -> Option<Vec<Variable>> {
+        let entry = self.entries.get_mut(&reference)?;
+        let key = (start, count);
+        if let Some(cached) = entry.page_slices.get(&key) {
+            return Some(cached.clone());
+        }
+
+        let page = slice_variables(&entry.full, start, count);
+        let _ = entry.page_slices.insert(key, page.clone());
+        Some(page)
+    }
+
+    fn all_variables(&self) -> impl Iterator<Item = &Variable> {
+        self.entries
+            .values()
+            .filter(|entry| entry.kind == VariableCacheKind::Root)
+            .chain(self.entries.values().filter(|entry| entry.kind == VariableCacheKind::Child))
+            .flat_map(|entry| entry.full.iter())
+    }
+}
+
+fn slice_variables(variables: &[Variable], start: usize, count: usize) -> Vec<Variable> {
+    variables.iter().skip(start).take(count).cloned().collect()
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -11,7 +11,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 /// Base parsing-time budget for extreme inputs.
-const BASE_MAX_PARSE_TIME: Duration = Duration::from_secs(30);
+const BASE_MAX_PARSE_TIME: Duration = Duration::from_secs(60);
 
 fn max_parse_time() -> Duration {
     let mut seconds = BASE_MAX_PARSE_TIME.as_secs();

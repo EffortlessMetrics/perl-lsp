@@ -1,40 +1,40 @@
 {
   "schema_version": 1,
-  "measured_at": null,
-  "commit": null,
+  "measured_at": "2026-04-28T00:00:00Z",
+  "commit": "5c89a9371",
   "projects": {
     "mojolicious": {
-      "file_count": null,
+      "file_count": 13,
       "metrics": {
         "cold_start_to_hover": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 463,
+          "p95_ms": 978,
+          "p99_ms": 978,
+          "samples": 10
         },
         "first_completion": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 0,
+          "p95_ms": 1,
+          "p99_ms": 1,
+          "samples": 10
         },
         "first_goto_definition": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 0,
+          "p95_ms": 3,
+          "p99_ms": 3,
+          "samples": 10
         },
         "incremental_reparse": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 1,
+          "p95_ms": 2,
+          "p99_ms": 2,
+          "samples": 10
         },
         "workspace_symbol_query": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "samples": 10
         }
       }
     },

@@ -1038,9 +1038,9 @@ catch (Error::Type $e) {
 
 (source_file
   (use_statement)
-  (try_catch_statement)
+  (try_statement)
   (use_statement)
-  (try_catch_statement))
+  (try_statement))
 
 ==================
 Scope::Guard for cleanup

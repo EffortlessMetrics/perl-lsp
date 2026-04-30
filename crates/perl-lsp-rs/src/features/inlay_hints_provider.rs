@@ -1,3 +1,5 @@
+//! Inlay hints provider data model and AST-driven hint generation.
+
 use perl_parser::ast::{Node, NodeKind};
 use perl_parser::builtin_signatures_phf::get_param_names;
 use perl_parser::position::{Position as LspPosition, Range};
@@ -441,15 +443,15 @@ impl InlayHintsProvider {
         let mut line = 0;
         let mut col = 0;
 
-        for (i, ch) in self.source.chars().enumerate() {
-            if i >= offset {
+        for (byte_idx, ch) in self.source.char_indices() {
+            if byte_idx >= offset {
                 break;
             }
             if ch == '\n' {
                 line += 1;
                 col = 0;
             } else {
-                col += 1;
+                col += ch.len_utf16() as u32;
             }
         }
 
@@ -553,5 +555,32 @@ print("Hello, World!");
 
             // Test passes if no crash occurs - actual hint behavior is flexible
         }
+    }
+
+    #[test]
+    fn test_offset_to_position_multibyte_utf8() {
+        // 'é' is 2 bytes in UTF-8 (U+00E9: 0xC3 0xA9).
+        // Before the fix, chars().enumerate() yields character indices, not byte
+        // offsets, so byte offset 4 would be compared against character index 3
+        // (the second 'l'), reporting (line=1, col=1) instead of (line=1, col=0).
+        let source = "hé\nllo".to_string();
+        let provider = InlayHintsProvider::new(source);
+        // byte layout: h=0, é=1-2 (2 bytes), \n=3, l=4, l=5, o=6
+        let (line, col) = provider.offset_to_position(4);
+        assert_eq!(line, 1, "byte offset 4 ('l') should be on line 1");
+        assert_eq!(col, 0, "byte offset 4 ('l') should be at column 0");
+    }
+
+    #[test]
+    fn test_offset_to_position_non_bmp_utf16() {
+        // '😀' (U+1F600) is 4 bytes in UTF-8 and 2 UTF-16 code units.
+        // LSP requires UTF-16 column counting, so the 'b' after '😀' should be at col=3
+        // (1 for 'a' + 2 for '😀'), not col=2 (1 + 1, if using scalar count).
+        let source = "a😀b".to_string();
+        let provider = InlayHintsProvider::new(source);
+        // byte layout: a=0, 😀=1-4 (4 bytes), b=5
+        let (line, col) = provider.offset_to_position(5);
+        assert_eq!(line, 0, "byte offset 5 ('b') should be on line 0");
+        assert_eq!(col, 3, "byte offset 5 ('b') should be at UTF-16 column 3");
     }
 }

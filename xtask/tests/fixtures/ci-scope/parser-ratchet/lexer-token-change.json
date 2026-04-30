@@ -1,0 +1,12 @@
+{
+  "name": "lexer and token changes select parser-ratchet",
+  "changed_files": [
+    "crates/perl-lexer/src/lib.rs",
+    "crates/perl-token/src/token.rs"
+  ],
+  "risk_tags": [],
+  "expected": {
+    "selected": true,
+    "selection_reason": "path matched crates/perl-lexer/** or crates/perl-token/**"
+  }
+}

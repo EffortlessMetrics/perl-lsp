@@ -8,7 +8,7 @@ mod built_in;
 mod quick_fix;
 mod types;
 
-pub use analyzer::CriticAnalyzer;
+pub use analyzer::{CriticAnalyzer, hash_content};
 pub use built_in::{BuiltInAnalyzer, Policy};
 pub use quick_fix::{QuickFix, TextEdit};
 pub use types::{CriticConfig, Severity, Violation};

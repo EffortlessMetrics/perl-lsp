@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 /// Environment variable used to override corpus root discovery.
 pub const CORPUS_ROOT_ENV: &str = "PERL_CORPUS_ROOT";
-const TEST_EXTENSIONS: &[&str] = &["pl", "pm", "t", "psgi", "cgi"];
+const TEST_EXTENSIONS: &[&str] = &["pl", "pm", "plx", "t", "psgi", "cgi"];
 
 /// Common corpus paths anchored at a root directory.
 #[derive(Debug, Clone)]
@@ -176,7 +176,6 @@ fn has_allowed_extension(path: &Path, extensions: &[&str]) -> bool {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -187,6 +186,37 @@ mod tests {
         root.push(format!("{}_{}_{}", prefix, std::process::id(), nanos));
         fs::create_dir_all(&root)?;
         Ok(root)
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<std::ffi::OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: &Path) -> Self {
+            let previous = env::var_os(key);
+            // SAFETY: Tests in this module set process environment variables in a
+            // controlled way and restore them on drop.
+            unsafe { env::set_var(key, value) };
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(previous) => {
+                    // SAFETY: This restores the original value captured by the
+                    // guard when it was created.
+                    unsafe { env::set_var(self.key, previous) };
+                }
+                None => {
+                    // SAFETY: The guard created this variable and now removes it.
+                    unsafe { env::remove_var(self.key) };
+                }
+            }
+        }
     }
 
     #[test]
@@ -201,6 +231,7 @@ mod tests {
         let fixtures = [
             root.join("case.pl"),
             root.join("case.pm"),
+            root.join("case.plx"),
             root.join("case.t"),
             root.join("case.psgi"),
             root.join("case.cgi"),
@@ -224,7 +255,8 @@ mod tests {
             .collect();
         names.sort();
 
-        let expected = vec!["case.cgi", "case.pl", "case.pm", "case.psgi", "case.t", "nested.pl"];
+        let expected =
+            vec!["case.cgi", "case.pl", "case.plx", "case.pm", "case.psgi", "case.t", "nested.pl"];
         assert_eq!(names, expected);
 
         fs::remove_dir_all(&root)?;
@@ -270,6 +302,7 @@ mod tests {
             root.join("upper.PL"),
             root.join("mixed.Pm"),
             root.join("suite.T"),
+            root.join("tool.PlX"),
             root.join("app.PsGi"),
             root.join("legacy.CgI"),
         ];
@@ -287,8 +320,63 @@ mod tests {
             .collect();
         names.sort();
 
-        let expected = vec!["app.PsGi", "legacy.CgI", "mixed.Pm", "suite.T", "upper.PL"];
+        let expected =
+            vec!["app.PsGi", "legacy.CgI", "mixed.Pm", "suite.T", "tool.PlX", "upper.PL"];
         assert_eq!(names, expected);
+
+        fs::remove_dir_all(&root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn corpus_paths_discover_prefers_env_root() -> Result<(), Box<dyn std::error::Error>> {
+        let root = temp_root("perl_corpus_env_root")?;
+        let _env_guard = EnvVarGuard::set(CORPUS_ROOT_ENV, &root);
+
+        let discovered = CorpusPaths::discover();
+        assert_eq!(discovered.root, root);
+        assert_eq!(discovered.test_corpus, discovered.root.join("test_corpus"));
+        assert_eq!(discovered.fuzz, discovered.root.join("crates/perl-corpus/fuzz"));
+
+        fs::remove_dir_all(&root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn get_all_test_files_is_sorted_and_deduplicated() -> Result<(), Box<dyn std::error::Error>> {
+        let root = temp_root("perl_corpus_all_files")?;
+        let test_dir = root.join("test_corpus");
+        let fuzz_dir = root.join("crates/perl-corpus/fuzz");
+        fs::create_dir_all(&test_dir)?;
+        fs::create_dir_all(&fuzz_dir)?;
+
+        let shared = test_dir.join("shared.pl");
+        fs::write(&shared, "print 1;\n")?;
+        fs::write(test_dir.join("zzz.pm"), "1;\n")?;
+        fs::write(fuzz_dir.join("aaa.pl"), "print 2;\n")?;
+
+        let paths = CorpusPaths::from_root(root.clone());
+        let mut all: Vec<PathBuf> =
+            get_corpus_files_from(&paths).into_iter().map(|file| file.path).collect();
+        all.sort();
+        all.dedup();
+
+        let mut from_api = {
+            let _env_guard = EnvVarGuard::set(CORPUS_ROOT_ENV, &root);
+            get_all_test_files()
+        };
+        from_api.sort();
+        from_api.dedup();
+
+        assert_eq!(from_api, all);
+        assert_eq!(
+            from_api.first().and_then(|p| p.file_name()).and_then(|n| n.to_str()),
+            Some("aaa.pl")
+        );
+        assert_eq!(
+            from_api.last().and_then(|p| p.file_name()).and_then(|n| n.to_str()),
+            Some("zzz.pm")
+        );
 
         fs::remove_dir_all(&root)?;
         Ok(())

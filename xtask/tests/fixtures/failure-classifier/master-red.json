@@ -1,0 +1,27 @@
+{
+  "pr": {
+    "number": 7001,
+    "head_sha": "pr-head-111",
+    "master_sha": "master-aaa",
+    "behind_master": false,
+    "changed_files": ["crates/perl-lsp-rs/src/lib.rs"]
+  },
+  "pr_checks": [
+    {
+      "name": "ci / test",
+      "signature": "ci / test: parser panic",
+      "sha": "pr-head-111",
+      "conclusion": "failure",
+      "files": ["crates/perl-lsp-rs/src/lib.rs"]
+    }
+  ],
+  "master_checks": [
+    {
+      "name": "ci / test",
+      "signature": "ci / test: parser panic",
+      "sha": "master-aaa",
+      "conclusion": "failure"
+    }
+  ],
+  "affected_prs": [7001, 7004, 7008]
+}
