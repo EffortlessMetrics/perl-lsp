@@ -199,6 +199,17 @@ fn lint_workflow_file(path: &Path, is_fixture: bool, issues: &mut Vec<LintIssue>
         });
     }
 
+    if pull_request_has_label_triggers(&workflow)
+        && cancel_in_progress_cancels_all_pr_events(&workflow)
+    {
+        issues.push(LintIssue {
+            level: "error",
+            code: "LABEL_EVENT_CANCELS_PR_RUN",
+            workflow: workflow_name.clone(),
+            message: "pull_request labeled/unlabeled workflows must not cancel in-progress PR runs; use github.event.action == 'synchronize' or remove label triggers".to_string(),
+        });
+    }
+
     if POLICY_WARN_UNPINNED_ACTIONS {
         for action in collect_unpinned_actions(&workflow) {
             issues.push(LintIssue {
@@ -425,6 +436,46 @@ fn blanket_cancel_in_progress(workflow: &Value) -> bool {
         .unwrap_or(false)
 }
 
+fn pull_request_has_label_triggers(workflow: &Value) -> bool {
+    workflow
+        .get("on")
+        .and_then(Value::as_mapping)
+        .and_then(|mapping| mapping.get(Value::String("pull_request".to_string())))
+        .and_then(Value::as_mapping)
+        .and_then(|pull_request| pull_request.get(Value::String("types".to_string())))
+        .and_then(Value::as_sequence)
+        .is_some_and(|types| {
+            types
+                .iter()
+                .filter_map(Value::as_str)
+                .any(|event| event == "labeled" || event == "unlabeled")
+        })
+}
+
+fn cancel_in_progress_cancels_all_pr_events(workflow: &Value) -> bool {
+    let Some(concurrency) = workflow.get("concurrency") else {
+        return false;
+    };
+
+    if let Some(enabled) = concurrency.as_bool() {
+        return enabled;
+    }
+
+    let Some(map) = concurrency.as_mapping() else {
+        return false;
+    };
+
+    let Some(cancel) = map.get(Value::String("cancel-in-progress".to_string())) else {
+        return false;
+    };
+
+    if let Some(enabled) = cancel.as_bool() {
+        return enabled;
+    }
+
+    cancel.as_str().is_some_and(|expr| expr.trim() == "${{ github.event_name == 'pull_request' }}")
+}
+
 fn collect_unpinned_actions(workflow: &Value) -> Vec<String> {
     let Some(jobs) = workflow.get("jobs").and_then(Value::as_mapping) else {
         return Vec::new();
@@ -495,6 +546,24 @@ mod tests {
         let mut issues = Vec::new();
         lint_workflow_file(&path, true, &mut issues)?;
         assert!(issues.iter().all(|issue| issue.level != "error"));
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_label_event_cancel_expression_fails() -> Result<()> {
+        let path = fixture_path("label_event_cancel_expression.yml")?;
+        let mut issues = Vec::new();
+        lint_workflow_file(&path, true, &mut issues)?;
+        assert!(issues.iter().any(|issue| issue.code == "LABEL_EVENT_CANCELS_PR_RUN"));
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_label_event_synchronize_cancel_passes() -> Result<()> {
+        let path = fixture_path("label_event_synchronize_cancel.yml")?;
+        let mut issues = Vec::new();
+        lint_workflow_file(&path, true, &mut issues)?;
+        assert!(issues.iter().all(|issue| issue.code != "LABEL_EVENT_CANCELS_PR_RUN"));
         Ok(())
     }
 

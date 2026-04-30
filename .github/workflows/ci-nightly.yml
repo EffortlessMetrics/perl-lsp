@@ -42,8 +42,8 @@ on:
 
 # Cancel in-flight runs on new pushes (saves minutes)
 concurrency:
-  group: ci-nightly-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-nightly-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
 
 permissions:
   contents: read
