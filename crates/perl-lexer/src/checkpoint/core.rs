@@ -96,10 +96,12 @@ impl LexerCheckpoint {
     /// Apply an edit to this checkpoint
     pub fn apply_edit(&mut self, start: usize, old_len: usize, new_len: usize) {
         if self.position > start {
-            if self.position >= start + old_len {
-                self.position = self.position - old_len + new_len;
+            if self.position >= start.saturating_add(old_len) {
+                self.position = self.position.saturating_sub(old_len).saturating_add(new_len);
+                self.current_pos = Position::start();
             } else {
                 self.position = start;
+                self.current_pos = Position::start();
                 self.mode = LexerMode::ExpectTerm;
                 self.delimiter_stack.clear();
                 self.in_prototype = false;

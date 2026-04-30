@@ -2,15 +2,16 @@ use super::*;
 use crate::LexerMode;
 
 #[test]
-fn test_checkpoint_creation() {
+fn test_checkpoint_creation() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let cp = LexerCheckpoint::new();
     assert_eq!(cp.position, 0);
     assert_eq!(cp.mode, LexerMode::ExpectTerm);
     assert!(cp.delimiter_stack.is_empty());
+    Ok(())
 }
 
 #[test]
-fn test_checkpoint_diff() {
+fn test_checkpoint_diff() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let cp1 = LexerCheckpoint::at_position(10);
     let mut cp2 = cp1.clone();
     cp2.position = 20;
@@ -20,10 +21,11 @@ fn test_checkpoint_diff() {
     assert_eq!(diff.position_delta, 10);
     assert!(diff.mode_changed);
     assert!(!diff.delimiter_stack_changed);
+    Ok(())
 }
 
 #[test]
-fn test_checkpoint_edit() {
+fn test_checkpoint_edit() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let mut cp = LexerCheckpoint::at_position(50);
     cp.apply_edit(10, 5, 10);
     assert_eq!(cp.position, 55);
@@ -35,13 +37,16 @@ fn test_checkpoint_edit() {
     let mut cp3 = LexerCheckpoint::at_position(50);
     cp3.apply_edit(45, 10, 5);
     assert_eq!(cp3.position, 45);
+    Ok(())
 }
 
 #[test]
-fn test_checkpoint_edit_start_boundary_no_change() {
+fn test_checkpoint_edit_start_boundary_no_change()
+-> std::result::Result<(), Box<dyn std::error::Error>> {
     let mut cp = LexerCheckpoint::at_position(50);
     cp.apply_edit(50, 3, 7);
     assert_eq!(cp.position, 50, "position equal to edit start should remain unchanged");
+    Ok(())
 }
 
 #[test]
@@ -72,7 +77,7 @@ fn test_find_before_binary_search() -> std::result::Result<(), Box<dyn std::erro
 }
 
 #[test]
-fn test_find_after_edges() {
+fn test_find_after_edges() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let mut cache = CheckpointCache::new(3);
     cache.add(LexerCheckpoint::at_position(10));
     cache.add(LexerCheckpoint::at_position(20));
@@ -81,4 +86,5 @@ fn test_find_after_edges() {
     assert_eq!(cache.find_after(10).map(|cp| cp.position), Some(10));
     assert_eq!(cache.find_after(11).map(|cp| cp.position), Some(20));
     assert!(cache.find_after(30).is_none());
+    Ok(())
 }
