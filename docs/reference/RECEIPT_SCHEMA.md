@@ -227,6 +227,30 @@ It uses `kind` instead of `check` (a pre-unification inconsistency — see §7).
 Constraint: `verdict: "clean"` requires `next_routes` to contain `"signoff_clean"` and
 `material_observations` must be non-empty (the schema enforces this via `allOf`).
 
+### 4.4.1 Review label projection receipt (`kind: "review_receipt"`)
+
+Reviewer agents should emit a structured review receipt and/or matching PR comment for the
+**current PR head SHA**; the queue reconciler is the label authority and projects/repairs labels
+from this evidence. Reviewers should not treat manual label edits as the primary control path.
+
+```json
+{
+  "kind": "review_receipt",
+  "schema_version": 1,
+  "pr": 1234,
+  "sha": "abcdef1234567890abcdef1234567890abcdef12",
+  "verdict": "approved",
+  "review_depth": "deep",
+  "fix_forward_applied": false,
+  "blocking_findings": [],
+  "labels_projected": []
+}
+```
+
+`verdict` vocabulary: `approved | needs_builder | needs_diff | needs_ci`
+
+`review_depth` vocabulary: `haiku_first | deep | security`
+
 ### 4.5 Aggregator (`check: "aggregator"`)
 
 **Schema file:** `.ci/receipts/schemas/aggregator-receipt.schema.json`
