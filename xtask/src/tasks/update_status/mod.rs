@@ -15,8 +15,14 @@
 //! Also keeps docs/project/ROADMAP.md compliance table in sync when lsp subsystem runs.
 
 use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+use std::thread;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, eyre};
@@ -143,6 +149,59 @@ fn replace_block(
     Ok(result.into_owned())
 }
 
+struct ProgressHeartbeat {
+    stop: Arc<AtomicBool>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl ProgressHeartbeat {
+    fn start(subsystem: &StatusSubsystem) -> Self {
+        let name = subsystem.as_str();
+        eprintln!("[update-status] starting subsystem: {name}");
+        let _ = io::stderr().flush();
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_clone = Arc::clone(&stop);
+        let name_owned = name.to_string();
+        let handle = thread::spawn(move || {
+            while !stop_clone.load(Ordering::Relaxed) {
+                thread::sleep(Duration::from_secs(30));
+                if stop_clone.load(Ordering::Relaxed) {
+                    break;
+                }
+                eprintln!("[update-status] subsystem '{}' is still running...", name_owned);
+                let _ = io::stderr().flush();
+            }
+        });
+
+        Self { stop, handle: Some(handle) }
+    }
+
+    fn finish(mut self, subsystem: &StatusSubsystem) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+        eprintln!("[update-status] completed subsystem: {}", subsystem.as_str());
+        let _ = io::stderr().flush();
+    }
+}
+
+fn run_subsystem<F>(subsystem: StatusSubsystem, mut work: F) -> Result<()>
+where
+    F: FnMut() -> Result<()>,
+{
+    let heartbeat = ProgressHeartbeat::start(&subsystem);
+    let result = work().with_context(|| {
+        format!(
+            "update-status subsystem '{}' failed; repro: cargo xtask update-status --write --only {}",
+            subsystem.as_str(),
+            subsystem.as_str()
+        )
+    });
+    heartbeat.finish(&subsystem);
+    result
+}
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
@@ -182,103 +241,130 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- LSP subsystem ---
     if need_lsp {
-        let cov = lsp::count_lsp_coverage(&root)?;
-        let compliance_table = lsp::compute_compliance_table(&root)?;
+        run_subsystem(StatusSubsystem::Lsp, || {
+            let cov = lsp::count_lsp_coverage(&root)?;
+            let compliance_table = lsp::compute_compliance_table(&root)?;
 
-        let lsp_path = root.join("docs/project/status/lsp.md");
-        let original_lsp =
-            fs::read_to_string(&lsp_path).context("reading docs/project/status/lsp.md")?;
-        let updated_lsp = lsp::generate_lsp_status(&cov, &compliance_table, &original_lsp)?;
-        if updated_lsp != original_lsp {
-            files_to_update.push(("docs/project/status/lsp.md", lsp_path, updated_lsp));
-        }
+            let lsp_path = root.join("docs/project/status/lsp.md");
+            let original_lsp =
+                fs::read_to_string(&lsp_path).context("reading docs/project/status/lsp.md")?;
+            let updated_lsp = lsp::generate_lsp_status(&cov, &compliance_table, &original_lsp)?;
+            if updated_lsp != original_lsp {
+                files_to_update.push(("docs/project/status/lsp.md", lsp_path, updated_lsp));
+            }
 
-        let roadmap_path = root.join("docs/project/ROADMAP.md");
-        let original_roadmap =
-            fs::read_to_string(&roadmap_path).context("reading docs/project/ROADMAP.md")?;
-        let updated_roadmap = lsp::update_roadmap(&root, &original_roadmap)?;
-        if updated_roadmap != original_roadmap {
-            files_to_update.push(("docs/project/ROADMAP.md", roadmap_path, updated_roadmap));
-        }
+            let roadmap_path = root.join("docs/project/ROADMAP.md");
+            let original_roadmap =
+                fs::read_to_string(&roadmap_path).context("reading docs/project/ROADMAP.md")?;
+            let updated_roadmap = lsp::update_roadmap(&root, &original_roadmap)?;
+            if updated_roadmap != original_roadmap {
+                files_to_update.push(("docs/project/ROADMAP.md", roadmap_path, updated_roadmap));
+            }
+            Ok(())
+        })?;
     }
 
     // --- Tests subsystem ---
     if need_tests {
-        let test_counts = tests::count_tests(&root);
-        let missing_docs_current = tests::count_missing_docs_perl_parser(&root);
-        let missing_docs_baseline = tests::read_missing_docs_baseline(&root);
+        run_subsystem(StatusSubsystem::Tests, || {
+            let test_counts = tests::count_tests(&root);
+            let missing_docs_current = tests::count_missing_docs_perl_parser(&root);
+            let missing_docs_baseline = tests::read_missing_docs_baseline(&root);
 
-        let tests_path = root.join("docs/project/status/tests.md");
-        let original_tests =
-            fs::read_to_string(&tests_path).context("reading docs/project/status/tests.md")?;
-        let updated_tests = tests::generate_tests_status(
-            &test_counts,
-            missing_docs_current,
-            missing_docs_baseline,
-            &original_tests,
-        )?;
-        if updated_tests != original_tests {
-            files_to_update.push(("docs/project/status/tests.md", tests_path, updated_tests));
-        }
+            let tests_path = root.join("docs/project/status/tests.md");
+            let original_tests =
+                fs::read_to_string(&tests_path).context("reading docs/project/status/tests.md")?;
+            let updated_tests = tests::generate_tests_status(
+                &test_counts,
+                missing_docs_current,
+                missing_docs_baseline,
+                &original_tests,
+            )?;
+            if updated_tests != original_tests {
+                files_to_update.push(("docs/project/status/tests.md", tests_path, updated_tests));
+            }
+            Ok(())
+        })?;
     }
 
     // --- Parser subsystem ---
     if need_parser {
-        let parser_metrics = parser::collect_parser_metrics(&root);
+        run_subsystem(StatusSubsystem::Parser, || {
+            let parser_metrics = parser::collect_parser_metrics(&root);
 
-        let parser_path = root.join("docs/project/status/parser.md");
-        let original_parser =
-            fs::read_to_string(&parser_path).context("reading docs/project/status/parser.md")?;
-        let updated_parser = parser::generate_parser_status(&parser_metrics, &original_parser)?;
-        if updated_parser != original_parser {
-            files_to_update.push(("docs/project/status/parser.md", parser_path, updated_parser));
-        }
+            let parser_path = root.join("docs/project/status/parser.md");
+            let original_parser = fs::read_to_string(&parser_path)
+                .context("reading docs/project/status/parser.md")?;
+            let updated_parser = parser::generate_parser_status(&parser_metrics, &original_parser)?;
+            if updated_parser != original_parser {
+                files_to_update.push((
+                    "docs/project/status/parser.md",
+                    parser_path,
+                    updated_parser,
+                ));
+            }
+            Ok(())
+        })?;
     }
 
     // --- Quality subsystem ---
     if need_quality {
-        let quality_path = root.join("docs/project/status/quality.md");
-        let original_quality =
-            fs::read_to_string(&quality_path).context("reading docs/project/status/quality.md")?;
-        let updated_quality = quality::generate_quality_status(&root, &original_quality)?;
-        if updated_quality != original_quality {
-            files_to_update.push(("docs/project/status/quality.md", quality_path, updated_quality));
-        }
+        run_subsystem(StatusSubsystem::Quality, || {
+            let quality_path = root.join("docs/project/status/quality.md");
+            let original_quality = fs::read_to_string(&quality_path)
+                .context("reading docs/project/status/quality.md")?;
+            let updated_quality = quality::generate_quality_status(&root, &original_quality)?;
+            if updated_quality != original_quality {
+                files_to_update.push((
+                    "docs/project/status/quality.md",
+                    quality_path,
+                    updated_quality,
+                ));
+            }
 
-        let ux_path = root.join("docs/project/status/editor_ux.json");
-        let original_ux = fs::read_to_string(&ux_path).unwrap_or_default();
-        let updated_ux = editor_ux::generate_editor_ux_receipt(&root)?;
-        if updated_ux != original_ux {
-            files_to_update.push(("docs/project/status/editor_ux.json", ux_path, updated_ux));
-        }
+            let ux_path = root.join("docs/project/status/editor_ux.json");
+            let original_ux = fs::read_to_string(&ux_path).unwrap_or_default();
+            let updated_ux = editor_ux::generate_editor_ux_receipt(&root)?;
+            if updated_ux != original_ux {
+                files_to_update.push(("docs/project/status/editor_ux.json", ux_path, updated_ux));
+            }
+            Ok(())
+        })?;
     }
 
     // --- DAP subsystem ---
     if need_dap {
-        let dap_counts = dap::count_dap_tests(&root);
+        run_subsystem(StatusSubsystem::Dap, || {
+            let dap_counts = dap::count_dap_tests(&root);
 
-        let dap_path = root.join("docs/project/status/dap.md");
-        let original_dap =
-            fs::read_to_string(&dap_path).context("reading docs/project/status/dap.md")?;
-        let updated_dap = dap::generate_dap_status(&root, &dap_counts, &original_dap)?;
-        if updated_dap != original_dap {
-            files_to_update.push(("docs/project/status/dap.md", dap_path, updated_dap));
-        }
+            let dap_path = root.join("docs/project/status/dap.md");
+            let original_dap =
+                fs::read_to_string(&dap_path).context("reading docs/project/status/dap.md")?;
+            let updated_dap = dap::generate_dap_status(&root, &dap_counts, &original_dap)?;
+            if updated_dap != original_dap {
+                files_to_update.push(("docs/project/status/dap.md", dap_path, updated_dap));
+            }
+            Ok(())
+        })?;
     }
 
     // --- Workspace subsystem ---
     if need_workspace {
-        let workspace_path = root.join("docs/project/status/workspace.md");
-        let original_workspace = fs::read_to_string(&workspace_path)
-            .context("reading docs/project/status/workspace.md")?;
-        let updated_workspace = workspace::generate_workspace_status(&root, &original_workspace)?;
-        if updated_workspace != original_workspace {
-            files_to_update.push((
-                "docs/project/status/workspace.md",
-                workspace_path,
-                updated_workspace,
-            ));
-        }
+        run_subsystem(StatusSubsystem::Workspace, || {
+            let workspace_path = root.join("docs/project/status/workspace.md");
+            let original_workspace = fs::read_to_string(&workspace_path)
+                .context("reading docs/project/status/workspace.md")?;
+            let updated_workspace =
+                workspace::generate_workspace_status(&root, &original_workspace)?;
+            if updated_workspace != original_workspace {
+                files_to_update.push((
+                    "docs/project/status/workspace.md",
+                    workspace_path,
+                    updated_workspace,
+                ));
+            }
+            Ok(())
+        })?;
     }
 
     if files_to_update.is_empty() {
