@@ -50,7 +50,7 @@
 //! ```
 
 use crate::ast::{Node, NodeKind};
-use crate::pragma_tracker::{PragmaState, PragmaTracker};
+use crate::pragma_tracker::{PragmaQueryCursor, PragmaState};
 use perl_module::import::resolve_known_export_tag;
 use rustc_hash::FxHashMap;
 use std::cell::{Cell, RefCell};
@@ -58,27 +58,43 @@ use std::collections::HashSet;
 use std::ops::Range;
 use std::rc::Rc;
 
+/// Category of scope-related issue detected during analysis.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum IssueKind {
+    /// A variable declared in an inner scope shadows one in an outer scope.
     VariableShadowing,
+    /// A declared variable is never read.
     UnusedVariable,
+    /// A variable is used without a prior declaration (`my`/`our`/`local`).
     UndeclaredVariable,
+    /// The same variable name is declared twice in the same scope.
     VariableRedeclaration,
+    /// A subroutine parameter name appears more than once in the signature.
     DuplicateParameter,
+    /// A parameter name shadows a package-level (`our`) variable.
     ParameterShadowsGlobal,
+    /// A subroutine parameter is never used inside the body.
     UnusedParameter,
+    /// A bareword was used where a string or identifier was expected.
     UnquotedBareword,
+    /// A variable was accessed before any initializing assignment.
     UninitializedVariable,
     /// Capture variable (`$1`, `$2`, etc.) used with no preceding regex match in scope.
     CaptureVarWithoutRegexMatch,
 }
 
+/// A single scope-analysis finding with location and human-readable description.
 #[derive(Debug, Clone)]
 pub struct ScopeIssue {
+    /// The category of scope problem detected.
     pub kind: IssueKind,
+    /// The bare variable name (without sigil) involved in the issue.
     pub variable_name: String,
+    /// Zero-based line number of the first token of the offending construct.
     pub line: usize,
+    /// Byte offset range `(start, end)` of the offending construct.
     pub range: (usize, usize),
+    /// Human-readable explanation of the issue.
     pub description: String,
 }
 
@@ -359,6 +375,7 @@ enum ExtractedName<'a> {
 struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
+    pragma_cursor: RefCell<PragmaQueryCursor>,
     imported_barewords: HashSet<String>,
     line_starts: RefCell<Option<Vec<usize>>>,
     /// Current package name, updated as `package` statements are traversed.
@@ -370,10 +387,15 @@ impl<'a> AnalysisContext<'a> {
         Self {
             code,
             pragma_map,
+            pragma_cursor: RefCell::new(PragmaQueryCursor::new()),
             imported_barewords: collect_imported_barewords(ast),
             line_starts: RefCell::new(None),
             current_package: RefCell::new("main".to_string()),
         }
+    }
+
+    fn pragma_state_for_offset(&self, offset: usize) -> PragmaState {
+        self.pragma_cursor.borrow_mut().state_for_offset(self.pragma_map, offset)
     }
 
     fn has_imported_bareword(&self, name: &str) -> bool {
@@ -444,6 +466,11 @@ impl<'a> ExtractedName<'a> {
     }
 }
 
+/// Analyzes an AST for scope-related issues such as unused variables and shadowing.
+///
+/// Produces a list of [`ScopeIssue`]s that can be surfaced as LSP diagnostics
+/// or used by the refactoring engine.  The analyzer is stateless and may be
+/// reused across multiple invocations.
 pub struct ScopeAnalyzer;
 
 impl Default for ScopeAnalyzer {
@@ -453,6 +480,7 @@ impl Default for ScopeAnalyzer {
 }
 
 impl ScopeAnalyzer {
+    /// Create a new scope analyzer instance.
     pub fn new() -> Self {
         Self
     }
@@ -554,6 +582,9 @@ impl ScopeAnalyzer {
         })
     }
 
+    /// Analyze `ast` for scope issues, using `pragma_map` to honour `use strict` regions.
+    ///
+    /// Returns all detected issues sorted by byte offset.
     pub fn analyze(
         &self,
         ast: &Node,
@@ -585,7 +616,7 @@ impl ScopeAnalyzer {
         context: &AnalysisContext<'a>,
     ) {
         // Get effective pragma state at this node's location
-        let pragma_state = PragmaTracker::state_for_offset(context.pragma_map, node.location.start);
+        let pragma_state = context.pragma_state_for_offset(node.location.start);
         let strict_vars_mode = pragma_state.strict_vars || pragma_state.signatures_strict;
         let strict_subs_mode = pragma_state.strict_subs || pragma_state.signatures_strict;
         match &node.kind {
@@ -1797,6 +1828,7 @@ impl ScopeAnalyzer {
         false
     }
 
+    /// Return one human-readable fix suggestion per issue.
     pub fn get_suggestions(&self, issues: &[ScopeIssue]) -> Vec<String> {
         issues
             .iter()
@@ -1942,7 +1974,10 @@ fn collect_imported_barewords(ast: &Node) -> HashSet<String> {
         }
     }
 
-    fn visit(node: &Node, imported: &mut HashSet<String>) {
+    // `in_eval` — when true we are inside a runtime `eval { }` block and
+    // `require` statements are no longer static; skip the require+import
+    // suppression analysis for the current block.
+    fn visit(node: &Node, imported: &mut HashSet<String>, in_eval: bool) {
         if let NodeKind::Use { module, args, .. } = &node.kind {
             for arg in args {
                 if arg.starts_with("qw") {
@@ -1957,26 +1992,29 @@ fn collect_imported_barewords(ast: &Node) -> HashSet<String> {
                     push_symbol(imported, module, arg);
                 }
             }
-        } else if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind
-        {
-            let required_modules: HashSet<String> = statements
-                .iter()
-                .filter_map(|stmt| require_module_name(inner_node(stmt)))
-                .collect();
-            if !required_modules.is_empty() {
-                for stmt in statements {
-                    maybe_record_manual_imports(inner_node(stmt), &required_modules, imported);
+        } else if !in_eval {
+            if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind {
+                let required_modules: HashSet<String> = statements
+                    .iter()
+                    .filter_map(|stmt| require_module_name(inner_node(stmt)))
+                    .collect();
+                if !required_modules.is_empty() {
+                    for stmt in statements {
+                        maybe_record_manual_imports(inner_node(stmt), &required_modules, imported);
+                    }
                 }
             }
         }
 
+        // Propagate eval context: children of an Eval block are runtime.
+        let child_in_eval = in_eval || matches!(&node.kind, NodeKind::Eval { .. });
         for child in node.children() {
-            visit(child, imported);
+            visit(child, imported, child_in_eval);
         }
     }
 
     let mut imported = HashSet::new();
-    visit(ast, &mut imported);
+    visit(ast, &mut imported, false);
     imported
 }
 

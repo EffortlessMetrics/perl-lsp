@@ -252,6 +252,26 @@ fn known_feature_name(name: &str) -> Option<&'static str> {
     }
 }
 
+const ALL_KNOWN_FEATURES: &[&str] = &[
+    "say",
+    "state",
+    "switch",
+    "unicode_strings",
+    "unicode_eval",
+    "evalbytes",
+    "current_sub",
+    "fc",
+    "postfix_deref",
+    "try",
+    "signatures",
+    "defer",
+    "isa",
+    "class",
+    "field",
+    "method",
+    "builtin",
+];
+
 fn enable_feature_name(state: &mut PragmaState, name: &str) -> bool {
     if name == "signatures" {
         state.signatures_strict = true;
@@ -302,7 +322,7 @@ fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) 
     for arg in args {
         for item in feature_items(arg) {
             if enabled && item == ":all" {
-                for feature in features_enabled_by_version(PerlVersion::new(5, 40)) {
+                for feature in ALL_KNOWN_FEATURES {
                     changed |= enable_feature_name(state, feature);
                 }
                 continue;
@@ -405,6 +425,10 @@ fn pragma_arg_items(arg: &str) -> Vec<String> {
         return inner.split_whitespace().map(|item| item.to_string()).collect();
     }
 
+    if trimmed.contains(char::is_whitespace) {
+        return trimmed.split_whitespace().map(|item| item.to_string()).collect();
+    }
+
     vec![trimmed.to_string()]
 }
 
@@ -458,6 +482,67 @@ fn conditional_pragma_target(args: &[String]) -> Option<(&str, &[String])> {
 /// Tracks pragma state throughout a Perl file
 pub struct PragmaTracker;
 
+/// Monotonic query cursor for repeated pragma lookups.
+///
+/// Reuse a single cursor when querying offsets in non-decreasing order to
+/// avoid repeated binary searches over the pragma map.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct PragmaQueryCursor {
+    index: usize,
+}
+
+impl PragmaQueryCursor {
+    /// Create a new cursor positioned before the start of the map.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Query state at `offset` assuming lookups are mostly non-decreasing.
+    ///
+    /// If the caller queries an older offset, this falls back to a binary
+    /// search and repositions the cursor.
+    pub fn state_for_offset(
+        &mut self,
+        pragma_map: &[(Range<usize>, PragmaState)],
+        offset: usize,
+    ) -> PragmaState {
+        if pragma_map.is_empty() {
+            return PragmaState::default();
+        }
+
+        if self.index >= pragma_map.len() {
+            self.index = pragma_map.len() - 1;
+        }
+
+        if pragma_map[self.index].0.start > offset {
+            self.index = pragma_map.partition_point(|(range, _)| range.start <= offset);
+            if self.index > 0 {
+                self.index -= 1;
+            }
+        } else {
+            while self.index + 1 < pragma_map.len() && pragma_map[self.index + 1].0.start <= offset
+            {
+                self.index += 1;
+            }
+        }
+
+        let mut state = if pragma_map[self.index].0.start <= offset {
+            pragma_map[self.index].1.clone()
+        } else {
+            PragmaState::default()
+        };
+
+        if state.signatures_strict {
+            state.strict_vars = true;
+            state.strict_subs = true;
+            state.strict_refs = true;
+        }
+
+        state
+    }
+}
+
 impl PragmaTracker {
     /// Build a range-indexed pragma map from an AST
     pub fn build(ast: &Node) -> Vec<(Range<usize>, PragmaState)> {
@@ -486,6 +571,20 @@ impl PragmaTracker {
 
         let mut state =
             if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() };
+
+        if state.signatures_strict {
+            state.strict_vars = true;
+            state.strict_subs = true;
+            state.strict_refs = true;
+        }
+
+        state
+    }
+
+    /// Get the final top-level pragma state after all lexical scopes close.
+    #[must_use]
+    pub fn final_state(pragma_map: &[(Range<usize>, PragmaState)]) -> PragmaState {
+        let mut state = pragma_map.last().map_or_else(PragmaState::default, |(_, s)| s.clone());
 
         if state.signatures_strict {
             state.strict_vars = true;
@@ -531,11 +630,13 @@ impl PragmaTracker {
                                 current_state.strict_refs = true;
                             } else {
                                 for arg in conditional_args {
-                                    match normalized_pragma_token(arg) {
-                                        "vars" => current_state.strict_vars = true,
-                                        "subs" => current_state.strict_subs = true,
-                                        "refs" => current_state.strict_refs = true,
-                                        _ => {}
+                                    for item in pragma_arg_items(arg) {
+                                        match item.as_str() {
+                                            "vars" => current_state.strict_vars = true,
+                                            "subs" => current_state.strict_subs = true,
+                                            "refs" => current_state.strict_refs = true,
+                                            _ => {}
+                                        }
                                     }
                                 }
                             }
@@ -710,11 +811,13 @@ impl PragmaTracker {
                                 current_state.strict_refs = false;
                             } else {
                                 for arg in conditional_args {
-                                    match normalized_pragma_token(arg) {
-                                        "vars" => current_state.strict_vars = false,
-                                        "subs" => current_state.strict_subs = false,
-                                        "refs" => current_state.strict_refs = false,
-                                        _ => {}
+                                    for item in pragma_arg_items(arg) {
+                                        match item.as_str() {
+                                            "vars" => current_state.strict_vars = false,
+                                            "subs" => current_state.strict_subs = false,
+                                            "refs" => current_state.strict_refs = false,
+                                            _ => {}
+                                        }
                                     }
                                 }
                             }
@@ -819,6 +922,10 @@ impl PragmaTracker {
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     "warnings" => {
+                        let warnings_before = current_state.warnings;
+                        let had_disabled_before =
+                            !current_state.disabled_warning_categories.is_empty();
+                        let before = current_state.disabled_warning_categories.len();
                         if args.is_empty() {
                             // `no warnings;` — disable all warnings globally
                             current_state.warnings = false;
@@ -834,8 +941,17 @@ impl PragmaTracker {
                                 add_disabled_warning_category(current_state, category);
                             }
                         }
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        let changed = if args.is_empty() {
+                            warnings_before || had_disabled_before
+                        } else {
+                            current_state.disabled_warning_categories.len() != before
+                        };
+                        if changed {
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                        }
                     }
                     "utf8" => {
                         current_state.utf8 = false;

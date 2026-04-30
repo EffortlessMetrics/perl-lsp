@@ -204,6 +204,44 @@ my $x = unknown_function();
     Ok(())
 }
 
+/// Validates goto-definition on a `goto &sub_name` target resolves to the subroutine declaration.
+#[test]
+fn test_go_to_sub_definition_from_goto_ampersand() -> TestResult {
+    let doc = r#"
+sub target {
+    return 42;
+}
+
+sub jump {
+    goto &target;
+}
+"#;
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///goto_sub.pl", doc)?;
+
+    let result = harness
+        .request(
+            "textDocument/definition",
+            json!({
+                "textDocument": {"uri": "file:///goto_sub.pl"},
+                "position": {"line": 6, "character": 10}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    let locations = result.as_array().ok_or("expected goto &sub definition array result")?;
+    assert!(!locations.is_empty(), "goto &sub should resolve to subroutine declaration");
+    assert_valid_location(&locations[0]);
+
+    let def_line =
+        locations[0].pointer("/range/start/line").and_then(|line_value| line_value.as_u64());
+    assert_eq!(def_line, Some(1), "goto &target should jump to sub target declaration");
+
+    Ok(())
+}
+
 /// Tests feature spec: navigation.rs#declaration-provider
 ///
 /// Validates that textDocument/declaration works for finding variable declarations.

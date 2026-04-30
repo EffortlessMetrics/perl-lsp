@@ -1310,15 +1310,18 @@ fn workspace_index_empty_search() -> Result<(), Box<dyn std::error::Error>> {
 fn workspace_index_duplicate_uri_update() -> Result<(), Box<dyn std::error::Error>> {
     use perl_semantic_analyzer::analysis::index::WorkspaceIndex;
 
+    // NOTE: avoid names like `v1`/`v2` — the lexer treats `vNNN` as a
+    // Perl v-string token (chr(N)), so the parser never emits a Subroutine
+    // symbol and `find_defs` returns nothing.  Use plain identifiers instead.
     let mut index = WorkspaceIndex::new();
-    let table1 = parse_and_extract("sub v1 { 1 }");
+    let table1 = parse_and_extract("sub version_one { 1 }");
     index.update_from_document("file:///same.pl", "", &table1);
-    assert_eq!(index.find_defs("v1").len(), 1);
+    assert_eq!(index.find_defs("version_one").len(), 1);
 
-    let table2 = parse_and_extract("sub v2 { 2 }");
+    let table2 = parse_and_extract("sub version_two { 2 }");
     index.update_from_document("file:///same.pl", "", &table2);
-    assert_eq!(index.find_defs("v1").len(), 0);
-    assert_eq!(index.find_defs("v2").len(), 1);
+    assert_eq!(index.find_defs("version_one").len(), 0);
+    assert_eq!(index.find_defs("version_two").len(), 1);
     assert_eq!(index.file_count(), 1);
     Ok(())
 }
