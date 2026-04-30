@@ -1706,21 +1706,24 @@ fn run_shell_command_with_timeout(
 
     let start = Instant::now();
     let timeout = Duration::from_secs(timeout_secs);
-    let timed_out = loop {
-        if let Some(_status) = child.try_wait().context("Failed waiting on gate process")? {
-            break false;
+
+    // Poll until the process exits or the deadline elapses.
+    // Capture exit_code inside the loop so the timed-out branch never calls
+    // wait() a second time (which would be a double-wait and returns an error
+    // on Windows). Synthetic exit code 124 follows the GNU timeout(1) convention.
+    let (timed_out, exit_code) = loop {
+        if let Some(status) = child.try_wait().context("Failed waiting on gate process")? {
+            break (false, status.code().unwrap_or(-1));
         }
         if start.elapsed() >= timeout {
             child.kill().ok();
             child.wait().ok();
-            break true;
+            break (true, 124_i32);
         }
         thread::sleep(Duration::from_millis(100));
     };
 
-    let status = child.wait().context("Failed to read gate process exit status")?;
     let stdout = fs::read_to_string(log_path).unwrap_or_default();
-    let exit_code = status.code().unwrap_or(if timed_out { 124 } else { -1 });
 
     Ok(ShellExecutionResult { stdout, exit_code, timed_out })
 }
@@ -2975,11 +2978,10 @@ mod tests {
     fn shell_command_timeout_marks_execution_and_writes_log() -> color_eyre::eyre::Result<()> {
         let tmp = tempdir()?;
         let log_path = tmp.path().join("timeout.log");
-        let command = if cfg!(windows) {
-            r#"powershell -NoProfile -Command "Start-Sleep -Seconds 2""#
-        } else {
-            "sleep 2"
-        };
+        // On Windows, cmd /C PowerShell quoting is unreliable for embedded double
+        // quotes; use ping -n 4 (sends 4 ICMP echo requests ~1s apart, ~3s total)
+        // as a portable delay that works through cmd.exe without quote issues.
+        let command = if cfg!(windows) { "ping -n 4 127.0.0.1" } else { "sleep 3" };
 
         let execution = run_shell_command_with_timeout(command, &log_path, 1)?;
 
@@ -2997,10 +2999,12 @@ mod tests {
             tier: "merge_gate".to_string(),
             description: "Synthetic timeout gate for regression coverage".to_string(),
             required: true,
+            // Same rationale as shell_command_timeout_marks_execution_and_writes_log:
+            // ping -n 4 is the Windows-safe delay that survives cmd.exe quoting.
             command: if cfg!(windows) {
-                r#"powershell -NoProfile -Command "Start-Sleep -Seconds 2""#.to_string()
+                "ping -n 4 127.0.0.1".to_string()
             } else {
-                "sleep 2".to_string()
+                "sleep 3".to_string()
             },
             timeout_seconds: 1,
             retry_count: 0,
