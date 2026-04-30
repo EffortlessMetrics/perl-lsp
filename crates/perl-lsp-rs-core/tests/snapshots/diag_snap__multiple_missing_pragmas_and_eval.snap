@@ -1,0 +1,8 @@
+---
+source: crates/perl-lsp-rs-core/tests/diag_snap.rs
+expression: snapshot
+---
+PL100 | Information | (0, 0) | Consider adding 'use strict;' for better error checking | Add 'use strict;' at the top of the file
+PL101 | Information | (0, 0) | Consider adding 'use warnings;' for better error detection | Add 'use warnings;' at the top of the file
+PL102 | Warning | (76, 83) | Variable '$unused' is declared but never used -- prefix with '_' or remove it | Prefix as '_unused'
+PL600 | Warning | (58, 71) | String eval is a security risk. Consider eval { } for exception handling. | Use eval { } for exception handling, or consider safer alternatives like Try::Tiny
