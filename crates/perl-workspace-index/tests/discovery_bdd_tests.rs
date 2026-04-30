@@ -221,3 +221,52 @@ fn given_git_workspace_with_perl_adjacent_extensions_when_discovering_then_git_s
 
     Ok(())
 }
+
+#[test]
+fn given_walk_discovery_with_only_skipped_dirs_when_discovering_then_sources_are_excluded() -> TestResult {
+    let tmp = TempDir::new()?;
+    let root = tmp.path();
+
+    create_file(root, "target/generated/Hidden.pm")?;
+    create_file(root, ".cache/index/AlsoHidden.pl")?;
+    create_file(root, "lib/Visible.pm")?;
+
+    let result = discover_perl_files(root);
+
+    assert_eq!(result.method, DiscoveryMethod::Walk);
+    assert_eq!(result.files.len(), 1);
+    assert!(result.files.iter().any(|path| path.ends_with("lib/Visible.pm")));
+    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains("target/generated")));
+    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains(".cache/index")));
+    assert!(result.excluded_count >= 2);
+
+    Ok(())
+}
+
+#[test]
+fn given_git_workspace_with_mixed_case_extensions_when_discovering_then_git_strategy_keeps_them()
+-> TestResult {
+    if !git_available() {
+        return Ok(());
+    }
+
+    let tmp = TempDir::new()?;
+    let root = tmp.path();
+
+    run_git(root, &["init", "--quiet"])?;
+    create_file(root, "templates/a.TT2")?;
+    create_file(root, "templates/b.eP")?;
+    create_file(root, "native/c.xS")?;
+    create_file(root, "notes.md")?;
+
+    let result = discover_perl_files(root);
+
+    assert_eq!(result.method, DiscoveryMethod::Git);
+    assert_eq!(result.files.len(), 3);
+    assert!(result.files.iter().any(|path| path.ends_with("templates/a.TT2")));
+    assert!(result.files.iter().any(|path| path.ends_with("templates/b.eP")));
+    assert!(result.files.iter().any(|path| path.ends_with("native/c.xS")));
+    assert!(!result.files.iter().any(|path| path.ends_with("notes.md")));
+
+    Ok(())
+}
