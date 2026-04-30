@@ -151,21 +151,12 @@ impl PerlParser {
     }
 
     /// Parses Perl source bytes using this parser instance.
-    pub fn parse_bytes(
-        &mut self,
-        code: &[u8],
-    ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-        match self.parser.parse(code, None) {
-            Some(tree) => Ok(tree),
-            None => Err("Failed to parse code".into()),
-        }
+    pub fn parse_bytes(&mut self, code: &[u8]) -> Result<tree_sitter::Tree, ParsePerlError> {
+        try_parse_with_parser(&mut self.parser, code)
     }
 
     /// Parses Perl source text using this parser instance.
-    pub fn parse_code(
-        &mut self,
-        code: &str,
-    ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
+    pub fn parse_code(&mut self, code: &str) -> Result<tree_sitter::Tree, ParsePerlError> {
         self.parse_bytes(code.as_bytes())
     }
 }
@@ -244,10 +235,18 @@ pub fn parse_perl_bytes_with_parser(
     parser: &mut Parser,
     code: &[u8],
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    match parser.parse(code, None) {
-        Some(tree) => Ok(tree),
-        None => Err("Failed to parse code".into()),
-    }
+    try_parse_perl_bytes_with_parser(parser, code).map_err(Into::into)
+}
+
+/// Parses Perl source bytes using a caller-provided configured [`tree_sitter::Parser`].
+///
+/// This typed variant allows callers to explicitly handle parse cancellation/timeouts
+/// (`None` from tree-sitter) as [`ParsePerlError::ParseReturnedNone`].
+pub fn try_parse_perl_bytes_with_parser(
+    parser: &mut Parser,
+    code: &[u8],
+) -> Result<tree_sitter::Tree, ParsePerlError> {
+    try_parse_with_parser(parser, code)
 }
 
 /// Parses a Perl source string and returns the resulting [`tree_sitter::Tree`].
@@ -290,7 +289,18 @@ pub fn parse_perl_code_with_parser(
     parser: &mut Parser,
     code: &str,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    parse_perl_bytes_with_parser(parser, code.as_bytes())
+    try_parse_perl_code_with_parser(parser, code).map_err(Into::into)
+}
+
+/// Parses a Perl source string using a caller-provided configured [`tree_sitter::Parser`].
+///
+/// This typed variant allows callers to explicitly handle parse cancellation/timeouts
+/// (`None` from tree-sitter) as [`ParsePerlError::ParseReturnedNone`].
+pub fn try_parse_perl_code_with_parser(
+    parser: &mut Parser,
+    code: &str,
+) -> Result<tree_sitter::Tree, ParsePerlError> {
+    try_parse_perl_bytes_with_parser(parser, code.as_bytes())
 }
 
 /// Reads a file from `path` and parses it as Perl source.

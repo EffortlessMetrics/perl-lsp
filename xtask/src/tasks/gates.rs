@@ -610,7 +610,7 @@ pub fn run(config: GateRunnerConfig) -> Result<()> {
 
     // Load gate policy
     let policy_path = root.join(".ci/gate-policy.yaml");
-    let policy = load_policy(&policy_path)?;
+    let policy = load_policy_for_inspection(&policy_path)?;
 
     // Handle list mode against the static policy catalog. Dynamic PR-fast scope
     // planning is run only for actual execution/diff receipts.
@@ -656,7 +656,7 @@ pub fn run(config: GateRunnerConfig) -> Result<()> {
 }
 
 /// Load gate policy from YAML file
-fn load_policy(path: &PathBuf) -> Result<GatePolicy> {
+pub(crate) fn load_policy_for_inspection(path: &Path) -> Result<GatePolicy> {
     let content = fs::read_to_string(path)
         .with_context(|| format!("Failed to read gate policy from {}", path.display()))?;
     let policy: GatePolicy = serde_yaml_ng::from_str(&content)
@@ -2536,10 +2536,11 @@ mod tests {
         PackageTargetIndex, Receipt, blocking_failure_gate_names, build_pr_fast_plan_from_scope,
         build_pr_fast_plan_from_scope_with_targets, compare_receipts, determine_overall_status,
         extend_plan_with_non_pr_fast_static_gates, extend_plan_with_static_tiers, failure_guidance,
-        is_blocking_gate_status, is_cargo_test_command, load_policy, parse_first_failure,
+        is_blocking_gate_status, is_cargo_test_command, load_policy_for_inspection,
+        parse_first_failure,
     };
     use crate::tasks::ci_scope::{
-        ArchWidener, DirectCrate, PlatformOverrides, RevDepCrate, ScopeOutput,
+        ArchWidener, DirectCrate, LaneDecisions, PlatformOverrides, RevDepCrate, ScopeOutput,
     };
 
     fn gate_result(name: &str, status: &str, required: bool) -> GateResult {
@@ -2643,7 +2644,7 @@ mod tests {
             platform_overrides: PlatformOverrides::default(),
             selected_lanes: Vec::new(),
             selected_heavy_lanes: Vec::new(),
-            lanes: BTreeMap::new(),
+            lanes: LaneDecisions::default(),
             explanations: BTreeMap::new(),
         }
     }
@@ -2871,7 +2872,7 @@ mod tests {
     fn pr_fast_policy_planning_roles_are_complete() -> color_eyre::eyre::Result<()> {
         let root = crate::utils::project_root()?;
         let policy_path = root.join(".ci/gate-policy.yaml");
-        let policy = load_policy(&policy_path)?;
+        let policy = load_policy_for_inspection(&policy_path)?;
 
         for gate in policy.gates.iter().filter(|gate| gate.tier == "pr_fast") {
             let Some(planning) = &gate.planning else {

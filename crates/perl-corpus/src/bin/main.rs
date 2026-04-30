@@ -3,7 +3,9 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use perl_corpus::{index::write_indices, parse_dir};
+use perl_corpus::{
+    build_inventory_from_paths, files::CorpusPaths, index::write_indices, parse_dir,
+};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -57,6 +59,17 @@ enum Command {
         /// Random seed
         #[arg(short, long)]
         seed: Option<u64>,
+    },
+
+    /// Build a deterministic corpus inventory report
+    Inventory {
+        /// Output format
+        #[arg(long, default_value = "json")]
+        format: String,
+
+        /// Optional output path (prints to stdout if omitted)
+        #[arg(long)]
+        out: Option<PathBuf>,
     },
 }
 
@@ -470,6 +483,25 @@ fn main() -> Result<()> {
                         println!();
                     }
                 }
+            }
+        }
+        Command::Inventory { format, out } => {
+            if format != "json" {
+                anyhow::bail!("unsupported format '{format}', expected 'json'");
+            }
+
+            let paths = CorpusPaths::from_root(std::env::current_dir()?);
+            let inventory = build_inventory_from_paths(&paths)?;
+            let json = serde_json::to_string_pretty(&inventory)?;
+
+            if let Some(path) = out {
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::write(&path, format!("{json}\n"))?;
+                println!("✅ Wrote inventory report to {}", path.display());
+            } else {
+                println!("{json}");
             }
         }
     }

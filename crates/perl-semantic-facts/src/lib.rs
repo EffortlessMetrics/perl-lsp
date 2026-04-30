@@ -156,6 +156,30 @@ pub struct DiagnosticFact {
     pub confidence: Confidence,
 }
 
+/// Canonical export facts inferred for a Perl package.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportSet {
+    /// Package symbols exported by default (`@EXPORT`).
+    pub default_exports: Vec<String>,
+    /// Package symbols exported on request (`@EXPORT_OK`).
+    pub optional_exports: Vec<String>,
+    /// Named export groups (`%EXPORT_TAGS`).
+    pub tags: Vec<ExportTag>,
+    /// How this export set was inferred.
+    pub provenance: Provenance,
+    /// Confidence for the inferred export set.
+    pub confidence: Confidence,
+}
+
+/// Named `%EXPORT_TAGS` entry and its members.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExportTag {
+    /// Tag name (for example `all` from `:all`).
+    pub name: String,
+    /// Symbols in this tag.
+    pub members: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

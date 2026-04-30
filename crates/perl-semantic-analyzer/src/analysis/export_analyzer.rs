@@ -27,6 +27,7 @@
 //! forms are extracted.
 
 use crate::ast::{Node, NodeKind};
+use perl_semantic_facts::{Confidence, ExportSet, ExportTag, Provenance};
 use std::collections::{HashMap, HashSet};
 
 /// Information extracted from an Exporter-based module.
@@ -38,6 +39,38 @@ pub struct ExportInfo {
     pub optional_export: HashSet<String>,
     /// Tag-based exports via `%EXPORT_TAGS` (tag name -> symbols)
     pub export_tags: HashMap<String, Vec<String>>,
+}
+
+impl ExportInfo {
+    /// Convert extracted Exporter data into canonical semantic export facts.
+    #[must_use]
+    pub fn to_export_set(&self) -> ExportSet {
+        let mut default_exports: Vec<String> = self.default_export.iter().cloned().collect();
+        default_exports.sort();
+
+        let mut optional_exports: Vec<String> = self.optional_export.iter().cloned().collect();
+        optional_exports.sort();
+
+        let mut tags: Vec<ExportTag> = self
+            .export_tags
+            .iter()
+            .map(|(name, members)| {
+                let mut members = members.clone();
+                members.sort();
+                members.dedup();
+                ExportTag { name: name.clone(), members }
+            })
+            .collect();
+        tags.sort_by(|left, right| left.name.cmp(&right.name));
+
+        ExportSet {
+            default_exports,
+            optional_exports,
+            tags,
+            provenance: Provenance::ImportExportInference,
+            confidence: Confidence::High,
+        }
+    }
 }
 
 /// Detection method for Exporter inheritance.
@@ -693,11 +726,13 @@ our %EXPORT_TAGS = (all => [qw(foo bar baz)]);
         assert!(info.default_export.contains("foo"));
         assert!(info.optional_export.contains("bar"));
         assert!(info.optional_export.contains("baz"));
-        assert_eq!(info.export_tags.get("core").unwrap(), &vec!["foo".to_string(), "bar".to_string()]);
+        assert_eq!(
+            info.export_tags.get("core").unwrap(),
+            &vec!["foo".to_string(), "bar".to_string()]
+        );
         assert_eq!(
             info.export_tags.get("all").unwrap(),
             &vec!["foo".to_string(), "bar".to_string(), "baz".to_string()]
         );
     }
-
 }

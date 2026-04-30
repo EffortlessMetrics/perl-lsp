@@ -470,16 +470,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_gold_assertion_deserialization() {
+    fn test_gold_assertion_deserialization() -> Result<(), serde_json::Error> {
         let json = r#"{"assertion": "no_diagnostics"}"#;
-        let assertion: GoldAssertion = serde_json::from_str(json).unwrap();
+        let assertion: GoldAssertion = serde_json::from_str(json)?;
         assert!(matches!(assertion, GoldAssertion::NoDiagnostics));
+        Ok(())
     }
 
     #[test]
-    fn test_gold_assertion_diagnostic_present() {
+    fn test_gold_assertion_diagnostic_present() -> Result<(), serde_json::Error> {
         let json = r#"{"assertion": "diagnostic_present", "code": "PL100", "byte_offset": 24}"#;
-        let assertion: GoldAssertion = serde_json::from_str(json).unwrap();
+        let assertion: GoldAssertion = serde_json::from_str(json)?;
         assert!(
             matches!(
                 &assertion,
@@ -491,13 +492,15 @@ mod tests {
             ),
             "Expected DiagnosticPresent variant with code PL100 and byte_offset 24"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_gold_expected_deserialization() {
+    fn test_gold_expected_deserialization() -> Result<(), serde_json::Error> {
         let json = r#"{"diagnostics": [{"assertion": "no_diagnostics"}]}"#;
-        let expected: GoldExpected = serde_json::from_str(json).unwrap();
+        let expected: GoldExpected = serde_json::from_str(json)?;
         assert_eq!(expected.diagnostics.len(), 1);
+        Ok(())
     }
 
     #[test]
@@ -509,30 +512,33 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_diagnostics_array_deserializes() {
+    fn test_empty_diagnostics_array_deserializes() -> Result<(), serde_json::Error> {
         // empty array is valid JSON but the harness will catch it as vacuous
         let json = r#"{"diagnostics": []}"#;
-        let expected: GoldExpected = serde_json::from_str(json).unwrap();
+        let expected: GoldExpected = serde_json::from_str(json)?;
         assert_eq!(expected.diagnostics.len(), 0);
+        Ok(())
     }
 
     #[test]
-    fn test_no_diagnostic_deserialization() {
+    fn test_no_diagnostic_deserialization() -> Result<(), serde_json::Error> {
         let json = r#"{"assertion": "no_diagnostic", "code": "PL100"}"#;
-        let assertion: GoldAssertion = serde_json::from_str(json).unwrap();
+        let assertion: GoldAssertion = serde_json::from_str(json)?;
         assert!(
             matches!(&assertion, GoldAssertion::NoDiagnostic { code } if code == "PL100"),
             "Expected NoDiagnostic variant with code PL100"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_diagnostic_count_deserialization() {
+    fn test_diagnostic_count_deserialization() -> Result<(), serde_json::Error> {
         let json = r#"{"assertion": "diagnostic_count", "code": "PL001", "count": 3}"#;
-        let assertion: GoldAssertion = serde_json::from_str(json).unwrap();
+        let assertion: GoldAssertion = serde_json::from_str(json)?;
         assert!(
             matches!(&assertion, GoldAssertion::DiagnosticCount { code, count: 3 } if code == "PL001"),
             "Expected DiagnosticCount variant with code PL001 and count 3"
         );
+        Ok(())
     }
 }
