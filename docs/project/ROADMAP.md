@@ -120,6 +120,28 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Seamless install story verified across all distribution channels
 - Announcement blog post / release notes
 
+### Next (parallel CI/control-plane hardening wave)
+
+Use independent, reviewable slices that can merge in sequence without sibling coupling.
+
+1. **`update-status` streaming fix (issue #7404)**
+   - Ensure `cargo xtask update-status --write` continuously emits progress and subsystem start/end lines.
+   - Keep failure output subsystem-scoped with an explicit repro command.
+2. **Workflow trigger regression lint guard**
+   - Keep `pull_request` `labeled`/`unlabeled` + `concurrency.cancel-in-progress: true` from re-entering merge-critical workflows.
+3. **Expected-skip status normalizer follow-through**
+   - Preserve machine-readable distinction between `expected_skip`, `unexpected_skip`, and `stale` so merge/readiness logic is evidence-backed.
+4. **Review receipt projection in reconciler**
+   - Treat labels as projected state from current-SHA review receipts, not as agent-authored truth.
+5. **PR disposition evidence contract**
+   - Require structured duplicate/superseded/absorbed/extracted evidence before closure-class dispositions.
+6. **Merge-train planner receipt**
+   - Add train-level preflight protocol/receipt (conflict markers, fmt check, pr-fast gates) without auto-merge behavior.
+7. **Tokmd advisory stabilization**
+   - Keep tokmd non-blocking while making advisory failure modes and artifacts explicit/reproducible.
+
+Guardrail for this wave: **do not optimize for tiny diffs; optimize for changes reviewers can prove correct quickly.**
+
 ## Milestone Ladder
 
 ### v0.11.0
