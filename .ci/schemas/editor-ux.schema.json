@@ -114,12 +114,20 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "state",
         "kind",
         "basis",
         "coverage",
         "confidence"
       ],
       "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "measured",
+            "insufficient_data"
+          ]
+        },
         "kind": {
           "type": "string",
           "enum": [
@@ -175,7 +183,10 @@
           ],
           "properties": {
             "value": {
-              "type": "number",
+              "type": [
+                "number",
+                "null"
+              ],
               "minimum": 0,
               "maximum": 1
             }
@@ -195,7 +206,10 @@
           ],
           "properties": {
             "value": {
-              "type": "number",
+              "type": [
+                "number",
+                "null"
+              ],
               "minimum": 0
             }
           }
@@ -228,7 +242,8 @@
             "module_resolution",
             "workspace_indexing",
             "dap",
-            "engineering_health"
+            "engineering_health",
+            "text_sync"
           ]
         },
         "pass_rate": {
