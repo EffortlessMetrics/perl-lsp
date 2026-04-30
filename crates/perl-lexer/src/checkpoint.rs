@@ -521,13 +521,15 @@ mod tests {
         // - checkpoint at 12 falls inside edit and resets to position 10 with Normal context.
         cache.apply_edit(10, 5, 2);
 
-        let reset = cache.find_before(10).ok_or("checkpoint inside edit should reset to edit start")?;
+        let reset =
+            cache.find_before(10).ok_or("checkpoint inside edit should reset to edit start")?;
         assert_eq!(reset.position, 10);
         assert_eq!(reset.context, CheckpointContext::Normal);
         assert_eq!(reset.mode, LexerMode::ExpectTerm);
 
-        let shifted =
-            cache.find_after(11).ok_or("checkpoint after edit should still be present and shifted")?;
+        let shifted = cache
+            .find_after(11)
+            .ok_or("checkpoint after edit should still be present and shifted")?;
         assert_eq!(shifted.position, 27);
         Ok(())
     }
