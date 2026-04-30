@@ -6,12 +6,12 @@
 //! every microcrate-collapse facade.
 
 use perl_symbol::{
-    SymbolDecl, SymbolIndex, SymbolKind, VarKind,
+    SymbolDecl, SymbolIndex, SymbolKind, SymbolRef, SymbolRefKind, VarKind,
     cursor::{
         CursorSymbolKind, byte_offset_utf16, extract_symbol_from_source,
         get_symbol_range_at_position, is_modchar, is_word_boundary, token_under_cursor,
     },
-    extract_symbol_decls,
+    extract_symbol_decls, extract_symbol_refs,
 };
 
 #[test]
@@ -57,10 +57,32 @@ fn symbol_index_accessible() {
 }
 
 #[test]
+fn symbol_index_document_api_accessible() {
+    // replace_document_symbols, remove_document, and search_fuzzy must be
+    // callable at the documented paths on SymbolIndex.
+    let mut idx = SymbolIndex::new();
+    idx.replace_document_symbols(
+        "file:///a.pl",
+        vec!["get_user".to_string(), "set_user".to_string()],
+    );
+    assert!(!idx.search_prefix("get_").is_empty());
+    assert!(!idx.search_fuzzy("user").is_empty());
+
+    idx.remove_document("file:///a.pl");
+    assert!(idx.search_prefix("get_").is_empty());
+}
+
+#[test]
 fn surface_decl_accessible() {
     // SymbolDecl and extract_symbol_decls must be callable at perl_symbol
     // (crate-root re-export) and at perl_symbol::surface (module path).
     // Compilation verifies the paths; the tiny runtime check binds the
     // function to a compatible type signature.
     let _fn: fn(&perl_ast::Node, Option<&str>) -> Vec<SymbolDecl> = extract_symbol_decls;
+}
+
+#[test]
+fn surface_ref_accessible() {
+    let _kind = SymbolRefKind::SubroutineCall;
+    let _fn: fn(&perl_ast::Node) -> Vec<SymbolRef> = extract_symbol_refs;
 }

@@ -189,7 +189,7 @@ impl RenameProvider {
 
         if options.rename_in_comments || options.rename_in_strings {
             let additional_edits =
-                apply::find_occurrences_in_text(&old_name, kind, options, &self.source);
+                apply::find_occurrences_in_text(&old_name, new_name, kind, options, &self.source);
             edits.extend(additional_edits);
         }
 
@@ -459,6 +459,8 @@ mod tests {
         assert!(validate_name("valid_name", SymbolKind::scalar(), &provider.symbol_table).is_ok());
         assert!(validate_name("_private", SymbolKind::scalar(), &provider.symbol_table).is_ok());
         assert!(validate_name("camelCase", SymbolKind::scalar(), &provider.symbol_table).is_ok());
+        assert!(validate_name("naïve", SymbolKind::scalar(), &provider.symbol_table).is_err());
+        assert!(validate_name("１２name", SymbolKind::scalar(), &provider.symbol_table).is_err());
     }
 
     #[test]

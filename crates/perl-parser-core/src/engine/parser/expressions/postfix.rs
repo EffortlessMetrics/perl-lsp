@@ -64,7 +64,7 @@ impl<'a> Parser<'a> {
                         // Hash/array slice: @hash{...} or %hash{...}
                         self.tokens.next()?; // consume {
                         let key = self.parse_hash_subscript_key()?;
-                        self.expect(TokenKind::RightBrace)?;
+                        self.expect_closing_delimiter(TokenKind::RightBrace)?;
 
                         let start = expr.location.start;
                         let end = self.previous_position();
@@ -163,7 +163,7 @@ impl<'a> Parser<'a> {
                                 // ->%{...} hash slice
                                 self.tokens.next()?; // consume {
                                 let key = self.parse_hash_subscript_key()?;
-                                self.expect(TokenKind::RightBrace)?;
+                                self.expect_closing_delimiter(TokenKind::RightBrace)?;
 
                                 let start = expr.location.start;
                                 let end = self.previous_position();
@@ -326,7 +326,7 @@ impl<'a> Parser<'a> {
                             // Arrow hash dereference: $ref->{key}
                             self.tokens.next()?; // consume {
                             let key = self.parse_hash_subscript_key()?;
-                            self.expect(TokenKind::RightBrace)?;
+                            self.expect_closing_delimiter(TokenKind::RightBrace)?;
 
                             let start = expr.location.start;
                             let end = self.previous_position();
@@ -500,12 +500,10 @@ impl<'a> Parser<'a> {
                                     self.should_continue_bare_call_after_block()
                                 } else {
                                     !self.is_at_statement_end()
-                                })
-                                    && !matches!(
-                                        self.peek_kind(),
-                                        Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
-                                    )
-                                {
+                                }) && !matches!(
+                                    self.peek_kind(),
+                                    Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                ) {
                                     args.push(self.parse_assignment_or_declaration()?);
                                 }
 
@@ -599,7 +597,7 @@ impl<'a> Parser<'a> {
                     // Hash element access
                     self.tokens.next()?; // consume {
                     let key = self.parse_hash_subscript_key()?;
-                    self.expect(TokenKind::RightBrace)?;
+                    self.expect_closing_delimiter(TokenKind::RightBrace)?;
 
                     let start = expr.location.start;
                     let end = self.previous_position();
@@ -676,20 +674,14 @@ impl<'a> Parser<'a> {
                     record_postfix_layer()?;
                     expr = if matches!(&expr.kind, NodeKind::Undef) {
                         Node::new(
-                            NodeKind::FunctionCall {
-                                name: "undef".to_string(),
-                                args,
-                            },
+                            NodeKind::FunctionCall { name: "undef".to_string(), args },
                             SourceLocation { start, end },
                         )
                     } else {
                         let mut all_args = vec![expr];
                         all_args.extend(args);
                         Node::new(
-                            NodeKind::FunctionCall {
-                                name: "->()".to_string(),
-                                args: all_args,
-                            },
+                            NodeKind::FunctionCall { name: "->()".to_string(), args: all_args },
                             SourceLocation { start, end },
                         )
                     };
@@ -1182,26 +1174,22 @@ impl<'a> Parser<'a> {
 
     /// Check if we're at a statement boundary
     fn is_at_statement_end(&mut self) -> bool {
-        matches!(
-            self.peek_kind(),
-            Some(TokenKind::Semicolon)
-                | Some(TokenKind::RightBrace)
-                | Some(TokenKind::RightParen)
-                | Some(TokenKind::RightBracket)
-                | Some(TokenKind::If)
-                | Some(TokenKind::Unless)
-                | Some(TokenKind::While)
-                | Some(TokenKind::Until)
-                | Some(TokenKind::For)
-                | Some(TokenKind::Foreach)
-                | Some(TokenKind::WordAnd)
-                | Some(TokenKind::WordOr)
-                | Some(TokenKind::WordXor)
-                | Some(TokenKind::WordNot)
-                | Some(TokenKind::DataMarker)
-                | Some(TokenKind::Eof)
-                | None
-        )
+        match self.peek_kind() {
+            Some(kind) if kind.is_recovery_boundary() => true,
+            // `?` starts a ternary operator at a higher expression level; it is
+            // not a valid start of a bare-call argument so it terminates arg collection.
+            Some(TokenKind::Question) => true,
+            Some(TokenKind::If)
+            | Some(TokenKind::Unless)
+            | Some(TokenKind::While)
+            | Some(TokenKind::Until)
+            | Some(TokenKind::For)
+            | Some(TokenKind::Foreach)
+            | Some(TokenKind::DataMarker) => true,
+            Some(kind) if kind.is_low_precedence_word_operator() => true,
+            None => true,
+            _ => false,
+        }
     }
 
     /// Check whether the current peek token is a quote-op name that should be
@@ -1214,18 +1202,27 @@ impl<'a> Parser<'a> {
     /// Contrast: `qw(a b)` has `qw` followed by `(`, so it returns `false`
     /// and the normal `parse_expression` path handles it as a `qw(...)` literal.
     fn peek_is_quote_op_bareword(&mut self) -> bool {
-        if self.peek_kind() == Some(TokenKind::Identifier) {
-            if let Ok(first) = self.tokens.peek() {
-                let is_quote_op_name = matches!(
-                    first.text.as_ref(),
-                    "m" | "s" | "q" | "qq" | "qw" | "qr" | "qx" | "tr" | "y"
-                );
-                if is_quote_op_name {
-                    // Only treat as a bareword key if the NEXT token is `}` or `,`
-                    // (meaning there is no delimiter to start a real quote expression).
-                    if let Ok(second) = self.tokens.peek_second() {
-                        return matches!(second.kind, TokenKind::RightBrace | TokenKind::Comma);
-                    }
+        // We do NOT require `peek_kind() == Some(TokenKind::Identifier)` here.
+        // Inside a hash subscript (`hash_brace_depth > 0`), the lexer bypasses
+        // the quote-operator expansion path and emits quote-op names (`m`, `s`,
+        // `tr`, etc.) as `TokenType::Keyword`.  The token-stream converter maps
+        // those through `TokenKind::from_keyword`, which returns `None` for all
+        // quote-op names, so they fall back to `TokenKind::Identifier` — meaning
+        // the kind check was always satisfied.  We now match on text directly to
+        // make the intent explicit and avoid a redundant kind predicate.
+        // The real guard is the second-token check below (`}` or `,`): a
+        // quote-op followed by a delimiter would not stop at `}` or `,`, so
+        // false positives are structurally impossible.
+        if let Ok(first) = self.tokens.peek() {
+            let is_quote_op_name = matches!(
+                first.text.as_ref(),
+                "m" | "s" | "q" | "qq" | "qw" | "qr" | "qx" | "tr" | "y"
+            );
+            if is_quote_op_name {
+                // Only treat as a bareword key if the NEXT token is `}` or `,`
+                // (meaning there is no delimiter to start a real quote expression).
+                if let Ok(second) = self.tokens.peek_second() {
+                    return matches!(second.kind, TokenKind::RightBrace | TokenKind::Comma);
                 }
             }
         }
@@ -1349,9 +1346,6 @@ impl<'a> Parser<'a> {
         }
 
         let end = elements.last().map(|n| n.location.end).unwrap_or(start);
-        Ok(Some(Node::new(
-            NodeKind::ArrayLiteral { elements },
-            SourceLocation { start, end },
-        )))
+        Ok(Some(Node::new(NodeKind::ArrayLiteral { elements }, SourceLocation { start, end })))
     }
 }

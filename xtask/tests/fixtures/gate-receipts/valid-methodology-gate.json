@@ -1,0 +1,21 @@
+{
+  "check": "methodology-gate",
+  "schema_version": "1",
+  "event": "pull_request",
+  "verdict": "pass",
+  "run_id": "run-12345",
+  "pr": 6856,
+  "base_sha": "1111111",
+  "head_sha": "2222222",
+  "candidate_sha": "3333333",
+  "selected": true,
+  "selection_reason": "all required checks are current and green",
+  "classification": "unknown",
+  "metrics": {
+    "stale_check_count": 0,
+    "missing_required_count": 0
+  },
+  "repro": {
+    "command": "cargo xtask gate-receipts validate xtask/tests/fixtures/gate-receipts/valid-methodology-gate.json"
+  }
+}

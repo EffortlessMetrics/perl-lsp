@@ -38,3 +38,23 @@ fn test_heredoc_timeout() {
 
     assert!(duration < Duration::from_secs(10), "Lexer should not hang for more than 10 seconds");
 }
+
+#[test]
+fn test_heredoc_large_crlf_body_respects_budget() {
+    let mut code = String::from("my $x = <<EOF;\r\n");
+    // Bigger than MAX_HEREDOC_BYTES in lexer implementation.
+    for _ in 0..40_000 {
+        code.push_str("0123456789\r\n");
+    }
+
+    let start = Instant::now();
+    let mut lexer = PerlLexer::new(&code);
+    let tokens = lexer.collect_tokens();
+    let duration = start.elapsed();
+
+    assert!(duration < Duration::from_secs(10), "Lexer should remain bounded");
+    assert!(
+        tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest)),
+        "expected UnknownRest when heredoc body exceeds budget"
+    );
+}

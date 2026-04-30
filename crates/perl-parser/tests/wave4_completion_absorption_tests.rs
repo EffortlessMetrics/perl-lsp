@@ -188,17 +188,22 @@ fn test_perl_incremental_parsing_not_in_allowlist() -> TestResult {
 // Section 4: Published Count Baseline Tests
 // =============================================================================
 
-/// Test that published-crate-baseline.txt is updated to 34 (down from 37)
+/// Test that published-crate-baseline.txt is updated to 31.
+///
+/// Wave 4-Completion absorbed perl-dead-code, perl-refactoring, and
+/// perl-incremental-parsing (37 → 34). Wave Final PR B subsequently absorbed
+/// perl-lsp-feature-catalog, perl-lsp-config, and perl-content-length-framing
+/// (34 → 31). The current baseline is 31.
 #[test]
-fn test_published_count_baseline_is_34() -> TestResult {
+fn test_published_count_baseline_is_current() -> TestResult {
     let baseline_path = ws("xtask/published-crate-baseline.txt");
     let content = fs::read_to_string(&baseline_path)?;
     let baseline_count = content.trim().parse::<u32>()?;
 
-    if baseline_count == 34 {
+    if baseline_count == 31 {
         Ok(())
     } else {
-        Err(format!("published-crate-baseline.txt must be 34, got {}", baseline_count).into())
+        Err(format!("published-crate-baseline.txt must be 31, got {}", baseline_count).into())
     }
 }
 

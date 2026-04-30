@@ -23,6 +23,20 @@ const ALLOWED_WORKFLOWS: &[&str] = &[
     // ci-gate-self-tests.yml is path-filtered to gate scripts only.
     // Runs only when the gate scripts or self-test scripts change.
     "ci-gate-self-tests.yml",
+    // workflow-policy.yml is path-filtered to workflow-policy lint sources only.
+    // Runs only when .github/workflows/, the workflow_policy_lint xtask, or its
+    // fixtures/schema change.
+    "workflow-policy.yml",
+    // methodology-gate.yml is advisory-only (read-only label detector).
+    // The single job runs `cargo xtask methodology-gate` which is cheap
+    // (no tests, no compilation beyond xtask itself). Adding an `if:` gate
+    // would prevent it from detecting label contradictions on the PRs that
+    // most need detection.
+    "methodology-gate.yml",
+    // workflow-trigger-lint.yml is a single small advisory lint (no test
+    // execution); the job exits 0 even when violations are found and only
+    // uploads a JSON receipt.
+    "workflow-trigger-lint.yml",
 ];
 
 const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];

@@ -659,11 +659,8 @@ mod tests {
     #[test]
     fn parse_criterion_identity_handles_plain_layout_without_new_subdir() {
         // Older Criterion versions write estimates.json directly under bench_name/
-        let parts = vec![
-            "parser".to_string(),
-            "large_file".to_string(),
-            "estimates.json".to_string(),
-        ];
+        let parts =
+            vec!["parser".to_string(), "large_file".to_string(), "estimates.json".to_string()];
         let result = parse_criterion_identity(&parts);
         assert_eq!(result, Some(("parser".to_string(), "large_file".to_string())));
     }
