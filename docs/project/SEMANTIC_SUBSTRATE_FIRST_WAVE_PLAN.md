@@ -103,7 +103,7 @@ safe_delete_plan(entity)
 5. Definition-candidate multimap behind compatibility APIs.
 6. Typed reference-edge global index behind compatibility APIs.
 
-## Wave 2 Implementation Status (as of 2026-04-29)
+## Wave 2 Implementation Status (as of 2026-04-30)
 
 This section is the migration receipt for what has landed versus what remains staged.
 
@@ -115,12 +115,15 @@ This section is the migration receipt for what has landed versus what remains st
 - **Definition candidate multimap:** `DefinitionCandidate` multimap behind compatibility APIs is landed with deterministic sort and incremental removal. (PR #7360)
 - **Shadow-compare receipt:** design/test rail is landed (`semantic_shadow_compare.rs`); no provider cutover or production shadow-read gating is enabled. (PR #7366)
 - **Scorecard v1:** fixture harness and baseline-pending semantic scorecard are landed; metric rows are intentionally `baseline_pending` until full adapter/index plumbing is wired. (PR #7367)
+- **`SymbolRef -> OccurrenceFact` adapter:** landed in `perl-symbol` as a phase-1 adapter that emits canonical `AnchorFact`/`OccurrenceFact` rows and optional reference edges when an entity target is known. (PR #7444)
+- **`ExportInfo -> ExportSet` adapter:** landed; export analysis now has a canonical `ExportSet` adapter path alongside compatibility behavior.
 
 ### Still staged
 
-- **`SymbolRef -> OccurrenceFact` adapter:** not landed; occurrence facts are not yet emitted from reference sites.
-- **`ExportInfo -> ExportSet` adapter:** not landed; export analysis remains in legacy format.
 - **Typed reference-edge global index:** not landed; typed-reference behavior is constrained to fixture/regression banks rather than a provider-facing global index.
+- **FileFactShard canonical producer wiring:** partially landed as write-through storage, but canonical producer population/coverage is not yet complete across declarations/references/exports.
+- **Scorecard real/nonzero fact counts:** scorecard infrastructure exists, but several rows are still baseline/pending until full fact/index wiring is complete.
+- **Fixture-backed semantic shadow compare execution:** receipt shape exists; fixture-backed execution for core queries is still staged.
 
 ### Explicit non-goals for current Wave 2 state
 
