@@ -80,7 +80,6 @@ Every review receipt includes:
 }
 ```
 
-
 ## Label ownership
 
 Reviewer agents emit structured review receipts/comments; they are not label authorities.

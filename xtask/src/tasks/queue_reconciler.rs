@@ -213,10 +213,10 @@ struct CheckContext<'a> {
 }
 
 fn normalize_check_status(ctx: &CheckContext<'_>) -> NormalizedCheckStatus {
-    if let (Some(check_sha), Some(pr_sha)) = (ctx.check_head_sha, ctx.pr_head_sha) {
-        if check_sha != pr_sha {
-            return NormalizedCheckStatus::Stale;
-        }
+    if let (Some(check_sha), Some(pr_sha)) = (ctx.check_head_sha, ctx.pr_head_sha)
+        && check_sha != pr_sha
+    {
+        return NormalizedCheckStatus::Stale;
     }
 
     let status = ctx.conclusion_or_state.unwrap_or("UNKNOWN").to_ascii_uppercase();
@@ -1292,11 +1292,23 @@ my $x = 1;
     /// loop: receipts loaded from comments now reach the strip-action stream.
     #[test]
     fn reconcile_pr_pipeline_extends_contradictions_with_review_receipt() {
-        // PR has both review-reviewed + needs-builder-fix (the timeline-pair detector
-        // will keep review-reviewed, strip needs-builder-fix once via the conservative
-        // fallback). Then the approved receipt also fires a strip — but the dedupe
-        // in the strip-application stream means the final stripped set is exactly
-        // {needs-builder-fix}, applied at most once.
+        // PR has both review-reviewed + needs-builder-fix. Two emitters fire:
+        //   1. Timeline-pair detector — conservative fallback keeps review-reviewed,
+        //      strips needs-builder-fix.
+        //   2. Receipt projection (verdict=approved, current SHA) — also strips
+        //      needs-builder-fix, but with `keep: review_receipt` for provenance.
+        //
+        // Both contradictions reach the strip-action stream; the strip-application
+        // loop in `reconcile_queue` calls `gh pr edit --remove-label` for each.
+        // GitHub treats removing an already-removed label as a no-op (idempotent
+        // at the API surface), so the live label state is "needs-builder-fix
+        // removed" regardless of how many times the strip is requested.
+        //
+        // This test pins the contract: receipts must REACH the strip stream
+        // (closing the dead-code loop), and at least one strip must carry
+        // receipt provenance (keep == review_receipt). We do NOT assert
+        // `contradictions.len() == 1` — both sources legitimately fire and the
+        // audit trail benefits from preserving both reasons.
         let pr = make_pr(42, &[REVIEW_REVIEWED, NEEDS_BUILDER_FIX]);
         let body = format!(
             r#"```json
@@ -1318,7 +1330,8 @@ my $x = 1;
         );
 
         // Provenance: at least one contradiction must come from the review_receipt
-        // (its `keep` references the receipt kind).
+        // (its `keep` references the receipt kind). This is the load-bearing
+        // assertion that proves receipts are no longer dead code.
         assert!(
             contradictions.iter().any(|c| c.keep == REVIEW_RECEIPT_KIND),
             "wired pipeline must emit a receipt-sourced contradiction"
