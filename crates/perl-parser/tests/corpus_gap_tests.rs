@@ -187,6 +187,49 @@ mod corpus_gap_tests {
         Ok(())
     }
 
+    /// Coverage: state variables and signatures in the same snippet should
+    /// parse without introducing ERROR nodes.
+    #[test]
+    fn test_state_and_signature_combo() -> Result<(), Box<dyn std::error::Error>> {
+        let input = r#"
+            use feature 'signatures';
+            no warnings 'experimental::signatures';
+            sub next_id ($prefix, $seed = 0) {
+                state $counter = 0;
+                return $prefix . ++$counter . $seed;
+            }
+        "#;
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for signatures/state snippet, got: {sexp}"
+        );
+        assert!(
+            sexp.contains("state"),
+            "expected state declaration to be represented, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    /// Coverage: parses modern control-flow expression forms (postderef + defined-or).
+    #[test]
+    fn test_postderef_defined_or_expression() -> Result<(), Box<dyn std::error::Error>> {
+        let input = "my $first = $obj->items->@*->[0] // 'fallback';";
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for postderef defined-or expression, got: {sexp}"
+        );
+        assert!(sexp.contains("fallback"), "expected literal fallback value, got: {sexp}");
+        Ok(())
+    }
+
     // Property-based test for delimiters
     #[test]
     fn test_arbitrary_delimiters() {
