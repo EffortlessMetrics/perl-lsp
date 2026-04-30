@@ -140,7 +140,7 @@ impl<'src> TokenRef<'src> {
     ///
     /// Rules:
     /// - `start <= end`
-    /// - zero-length spans are accepted only for EOF tokens
+    /// - zero-length spans are accepted for EOF and explicit synthetic unknown tokens
     pub fn new_checked(
         kind: TokenKind,
         text: &'src str,
@@ -148,7 +148,7 @@ impl<'src> TokenRef<'src> {
         end: usize,
     ) -> Result<Self, TokenSpanError> {
         let token = Self::try_new(kind, text, start, end)?;
-        if token.is_empty() && token.kind != TokenKind::Eof {
+        if token.is_empty() && !matches!(token.kind, TokenKind::Eof | TokenKind::Unknown) {
             return Err(TokenSpanError::EmptySpanNotAllowed { kind: token.kind, at: token.start });
         }
 
@@ -230,7 +230,7 @@ impl Token {
     ///
     /// Rules:
     /// - `start <= end`
-    /// - zero-length spans are accepted only for EOF tokens
+    /// - zero-length spans are accepted for EOF and explicit synthetic unknown tokens
     pub fn new_checked(
         kind: TokenKind,
         text: impl Into<Arc<str>>,
@@ -238,7 +238,7 @@ impl Token {
         end: usize,
     ) -> Result<Self, TokenSpanError> {
         let token = Self::try_new(kind, text, start, end)?;
-        if token.is_empty() && token.kind != TokenKind::Eof {
+        if token.is_empty() && !matches!(token.kind, TokenKind::Eof | TokenKind::Unknown) {
             return Err(TokenSpanError::EmptySpanNotAllowed { kind: token.kind, at: token.start });
         }
 

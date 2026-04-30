@@ -200,6 +200,7 @@ fn add_known_core_module_completions(
             additional_edits: vec![],
             text_edit_range: Some((context.prefix_start, context.position)),
             commit_characters: None,
+            label_details: None,
         });
     }
 }
@@ -250,6 +251,7 @@ pub fn add_package_completions(
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
+                    label_details: None,
                 });
             }
         }
