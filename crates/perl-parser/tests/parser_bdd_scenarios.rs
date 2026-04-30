@@ -306,3 +306,32 @@ fn bdd_given_labeled_loop_control_when_parsed_then_label_and_control_ops_are_ret
 
     Ok(())
 }
+
+
+#[test]
+fn bdd_given_loop_with_continue_block_when_parsed_then_continue_and_flow_nodes_are_preserved()
+-> TestResult {
+    // Given: a developer maintains a read loop with a continue block for line accounting.
+    let code = r#"
+        my $line_no = 0;
+        while (my $line = <DATA>) {
+            next if $line =~ /^#/;
+            last if $line =~ /^__END__$/;
+            print $line;
+        } continue {
+            $line_no++;
+        }
+    "#;
+
+    // When: the parser processes loop control mixed with a continue block.
+    let sexp = parse_sexp(code)?;
+
+    // Then: loop, continue, and control-flow nodes should be retained without recovery markers.
+    assert!(sexp.contains("(while"), "Expected While node in: {sexp}");
+    assert!(sexp.contains("(continue"), "Expected Continue node in: {sexp}");
+    assert!(sexp.contains("(next"), "Expected Next loop-control node in: {sexp}");
+    assert!(sexp.contains("(last"), "Expected Last loop-control node in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
