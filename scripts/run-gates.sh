@@ -9,6 +9,12 @@ RECEIPTS_DIR="$ROOT/target/receipts"
 LOG_DIR="$RECEIPTS_DIR/logs"
 ARTIFACT_DIR="$RECEIPTS_DIR/artifacts"
 
+if ! command -v just >/dev/null 2>&1; then
+  echo "Error: 'just' is required to run merge gates." >&2
+  echo "Install it from https://github.com/casey/just#installation and re-run this script." >&2
+  exit 1
+fi
+
 mkdir -p "$LOG_DIR" "$ARTIFACT_DIR"
 
 policy_path="ci/gate-policy.yaml"

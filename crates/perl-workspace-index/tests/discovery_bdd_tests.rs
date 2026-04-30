@@ -162,3 +162,62 @@ fn given_git_workspace_with_only_ignored_or_non_perl_files_when_discovering_then
 
     Ok(())
 }
+
+#[test]
+fn given_non_git_workspace_with_perl_adjacent_extensions_when_discovering_then_walk_strategy_includes_them()
+-> TestResult {
+    let tmp = TempDir::new()?;
+    let root = tmp.path();
+
+    create_file(root, "native/module.XS")?;
+    create_file(root, "ffi/helper.I")?;
+    create_file(root, "templates/view.EP")?;
+    create_file(root, "templates/layout.TT")?;
+    create_file(root, "templates/page.Tt2")?;
+    create_file(root, "notes/readme.txt")?;
+
+    let result = discover_perl_files(root);
+
+    assert_eq!(result.method, DiscoveryMethod::Walk);
+    assert_eq!(result.files.len(), 5);
+    assert!(result.files.iter().any(|path| path.ends_with("native/module.XS")));
+    assert!(result.files.iter().any(|path| path.ends_with("ffi/helper.I")));
+    assert!(result.files.iter().any(|path| path.ends_with("templates/view.EP")));
+    assert!(result.files.iter().any(|path| path.ends_with("templates/layout.TT")));
+    assert!(result.files.iter().any(|path| path.ends_with("templates/page.Tt2")));
+    assert!(!result.files.iter().any(|path| path.ends_with("notes/readme.txt")));
+
+    Ok(())
+}
+
+#[test]
+fn given_git_workspace_with_perl_adjacent_extensions_when_discovering_then_git_strategy_includes_them()
+-> TestResult {
+    if !git_available() {
+        return Ok(());
+    }
+
+    let tmp = TempDir::new()?;
+    let root = tmp.path();
+
+    run_git(root, &["init", "--quiet"])?;
+    create_file(root, "native/module.XS")?;
+    create_file(root, "ffi/helper.I")?;
+    create_file(root, "templates/view.EP")?;
+    create_file(root, "templates/layout.TT")?;
+    create_file(root, "templates/page.Tt2")?;
+    create_file(root, "notes/readme.txt")?;
+
+    let result = discover_perl_files(root);
+
+    assert_eq!(result.method, DiscoveryMethod::Git);
+    assert_eq!(result.files.len(), 5);
+    assert!(result.files.iter().any(|path| path.ends_with("native/module.XS")));
+    assert!(result.files.iter().any(|path| path.ends_with("ffi/helper.I")));
+    assert!(result.files.iter().any(|path| path.ends_with("templates/view.EP")));
+    assert!(result.files.iter().any(|path| path.ends_with("templates/layout.TT")));
+    assert!(result.files.iter().any(|path| path.ends_with("templates/page.Tt2")));
+    assert!(!result.files.iter().any(|path| path.ends_with("notes/readme.txt")));
+
+    Ok(())
+}

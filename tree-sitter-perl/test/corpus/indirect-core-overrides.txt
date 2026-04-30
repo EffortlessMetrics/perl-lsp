@@ -19,16 +19,16 @@ invoke Package 'arg';
 ---
 
 (source_file
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement))
 
 ==================
 No indirect pragma

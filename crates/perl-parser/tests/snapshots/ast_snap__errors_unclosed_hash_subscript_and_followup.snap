@@ -2,5 +2,4 @@
 source: crates/perl-parser/tests/ast_snap.rs
 expression: "parse_errors(\"my $x = $h{foo;\\nmy $y = 2;\")"
 ---
-expected '}', found ';' at position 14
-expected statement, found 'my' at position 16
+Recovered from InsertedCloser at HashSubscript (position 14)
