@@ -320,4 +320,9 @@ pub struct ClientCapabilities {
     /// client has declared that property here.  A `None` value means the client
     /// sent no `resolveSupport` entry at all (i.e. resolve is unsupported).
     pub inlay_hint_resolve_support: Option<std::collections::HashSet<String>>,
+    /// Client supports `completionItem.labelDetails` (LSP 3.17+).
+    ///
+    /// When true the server may include a `labelDetails` object in completion
+    /// items and in `completionItem/resolve` responses.
+    pub label_details_support: bool,
 }

@@ -1498,6 +1498,7 @@ impl CompletionProvider {
                 additional_edits: vec![],
                 text_edit_range: Some((context.position - key_prefix_len, context.position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }
@@ -1529,6 +1530,7 @@ impl CompletionProvider {
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
+                    label_details: None,
                 });
             };
 
@@ -1631,6 +1633,7 @@ impl CompletionProvider {
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
+                    label_details: None,
                 });
             }
         }
@@ -1667,6 +1670,7 @@ impl CompletionProvider {
                 additional_edits: vec![],
                 text_edit_range: Some((context.prefix_start, context.position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }
