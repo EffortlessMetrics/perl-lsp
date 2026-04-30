@@ -105,6 +105,7 @@
 pub use perl_position_tracking::SourceLocation;
 // Re-export Token and TokenKind from perl-token for AST error nodes
 pub use perl_token::{Token, TokenKind};
+use std::fmt;
 
 /// Core AST node representing any Perl language construct within parsing workflows.
 ///
@@ -1371,6 +1372,17 @@ impl Node {
         children
     }
 
+    /// Count direct child nodes without allocating an intermediate vector.
+    ///
+    /// This is more efficient than `children().len()` when callers only need
+    /// cardinality.
+    #[inline]
+    pub fn child_count(&self) -> usize {
+        let mut count = 0;
+        self.for_each_child(|_| count += 1);
+        count
+    }
+
     /// Get the first direct child node, if any.
     ///
     /// Optimized to avoid allocating the children vector.
@@ -1381,6 +1393,51 @@ impl Node {
             if result.is_none() {
                 result = Some(child);
             }
+        });
+        result
+    }
+
+    /// Returns `true` when this node's source span contains `offset`.
+    ///
+    /// The start position is inclusive and the end position is exclusive.
+    #[inline]
+    pub fn contains_offset(&self, offset: usize) -> bool {
+        self.location.start <= offset && offset < self.location.end
+    }
+
+    /// Returns the byte length of this node's source span.
+    ///
+    /// Uses saturating subtraction so malformed spans never underflow.
+    #[inline]
+    pub fn span_len(&self) -> usize {
+        self.location.end.saturating_sub(self.location.start)
+    }
+
+    /// Get the last direct child node, if any.
+    ///
+    /// Optimized to avoid allocating the children vector.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_ast::{Node, NodeKind, SourceLocation};
+    ///
+    /// let loc = SourceLocation { start: 0, end: 1 };
+    /// let first = Node::new(NodeKind::Number { value: "1".to_string() }, loc);
+    /// let second = Node::new(NodeKind::Number { value: "2".to_string() }, loc);
+    /// let program = Node::new(
+    ///     NodeKind::Program { statements: vec![first, second] },
+    ///     loc,
+    /// );
+    ///
+    /// assert_eq!(program.last_child().map(|n| n.kind.kind_name()), Some("Number"));
+    /// assert_eq!(Node::new(NodeKind::Block { statements: vec![] }, loc).last_child(), None);
+    /// ```
+    #[inline]
+    pub fn last_child(&self) -> Option<&Node> {
+        let mut result = None;
+        self.for_each_child(|child| {
+            result = Some(child);
         });
         result
     }
@@ -1415,13 +1472,10 @@ impl Node {
 ///     loc,
 /// );
 ///
-/// match &node.kind {
-///     NodeKind::Variable { sigil, name } => {
-///         assert_eq!(sigil, "$");
-///         assert_eq!(name, "foo");
-///     }
-///     _ => panic!("expected Variable"),
-/// }
+/// assert!(matches!(
+///     &node.kind,
+///     NodeKind::Variable { sigil, name } if sigil == "$" && name == "foo"
+/// ));
 /// ```
 ///
 /// Use [`kind_name()`](NodeKind::kind_name) for debugging and diagnostics:
@@ -2249,6 +2303,20 @@ impl NodeKind {
         "MissingStatement",
         "UnknownRest",
     ];
+}
+
+impl fmt::Display for NodeKind {
+    /// Formats as the canonical `kind_name()` string.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.kind_name())
+    }
+}
+
+impl fmt::Display for Node {
+    /// Formats as the tree-sitter compatible S-expression.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.to_sexp())
+    }
 }
 
 /// Format unary operator for S-expression output

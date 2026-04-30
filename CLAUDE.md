@@ -1,12 +1,40 @@
 # CLAUDE.md
 
-**Latest Release**: 0.12.4 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md) | **Implementation agents**: [AGENTS.md](AGENTS.md)
+**Latest Release**: 0.13.0-rc1 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md) | **Implementation agents**: [AGENTS.md](AGENTS.md)
 
 ## Orchestration Model
 
+perl-lsp's orchestration is an *Octopus Cluster* — see [docs/reference/OCTOPUS_CLUSTER.md](docs/reference/OCTOPUS_CLUSTER.md) for the umbrella framing.
+
+> For the design rationale and direction behind this orchestration model, see [docs/reference/ORCHESTRATION_DOCTRINE.md](docs/reference/ORCHESTRATION_DOCTRINE.md).
+
 The orchestrator routes work to agents, never writes code directly.
 
+### Gates and Agents
+
+The pipeline is organized into **7 gates** (coarse stages) with multiple agents working within each gate:
+
+| Gate | Purpose | Key agents |
+|------|---------|-----------|
+| **1. Identify** | Accurate, builder-ready problem statement | scout, accuracy-scout, research-verifier |
+| **2. Spec** | Scoped, project-aligned approach | plan-reviewer, oppositional-planner, advocatus-diaboli, architecture-reviewer, maintainer-issue, spec-planner |
+| **3. Build** | Well-tested, implemented PR | red-tdd, builder, green-tdd |
+| **4. Review/improve** | Right thing × what codebase needs × right way | reviewer, maintainer-pr, refactor-planner, green-refactor, reviewer-deep, diff-auditor |
+| **5. CI green** | Live CI actually green (not just a label) | green-ci, pr-responder |
+| **6. Merge** | Land it | ops |
+| **7. Learn** | Consolidate captured learning into durable artifacts | wisdom, memory-recalibrator |
+
+**Sequencing within a gate** is preferred when agents build on each other's output, but is not strict — parallel agents within a gate are fine when they don't depend on each other.
+
+**Some gates may be skipped** when they are not relevant for a given PR's nature (e.g., a 1-line fmt fix skips Gates 1 and 2; a docs-only PR skips reviewer-deep in Gate 4).
+
+**Learning is captured continuously** by every agent in every gate. Gate 7 is the dedicated consolidation layer — it shapes captured artifacts into durable memory, doctrine, and follow-up work.
+
+See [docs/reference/PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) for the full gate model: skip criteria, within-gate ordering, three-axis triangulation in Gate 4, and worked examples.
+
 ### Pipeline: Scout → Accuracy-Scout → Plan-Review → Build → Review → Green → Merge → Wisdom
+
+The default sequence within and across gates. Adapt to PR nature; skip gates that don't apply.
 
 Every change flows through this pipeline. Each stage is a cheap pass that catches what the previous one missed.
 
@@ -53,7 +81,7 @@ Every change flows through this pipeline. Each stage is a cheap pass that catche
 
 ### Pipeline State Labels
 
-Labels are the authoritative state for every issue and PR. The orchestrator reads them; agents write them.
+Labels are the authoritative state for every issue and PR. The orchestrator reads them; agents write them. For the principle distinguishing live-truth labels (CI, mergeability) from authoritative-only labels (signoffs, routing), see [docs/reference/LIVE_SIGNALS_VS_LABELS.md](docs/reference/LIVE_SIGNALS_VS_LABELS.md).
 
 **Sign-off labels** (`<agent>-reviewed` = agent completed its pass):
 
@@ -111,6 +139,8 @@ Labels are the authoritative state for every issue and PR. The orchestrator read
 Labels are sign-off receipts. The *presence* of a label means an agent reviewed and approved. The *absence* means the pass hasn't happened yet. The orchestrator routes based on what's missing.
 
 ### Label-based routing
+
+Default routing pattern. The orchestrator may skip individual queries when the PR's nature makes that gate's check trivially satisfied or irrelevant. See [docs/reference/PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) for skip criteria.
 
 **Pre-plan-review verification** (issue has `needs-plan-review`):
 ```
@@ -353,7 +383,9 @@ Invoke `/coding-standards` for full detail.
 
 ## Documentation
 
-[Status Overview](docs/project/status/index.md) | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) (stub) | [ROADMAP.md](docs/project/ROADMAP.md) | [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE.md](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | [features.toml](features.toml)
+[Status Overview](docs/project/status/index.md) | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) (stub) | [ROADMAP.md](docs/project/ROADMAP.md) | [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE.md](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | [FAILURE_MODES.md](docs/reference/FAILURE_MODES.md) | [CI_ARCHITECTURE.md](docs/reference/CI_ARCHITECTURE.md) | [features.toml](features.toml)
+
+**SDLC positioning**: [DISTRIBUTED_ENGINEERING_LINEAGE.md](docs/reference/DISTRIBUTED_ENGINEERING_LINEAGE.md) — situates the Octopus Cluster in classical engineering practice (Kanban, code review, trunk-health, CI/CD, SRE) with Beowulf contrast and SDLC-mapping table.
 
 ## Contributing
 

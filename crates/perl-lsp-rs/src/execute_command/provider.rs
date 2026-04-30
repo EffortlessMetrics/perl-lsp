@@ -949,18 +949,7 @@ pub(crate) fn select_test_runner(
 
 /// Check whether a command exists in the current PATH.
 pub fn command_exists(command: &str) -> bool {
-    let cmd = if cfg!(windows) {
-        let mut cmd = std::process::Command::new("where");
-        cmd.arg(command);
-        cmd
-    } else {
-        let mut cmd = std::process::Command::new(command);
-        cmd.arg("--version");
-        cmd
-    };
-    crate::util::run_command_with_timeout(cmd, 2)
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+    which::which(command).is_ok()
 }
 
 /// Return the supported executeCommand identifiers.

@@ -1,0 +1,5 @@
+[[generated]]
+path = "docs/project/status/**"
+command = "cargo xtask update-status --write"
+owner = "status-docs"
+allow_manual_edits = false

@@ -14,6 +14,8 @@ codeLensProvider:
   resolveProvider: true
 colorProvider: true
 completionProvider:
+  completionItem:
+    labelDetailsSupport: true
   resolveProvider: true
   triggerCharacters:
     - $
