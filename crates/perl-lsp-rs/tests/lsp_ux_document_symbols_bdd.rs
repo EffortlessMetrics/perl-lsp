@@ -163,3 +163,44 @@ fn bdd_document_symbols_track_new_declaration_without_reopen()
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn bdd_document_symbols_recover_after_temporary_syntax_error()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = Scenario::new("Document symbols recover after transient parse error");
+
+    let valid = "package Demo;\nsub alpha { return 1; }\nsub beta { return alpha(); }\n1;\n";
+    let broken = "package Demo;\nsub alpha { return 1;\nsub beta { return alpha(); }\n1;\n";
+    let recovered = "package Demo;\nsub alpha { return 1; }\nsub beta { return alpha(); }\nsub gamma { return beta(); }\n1;\n";
+
+    scenario.given("an open document with valid document symbols");
+    let (mut harness, workspace) = setup_workspace(&[("lib/Demo.pm", valid)])?;
+    let uri = workspace.uri("lib/Demo.pm");
+    harness.open_document(&uri, valid)?;
+    let baseline = wait_for_symbol_names(
+        &mut harness,
+        &uri,
+        &["Demo", "alpha", "beta"],
+        &["gamma"],
+        Duration::from_secs(3),
+    )?;
+    assert!(baseline.contains("alpha"));
+    assert!(baseline.contains("beta"));
+
+    scenario.when("the user introduces and then fixes a syntax error via didChange");
+    harness.change_full(&uri, 2, broken)?;
+    harness.change_full(&uri, 3, recovered)?;
+
+    scenario.then("documentSymbol converges to the recovered declarations");
+    let names = wait_for_symbol_names(
+        &mut harness,
+        &uri,
+        &["Demo", "alpha", "beta", "gamma"],
+        &[],
+        Duration::from_secs(3),
+    )?;
+    assert!(names.contains("gamma"));
+
+    Ok(())
+}
