@@ -8,7 +8,7 @@
 
 ## Current Framing
 
-- Workspace version line: `v0.12.4`
+- Workspace version line: `v0.13.0-rc1`
 - Latest published GitHub/editor release: `v0.12.4` (GitHub Releases and VS Code Marketplace, shipped 2026-04-12)
 - crates.io published line: `v0.12.2` (registry line, published 2026-04-08)
 - Active work: finish the `v0.13.0` public alpha announcement pass (demo assets, distribution-truth cleanup, post-release docs/automation cleanup) while keeping the shipped `v0.12.4` line stable across GitHub Releases and the editor marketplaces
@@ -111,7 +111,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - AI inline completion (#3018) shipped in the live 0.12.x line — feature wired end-to-end via #3157–#3168, awaiting E2E user validation
 - Workspace-wide rename slice: multi-root support shipped in 0.12.x (#3984); workspace-wide rename/module-move remains roughly 30% complete and only conditionally in scope pending #3522 verification
 - Coroutine support issue #3539 is re-scoped: defer hypothetical core syntax, split upstream-tracking from CPAN-library IDE support planning
-- Semantic substrate first-wave planning is documented as rails-first (facts schema, fixture banks, scorecards, migration contracts) in [SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md](SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md); provider cutover is explicitly deferred until Wave 2/3 foundations are proven
+- Semantic substrate migration status now tracks Wave 2 reality (facts vocabulary, SymbolDecl adapter, FileFactShard write-through, and DefinitionCandidate multimap landed; SymbolRef adapter, ExportInfo adapter, and typed-reference global index still staged) in [SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md](SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md); provider cutover remains explicitly deferred until Wave 3 foundations (`ImportSpec` + `visible_symbols_at`) are proven
 
 ### Next (v0.13.0 — public alpha announcement)
 

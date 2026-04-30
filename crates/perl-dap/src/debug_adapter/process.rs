@@ -80,6 +80,22 @@ fn detect_perl_info() -> String {
     }
 }
 
+fn is_valid_perl_interpreter(perl_interpreter: &str) -> bool {
+    let trimmed = perl_interpreter.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    let candidate = Path::new(trimmed)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(trimmed)
+        .to_ascii_lowercase();
+
+    let candidate = candidate.strip_suffix(".exe").unwrap_or(&candidate);
+    candidate == "perl" || candidate.starts_with("perl")
+}
+
 fn format_perl_spawn_error(perl_interpreter: &str, error: &std::io::Error) -> String {
     if error.kind() == std::io::ErrorKind::NotFound {
         #[cfg(windows)]
@@ -373,6 +389,13 @@ impl DebugAdapter {
                     program, e
                 )
             })?;
+        }
+
+        if !is_valid_perl_interpreter(perl_interpreter) {
+            return Err(format!(
+                "Invalid Perl interpreter '{}'. Set launch.json `perl` to a Perl executable path (for example, `perl` or `/usr/bin/perl`).",
+                perl_interpreter
+            ));
         }
 
         // Pre-launch syntax check: run `perl -c <script>` before spawning the
@@ -1753,7 +1776,9 @@ impl DebugAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::{DebugAdapter, detect_perl_info, format_perl_spawn_error};
+    use super::{
+        DebugAdapter, detect_perl_info, format_perl_spawn_error, is_valid_perl_interpreter,
+    };
 
     #[test]
     fn missing_module_name_parses_standard_module_path() {
@@ -1866,6 +1891,17 @@ mod tests {
         }
     }
 
+    #[test]
+    fn validates_perl_interpreter_names() {
+        assert!(is_valid_perl_interpreter("perl"));
+        assert!(is_valid_perl_interpreter("/usr/bin/perl"));
+        assert!(is_valid_perl_interpreter("C:/Strawberry/perl/bin/perl.exe"));
+        assert!(is_valid_perl_interpreter("perl5.38.2"));
+
+        assert!(!is_valid_perl_interpreter("/bin/sh"));
+        assert!(!is_valid_perl_interpreter("python3"));
+        assert!(!is_valid_perl_interpreter("   "));
+    }
     #[test]
     fn format_perl_spawn_error_includes_custom_interpreter_name() {
         let error = std::io::Error::new(std::io::ErrorKind::NotFound, "No such file or directory");

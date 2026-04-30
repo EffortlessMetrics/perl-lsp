@@ -252,6 +252,26 @@ fn known_feature_name(name: &str) -> Option<&'static str> {
     }
 }
 
+const ALL_KNOWN_FEATURES: &[&str] = &[
+    "say",
+    "state",
+    "switch",
+    "unicode_strings",
+    "unicode_eval",
+    "evalbytes",
+    "current_sub",
+    "fc",
+    "postfix_deref",
+    "try",
+    "signatures",
+    "defer",
+    "isa",
+    "class",
+    "field",
+    "method",
+    "builtin",
+];
+
 fn enable_feature_name(state: &mut PragmaState, name: &str) -> bool {
     if name == "signatures" {
         state.signatures_strict = true;
@@ -302,7 +322,7 @@ fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) 
     for arg in args {
         for item in feature_items(arg) {
             if enabled && item == ":all" {
-                for feature in features_enabled_by_version(PerlVersion::new(5, 40)) {
+                for feature in ALL_KNOWN_FEATURES {
                     changed |= enable_feature_name(state, feature);
                 }
                 continue;
@@ -403,6 +423,10 @@ fn pragma_arg_items(arg: &str) -> Vec<String> {
 
     if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
         return inner.split_whitespace().map(|item| item.to_string()).collect();
+    }
+
+    if trimmed.contains(char::is_whitespace) {
+        return trimmed.split_whitespace().map(|item| item.to_string()).collect();
     }
 
     vec![trimmed.to_string()]
@@ -606,11 +630,13 @@ impl PragmaTracker {
                                 current_state.strict_refs = true;
                             } else {
                                 for arg in conditional_args {
-                                    match normalized_pragma_token(arg) {
-                                        "vars" => current_state.strict_vars = true,
-                                        "subs" => current_state.strict_subs = true,
-                                        "refs" => current_state.strict_refs = true,
-                                        _ => {}
+                                    for item in pragma_arg_items(arg) {
+                                        match item.as_str() {
+                                            "vars" => current_state.strict_vars = true,
+                                            "subs" => current_state.strict_subs = true,
+                                            "refs" => current_state.strict_refs = true,
+                                            _ => {}
+                                        }
                                     }
                                 }
                             }
@@ -785,11 +811,13 @@ impl PragmaTracker {
                                 current_state.strict_refs = false;
                             } else {
                                 for arg in conditional_args {
-                                    match normalized_pragma_token(arg) {
-                                        "vars" => current_state.strict_vars = false,
-                                        "subs" => current_state.strict_subs = false,
-                                        "refs" => current_state.strict_refs = false,
-                                        _ => {}
+                                    for item in pragma_arg_items(arg) {
+                                        match item.as_str() {
+                                            "vars" => current_state.strict_vars = false,
+                                            "subs" => current_state.strict_subs = false,
+                                            "refs" => current_state.strict_refs = false,
+                                            _ => {}
+                                        }
                                     }
                                 }
                             }
@@ -894,6 +922,10 @@ impl PragmaTracker {
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     "warnings" => {
+                        let warnings_before = current_state.warnings;
+                        let had_disabled_before =
+                            !current_state.disabled_warning_categories.is_empty();
+                        let before = current_state.disabled_warning_categories.len();
                         if args.is_empty() {
                             // `no warnings;` — disable all warnings globally
                             current_state.warnings = false;
@@ -909,8 +941,17 @@ impl PragmaTracker {
                                 add_disabled_warning_category(current_state, category);
                             }
                         }
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        let changed = if args.is_empty() {
+                            warnings_before || had_disabled_before
+                        } else {
+                            current_state.disabled_warning_categories.len() != before
+                        };
+                        if changed {
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                        }
                     }
                     "utf8" => {
                         current_state.utf8 = false;
