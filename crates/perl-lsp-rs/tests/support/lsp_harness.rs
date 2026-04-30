@@ -811,6 +811,28 @@ impl LspHarness {
         }
     }
 
+    /// Wait for an ordered sequence of `$/progress` kinds for `token`, sharing the
+    /// same overall `timeout` budget across all kinds in the sequence.
+    pub fn wait_for_progress_sequence(
+        &mut self,
+        token: &str,
+        kinds: &[&str],
+        timeout: Duration,
+    ) -> Result<Vec<Value>, String> {
+        let start = Instant::now();
+        let mut found = Vec::with_capacity(kinds.len());
+        for kind in kinds {
+            let remaining = timeout.saturating_sub(start.elapsed());
+            if remaining.is_zero() {
+                return Err(format!(
+                    "$/progress sequence for token '{token}' did not complete within {timeout:?}"
+                ));
+            }
+            found.push(self.wait_for_progress_kind(token, kind, remaining)?);
+        }
+        Ok(found)
+    }
+
     /// Drain server-initiated requests from the buffer.
     ///
     /// Server-to-client requests (e.g., `window/workDoneProgress/create`) are
