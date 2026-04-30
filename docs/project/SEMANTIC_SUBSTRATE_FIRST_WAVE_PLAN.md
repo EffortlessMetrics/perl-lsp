@@ -103,7 +103,7 @@ safe_delete_plan(entity)
 5. Definition-candidate multimap behind compatibility APIs.
 6. Typed reference-edge global index behind compatibility APIs.
 
-## Wave 2 Implementation Status (as of 2026-04-29)
+## Wave 2 Implementation Status (as of 2026-04-30)
 
 This section is the migration receipt for what has landed versus what remains staged.
 
@@ -115,12 +115,15 @@ This section is the migration receipt for what has landed versus what remains st
 - **Definition candidate multimap:** `DefinitionCandidate` multimap behind compatibility APIs is landed with deterministic sort and incremental removal. (PR #7360)
 - **Shadow-compare receipt:** design/test rail is landed (`semantic_shadow_compare.rs`); no provider cutover or production shadow-read gating is enabled. (PR #7366)
 - **Scorecard v1:** fixture harness and baseline-pending semantic scorecard are landed; metric rows are intentionally `baseline_pending` until full adapter/index plumbing is wired. (PR #7367)
+- **`SymbolRef -> OccurrenceFact` adapter:** landed in `perl-symbol`; phase-1 `SymbolRef` forms can emit canonical `OccurrenceFact`/`AnchorFact` with neutral unresolved handling. (PR #7444)
+- **`ExportInfo -> ExportSet` adapter:** landed in `perl-semantic-analyzer` with deterministic adapter tests.
 
 ### Still staged
 
-- **`SymbolRef -> OccurrenceFact` adapter:** not landed; occurrence facts are not yet emitted from reference sites.
-- **`ExportInfo -> ExportSet` adapter:** not landed; export analysis remains in legacy format.
 - **Typed reference-edge global index:** not landed; typed-reference behavior is constrained to fixture/regression banks rather than a provider-facing global index.
+- **Canonical producer wiring into `FileFactShard`:** partial; declarations are present but workspace-wide shard population from all canonical producers is not yet complete.
+- **Scorecard real/nonzero fact rows:** not landed; scorecard remains baseline-pending rather than emitted-fact counts.
+- **Fixture-backed shadow compare execution:** not landed; receipt schema exists but execution is not yet fixture-backed for core workspace queries.
 
 ### Explicit non-goals for current Wave 2 state
 
