@@ -29,6 +29,16 @@ fn new_checked_allows_empty_eof_tokens() -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
+
+#[test]
+fn new_checked_allows_empty_unknown_tokens() -> Result<(), Box<dyn std::error::Error>> {
+    let tok = Token::new_checked(TokenKind::Unknown, "<synthetic>", 11, 11)?;
+    assert_eq!(tok.kind, TokenKind::Unknown);
+    assert_eq!(tok.start, 11);
+    assert_eq!(tok.end, 11);
+    assert!(tok.is_empty());
+    Ok(())
+}
 #[test]
 fn eof_at_preserves_position() -> Result<(), Box<dyn std::error::Error>> {
     let eof = Token::eof_at(123);
