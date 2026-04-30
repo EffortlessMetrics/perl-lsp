@@ -17,6 +17,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, eyre};
@@ -143,6 +146,41 @@ fn replace_block(
     Ok(result.into_owned())
 }
 
+struct SubsystemProgress {
+    done: Arc<AtomicBool>,
+    join: Option<thread::JoinHandle<()>>,
+}
+
+impl SubsystemProgress {
+    fn start(name: &str) -> Self {
+        eprintln!("[update-status] starting subsystem: {name}");
+        let done = Arc::new(AtomicBool::new(false));
+        let done_clone = Arc::clone(&done);
+        let name_owned = name.to_string();
+        let join = thread::spawn(move || {
+            while !done_clone.load(Ordering::Relaxed) {
+                thread::sleep(Duration::from_secs(30));
+                if done_clone.load(Ordering::Relaxed) {
+                    break;
+                }
+                eprintln!(
+                    "[update-status] subsystem '{name_owned}' still running; waiting for completion..."
+                );
+            }
+        });
+        Self { done, join: Some(join) }
+    }
+}
+
+impl Drop for SubsystemProgress {
+    fn drop(&mut self) {
+        self.done.store(true, Ordering::Relaxed);
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
@@ -182,6 +220,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- LSP subsystem ---
     if need_lsp {
+        let _progress = SubsystemProgress::start("lsp");
         let cov = lsp::count_lsp_coverage(&root)?;
         let compliance_table = lsp::compute_compliance_table(&root)?;
 
@@ -204,6 +243,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- Tests subsystem ---
     if need_tests {
+        let _progress = SubsystemProgress::start("tests");
         let test_counts = tests::count_tests(&root);
         let missing_docs_current = tests::count_missing_docs_perl_parser(&root);
         let missing_docs_baseline = tests::read_missing_docs_baseline(&root);
@@ -224,6 +264,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- Parser subsystem ---
     if need_parser {
+        let _progress = SubsystemProgress::start("parser");
         let parser_metrics = parser::collect_parser_metrics(&root);
 
         let parser_path = root.join("docs/project/status/parser.md");
@@ -237,6 +278,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- Quality subsystem ---
     if need_quality {
+        let _progress = SubsystemProgress::start("quality");
         let quality_path = root.join("docs/project/status/quality.md");
         let original_quality =
             fs::read_to_string(&quality_path).context("reading docs/project/status/quality.md")?;
@@ -255,6 +297,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- DAP subsystem ---
     if need_dap {
+        let _progress = SubsystemProgress::start("dap");
         let dap_counts = dap::count_dap_tests(&root);
 
         let dap_path = root.join("docs/project/status/dap.md");
@@ -268,6 +311,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- Workspace subsystem ---
     if need_workspace {
+        let _progress = SubsystemProgress::start("workspace");
         let workspace_path = root.join("docs/project/status/workspace.md");
         let original_workspace = fs::read_to_string(&workspace_path)
             .context("reading docs/project/status/workspace.md")?;
