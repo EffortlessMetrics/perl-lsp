@@ -941,6 +941,56 @@ sub function_in_file2 { }
     Ok(())
 }
 
+/// Test 16b: Workspace Symbols honor document lifecycle (open/close)
+#[test]
+fn test_e2e_workspace_symbols_document_close_lifecycle() -> TestResult {
+    let mut ctx = TestContext::new();
+    ctx.initialize();
+
+    let uri = "file:///test/lifecycle_symbols.pl";
+    let symbol_name = "lifecycle_unique_symbol";
+    let code = format!(
+        r#"
+sub {symbol_name} {{
+    return 1;
+}}
+"#
+    );
+    ctx.open_document(uri, &code);
+
+    let opened_result = ctx.send_request(
+        "workspace/symbol",
+        Some(json!({
+            "query": "lifecycle_unique_symbol"
+        })),
+    );
+    let opened_symbols = opened_result.ok_or("No workspace symbol result after opening document")?;
+    let opened_matches = opened_symbols
+        .as_array()
+        .ok_or("Expected workspace/symbol array after opening document")?
+        .iter()
+        .any(|symbol| symbol["name"] == symbol_name);
+    assert!(opened_matches, "Expected symbol to be indexed while document is open");
+
+    ctx.close_document(uri);
+
+    let closed_result = ctx.send_request(
+        "workspace/symbol",
+        Some(json!({
+            "query": "lifecycle_unique_symbol"
+        })),
+    );
+    let closed_symbols = closed_result.ok_or("No workspace symbol result after closing document")?;
+    let closed_matches = closed_symbols
+        .as_array()
+        .ok_or("Expected workspace/symbol array after closing document")?
+        .iter()
+        .any(|symbol| symbol["name"] == symbol_name);
+    assert!(!closed_matches, "Expected symbol to be removed after document close");
+
+    Ok(())
+}
+
 /// Test 17: Document Formatting
 #[test]
 fn test_e2e_document_formatting() -> TestResult {
