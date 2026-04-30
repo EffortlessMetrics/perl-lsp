@@ -184,4 +184,46 @@ proptest! {
             s
         );
     }
+
+    /// Escaped opener sequences are treated as literals and never trigger detection.
+    #[test]
+    fn escaped_code_constructs_do_not_trigger_detection(
+        prefix in "[A-Za-z0-9]{0,10}",
+        suffix in "[A-Za-z0-9]{0,10}",
+    ) {
+        let escaped_block = format!(r"{prefix}\(?{{danger}}{suffix}");
+        prop_assert!(
+            !RegexValidator::new().detects_code_execution(&escaped_block),
+            "escaped (?{{ should not be detected in {:?}",
+            escaped_block
+        );
+
+        let escaped_deferred = format!(r"{prefix}\(??{{danger}}{suffix}");
+        prop_assert!(
+            !RegexValidator::new().detects_code_execution(&escaped_deferred),
+            "escaped (??{{ should not be detected in {:?}",
+            escaped_deferred
+        );
+    }
+
+    /// Candidate sequences inside character classes are literals and not executable.
+    #[test]
+    fn character_class_literals_do_not_trigger_detection(
+        prefix in "[A-Za-z0-9]{0,10}",
+        suffix in "[A-Za-z0-9]{0,10}",
+    ) {
+        let class_block = format!("{prefix}[(?{{abc}})]{suffix}");
+        prop_assert!(
+            !RegexValidator::new().detects_code_execution(&class_block),
+            "character class (?{{ literal should not be detected in {:?}",
+            class_block
+        );
+
+        let class_deferred = format!("{prefix}[(??{{abc}})]{suffix}");
+        prop_assert!(
+            !RegexValidator::new().detects_code_execution(&class_deferred),
+            "character class (??{{ literal should not be detected in {:?}",
+            class_deferred
+        );
+    }
 }
