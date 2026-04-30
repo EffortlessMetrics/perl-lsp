@@ -915,7 +915,10 @@ impl RefactoringEngine {
             return Ok(false);
         }
 
-        // Ensure it's a directory and not a symlink (security check)
+        // Ensure it's a real directory — reject symlinks and, on Windows, NTFS
+        // junctions (FILE_ATTRIBUTE_REPARSE_POINT).  `file_type().is_symlink()`
+        // only fires for Unix symlinks / Windows symlinks; junctions require the
+        // platform-specific attribute check below.
         let metadata = std::fs::symlink_metadata(dir).map_err(|e| ParseError::SyntaxError {
             message: format!("Failed to read symlink metadata for {}: {}", dir.display(), e),
             location: 0,
@@ -923,6 +926,16 @@ impl RefactoringEngine {
 
         if !metadata.is_dir() || metadata.file_type().is_symlink() {
             return Ok(false);
+        }
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            // FILE_ATTRIBUTE_REPARSE_POINT covers both symlinks and junctions.
+            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+            if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                return Ok(false);
+            }
         }
 
         Ok(true)

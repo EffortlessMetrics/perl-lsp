@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/fix-forward.schema.json",
+  "title": "Fix Forward Receipt",
+  "type": "object",
+  "required": [
+    "classification",
+    "fix_forward_kind",
+    "safe_auto_fix",
+    "evidence",
+    "next_agent"
+  ],
+  "properties": {
+    "classification": {
+      "type": "string",
+      "const": "typed_fix_forward"
+    },
+    "fix_forward_kind": {
+      "type": "string",
+      "enum": [
+        "FMT_ONLY",
+        "TITLE_FIX",
+        "STALE_BASE_CASCADE",
+        "GENERATED_DOC_REGEN",
+        "INFRA_ADVISORY_DEMOTION",
+        "PARSER_RATCHET_REGRESSION"
+      ]
+    },
+    "safe_auto_fix": {
+      "type": "boolean"
+    },
+    "command": {
+      "type": ["string", "null"]
+    },
+    "route": {
+      "type": ["string", "null"]
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "next_agent": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

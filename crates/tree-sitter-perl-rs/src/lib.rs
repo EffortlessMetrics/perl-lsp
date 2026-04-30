@@ -525,6 +525,18 @@ impl<'tree> TreeCursor<'tree> {
         true
     }
 
+    /// Moves to the last child of the current node.
+    ///
+    /// Returns `true` when movement succeeds, `false` when the node has no children.
+    pub fn goto_last_child(&mut self) -> bool {
+        let child_count = self.current_ast_node().children().len();
+        if child_count == 0 {
+            return false;
+        }
+        self.path.push(child_count - 1);
+        true
+    }
+
     /// Moves to the next sibling of the current node.
     ///
     /// Returns `true` on success. Returns `false` if the cursor is at root or if
@@ -544,6 +556,25 @@ impl<'tree> TreeCursor<'tree> {
 
         let last_pos = self.path.len() - 1;
         self.path[last_pos] = next;
+        true
+    }
+
+    /// Moves to the previous sibling of the current node.
+    ///
+    /// Returns `true` on success. Returns `false` if the cursor is at root or if
+    /// there is no previous sibling.
+    pub fn goto_previous_sibling(&mut self) -> bool {
+        if self.path.is_empty() {
+            return false;
+        }
+
+        let current_index = self.path[self.path.len() - 1];
+        if current_index == 0 {
+            return false;
+        }
+
+        let last_pos = self.path.len() - 1;
+        self.path[last_pos] = current_index - 1;
         true
     }
 
@@ -630,14 +661,19 @@ fn collect_visible_use_imports(
     node.for_each_child(|child| collect_visible_use_imports(child, source, offset, out));
 }
 
-// Invariant: TreeCursor path is constructed by the traversal that just yielded this
-// index, so child_at is guaranteed valid.
-#[allow(clippy::expect_used)]
+// Invariant: TreeCursor path is constructed by traversal methods in this type.
+// If a stale/invalid path somehow appears, return the last valid node instead
+// of panicking, preserving total API safety guarantees.
 fn resolve_path<'tree>(root: &'tree AstNode, path: &[usize]) -> &'tree AstNode {
     let mut current = root;
     for &index in path {
-        current = ast_child_at(current, index)
-            .expect("TreeCursor path must always reference a valid child");
+        match ast_child_at(current, index) {
+            Some(child) => current = child,
+            None => {
+                debug_assert!(false, "TreeCursor path must reference a valid child");
+                break;
+            }
+        }
     }
     current
 }
@@ -1050,6 +1086,33 @@ mod tests {
     }
 
     #[test]
+    fn test_tree_cursor_last_child_and_previous_sibling_behavior() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $a = 1; my $b = 2;"));
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+
+        assert!(cursor.goto_last_child(), "root should have a last child");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+        assert!(cursor.goto_previous_sibling(), "last child should have a previous sibling");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+        assert!(!cursor.goto_previous_sibling(), "first sibling should not have previous sibling");
+    }
+
+    #[test]
+    fn test_tree_cursor_last_child_returns_false_for_leaf() {
+        let mut p = Parser::new();
+        let tree = must_some(p.parse("my $x = 42;"));
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+
+        assert!(cursor.goto_first_child(), "root should have a child");
+        assert!(cursor.goto_first_child(), "my_declaration should have a child");
+        let at_leaf = !cursor.goto_last_child();
+        assert!(at_leaf, "leaf nodes should not have a last child");
+    }
+
+    #[test]
     fn test_tree_cursor_goto_first_child_returns_false_for_leaf() {
         // A leaf node has no children; goto_first_child must return false and
         // leave the cursor positioned at the leaf rather than panicking.
@@ -1076,10 +1139,10 @@ mod tests {
 
         // Navigate to first statement
         assert!(cursor.goto_first_child());
-        let mut count = 1;
+        let mut _count = 1;
         // Keep advancing siblings until we can't
         while cursor.goto_next_sibling() {
-            count += 1;
+            _count += 1;
         }
         // After last goto_next_sibling returns false, cursor should still be valid
         // and still have a node (the last sibling).
