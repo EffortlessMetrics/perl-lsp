@@ -1093,16 +1093,14 @@ enum Commands {
         ratchet_check: bool,
     },
 
-    /// Generate structured UX regression receipt from test output
+    /// Emit structured UX regression receipt from test output
     UxRegressionReceipt {
-        /// Path to UX test output log
+        /// Path to test output file (e.g., /tmp/ux-test-output.txt)
         #[arg(long)]
         input: PathBuf,
-
-        /// Path to write receipt JSON (optional)
+        /// Optional path to write receipt JSON
         #[arg(long)]
         receipt: Option<PathBuf>,
-
         /// Git SHA for receipt metadata
         #[arg(long)]
         sha: Option<String>,
