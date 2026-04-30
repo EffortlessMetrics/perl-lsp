@@ -105,6 +105,7 @@ pub fn add_workspace_symbol_completions(
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
+                    label_details: None,
                 });
             }
             WsSymbolKind::Variable(var_kind) => {
@@ -137,6 +138,7 @@ pub fn add_workspace_symbol_completions(
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
+                    label_details: None,
                 });
             }
             WsSymbolKind::Package => {
@@ -153,6 +155,7 @@ pub fn add_workspace_symbol_completions(
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: Some(vec![":".to_string(), ";".to_string()]),
+                    label_details: None,
                 });
             }
             WsSymbolKind::Constant => {
@@ -169,6 +172,7 @@ pub fn add_workspace_symbol_completions(
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
+                    label_details: None,
                 });
             }
             WsSymbolKind::Export => {
@@ -185,6 +189,7 @@ pub fn add_workspace_symbol_completions(
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
+                    label_details: None,
                 });
             }
             _ => {
@@ -369,6 +374,7 @@ pub fn add_use_module_completions(
                 additional_edits: vec![],
                 text_edit_range: Some((context.prefix_start, context.position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }
@@ -391,6 +397,7 @@ pub fn add_use_module_completions(
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: Some(vec![":".to_string(), ";".to_string()]),
+                    label_details: None,
                 });
             }
         }
@@ -471,6 +478,7 @@ pub fn add_use_qw_import_completions(
             additional_edits: vec![],
             text_edit_range: Some((context.prefix_start, context.position)),
             commit_characters: None,
+            label_details: None,
         });
     }
 }
@@ -645,6 +653,7 @@ pub fn add_workspace_method_completions(
             additional_edits,
             text_edit_range: Some((context.prefix_start, context.position)),
             commit_characters: None,
+            label_details: None,
         });
     }
 }
