@@ -46,6 +46,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 use walkdir::WalkDir;
 
 /// Validates the output path for benchmark results
@@ -153,7 +154,7 @@ pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<
         && std::path::Path::new("tree-sitter-perl/test/benchmark.js").exists()
     {
         let c_result = run_c_benchmarks()?;
-        let rust_mean = extract_rust_mean()?;
+        let rust_mean = extract_rust_mean(name.as_deref())?;
         let comparison = compare_implementations(rust_mean, c_result.average);
         detect_regressions(&comparison)?;
         let report = generate_report(&comparison);
@@ -191,19 +192,41 @@ fn run_c_benchmarks() -> Result<CBenchmarkResult> {
 }
 
 /// Extract the mean time from the latest Criterion benchmark output
-fn extract_rust_mean() -> Result<f64> {
-    for entry in WalkDir::new("target/criterion").into_iter().filter_map(|e| e.ok()) {
-        if entry.file_name() == "estimates.json" {
-            let data = fs::read_to_string(entry.path())?;
-            let json: serde_json::Value = serde_json::from_str(&data)?;
-            if let Some(mean) =
-                json.get("mean").and_then(|m| m.get("point_estimate")).and_then(|v| v.as_f64())
-            {
-                return Ok(mean);
+fn extract_rust_mean(bench_name: Option<&str>) -> Result<f64> {
+    extract_rust_mean_from(Path::new("target/criterion"), bench_name)
+}
+
+fn extract_rust_mean_from(criteria_root: &Path, bench_name: Option<&str>) -> Result<f64> {
+    let mut candidates: Vec<(PathBuf, SystemTime)> = WalkDir::new(criteria_root)
+        .into_iter()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_name() == "estimates.json")
+        .filter_map(|entry| {
+            let path = entry.path().to_path_buf();
+            if let Some(bench_name) = bench_name {
+                // Check path components to be OS-agnostic (avoid hardcoding '/' separator on Windows)
+                let matches = path.components().any(|c| c.as_os_str() == bench_name);
+                if !matches {
+                    return None;
+                }
             }
-        }
-    }
-    Err(color_eyre::eyre::eyre!("No Criterion benchmark estimates found"))
+            let modified = entry.metadata().ok()?.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+            Some((path, modified))
+        })
+        .collect();
+
+    candidates.sort_by_key(|(_, modified)| *modified);
+
+    let (best_path, _) = candidates
+        .pop()
+        .ok_or_else(|| color_eyre::eyre::eyre!("No Criterion benchmark estimates found"))?;
+
+    let data = fs::read_to_string(&best_path)?;
+    let json: serde_json::Value = serde_json::from_str(&data)?;
+    json.get("mean")
+        .and_then(|m| m.get("point_estimate"))
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| color_eyre::eyre::eyre!("No mean.point_estimate in {}", best_path.display()))
 }
 
 /// Comparison between C and Rust benchmark results
@@ -242,6 +265,7 @@ fn generate_report(comparison: &BenchmarkComparison) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
@@ -351,5 +375,47 @@ mod tests {
         let output_path = temp_dir.path().join("benchmark_results.txt");
 
         assert!(validate_output_path(&output_path).is_ok());
+    }
+
+    #[test]
+    fn test_extract_rust_mean_prefers_named_benchmark() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let old = temp_dir.path().join("target/criterion/other/new/estimates.json");
+        let new = temp_dir.path().join("target/criterion/parser_benchmark/new/estimates.json");
+        if let Some(parent) = old.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if let Some(parent) = new.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        fs::write(&old, json!({"mean":{"point_estimate": 9999.0}}).to_string())?;
+        fs::write(&new, json!({"mean":{"point_estimate": 123.0}}).to_string())?;
+
+        let result = extract_rust_mean_from(
+            &temp_dir.path().join("target/criterion"),
+            Some("parser_benchmark"),
+        );
+
+        assert_eq!(result?, 123.0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_extract_rust_mean_requires_estimate_value() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let path = temp_dir.path().join("target/criterion/parser_benchmark/new/estimates.json");
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&path, json!({"mean":{"confidence_interval":{}}}).to_string())?;
+
+        let result = extract_rust_mean_from(
+            &temp_dir.path().join("target/criterion"),
+            Some("parser_benchmark"),
+        );
+
+        assert!(result.is_err());
+        Ok(())
     }
 }
