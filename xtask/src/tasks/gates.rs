@@ -2771,6 +2771,80 @@ mod tests {
     }
 
     #[test]
+    fn pr_fast_docs_as_code_keeps_always_on_and_skips_rust_lanes() -> color_eyre::eyre::Result<()> {
+        let gates = vec![
+            pr_gate("fmt", GatePlanningRole::AlwaysOn, "cargo xtask fmt --check"),
+            pr_gate("clippy_scoped", GatePlanningRole::RustScoped, "cargo clippy {package_args}"),
+            pr_gate("unit_core", GatePlanningRole::RustFallback, "cargo test -p perl-parser"),
+        ];
+
+        let plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates,
+            Some(scope_output("docs_as_code", &[], &[], &[])),
+            true,
+            false,
+            None,
+        )?;
+
+        assert_eq!(selected_gate_names(&plan), vec!["fmt"]);
+        assert_eq!(skipped_gate_names(&plan), vec!["clippy_scoped", "unit_core"]);
+        assert!(!plan.fallback_used);
+        assert!(plan.skipped.iter().all(|gate| gate.reason.contains("diff_class=docs_as_code")));
+        Ok(())
+    }
+
+    #[test]
+    fn pr_fast_ci_config_keeps_always_on_and_skips_rust_lanes() -> color_eyre::eyre::Result<()> {
+        let gates = vec![
+            pr_gate("fmt", GatePlanningRole::AlwaysOn, "cargo xtask fmt --check"),
+            pr_gate("clippy_scoped", GatePlanningRole::RustScoped, "cargo clippy {package_args}"),
+            pr_gate("unit_core", GatePlanningRole::RustFallback, "cargo test -p perl-parser"),
+        ];
+
+        let plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates,
+            Some(scope_output("ci_config", &[], &[], &[])),
+            true,
+            false,
+            None,
+        )?;
+
+        assert_eq!(selected_gate_names(&plan), vec!["fmt"]);
+        assert_eq!(skipped_gate_names(&plan), vec!["clippy_scoped", "unit_core"]);
+        assert!(!plan.fallback_used);
+        assert!(plan.skipped.iter().all(|gate| gate.reason.contains("diff_class=ci_config")));
+        Ok(())
+    }
+
+    #[test]
+    fn pr_fast_code_diff_with_empty_package_set_uses_fallback() -> color_eyre::eyre::Result<()> {
+        let gates = vec![
+            pr_gate("fmt", GatePlanningRole::AlwaysOn, "cargo xtask fmt --check"),
+            pr_gate("clippy_scoped", GatePlanningRole::RustScoped, "cargo clippy {package_args}"),
+            pr_gate("clippy_core", GatePlanningRole::RustFallback, "cargo clippy -p perl-parser"),
+        ];
+
+        let plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates,
+            Some(scope_output("code", &[], &[], &[])),
+            true,
+            true,
+            Some("ci-scope produced no package scope for a Rust-relevant diff".to_string()),
+        )?;
+
+        assert_eq!(selected_gate_names(&plan), vec!["fmt", "clippy_core"]);
+        assert_eq!(skipped_gate_names(&plan), vec!["clippy_scoped"]);
+        assert!(plan.fallback_used);
+        Ok(())
+    }
+
+    #[test]
     fn pr_fast_package_scoped_gate_runs_only_when_package_selected() -> color_eyre::eyre::Result<()>
     {
         let gates = vec![
@@ -2872,6 +2946,74 @@ mod tests {
         };
         assert!(check_tests.gate.command.contains("-p perl-parser"));
         assert!(check_tests.gate.command.contains("-p xtask"));
+        Ok(())
+    }
+
+    #[test]
+    fn pr_fast_code_diff_package_args_include_direct_crates() -> color_eyre::eyre::Result<()> {
+        let gates = vec![pr_gate(
+            "clippy_scoped",
+            GatePlanningRole::RustScoped,
+            "cargo clippy --locked {package_args}",
+        )];
+
+        let plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates,
+            Some(scope_output("code", &["perl-parser"], &[], &[])),
+            true,
+            false,
+            None,
+        )?;
+
+        assert_eq!(plan.package_args, vec!["-p", "perl-parser"]);
+        Ok(())
+    }
+
+    #[test]
+    fn pr_fast_code_diff_package_args_include_reverse_dependencies() -> color_eyre::eyre::Result<()>
+    {
+        let gates = vec![pr_gate(
+            "clippy_scoped",
+            GatePlanningRole::RustScoped,
+            "cargo clippy --locked {package_args}",
+        )];
+
+        let plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates,
+            Some(scope_output("code", &[], &["perl-lsp-rs"], &[])),
+            true,
+            false,
+            None,
+        )?;
+
+        assert_eq!(plan.package_args, vec!["-p", "perl-lsp-rs"]);
+        Ok(())
+    }
+
+    #[test]
+    fn pr_fast_code_diff_package_args_include_architecture_wideners() -> color_eyre::eyre::Result<()>
+    {
+        let gates = vec![pr_gate(
+            "clippy_scoped",
+            GatePlanningRole::RustScoped,
+            "cargo clippy --locked {package_args}",
+        )];
+
+        let plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates,
+            Some(scope_output("code", &[], &[], &["perl-dap"])),
+            true,
+            false,
+            None,
+        )?;
+
+        assert_eq!(plan.package_args, vec!["-p", "perl-dap"]);
         Ok(())
     }
 
