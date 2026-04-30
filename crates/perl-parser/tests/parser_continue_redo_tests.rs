@@ -451,6 +451,27 @@ fn parser_all_valid_continue_redo_cases_parse() {
 }
 
 #[test]
+fn parser_invalid_continue_redo_cases_fail() {
+    let invalid_cases: Vec<_> = continue_redo_cases().iter().filter(|case| !case.should_parse).collect();
+    assert!(
+        !invalid_cases.is_empty(),
+        "Expected at least one invalid continue/redo fixture"
+    );
+
+    for case in invalid_cases {
+        let result = parse_code(case.source);
+        assert!(
+            result.is_err(),
+            "Expected invalid case '{}' to fail parsing
+Source:
+{}",
+            case.id,
+            case.source
+        );
+    }
+}
+
+#[test]
 fn parser_continue_redo_coverage() {
     let all_cases = continue_redo_cases();
     let valid_count = all_cases.iter().filter(|c| c.should_parse).count();
