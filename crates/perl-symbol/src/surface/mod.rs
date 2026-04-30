@@ -30,7 +30,6 @@
 pub mod decl;
 pub mod facts;
 pub mod r#ref;
-pub mod ref_facts;
 
 pub use decl::{SymbolDecl, extract_symbol_decls};
 pub use facts::{
