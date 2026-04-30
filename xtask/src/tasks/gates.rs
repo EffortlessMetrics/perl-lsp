@@ -2529,6 +2529,7 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, HashMap, HashSet};
+    use tempfile::tempdir;
 
     use super::{
         DiffResult, FirstFailure, GateDefinition, GateMetrics, GatePlanningConfig,
@@ -2537,7 +2538,7 @@ mod tests {
         build_pr_fast_plan_from_scope_with_targets, compare_receipts, determine_overall_status,
         extend_plan_with_non_pr_fast_static_gates, extend_plan_with_static_tiers, failure_guidance,
         is_blocking_gate_status, is_cargo_test_command, load_policy_for_inspection,
-        parse_first_failure,
+        parse_first_failure, run_single_gate,
     };
     use crate::tasks::ci_scope::{
         ArchWidener, DirectCrate, LaneDecisions, PlatformOverrides, RevDepCrate, ScopeOutput,
@@ -2992,6 +2993,54 @@ mod tests {
     fn overall_status_is_fail_when_required_timeout_exists_even_without_fail_count() {
         let blocking_failures = vec!["req-timeout".to_string()];
         assert_eq!(determine_overall_status(0, &blocking_failures), "fail");
+    }
+
+    #[test]
+    fn required_gate_timeout_produces_timeout_receipt_fields_and_blocks_run() -> color_eyre::eyre::Result<()> {
+        let gate = GateDefinition {
+            name: "synthetic-timeout".to_string(),
+            tier: "pr_fast".to_string(),
+            description: "Synthetic timeout gate for timeout classification".to_string(),
+            required: true,
+            command: "sleep 1".to_string(),
+            timeout_seconds: 0,
+            retry_count: 0,
+            budgets: None,
+            quarantine: false,
+            tags: Vec::new(),
+            artifacts: Vec::new(),
+            matrix: None,
+            planning: None,
+        };
+        let policy = policy_with_gates(vec![gate.clone()]);
+        let log_dir = tempdir()?;
+
+        let result = run_single_gate(&gate, &policy, log_dir.path(), &super::GateRunnerConfig::default())?;
+
+        assert_eq!(result.gate_name, "synthetic-timeout");
+        assert_eq!(result.status, "timeout");
+        assert_eq!(result.command, "sleep 1");
+        assert_eq!(result.duration_ms > 0, true);
+        assert_eq!(result.log_path.as_deref(), Some("logs/synthetic-timeout.log"));
+        assert!(
+            result.output_summary.as_ref().is_some_and(|summary| !summary.trim().is_empty()),
+            "timeout result should retain output summary/log-derived content"
+        );
+
+        let timeout_seconds = gate.timeout_seconds;
+        assert_eq!(timeout_seconds, 0);
+        let blocking_failures = blocking_failure_gate_names(std::slice::from_ref(&result));
+        assert_eq!(blocking_failures, vec!["synthetic-timeout"]);
+        assert_eq!(determine_overall_status(0, &blocking_failures), "fail");
+
+        let (failures, _) = failure_guidance(std::slice::from_ref(&result));
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].lane, "synthetic-timeout");
+        assert!(
+            failures[0].summary.contains("timeout"),
+            "first_failure summary should mention timeout classification"
+        );
+        Ok(())
     }
 
     #[test]
