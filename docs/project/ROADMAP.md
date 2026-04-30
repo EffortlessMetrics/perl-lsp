@@ -101,6 +101,21 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 
 ### Now (post-v0.12.3 / pre-v0.13.0)
 
+- CI/control-plane Wave 2 substrate already landed and should not be re-implemented in parallel follow-up PRs:
+  - Per-gate timeout regression coverage in gate receipts (#7525)
+  - Bounded build-plane/agent storage contract (`cargo-safe`, `devplane-init`, `storage-doctor`) (#7449)
+  - UX receipt command registration + workflow upload path (#7569, #7561)
+  - PR-fast planner matrix coverage (#7547)
+  - Tokmd advisory workflow staged as non-blocking instrumentation (#7568)
+- Next CI/control-plane wave should optimize for reviewable, testable, independent slices and avoid broad redesign:
+  1. `update-status --write` progress streaming/failure attribution (#7404)
+  2. CI trigger regression lint (`pull_request:labeled|unlabeled` + `cancel-in-progress`)
+  3. Expected-skip/stale-check status normalization in merge-ready/reconciler
+  4. Review receipt -> reconciler label projection (labels as projected state, not source truth)
+  5. PR disposition evidence contract (duplicate/superseded/absorbed/extracted with linked evidence)
+  6. Merge-train planner/receipt protocol with stop conditions
+  7. Tokmd advisory stabilization (explicitly non-required while calibrating signal)
+- Wave guardrails: no bulk stale-closure automation, no full merge bot scope, no global pre-push hooks, no broad CI architecture rewrite in this pass.
 - `v0.12.3` shipped to GitHub Releases, VS Code Marketplace, and Open VSX on 2026-04-09; crates.io remains on `v0.12.2`
 - Pre-announcement license badge fix (PR #3193): canonical SPDX text in all 126 LICENSE files
 - Pre-announcement Docker arm64 timeout fix (#3188 → PR #3191, merged)
