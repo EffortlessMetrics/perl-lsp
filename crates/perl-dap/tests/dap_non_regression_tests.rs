@@ -621,6 +621,21 @@ fn test_set_function_breakpoints_response_has_breakpoints_array()
 }
 
 #[test]
+fn test_set_function_breakpoints_rejects_overlong_name() -> Result<(), Box<dyn std::error::Error>> {
+    let mut adapter = new_adapter();
+    let long_name = format!("Foo::{}", "A".repeat(600));
+    let args = json!({"breakpoints": [{"name": long_name}]});
+    let body = assert_ok(
+        adapter.handle_request(1, "setFunctionBreakpoints", Some(args)),
+        "setFunctionBreakpoints",
+    )
+    .ok_or("setFunctionBreakpoints must return a body")?;
+
+    assert_eq!(body["breakpoints"][0]["verified"], json!(false));
+    Ok(())
+}
+
+#[test]
 // AC:17 — setExceptionBreakpoints response has 'breakpoints' array
 fn test_set_exception_breakpoints_response_has_breakpoints_array()
 -> Result<(), Box<dyn std::error::Error>> {

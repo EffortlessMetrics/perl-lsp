@@ -334,7 +334,9 @@ impl DocumentHighlightProvider {
             }
             NodeKind::SlurpyParameter { variable } => Some(vec![variable.as_ref()]),
             NodeKind::NamedParameter { variable } => Some(vec![variable.as_ref()]),
-            _ => None,
+            // Fall back to the canonical AST traversal contract so newly-added
+            // child-bearing node kinds are still visited by highlights.
+            _ => Some(node.children()),
         }
     }
 

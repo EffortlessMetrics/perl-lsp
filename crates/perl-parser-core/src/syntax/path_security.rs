@@ -7,6 +7,18 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::syntax::path_normalize::{NormalizePathError, normalize_path_within_workspace};
 
+/// Walk `path` prefix-by-prefix and return `true` if any component is a symlink.
+fn path_has_symlink_component(path: &Path) -> bool {
+    let mut current = PathBuf::new();
+    for component in path.components() {
+        current.push(component.as_os_str());
+        if current.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+            return true;
+        }
+    }
+    false
+}
+
 fn normalize_filesystem_path(path: PathBuf) -> PathBuf {
     #[cfg(windows)]
     {
@@ -33,6 +45,10 @@ pub enum WorkspacePathError {
     /// Path resolves outside the workspace root.
     #[error("Path outside workspace: {0}")]
     PathOutsideWorkspace(String),
+
+    /// A symlink in the path resolves to a target outside the workspace root.
+    #[error("Symlink resolves outside workspace: {0}")]
+    SymlinkOutsideWorkspace(String),
 
     /// Path contains null bytes or disallowed control characters.
     #[error("Invalid path characters detected")]
@@ -69,6 +85,16 @@ pub fn validate_workspace_path(
     let final_path = if let Ok(canonical) = resolved.canonicalize() {
         let canonical = normalize_filesystem_path(canonical);
         if !canonical.starts_with(&workspace_canonical) {
+            // Distinguish symlink escapes (path was within workspace before symlink
+            // resolution) from direct outside-workspace access.
+            if path_has_symlink_component(&resolved) {
+                return Err(WorkspacePathError::SymlinkOutsideWorkspace(format!(
+                    "Symlink resolves outside workspace: {} -> {} (workspace: {})",
+                    resolved.display(),
+                    canonical.display(),
+                    workspace_canonical.display()
+                )));
+            }
             return Err(WorkspacePathError::PathOutsideWorkspace(format!(
                 "Path resolves outside workspace: {} (workspace: {})",
                 canonical.display(),
@@ -149,7 +175,7 @@ pub fn resolve_completion_base_directory(dir_part: &str) -> Option<PathBuf> {
     }
 
     match path.canonicalize() {
-        Ok(canonical) => Some(canonical),
+        Ok(canonical) => Some(normalize_filesystem_path(canonical)),
         Err(_) => {
             if path.exists() && path.is_dir() {
                 Some(path.to_path_buf())
@@ -574,7 +600,10 @@ mod tests {
         {
             let result =
                 validate_workspace_path(&PathBuf::from("escape_link/secret.txt"), workspace);
-            assert!(result.is_err(), "Symlink escape should be rejected");
+            assert!(
+                matches!(result, Err(WorkspacePathError::SymlinkOutsideWorkspace(_))),
+                "Symlink escape should produce SymlinkOutsideWorkspace, got: {result:?}"
+            );
         }
 
         Ok(())
@@ -622,7 +651,10 @@ mod tests {
         #[cfg(unix)]
         {
             let result = validate_workspace_path(&PathBuf::from("hop1/hop2/data.txt"), workspace);
-            assert!(result.is_err(), "Chained symlink escape should be rejected");
+            assert!(
+                matches!(result, Err(WorkspacePathError::SymlinkOutsideWorkspace(_))),
+                "Chained symlink escape should produce SymlinkOutsideWorkspace, got: {result:?}"
+            );
         }
 
         Ok(())

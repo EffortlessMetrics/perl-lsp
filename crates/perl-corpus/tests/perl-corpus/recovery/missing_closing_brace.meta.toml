@@ -1,0 +1,17 @@
+[concept]
+id = "parser.recovery.missing_closing_brace"
+tier = "pr"
+
+[expect]
+panic = false
+timeout = false
+mode = "recover_without_panic"
+
+[metrics]
+max_error_nodes = 2
+must_emit_node_kinds = ["SubDecl", "Block"]
+
+[snapshots]
+tokens = false
+ast = true
+spans = true

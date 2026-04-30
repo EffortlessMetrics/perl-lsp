@@ -8,6 +8,7 @@
 
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use serde_json::Value;
+use serde_json::json;
 use std::time::{Duration, Instant};
 
 fn binary_available() -> bool {
@@ -55,6 +56,7 @@ fn scenario_17_deleted_module_evicted_from_symbols_and_definition() {
 
     harness.open_file("main.pl", SCRIPT_SOURCE).expect("didOpen should succeed");
 
+    let cursor = harness.position_cursor("main.pl", 5, 25);
     let before_deadline = Instant::now() + Duration::from_secs(10);
     let mut symbols_before = Vec::new();
     let mut defs_before = Vec::new();
@@ -63,7 +65,7 @@ fn scenario_17_deleted_module_evicted_from_symbols_and_definition() {
             .workspace_symbols("gone_value_4068")
             .expect("workspace/symbol must not error before delete");
         defs_before =
-            harness.definition("main.pl", 5, 25).expect("definition must not error before delete");
+            harness.definition_at(&cursor).expect("definition must not error before delete");
 
         if !symbols_before.is_empty() && !defs_before.is_empty() {
             break;
@@ -81,6 +83,13 @@ fn scenario_17_deleted_module_evicted_from_symbols_and_definition() {
         "Expected definition to resolve before delete, got {:?}",
         defs_before
     );
+    harness.assert_normalized_eq(
+        &defs_before[0],
+        &json!({
+            "uri": "file://$WORKSPACE/lib/ModuleGone.pm",
+            "range": defs_before[0]["range"].clone(),
+        }),
+    );
 
     harness.workspace.delete("lib/ModuleGone.pm").expect("module delete should succeed");
     harness
@@ -95,7 +104,7 @@ fn scenario_17_deleted_module_evicted_from_symbols_and_definition() {
             .workspace_symbols("gone_value_4068")
             .expect("workspace/symbol must not error after delete");
         defs_after =
-            harness.definition("main.pl", 5, 25).expect("definition must not error after delete");
+            harness.definition_at(&cursor).expect("definition must not error after delete");
 
         if symbols_after.is_empty() && defs_after.is_empty() {
             break;
