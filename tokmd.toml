@@ -20,9 +20,11 @@ roots = ["crates", "xtask", "docs", "book", "scripts"]
 depth = 2
 
 [gate]
-# Phase 1: advisory-only. All rules are warn-level; fail_fast = false means
-# the gate collects full results without blocking merges. Promotion roadmap
-# and baseline acceptance criteria tracked in #4993 (Phase 2/3).
+# Phase 1: advisory-only. fail_fast = false means the gate collects all rule
+# violations before exiting rather than stopping at the first failure.
+# Merge non-blocking: tokmd Advisory has no required = true in required-checks.toml,
+# so a gate exit 1 does not prevent merge. Promotion roadmap and baseline
+# acceptance criteria tracked in #4993 (Phase 2/3).
 # SHA pinning: locked to v1.10.0 commit SHA (01f19c1c...) as accepted Phase 1
 # tech debt. Refresh cadence: update SHA when a tokmd release contains a rule
 # or config change relevant to perl-lsp. No automated tracking; manual review.
