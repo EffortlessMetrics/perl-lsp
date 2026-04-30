@@ -50,6 +50,7 @@ pub fn add_variable_completions(
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
                     commit_characters: None,
+                    label_details: None,
                 });
             }
         }
@@ -113,6 +114,7 @@ pub fn add_special_variables(
                 additional_edits: vec![],
                 text_edit_range: Some((context.prefix_start, context.position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }
@@ -152,6 +154,7 @@ pub fn add_all_variables(
                         additional_edits: vec![],
                         text_edit_range: Some((context.prefix_start, context.position)),
                         commit_characters: None,
+                        label_details: None,
                     });
                 }
             }

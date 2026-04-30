@@ -318,6 +318,10 @@ impl CheckpointCache {
         // Remove invalid checkpoints
         self.checkpoints
             .retain(|(_, cp)| !matches!(cp.context, CheckpointContext::Normal) || cp.position > 0);
+
+        // Edits can move checkpoints backward (or to the same position), so
+        // restore the sorted-order invariant required by binary-search lookups.
+        self.checkpoints.sort_unstable_by_key(|(pos, _)| *pos);
     }
 }
 
@@ -521,13 +525,15 @@ mod tests {
         // - checkpoint at 12 falls inside edit and resets to position 10 with Normal context.
         cache.apply_edit(10, 5, 2);
 
-        let reset = cache.find_before(10).ok_or("checkpoint inside edit should reset to edit start")?;
+        let reset =
+            cache.find_before(10).ok_or("checkpoint inside edit should reset to edit start")?;
         assert_eq!(reset.position, 10);
         assert_eq!(reset.context, CheckpointContext::Normal);
         assert_eq!(reset.mode, LexerMode::ExpectTerm);
 
-        let shifted =
-            cache.find_after(11).ok_or("checkpoint after edit should still be present and shifted")?;
+        let shifted = cache
+            .find_after(11)
+            .ok_or("checkpoint after edit should still be present and shifted")?;
         assert_eq!(shifted.position, 27);
         Ok(())
     }
@@ -573,6 +579,32 @@ mod tests {
             mid.is_none_or(|cp| cp.position != 20),
             "middle checkpoint (20) must be evicted when capacity=2 and total=3"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_checkpoint_cache_apply_edit_resorts_positions()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let mut cache = CheckpointCache::new(10);
+        for pos in [10usize, 20, 30] {
+            cache.add(LexerCheckpoint::at_position(pos));
+        }
+
+        // Edit [15, 35) resets checkpoints at 20 and 30 to position 15.
+        // Without re-sorting, cache order becomes [10, 15, 15] by position but
+        // stored entries can be out of order, breaking binary-search lookups.
+        cache.apply_edit(15, 20, 0);
+
+        let before = cache
+            .find_before(15)
+            .ok_or("find_before should locate checkpoint at edited boundary")?;
+        assert_eq!(before.position, 15);
+
+        let after = cache
+            .find_after(15)
+            .ok_or("find_after should locate checkpoint at edited boundary")?;
+        assert_eq!(after.position, 15);
+
         Ok(())
     }
 }

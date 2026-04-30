@@ -428,11 +428,7 @@ mod tests {
     fn shorthand_signature_entries_have_full_signature_coverage() {
         let targets = ["printf", "system", "exec", "mkdir", "unlink", "stat"];
         for name in &targets {
-            assert!(
-                try_get_param_names(name).is_some(),
-                "BUILTIN_SIGS should contain '{}'",
-                name
-            );
+            assert!(try_get_param_names(name).is_some(), "BUILTIN_SIGS should contain '{}'", name);
             assert!(
                 BUILTIN_FULL_SIGS.contains_key(name),
                 "BUILTIN_FULL_SIGS should contain '{}'",

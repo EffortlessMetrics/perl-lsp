@@ -59,9 +59,8 @@ fn fuzz_randomized_workspace_layouts_preserve_discovery_invariants() -> TestResu
         ".cache/precompiled",
         ".git/hooks",
     ];
-    let extensions = [
-        "pl", "pm", "t", "psgi", "xs", "i", "tt", "tt2", "ep", "txt", "md", "json", "rs",
-    ];
+    let extensions =
+        ["pl", "pm", "t", "psgi", "xs", "i", "tt", "tt2", "ep", "txt", "md", "json", "rs"];
 
     let mut rng = XorShift64::new(0xA11C_E55D_1234_5678);
 

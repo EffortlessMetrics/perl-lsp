@@ -10,7 +10,8 @@
 /// Returns the byte offset of the start of the marker, or None if not found.
 pub fn find_data_marker_byte_lexed(s: &str) -> Option<usize> {
     // Cheap prefilter: avoid constructing the lexer when marker substrings are absent.
-    if !s.contains("__DATA__") && !s.contains("__END__") {
+    const MARKERS: [&str; 2] = ["__DATA__", "__END__"];
+    if !MARKERS.iter().any(|marker| s.contains(marker)) {
         return None;
     }
 
@@ -86,6 +87,25 @@ mod tests {
         assert_eq!(code_slice(src2), "code;\n");
     }
 
+
+    #[test]
+    fn test_split_code_and_data_prefers_first_marker() {
+        let src = "print 'a';\n__DATA__\none\n__END__\ntwo";
+        assert_eq!(
+            split_code_and_data(src),
+            ("print 'a';\n", Some("__DATA__\none\n__END__\ntwo"))
+        );
+    }
+
+    #[test]
+    fn test_find_data_marker_ignores_markers_inside_heredoc_and_pod() {
+        let heredoc = "my $x = <<'TXT';\n__DATA__\nTXT\nprint $x;\n";
+        assert_eq!(find_data_marker_byte_lexed(heredoc), None);
+
+        let pod = "=pod\n__END__\n=cut\nprint 'ok';\n";
+        assert_eq!(find_data_marker_byte_lexed(pod), None);
+    }
+
     #[test]
     fn test_split_code_and_data() {
         let no_marker = "print 'hello';\n";
@@ -123,5 +143,4 @@ mod tests {
         let src = "say 1;\n__END__\ntrailer";
         assert_eq!(find_data_marker_byte(src), find_data_marker_byte_lexed(src));
     }
-
 }
