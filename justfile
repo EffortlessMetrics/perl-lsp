@@ -42,29 +42,12 @@ _timed name cmd:
 # Tier: PR-fast (required for every PR iteration, must be fast ~1-2 min)
 pr-fast: _check-tools-basic
     #!/usr/bin/env bash
-    set -uo pipefail
-    echo "=============================================="
-    echo "  PR-FAST GATE (quick validation)"
-    echo "=============================================="
-    START=$(date +%s)
-    just _timed "check-conflict-markers" "just check-conflict-markers" && \
-    just _timed "fmt-check" "just fmt-check" && \
-    just _timed "release-history" "just ci-release-history" && \
-    just _timed "readme-heading-check" "just readme-heading-check" && \
-    just _timed "clippy-core" "just clippy-core" && \
-    just _timed "test-core" "just test-core" && \
-    just _timed "publish-closure" "just ci-publish-closure" && \
-    just _timed "publish-manifest-check" "just ci-publish-manifest-check" && \
-    just _timed "layer-check" "just ci-layer-check" && \
-    just _timed "published-crate-count" "just ci-published-crate-count" && \
-    just _timed "release-history-check" "just ci-release-history-check"
-    RC=$?
-    END=$(date +%s)
-    echo ""
-    echo "=============================================="
-    echo "  PR-fast gate complete (total: $((END - START))s)"
-    echo "=============================================="
-    exit $RC
+    set -euo pipefail
+    args=(--tier pr-fast --receipt)
+    if [ -n "${CI_SCOPE_BASE:-}" ]; then
+        args+=(--base "$CI_SCOPE_BASE")
+    fi
+    cargo xtask gates "${args[@]}"
 
 # Compile-only gate: catches integration-test/benchmark bit-rot and also
 # validates feature-gated code paths without incurring full test runtime.
@@ -77,7 +60,7 @@ check-all-targets:
     cargo check --workspace --all-targets --all-features --locked
     @echo "All targets compile clean."
 
-# Scan every tracked file for committed git conflict markers (<<<<<<< / >>>>>>> / =======).
+# Scan every tracked file for committed git conflict marker lines.
 # Catches accidental conflict-marker commits before they break compilation or CI.
 # Historically caused: broken reconciler (3 cron cycles, #6869), corrupted docs (#7042).
 # Cost: <1s. Zero false positives for lines starting with exactly 7 < / > chars or =======$
@@ -991,11 +974,11 @@ gates-json tier='merge-gate':
 gates-list:
     @cargo xtask gates --list
 
-# Validate gate-policy invariants and registry alignment.
+# Validate effective gate policy invariants (PR safety + registry alignment)
 gate-policy-check:
     @cargo xtask gate-policy check
 
-# Print effective gates for a policy profile (pr, merge, nightly, release).
+# Show effective gate policy for a profile (pr/nightly/release)
 gate-policy-effective profile='pr':
     @cargo xtask gate-policy effective --profile {{profile}}
 
@@ -1799,6 +1782,26 @@ perf-baseline:
     @echo "Baseline complete. See docs/project/PERFORMANCE_BASELINES.md"
 
 # ============================================================================
+# Real-Workspace Baseline Measurement (Issue #7291)
+# ============================================================================
+
+# Run real-workspace LSP latency baseline for a given project and system.
+#
+# Usage:
+#   just real-workspace-baseline                             # defaults: mojolicious + auto-detected OS
+#   just real-workspace-baseline dancer2                     # specific project
+#   just real-workspace-baseline mojolicious linux           # project + system override
+#
+# Deliverables:
+#   - Captures p50/p95/p99 latencies for 5 LSP operations via the test harness
+#   - Writes raw JSON to .ci/metrics/real_project_latency.json
+#   - Generates a dated markdown doc in docs/forensics/
+#
+# Note: The test harness runs ignored tests so this takes ~60-120s.
+real-workspace-baseline project='mojolicious' system='':
+    @bash scripts/real-workspace-baseline.sh "{{project}}" "{{system}}"
+
+# ============================================================================
 # Code Coverage (Issue #276)
 # ============================================================================
 # Generate and analyze code coverage reports using cargo-llvm-cov.
@@ -2160,6 +2163,9 @@ fuzz-regression duration='30':
     @just fuzz lsp_navigation {{duration}} || true
     @just fuzz utf16_roundtrip {{duration}} || true
     @just fuzz unicode_positions {{duration}} || true
+    @just fuzz lexer_tokenization {{duration}} || true
+    @just fuzz dap_eval_validator {{duration}} || true
+    @just fuzz dap_stack_parser {{duration}} || true
     @just fuzz-check-crashes
     @echo "✅ Fuzz regression testing complete"
 
