@@ -316,6 +316,76 @@ fn test_statement_modifier_parsing_mutations() {
     }
 }
 
+
+/// Test block/terminator boundaries with trailing control tokens.
+/// This specifically targets statement terminator boolean mutations around `}` and EOF.
+#[test]
+fn test_block_boundary_terminator_mutations() {
+    let boundary_cases = vec![
+        (
+            r"if ($ok) { my $x = 1; } else { my $y = 2; }",
+            true,
+            "Braced if/else should terminate statements at closing braces",
+        ),
+        (
+            r"while ($ready) { last if $done; }",
+            true,
+            "Loop body should terminate at closing brace",
+        ),
+        (
+            r"sub f { return 1; } f();",
+            true,
+            "Sub declaration followed by call should parse as two statements",
+        ),
+        (
+            r"if ($ok) { my $x = 1; } else",
+            true,
+            "Dangling else must fail quickly instead of looping",
+        ),
+        (
+            r"sub g { my $x = 1; ",
+            true,
+            "Unclosed block at EOF must be handled without hanging",
+        ),
+        (
+            r"for my $i (1..3) { print $i; } }",
+            true,
+            "Extra closing brace must fail cleanly",
+        ),
+    ];
+
+    for (perl_code, should_succeed, description) in boundary_cases {
+        let start_time = Instant::now();
+        let timeout = Duration::from_millis(100);
+
+        let mut parser = Parser::new(perl_code);
+        let parse_result = parser.parse();
+        let elapsed = start_time.elapsed();
+
+        assert!(
+            elapsed < timeout,
+            "MUTATION KILL: {} - parser exceeded timeout ({:?}) for input: '{}'",
+            description,
+            elapsed,
+            perl_code
+        );
+
+        assert!(
+            !matches!(parse_result, Err(ParseError::RecursionLimit)),
+            "MUTATION KILL: {} - recursion limit indicates terminator mutation for input: '{}'",
+            description,
+            perl_code
+        );
+
+        assert_eq!(
+            parse_result.is_ok(),
+            should_succeed,
+            "{}",
+            description
+        );
+    }
+}
+
 /// Integration test combining all boolean logic patterns
 /// Tests complex interactions that might reveal boolean logic mutations
 #[test]
