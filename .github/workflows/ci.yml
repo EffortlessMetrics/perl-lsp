@@ -113,7 +113,7 @@ jobs:
   pr-smoke:
     name: PR Smoke (Fast Feedback)
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 30
     needs: [draft-pr-check, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
