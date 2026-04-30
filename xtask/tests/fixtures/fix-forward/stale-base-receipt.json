@@ -1,0 +1,10 @@
+{
+  "gates": [
+    {
+      "gate_name": "stale-base-classifier",
+      "status": "fail",
+      "command": "cargo xtask ci-policy stale-base",
+      "output_summary": "stale base detected; rebase required"
+    }
+  ]
+}
