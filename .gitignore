@@ -250,6 +250,5 @@ test_corpus/workspaces/xlarge/bin/
 # Nextest local output
 /.nextest/
 
-# Cargo / Rust build output
-/target/
+# Devplane-routed build output (not repo-local)
 /build/
