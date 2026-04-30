@@ -112,6 +112,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Workspace-wide rename slice: multi-root support shipped in 0.12.x (#3984); workspace-wide rename/module-move remains roughly 30% complete and only conditionally in scope pending #3522 verification
 - Coroutine support issue #3539 is re-scoped: defer hypothetical core syntax, split upstream-tracking from CPAN-library IDE support planning
 - Semantic substrate migration status now tracks Wave 2 reality (facts vocabulary, SymbolDecl adapter, FileFactShard write-through, and DefinitionCandidate multimap landed; SymbolRef adapter and typed-reference global index still staged; ExportInfo -> ExportSet landed) in [SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md](SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md); provider cutover remains explicitly deferred until Wave 3 foundations (`ImportSpec` + `visible_symbols_at`) are proven
+- CI/control-plane next-wave execution sequencing is tracked in [CI_WAVE_EXECUTION_PLAN.md](CI_WAVE_EXECUTION_PLAN.md), with #7404 (`update-status --write` streaming) as the top urgency lane.
 
 ### Next (v0.13.0 — public alpha announcement)
 
