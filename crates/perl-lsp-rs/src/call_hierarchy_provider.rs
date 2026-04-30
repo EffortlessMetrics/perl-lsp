@@ -1,3 +1,5 @@
+//! Call hierarchy provider types and traversal helpers for LSP requests.
+
 use std::collections::HashMap;
 
 use perl_parser::PositionMapper;

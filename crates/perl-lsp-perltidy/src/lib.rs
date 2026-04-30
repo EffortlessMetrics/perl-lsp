@@ -110,6 +110,7 @@ impl PerlTidyConfig {
 
         if let Some(profile) = &self.profile {
             args.push(format!("--profile={profile}"));
+            args.extend(self.extra_args.clone());
             return args;
         }
 
@@ -197,7 +198,9 @@ impl PerlTidyFormatter {
     #[must_use]
     pub fn with_os_runtime(config: PerlTidyConfig) -> Self {
         use perl_subprocess_runtime::OsSubprocessRuntime;
-        let timeout = config.timeout_secs;
+        // OsSubprocessRuntime::with_timeout panics on zero; clamp to 1s so
+        // misconfigured clients do not crash the language server process.
+        let timeout = config.timeout_secs.max(1);
         Self::new(config, Arc::new(OsSubprocessRuntime::with_timeout(timeout)))
     }
 
@@ -256,8 +259,9 @@ impl PerlTidyFormatter {
         end_line: u32,
     ) -> Result<String, String> {
         if start_line > end_line {
-            return Err("Invalid line range: start line must be less than or equal to end line"
-                .to_string());
+            return Err(
+                "Invalid line range: start line must be less than or equal to end line".to_string()
+            );
         }
 
         let lines: Vec<&str> = code.lines().collect();
@@ -351,13 +355,15 @@ impl BuiltInFormatter {
     pub fn format(&self, code: &str) -> String {
         let mut result = String::new();
         let mut indent_level: i32 = 0;
+        let lines: Vec<&str> = code.lines().collect();
+        let had_trailing_newline = code.ends_with('\n');
         let indent_str = if self.config.tabs.unwrap_or(false) {
             "\t".to_string()
         } else {
             " ".repeat(self.config.indent_columns.unwrap_or(4) as usize)
         };
 
-        for line in code.lines() {
+        for (index, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
             let leading_closers = count_leading_closers(trimmed) as i32;
             indent_level = indent_level.saturating_sub(leading_closers);
@@ -368,14 +374,17 @@ impl BuiltInFormatter {
                 }
                 result.push_str(trimmed);
             }
-            result.push('\n');
+
+            let is_last_line = index + 1 == lines.len();
+            if !is_last_line || had_trailing_newline {
+                result.push('\n');
+            }
 
             // net_delimiter_delta counts all delimiters including leading closers.
             // We already decremented by leading_closers before printing, so add them
             // back to avoid double-counting: the net change for the *next* line is
             // delta + leading_closers (leading closers cancel in the net formula).
-            indent_level =
-                (indent_level + net_delimiter_delta(trimmed) + leading_closers).max(0);
+            indent_level = (indent_level + net_delimiter_delta(trimmed) + leading_closers).max(0);
         }
 
         result

@@ -130,6 +130,18 @@ pub enum TokenType {
     Error(Arc<str>),
 }
 
+impl TokenType {
+    /// Return `true` when this token is ignorable trivia.
+    pub fn is_trivia(&self) -> bool {
+        matches!(self, Self::Whitespace | Self::Newline | Self::Comment(_))
+    }
+
+    /// Return `true` when lexing could not continue safely.
+    pub fn is_recovery_token(&self) -> bool {
+        matches!(self, Self::UnknownRest | Self::Error(_))
+    }
+}
+
 /// A single token produced by [`PerlLexer`](crate::PerlLexer).
 ///
 /// Carries its [`TokenType`], the original source text (as a cheap-to-clone
@@ -160,5 +172,26 @@ impl Token {
     /// Return `true` if the token has a zero-length span.
     pub fn is_empty(&self) -> bool {
         self.start == self.end
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TokenType;
+    use std::sync::Arc;
+
+    #[test]
+    fn token_type_trivia_classifier_matches_expected_variants() {
+        assert!(TokenType::Whitespace.is_trivia());
+        assert!(TokenType::Newline.is_trivia());
+        assert!(TokenType::Comment(Arc::from("# note")).is_trivia());
+        assert!(!TokenType::Identifier(Arc::from("foo")).is_trivia());
+    }
+
+    #[test]
+    fn token_type_recovery_classifier_matches_expected_variants() {
+        assert!(TokenType::UnknownRest.is_recovery_token());
+        assert!(TokenType::Error(Arc::from("oops")).is_recovery_token());
+        assert!(!TokenType::EOF.is_recovery_token());
     }
 }

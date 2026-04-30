@@ -378,21 +378,109 @@ pub fn load_completion_gold_fixtures<P: AsRef<Path>>(
     Ok(fixtures)
 }
 
+// ---------------------------------------------------------------------------
+// Editor Intelligence — Document Symbols
+// ---------------------------------------------------------------------------
+
+/// Assertion kind for document-symbol gold corpus entries
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum DocumentSymbolAssertionKind {
+    /// Symbols list must not be empty
+    SymbolNonEmpty,
+    /// Symbol with exact `name` must be present in returned symbols
+    SymbolPresent { name: String },
+    /// Symbol with exact `name` must not be present
+    SymbolAbsent { name: String },
+    /// Exactly `count` symbols should be returned
+    SymbolCount { count: usize },
+}
+
+/// A single document-symbol assertion
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentSymbolAssertion {
+    #[serde(flatten)]
+    pub kind: DocumentSymbolAssertionKind,
+    #[serde(default)]
+    pub rationale: String,
+}
+
+/// On-disk representation of `expected_symbols.json`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentSymbolGoldExpected {
+    pub version: u32,
+    pub fixture: String,
+    pub assertions: Vec<DocumentSymbolAssertion>,
+}
+
+/// A document-symbol gold fixture (fixture.pl + expected_symbols.json)
+#[derive(Debug, Clone)]
+pub struct DocumentSymbolGoldFixture {
+    pub name: String,
+    pub fixture_path: PathBuf,
+    pub symbol_assertions: Vec<DocumentSymbolAssertion>,
+}
+
+/// Load all document-symbol gold fixtures from a directory.
+///
+/// Silently skips directories that lack `expected_symbols.json`.
+pub fn load_document_symbol_gold_fixtures<P: AsRef<Path>>(
+    root: P,
+) -> Result<Vec<DocumentSymbolGoldFixture>, Box<dyn std::error::Error>> {
+    let root = root.as_ref();
+    let mut fixtures = Vec::new();
+
+    if !root.exists() {
+        return Err(format!("Gold fixtures directory not found: {}", root.display()).into());
+    }
+
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if !path.is_dir() {
+            continue;
+        }
+
+        let fixture_path = path.join("fixture.pl");
+        let symbols_path = path.join("expected_symbols.json");
+
+        if !fixture_path.exists() || !symbols_path.exists() {
+            continue;
+        }
+
+        let name = path.file_name().ok_or("No directory name")?.to_string_lossy().to_string();
+        let json = fs::read_to_string(&symbols_path)?;
+        let expected: DocumentSymbolGoldExpected = serde_json::from_str(&json)
+            .map_err(|e| format!("Parsing {}: {e}", symbols_path.display()))?;
+
+        fixtures.push(DocumentSymbolGoldFixture {
+            name,
+            fixture_path,
+            symbol_assertions: expected.assertions,
+        });
+    }
+
+    fixtures.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(fixtures)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_gold_assertion_deserialization() {
+    fn test_gold_assertion_deserialization() -> Result<(), serde_json::Error> {
         let json = r#"{"assertion": "no_diagnostics"}"#;
-        let assertion: GoldAssertion = serde_json::from_str(json).unwrap();
+        let assertion: GoldAssertion = serde_json::from_str(json)?;
         assert!(matches!(assertion, GoldAssertion::NoDiagnostics));
+        Ok(())
     }
 
     #[test]
-    fn test_gold_assertion_diagnostic_present() {
+    fn test_gold_assertion_diagnostic_present() -> Result<(), serde_json::Error> {
         let json = r#"{"assertion": "diagnostic_present", "code": "PL100", "byte_offset": 24}"#;
-        let assertion: GoldAssertion = serde_json::from_str(json).unwrap();
+        let assertion: GoldAssertion = serde_json::from_str(json)?;
         assert!(
             matches!(
                 &assertion,
@@ -404,13 +492,15 @@ mod tests {
             ),
             "Expected DiagnosticPresent variant with code PL100 and byte_offset 24"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_gold_expected_deserialization() {
+    fn test_gold_expected_deserialization() -> Result<(), serde_json::Error> {
         let json = r#"{"diagnostics": [{"assertion": "no_diagnostics"}]}"#;
-        let expected: GoldExpected = serde_json::from_str(json).unwrap();
+        let expected: GoldExpected = serde_json::from_str(json)?;
         assert_eq!(expected.diagnostics.len(), 1);
+        Ok(())
     }
 
     #[test]
@@ -422,30 +512,33 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_diagnostics_array_deserializes() {
+    fn test_empty_diagnostics_array_deserializes() -> Result<(), serde_json::Error> {
         // empty array is valid JSON but the harness will catch it as vacuous
         let json = r#"{"diagnostics": []}"#;
-        let expected: GoldExpected = serde_json::from_str(json).unwrap();
+        let expected: GoldExpected = serde_json::from_str(json)?;
         assert_eq!(expected.diagnostics.len(), 0);
+        Ok(())
     }
 
     #[test]
-    fn test_no_diagnostic_deserialization() {
+    fn test_no_diagnostic_deserialization() -> Result<(), serde_json::Error> {
         let json = r#"{"assertion": "no_diagnostic", "code": "PL100"}"#;
-        let assertion: GoldAssertion = serde_json::from_str(json).unwrap();
+        let assertion: GoldAssertion = serde_json::from_str(json)?;
         assert!(
             matches!(&assertion, GoldAssertion::NoDiagnostic { code } if code == "PL100"),
             "Expected NoDiagnostic variant with code PL100"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_diagnostic_count_deserialization() {
+    fn test_diagnostic_count_deserialization() -> Result<(), serde_json::Error> {
         let json = r#"{"assertion": "diagnostic_count", "code": "PL001", "count": 3}"#;
-        let assertion: GoldAssertion = serde_json::from_str(json).unwrap();
+        let assertion: GoldAssertion = serde_json::from_str(json)?;
         assert!(
             matches!(&assertion, GoldAssertion::DiagnosticCount { code, count: 3 } if code == "PL001"),
             "Expected DiagnosticCount variant with code PL001 and count 3"
         );
+        Ok(())
     }
 }

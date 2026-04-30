@@ -76,6 +76,39 @@ jobs:
               ? context.payload.pull_request.number
               : null;
             if (!prNumber) return;
+            const labelWrite = async (description, fn) => {
+              try {
+                await fn();
+                return true;
+              } catch (error) {
+                if (error.status === 403) {
+                  core.warning(
+                    `Could not ${description} because this workflow context cannot write labels: ${error.message}`
+                  );
+                  return false;
+                }
+                throw error;
+              }
+            };
+            const removeLabelIfPresent = async (name) => {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name,
+                });
+              } catch (error) {
+                if (error.status === 404) return;
+                if (error.status === 403) {
+                  core.warning(
+                    `Could not remove ${name} because this workflow context cannot write labels: ${error.message}`
+                  );
+                  return;
+                }
+                throw error;
+              }
+            };
 
             const pr = await github.rest.pulls.get({
               owner: context.repo.owner,
@@ -98,26 +131,21 @@ jobs:
                 // Docs-only PRs can take the reviewer fast-track path.
                 // Do not manufacture a misleading needs-deep-review label.
                 if (prLabels.includes('needs-deep-review')) {
-                  try {
-                    await github.rest.issues.removeLabel({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      issue_number: prNumber,
-                      name: 'needs-deep-review',
-                    });
-                  } catch (e) { /* label might not exist */ }
+                  await removeLabelIfPresent('needs-deep-review');
                 }
                 return;
               }
 
               // Flag for deep review - do not merge without reviewer-deep sign-off
               if (!prLabels.includes('needs-deep-review')) {
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: prNumber,
-                  labels: ['needs-deep-review'],
-                });
+                await labelWrite('add needs-deep-review', () =>
+                  github.rest.issues.addLabels({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    labels: ['needs-deep-review'],
+                  })
+                );
               }
               return; // Do not add merge-ready until reviewer-deep has signed off
             }
@@ -134,25 +162,13 @@ jobs:
             }
 
             // reviewed-deep is present and PR is approved - proceed to merge-ready
-            try {
-              await github.rest.issues.removeLabel({
+            await removeLabelIfPresent('in-review');
+            await removeLabelIfPresent('needs-deep-review');
+            await labelWrite('add merge-ready', () =>
+              github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                name: 'in-review'
-              });
-            } catch (e) { /* label might not exist */ }
-            try {
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                name: 'needs-deep-review'
-              });
-            } catch (e) { /* label might not exist */ }
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              labels: ['merge-ready']
-            });
+                labels: ['merge-ready']
+              })
+            );
