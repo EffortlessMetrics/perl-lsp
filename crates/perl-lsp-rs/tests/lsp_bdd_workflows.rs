@@ -3088,3 +3088,46 @@ sub list {
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn bdd_document_highlight_marks_read_and_write_occurrences() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Document highlight includes read and write occurrences");
+
+    let script = r#"use strict;
+use warnings;
+
+my $count = 0;
+$count = $count + 1;
+print $count;
+"#;
+
+    scenario.given("a document where the same lexical variable is written and read multiple times");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", script)])?;
+    let script_uri = workspace.uri("main.pl");
+
+    harness.open(&script_uri, script)?;
+    harness.barrier();
+
+    let (line, character) = find_position(script, "$count = $count + 1");
+
+    scenario.when("requesting document highlights at the variable usage site");
+    let highlights = harness.request_with_timeout(
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": script_uri },
+            "position": { "line": line, "character": character + 1 }
+        }),
+        Duration::from_secs(2),
+    )?;
+
+    scenario.then("highlights include multiple ranges and both read and write kinds");
+    let items = highlight_items(&highlights);
+    assert!(items.len() >= 3, "expected >=3 highlights, got {highlights:?}");
+
+    let kinds = highlight_kinds(&highlights);
+    assert!(kinds.contains(&2), "expected read highlight kind=2, got {kinds:?}");
+    assert!(kinds.contains(&3), "expected write highlight kind=3, got {kinds:?}");
+
+    Ok(())
+}
