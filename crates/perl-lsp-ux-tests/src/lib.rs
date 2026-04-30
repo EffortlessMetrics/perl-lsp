@@ -47,13 +47,23 @@
 pub mod client;
 pub mod diagnostics;
 pub mod env;
+pub mod recorder;
 pub mod scorecard;
+pub mod taxonomy;
 pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
 pub use diagnostics::DiagnosticsTracker;
 pub use env::{PathGuard, RestrictedPath};
+pub use recorder::{
+    AssertionBasis, AssertionCounts, OperationTiming, RunIdentity, UxCheckFailure, UxRunRecorder,
+    UxScenarioRunReceipt, UxScenarioSkip, run_ux_scenario,
+};
 pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
+pub use taxonomy::{
+    MetricState, UxCiTier, UxComponent, UxFailureClass, UxRoute, UxScenarioResult,
+    route_for_failure_class,
+};
 pub use workspace::FakeWorkspace;
 
 use anyhow::{Context, Result, anyhow};

@@ -8,6 +8,22 @@ use serde_json::Value;
 const FIXTURE_MATRIX: &str = "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json";
 const UX_TESTS_DIR: &str = "crates/perl-lsp-ux-tests/tests";
 
+/// Valid `component` values matching the `UxComponent` enum in `taxonomy.rs`.
+const VALID_COMPONENTS: &[&str] = &[
+    "completion",
+    "diagnostics",
+    "module_resolution",
+    "workspace_symbols",
+    "rename",
+    "hover",
+    "goto_definition",
+    "infra",
+    "ai_completion",
+];
+
+/// Required keys inside each workflow's `instrumentation` object.
+const INSTRUMENTATION_KEYS: &[&str] = &["run_receipt", "first_useful_result", "protocol_goldens"];
+
 fn workspace_root() -> &'static Path {
     match Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(Path::parent) {
         Some(p) => p,
@@ -68,6 +84,8 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
         allowed_metrics.iter().cloned().map(|metric| (metric, 0_usize)).collect();
     let mut workflows_with_extended_metrics = 0_usize;
 
+    let valid_components: BTreeSet<&str> = VALID_COMPONENTS.iter().copied().collect();
+
     let workflows =
         matrix.get("workflows").and_then(Value::as_array).context("workflows missing")?;
 
@@ -78,6 +96,32 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
             .get("scenario_file")
             .and_then(Value::as_str)
             .context("workflow missing scenario_file")?;
+
+        // ── component field validation ───────────────────────────────
+        let component = workflow.get("component").and_then(Value::as_str).with_context(|| {
+            format!("workflow `{scenario_file}` missing required string `component`")
+        })?;
+        assert!(
+            valid_components.contains(component),
+            "workflow `{scenario_file}` has unknown component `{component}`, \
+             expected one of {valid_components:?}"
+        );
+
+        // ── instrumentation object validation ────────────────────────
+        let instrumentation =
+            workflow.get("instrumentation").and_then(Value::as_object).with_context(|| {
+                format!("workflow `{scenario_file}` missing required object `instrumentation`")
+            })?;
+        for &key in INSTRUMENTATION_KEYS {
+            let val = instrumentation.get(key).with_context(|| {
+                format!("workflow `{scenario_file}` instrumentation missing key `{key}`")
+            })?;
+            assert!(
+                val.is_boolean(),
+                "workflow `{scenario_file}` instrumentation.{key} must be a boolean"
+            );
+        }
+
         let measures = collect_string_set(
             workflow.get("measures").context("workflow missing measures")?,
             scenario_file,
