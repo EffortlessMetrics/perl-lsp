@@ -979,6 +979,7 @@ ci-gate:
     just hook-check && \
     just hook-registry-check && \
     just hook-tests && \
+    just ci-xtask-structural && \
     just ci-publish-closure && \
     just ci-publish-manifest-check && \
     just ci-layer-check && \
@@ -1400,6 +1401,10 @@ hook-registry-check:
 # Run all hook tests (behavior, registry, executable-bit)
 hook-tests:
     @cargo xtask hook-tests
+
+# Structural integrity tests for xtask update_status module layout (LOC caps, file existence)
+ci-xtask-structural:
+    @cargo test -p xtask 'tasks::update_status::mod_tests'
 
 # Show swarm metrics summary
 swarm-summary:
