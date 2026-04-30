@@ -194,6 +194,35 @@ mod tests {
     }
 
     #[test]
+    fn test_collect_per_crate_mutation_ignores_entries_without_package() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let out_dir = dir.path().join("mutants.out");
+        fs::create_dir_all(&out_dir)?;
+        let json = r#"[
+            {"package":"perl-quote","file":"crates/perl-quote/src/lib.rs"},
+            {"file":"crates/perl-parser/src/lib.rs","genre":"FnValue"},
+            {"package":null,"file":"crates/perl-parser/src/lib.rs"},
+            {"package":"perl-quote","file":"crates/perl-quote/src/lib.rs"}
+        ]"#;
+        fs::write(out_dir.join("mutants.json"), json)?;
+        let result = collect_per_crate_mutation(dir.path());
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.get("perl-quote"), Some(&2));
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_per_crate_mutation_invalid_json_returns_empty_map() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let out_dir = dir.path().join("mutants.out");
+        fs::create_dir_all(&out_dir)?;
+        fs::write(out_dir.join("mutants.json"), "{not-json")?;
+        let result = collect_per_crate_mutation(dir.path());
+        assert!(result.is_empty());
+        Ok(())
+    }
+
+    #[test]
     fn test_format_crate_quality_table_has_header_and_data() {
         let mut mutation = BTreeMap::new();
         mutation.insert("perl-quote".to_string(), 249);
@@ -225,5 +254,19 @@ mod tests {
         let counts = parse_per_crate_test_counts(output);
         assert_eq!(counts.get("perl-parser-core"), Some(&2));
         assert_eq!(counts.get("perl-workspace-index"), Some(&1));
+    }
+
+    #[test]
+    fn test_parse_per_crate_test_counts_ignores_tests_without_active_crate() {
+        let output = "orphan_test: test\n\
+            Running unittests src/lib.rs (target/debug/deps/perl_parser_core-abc123)\n\
+            parser_smoke: test\n\
+            note: test\n\
+            Running unittests src/lib.rs (target/debug/deps/perl_lexer-987def)\n\
+            lexer_smoke: test\n";
+        let counts = parse_per_crate_test_counts(output);
+        assert_eq!(counts.get("perl-parser-core"), Some(&2));
+        assert_eq!(counts.get("perl-lexer"), Some(&1));
+        assert_eq!(counts.len(), 2);
     }
 }
