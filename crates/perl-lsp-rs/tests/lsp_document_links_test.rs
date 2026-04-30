@@ -99,7 +99,7 @@ use JSON::PP;
 
     scenario.when("resolving the first link");
     let first_link = &links[0];
-    let resolved = harness.request("documentLink/resolve", first_link)?;
+    let resolved = harness.request("documentLink/resolve", first_link.clone())?;
 
     scenario.then("received resolved link contains target module path");
     let target = resolved
