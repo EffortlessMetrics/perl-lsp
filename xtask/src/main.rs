@@ -1612,6 +1612,9 @@ enum MetricsCommand {
         /// Write output to .ci/metrics/editor_intelligence.json
         #[arg(long)]
         json: bool,
+        /// Directory containing ux_scenario_run receipt JSON files.
+        #[arg(long)]
+        receipt_dir: Option<PathBuf>,
     },
     /// [stub] Workspace index memory and timing statistics.
     WorkspaceStats,
@@ -2129,7 +2132,9 @@ fn main() -> Result<()> {
         Commands::CheckTestWiring => check_test_wiring::run(),
         Commands::Metrics { command } => match command {
             MetricsCommand::ParserStats { input, json } => metrics::parser_stats::run(input, json),
-            MetricsCommand::LspStats { json } => metrics::lsp_stats::run_with_json(json),
+            MetricsCommand::LspStats { json, receipt_dir } => {
+                metrics::lsp_stats::run_with_receipt_dir(json, receipt_dir.as_deref())
+            }
             MetricsCommand::WorkspaceStats => metrics::workspace_stats::run(),
             MetricsCommand::DiagnosticsStats => metrics::diagnostics_stats::run(),
             MetricsCommand::Memory => metrics::memory::run(),

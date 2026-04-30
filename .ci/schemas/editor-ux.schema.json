@@ -228,7 +228,8 @@
             "module_resolution",
             "workspace_indexing",
             "dap",
-            "engineering_health"
+            "engineering_health",
+            "text_sync"
           ]
         },
         "pass_rate": {
