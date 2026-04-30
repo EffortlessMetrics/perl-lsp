@@ -1364,7 +1364,6 @@ fn select_by_seed<T>(items: &[T], seed: u64) -> Option<&T> {
     items.get(idx)
 }
 
-
 fn case_has_any_tag(case: &EdgeCase, tags: &[&str]) -> bool {
     case.tags.iter().any(|tag| tags.contains(tag))
 }
@@ -1402,10 +1401,7 @@ impl EdgeCaseGenerator {
             return edge_cases().iter().collect();
         }
 
-        edge_cases()
-            .iter()
-            .filter(|case| case_has_all_tags(case, tags))
-            .collect()
+        edge_cases().iter().filter(|case| case_has_all_tags(case, tags)).collect()
     }
 
     /// Find a single edge case by ID.
@@ -1509,7 +1505,9 @@ mod tests {
     #[test]
     fn edge_cases_filter_unknown_tags_returns_no_cases() {
         assert!(EdgeCaseGenerator::by_tags_any(&["tag-does-not-exist"]).is_empty());
-        assert!(EdgeCaseGenerator::by_tags_all(&["tag-does-not-exist", "still-missing"]).is_empty());
+        assert!(
+            EdgeCaseGenerator::by_tags_all(&["tag-does-not-exist", "still-missing"]).is_empty()
+        );
     }
 
     #[test]

@@ -22,7 +22,12 @@ pub fn symbol_refs_to_semantic_facts(
 
     for symbol_ref in refs {
         let anchor_span = symbol_ref.anchor_span.unwrap_or(symbol_ref.full_span);
-        let anchor_id = AnchorId(stable_id("ref_anchor", &symbol_ref.qualified_name, anchor_span.0, anchor_span.1));
+        let anchor_id = AnchorId(stable_id(
+            "ref_anchor",
+            &symbol_ref.qualified_name,
+            anchor_span.0,
+            anchor_span.1,
+        ));
         anchors.push(AnchorFact {
             id: anchor_id,
             file_id,
@@ -58,7 +63,12 @@ pub fn symbol_refs_to_semantic_facts(
                 symbol_ref.full_span.1,
             ));
             references_edges.push(EdgeFact {
-                id: EdgeId(stable_id("references_edge", &symbol_ref.qualified_name, from_entity_id.0 as usize, to_entity_id.0 as usize)),
+                id: EdgeId(stable_id(
+                    "references_edge",
+                    &symbol_ref.qualified_name,
+                    from_entity_id.0 as usize,
+                    to_entity_id.0 as usize,
+                )),
                 kind: EdgeKind::References,
                 from_entity_id,
                 to_entity_id,

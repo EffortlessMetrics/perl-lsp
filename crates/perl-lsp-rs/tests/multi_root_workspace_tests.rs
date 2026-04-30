@@ -17,7 +17,6 @@
 //! implemented. The tests use best-effort assertions and provide clear error
 //! messages about what's expected vs. what's currently working.
 #![cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))]
-
 // All tests in this file are gated behind
 // `cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))`. When
 // either feature is disabled (the default for `cargo clippy --workspace --lib`

@@ -36,16 +36,13 @@ fn recovers_after_scoped_sub_missing_name() {
     let sexp = output.ast.to_sexp();
 
     assert!(
-        output
-            .diagnostics
-            .iter()
-            .any(|d| {
-                matches!(
-                    d,
-                    ParseError::SyntaxError { message, .. }
-                        if message.contains("Expected subroutine name after scoped declarator")
-                )
-            }),
+        output.diagnostics.iter().any(|d| {
+            matches!(
+                d,
+                ParseError::SyntaxError { message, .. }
+                    if message.contains("Expected subroutine name after scoped declarator")
+            )
+        }),
         "missing-name scoped sub should produce an explicit diagnostic: {:?}",
         output.diagnostics
     );

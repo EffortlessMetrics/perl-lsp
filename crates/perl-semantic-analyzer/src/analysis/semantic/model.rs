@@ -1,8 +1,8 @@
 //! `SemanticModel` — a stable, query-oriented facade over `SemanticAnalyzer`.
 
+use crate::SourceLocation;
 use crate::ast::Node;
 use crate::symbol::{Symbol, SymbolTable};
-use crate::SourceLocation;
 
 use super::hover::HoverInfo;
 use super::tokens::SemanticToken;

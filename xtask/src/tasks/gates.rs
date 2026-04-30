@@ -1687,9 +1687,13 @@ struct ShellExecutionResult {
     timed_out: bool,
 }
 
-fn run_shell_command_with_timeout(command: &str, log_path: &Path, timeout_secs: u64) -> Result<ShellExecutionResult> {
-    let log_file =
-        fs::File::create(log_path).with_context(|| format!("Failed to create log file: {}", log_path.display()))?;
+fn run_shell_command_with_timeout(
+    command: &str,
+    log_path: &Path,
+    timeout_secs: u64,
+) -> Result<ShellExecutionResult> {
+    let log_file = fs::File::create(log_path)
+        .with_context(|| format!("Failed to create log file: {}", log_path.display()))?;
     let log_file_err = log_file
         .try_clone()
         .with_context(|| format!("Failed to clone log file handle: {}", log_path.display()))?;

@@ -41,8 +41,12 @@ pub fn symbol_refs_to_semantic_facts(
 
     for symbol_ref in refs {
         let anchor_span = symbol_ref.anchor_span.unwrap_or(symbol_ref.full_span);
-        let anchor_id =
-            AnchorId(stable_id("ref-anchor", &symbol_ref.qualified_name, anchor_span.0, anchor_span.1));
+        let anchor_id = AnchorId(stable_id(
+            "ref-anchor",
+            &symbol_ref.qualified_name,
+            anchor_span.0,
+            anchor_span.1,
+        ));
         anchors.push(AnchorFact {
             id: anchor_id,
             file_id,
@@ -75,7 +79,8 @@ pub fn symbol_refs_to_semantic_facts(
         });
 
         if let Some(to_entity_id) = entity_id {
-            let from_entity_id = EntityId(stable_id("ref-source", &symbol_ref.qualified_name, 0, 0));
+            let from_entity_id =
+                EntityId(stable_id("ref-source", &symbol_ref.qualified_name, 0, 0));
             reference_edges.push(EdgeFact {
                 id: EdgeId(stable_id(
                     "references",

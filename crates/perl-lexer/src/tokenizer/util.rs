@@ -87,14 +87,10 @@ mod tests {
         assert_eq!(code_slice(src2), "code;\n");
     }
 
-
     #[test]
     fn test_split_code_and_data_prefers_first_marker() {
         let src = "print 'a';\n__DATA__\none\n__END__\ntwo";
-        assert_eq!(
-            split_code_and_data(src),
-            ("print 'a';\n", Some("__DATA__\none\n__END__\ntwo"))
-        );
+        assert_eq!(split_code_and_data(src), ("print 'a';\n", Some("__DATA__\none\n__END__\ntwo")));
     }
 
     #[test]

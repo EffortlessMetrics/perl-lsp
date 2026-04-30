@@ -34,7 +34,7 @@ fn build_incremental_edit_set(
     original_rope: &ropey::Rope,
     lsp_changes: &[lsp_types::TextDocumentContentChangeEvent],
 ) -> Option<perl_parser::incremental::incremental_edit::IncrementalEditSet> {
-    use crate::textdoc::{safe_range_mapping, PosEnc};
+    use crate::textdoc::{PosEnc, safe_range_mapping};
     use perl_parser::incremental::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 
     fn map_offset_to_original_space(evolving: usize, cumulative_shift: isize) -> Option<usize> {
@@ -92,11 +92,7 @@ fn build_incremental_edit_set(
             change.text.len() as isize - (evolving_end as isize - evolving_start as isize);
     }
 
-    if edit_set.is_empty() {
-        None
-    } else {
-        Some(edit_set)
-    }
+    if edit_set.is_empty() { None } else { Some(edit_set) }
 }
 
 impl LspServer {
@@ -597,7 +593,7 @@ impl LspServer {
                 let target_version = version;
 
                 // Apply incremental changes with UTF-16 aware mapping
-                use crate::textdoc::{apply_changes, Doc, PosEnc};
+                use crate::textdoc::{Doc, PosEnc, apply_changes};
                 use lsp_types::TextDocumentContentChangeEvent;
 
                 let mut doc = Doc { rope: doc_state.rope.clone(), version };
@@ -887,7 +883,7 @@ impl LspServer {
                 #[cfg(feature = "incremental")]
                 let incremental_state = {
                     use perl_parser::incremental::{
-                        apply_edits as inc_apply_edits, Edit as IncEdit, IncrementalState,
+                        Edit as IncEdit, IncrementalState, apply_edits as inc_apply_edits,
                     };
                     let code_text = crate::util::code_slice(&text);
                     match (doc_state.incremental_state.take(), &incremental_edits_opt_clone) {
@@ -1620,8 +1616,8 @@ mod tests {
     }
 
     #[test]
-    fn test_did_change_ranged_edit_ignored_for_unopened_document(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_did_change_ranged_edit_ignored_for_unopened_document()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///not-opened.pl";
 
@@ -1681,8 +1677,8 @@ mod tests {
     /// but 4+ UTF-8 bytes. The byte offset calculation must account for this.
     #[cfg(feature = "incremental")]
     #[test]
-    fn test_incremental_utf16_multi_byte_character_positions(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_incremental_utf16_multi_byte_character_positions()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///test_inc_utf16.pl";
         // Line 0: "my $emoji = 😀;\n" (😀 is U+1F600, takes 2 UTF-16 units, 4 UTF-8 bytes)
@@ -1978,8 +1974,8 @@ mod tests {
     /// This preserves exact URI identity for clients that key diagnostics by
     /// the original URI representation rather than normalized equivalents.
     #[test]
-    fn test_did_close_clears_diagnostics_with_original_uri(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_did_close_clears_diagnostics_with_original_uri()
+    -> Result<(), Box<dyn std::error::Error>> {
         let (server, buf) = make_server_with_capture();
         let uri = "FILE:///test_close_uri_identity.pl";
 
@@ -2001,8 +1997,8 @@ mod tests {
 
     /// didSave must publish diagnostics using the original URI string.
     #[test]
-    fn test_did_save_publishes_diagnostics_with_original_uri(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_did_save_publishes_diagnostics_with_original_uri()
+    -> Result<(), Box<dyn std::error::Error>> {
         let (server, buf) = make_server_with_capture();
         let uri = "FILE:///test_save_uri_identity.pl";
 
@@ -2039,10 +2035,10 @@ mod tests {
     /// A parse cancelled via a pre-set flag must return Ok(()) and not store
     /// a document, so the caller behaves as if the parse simply didn't happen.
     #[test]
-    fn test_cancelled_open_returns_ok_without_storing_document(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        use std::sync::atomic::AtomicBool;
+    fn test_cancelled_open_returns_ok_without_storing_document()
+    -> Result<(), Box<dyn std::error::Error>> {
         use std::sync::Arc;
+        use std::sync::atomic::AtomicBool;
 
         let server = LspServer::new();
         let uri = "file:///test_cancelled_open.pl";
@@ -2110,8 +2106,8 @@ mod tests {
 
     /// Binary content guard — a single null byte is sufficient to trigger the guard.
     #[test]
-    fn test_binary_file_guard_single_null_byte_triggers_guard(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_binary_file_guard_single_null_byte_triggers_guard()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///test_null.pl";
         let content_with_null = "#!/usr/bin/perl\nmy $x = 1;\x00\n";
@@ -2195,8 +2191,8 @@ mod tests {
     }
 
     #[test]
-    fn test_template_file_guard_skips_parse_for_non_perl_language_id(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_template_file_guard_skips_parse_for_non_perl_language_id()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///app/templates/welcome.html.ep";
 
@@ -2221,8 +2217,8 @@ mod tests {
     }
 
     #[test]
-    fn test_template_file_guard_persists_across_did_change(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_template_file_guard_persists_across_did_change()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///app/templates/welcome.html.ep";
 
@@ -2252,8 +2248,8 @@ mod tests {
     }
 
     #[test]
-    fn test_template_file_guard_parses_embedded_perl_language_id(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_template_file_guard_parses_embedded_perl_language_id()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///app/templates/welcome.html.ep";
 
@@ -2276,8 +2272,8 @@ mod tests {
     }
 
     #[test]
-    fn test_template_file_guard_parses_mojolicious_language_id(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_template_file_guard_parses_mojolicious_language_id()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///app/templates/index.html.ep";
 
@@ -2303,8 +2299,8 @@ mod tests {
     /// same document text must reuse the cached SemanticAnalyzer rather than
     /// constructing a fresh one.
     #[test]
-    fn test_semantic_analyzer_cache_reuses_entry_on_same_version(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_semantic_analyzer_cache_reuses_entry_on_same_version()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///test_cache_hover.pl";
         let text = "my $x = 1;\nmy $y = 2;\n";
@@ -2339,8 +2335,8 @@ mod tests {
     /// The semantic analyzer cache must be cleared for a URI when the document
     /// changes (textDocument/didChange), so stale analysis is never served.
     #[test]
-    fn test_semantic_analyzer_cache_invalidated_on_did_change(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_semantic_analyzer_cache_invalidated_on_did_change()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///test_cache_invalidate_change.pl";
         let text = "my $x = 1;\n";
@@ -2379,8 +2375,8 @@ mod tests {
     /// The semantic analyzer cache must be cleared for a URI when the document
     /// is closed (textDocument/didClose), preventing stale memory retention.
     #[test]
-    fn test_semantic_analyzer_cache_invalidated_on_did_close(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_semantic_analyzer_cache_invalidated_on_did_close()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///test_cache_invalidate_close.pl";
         let text = "my $x = 1;\n";
@@ -2416,8 +2412,8 @@ mod tests {
     /// A new document version must produce a distinct cache entry (different
     /// content hash) while the old version's entry is evicted on didChange.
     #[test]
-    fn test_semantic_analyzer_cache_separates_document_versions(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn test_semantic_analyzer_cache_separates_document_versions()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///test_cache_versions.pl";
         let text_v1 = "my $x = 1;\n";
@@ -2619,8 +2615,8 @@ mod tests {
 
     /// didChange without a version field should still be applied for compatibility.
     #[test]
-    fn handle_did_change_without_version_uses_next_version(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn handle_did_change_without_version_uses_next_version()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///missing_version.pl";
 

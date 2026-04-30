@@ -600,9 +600,8 @@ mod tests {
             .ok_or("find_before should locate checkpoint at edited boundary")?;
         assert_eq!(before.position, 15);
 
-        let after = cache
-            .find_after(15)
-            .ok_or("find_after should locate checkpoint at edited boundary")?;
+        let after =
+            cache.find_after(15).ok_or("find_after should locate checkpoint at edited boundary")?;
         assert_eq!(after.position, 15);
 
         Ok(())

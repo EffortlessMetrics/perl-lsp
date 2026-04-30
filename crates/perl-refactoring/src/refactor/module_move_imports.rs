@@ -18,10 +18,7 @@ pub struct ModuleMoveImportRewriter {
 impl ModuleMoveImportRewriter {
     /// Create a new module-move import rewriter.
     pub fn new(old_module: impl Into<String>, new_module: impl Into<String>) -> Self {
-        Self {
-            old_module: old_module.into(),
-            new_module: new_module.into(),
-        }
+        Self { old_module: old_module.into(), new_module: new_module.into() }
     }
 
     /// Rewrite imports and obvious qualified references for a single file.
@@ -43,18 +40,13 @@ impl ModuleMoveImportRewriter {
         if edits.is_empty() {
             None
         } else {
-            Some(FileEdit {
-                file_path: file_path.as_ref().to_path_buf(),
-                edits,
-            })
+            Some(FileEdit { file_path: file_path.as_ref().to_path_buf(), edits })
         }
     }
 
     /// Rewrite imports and obvious qualified references for many files.
     pub fn rewrite_workspace(&self, files: &[(PathBuf, String)]) -> Vec<FileEdit> {
-        files.iter()
-            .filter_map(|(path, content)| self.rewrite_file(path, content))
-            .collect()
+        files.iter().filter_map(|(path, content)| self.rewrite_file(path, content)).collect()
     }
 
     fn rewrite_line(&self, line: &str) -> Option<String> {
@@ -76,8 +68,7 @@ impl ModuleMoveImportRewriter {
             return None;
         }
 
-        self.rewrite_qualified_references(body)
-            .map(|updated| format!("{updated}{newline}"))
+        self.rewrite_qualified_references(body).map(|updated| format!("{updated}{newline}"))
     }
 
     fn rewrite_use_statement(&self, line: &str) -> Option<String> {

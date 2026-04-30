@@ -1,10 +1,10 @@
 use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
-use perl_lsp::textdoc::{apply_changes, safe_range_mapping, Doc, PosEnc};
+use perl_lsp::textdoc::{Doc, PosEnc, apply_changes, safe_range_mapping};
 use ropey::Rope;
 
 #[test]
-fn malformed_did_change_range_is_rejected_for_incremental_mapping(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn malformed_did_change_range_is_rejected_for_incremental_mapping()
+-> Result<(), Box<dyn std::error::Error>> {
     let rope = Rope::from_str("my $x = 1;\n");
     let reversed = Range {
         start: Position { line: 0, character: 8 },
@@ -17,8 +17,8 @@ fn malformed_did_change_range_is_rejected_for_incremental_mapping(
 }
 
 #[test]
-fn multibyte_boundary_edit_is_rejected_for_incremental_mapping(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn multibyte_boundary_edit_is_rejected_for_incremental_mapping()
+-> Result<(), Box<dyn std::error::Error>> {
     let rope = Rope::from_str("hi 😀x\n");
 
     let split_surrogate = Range {
@@ -35,8 +35,8 @@ fn multibyte_boundary_edit_is_rejected_for_incremental_mapping(
 }
 
 #[test]
-fn full_document_replacement_event_is_conservative_by_definition(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn full_document_replacement_event_is_conservative_by_definition()
+-> Result<(), Box<dyn std::error::Error>> {
     let mut doc = Doc { rope: Rope::from_str("old\n"), version: 1 };
     let full_replace = TextDocumentContentChangeEvent {
         range: None,
@@ -50,8 +50,8 @@ fn full_document_replacement_event_is_conservative_by_definition(
 }
 
 #[test]
-fn malformed_ranges_do_not_panic_or_corrupt_following_changes(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn malformed_ranges_do_not_panic_or_corrupt_following_changes()
+-> Result<(), Box<dyn std::error::Error>> {
     let mut doc = Doc { rope: Rope::from_str("my $x = 1;\n"), version: 1 };
 
     let malformed = TextDocumentContentChangeEvent {

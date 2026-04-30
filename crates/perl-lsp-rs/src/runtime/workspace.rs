@@ -36,8 +36,6 @@ use std::time::Instant;
 use url::Url;
 
 #[cfg(feature = "workspace")]
-mod progress;
-#[cfg(feature = "workspace")]
 mod text_decode;
 
 const WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
