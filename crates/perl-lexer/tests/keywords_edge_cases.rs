@@ -17,8 +17,8 @@ use perl_lexer::{
 
 #[test]
 fn token_just_before_first_keyword_is_not_found() {
-    // "AUTOLOAD" is first in KEYWORDS; "AUTOLOA" sorts before it.
-    assert!(!is_keyword("AUTOLOA"));
+    // "ADJUST" is first in KEYWORDS; "ADJUS" sorts before it.
+    assert!(!is_keyword("ADJUS"));
 }
 
 #[test]
