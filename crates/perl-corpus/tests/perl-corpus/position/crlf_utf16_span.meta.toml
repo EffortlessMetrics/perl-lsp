@@ -1,0 +1,17 @@
+[concept]
+id = "parser.position.crlf_utf16_span_tracking"
+tier = "pr"
+
+[expect]
+panic = false
+timeout = false
+mode = "span_only"
+
+[metrics]
+max_error_nodes = 0
+must_emit_node_kinds = ["VariableDeclaration", "StringLiteral"]
+
+[snapshots]
+tokens = false
+ast = false
+spans = true

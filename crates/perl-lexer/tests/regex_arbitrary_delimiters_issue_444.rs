@@ -286,3 +286,71 @@ fn test_m_vs_bareword_disambiguation() {
         tokens2[0].token_type
     );
 }
+
+#[test]
+fn test_slash_regex_with_character_class_containing_slash() {
+    let code = r#"/[\/]/"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected regex token and EOF");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::RegexMatch),
+        "Expected RegexMatch token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), code, "Regex text should include full character class");
+}
+
+#[test]
+fn test_slash_regex_with_url_character_class() {
+    let code = r#"/[a-z/]+/i"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected regex token and EOF");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::RegexMatch),
+        "Expected RegexMatch token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), code, "Regex token should include trailing modifier");
+}
+
+#[test]
+fn test_slash_regex_with_negated_character_class_containing_slash() {
+    // /[^/]+/ - negated class with slash — should not terminate at the / inside [^...]
+    let code = r#"/[^/]+/"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected regex token and EOF");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::RegexMatch),
+        "Expected RegexMatch for [^/] class, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(
+        tokens[0].text.as_ref(),
+        code,
+        "Regex text should span the full negated character class"
+    );
+}
+
+#[test]
+fn test_slash_regex_escaped_bracket_does_not_open_class() {
+    // /\[/ - escaped bracket should not start a character class
+    // so the / after \[ terminates the regex at position 3, not 4
+    let code = r"/\[/";
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected regex token and EOF");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::RegexMatch),
+        "Expected RegexMatch for escaped bracket regex, got: {:?}",
+        tokens[0].token_type
+    );
+    // /\[/ should be recognized as a complete regex matching a literal [
+    assert_eq!(tokens[0].text.as_ref(), code, "Escaped bracket regex text mismatch");
+}

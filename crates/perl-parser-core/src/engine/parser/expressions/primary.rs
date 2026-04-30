@@ -958,6 +958,12 @@ impl<'a> Parser<'a> {
             }
 
             TokenKind::LeftBracket => {
+                // Extra recursion budget: each `[...]` nesting level must consume two
+                // depth units (this check plus parse_primary's own guard) so that
+                // deep array-ref nesting hits MAX_RECURSION_DEPTH before the OS stack
+                // overflows — symmetric with the double-guard used by hash literals.
+                self.check_recursion()?;
+
                 // Array reference constructor: [ LIST ]
                 //
                 // Inside [...] the content is always list context. Fat arrow (=>)
@@ -1019,6 +1025,7 @@ impl<'a> Parser<'a> {
                 self.expect_closing_delimiter(TokenKind::RightBracket)?;
                 let end = self.previous_position();
 
+                self.exit_recursion();
                 Ok(Node::new(NodeKind::ArrayLiteral { elements }, SourceLocation { start, end }))
             }
 

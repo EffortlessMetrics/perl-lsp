@@ -20,7 +20,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   multi-server workspace configurations, each `LspServer` instance tracks its own shown
   state rather than sharing a process-level `Once`. (#4178)
 
+### Migration
+
+- **Microcrate collapse complete — migration guide available** — v0.13.0 drops the
+  published crate count from 132 to 32 across 10+ collapse waves. All ~100 retired
+  crate names stop appearing on crates.io after this release; their code lives as
+  subfolder modules inside the owning published crate. See
+  [`docs/MIGRATION_v0.13.md`](docs/MIGRATION_v0.13.md) for the complete
+  old-path → new-path mapping for every retired crate, feature flag changes
+  (`lsp-ga-lock`, `incremental`, `workspace_refactor`), and the breaking-changes
+  summary per wave. (#7292, #4410)
+
 ### Internal
+
+- **Release prep: start `v0.13.0-rc1` version staging** — bumped workspace and internal crate dependency versions to `0.13.0-rc1`, updated the feature catalog metadata version, and refreshed the top-level README release line for release-candidate signaling. (#0000)
 
 - **`cargo xtask published-crate-count`** — new ratchet gate that monitors the
   count of entries in `[workspace.metadata.publish.allow]` and prevents accidental
