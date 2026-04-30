@@ -5,6 +5,7 @@
 use perl_parser::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use std::fmt;
 
 /// Represents a text edit for a single document
 #[derive(Debug, Clone)]
@@ -26,21 +27,69 @@ pub struct RenameEdit {
     pub edits: Vec<TextEdit>,
 }
 
+/// Reasons why workspace rename is refused with a hard error.
+///
+/// Graceful-degradation cases (`main`-package symbols, unsupported kinds,
+/// missing definitions) return `Ok(vec![])` so the LSP handler falls through
+/// to same-file rename.  Only `AmbiguousIdentity` produces a hard refusal
+/// because it indicates an unsafe rename the user must resolve manually.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenameRefusal {
+    /// Workspace index produced references that cannot be safely attributed
+    /// to a single declaration (e.g. unqualified cross-package call site).
+    AmbiguousIdentity(String),
+}
+
+impl fmt::Display for RenameRefusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::AmbiguousIdentity(reason) => {
+                write!(f, "Workspace rename refused: ambiguous symbol identity ({reason})")
+            }
+        }
+    }
+}
+
+impl std::error::Error for RenameRefusal {}
+
 /// Build a rename edit across the workspace.
 ///
-/// Finds all references to the given symbol and builds text edits to rename them.
+/// Returns `Ok(edits)` on success (edits may be empty — caller falls through to
+/// same-file rename when empty).  Returns `Err(RenameRefusal::AmbiguousIdentity)`
+/// when the workspace index finds an unqualified reference to this symbol from a
+/// different package, making it unsafe to rename automatically.
+///
+/// Graceful-degradation paths (symbol in `main`, kind not Sub, definition not in
+/// index) return `Ok(vec![])` rather than errors so the handler can fall back to
+/// same-file rename without surfacing a JSON-RPC error to the editor.
 pub fn build_rename_edit(
     idx: &WorkspaceIndex,
     key: &SymbolKey,
     new_name_bare: &str,
-) -> Vec<RenameEdit> {
+) -> Result<Vec<RenameEdit>, RenameRefusal> {
+    // Only Sub symbols have stable enough workspace identity for cross-file rename.
+    // Var/Pack fall through to same-file rename.
+    if key.kind != SymKind::Sub {
+        return Ok(vec![]);
+    }
+
+    // `main`-package symbols may be called unqualified from any file; workspace
+    // rename cannot safely attribute them.  Fall through to same-file rename.
+    if key.pkg.as_ref() == "main" {
+        return Ok(vec![]);
+    }
+
+    // If the workspace index has no definition for this key, we can't do a
+    // cross-file rename.  Fall through to same-file rename.
+    let Some(def) = idx.find_def(key) else {
+        return Ok(vec![]);
+    };
+
     // 1) Get all references across the workspace
     let mut locs = idx.find_refs(key);
 
     // 2) Also include the definition itself
-    if let Some(def) = idx.find_def(key) {
-        locs.push(def);
-    }
+    locs.push(def);
 
     // 3) Group edits by URI and compute replacement text
     let mut grouped: BTreeMap<String, Vec<TextEdit>> = BTreeMap::new();
@@ -51,19 +100,27 @@ pub fn build_rename_edit(
         let end_line = loc.range.end.line;
         let end_char = loc.range.end.column;
 
-        if key.kind == SymKind::Sub
-            && key.pkg.as_ref() != "main"
-            && is_non_target_package_declaration(
-                idx, key, &loc.uri, start_line, start_char, end_line, end_char,
-            )
-        {
+        if is_non_target_package_declaration(
+            idx, key, &loc.uri, start_line, start_char, end_line, end_char,
+        ) {
             continue;
+        }
+
+        // Guard: unqualified bare call to this sub from a different package is
+        // ambiguous — the workspace can't tell if it's intentionally calling our
+        // sub or a same-package sub with the same name.
+        if is_ambiguous_sub_reference(
+            idx, key, &loc.uri, start_line, start_char, end_line, end_char,
+        ) {
+            return Err(RenameRefusal::AmbiguousIdentity(format!(
+                "unqualified `{}` reference outside package `{}`",
+                key.name, key.pkg
+            )));
         }
 
         // Compute replacement text based on symbol kind
         let replacement = match key.kind {
             SymKind::Var => {
-                // Preserve the sigil for variables
                 let sigil = key.sigil.unwrap_or('$');
                 format!("{}{}", sigil, new_name_bare)
             }
@@ -86,10 +143,7 @@ pub fn build_rename_edit(
 
                 replacement
             }
-            SymKind::Pack => {
-                // Package names are replaced as-is
-                new_name_bare.to_string()
-            }
+            SymKind::Pack => new_name_bare.to_string(),
         };
 
         grouped.entry(loc.uri.clone()).or_default().push(TextEdit {
@@ -99,8 +153,45 @@ pub fn build_rename_edit(
         });
     }
 
-    // Convert to RenameEdit structs
-    grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect()
+    Ok(grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect())
+}
+
+/// Returns true when `loc` is an unqualified bare call to `key.name` from a
+/// package other than `key.pkg`.  Such references are ambiguous: a Perl
+/// program importing a same-named sub from a different package would be
+/// incorrectly renamed.
+fn is_ambiguous_sub_reference(
+    idx: &WorkspaceIndex,
+    key: &SymbolKey,
+    uri: &str,
+    start_line: u32,
+    start_char: u32,
+    end_line: u32,
+    end_char: u32,
+) -> bool {
+    let Some(doc) = idx.document_store().get(uri) else {
+        return false;
+    };
+
+    let Some(start_off) = doc.line_index.position_to_offset(start_line, start_char) else {
+        return false;
+    };
+    let Some(end_off) = doc.line_index.position_to_offset(end_line, end_char) else {
+        return false;
+    };
+    let Some(original) = doc.text.get(start_off..end_off) else {
+        return false;
+    };
+
+    // Only explicitly qualified calls (`Pkg::name` or `&Pkg::name`) are unambiguous.
+    // A bare `&name` call (without `::`) is still subject to package resolution and
+    // is just as ambiguous as `name()` when called from a different package.
+    if original.contains("::") {
+        return false;
+    }
+
+    let package_at_line = package_name_for_line(&doc.text, start_line);
+    package_at_line != key.pkg.as_ref()
 }
 
 fn package_name_for_line(text: &str, target_line: u32) -> &str {
@@ -273,7 +364,7 @@ $var;
             kind: SymKind::Sub,
         };
 
-        let edits = build_rename_edit(&idx, &key, "new_name");
+        let edits = build_rename_edit(&idx, &key, "new_name")?;
         assert_eq!(edits.len(), 1);
 
         let texts: Vec<String> = edits[0].edits.iter().map(|e| e.new_text.clone()).collect();
@@ -334,7 +425,7 @@ $var;
             kind: SymKind::Sub,
         };
 
-        let edits = build_rename_edit(&idx, &key, "renamed_target");
+        let edits = build_rename_edit(&idx, &key, "renamed_target")?;
 
         // The rename must produce at least one edit (for the definition in A.pm)
         assert!(
@@ -422,7 +513,7 @@ $var;
             kind: SymKind::Sub,
         };
 
-        let edits = build_rename_edit(&idx, &key, "process_records");
+        let edits = build_rename_edit(&idx, &key, "process_records")?;
 
         // Bar.pm must not appear in the edit list
         let bar_edit = edits.iter().find(|e| e.uri.contains("Bar.pm"));
@@ -430,6 +521,97 @@ $var;
             bar_edit.is_none(),
             "renaming Foo::process_data must not touch Bar.pm; got edits: {:?}",
             edits.iter().map(|e| (&e.uri, &e.edits)).collect::<Vec<_>>()
+        );
+
+        Ok(())
+    }
+
+    /// Renaming a sub with an unqualified cross-package call site must return
+    /// `Err(AmbiguousIdentity)` so the LSP handler can report the refusal to
+    /// the editor instead of silently producing incorrect edits.
+    #[test]
+    fn rename_refuses_ambiguous_unqualified_cross_package_call()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+
+        let foo_text = "package Foo;\nsub process_data { return 1; }\n1;\n";
+        // Bar calls process_data without qualification — ambiguous cross-package ref.
+        let bar_text = "package Bar;\nsub run { return process_data(); }\n1;\n";
+
+        index_text(&idx, "file:///Foo.pm", foo_text)?;
+        index_text(&idx, "file:///Bar.pm", bar_text)?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("Foo"),
+            name: Arc::from("process_data"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let refusal = build_rename_edit(&idx, &key, "process_records")
+            .expect_err("workspace rename should refuse ambiguous unqualified cross-package refs");
+        assert!(
+            matches!(refusal, RenameRefusal::AmbiguousIdentity(_)),
+            "expected AmbiguousIdentity refusal, got: {refusal:?}"
+        );
+
+        Ok(())
+    }
+
+    /// A bare `&name` call (without `::`) from a different package is still an
+    /// unqualified reference and must be refused, just like a bare `name()` call.
+    /// Only `&Pkg::name` (which contains `::`) is unambiguous.
+    #[test]
+    fn rename_refuses_ampersand_sigil_cross_package_call() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let idx = WorkspaceIndex::new();
+
+        let foo_text = "package Foo;\nsub process_data { return 1; }\n1;\n";
+        // Bar calls &process_data — still unqualified, still ambiguous.
+        let bar_text = "package Bar;\nsub run { return &process_data(); }\n1;\n";
+
+        index_text(&idx, "file:///Foo.pm", foo_text)?;
+        index_text(&idx, "file:///Bar.pm", bar_text)?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("Foo"),
+            name: Arc::from("process_data"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let refusal = build_rename_edit(&idx, &key, "process_records")
+            .expect_err("workspace rename should refuse ambiguous &name cross-package refs");
+        assert!(
+            matches!(refusal, RenameRefusal::AmbiguousIdentity(_)),
+            "expected AmbiguousIdentity refusal for &name cross-package call, got: {refusal:?}"
+        );
+
+        Ok(())
+    }
+
+    /// `main`-package symbols fall through gracefully (empty edits) rather than
+    /// returning a hard error, allowing the LSP handler to do same-file rename.
+    #[test]
+    fn rename_main_package_sub_returns_empty_not_error() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+
+        // No package declaration → everything is in `main`.
+        let text = "sub greet { return 'hello'; }\nmy $x = greet();\n";
+        index_text(&idx, "file:///script.pl", text)?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("main"),
+            name: Arc::from("greet"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let edits = build_rename_edit(&idx, &key, "welcome")
+            .expect("main-package rename should not return a hard error");
+        assert!(
+            edits.is_empty(),
+            "main-package rename must return empty edits (fall-through to same-file), got: {edits:?}"
         );
 
         Ok(())

@@ -61,7 +61,12 @@
 
 use perl_lexer::{CheckpointCache, Checkpointable, LexerCheckpoint, PerlLexer};
 use perl_parser_core::token_stream::{Token, TokenStream};
-use perl_parser_core::{ast::Node, edit::Edit as OriginalEdit, error::ParseResult, parser::Parser};
+use perl_parser_core::{
+    ast::Node,
+    edit::Edit as OriginalEdit,
+    error::{ParseError, ParseResult},
+    parser::Parser,
+};
 
 /// Incremental parser with lexer checkpointing
 pub struct CheckpointedIncrementalParser {
@@ -209,6 +214,9 @@ impl TokenCache {
     /// * `edit_start` - Start byte position of the edit.
     /// * `old_len` - Length of the removed text.
     /// * `new_len` - Length of the inserted text.
+    ///
+    /// # Implementation notes
+    ///
     /// Adjust segment bounds after an edit.
     ///
     /// Only `segment.start` and `segment.end` are shifted; individual token byte
@@ -268,11 +276,7 @@ impl TokenCache {
             }
         }
 
-        if all_tokens.is_empty() {
-            None
-        } else {
-            Some(all_tokens)
-        }
+        if all_tokens.is_empty() { None } else { Some(all_tokens) }
     }
 
     /// Return cached tokens that end at or before `position`.
@@ -298,11 +302,7 @@ impl TokenCache {
             }
         }
 
-        if all_tokens.is_empty() {
-            None
-        } else {
-            Some(all_tokens)
-        }
+        if all_tokens.is_empty() { None } else { Some(all_tokens) }
     }
 
     fn count_segments_with_tokens_before(&self, position: usize) -> usize {
@@ -445,6 +445,8 @@ impl CheckpointedIncrementalParser {
 
     /// Apply an edit and reparse incrementally
     pub fn apply_edit(&mut self, edit: &SimpleEdit) -> ParseResult<Node> {
+        self.validate_edit(edit)?;
+
         self.stats.total_parses += 1;
         self.stats.incremental_parses += 1;
 
@@ -482,6 +484,53 @@ impl CheckpointedIncrementalParser {
             // No checkpoint found, full reparse
             self.parse_with_checkpoints()
         }
+    }
+
+    /// Validate that an edit's byte range is within bounds and aligned to UTF-8
+    /// character boundaries, returning an error before any state mutation occurs.
+    fn validate_edit(&self, edit: &SimpleEdit) -> ParseResult<()> {
+        if edit.start > edit.end {
+            return Err(ParseError::syntax(
+                format!(
+                    "invalid edit range: start {} is greater than end {}",
+                    edit.start, edit.end
+                ),
+                edit.start,
+            ));
+        }
+
+        if edit.end > self.source.len() {
+            return Err(ParseError::syntax(
+                format!(
+                    "invalid edit range: end {} exceeds document length {}",
+                    edit.end,
+                    self.source.len()
+                ),
+                edit.end,
+            ));
+        }
+
+        if !self.source.is_char_boundary(edit.start) {
+            return Err(ParseError::syntax(
+                format!(
+                    "invalid edit boundary: start {} is not on a UTF-8 character boundary",
+                    edit.start
+                ),
+                edit.start,
+            ));
+        }
+
+        if !self.source.is_char_boundary(edit.end) {
+            return Err(ParseError::syntax(
+                format!(
+                    "invalid edit boundary: end {} is not on a UTF-8 character boundary",
+                    edit.end
+                ),
+                edit.end,
+            ));
+        }
+
+        Ok(())
     }
 
     /// Parse with checkpoint collection and parser-token caching.
@@ -741,9 +790,9 @@ impl CheckpointedIncrementalParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_parser_core::token_stream::TokenKind;
     use perl_parser_core::NodeKind;
-    use perl_tdd_support::must;
+    use perl_parser_core::token_stream::TokenKind;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_checkpoint_incremental_parsing() {
@@ -950,7 +999,11 @@ mod tests {
         // Invalidate a range entirely after the cached segment — no overlap.
         cache.invalidate_range(30, 50);
 
-        assert_eq!(cache.segments.len(), 1, "non-overlapping invalidation should leave segment intact");
+        assert_eq!(
+            cache.segments.len(),
+            1,
+            "non-overlapping invalidation should leave segment intact"
+        );
         assert_eq!(cache.segments[0].start, 0);
         assert_eq!(cache.segments[0].end, 20);
         assert_eq!(cache.segments[0].tokens.len(), 2);
@@ -1006,8 +1059,162 @@ mod tests {
 
         // But individual token positions must remain at their original values so
         // Phase-3's byte_shift application later yields the right final position.
-        assert_eq!(cache.segments[0].tokens[0].start, 100, "token start must NOT be shifted by adjust_positions");
-        assert_eq!(cache.segments[0].tokens[0].end, 110, "token end must NOT be shifted by adjust_positions");
-        assert_eq!(cache.segments[0].tokens[1].start, 110, "token start must NOT be shifted by adjust_positions");
+        assert_eq!(
+            cache.segments[0].tokens[0].start, 100,
+            "token start must NOT be shifted by adjust_positions"
+        );
+        assert_eq!(
+            cache.segments[0].tokens[0].end, 110,
+            "token end must NOT be shifted by adjust_positions"
+        );
+        assert_eq!(
+            cache.segments[0].tokens[1].start, 110,
+            "token start must NOT be shifted by adjust_positions"
+        );
+    }
+
+    #[test]
+    fn test_apply_edit_rejects_out_of_bounds_range() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        must(parser.parse("my $x = 1;\n".to_string()));
+
+        let edit = SimpleEdit { start: 0, end: 100, new_text: "2".to_string() };
+        let result = parser.apply_edit(&edit);
+
+        assert!(result.is_err(), "out-of-bounds edit should return an error");
+        assert!(matches!(result, Err(ParseError::SyntaxError { location: 100, .. })));
+    }
+
+    #[test]
+    fn test_apply_edit_rejects_non_char_boundary_start() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        must(parser.parse("my $x = \"é\";\n".to_string()));
+
+        let source = parser.source.clone();
+        let char_start = must_some(source.find('é'));
+        let invalid_start = char_start + 1;
+        let edit =
+            SimpleEdit { start: invalid_start, end: invalid_start + 1, new_text: "e".to_string() };
+        let result = parser.apply_edit(&edit);
+
+        assert!(result.is_err(), "non-char-boundary edit should return an error");
+        assert!(matches!(
+            result,
+            Err(ParseError::SyntaxError {
+                location,
+                message,
+            }) if location == invalid_start && message.contains("UTF-8 character boundary")
+        ));
+    }
+
+    #[test]
+    fn test_apply_edit_rejects_non_char_boundary_end() {
+        // Tests that `end` splitting a multibyte codepoint is caught even when
+        // `start` lands on a valid char boundary. Uses a 4-byte emoji so three
+        // interior bytes are all invalid landing spots.
+        let mut parser = CheckpointedIncrementalParser::new();
+        // 🎉 is U+1F389, encoded as 4 UTF-8 bytes
+        must(parser.parse("my $x = 1; # \u{1F389}\n".to_string()));
+
+        let source = parser.source.clone();
+        let emoji_pos = must_some(source.find('\u{1F389}'));
+        // start = beginning of emoji (valid boundary), end = 1 byte inside (invalid)
+        let valid_start = emoji_pos;
+        let invalid_end = emoji_pos + 1;
+        let edit = SimpleEdit { start: valid_start, end: invalid_end, new_text: "x".to_string() };
+        let result = parser.apply_edit(&edit);
+
+        assert!(result.is_err(), "edit whose end splits a 4-byte codepoint should return an error");
+        assert!(matches!(
+            result,
+            Err(ParseError::SyntaxError { location, .. }) if location == invalid_end
+        ));
+    }
+
+    #[test]
+    fn test_apply_edit_accepts_full_source_replacement() {
+        // Edge: start=0, end=len replaces the entire document — must succeed.
+        let mut parser = CheckpointedIncrementalParser::new();
+        let original = "my $x = 1;\n".to_string();
+        must(parser.parse(original.clone()));
+
+        let edit =
+            SimpleEdit { start: 0, end: original.len(), new_text: "my $y = 2;\n".to_string() };
+        let result = parser.apply_edit(&edit);
+        assert!(result.is_ok(), "full-document replacement should succeed: {result:?}");
+    }
+
+    #[test]
+    fn test_apply_edit_accepts_empty_insert_at_end() {
+        // Edge: start=len, end=len (insertion at document end) must succeed.
+        let mut parser = CheckpointedIncrementalParser::new();
+        let original = "my $x = 1;\n".to_string();
+        must(parser.parse(original.clone()));
+
+        let edit = SimpleEdit {
+            start: original.len(),
+            end: original.len(),
+            new_text: "my $y = 2;\n".to_string(),
+        };
+        let result = parser.apply_edit(&edit);
+        assert!(result.is_ok(), "insert-at-end edit should succeed: {result:?}");
+    }
+
+    #[test]
+    fn test_apply_edit_rejects_three_byte_bmp_boundary() {
+        // Tests a 3-byte BMP character (€ = U+20AC) so the interior bytes
+        // trigger the char-boundary check.
+        let mut parser = CheckpointedIncrementalParser::new();
+        // € is U+20AC, encoded as 3 UTF-8 bytes: 0xE2 0x82 0xAC
+        must(parser.parse("my $cost = 1; # \u{20AC}\n".to_string()));
+
+        let source = parser.source.clone();
+        let euro_pos = must_some(source.find('\u{20AC}'));
+        let invalid_start = euro_pos + 1; // inside the 3-byte sequence
+        let edit =
+            SimpleEdit { start: invalid_start, end: invalid_start + 1, new_text: "e".to_string() };
+        let result = parser.apply_edit(&edit);
+
+        assert!(result.is_err(), "edit splitting a 3-byte BMP codepoint should return an error");
+        assert!(matches!(
+            result,
+            Err(ParseError::SyntaxError { location, .. }) if location == invalid_start
+        ));
+    }
+
+    #[test]
+    fn test_apply_edit_rejects_inverted_range() {
+        // start > end should return an error without panicking.
+        let mut parser = CheckpointedIncrementalParser::new();
+        must(parser.parse("my $x = 1;\n".to_string()));
+
+        let edit = SimpleEdit { start: 5, end: 2, new_text: "z".to_string() };
+        let result = parser.apply_edit(&edit);
+
+        assert!(result.is_err(), "inverted range should return an error");
+        assert!(matches!(result, Err(ParseError::SyntaxError { location: 5, .. })));
+    }
+
+    #[test]
+    fn test_apply_edit_accepts_insert_into_empty_source() {
+        // Edge: apply_edit on a never-parsed parser (source = "").
+        // start=0, end=0 is a valid insert-at-start-of-empty-document.
+        // LSP clients can send an initial edit before a parse has occurred.
+        let mut parser = CheckpointedIncrementalParser::new();
+
+        let edit = SimpleEdit { start: 0, end: 0, new_text: "my $x = 1;\n".to_string() };
+        let result = parser.apply_edit(&edit);
+        assert!(result.is_ok(), "insert into empty source should succeed: {result:?}");
+    }
+
+    #[test]
+    fn test_apply_edit_rejects_nonzero_range_on_empty_source() {
+        // Edge: end > 0 on an empty source must be rejected as out-of-bounds.
+        let mut parser = CheckpointedIncrementalParser::new();
+
+        let edit = SimpleEdit { start: 0, end: 1, new_text: "x".to_string() };
+        let result = parser.apply_edit(&edit);
+        assert!(result.is_err(), "end=1 on empty source should be rejected");
+        assert!(matches!(result, Err(ParseError::SyntaxError { location: 1, .. })));
     }
 }

@@ -541,21 +541,11 @@ impl WorkspaceConfig {
                 }
                 self.use_system_inc = use_inc;
             }
-            if let Some(perl_path) = workspace.get("perlPath").and_then(|v| v.as_str()) {
-                let next = Some(perl_path.to_string());
-                if next != self.perl_path {
-                    self.system_inc_cache = None;
-                }
-                self.perl_path = next;
-            }
-            if let Some(perl_args) = workspace.get("perlArgs").and_then(|v| v.as_array()) {
-                let next: Vec<String> =
-                    perl_args.iter().filter_map(|v| v.as_str().map(str::to_string)).collect();
-                if next != self.perl_args {
-                    self.system_inc_cache = None;
-                }
-                self.perl_args = next;
-            }
+            // Security: do NOT honour workspace-supplied perlPath / perlArgs.
+            // Allowing arbitrary Perl interpreter / argv from workspace settings
+            // would let a hostile project execute arbitrary code via the @INC
+            // probe (issue #3729). The interpreter / args remain whatever the
+            // user (not the workspace) configured globally.
             if let Some(timeout) = workspace.get("resolutionTimeout").and_then(|v| v.as_u64()) {
                 self.resolution_timeout_ms = timeout;
             }
@@ -602,19 +592,35 @@ impl WorkspaceConfig {
         let output = command.args(["-e", "print join(\"\\n\", @INC)"]).output();
 
         match output {
-            Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty() && *line != ".")
-                .map(PathBuf::from)
-                .fold(Vec::new(), |mut acc, path| {
-                    if !acc.contains(&path) {
-                        acc.push(path);
-                    }
-                    acc
-                }),
+            Ok(out) if out.status.success() => {
+                Self::parse_perl_inc_output(&String::from_utf8_lossy(&out.stdout))
+            }
             _ => Vec::new(),
         }
+    }
+
+    fn parse_perl_inc_output(stdout: &str) -> Vec<PathBuf> {
+        stdout
+            .lines()
+            .map(str::trim)
+            .filter(|line| {
+                !line.is_empty()
+                    && *line != "."
+                    && !line.starts_with("CODE(")
+                    && !line.starts_with("ARRAY(")
+                    && !line.starts_with("HASH(")
+                    && !line.starts_with("SCALAR(")
+                    && !line.starts_with("REF(")
+                    && !line.starts_with("GLOB(")
+                    && !line.starts_with("IO::")
+            })
+            .map(PathBuf::from)
+            .fold(Vec::new(), |mut acc, path| {
+                if !acc.contains(&path) {
+                    acc.push(path);
+                }
+                acc
+            })
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -1162,5 +1168,35 @@ perltidy_extra_args = ["-noll"]
 
         let paths = config.effective_include_paths(&["./lib/".to_string(), " ./ ".to_string()]);
         assert_eq!(paths, vec!["lib", "."]);
+    }
+
+    /// Security regression: workspace settings must not be able to redirect the
+    /// Perl interpreter / argv used for the @INC probe (issue #3729). A hostile
+    /// project could otherwise execute arbitrary code at config-load time.
+    #[test]
+    fn workspace_config_ignores_untrusted_perl_probe_settings() {
+        let mut config = WorkspaceConfig::default();
+        config.update_from_value(&serde_json::json!({
+            "workspace": {
+                "perlPath": "/opt/custom/perl",
+                "perlArgs": ["-I", "/tmp/custom/lib"]
+            }
+        }));
+        assert!(config.perl_path.is_none(), "perlPath from workspace must be ignored");
+        assert!(config.perl_args.is_empty(), "perlArgs from workspace must be ignored");
+    }
+    #[test]
+    fn parse_perl_inc_output_filters_dynamic_hook_entries() {
+        let parsed = WorkspaceConfig::parse_perl_inc_output(
+            "lib\nCODE(0x123)\nARRAY(0xabc)\nHASH(0xdef)\n/usr/lib/perl5\n",
+        );
+        assert_eq!(parsed, vec![PathBuf::from("lib"), PathBuf::from("/usr/lib/perl5")]);
+    }
+
+    #[test]
+    fn parse_perl_inc_output_dedupes_and_drops_dot() {
+        let parsed =
+            WorkspaceConfig::parse_perl_inc_output("lib\n.\nlib\n/usr/lib/perl5\n/usr/lib/perl5\n");
+        assert_eq!(parsed, vec![PathBuf::from("lib"), PathBuf::from("/usr/lib/perl5")]);
     }
 }

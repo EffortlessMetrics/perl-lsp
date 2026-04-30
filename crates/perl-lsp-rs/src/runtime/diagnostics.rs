@@ -34,6 +34,14 @@ fn resolve_configured_profile_path(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+fn workspace_root_for_doc(server: &LspServer, uri: &str) -> Option<std::path::PathBuf> {
+    server
+        .folder_for_doc_uri(uri)
+        .and_then(|folder| folder.path.or_else(|| source_path_from_uri(&folder.uri)))
+        .or_else(|| server.root_path.lock().clone())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn find_workspace_perlcritic_profile(
     workspace_root: Option<&std::path::Path>,
     file_path: &std::path::Path,
@@ -94,8 +102,17 @@ impl PullDiagnosticsOrchestrator {
         let profile =
             perlcritic_profile.and_then(|p| if p.trim().is_empty() { None } else { Some(p) });
 
-        // Get workspace root
-        let workspace_root = server.root_path.lock().clone();
+        // Get workspace root for this document's containing folder (multi-root aware).
+        // Falls back to the global root_path when no specific folder matches.
+        //
+        // Note: we inline the resolution here rather than calling `workspace_root_for_doc`
+        // because `build_context` runs on all targets (including wasm32), while
+        // `workspace_root_for_doc` is `#[cfg(not(target_arch = "wasm32"))]` since it is
+        // only needed from the native perlcritic diagnostic paths.
+        let workspace_root = server
+            .folder_for_doc_uri(uri)
+            .and_then(|folder| folder.path.or_else(|| source_path_from_uri(&folder.uri)))
+            .or_else(|| server.root_path.lock().clone());
 
         // Get include paths for the document
         let include_paths: Vec<String> = server
@@ -174,7 +191,7 @@ impl PullDiagnosticsOrchestrator {
             return;
         }
 
-        let workspace_root = server.root_path.lock().clone();
+        let workspace_root = workspace_root_for_doc(server, uri);
 
         // Validate configured profile if present.
         let resolved_configured_profile = if let Some(ref configured_profile) = profile {
@@ -231,10 +248,14 @@ impl PullDiagnosticsOrchestrator {
             }
         }
 
+        // Compute content hash for cache validation (detects stale entries from
+        // external file changes that bypass the LSP didChange notification).
+        let content_hash = perl_lsp_rs_core::tooling::perl_critic::hash_content(doc_text);
+
         // Run analysis
         let result = {
             let mut guard = self.critic_analyzer.lock();
-            guard.as_mut().map(|a| a.analyze_file(&file_path))
+            guard.as_mut().map(|a| a.analyze_file_with_hash(&file_path, content_hash))
         };
 
         match result {
@@ -1348,7 +1369,7 @@ impl LspServer {
             return;
         }
 
-        let workspace_root = self.root_path.lock().clone();
+        let workspace_root = workspace_root_for_doc(self, uri);
         let resolved_configured_profile = if let Some(ref configured_profile) = profile {
             let resolved = resolve_configured_profile_path(
                 configured_profile,
@@ -1412,11 +1433,16 @@ impl LspServer {
             }
         }
 
+        // Compute a content hash so the cache can detect stale entries when the
+        // file changes without triggering a `didChange` LSP event (e.g. external
+        // editor or `git checkout` while the server is running).
+        let content_hash = crate::perl_critic::hash_content(doc_text);
+
         // Borrow the shared analyzer to run the analysis.  The lock is held
-        // only for the duration of the `analyze_file` call.
+        // only for the duration of the `analyze_file_with_hash` call.
         let result = {
             let mut guard = self.critic_analyzer.lock();
-            guard.as_mut().map(|a| a.analyze_file(&file_path))
+            guard.as_mut().map(|a| a.analyze_file_with_hash(&file_path, content_hash))
         };
 
         match result {
@@ -1736,5 +1762,91 @@ mod tests {
         let diagnostic = builtin_violation_to_diagnostic(&violation);
         assert_eq!(diagnostic.severity, InternalDiagnosticSeverity::Error);
         assert_eq!(diagnostic.code.as_deref(), Some("GentlePolicy"));
+    }
+
+    // --- build_context workspace root tests ---
+
+    /// build_context must use the workspace root of the folder that owns the document,
+    /// not the global root_path (which points to the first workspace folder).
+    #[test]
+    fn build_context_uses_doc_scoped_workspace_root() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let folder_a = temp.path().join("folder-a");
+        let folder_b = temp.path().join("folder-b");
+        let script_b = folder_b.join("script.pl");
+        std::fs::create_dir_all(&folder_a)?;
+        std::fs::create_dir_all(&folder_b)?;
+        std::fs::write(&script_b, "use strict;\n")?;
+
+        let doc_uri = url::Url::from_file_path(&script_b).map_err(|_| "bad uri")?.to_string();
+
+        let (server, _buf) = make_server_with_capture();
+        // root_path points to folder_a (the "primary" folder)
+        *server.root_path.lock() = Some(folder_a.clone());
+        {
+            let mut folders = server.workspace_folders.lock();
+            folders.push(
+                crate::runtime::workspace_folder::WorkspaceFolderState::new(
+                    url::Url::from_directory_path(&folder_a).map_err(|_| "bad uri_a")?.to_string(),
+                )
+                .with_path(folder_a.clone()),
+            );
+            folders.push(
+                crate::runtime::workspace_folder::WorkspaceFolderState::new(
+                    url::Url::from_directory_path(&folder_b).map_err(|_| "bad uri_b")?.to_string(),
+                )
+                .with_path(folder_b.clone()),
+            );
+        }
+
+        let orchestrator = PullDiagnosticsOrchestrator::new();
+        let context = orchestrator.build_context(&server, &doc_uri);
+
+        assert_eq!(
+            context.workspace_root.as_deref(),
+            Some(folder_b.as_path()),
+            "workspace_root must be the folder containing the document, not root_path"
+        );
+        Ok(())
+    }
+
+    /// When no workspace folder contains the document, build_context must fall back
+    /// to the global root_path.
+    #[test]
+    fn build_context_falls_back_to_root_path_when_no_folder_matches()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let outside = temp.path().join("outside");
+        let script = outside.join("script.pl");
+        std::fs::create_dir_all(&workspace)?;
+        std::fs::create_dir_all(&outside)?;
+        std::fs::write(&script, "use strict;\n")?;
+
+        let doc_uri = url::Url::from_file_path(&script).map_err(|_| "bad uri")?.to_string();
+
+        let (server, _buf) = make_server_with_capture();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut folders = server.workspace_folders.lock();
+            folders.push(
+                crate::runtime::workspace_folder::WorkspaceFolderState::new(
+                    url::Url::from_directory_path(&workspace)
+                        .map_err(|_| "bad folder uri")?
+                        .to_string(),
+                )
+                .with_path(workspace.clone()),
+            );
+        }
+
+        let orchestrator = PullDiagnosticsOrchestrator::new();
+        let context = orchestrator.build_context(&server, &doc_uri);
+
+        assert_eq!(
+            context.workspace_root.as_deref(),
+            Some(workspace.as_path()),
+            "workspace_root must fall back to root_path when no folder contains the document"
+        );
+        Ok(())
     }
 }

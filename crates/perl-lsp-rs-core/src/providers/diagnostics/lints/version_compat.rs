@@ -16,7 +16,7 @@
 
 use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
-use perl_pragma::{PerlVersion, PragmaTracker, parse_perl_version};
+use perl_pragma::{PerlVersion, PragmaQueryCursor, PragmaTracker, parse_perl_version};
 
 use super::super::internal_types::Diagnostic;
 use super::super::walker::walk_node;
@@ -143,10 +143,11 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     };
 
     let pragma_map = PragmaTracker::build(node);
+    let mut pragma_cursor = PragmaQueryCursor::new();
 
     // Second pass: walk AST for version-gated constructs.
     walk_node(node, &mut |n| {
-        let pragma_state = PragmaTracker::state_for_offset(&pragma_map, n.location.start);
+        let pragma_state = pragma_cursor.state_for_offset(&pragma_map, n.location.start);
 
         match &n.kind {
             // `class Foo { }` — requires v5.38
@@ -489,5 +490,99 @@ fn make_diagnostic_with_details(
         related_information: vec![],
         tags: vec![],
         suggestion,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser::Parser;
+    use perl_tdd_support::must;
+
+    fn version_compat_diags(source: &str) -> Vec<Diagnostic> {
+        let ast = must(Parser::new(source).parse());
+        let mut diags = Vec::new();
+        check_version_compat(&ast, &mut diags);
+        diags
+    }
+
+    #[test]
+    fn signatures_need_explicit_feature_before_v5_36() {
+        let diags = version_compat_diags("use v5.20;\nsub foo ($x) { return $x; }\n");
+        assert!(
+            diags.iter().any(|d| d.message.contains("subroutine signatures")),
+            "v5.20 without explicit signatures feature should emit PL900 for signature subs"
+        );
+    }
+
+    #[test]
+    fn signatures_explicit_feature_suppresses_version_compat_diagnostic() {
+        let diags =
+            version_compat_diags("use v5.20;\nuse feature 'signatures';\nsub foo ($x) { $x }\n");
+        assert!(
+            diags.iter().all(|d| !d.message.contains("subroutine signatures")),
+            "explicit signatures feature must suppress PL900 for signature subs on v5.20"
+        );
+    }
+
+    #[test]
+    fn lexical_no_feature_signatures_re_enables_signature_diagnostic() {
+        let diags =
+            version_compat_diags("use v5.36;\nno feature 'signatures';\nsub foo ($x) { $x }\n");
+        assert!(
+            diags.iter().any(|d| d.message.contains("subroutine signatures")),
+            "lexical no feature signatures must make signature subs warn again"
+        );
+    }
+
+    #[test]
+    fn conditional_no_feature_is_observable_to_version_compat() {
+        let diags = version_compat_diags(
+            "use v5.36;\nno if 1, 'feature', 'signatures';\nsub foo ($x) { $x }\n",
+        );
+        assert!(
+            diags.iter().any(|d| d.message.contains("subroutine signatures")),
+            "conditional no feature should disable signatures for downstream PL900 checks"
+        );
+    }
+
+    #[test]
+    fn eval_string_feature_enable_does_not_affect_version_compat_state() {
+        let diags = version_compat_diags(
+            "use v5.20;\neval \"use feature 'signatures'\";\nsub foo ($x) { $x }\n",
+        );
+        assert!(
+            diags.iter().any(|d| d.message.contains("subroutine signatures")),
+            "eval STRING should not be treated as compile-time signatures enablement"
+        );
+    }
+
+    #[test]
+    fn builtin_named_import_suppresses_call_diagnostic_for_that_symbol() {
+        let import_diags =
+            version_compat_diags("use v5.38;\nuse builtin 'inf';\nmy $x = builtin::inf();\n");
+        assert!(
+            import_diags.iter().all(|d| !d.message.contains("builtin::inf")),
+            "named builtin import should suppress the separate builtin::inf call diagnostic"
+        );
+
+        let no_import_diags = version_compat_diags("use v5.38;\nmy $x = builtin::inf();\n");
+        assert!(
+            no_import_diags.iter().any(|d| d.message.contains("builtin::inf")),
+            "without named import or bundle, builtin::inf should still be version-gated"
+        );
+    }
+
+    #[test]
+    fn builtin_bundle_suppresses_call_diagnostic_but_not_bundle_version_diagnostic() {
+        let diags = version_compat_diags("use v5.36;\nuse builtin;\nmy $x = builtin::inf();\n");
+        assert!(
+            diags.iter().any(|d| d.message.contains("'use builtin' requires Perl v5.40+")),
+            "use builtin on v5.36 should emit a bundle version diagnostic"
+        );
+        assert!(
+            diags.iter().all(|d| !d.message.contains("builtin::inf")),
+            "declaring the builtin bundle should suppress separate builtin::inf call diagnostics"
+        );
     }
 }
