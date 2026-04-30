@@ -153,3 +153,53 @@ pub fn get_mod_spec(operator: &str) -> Option<&'static ModSpec> {
         _ => None, // q, qq, qw, qx don't take modifiers
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paired_close_handles_balanced_and_unbalanced_delimiters() {
+        assert_eq!(paired_close('('), Some(')'));
+        assert_eq!(paired_close('['), Some(']'));
+        assert_eq!(paired_close('{'), Some('}'));
+        assert_eq!(paired_close('<'), Some('>'));
+        assert_eq!(paired_close('/'), None);
+    }
+
+    #[test]
+    fn split_tail_for_spec_rejects_invalid_input() {
+        assert_eq!(split_tail_for_spec("im1", &QR_SPEC), None);
+        assert_eq!(split_tail_for_spec("z", &QR_SPEC), None);
+        assert_eq!(split_tail_for_spec("ca", &TR_SPEC), None);
+    }
+
+    #[test]
+    fn split_tail_for_spec_supports_charset_suffix_and_canonical_run_order() {
+        assert_eq!(split_tail_for_spec("mixa", &QR_SPEC), Some(("imx".to_string(), Some("a"))));
+        assert_eq!(split_tail_for_spec("ximaa", &QR_SPEC), Some(("imx".to_string(), Some("aa"))));
+        assert_eq!(split_tail_for_spec("d", &QR_SPEC), Some(("".to_string(), Some("d"))));
+    }
+
+    #[test]
+    fn split_tail_for_spec_without_charset_only_accepts_run_flags() {
+        assert_eq!(split_tail_for_spec("rsc", &TR_SPEC), Some(("csr".to_string(), None)));
+        assert_eq!(split_tail_for_spec("rsu", &TR_SPEC), None);
+    }
+
+    #[test]
+    fn quote_operator_helpers_cover_known_and_unknown_operators() {
+        assert!(is_quote_operator("qq"));
+        assert!(is_quote_operator("tr"));
+        assert!(!is_quote_operator("foo"));
+
+        assert_eq!(get_quote_token_type("q"), TokenType::QuoteSingle);
+        assert_eq!(get_quote_token_type("y"), TokenType::Transliteration);
+
+        let unknown = get_quote_token_type("unknown");
+        assert!(matches!(unknown, TokenType::Error(_)));
+        if let TokenType::Error(message) = unknown {
+            assert!(message.contains("unknown"));
+        }
+    }
+}
