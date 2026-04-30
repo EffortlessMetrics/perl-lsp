@@ -247,6 +247,68 @@ pri  # Developer is typing 'print'
     Ok(())
 }
 
+#[test]
+fn test_user_story_completion_tracks_document_updates() -> TestResult {
+    let server = create_test_server();
+    initialize_server(&server);
+
+    let uri = "file:///test/completion_update.pl";
+    let original = r#"
+my $alpha = 1;
+my $beta = 2;
+
+$
+"#;
+    open_document(&server, uri, original);
+
+    let before = send_request(
+        &server,
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 4, "character": 1 }
+        })),
+    );
+
+    assert_completion_has_items(&before);
+    let before_val = before.ok_or("Expected completion response before update")?;
+    let before_items =
+        before_val["items"].as_array().ok_or("Expected completion items before update")?;
+    assert!(before_items.iter().any(|item| item["label"] == "$alpha"));
+    assert!(before_items.iter().any(|item| item["label"] == "$beta"));
+
+    let updated = r#"
+my $renamed_alpha = 1;
+my $beta = 2;
+
+$
+"#;
+    update_document(&server, uri, 2, updated);
+
+    let after = send_request(
+        &server,
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 4, "character": 1 }
+        })),
+    );
+
+    assert_completion_has_items(&after);
+    let after_val = after.ok_or("Expected completion response after update")?;
+    let after_items =
+        after_val["items"].as_array().ok_or("Expected completion items after update")?;
+
+    assert!(after_items.iter().any(|item| item["label"] == "$renamed_alpha"));
+    assert!(after_items.iter().any(|item| item["label"] == "$beta"));
+    assert!(
+        !after_items.iter().any(|item| item["label"] == "$alpha"),
+        "stale completion item from previous document version should not remain"
+    );
+
+    Ok(())
+}
+
 // ==================== USER STORY 3: GO TO DEFINITION ====================
 // As a Perl developer, I want to quickly navigate to where functions and variables are defined,
 // so that I can understand the code better.
