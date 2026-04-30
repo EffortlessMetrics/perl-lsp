@@ -1088,10 +1088,10 @@ fn package_names_for_gate(
     package_names: &[String],
     target_index: Option<&PackageTargetIndex>,
 ) -> Vec<String> {
-    if gate_requires_lib(gate) {
-        if let Some(index) = target_index {
-            return package_names.iter().filter(|name| index.has_lib(name)).cloned().collect();
-        }
+    if gate_requires_lib(gate)
+        && let Some(index) = target_index
+    {
+        return package_names.iter().filter(|name| index.has_lib(name)).cloned().collect();
     }
     package_names.to_vec()
 }
