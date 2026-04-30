@@ -1,0 +1,49 @@
+fail_fast = false
+allow_missing = true
+
+[[rules]]
+name = "review_plan_exists"
+pointer = "/review_plan/0/path"
+op = "exists"
+level = "warn"
+message = "No review plan was generated. The PR may be docs/config-only, or cockpit review-plan generation needs tuning."
+
+[[rules]]
+name = "risk_not_critical"
+pointer = "/risk/score"
+op = "lte"
+value = 89
+level = "warn"
+message = "Critical-risk PR. Review P1 cockpit items before merge."
+
+[[rules]]
+name = "health_not_low"
+pointer = "/code_health/score"
+op = "gte"
+value = 60
+level = "warn"
+message = "Low code-health score. Inspect code health warnings and priority review items."
+
+[[rules]]
+name = "large_files_visible"
+pointer = "/code_health/large_files_touched"
+op = "lte"
+value = 0
+level = "warn"
+message = "Large changed files detected. Review cockpit Code Health section."
+
+[[rules]]
+name = "breaking_indicators_visible"
+pointer = "/contracts/breaking_indicators"
+op = "lte"
+value = 0
+level = "warn"
+message = "Breaking-change indicators detected. Review cockpit Contracts section."
+
+[[rules]]
+name = "evidence_not_failed"
+pointer = "/evidence/overall_status"
+op = "ne"
+value = "fail"
+level = "warn"
+message = "Cockpit evidence status is fail. Review evidence gates before merge."
