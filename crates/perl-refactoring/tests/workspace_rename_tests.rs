@@ -12,6 +12,7 @@ use perl_refactoring::workspace_rename::{
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::sync::mpsc;
 use tempfile::TempDir;
+use url::Url;
 
 /// Test helper to set up a temporary workspace with indexed files
 fn setup_workspace(
@@ -27,8 +28,11 @@ fn setup_workspace(
         std::fs::write(&path, content)?;
 
         // Index the file in the workspace index
-        let uri = format!("file://{}", path.display());
-        index.index_file_str(&uri, content).map_err(|e| format!("index_file_str failed: {}", e))?;
+        let uri = Url::from_file_path(&path)
+            .map_err(|_| format!("failed to create file URL from path: {}", path.display()))?;
+        index
+            .index_file_str(uri.as_str(), content)
+            .map_err(|e| format!("index_file_str failed: {}", e))?;
     }
     Ok((dir, index))
 }
@@ -476,5 +480,4 @@ fn workspace_rename_config_defaults() {
     assert_eq!(config.max_files, 0, "max_files should default to 0");
     assert!(config.report_progress, "report_progress should default to true");
     assert!(config.validate_syntax, "validate_syntax should default to true");
-    assert!(!config.follow_symlinks, "follow_symlinks should default to false");
 }

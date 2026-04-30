@@ -19,7 +19,7 @@ my $regex2 = /$a\/$b/;
 my $regex3 = m/$a\/$b/;
 
 # Ambiguous cases that require careful parsing
-my $ambiguous1 = $a / $b / $c;  # Could be ($a / $b) / $c or $a / ($b / $c)
+my $ambiguous1 = $a / $b / $c;  # Always ($a / $b) / $c — division is left-associative
 my $ambiguous2 = $a =~ /$b/ / $c;  # Regex followed by division
 my $ambiguous3 = $a / $b =~ /$c/;  # Division then regex match
 

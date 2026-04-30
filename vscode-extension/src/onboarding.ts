@@ -8,6 +8,8 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { execFile } from 'child_process';
 import * as vscode from 'vscode';
 
@@ -95,6 +97,19 @@ type ExecCheckFn = (
 interface ExecInvocation {
   command: string;
   args: string[];
+}
+
+function resolveUserPath(rawPath: string): string {
+  const trimmedPath = rawPath.trim();
+  if (trimmedPath === '~') {
+    return os.homedir();
+  }
+
+  if (trimmedPath.startsWith('~/') || trimmedPath.startsWith('~\\')) {
+    return path.join(os.homedir(), trimmedPath.slice(2));
+  }
+
+  return trimmedPath;
 }
 
 // ---------------------------------------------------------------------------
@@ -210,7 +225,10 @@ export class OnboardingManager {
     const label = 'perlcritic';
     const perlcriticConfig = vscode.workspace.getConfiguration('perl-lsp').get<any>('perlcritic', {});
     const enabled = Boolean(perlcriticConfig?.enabled);
-    const profile = typeof perlcriticConfig?.profile === 'string' ? perlcriticConfig.profile.trim() : '';
+    const profile =
+      typeof perlcriticConfig?.profile === 'string'
+        ? resolveUserPath(perlcriticConfig.profile)
+        : '';
 
     if (!enabled) {
       return {
@@ -221,12 +239,13 @@ export class OnboardingManager {
       };
     }
 
-    if (profile && !fs.existsSync(profile)) {
+    const resolvedProfile = this.resolvePerlcriticProfilePath(profile);
+    if (resolvedProfile && !fs.existsSync(resolvedProfile)) {
       return {
         label,
         ok: false,
         status: HealthCheckStatus.Warning,
-        detail: `Configured perlcritic profile was not found: ${profile}`,
+        detail: `Configured perlcritic profile was not found: ${resolvedProfile}`,
       };
     }
 
@@ -249,6 +268,23 @@ export class OnboardingManager {
           'Install via: cpanm Perl::Critic',
       };
     }
+  }
+
+  private resolvePerlcriticProfilePath(profile: string): string | undefined {
+    if (!profile) {
+      return undefined;
+    }
+
+    if (path.isAbsolute(profile)) {
+      return profile;
+    }
+
+    const primaryWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    // When no workspace folder is open we cannot resolve a relative path to a
+    // meaningful absolute location (CWD of the extension host is not the user's
+    // project directory).  Return `undefined` so the caller skips the existence
+    // check rather than silently probing the wrong location.
+    return primaryWorkspace ? path.resolve(primaryWorkspace, profile) : undefined;
   }
 
   /**

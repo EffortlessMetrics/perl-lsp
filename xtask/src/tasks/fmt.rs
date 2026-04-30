@@ -19,6 +19,18 @@ struct CargoPackage {
     manifest_path: String,
 }
 
+/// One crate's failure record collected during the per-crate iteration.
+///
+/// `unformatted_files` is populated in `--check` mode by parsing rustfmt's
+/// `Diff in <path>` lines from stdout; in apply mode it stays empty (cargo
+/// fmt without `--check` is expected to mutate files and exit zero unless
+/// rustfmt itself errored, which we still report as a per-crate failure).
+struct CrateFailure {
+    manifest_path: String,
+    unformatted_files: Vec<String>,
+    spawn_error: Option<String>,
+}
+
 pub fn run(check: bool, package_filters: Option<Vec<String>>) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
@@ -30,6 +42,8 @@ pub fn run(check: bool, package_filters: Option<Vec<String>>) -> Result<()> {
     let action = if check { "Checking" } else { "Formatting" };
     spinner.set_message(format!("{} code", action));
 
+    let mut failures: Vec<CrateFailure> = Vec::new();
+
     for manifest_path in workspace_manifest_paths(package_filters.as_deref())? {
         spinner.set_message(format!("{} {}", action, manifest_path));
 
@@ -39,27 +53,134 @@ pub fn run(check: bool, package_filters: Option<Vec<String>>) -> Result<()> {
             args.push("--check".to_string());
         }
 
-        let status =
-            cmd("cargo", &args).run().with_context(|| format!("Failed to format {}", args[2]))?;
+        // Capture stdout in --check mode so we can name the unformatted files
+        // in the aggregate error report. In apply mode we let cargo's output
+        // pass through unchanged so users still see rustfmt warnings live.
+        let result = if check {
+            cmd("cargo", &args).stdout_capture().unchecked().run()
+        } else {
+            cmd("cargo", &args).unchecked().run()
+        };
 
-        if !status.status.success() {
-            spinner.finish_with_message(format!(
-                "❌ Code {} failed",
-                if check { "check" } else { "formatting" }
-            ));
-            return Err(eyre!(
-                "Code {} failed for {}",
-                if check { "check" } else { "formatting" },
-                args[2]
-            ));
+        match result {
+            Ok(output) => {
+                if !output.status.success() {
+                    let unformatted_files =
+                        if check { parse_unformatted_files(&output.stdout) } else { Vec::new() };
+                    // In --check mode, echo the captured stdout so the user
+                    // still sees the diff context in addition to the summary.
+                    if check && !output.stdout.is_empty() {
+                        print!("{}", String::from_utf8_lossy(&output.stdout));
+                    }
+                    failures.push(CrateFailure {
+                        manifest_path: args[2].clone(),
+                        unformatted_files,
+                        spawn_error: None,
+                    });
+                }
+            }
+            Err(err) => {
+                // Spawn / I/O failures are kept in the aggregate report
+                // rather than aborting on the first crate, so a single run
+                // still surfaces every per-crate problem.
+                failures.push(CrateFailure {
+                    manifest_path: args[2].clone(),
+                    unformatted_files: Vec::new(),
+                    spawn_error: Some(err.to_string()),
+                });
+            }
         }
     }
 
+    if failures.is_empty() {
+        spinner.finish_with_message(format!(
+            "✅ Code {} successfully",
+            if check { "check passed" } else { "formatted" }
+        ));
+        return Ok(());
+    }
+
     spinner.finish_with_message(format!(
-        "✅ Code {} successfully",
-        if check { "check passed" } else { "formatted" }
+        "❌ Code {} failed in {} crate(s)",
+        if check { "check" } else { "formatting" },
+        failures.len()
     ));
-    Ok(())
+    Err(eyre!("{}", format_failure_report(check, &failures)))
+}
+
+/// Parse rustfmt's `Diff in <path>` lines from captured stdout.
+///
+/// rustfmt emits one of these two header shapes per unformatted file:
+///   * `Diff in <path> at line N:`  (older / verbose-diff)
+///   * `Diff in <path>:<N>:`        (current default on recent toolchains)
+///
+/// Pulling the path out lets the aggregate error name every offending file,
+/// not just the crate that contains them. Returns a deduplicated,
+/// insertion-ordered list (rustfmt may repeat a path across multiple hunks).
+fn parse_unformatted_files(stdout: &[u8]) -> Vec<String> {
+    let text = String::from_utf8_lossy(stdout);
+    let mut seen = HashSet::new();
+    let mut files = Vec::new();
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("Diff in ") {
+            let path = extract_diff_path(rest);
+            if !path.is_empty() && seen.insert(path.to_string()) {
+                files.push(path.to_string());
+            }
+        }
+    }
+    files
+}
+
+/// Extract the file path from a rustfmt `Diff in ...` line tail.
+///
+/// Handles both the `<path> at line N:` and `<path>:<N>:` shapes, plus
+/// Windows paths like `\\?\C:\...\lib.rs:11:` where the trailing `:line:`
+/// must not be confused with the drive-letter colon earlier in the path.
+fn extract_diff_path(rest: &str) -> &str {
+    // Verbose-diff shape: `<path> at line N:` — split on the literal marker
+    // and ignore the trailing line/column completely.
+    if let Some(idx) = rest.rfind(" at line ") {
+        return rest[..idx].trim();
+    }
+    // Default shape: `<path>:<line>:` — strip the trailing `:`, then strip the
+    // trailing digit run (line number), then strip the separator `:`. Keeping
+    // this lexical (rather than regex) matches the rest of the xtask style.
+    let mut s = rest.trim().trim_end_matches(':');
+    let stripped = s.trim_end_matches(|c: char| c.is_ascii_digit());
+    if stripped.len() < s.len() && stripped.ends_with(':') {
+        s = stripped.trim_end_matches(':');
+    }
+    s.trim()
+}
+
+/// Build the aggregate error message that lists every failing crate.
+///
+/// In `--check` mode the report names each unformatted file under the crate
+/// that owns it, replacing the historical generic "Failed to format
+/// Cargo.toml" message that masked per-PR drift as a master cascade.
+fn format_failure_report(check: bool, failures: &[CrateFailure]) -> String {
+    let mut report = String::new();
+    let header = if check {
+        format!("cargo fmt --check found unformatted files in {} crate(s):", failures.len())
+    } else {
+        format!("cargo fmt failed in {} crate(s):", failures.len())
+    };
+    report.push_str(&header);
+    for failure in failures {
+        report.push_str("\n  - ");
+        report.push_str(&failure.manifest_path);
+        if let Some(spawn_error) = &failure.spawn_error {
+            report.push_str(" (spawn failed: ");
+            report.push_str(spawn_error);
+            report.push(')');
+        }
+        for file in &failure.unformatted_files {
+            report.push_str("\n      ");
+            report.push_str(file);
+        }
+    }
+    report
 }
 
 fn workspace_manifest_paths(package_filters: Option<&[String]>) -> Result<Vec<String>> {
@@ -131,7 +252,10 @@ fn dedup_preserve_order(paths: Vec<String>) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CargoMetadata, CargoPackage, collect_workspace_manifest_paths};
+    use super::{
+        CargoMetadata, CargoPackage, CrateFailure, collect_workspace_manifest_paths,
+        format_failure_report, parse_unformatted_files,
+    };
     use color_eyre::eyre::Result;
 
     fn sample_metadata() -> CargoMetadata {
@@ -203,5 +327,100 @@ mod tests {
         let xtask_pos = message.find("xtask").expect("xtask in error");
         assert!(perl_pos < xtask_pos, "available packages must be listed in sorted order");
         Ok(())
+    }
+
+    #[test]
+    fn parse_unformatted_files_extracts_paths_from_verbose_diff_lines() {
+        // Older rustfmt and verbose-diff modes emit `<path> at line N:`.
+        let stdout = b"Diff in /repo/crates/foo/src/lib.rs at line 12:\n\
+             -    let x = 1;\n\
+             +    let x = 1;\n\
+             Diff in /repo/crates/bar/src/main.rs at line 3:\n\
+             -fn main(){}\n";
+        let files = parse_unformatted_files(stdout);
+        assert_eq!(
+            files,
+            vec![
+                "/repo/crates/foo/src/lib.rs".to_string(),
+                "/repo/crates/bar/src/main.rs".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_unformatted_files_extracts_paths_from_default_diff_lines() {
+        // Current default rustfmt output: `<path>:<line>:` — must not chop the
+        // drive-letter colon out of `\\?\C:\...` style Windows paths.
+        let stdout = b"Diff in /repo/crates/foo/src/lib.rs:11:\n\
+             -    let x = 1;\n\
+             Diff in \\\\?\\C:\\repo\\crates\\bar\\src\\main.rs:42:\n\
+             -fn main(){}\n";
+        let files = parse_unformatted_files(stdout);
+        assert_eq!(
+            files,
+            vec![
+                "/repo/crates/foo/src/lib.rs".to_string(),
+                "\\\\?\\C:\\repo\\crates\\bar\\src\\main.rs".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_unformatted_files_deduplicates_repeated_paths() {
+        let stdout = b"Diff in /repo/a/src/lib.rs at line 1:\n\
+             Diff in /repo/a/src/lib.rs at line 42:\n";
+        let files = parse_unformatted_files(stdout);
+        assert_eq!(files, vec!["/repo/a/src/lib.rs".to_string()]);
+    }
+
+    #[test]
+    fn parse_unformatted_files_returns_empty_for_clean_output() {
+        let files = parse_unformatted_files(b"");
+        assert!(files.is_empty());
+        let files = parse_unformatted_files(b"some unrelated cargo output\n");
+        assert!(files.is_empty());
+    }
+
+    #[test]
+    fn format_failure_report_lists_every_failing_crate_in_check_mode() {
+        let failures = vec![
+            CrateFailure {
+                manifest_path: "crates/foo/Cargo.toml".to_string(),
+                unformatted_files: vec!["crates/foo/src/lib.rs".to_string()],
+                spawn_error: None,
+            },
+            CrateFailure {
+                manifest_path: "crates/bar/Cargo.toml".to_string(),
+                unformatted_files: vec![
+                    "crates/bar/src/lib.rs".to_string(),
+                    "crates/bar/src/util.rs".to_string(),
+                ],
+                spawn_error: None,
+            },
+        ];
+        let report = format_failure_report(true, &failures);
+        // Both crates and every unformatted file must appear so operators can
+        // distinguish per-PR drift from a shared master cascade in one read.
+        assert!(report.contains("2 crate(s)"));
+        assert!(report.contains("crates/foo/Cargo.toml"));
+        assert!(report.contains("crates/bar/Cargo.toml"));
+        assert!(report.contains("crates/foo/src/lib.rs"));
+        assert!(report.contains("crates/bar/src/lib.rs"));
+        assert!(report.contains("crates/bar/src/util.rs"));
+        // Regression: never emit the original misleading generic message.
+        assert!(!report.contains("Failed to format Cargo.toml"));
+    }
+
+    #[test]
+    fn format_failure_report_surfaces_spawn_errors_inline() {
+        let failures = vec![CrateFailure {
+            manifest_path: "crates/foo/Cargo.toml".to_string(),
+            unformatted_files: Vec::new(),
+            spawn_error: Some("rustfmt not found".to_string()),
+        }];
+        let report = format_failure_report(false, &failures);
+        assert!(report.contains("cargo fmt failed"));
+        assert!(report.contains("crates/foo/Cargo.toml"));
+        assert!(report.contains("rustfmt not found"));
     }
 }

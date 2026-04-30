@@ -463,9 +463,9 @@ Intelligent code folding:
 ```json
 {
   "perl.testRunner.enabled": true,
-  "perl.testRunner.testCommand": "perl",
-  "perl.testRunner.testArgs": [],
-  "perl.testRunner.testTimeout": 60000
+  "perl.testRunner.command": "perl",
+  "perl.testRunner.args": [],
+  "perl.testRunner.timeout": 60000
 }
 ```
 
@@ -504,20 +504,30 @@ Install the Perl LSP extension or configure the `perllsp` binary manually:
 
 ### Neovim
 
-Using nvim-lspconfig:
+Neovim 0.11+ using built-in LSP config APIs:
 
 ```lua
-require('lspconfig').perl_lsp.setup{
-  cmd = {'perllsp', '--stdio'},
-  settings = {
+vim.lsp.config('perllsp', {
+  cmd = { 'perllsp', '--stdio' },
+  filetypes = { 'perl' },
+  root_markers = {
+    '.perl-lsp.toml',
+    'Makefile.PL',
+    'Build.PL',
+    'cpanfile',
+    'dist.ini',
+    '.git',
+  },
+  init_options = {
     perl = {
-      lsp = {
-        diagnostics = true,
-        completion = { enableSnippets = true }
-      }
-    }
-  }
-}
+      workspace = {
+        includePaths = { 'lib', '.', 'local/lib/perl5' },
+      },
+    },
+  },
+})
+
+vim.lsp.enable('perllsp')
 ```
 
 ### Emacs
@@ -589,10 +599,13 @@ With lsp-mode or eglot:
 **LSP not starting:**
 ```bash
 # Check if perllsp is in PATH
-which perllsp
+command -v perllsp
 
-# Test standalone
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perllsp --stdio
+# Check CLI diagnostics and metadata commands
+perllsp --version
+perllsp --health
+perllsp --info
+perllsp --check path/to/file.pl
 ```
 
 **Slow performance:**
@@ -612,10 +625,10 @@ Enable debug logging for troubleshooting:
 
 ```bash
 # Command line
-perllsp --stdio --log-level=debug --log-file=perl-lsp.log
+perllsp --stdio --log
 
 # Environment variable
-RUST_LOG=debug perllsp --stdio
+PERL_LSP_LOG=1 perllsp --stdio
 ```
 
 ## Contributing

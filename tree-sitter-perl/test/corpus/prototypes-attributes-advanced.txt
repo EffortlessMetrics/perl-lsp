@@ -923,15 +923,15 @@ $emp->{employee_id} = "E123";
 ---
 
 (source_file
-  (package_declaration)
+  (package_statement)
   (use_statement)
-  (subroutine_declaration)
-  (package_declaration)
+  (subroutine_declaration_statement)
+  (package_statement)
   (use_statement)
   (use_statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement)
+  (expression_statement)
+  (expression_statement))
 
 ==================
 Thread attributes
