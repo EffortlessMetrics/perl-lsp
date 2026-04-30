@@ -1226,7 +1226,20 @@ fn run_gate_plan(
             pb.set_message(format!("Running {}...", gate.name));
         }
 
+        println!(
+            "BEGIN gate={} timeout={}s command={}",
+            gate.name, gate.timeout_seconds, gate.command.trim()
+        );
+
         let result = run_single_gate(gate, policy, &log_dir, config)?;
+
+        let exit_display = result
+            .exit_code
+            .map_or_else(|| "none".to_string(), |code| code.to_string());
+        println!(
+            "END gate={} status={} exit={} duration_ms={}",
+            gate.name, result.status, exit_display, result.duration_ms
+        );
 
         // Update tier summary
         let tier_summary = tier_summaries.entry(gate.tier.clone()).or_default();
@@ -1636,7 +1649,14 @@ fn run_single_gate(
             };
 
             // For failing cargo test gates, extract the first failure details
-            let first_failure = if status == "fail" && is_cargo_test_command(command) {
+            let first_failure = if status == "timeout" {
+                Some(FirstFailure {
+                    test: None,
+                    site: Some(command.to_string()),
+                    message: Some(format!("Gate timed out after {}s", timeout_secs)),
+                    exit_code: 124,
+                })
+            } else if status == "fail" && is_cargo_test_command(command) {
                 parse_first_failure(&execution.stdout, execution.exit_code)
             } else {
                 None
@@ -3191,6 +3211,9 @@ mod tests {
         assert_eq!(result.command, gate.command);
         assert_eq!(result.log_path.as_deref(), Some("logs/synthetic_timeout_gate.log"));
         assert!(result.output_summary.is_some(), "timeout should preserve output summary context");
+        let first_failure = result.first_failure.as_ref().expect("timeout should record first_failure");
+        assert!(first_failure.message.as_deref().unwrap_or_default().contains("timed out"));
+        assert_eq!(first_failure.site.as_deref(), Some(gate.command.as_str()));
 
         let blocking = blocking_failure_gate_names(std::slice::from_ref(&result));
         assert_eq!(blocking, vec!["synthetic_timeout_gate"]);
