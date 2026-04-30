@@ -1093,6 +1093,21 @@ enum Commands {
         ratchet_check: bool,
     },
 
+    /// Generate structured UX regression receipt from test output
+    UxRegressionReceipt {
+        /// Path to UX test output log
+        #[arg(long)]
+        input: PathBuf,
+
+        /// Path to write receipt JSON (optional)
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Git SHA for receipt metadata
+        #[arg(long)]
+        sha: Option<String>,
+    },
+
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
 
@@ -2139,6 +2154,13 @@ fn main() -> Result<()> {
                 UxScorecardOutputFormat::Json => UxScorecardFormat::Json,
             };
             ux_scorecard::run(format, input, output, status_md, ratchet_check)
+        }
+        Commands::UxRegressionReceipt { input, receipt, sha } => {
+            ux_regression_receipt::run(ux_regression_receipt::UxRegressionReceiptConfig {
+                input,
+                receipt,
+                sha,
+            })
         }
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
