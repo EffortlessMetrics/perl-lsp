@@ -23,6 +23,16 @@ It separates what is already landed from what is partial/open so agents do not r
 5. **Status marker contract landed**
    - Parser/status marker validation has a contract path so marker integrity is caught before merge rather than discovered post-merge.
 
+## Recently landed (2026-04-30, after this snapshot was first drafted)
+
+1. **`update-status` streaming landed**
+   - PR **#7518** `fix(xtask): stream update-status progress output` merged 2026-04-30T09:12:46Z.
+   - Streaming evidence emission is in place; issue **#7404** remains open pending end-to-end validation of the streaming behavior in CI.
+
+2. **Expected-skip normalizer landed**
+   - PR **#7558** `fix(queue-reconciler): normalize skipped and stale check states` merged 2026-04-30T09:14:00Z.
+   - Adds `NormalizedCheckStatus` and `normalize_check_status` in `xtask/src/tasks/queue_reconciler.rs`, giving canonical `SKIPPED` outcome normalization (`expected_skip` vs `unexpected_skip`) so receipts/labels can be trusted at scale.
+
 ## Partial items (landed core, follow-up still needed)
 
 1. **UX receipt coverage completion**
@@ -33,19 +43,18 @@ It separates what is already landed from what is partial/open so agents do not r
    - High-risk workflows were corrected.
    - Remaining follow-up: full inventory verification + explicit exception registry.
 
+3. **`update-status` streaming validation**
+   - Streaming landed in #7518 (see "Recently landed" above).
+   - Remaining follow-up tracked by **#7404** — validate streaming behavior end-to-end in CI before closing.
+
 ## Open items
 
-1. **`update-status` streaming remains open**
-   - Tracking: **#7404**.
-
-2. **Expected-skip normalizer remains open**
-   - Need canonical `SKIPPED` outcome normalization (`expected_skip` vs `unexpected_skip`) before receipts/labels can be trusted at scale.
-
-3. **Review receipts / reconciler projection remains open**
+1. **Review receipts / reconciler projection remains open**
    - Need consistent projection of review receipt outcomes into reconciler-visible state.
 
-4. **Merge-train protocol remains open**
+2. **Merge-train protocol remains open**
    - Need an explicit batch/merge-train operating protocol to reduce queue thrash and stale-green churn.
+   - Tracked by PR **#7520** `docs(ci): add merge-train operator protocol` (currently in deep review).
 
 ## Exact verification commands
 
@@ -78,11 +87,10 @@ nix develop -c just ci-gate
 
 ## Next-wave order (execution sequence)
 
-1. **Close #7404 (`update-status` streaming)** so status evidence can be emitted incrementally and consumed reliably.
-2. **Land expected-skip normalizer** to stabilize status semantics for reconciler and gate policy.
-3. **Land review-receipt ↔ reconciler projection** so labels and receipts agree on actionable state.
-4. **Codify merge-train protocol** (batch policy, stale-state invalidation, and rerun rules).
-5. **Finish UX receipt tail work** (artifact-path completeness + edge-path routing coverage).
+1. **Validate `update-status` streaming end-to-end** (streaming landed in #7518; close **#7404** once CI evidence confirms incremental emission works under load).
+2. **Land review-receipt ↔ reconciler projection** so labels and receipts agree on actionable state.
+3. **Land merge-train protocol** via **#7520** (in deep review): batch policy, stale-state invalidation, and rerun rules.
+4. **Finish UX receipt tail work** (artifact-path completeness + edge-path routing coverage).
 
 ## Source notes
 
