@@ -15,8 +15,8 @@ fn parse_sexp(code: &str) -> Result<String, Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn bdd_given_named_sub_with_assignment_when_parsed_then_ast_contains_subroutine_and_assignment(
-) -> TestResult {
+fn bdd_given_named_sub_with_assignment_when_parsed_then_ast_contains_subroutine_and_assignment()
+-> TestResult {
     // Given: a developer writes a basic subroutine that mutates a lexical scalar.
     let code = r#"
         sub greet {
@@ -39,8 +39,8 @@ fn bdd_given_named_sub_with_assignment_when_parsed_then_ast_contains_subroutine_
 }
 
 #[test]
-fn bdd_given_regex_substitution_when_parsed_then_pattern_replacement_and_flags_are_retained(
-) -> TestResult {
+fn bdd_given_regex_substitution_when_parsed_then_pattern_replacement_and_flags_are_retained()
+-> TestResult {
     // Given: a developer normalizes identifiers with substitution flags.
     let code = r#"$value =~ s/(\w+)/prefix_$1/gi;"#;
 
@@ -141,8 +141,8 @@ fn bdd_given_multiple_realistic_statements_when_parsed_then_program_shape_is_sta
 }
 
 #[test]
-fn bdd_given_postfix_flow_and_ternary_when_parsed_then_control_flow_nodes_are_retained(
-) -> TestResult {
+fn bdd_given_postfix_flow_and_ternary_when_parsed_then_control_flow_nodes_are_retained()
+-> TestResult {
     // Given: a developer writes concise Perl with postfix conditionals and ternary expressions.
     let code = r#"
         my $count = 2;
@@ -189,8 +189,8 @@ fn bdd_given_unclosed_quote_when_parsed_then_recovery_is_reported_without_panick
 }
 
 #[test]
-fn bdd_given_package_and_constructor_pattern_when_parsed_then_namespace_and_bless_flow_are_preserved(
-) -> TestResult {
+fn bdd_given_package_and_constructor_pattern_when_parsed_then_namespace_and_bless_flow_are_preserved()
+-> TestResult {
     // Given: a developer writes a package with a constructor that blesses a hashref.
     let code = r#"
         package My::Service;
@@ -250,8 +250,8 @@ fn bdd_given_partial_hashref_literal_when_parsed_then_parser_recovers_without_pa
 }
 
 #[test]
-fn bdd_given_nested_try_catch_and_finally_when_parsed_then_exception_flow_nodes_are_preserved(
-) -> TestResult {
+fn bdd_given_nested_try_catch_and_finally_when_parsed_then_exception_flow_nodes_are_preserved()
+-> TestResult {
     // Given: a developer uses nested exception handling with fallback and cleanup logic.
     let code = r#"
         my $status = "pending";
