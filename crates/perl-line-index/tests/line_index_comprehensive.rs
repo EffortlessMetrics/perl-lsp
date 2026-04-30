@@ -215,11 +215,18 @@ fn test_crlf_three_lines_positions() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Newline-byte boundary: the newline char is the last addressable byte on a
+// line, but the next line's start byte is NOT addressable on the current line.
+// ---------------------------------------------------------------------------
+
 #[test]
 fn test_position_to_byte_allows_newline_byte_but_not_next_line_start()
 -> Result<(), Box<dyn std::error::Error>> {
     let index = LineIndex::new("ab\ncd");
+    // column 2 = '\n' byte — still on line 0
     assert_eq!(index.position_to_byte(0, 2), Some(2));
+    // column 3 = 'c' byte — that's the start of line 1, NOT accessible via line 0
     assert_eq!(index.position_to_byte(0, 3), None);
     Ok(())
 }
