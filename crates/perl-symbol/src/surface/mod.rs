@@ -30,6 +30,7 @@
 pub mod decl;
 pub mod facts;
 pub mod r#ref;
+pub mod ref_facts;
 
 pub use decl::{SymbolDecl, extract_symbol_decls};
 pub use facts::{
@@ -37,3 +38,4 @@ pub use facts::{
     symbol_refs_to_semantic_facts,
 };
 pub use r#ref::{SymbolRef, SymbolRefKind, extract_symbol_refs};
+pub use ref_facts::{SymbolRefSemanticFacts, symbol_refs_to_semantic_facts};
