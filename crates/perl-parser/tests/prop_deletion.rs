@@ -124,4 +124,42 @@ proptest! {
             );
         }
     }
+
+    #[test]
+    fn delete_is_idempotent(
+        s in "[a-zA-Z0-9 \t\n()\\[\\];:,.+=\\-*/!?%&|<>]+",
+    ) {
+        let once = delete_on_breakable(&s);
+        let twice = delete_on_breakable(&once);
+
+        prop_assert_eq!(
+            once,
+            twice,
+            "Deleting breakable whitespace should be idempotent for input {:?}",
+            s
+        );
+    }
+
+    #[test]
+    fn delete_preserves_leading_and_trailing_whitespace(
+        lead in r"[ \t\n]{0,8}",
+        body in "[a-zA-Z0-9()\\[\\];:,.+=\\-*]{1,64}",
+        trail in r"[ \t\n]{0,8}",
+    ) {
+        let s = format!("{lead}{body}{trail}");
+        let deleted = delete_on_breakable(&s);
+
+        prop_assert!(
+            deleted.starts_with(&lead),
+            "Leading whitespace changed: input {:?}, output {:?}",
+            s,
+            deleted
+        );
+        prop_assert!(
+            deleted.ends_with(&trail),
+            "Trailing whitespace changed: input {:?}, output {:?}",
+            s,
+            deleted
+        );
+    }
 }
