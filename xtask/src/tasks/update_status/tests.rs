@@ -22,17 +22,19 @@ pub(super) struct TestCounts {
     pub manual_count: Option<usize>,
 }
 
-pub(super) fn count_tier_a_lib_tests(root: &Path) -> Option<usize> {
+pub(super) fn count_tier_a_lib_tests(root: &Path) -> Result<Option<usize>> {
     let output = run_cmd(
         root,
         &["cargo", "test", "--workspace", "--lib", "--exclude", "tree-sitter-perl", "--", "--list"],
         Duration::from_secs(180),
-    );
+    )?;
     if output.is_empty() {
-        return None;
+        return Ok(None);
     }
-    let re = Regex::new(r":\s*test\s*$").ok()?;
-    Some(output.lines().filter(|line| re.is_match(line)).count())
+    let Ok(re) = Regex::new(r":\s*test\s*$") else {
+        return Ok(None);
+    };
+    Ok(Some(output.lines().filter(|line| re.is_match(line)).count()))
 }
 
 pub(super) fn count_ignored_tracked(root: &Path) -> (Option<usize>, Option<usize>, Option<usize>) {
@@ -47,20 +49,20 @@ pub(super) fn count_ignored_tracked(root: &Path) -> (Option<usize>, Option<usize
     (Some(ignored_total), Some(bug_count), Some(manual_count))
 }
 
-pub(super) fn count_tests(root: &Path) -> TestCounts {
-    let tier_a = count_tier_a_lib_tests(root);
+pub(super) fn count_tests(root: &Path) -> Result<TestCounts> {
+    let tier_a = count_tier_a_lib_tests(root)?;
     let (ignored_total, bug_count, manual_count) = count_ignored_tracked(root);
-    TestCounts { tier_a_lib_tests: tier_a, ignored_total, bug_count, manual_count }
+    Ok(TestCounts { tier_a_lib_tests: tier_a, ignored_total, bug_count, manual_count })
 }
 
-pub(super) fn count_missing_docs_perl_parser(root: &Path) -> Option<usize> {
+pub(super) fn count_missing_docs_perl_parser(root: &Path) -> Result<Option<usize>> {
     let output = run_cmd(
         root,
         &["cargo", "check", "-p", "perl-parser", "--tests", "--message-format=json"],
         Duration::from_secs(300),
-    );
+    )?;
     if output.is_empty() {
-        return None;
+        return Ok(None);
     }
 
     let mut count: usize = 0;
@@ -91,7 +93,7 @@ pub(super) fn count_missing_docs_perl_parser(root: &Path) -> Option<usize> {
             count += 1;
         }
     }
-    Some(count)
+    Ok(Some(count))
 }
 
 pub(super) fn read_missing_docs_baseline(root: &Path) -> Option<usize> {

@@ -16,7 +16,10 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::io::{BufRead, BufReader};
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, eyre};
@@ -69,17 +72,13 @@ impl StatusSubsystem {
 // ---------------------------------------------------------------------------
 
 /// Run a command with a timeout, returning combined stdout+stderr or empty string on failure.
-fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
+fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> Result<String> {
     let Some((&program, rest)) = args.split_first() else {
-        return String::new();
+        return Ok(String::new());
     };
 
-    let result = Command::new(program).args(rest).current_dir(root).output();
-
-    let output = match result {
-        Ok(o) => o,
-        Err(_) => return String::new(),
-    };
+    eprintln!("[update-status] running: {}", args.join(" "));
+    let output = run_cmd_streaming(root, args)?;
 
     // Basic timeout emulation: we cannot use `std::process::Command` timeout
     // directly, so we rely on the process completing.  The Python version used
@@ -87,9 +86,15 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
     // the parameter for API compatibility and future improvement.
     let _ = timeout;
 
-    let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
-    combined.push_str(&String::from_utf8_lossy(&output.stderr));
-    combined
+    if !output.status.success() {
+        return Err(eyre!(
+            "command failed (exit: {:?}): {}",
+            output.status.code(),
+            args.join(" ")
+        ));
+    }
+
+    Ok(output.combined)
 }
 
 /// Like `run_cmd` but merges stderr into stdout via shell `2>&1`.
@@ -98,22 +103,79 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
 /// names to stdout, so without `2>&1` the parser sees all names before all headers and
 /// can never associate a name with its crate.  Single-quote-escapes each argument to
 /// avoid shell injection while preserving flags like `--`.
-fn run_cmd_merged(root: &Path, args: &[&str], timeout: Duration) -> String {
+fn run_cmd_merged(root: &Path, args: &[&str], timeout: Duration) -> Result<String> {
     let _ = timeout;
     if args.is_empty() {
-        return String::new();
+        return Ok(String::new());
     }
-    let shell_args: Vec<String> =
-        args.iter().map(|&a| format!("'{}'", a.replace('\'', "'\\''"))).collect();
-    let shell_cmd = format!("{} 2>&1", shell_args.join(" "));
-    #[cfg(unix)]
-    let result = Command::new("sh").arg("-c").arg(&shell_cmd).current_dir(root).output();
-    #[cfg(not(unix))]
-    let result = Command::new("cmd").args(["/C", &shell_cmd]).current_dir(root).output();
-    match result {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
-        Err(_) => String::new(),
+    eprintln!("[update-status] running: {}", args.join(" "));
+    let output = run_cmd_streaming(root, args)?;
+    if !output.status.success() {
+        return Err(eyre!(
+            "command failed (exit: {:?}): {}",
+            output.status.code(),
+            args.join(" ")
+        ));
     }
+
+    Ok(output.combined)
+}
+
+struct StreamedOutput {
+    combined: String,
+    status: std::process::ExitStatus,
+}
+
+fn run_cmd_streaming(root: &Path, args: &[&str]) -> Result<StreamedOutput> {
+    let Some((&program, rest)) = args.split_first() else {
+        return Err(eyre!("empty command"));
+    };
+
+    let mut child = Command::new(program)
+        .args(rest)
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("spawning command: {}", args.join(" ")))?;
+
+    let stdout = child.stdout.take().ok_or_else(|| eyre!("missing stdout pipe"))?;
+    let stderr = child.stderr.take().ok_or_else(|| eyre!("missing stderr pipe"))?;
+    let (tx, rx) = mpsc::channel::<String>();
+
+    let tx_out = tx.clone();
+    let out_handle = thread::spawn(move || {
+        let mut reader = BufReader::new(stdout);
+        let mut line = String::new();
+        while reader.read_line(&mut line).ok().filter(|n| *n > 0).is_some() {
+            let emitted = line.clone();
+            eprint!("{emitted}");
+            let _ = tx_out.send(emitted);
+            line.clear();
+        }
+    });
+
+    let err_handle = thread::spawn(move || {
+        let mut reader = BufReader::new(stderr);
+        let mut line = String::new();
+        while reader.read_line(&mut line).ok().filter(|n| *n > 0).is_some() {
+            let emitted = line.clone();
+            eprint!("{emitted}");
+            let _ = tx.send(emitted);
+            line.clear();
+        }
+    });
+
+    let status = child.wait().context("waiting for command")?;
+    let _ = out_handle.join();
+    let _ = err_handle.join();
+
+    let mut combined = String::new();
+    while let Ok(chunk) = rx.try_recv() {
+        combined.push_str(&chunk);
+    }
+
+    Ok(StreamedOutput { combined, status })
 }
 
 /// Replace content between `begin_marker\n...\nend_marker` (inclusive of markers).
@@ -182,6 +244,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- LSP subsystem ---
     if need_lsp {
+        eprintln!("[update-status] subsystem start: lsp");
         let cov = lsp::count_lsp_coverage(&root)?;
         let compliance_table = lsp::compute_compliance_table(&root)?;
 
@@ -200,12 +263,15 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         if updated_roadmap != original_roadmap {
             files_to_update.push(("docs/project/ROADMAP.md", roadmap_path, updated_roadmap));
         }
+        eprintln!("[update-status] subsystem done: lsp");
     }
 
     // --- Tests subsystem ---
     if need_tests {
-        let test_counts = tests::count_tests(&root);
-        let missing_docs_current = tests::count_missing_docs_perl_parser(&root);
+        eprintln!("[update-status] subsystem start: tests");
+        let test_counts = tests::count_tests(&root).context("status subsystem `tests` failed")?;
+        let missing_docs_current =
+            tests::count_missing_docs_perl_parser(&root).context("status subsystem `tests` failed")?;
         let missing_docs_baseline = tests::read_missing_docs_baseline(&root);
 
         let tests_path = root.join("docs/project/status/tests.md");
@@ -220,10 +286,12 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         if updated_tests != original_tests {
             files_to_update.push(("docs/project/status/tests.md", tests_path, updated_tests));
         }
+        eprintln!("[update-status] subsystem done: tests");
     }
 
     // --- Parser subsystem ---
     if need_parser {
+        eprintln!("[update-status] subsystem start: parser");
         let parser_metrics = parser::collect_parser_metrics(&root);
 
         let parser_path = root.join("docs/project/status/parser.md");
@@ -233,14 +301,17 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         if updated_parser != original_parser {
             files_to_update.push(("docs/project/status/parser.md", parser_path, updated_parser));
         }
+        eprintln!("[update-status] subsystem done: parser");
     }
 
     // --- Quality subsystem ---
     if need_quality {
+        eprintln!("[update-status] subsystem start: quality");
         let quality_path = root.join("docs/project/status/quality.md");
         let original_quality =
             fs::read_to_string(&quality_path).context("reading docs/project/status/quality.md")?;
-        let updated_quality = quality::generate_quality_status(&root, &original_quality)?;
+        let updated_quality =
+            quality::generate_quality_status(&root, &original_quality).context("status subsystem `quality` failed")?;
         if updated_quality != original_quality {
             files_to_update.push(("docs/project/status/quality.md", quality_path, updated_quality));
         }
@@ -251,10 +322,12 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         if updated_ux != original_ux {
             files_to_update.push(("docs/project/status/editor_ux.json", ux_path, updated_ux));
         }
+        eprintln!("[update-status] subsystem done: quality");
     }
 
     // --- DAP subsystem ---
     if need_dap {
+        eprintln!("[update-status] subsystem start: dap");
         let dap_counts = dap::count_dap_tests(&root);
 
         let dap_path = root.join("docs/project/status/dap.md");
@@ -264,10 +337,12 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         if updated_dap != original_dap {
             files_to_update.push(("docs/project/status/dap.md", dap_path, updated_dap));
         }
+        eprintln!("[update-status] subsystem done: dap");
     }
 
     // --- Workspace subsystem ---
     if need_workspace {
+        eprintln!("[update-status] subsystem start: workspace");
         let workspace_path = root.join("docs/project/status/workspace.md");
         let original_workspace = fs::read_to_string(&workspace_path)
             .context("reading docs/project/status/workspace.md")?;
@@ -279,6 +354,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
                 updated_workspace,
             ));
         }
+        eprintln!("[update-status] subsystem done: workspace");
     }
 
     if files_to_update.is_empty() {
