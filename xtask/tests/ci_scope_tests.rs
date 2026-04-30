@@ -66,6 +66,8 @@ fn test_ci_scope_json_output_is_valid_schema_v2() -> Result<()> {
     assert!(parsed["platform_overrides"].is_object(), "platform_overrides must be object");
     assert!(parsed["selected_lanes"].is_array(), "selected_lanes must be array");
     assert!(parsed["selected_heavy_lanes"].is_array(), "selected_heavy_lanes must be array");
+    assert!(parsed["lanes"].is_object(), "lanes must be object");
+    assert!(parsed["lanes"]["parser_ratchet"].is_object(), "lanes.parser_ratchet must be object");
     assert!(parsed["explanations"].is_object(), "explanations must be object");
     Ok(())
 }
@@ -171,5 +173,59 @@ fn test_ci_scope_diff_class_is_valid_value() -> Result<()> {
         valid_classes.contains(&diff_class),
         "diff_class must be one of {valid_classes:?}; got: {diff_class}"
     );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// G. Invalid base ref falls back and reports resolved base in output
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_ci_scope_invalid_base_reports_resolved_fallback() -> Result<()> {
+    let output = Command::cargo_bin("xtask")?
+        .args(["ci-scope", "--base", "this-ref-should-not-exist", "--format", "json"])
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "ci-scope should resolve a fallback base; stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)?;
+    let base = parsed["base"].as_str().unwrap_or_default();
+
+    assert_ne!(
+        base, "this-ref-should-not-exist",
+        "Output base should report the resolved fallback ref, not the invalid user input"
+    );
+    assert!(!base.is_empty(), "Output base should not be empty when fallback succeeds");
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// H. auto base never shows a warning in stderr
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_ci_scope_auto_base_no_warning() -> Result<()> {
+    let output = Command::cargo_bin("xtask")?
+        .args(["ci-scope", "--base", "auto", "--format", "json"])
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "ci-scope --base auto should succeed; stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("Warning:"),
+        "--base auto should not emit fallback warnings; got: {stderr}"
+    );
+
     Ok(())
 }

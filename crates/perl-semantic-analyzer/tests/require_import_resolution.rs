@@ -2,7 +2,9 @@
 //! Issue #3476: literal require + explicit named import tracking.
 
 use perl_semantic_analyzer::Parser;
-use perl_semantic_analyzer::analysis::declaration::symbol_at_cursor;
+use perl_semantic_analyzer::analysis::declaration::{
+    symbol_at_cursor, symbol_at_cursor_with_source,
+};
 
 fn parse_and_symbol_at(code: &str, needle: &str) -> Option<String> {
     // Find the byte offset of needle in the code
@@ -11,6 +13,16 @@ fn parse_and_symbol_at(code: &str, needle: &str) -> Option<String> {
     let ast = parser.parse().ok()?;
     let key = symbol_at_cursor(&ast, offset, "main")?;
     Some(key.pkg.to_string())
+}
+
+/// Helper: parse `code`, find `needle`, call symbol_at_cursor_with_source.
+/// Returns the SymbolKey's (pkg, name) as Strings, or None.
+fn parse_and_symbol_with_source_at(code: &str, needle: &str) -> Option<(String, String)> {
+    let offset = code.find(needle)?;
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().ok()?;
+    let key = symbol_at_cursor_with_source(&ast, offset, "main", code)?;
+    Some((key.pkg.to_string(), key.name.to_string()))
 }
 
 #[test]
@@ -147,5 +159,104 @@ load_data();
         pkg.as_deref(),
         Some("My::Loader"),
         "$loader->import() should resolve back to static use_module target, got: {pkg:?}"
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Regression tests for NON_IMPORT_PRAGMAS false-positive fix (PR #5022)
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// `use parent qw(Base::Class)` — cursor on `Base` should NOT resolve to a
+/// bogus SymbolKey like `{ pkg: "parent", name: "Base::Class", kind: Sub }`.
+/// `parent` is an inheritance pragma; its args are class names, not imports.
+#[test]
+fn use_parent_qw_does_not_resolve_as_import() {
+    let code = "use parent qw(Base::Class);\n";
+    // Position cursor on "Base" inside the qw list
+    let result = parse_and_symbol_with_source_at(code, "Base");
+    // Must NOT return pkg="parent", name="Base::Class"
+    if let Some((pkg, name)) = &result {
+        assert!(
+            !(pkg == "parent" && name == "Base::Class"),
+            "use parent qw(Base::Class) with cursor on 'Base' produced bogus SymbolKey \
+             {{ pkg: {pkg:?}, name: {name:?} }} — parent args are not imported symbols"
+        );
+    }
+    // Either None or resolved to the package itself (Pack kind) is acceptable.
+}
+
+/// `use Exporter 'import'` — cursor on `import` should NOT resolve to
+/// `SymbolKey { pkg: "Exporter", name: "import", kind: Sub }`.
+/// `'import'` here is a proxy-import method name, not an imported symbol.
+#[test]
+fn use_exporter_import_does_not_resolve_as_import() {
+    let code = "use Exporter 'import';\n";
+    // Position cursor on 'import' (the string literal)
+    let result = parse_and_symbol_with_source_at(code, "import");
+    if let Some((pkg, name)) = &result {
+        assert!(
+            !(pkg == "Exporter" && name == "import"),
+            "use Exporter 'import' with cursor on 'import' produced bogus SymbolKey \
+             {{ pkg: {pkg:?}, name: {name:?} }} — Exporter args are not imported symbols"
+        );
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Import/export visibility regression bank (Box 5)
+// ──────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn exporter_default_import_visibility_is_currently_conservative() {
+    let code = r#"use MyLib;
+foo();
+"#;
+    let pkg = parse_and_symbol_at(code, "foo()");
+    assert_ne!(
+        pkg.as_deref(),
+        Some("MyLib"),
+        "currently conservative: bare use MyLib should not claim @EXPORT ownership without export table"
+    );
+}
+
+#[test]
+fn exporter_explicit_export_ok_visibility_resolves_symbols() {
+    let code = r#"use MyLib qw(bar baz);
+bar();
+baz();
+"#;
+    let bar_pkg = parse_and_symbol_at(code, "bar()");
+    let baz_pkg = parse_and_symbol_at(code, "baz()");
+    assert_eq!(bar_pkg.as_deref(), Some("MyLib"));
+    assert_eq!(baz_pkg.as_deref(), Some("MyLib"));
+}
+
+#[test]
+fn exporter_tag_import_visibility_is_currently_conservative() {
+    let code = r#"use MyLib qw(:all);
+foo();
+bar();
+baz();
+"#;
+    for symbol in ["foo()", "bar()", "baz()"] {
+        let pkg = parse_and_symbol_at(code, symbol);
+        assert_ne!(
+            pkg.as_deref(),
+            Some("MyLib"),
+            "currently conservative: {symbol} should not be attributed via :all without export table"
+        );
+    }
+}
+
+#[test]
+fn exporter_export_ok_not_visible_without_explicit_import() {
+    let code = r#"use MyLib;
+bar();
+"#;
+    let pkg = parse_and_symbol_at(code, "bar()");
+    assert_ne!(
+        pkg.as_deref(),
+        Some("MyLib"),
+        "@EXPORT_OK symbol should not be visible under bare use MyLib"
     );
 }

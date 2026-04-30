@@ -535,3 +535,23 @@ fn test_recovery_nested_qw_paren_mismatch() {
     assert!(result.is_ok(), "Parser should recover from nested paren in qw");
     assert!(!parser.errors().is_empty(), "Should record delimiter mismatch error");
 }
+
+#[test]
+fn test_recovery_unclosed_s_slash() {
+    // `s/pattern` with no replacement or closing delimiter
+    let code = "my $x = s/pattern; print 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should recover from unclosed s///");
+    assert!(!parser.errors().is_empty(), "Should record unclosed s delimiter error");
+}
+
+#[test]
+fn test_recovery_unclosed_s_replacement() {
+    // Pattern closes but replacement delimiter is never opened
+    let code = "s/find/; print 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should recover from s/ with unclosed replacement");
+    assert!(!parser.errors().is_empty(), "Should record unclosed s delimiter error");
+}

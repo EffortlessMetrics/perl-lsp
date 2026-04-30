@@ -147,8 +147,13 @@ pub use position::{LineEnding, PositionMapper};
 
 /// Core AST types re-exported for convenience.
 pub use ast::{Node, NodeKind, SourceLocation};
+/// Recovery-salvage metrics and classifier for accuracy closeout reporting.
+pub use error::classifier::{RecoverySalvageMetrics, classify_recovery_salvage};
 /// Parse error, budget, and output types.
-pub use error::{BudgetTracker, ParseBudget, ParseError, ParseOutput, ParseResult};
+pub use error::{
+    BudgetTracker, ParseBudget, ParseError, ParseOutput, ParseResult, RecoverySalvageClass,
+    RecoverySalvageProfile,
+};
 
 /// Builtin function signature lookup tables.
 pub use builtins::builtin_signatures;

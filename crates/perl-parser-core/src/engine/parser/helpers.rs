@@ -20,7 +20,7 @@ impl<'a> Parser<'a> {
 
     #[inline]
     fn is_logical_or(kind: Option<TokenKind>) -> bool {
-        matches!(kind, Some(TokenKind::Or) | Some(TokenKind::DefinedOr))
+        kind.is_some_and(|token| matches!(token, TokenKind::Or | TokenKind::DefinedOr))
     }
 
     /// Returns true if the token kind is a postfix increment/decrement operator.
@@ -114,15 +114,11 @@ impl<'a> Parser<'a> {
     /// the modifier token is being autoquoted before `=>`.
     fn should_continue_bare_call_after_block(&mut self) -> bool {
         match self.peek_kind() {
-            Some(TokenKind::Semicolon)
-            | Some(TokenKind::RightBrace)
-            | Some(TokenKind::RightParen)
-            | Some(TokenKind::RightBracket)
-            | Some(TokenKind::Eof)
-            | None => false,
-            Some(TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor | TokenKind::WordNot) => {
-                false
-            }
+            Some(kind) if kind.is_recovery_boundary() => false,
+            None => false,
+            // `?` begins a ternary on the block-call result, not an argument to it.
+            Some(TokenKind::Question) => false,
+            Some(kind) if kind.is_low_precedence_word_operator() => false,
             Some(kind) if Self::is_stmt_modifier_kind(kind) => self.is_keyword_before_fat_arrow(),
             _ => true,
         }
@@ -353,51 +349,21 @@ impl<'a> Parser<'a> {
 
     /// Check if a token kind is a binary operator that couldn't start an expression argument.
     fn is_binary_operator(kind: TokenKind) -> bool {
-        matches!(
-            kind,
-            TokenKind::Or
-                | TokenKind::And
-                | TokenKind::DefinedOr
-                | TokenKind::WordOr
-                | TokenKind::WordAnd
-                | TokenKind::WordXor
-                | TokenKind::Equal
-                | TokenKind::NotEqual
-                | TokenKind::Less
-                | TokenKind::Greater
-                | TokenKind::LessEqual
-                | TokenKind::GreaterEqual
-                | TokenKind::Spaceship
-                | TokenKind::StringCompare
-                | TokenKind::Match
-                | TokenKind::NotMatch
-                | TokenKind::SmartMatch
-                | TokenKind::Dot
-                | TokenKind::Range
-                | TokenKind::LeftShift
-                | TokenKind::RightShift
-                | TokenKind::BitwiseAnd
-                | TokenKind::BitwiseOr
-                | TokenKind::BitwiseXor
-                | TokenKind::Question
-                | TokenKind::Colon
-                | TokenKind::Assign
-                | TokenKind::PlusAssign
-                | TokenKind::MinusAssign
-                | TokenKind::StarAssign
-                | TokenKind::SlashAssign
-                | TokenKind::PercentAssign
-                | TokenKind::DotAssign
-                | TokenKind::AndAssign
-                | TokenKind::OrAssign
-                | TokenKind::XorAssign
-                | TokenKind::PowerAssign
-                | TokenKind::LeftShiftAssign
-                | TokenKind::RightShiftAssign
-                | TokenKind::LogicalAndAssign
-                | TokenKind::LogicalOrAssign
-                | TokenKind::DefinedOrAssign
-        )
+        kind.is_logical_operator()
+            || kind.is_comparison_operator()
+            || kind.is_assignment_operator()
+            || matches!(
+                kind,
+                TokenKind::Dot
+                    | TokenKind::Range
+                    | TokenKind::LeftShift
+                    | TokenKind::RightShift
+                    | TokenKind::BitwiseAnd
+                    | TokenKind::BitwiseOr
+                    | TokenKind::BitwiseXor
+                    | TokenKind::Question
+                    | TokenKind::Colon
+            )
     }
 
     /// Peek at the next token's kind
@@ -563,7 +529,9 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::RightParen)
                 | Some(TokenKind::RightBrace)
                 | Some(TokenKind::RightBracket) => break,
-                Some(k) if Self::is_stmt_modifier_kind(k) && !self.is_keyword_before_fat_arrow() => {
+                Some(k)
+                    if Self::is_stmt_modifier_kind(k) && !self.is_keyword_before_fat_arrow() =>
+                {
                     break;
                 }
                 _ => {}
@@ -590,10 +558,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let end = expressions
-            .last()
-            .map(|expr| expr.location.end)
-            .unwrap_or(start);
+        let end = expressions.last().map(|expr| expr.location.end).unwrap_or(start);
         Ok(Self::build_list_or_hash(expressions, saw_fat_arrow, start, end))
     }
 
@@ -618,33 +583,29 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        matches!(
-            self.peek_kind(),
-            Some(TokenKind::Semicolon)
-                | Some(TokenKind::RightBrace)
-                | Some(TokenKind::RightParen)
-                | Some(TokenKind::RightBracket)
-                // Statement-starter keywords cannot serve as an expression RHS.
-                // Treating them as "missing operand" allows declaration parsing
-                // to recover cleanly and resume at the next statement boundary.
-                | Some(TokenKind::My)
-                | Some(TokenKind::Our)
-                | Some(TokenKind::State)
-                | Some(TokenKind::Sub)
-                | Some(TokenKind::Package)
-                | Some(TokenKind::Use)
-                | Some(TokenKind::No)
-                | Some(TokenKind::If)
-                | Some(TokenKind::Unless)
-                | Some(TokenKind::Elsif)
-                | Some(TokenKind::Else)
-                | Some(TokenKind::While)
-                | Some(TokenKind::Until)
-                | Some(TokenKind::For)
-                | Some(TokenKind::Foreach)
-                | Some(TokenKind::Eof)
-                | None
-        )
+        match self.peek_kind() {
+            Some(kind) if kind.is_recovery_boundary() => true,
+            // Statement-starter keywords cannot serve as an expression RHS.
+            // Treating them as "missing operand" allows declaration parsing
+            // to recover cleanly and resume at the next statement boundary.
+            Some(TokenKind::My)
+            | Some(TokenKind::Our)
+            | Some(TokenKind::State)
+            | Some(TokenKind::Sub)
+            | Some(TokenKind::Package)
+            | Some(TokenKind::Use)
+            | Some(TokenKind::No)
+            | Some(TokenKind::If)
+            | Some(TokenKind::Unless)
+            | Some(TokenKind::Elsif)
+            | Some(TokenKind::Else)
+            | Some(TokenKind::While)
+            | Some(TokenKind::Until)
+            | Some(TokenKind::For)
+            | Some(TokenKind::Foreach)
+            | None => true,
+            _ => false,
+        }
     }
 
     /// Returns true when `sub` is followed by tokens that start an anonymous
@@ -733,42 +694,47 @@ impl<'a> Parser<'a> {
     }
 
     /// Check if current token is a strong follower at which a missing closer can
-    /// be inferred.  The set covers hard statement boundaries and EOF.
+    /// be inferred.  The set covers two categories:
+    ///
+    /// - **Statement boundaries**: `;`, `}`, `{`, keywords (`my`, `if`, `while`,
+    ///   etc.), and EOF — tokens that cannot appear inside a well-formed
+    ///   delimiter pair.
+    /// - **Sibling closers**: `)` and `]` — a closer owned by an *outer* nesting
+    ///   level that proves the *current* closer is missing.  When
+    ///   `expect_closing_delimiter` fires recovery here it does **not** consume
+    ///   the sibling token so the outer frame can consume it normally.
     ///
     /// `peek_kind()` returns `Some(TokenKind::Eof)` at end-of-input (the EOF
     /// token is sticky) so we match it explicitly alongside `None` (which covers
     /// the case where the lexer itself returns an error).
     fn is_delimiter_recovery_point(&mut self) -> bool {
-        matches!(
-            self.peek_kind(),
-            Some(TokenKind::Semicolon)
-                | Some(TokenKind::RightBrace)
-                | Some(TokenKind::LeftBrace)
-                | Some(TokenKind::Eof)
-                | Some(TokenKind::My)
-                | Some(TokenKind::Our)
-                | Some(TokenKind::Local)
-                | Some(TokenKind::State)
-                | Some(TokenKind::Sub)
-                | Some(TokenKind::Package)
-                | Some(TokenKind::Use)
-                | Some(TokenKind::If)
-                | Some(TokenKind::Unless)
-                | Some(TokenKind::Elsif)
-                | Some(TokenKind::Else)
-                | Some(TokenKind::While)
-                | Some(TokenKind::Until)
-                | Some(TokenKind::For)
-                | Some(TokenKind::Foreach)
-                | None
-        )
+        match self.peek_kind() {
+            Some(kind) if kind.is_recovery_boundary() => true,
+            Some(TokenKind::LeftBrace)
+            | Some(TokenKind::My)
+            | Some(TokenKind::Our)
+            | Some(TokenKind::Local)
+            | Some(TokenKind::State)
+            | Some(TokenKind::Sub)
+            | Some(TokenKind::Package)
+            | Some(TokenKind::Use)
+            | Some(TokenKind::If)
+            | Some(TokenKind::Unless)
+            | Some(TokenKind::Elsif)
+            | Some(TokenKind::Else)
+            | Some(TokenKind::While)
+            | Some(TokenKind::Until)
+            | Some(TokenKind::For)
+            | Some(TokenKind::Foreach)
+            | None => true,
+            _ => false,
+        }
     }
 
     /// Check if current token is a synchronization point for error recovery
     fn is_sync_point(&mut self) -> bool {
         match self.peek_kind() {
-            Some(TokenKind::Semicolon) => true,
-            Some(TokenKind::RightBrace) => true,
+            Some(kind) if kind.is_recovery_boundary() => true,
             Some(TokenKind::My)
             | Some(TokenKind::Our)
             | Some(TokenKind::Local)
@@ -778,7 +744,7 @@ impl<'a> Parser<'a> {
             Some(TokenKind::Elsif) | Some(TokenKind::Else) => true,
             Some(TokenKind::While) | Some(TokenKind::Until) => true,
             Some(TokenKind::For) | Some(TokenKind::Foreach) => true,
-            None => true, // EOF is a sync point
+            None => true, // tokenizer failure behaves like EOF for sync purposes
             _ => false,
         }
     }
@@ -940,15 +906,12 @@ impl<'a> Parser<'a> {
     /// must NOT be a string comparison operator (`eq`, `ne`, `lt`, `gt`, etc.)
     /// or a keyword token.
     fn looks_like_bare_call(&mut self, name: &str) -> bool {
-        if self
-            .peek_kind()
-            .is_some_and(|kind| matches!(kind, TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State))
-        {
+        if self.peek_kind().is_some_and(|kind| {
+            matches!(kind, TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State)
+        }) {
             return !name.is_empty()
                 && (name.contains("::")
-                    || name.starts_with(|c: char| {
-                        c.is_ascii_alphabetic() || c == '_'
-                    }));
+                    || name.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_'));
         }
 
         // Only lowercase identifiers can be bare function calls.
@@ -999,10 +962,8 @@ impl<'a> Parser<'a> {
                 // Special tokens like __PACKAGE__, __FILE__, __LINE__, __SUB__ are
                 // nullary builtins that produce values. They are valid bare-call arguments.
                 // e.g. `croak __PACKAGE__, ": error"` (Encode/Encoder.pm)
-                if matches!(
-                    next_text.as_ref(),
-                    "__PACKAGE__" | "__FILE__" | "__LINE__" | "__SUB__"
-                ) {
+                if matches!(next_text.as_ref(), "__PACKAGE__" | "__FILE__" | "__LINE__" | "__SUB__")
+                {
                     return true;
                 }
                 // Allow qualified names (e.g. `File::Spec`, `Scalar::Util`) as arguments.

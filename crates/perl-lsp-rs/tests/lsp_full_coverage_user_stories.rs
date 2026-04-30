@@ -603,12 +603,20 @@ if ($html =~ m{<div\s+class=['"]([^'"]+)['"]\s*>(.*?)</div>}i) {
     ctx.open_document("file:///workspace/regex.pl", regex_code);
 
     // Get hover on regex to see explanation
-    let _hover = ctx.get_hover("file:///workspace/regex.pl", 7, 20);
-    // Should provide regex pattern info
+    let hover = ctx.get_hover("file:///workspace/regex.pl", 7, 20);
+    assert!(
+        hover.is_some(),
+        "Regex hover should provide contextual information ({})",
+        ctx.story_context()
+    );
 
     // Get completions for regex modifiers
-    let _completions = ctx.get_completions("file:///workspace/regex.pl", 19, 55);
-    // Should suggest regex modifiers like 'g', 'm', 's', 'x'
+    let completions = ctx.get_completions("file:///workspace/regex.pl", 19, 55);
+    assert!(
+        completions.iter().all(|item| item.get("label").is_some()),
+        "Regex completion items should have labels when returned ({})",
+        ctx.story_context()
+    );
 }
 
 #[test]
@@ -696,12 +704,30 @@ app->start;
     ctx.open_document("file:///workspace/web_app.pl", web_code);
 
     // Get completions for Mojolicious methods
-    let _completions = ctx.get_completions("file:///workspace/web_app.pl", 7, 8);
-    // Should provide render options
+    let completions = ctx.get_completions("file:///workspace/web_app.pl", 7, 8);
+    assert!(
+        completions.iter().all(|item| item.get("label").is_some()),
+        "Web completion entries should include labels when returned"
+    );
 
     // Get definition for route handlers
-    let _defs = ctx.get_definition("file:///workspace/web_app.pl", 5, 0);
-    // Should find 'get' function definition
+    let defs = ctx.get_definition("file:///workspace/web_app.pl", 5, 0);
+    assert!(
+        defs.iter().all(|def| def.get("uri").is_some() || def.get("targetUri").is_some()),
+        "Definitions should carry URI information when returned"
+    );
+
+    let symbols = ctx.get_document_symbols("file:///workspace/web_app.pl");
+    assert!(
+        symbols.iter().any(|symbol| {
+            symbol
+                .get("name")
+                .and_then(Value::as_str)
+                .map(|name| name.contains("get") || name.contains("post"))
+                .unwrap_or(false)
+        }) || !symbols.is_empty(),
+        "Web document should produce navigable symbols"
+    );
 }
 
 #[test]
@@ -737,9 +763,29 @@ sub process_data {
         ctx.change_document("file:///workspace/shared.pl", &new_content);
     }
 
-    // Verify the document state is consistent
-    let _hover = ctx.get_hover("file:///workspace/shared.pl", 4, 4);
-    // Document should still be parseable
+    // Verify the document state is consistent and language features still work.
+    let hover = ctx.get_hover("file:///workspace/shared.pl", 4, 4);
+    assert!(hover.is_some(), "Edited collaborative document should still return hover");
+
+    let latest_content = ctx
+        .documents
+        .get("file:///workspace/shared.pl")
+        .map(std::string::String::as_str)
+        .unwrap_or("");
+    assert!(
+        latest_content.contains("# Developer 0 was here")
+            && latest_content.contains("# Developer 1 was here")
+            && latest_content.contains("# Developer 2 was here"),
+        "All collaborator edits should be reflected in the latest in-memory document"
+    );
+
+    let symbols = ctx.get_document_symbols("file:///workspace/shared.pl");
+    assert!(
+        symbols
+            .iter()
+            .any(|symbol| { symbol.get("name").and_then(Value::as_str) == Some("process_data") }),
+        "Core function symbol should remain discoverable after repeated edits"
+    );
 }
 
 #[test]
@@ -767,12 +813,15 @@ WriteMakefile(
     ctx.open_document("file:///workspace/Makefile.PL", makefile);
 
     // Get hover for module versions
-    let _hover = ctx.get_hover("file:///workspace/Makefile.PL", 6, 10);
-    // Should show DBI module info
+    let hover = ctx.get_hover("file:///workspace/Makefile.PL", 6, 10);
+    assert!(hover.is_some(), "Makefile dependency entries should produce hover information");
 
     // Get completions for common CPAN modules
-    let _completions = ctx.get_completions("file:///workspace/Makefile.PL", 10, 8);
-    // Could suggest other common modules
+    let completions = ctx.get_completions("file:///workspace/Makefile.PL", 10, 8);
+    assert!(
+        completions.iter().all(|item| item.get("label").is_some()),
+        "Package-management completion items should carry labels when returned"
+    );
 }
 
 #[test]
@@ -900,12 +949,18 @@ finally {
     ctx.open_document("file:///workspace/errors.pl", error_handling_code);
 
     // Get completions for Try::Tiny blocks
-    let _completions = ctx.get_completions("file:///workspace/errors.pl", 17, 0);
-    // Should suggest catch, finally blocks
+    let completions = ctx.get_completions("file:///workspace/errors.pl", 17, 0);
+    assert!(
+        completions.iter().all(|item| item.get("label").is_some()),
+        "Error-handling completion items should include labels when returned"
+    );
 
     // Get hover for error handling constructs
-    let _hover = ctx.get_hover("file:///workspace/errors.pl", 13, 0);
-    // Should explain try block
+    let hover = ctx.get_hover("file:///workspace/errors.pl", 13, 0);
+    assert!(
+        hover.is_some(),
+        "Try/catch constructs should return hover details in integration workflow"
+    );
 }
 
 #[test]
@@ -946,12 +1001,15 @@ print "API Key: $api_key\n";
     ctx.open_document("file:///workspace/config.pl", config_code);
 
     // Get completions for config methods
-    let _completions = ctx.get_completions("file:///workspace/config.pl", 9, 16);
-    // Should suggest Config::Simple methods
+    let completions = ctx.get_completions("file:///workspace/config.pl", 9, 16);
+    assert!(
+        completions.iter().all(|item| item.get("label").is_some()),
+        "Configuration completion items should include labels when returned"
+    );
 
     // Get hover for config modules
-    let _hover = ctx.get_hover("file:///workspace/config.pl", 4, 4);
-    // Should provide module documentation
+    let hover = ctx.get_hover("file:///workspace/config.pl", 4, 4);
+    assert!(hover.is_some(), "Configuration modules should provide hover documentation");
 }
 
 // ===================== Integration Test Suite =====================
