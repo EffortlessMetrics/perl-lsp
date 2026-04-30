@@ -17,6 +17,12 @@ workflow = ".github/workflows/methodology-gate.yml"
 required = false
 
 [[checks]]
+name = "tokmd Advisory"
+workflow = ".github/workflows/tokmd.yml"
+# Phase 1: advisory-only (visibility gate, no merge blocking).
+# Promotion to required = true tracked in #4993 (Phase 2/3).
+
+[[checks]]
 name = "PR Smoke"
 workflow = ".github/workflows/ci.yml"
 
