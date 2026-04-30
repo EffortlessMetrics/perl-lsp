@@ -6,6 +6,9 @@ use perl_parser::incremental::{apply_edits, Edit, IncrementalState};
 const MAX_INITIAL_CHARS: usize = 256;
 const MAX_EDIT_STEPS: usize = 32;
 const MAX_INSERT_CHARS: usize = 32;
+const ASCII_TOKEN_CHARS: &[u8] =
+    b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_ ;(){}[]<>$@%&*+-=/\\\"'.,:#\n\r\t";
+const UNICODE_TOKEN_CHARS: &[char] = &['é', 'ß', 'λ', '中', '🦀', '🙂', '\u{2028}'];
 
 struct ByteCursor<'a> {
     data: &'a [u8],
@@ -34,9 +37,12 @@ impl<'a> ByteCursor<'a> {
     }
 
     fn next_char(&mut self) -> char {
-        const ALPHABET: &[u8] =
-            b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_ ;(){}\n\t";
-        char::from(ALPHABET[usize::from(self.next_u8()) % ALPHABET.len()])
+        let selector = self.next_u8();
+        if selector % 5 == 0 {
+            return UNICODE_TOKEN_CHARS[usize::from(selector) % UNICODE_TOKEN_CHARS.len()];
+        }
+
+        char::from(ASCII_TOKEN_CHARS[usize::from(selector) % ASCII_TOKEN_CHARS.len()])
     }
 
     fn next_text(&mut self, max_chars: usize) -> String {
