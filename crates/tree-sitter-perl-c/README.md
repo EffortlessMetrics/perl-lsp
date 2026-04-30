@@ -111,7 +111,35 @@ match try_parse_perl_file("script.pl") {
     - `--root-kind` to print the root node kind
     - `--has-error` to print `true`/`false` for parse errors
     - `--sexp` to print the full tree-sitter s-expression
-- `bench_parser_c` — parse a Perl file and print timing (requires `--features test-utils`)
+- `bench_parser_c` — benchmark parse throughput and emit stable `key=value` output (requires `--features test-utils`)
+
+### `bench_parser_c` modes
+
+`bench_parser_c` supports both one-shot and parser-reuse flows:
+
+- `--mode cold` (default): create a fresh parser for every iteration
+- `--mode warm`: reuse one parser across all iterations
+- `--iterations N` / `-n N`: run N parse iterations
+- `--input str|bytes` (default `str`): parse through UTF-8 string or raw-byte path
+- `--cold` / `--warm`: shorthand for `--mode cold|warm`
+
+Example:
+
+```bash
+cargo run -p tree-sitter-perl-c --bin bench_parser_c --features test-utils -- \
+  examples/perl/simple.pl --mode warm --iterations 200 --input bytes
+```
+
+Output is intentionally stable for run-to-run diffing:
+
+```text
+mode=warm
+input=bytes
+iterations=200
+total_us=12345
+avg_us=61
+has_error=false
+```
 
 Examples:
 
