@@ -21,6 +21,7 @@ use perl_parser_core::source_file::{is_perl_source_path, is_perl_source_uri};
 use perl_workspace::folder::extract_workspace_folder_change;
 #[cfg(feature = "workspace")]
 use perl_workspace::ignore::is_skipped_dir_name;
+use std::collections::HashSet;
 #[cfg(feature = "workspace")]
 use std::path::Path;
 use std::sync::Arc;
@@ -29,6 +30,11 @@ use std::time::Duration;
 use std::time::Instant;
 #[cfg(feature = "workspace")]
 use url::Url;
+
+#[cfg(feature = "workspace")]
+mod progress;
+#[cfg(feature = "workspace")]
+mod text_decode;
 
 const WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 // Note: WalkDir logic has been extracted to super::file_discovery.
@@ -56,81 +62,6 @@ fn send_index_ready_notification(outbound: &super::outbound::OutboundSender, rea
     }
 }
 
-/// Token used for workspace indexing progress notifications.
-#[cfg(feature = "workspace")]
-const WORKSPACE_INDEX_PROGRESS_TOKEN: &str = "workspace-index";
-
-/// Send `window/workDoneProgress/create` to register the indexing token.
-///
-/// This is a fire-and-forget request — the client response is not awaited.
-/// Per LSP 3.15+ the server must create the token before sending `$/progress`.
-#[cfg(feature = "workspace")]
-fn send_progress_create(outbound: &super::outbound::OutboundSender, request_id: i64) {
-    if let Err(e) = outbound.send_request(
-        request_id,
-        "window/workDoneProgress/create",
-        json!({ "token": WORKSPACE_INDEX_PROGRESS_TOKEN }),
-    ) {
-        tracing::warn!(error = %e, "Failed to send workDoneProgress/create");
-    }
-}
-
-/// Send a `$/progress` begin notification for workspace indexing.
-#[cfg(feature = "workspace")]
-fn send_progress_begin(outbound: &super::outbound::OutboundSender) {
-    if let Err(e) = outbound.send_notification(
-        "$/progress",
-        json!({
-            "token": WORKSPACE_INDEX_PROGRESS_TOKEN,
-            "value": {
-                "kind": "begin",
-                "title": "Indexing workspace",
-                "cancellable": false,
-                "percentage": 0
-            }
-        }),
-    ) {
-        tracing::warn!(error = %e, "Failed to send progress begin");
-    }
-}
-
-/// Send a `$/progress` report notification for workspace indexing.
-#[cfg(feature = "workspace")]
-fn send_progress_report(outbound: &super::outbound::OutboundSender, indexed: usize, total: usize) {
-    let percentage = if total > 0 { (indexed * 100 / total).min(99) as u32 } else { 0 };
-    let message = format!("Indexed {} of {} files", indexed, total);
-    if let Err(e) = outbound.send_notification(
-        "$/progress",
-        json!({
-            "token": WORKSPACE_INDEX_PROGRESS_TOKEN,
-            "value": {
-                "kind": "report",
-                "message": message,
-                "percentage": percentage
-            }
-        }),
-    ) {
-        tracing::warn!(error = %e, "Failed to send progress report");
-    }
-}
-
-/// Send a `$/progress` end notification for workspace indexing.
-#[cfg(feature = "workspace")]
-fn send_progress_end(outbound: &super::outbound::OutboundSender, message: &str) {
-    if let Err(e) = outbound.send_notification(
-        "$/progress",
-        json!({
-            "token": WORKSPACE_INDEX_PROGRESS_TOKEN,
-            "value": {
-                "kind": "end",
-                "message": message
-            }
-        }),
-    ) {
-        tracing::warn!(error = %e, "Failed to send progress end");
-    }
-}
-
 /// Returns `true` when an I/O error represents a permission-denied condition.
 ///
 /// Covers both the portable `ErrorKind::PermissionDenied` and the Windows
@@ -149,46 +80,12 @@ fn is_permission_denied_error(e: &std::io::Error) -> bool {
     false
 }
 
-/// Read source text from disk with basic encoding fallbacks.
-///
-/// Behavior:
-/// - UTF-8 BOM (`EF BB BF`) is removed.
-/// - UTF-16 LE/BE with BOM is decoded.
-/// - Other content first tries strict UTF-8, then falls back to lossy UTF-8.
-///
-/// Odd-length payloads after a UTF-16 BOM fall back to lossy UTF-8 decoding
-/// of the original bytes rather than silently dropping the trailing byte.
 #[cfg(feature = "workspace")]
-fn read_text_with_encoding_fallback(path: &Path) -> std::io::Result<String> {
-    let bytes = std::fs::read(path)?;
-    if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
-        return Ok(String::from_utf8_lossy(&bytes[3..]).into_owned());
-    }
-    if bytes.starts_with(&[0xFF, 0xFE]) {
-        let payload = &bytes[2..];
-        if !payload.len().is_multiple_of(2) {
-            // Odd-length UTF-16 payload; fall back to lossy UTF-8 of the
-            // full original bytes rather than truncating the trailing byte.
-            return Ok(String::from_utf8_lossy(&bytes).into_owned());
-        }
-        let units: Vec<u16> =
-            payload.chunks_exact(2).map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]])).collect();
-        return Ok(String::from_utf16_lossy(&units));
-    }
-    if bytes.starts_with(&[0xFE, 0xFF]) {
-        let payload = &bytes[2..];
-        if !payload.len().is_multiple_of(2) {
-            return Ok(String::from_utf8_lossy(&bytes).into_owned());
-        }
-        let units: Vec<u16> =
-            payload.chunks_exact(2).map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]])).collect();
-        return Ok(String::from_utf16_lossy(&units));
-    }
-    match String::from_utf8(bytes) {
-        Ok(text) => Ok(text),
-        Err(err) => Ok(String::from_utf8_lossy(&err.into_bytes()).into_owned()),
-    }
-}
+use progress::{
+    send_progress_begin, send_progress_create, send_progress_end, send_progress_report,
+};
+#[cfg(feature = "workspace")]
+use text_decode::read_text_with_encoding_fallback;
 
 /// RAII guard that clears the `indexing_in_progress` flag on drop.
 ///
@@ -435,50 +332,48 @@ impl LspServer {
         query: &str,
         cap: usize,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let mut all_symbols = Vec::new();
-
-        // Collect lightweight snapshots without holding lock during iteration.
-        // Only clone the fields needed for symbol extraction (uri, text, ast Arc),
-        // avoiding expensive Rope, ParentMap, LineStartsCache, and parse_errors clones.
         let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
             let documents = self.documents.lock();
             documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
         };
 
-        // Pre-compute lowercased query once, outside the document loop
-        let query_lower = query.to_lowercase();
+        let mut provider =
+            perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolsProvider::new();
+        let mut source_map = std::collections::HashMap::new();
+        let mut text_fallback_symbols = Vec::new();
 
         for (i, (uri, text, ast)) in docs_snapshot.iter().enumerate() {
-            // Cooperative yield every 8 documents
             if i & 0x7 == 0 {
                 std::thread::yield_now();
             }
-
-            // Early exit if we've hit the result cap
-            if all_symbols.len() >= cap {
-                break;
-            }
-
+            source_map.insert(uri.clone(), text.clone());
             if let Some(ast) = ast {
-                let doc_symbols = self.extract_document_symbols(ast, text, uri);
-
-                for sym in doc_symbols {
-                    if sym.name.to_lowercase().contains(&query_lower) {
-                        all_symbols.push(sym);
-                        if all_symbols.len() >= cap {
-                            break;
-                        }
-                    }
-                }
+                provider.index_document(uri, ast, text);
             } else {
-                // Text-based fallback when AST is not available
-                let text_symbols = self.extract_text_based_symbols(text, uri, query);
-                let remaining = cap.saturating_sub(all_symbols.len());
-                all_symbols.extend(text_symbols.into_iter().take(remaining));
+                text_fallback_symbols.extend(self.extract_text_based_symbols(text, uri, query));
             }
         }
 
-        // Truncate to cap in case we went slightly over
+        let mut candidates = self.symbol_index.lock().search_prefix(query);
+        if candidates.is_empty() && !query.is_empty() {
+            candidates = self.symbol_index.lock().search_fuzzy(query);
+        }
+        let mut dedup = HashSet::new();
+        candidates.retain(|candidate| dedup.insert(candidate.clone()));
+
+        let mut provider_results = provider.search_with_candidates(query, &source_map, &candidates);
+        if provider_results.is_empty() && !query.is_empty() {
+            provider_results = provider.search(query, &source_map);
+        }
+        let mut all_symbols: Vec<Value> = provider_results
+            .into_iter()
+            .filter_map(|symbol| serde_json::to_value(symbol).ok())
+            .collect();
+        all_symbols.extend(
+            text_fallback_symbols
+                .into_iter()
+                .filter_map(|symbol| serde_json::to_value(symbol).ok()),
+        );
         all_symbols.truncate(cap);
         tracing::debug!(
             count = all_symbols.len(),
@@ -528,7 +423,17 @@ impl LspServer {
             source_map.insert(uri.clone(), text.clone());
         }
 
-        let mut symbols = provider.search(query, &source_map);
+        let mut candidates = self.symbol_index.lock().search_prefix(query);
+        if candidates.is_empty() && !query.is_empty() {
+            candidates = self.symbol_index.lock().search_fuzzy(query);
+        }
+        let mut dedup = HashSet::new();
+        candidates.retain(|candidate| dedup.insert(candidate.clone()));
+
+        let mut symbols = provider.search_with_candidates(query, &source_map, &candidates);
+        if symbols.is_empty() && !query.is_empty() {
+            symbols = provider.search(query, &source_map);
+        }
         symbols.truncate(cap);
 
         tracing::debug!(count = symbols.len(), cap, "Found symbols total");
@@ -684,6 +589,20 @@ impl LspServer {
                                 }
                                 "perl.workspace.useSystemInc" => {
                                     json!(workspace_config.use_system_inc)
+                                }
+                                "perl.workspace.usePerl5lib" => {
+                                    json!(workspace_config.use_perl5lib)
+                                }
+                                "perl.workspace.perl5libPrecedence" => {
+                                    let precedence = match workspace_config.perl5lib_precedence {
+                                        perl_lsp_rs_core::config::Perl5LibPrecedence::Prepend => {
+                                            "prepend"
+                                        }
+                                        perl_lsp_rs_core::config::Perl5LibPrecedence::Append => {
+                                            "append"
+                                        }
+                                    };
+                                    json!(precedence)
                                 }
                                 "perl.workspace.resolutionTimeout" => {
                                     json!(workspace_config.resolution_timeout_ms)
@@ -1914,16 +1833,26 @@ impl LspServer {
 
     #[cfg(feature = "workspace")]
     fn read_workspace_text(&self, uri: &str) -> Option<String> {
+        // Priority 1: actively-open document (editor is authoritative).
         if let Some(doc) = self.documents.lock().get(uri) {
             return Some(doc.text.clone());
         }
 
+        // Priority 2: workspace index document store (content from the last
+        // time the file was indexed; avoids a synchronous disk read for files
+        // that were open and then closed within the session).
         if let Some(coordinator) = self.coordinator() {
             if let Some(doc) = coordinator.index().document_store().get(uri) {
                 return Some(doc.text.clone());
             }
         }
 
+        // Priority 3: read from disk.  `workspace/willRenameFiles` is a
+        // workspace-wide refactoring operation; returning edits for files not
+        // currently open in the editor is explicitly correct per LSP 3.17 §3.17
+        // (the client requests cross-file edits and applies them).  This path
+        // is restricted to workspace-root-relative paths by the caller and is
+        // bounded to files that `find_dependents` already knows about.
         uri_to_fs_path(uri).and_then(|path| read_text_with_encoding_fallback(&path).ok())
     }
 }

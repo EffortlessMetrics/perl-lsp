@@ -23,10 +23,13 @@ use console::{Style, Term};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::Duration;
 use std::time::Instant;
 
 use crate::tasks::ci_scope::{self, ScopeOutput};
@@ -79,7 +82,7 @@ pub enum OutputFormat {
 
 /// Top-level gate policy configuration
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct GatePolicy {
     pub schema_version: u32,
     pub global: GlobalSettings,
@@ -92,7 +95,7 @@ pub struct GatePolicy {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct GlobalSettings {
     pub default_timeout_seconds: u64,
     #[serde(default)]
@@ -106,7 +109,7 @@ pub struct GlobalSettings {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ToolchainConfig {
     pub msrv: Option<String>,
     #[serde(default)]
@@ -114,7 +117,7 @@ pub struct ToolchainConfig {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TierDefinition {
     pub description: String,
     pub target_duration_seconds: u64,
@@ -124,7 +127,7 @@ pub struct TierDefinition {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct GateDefinition {
     pub name: String,
     pub tier: String,
@@ -146,6 +149,38 @@ pub struct GateDefinition {
     pub artifacts: Vec<String>,
     #[serde(default)]
     pub matrix: Option<serde_yaml_ng::Value>,
+    #[serde(default)]
+    pub planning: Option<GatePlanningConfig>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize)]
+pub struct GatePlanningConfig {
+    pub role: GatePlanningRole,
+    #[serde(default)]
+    pub packages: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GatePlanningRole {
+    AlwaysOn,
+    RustScoped,
+    RustFallback,
+    RustPackageScoped,
+    Static,
+}
+
+impl std::fmt::Display for GatePlanningRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GatePlanningRole::AlwaysOn => write!(f, "always_on"),
+            GatePlanningRole::RustScoped => write!(f, "rust_scoped"),
+            GatePlanningRole::RustFallback => write!(f, "rust_fallback"),
+            GatePlanningRole::RustPackageScoped => write!(f, "rust_package_scoped"),
+            GatePlanningRole::Static => write!(f, "static"),
+        }
+    }
 }
 
 fn default_true() -> bool {
@@ -157,14 +192,14 @@ fn default_timeout() -> u64 {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct GateBudgets {
     pub max_duration_ms: Option<u64>,
     pub max_warnings: Option<u32>,
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct FlakePolicy {
     pub max_retries: u32,
     pub auto_quarantine_threshold: u32,
@@ -176,7 +211,7 @@ pub struct FlakePolicy {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct QuarantinedGate {
     pub gate: String,
     pub reason: String,
@@ -185,14 +220,14 @@ pub struct QuarantinedGate {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct FlakyPattern {
     pub pattern: String,
     pub reason: String,
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct AuditConfig {
     pub receipt_path: String,
     pub log_directory: String,
@@ -209,40 +244,77 @@ pub struct Receipt {
     pub metadata: ReceiptMetadata,
     pub gates: Vec<GateResult>,
     pub summary: ReceiptSummary,
-    pub agent_receipt: AgentReceipt,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_receipt: Option<AgentReceipt>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diff_config: Option<DiffConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AgentReceipt {
+    pub sha: String,
+    pub is_latest: bool,
+    pub tier: String,
     pub scope: AgentScope,
     pub selected_lanes: Vec<AgentLane>,
-    pub reasons: BTreeMap<String, String>,
-    pub failures: AgentFailures,
-    pub baselines: Vec<String>,
-    pub next_actions: Vec<String>,
+    pub failures: Vec<AgentFailure>,
+    pub suggested_next_actions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan: Option<AgentPlanReceipt>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct AgentScope {
-    pub base: String,
-    pub diff_class: String,
-    pub changed_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diff_class: Option<String>,
     pub direct_crates: Vec<String>,
-    pub reverse_dep_closure: Vec<String>,
+    pub reverse_deps: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub architecture_wideners: Vec<String>,
+    pub risk_tags: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AgentPlanReceipt {
+    pub base: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diff_class: Option<String>,
+    pub scope_ok: bool,
+    pub fallback_used: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback_reason: Option<String>,
+    pub package_args: Vec<String>,
+    pub selected: Vec<AgentPlannedGate>,
+    pub skipped: Vec<AgentSkippedGate>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AgentPlannedGate {
+    pub name: String,
+    pub role: GatePlanningRole,
+    pub reason: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AgentSkippedGate {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<GatePlanningRole>,
+    pub reason: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AgentLane {
-    pub lane: String,
-    pub scope: Vec<String>,
+    pub name: String,
+    pub reason: String,
+    pub status: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct AgentFailures {
-    pub blocking: Vec<String>,
-    pub repro: Vec<String>,
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AgentFailure {
+    pub lane: String,
+    pub summary: String,
+    pub repro: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -304,6 +376,25 @@ pub struct EnvironmentInfo {
     pub nix_shell: Option<bool>,
 }
 
+/// First failing test extracted from `cargo test` output.
+///
+/// Populated only when a `cargo test`-class gate exits non-zero.
+/// Used by followers and curators to repair without re-running gates locally.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct FirstFailure {
+    /// Full test path, e.g. `module::submod::tests::test_name`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test: Option<String>,
+    /// Panic location as `file:line`, e.g. `src/lib.rs:42`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub site: Option<String>,
+    /// Panic / assertion message (first non-empty line after the `panicked at` line)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    /// Process exit code
+    pub exit_code: i32,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GateResult {
     pub gate_name: String,
@@ -323,6 +414,9 @@ pub struct GateResult {
     pub metrics: Option<GateMetrics>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artifacts: Option<Vec<String>>,
+    /// First failing test details for `cargo test`-class gates that exit non-zero.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub first_failure: Option<FirstFailure>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -436,10 +530,49 @@ pub struct MetricChange {
 // Gate Runner Implementation
 // =============================================================================
 
+#[derive(Debug, Clone)]
+struct GatePlan {
+    tier: GateTier,
+    base: String,
+    scope: Option<ScopeOutput>,
+    scope_ok: bool,
+    fallback_used: bool,
+    fallback_reason: Option<String>,
+    package_args: Vec<String>,
+    selected: Vec<PlannedGate>,
+    skipped: Vec<SkippedGate>,
+}
+
+#[derive(Debug, Clone)]
+struct PlannedGate {
+    gate: GateDefinition,
+    role: GatePlanningRole,
+    reason: String,
+}
+
+#[derive(Debug, Clone)]
+struct SkippedGate {
+    name: String,
+    role: Option<GatePlanningRole>,
+    reason: String,
+}
+
+#[derive(Debug, Clone, Default)]
+struct PackageTargetIndex {
+    lib_packages: HashSet<String>,
+}
+
+impl PackageTargetIndex {
+    fn has_lib(&self, package: &str) -> bool {
+        self.lib_packages.contains(package)
+    }
+}
+
 /// Configuration for the gate runner
 pub struct GateRunnerConfig {
     pub tier: GateTier,
     pub gate_filter: Option<String>,
+    pub base_ref: Option<String>,
     pub output_format: OutputFormat,
     pub emit_receipt: bool,
     pub receipt_path: Option<PathBuf>,
@@ -457,6 +590,7 @@ impl Default for GateRunnerConfig {
         Self {
             tier: GateTier::MergeGate,
             gate_filter: None,
+            base_ref: None,
             output_format: OutputFormat::Human,
             emit_receipt: false,
             receipt_path: None,
@@ -476,26 +610,30 @@ pub fn run(config: GateRunnerConfig) -> Result<()> {
 
     // Load gate policy
     let policy_path = root.join(".ci/gate-policy.yaml");
-    let policy = load_policy(&policy_path)?;
+    let policy = load_policy_for_inspection(&policy_path)?;
 
-    // Filter gates based on tier and gate filter
-    let gates_to_run = filter_gates(&policy, &config)?;
-
-    // Handle list mode
+    // Handle list mode against the static policy catalog. Dynamic PR-fast scope
+    // planning is run only for actual execution/diff receipts.
     if config.list_only {
-        return list_gates(&gates_to_run, &policy);
+        let gates = filter_gates(&policy, &config)?;
+        return list_gates(&gates, &policy);
     }
+
+    // Build the executable plan. PR-fast uses the shared xtask runner plus
+    // ci-scope planning so local `just pr-fast` and CI execute the same lane
+    // decisions instead of duplicating shell/YAML logic.
+    let plan = plan_gates(&root, &policy, &config)?;
 
     // Handle diff mode
     if let Some(baseline_path) = &config.diff_baseline {
         let baseline = load_receipt(baseline_path)?;
-        let current = run_gates(&gates_to_run, &policy, &config)?;
+        let current = run_gate_plan(&plan, &policy, &config)?;
         let diff = compare_receipts(&baseline, &current)?;
         return output_diff(&diff, &config);
     }
 
     // Run gates
-    let receipt = run_gates(&gates_to_run, &policy, &config)?;
+    let receipt = run_gate_plan(&plan, &policy, &config)?;
 
     // Output results
     output_results(&receipt, &config)?;
@@ -518,7 +656,7 @@ pub fn run(config: GateRunnerConfig) -> Result<()> {
 }
 
 /// Load gate policy from YAML file
-fn load_policy(path: &PathBuf) -> Result<GatePolicy> {
+pub(crate) fn load_policy_for_inspection(path: &Path) -> Result<GatePolicy> {
     let content = fs::read_to_string(path)
         .with_context(|| format!("Failed to read gate policy from {}", path.display()))?;
     let policy: GatePolicy = serde_yaml_ng::from_str(&content)
@@ -527,11 +665,8 @@ fn load_policy(path: &PathBuf) -> Result<GatePolicy> {
 }
 
 /// Filter gates based on tier and gate name filter
-fn filter_gates<'a>(
-    policy: &'a GatePolicy,
-    config: &GateRunnerConfig,
-) -> Result<Vec<&'a GateDefinition>> {
-    let mut gates: Vec<&GateDefinition> = policy.gates.iter().collect();
+fn filter_gates(policy: &GatePolicy, config: &GateRunnerConfig) -> Result<Vec<GateDefinition>> {
+    let mut gates: Vec<GateDefinition> = policy.gates.clone();
 
     // Filter by specific gate name
     if let Some(gate_name) = &config.gate_filter {
@@ -565,14 +700,443 @@ fn filter_gates<'a>(
         "pr_fast" => 0,
         "merge_gate" => 1,
         "nightly" => 2,
-        _ => 3,
+        "release" => 3,
+        _ => 4,
     });
 
     Ok(gates)
 }
 
+fn plan_gates(root: &Path, policy: &GatePolicy, config: &GateRunnerConfig) -> Result<GatePlan> {
+    let base = config.base_ref.clone().unwrap_or_else(|| select_scope_base(root));
+
+    if config.gate_filter.is_some() {
+        return Ok(static_gate_plan(config.tier.clone(), base, filter_gates(policy, config)?));
+    }
+
+    match config.tier {
+        GateTier::PrFast => plan_pr_fast_gates(root, gates_for_tier(policy, "pr_fast"), base),
+        GateTier::MergeGate => {
+            let mut plan = plan_pr_fast_gates(root, gates_for_tier(policy, "pr_fast"), base)?;
+            plan.tier = GateTier::MergeGate;
+            extend_plan_with_static_tiers(&mut plan, policy, &["merge_gate"]);
+            Ok(plan)
+        }
+        GateTier::Nightly => {
+            let mut plan = plan_pr_fast_gates(root, gates_for_tier(policy, "pr_fast"), base)?;
+            plan.tier = GateTier::Nightly;
+            extend_plan_with_static_tiers(&mut plan, policy, &["merge_gate", "nightly"]);
+            Ok(plan)
+        }
+        GateTier::All => {
+            let mut plan = plan_pr_fast_gates(root, gates_for_tier(policy, "pr_fast"), base)?;
+            plan.tier = GateTier::All;
+            extend_plan_with_non_pr_fast_static_gates(&mut plan, policy);
+            Ok(plan)
+        }
+    }
+}
+
+fn static_gate_plan(tier: GateTier, base: String, gates: Vec<GateDefinition>) -> GatePlan {
+    let selected = gates.into_iter().map(static_gate).collect();
+
+    GatePlan {
+        tier,
+        base,
+        scope: None,
+        scope_ok: true,
+        fallback_used: false,
+        fallback_reason: None,
+        package_args: Vec::new(),
+        selected,
+        skipped: Vec::new(),
+    }
+}
+
+fn gates_for_tier(policy: &GatePolicy, tier: &str) -> Vec<GateDefinition> {
+    policy.gates.iter().filter(|gate| gate.tier == tier).cloned().collect()
+}
+
+fn extend_plan_with_static_tiers(plan: &mut GatePlan, policy: &GatePolicy, tiers: &[&str]) {
+    let tier_set: HashSet<&str> = tiers.iter().copied().collect();
+    plan.selected.extend(
+        policy
+            .gates
+            .iter()
+            .filter(|gate| tier_set.contains(gate.tier.as_str()))
+            .cloned()
+            .map(static_gate),
+    );
+}
+
+fn extend_plan_with_non_pr_fast_static_gates(plan: &mut GatePlan, policy: &GatePolicy) {
+    plan.selected.extend(
+        policy.gates.iter().filter(|gate| gate.tier != "pr_fast").cloned().map(static_gate),
+    );
+}
+
+fn static_gate(gate: GateDefinition) -> PlannedGate {
+    PlannedGate {
+        role: gate
+            .planning
+            .as_ref()
+            .map(|planning| planning.role)
+            .unwrap_or(GatePlanningRole::Static),
+        reason: "selected by static policy filter".to_string(),
+        gate,
+    }
+}
+
+/// Plan PR-fast from policy planning roles plus ci-scope output.
+fn plan_pr_fast_gates(root: &Path, gates: Vec<GateDefinition>, base: String) -> Result<GatePlan> {
+    let scope = match compute_scope_output(root, &base) {
+        Ok(scope) => scope,
+        Err(err) => {
+            let reason =
+                format!("ci-scope failed for base '{base}'; falling back to rust_fallback gates");
+            eprintln!("warning: {reason}: {err:#}");
+            return build_pr_fast_plan_from_scope_with_targets(
+                GateTier::PrFast,
+                base,
+                gates,
+                None,
+                false,
+                true,
+                Some(reason),
+                None,
+            );
+        }
+    };
+
+    let non_rust_diff = is_non_rust_diff(&scope);
+    let fallback_used = !non_rust_diff && selected_package_names(&scope).is_empty();
+    let fallback_reason = if fallback_used {
+        Some("ci-scope produced no package scope for a Rust-relevant diff".to_string())
+    } else {
+        None
+    };
+
+    let target_index = if !non_rust_diff && !fallback_used {
+        match load_package_target_index(root) {
+            Ok(index) => Some(index),
+            Err(err) => {
+                let reason =
+                    "cargo metadata target indexing failed; falling back to rust_fallback gates"
+                        .to_string();
+                eprintln!("warning: {reason}: {err:#}");
+                return build_pr_fast_plan_from_scope_with_targets(
+                    GateTier::PrFast,
+                    base,
+                    gates,
+                    Some(scope),
+                    true,
+                    true,
+                    Some(reason),
+                    None,
+                );
+            }
+        }
+    } else {
+        None
+    };
+
+    build_pr_fast_plan_from_scope_with_targets(
+        GateTier::PrFast,
+        base,
+        gates,
+        Some(scope),
+        true,
+        fallback_used,
+        fallback_reason,
+        target_index.as_ref(),
+    )
+}
+
+#[cfg(test)]
+fn build_pr_fast_plan_from_scope(
+    tier: GateTier,
+    base: String,
+    gates: Vec<GateDefinition>,
+    scope: Option<ScopeOutput>,
+    scope_ok: bool,
+    fallback_used: bool,
+    fallback_reason: Option<String>,
+) -> Result<GatePlan> {
+    build_pr_fast_plan_from_scope_with_targets(
+        tier,
+        base,
+        gates,
+        scope,
+        scope_ok,
+        fallback_used,
+        fallback_reason,
+        None,
+    )
+}
+
+fn build_pr_fast_plan_from_scope_with_targets(
+    tier: GateTier,
+    base: String,
+    gates: Vec<GateDefinition>,
+    scope: Option<ScopeOutput>,
+    scope_ok: bool,
+    fallback_used: bool,
+    fallback_reason: Option<String>,
+    target_index: Option<&PackageTargetIndex>,
+) -> Result<GatePlan> {
+    let non_rust_diff = scope.as_ref().is_some_and(is_non_rust_diff);
+    let package_names = scope.as_ref().map(selected_package_names).unwrap_or_default();
+    let package_args = package_args_from_names(&package_names);
+
+    let mut selected = Vec::new();
+    let mut skipped = Vec::new();
+
+    for gate in gates {
+        let role = pr_fast_role(&gate)?;
+        match role {
+            GatePlanningRole::AlwaysOn => {
+                selected.push(PlannedGate {
+                    role,
+                    reason: "always-on pr_fast gate".to_string(),
+                    gate,
+                });
+            }
+            GatePlanningRole::RustScoped => {
+                if fallback_used {
+                    skipped.push(SkippedGate {
+                        name: gate.name,
+                        role: Some(role),
+                        reason: fallback_reason
+                            .clone()
+                            .unwrap_or_else(|| "rust fallback selected".to_string()),
+                    });
+                } else if non_rust_diff {
+                    skipped.push(SkippedGate {
+                        name: gate.name,
+                        role: Some(role),
+                        reason: scope_skip_reason(scope.as_ref()),
+                    });
+                } else {
+                    let gate_package_names =
+                        package_names_for_gate(&gate, &package_names, target_index);
+                    let gate_package_args = package_args_from_names(&gate_package_names);
+                    if gate_package_args.is_empty() {
+                        skipped.push(SkippedGate {
+                            name: gate.name.clone(),
+                            role: Some(role),
+                            reason: no_eligible_package_reason(&gate),
+                        });
+                    } else {
+                        selected.push(PlannedGate {
+                            role,
+                            reason: format!(
+                                "code diff selected packages: {}",
+                                gate_package_names.join(", ")
+                            ),
+                            gate: render_package_args(gate, &gate_package_args)?,
+                        });
+                    }
+                }
+            }
+            GatePlanningRole::RustFallback => {
+                if fallback_used {
+                    selected.push(PlannedGate {
+                        role,
+                        reason: fallback_reason
+                            .clone()
+                            .unwrap_or_else(|| "rust fallback selected".to_string()),
+                        gate,
+                    });
+                } else if non_rust_diff {
+                    skipped.push(SkippedGate {
+                        name: gate.name,
+                        role: Some(role),
+                        reason: scope_skip_reason(scope.as_ref()),
+                    });
+                } else {
+                    skipped.push(SkippedGate {
+                        name: gate.name,
+                        role: Some(role),
+                        reason: "rust scoped plan selected".to_string(),
+                    });
+                }
+            }
+            GatePlanningRole::RustPackageScoped => {
+                if fallback_used {
+                    selected.push(PlannedGate {
+                        role,
+                        reason: fallback_reason
+                            .clone()
+                            .unwrap_or_else(|| "rust fallback selected".to_string()),
+                        gate,
+                    });
+                } else if let Some(reason) = package_scoped_reason(&gate, &package_names) {
+                    selected.push(PlannedGate { role, reason, gate });
+                } else {
+                    skipped.push(SkippedGate {
+                        name: gate.name.clone(),
+                        role: Some(role),
+                        reason: package_scoped_skip_reason(&gate, scope.as_ref()),
+                    });
+                }
+            }
+            GatePlanningRole::Static => {
+                bail!(
+                    "Gate '{}' in pr_fast must declare planning.role; static is not valid for pr_fast planning",
+                    gate.name
+                );
+            }
+        }
+    }
+
+    Ok(GatePlan {
+        tier,
+        base,
+        scope,
+        scope_ok,
+        fallback_used,
+        fallback_reason,
+        package_args,
+        selected,
+        skipped,
+    })
+}
+
+fn pr_fast_role(gate: &GateDefinition) -> Result<GatePlanningRole> {
+    gate.planning.as_ref().map(|planning| planning.role).ok_or_else(|| {
+        color_eyre::eyre::eyre!("Gate '{}' in pr_fast is missing planning.role", gate.name)
+    })
+}
+
+fn is_non_rust_diff(scope: &ScopeOutput) -> bool {
+    matches!(scope.diff_class.as_str(), "prose_only" | "docs_as_code" | "ci_config")
+}
+
+fn scope_skip_reason(scope: Option<&ScopeOutput>) -> String {
+    let diff_class = scope.map(|scope| scope.diff_class.as_str()).unwrap_or("unknown");
+    format!("Rust lanes skipped because diff_class={diff_class}")
+}
+
+fn selected_package_names(scope: &ScopeOutput) -> Vec<String> {
+    let mut package_names: Vec<String> = scope
+        .direct_crates
+        .iter()
+        .map(|entry| entry.name.clone())
+        .chain(scope.reverse_dep_closure.iter().map(|entry| entry.name.clone()))
+        .chain(scope.architecture_wideners.iter().map(|entry| entry.name.clone()))
+        .collect();
+    package_names.sort();
+    package_names.dedup();
+    package_names
+}
+
+fn package_args_from_names(package_names: &[String]) -> Vec<String> {
+    package_names.iter().flat_map(|name| ["-p".to_string(), name.clone()]).collect()
+}
+
+fn render_package_args(
+    mut gate: GateDefinition,
+    package_args: &[String],
+) -> Result<GateDefinition> {
+    if !gate.command.contains("{package_args}") {
+        bail!(
+            "Gate '{}' has planning.role=rust_scoped but its command has no {{package_args}} placeholder",
+            gate.name
+        );
+    }
+    gate.command = gate.command.replace("{package_args}", &package_args.join(" "));
+    Ok(gate)
+}
+
+fn load_package_target_index(root: &Path) -> Result<PackageTargetIndex> {
+    let metadata_raw = cmd("cargo", ["metadata", "--format-version=1", "--no-deps"])
+        .dir(root)
+        .read()
+        .context("Failed to load cargo metadata for package target planning")?;
+    let metadata: serde_json::Value =
+        serde_json::from_str(&metadata_raw).context("Failed to parse cargo metadata JSON")?;
+
+    let mut index = PackageTargetIndex::default();
+    let packages = metadata
+        .get("packages")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| color_eyre::eyre::eyre!("cargo metadata JSON missing packages array"))?;
+
+    for package in packages {
+        let Some(name) = package.get("name").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let has_lib =
+            package.get("targets").and_then(serde_json::Value::as_array).is_some_and(|targets| {
+                targets.iter().any(|target| {
+                    target
+                        .get("kind")
+                        .and_then(serde_json::Value::as_array)
+                        .is_some_and(|kinds| kinds.iter().any(|kind| kind.as_str() == Some("lib")))
+                })
+            });
+        if has_lib {
+            index.lib_packages.insert(name.to_string());
+        }
+    }
+
+    Ok(index)
+}
+
+fn package_names_for_gate(
+    gate: &GateDefinition,
+    package_names: &[String],
+    target_index: Option<&PackageTargetIndex>,
+) -> Vec<String> {
+    if gate_requires_lib(gate) {
+        if let Some(index) = target_index {
+            return package_names.iter().filter(|name| index.has_lib(name)).cloned().collect();
+        }
+    }
+    package_names.to_vec()
+}
+
+fn no_eligible_package_reason(gate: &GateDefinition) -> String {
+    if gate_requires_lib(gate) {
+        "no ci-scope selected packages have a lib target for this gate".to_string()
+    } else {
+        "no ci-scope package arguments available".to_string()
+    }
+}
+
+fn gate_requires_lib(gate: &GateDefinition) -> bool {
+    gate.command.split_whitespace().any(|part| part == "--lib")
+}
+
+fn package_scoped_reason(gate: &GateDefinition, package_names: &[String]) -> Option<String> {
+    let packages = gate.planning.as_ref()?.packages.as_slice();
+    let matched: Vec<String> = packages
+        .iter()
+        .filter(|package| package_names.iter().any(|name| name == *package))
+        .cloned()
+        .collect();
+    if matched.is_empty() {
+        None
+    } else {
+        Some(format!("package-scoped gate matched {}", matched.join(", ")))
+    }
+}
+
+fn package_scoped_skip_reason(gate: &GateDefinition, scope: Option<&ScopeOutput>) -> String {
+    if scope.is_some_and(is_non_rust_diff) {
+        return scope_skip_reason(scope);
+    }
+    let packages =
+        gate.planning.as_ref().map(|planning| planning.packages.join(", ")).unwrap_or_default();
+    if packages.is_empty() {
+        "package-scoped gate has no configured packages".to_string()
+    } else {
+        format!("selected packages did not include {packages}")
+    }
+}
+
 /// List available gates
-fn list_gates(gates: &[&GateDefinition], policy: &GatePolicy) -> Result<()> {
+fn list_gates(gates: &[GateDefinition], policy: &GatePolicy) -> Result<()> {
     let mut term = Term::stdout();
     let bold = Style::new().bold();
     let dim = Style::new().dim();
@@ -582,12 +1146,12 @@ fn list_gates(gates: &[&GateDefinition], policy: &GatePolicy) -> Result<()> {
     writeln!(term)?;
 
     // Group by tier
-    let mut by_tier: HashMap<&str, Vec<&&GateDefinition>> = HashMap::new();
+    let mut by_tier: HashMap<&str, Vec<&GateDefinition>> = HashMap::new();
     for gate in gates {
         by_tier.entry(gate.tier.as_str()).or_default().push(gate);
     }
 
-    for tier_name in &["pr_fast", "merge_gate", "nightly"] {
+    for tier_name in &["pr_fast", "merge_gate", "nightly", "release"] {
         if let Some(tier_gates) = by_tier.get(tier_name) {
             let tier_def = policy.tiers.get(*tier_name);
             let tier_desc = tier_def.map(|t| t.description.as_str()).unwrap_or("Unknown tier");
@@ -621,9 +1185,9 @@ fn list_gates(gates: &[&GateDefinition], policy: &GatePolicy) -> Result<()> {
     Ok(())
 }
 
-/// Run gates and collect results
-fn run_gates(
-    gates: &[&GateDefinition],
+/// Run a planned set of gates and collect results.
+fn run_gate_plan(
+    plan: &GatePlan,
     policy: &GatePolicy,
     config: &GateRunnerConfig,
 ) -> Result<Receipt> {
@@ -643,7 +1207,7 @@ fn run_gates(
     let mut tier_summaries: HashMap<String, TierSummary> = HashMap::new();
 
     let spinner = if config.output_format == OutputFormat::Human {
-        let pb = ProgressBar::new(gates.len() as u64);
+        let pb = ProgressBar::new(plan.selected.len() as u64);
         pb.set_style(
             ProgressStyle::default_bar()
                 .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {wide_msg}")
@@ -655,7 +1219,8 @@ fn run_gates(
         None
     };
 
-    for (idx, gate) in gates.iter().enumerate() {
+    for (idx, planned_gate) in plan.selected.iter().enumerate() {
+        let gate = &planned_gate.gate;
         if let Some(ref pb) = spinner {
             pb.set_position(idx as u64);
             pb.set_message(format!("Running {}...", gate.name));
@@ -735,7 +1300,7 @@ fn run_gates(
         },
         aggregate_metrics: None, // Could aggregate test counts etc.
     };
-    let agent_receipt = build_agent_receipt(&root, &results);
+    let agent_receipt = Some(build_agent_receipt(&root, &results, plan));
 
     Ok(Receipt {
         schema_version: "1.0.0".to_string(),
@@ -747,105 +1312,175 @@ fn run_gates(
     })
 }
 
-fn build_agent_receipt(root: &Path, results: &[GateResult]) -> AgentReceipt {
-    let scope_output = compute_scope_output(root).ok();
+/// Phase-1 agent-facing receipt shape contract (Issue #5020):
+/// keep this as a stable, minimal JSON slice consumed by CI artifacts.
+fn build_agent_receipt(root: &Path, results: &[GateResult], plan: &GatePlan) -> AgentReceipt {
+    let scope_output = plan.scope.clone();
+    let gate_status_by_name: HashMap<String, String> =
+        results.iter().map(|result| (result.gate_name.clone(), result.status.clone())).collect();
     let selected_lanes = scope_output
         .as_ref()
         .map(|scope| {
-            scope
-                .selected_lanes
-                .iter()
-                .map(|lane| AgentLane { lane: lane.lane.clone(), scope: lane.scope.clone() })
-                .collect()
+            let standard = scope.selected_lanes.iter().map(|lane| {
+                let explanation = scope.explanations.get(&lane.lane).cloned().unwrap_or_default();
+                let reason = if explanation.is_empty() {
+                    lane.reason.clone()
+                } else {
+                    format!("{} — {}", lane.reason, explanation)
+                };
+                AgentLane {
+                    name: lane.lane.clone(),
+                    reason,
+                    status: gate_status_by_name
+                        .get(&lane.lane)
+                        .cloned()
+                        .unwrap_or_else(|| "not_run".to_string()),
+                }
+            });
+            let heavy = scope.selected_heavy_lanes.iter().map(|lane| AgentLane {
+                name: lane.lane.clone(),
+                reason: lane.reason.clone(),
+                status: gate_status_by_name
+                    .get(&lane.lane)
+                    .cloned()
+                    .unwrap_or_else(|| "not_run".to_string()),
+            });
+            standard.chain(heavy).collect()
         })
         .unwrap_or_default();
-    let reasons = scope_output
-        .as_ref()
-        .map(|scope| {
-            scope
-                .selected_lanes
-                .iter()
-                .map(|lane| {
-                    let explanation =
-                        scope.explanations.get(&lane.lane).cloned().unwrap_or_default();
-                    let reason = if explanation.is_empty() {
-                        lane.reason.clone()
-                    } else {
-                        format!("{} — {}", lane.reason, explanation)
-                    };
-                    (lane.lane.clone(), reason)
-                })
-                .collect()
-        })
+    let (failures, next_actions) = failure_guidance(results);
+    let sha = cmd("git", ["rev-parse", "HEAD"])
+        .dir(root)
+        .read()
+        .map(|s| s.trim().to_string())
         .unwrap_or_default();
-    let (blocking, repro, next_actions) = failure_guidance(results);
-    let baselines = discover_baselines(root);
+    let is_latest = is_latest_commit(root);
 
     let scope = if let Some(scope) = scope_output {
         AgentScope {
-            base: scope.base,
-            diff_class: scope.diff_class,
-            changed_files: scope.changed_files,
+            diff_class: Some(scope.diff_class),
             direct_crates: scope.direct_crates.into_iter().map(|entry| entry.name).collect(),
-            reverse_dep_closure: scope
-                .reverse_dep_closure
+            reverse_deps: scope.reverse_dep_closure.into_iter().map(|entry| entry.name).collect(),
+            architecture_wideners: scope
+                .architecture_wideners
                 .into_iter()
                 .map(|entry| entry.name)
                 .collect(),
+            risk_tags: scope.risk_tags,
         }
     } else {
         AgentScope::default()
     };
 
     AgentReceipt {
+        sha,
+        is_latest,
+        tier: plan.tier.to_string(),
         scope,
         selected_lanes,
-        reasons,
-        failures: AgentFailures { blocking, repro },
-        baselines,
-        next_actions,
+        failures,
+        suggested_next_actions: next_actions,
+        plan: Some(agent_plan_receipt(plan)),
     }
 }
 
-fn failure_guidance(results: &[GateResult]) -> (Vec<String>, Vec<String>, Vec<String>) {
-    let blocking = blocking_failure_gate_names(results);
-    let repro: Vec<String> = results
+fn agent_plan_receipt(plan: &GatePlan) -> AgentPlanReceipt {
+    AgentPlanReceipt {
+        base: plan.base.clone(),
+        diff_class: plan.scope.as_ref().map(|scope| scope.diff_class.clone()),
+        scope_ok: plan.scope_ok,
+        fallback_used: plan.fallback_used,
+        fallback_reason: plan.fallback_reason.clone(),
+        package_args: plan.package_args.clone(),
+        selected: plan
+            .selected
+            .iter()
+            .map(|planned| AgentPlannedGate {
+                name: planned.gate.name.clone(),
+                role: planned.role,
+                reason: planned.reason.clone(),
+            })
+            .collect(),
+        skipped: plan
+            .skipped
+            .iter()
+            .map(|skipped| AgentSkippedGate {
+                name: skipped.name.clone(),
+                role: skipped.role,
+                reason: skipped.reason.clone(),
+            })
+            .collect(),
+    }
+}
+
+fn failure_guidance(results: &[GateResult]) -> (Vec<AgentFailure>, Vec<String>) {
+    let failures: Vec<AgentFailure> = results
         .iter()
-        .filter(|result| blocking.iter().any(|name| name == &result.gate_name))
-        .map(|result| format!("{} # gate={}", result.command, result.gate_name))
+        .filter(|result| is_blocking_gate_status(&result.status) && result.required.unwrap_or(true))
+        .map(|result| {
+            let base_summary =
+                format!("Gate '{}' ended with status '{}'", result.gate_name, result.status);
+            // Augment summary with first_failure details when available
+            let summary = match &result.first_failure {
+                Some(ff) => {
+                    let mut parts = vec![base_summary];
+                    if let Some(test) = &ff.test {
+                        parts.push(format!("  test:  {}", test));
+                    }
+                    if let Some(site) = &ff.site {
+                        parts.push(format!("  site:  {}", site));
+                    }
+                    if let Some(msg) = &ff.message {
+                        parts.push(format!("  msg:   {}", msg));
+                    }
+                    parts.join("\n")
+                }
+                None => base_summary,
+            };
+            AgentFailure {
+                lane: result.gate_name.clone(),
+                summary,
+                repro: format!("{} # gate={}", result.command, result.gate_name),
+            }
+        })
         .collect();
-    let next_actions = if blocking.is_empty() {
+    let next_actions = if failures.is_empty() {
         vec!["No blocking failures detected. Proceed with review or merge flow.".to_string()]
     } else {
-        blocking
+        failures
             .iter()
-            .map(|gate| {
+            .map(|failure| {
                 format!(
-                    "Reproduce and fix gate '{gate}' locally, then rerun: cargo xtask gates --gate {gate}"
+                    "Reproduce and fix gate '{}' locally, then rerun: cargo xtask gates --gate {}",
+                    failure.lane, failure.lane
                 )
             })
             .collect()
     };
-    (blocking, repro, next_actions)
+    (failures, next_actions)
 }
 
-fn discover_baselines(root: &Path) -> Vec<String> {
-    let candidates = [
-        ".ci/public-api-baselines",
-        ".ci/metrics/baselines",
-        "benchmarks/baselines",
-        ".ci/parser-corpus-baseline.json",
-        ".ci/cpan-corpus-baseline.json",
-    ];
-    candidates
-        .iter()
-        .filter(|path| root.join(path).exists())
-        .map(|path| (*path).to_string())
-        .collect()
+fn is_latest_commit(root: &Path) -> bool {
+    // In detached HEAD (PR runs), @{upstream} fails with "HEAD does not point to a branch".
+    // Suppress stderr so that message does not leak into CI output.
+    let upstream =
+        match cmd("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
+            .dir(root)
+            .stderr_null()
+            .read()
+        {
+            Ok(value) => value.trim().to_string(),
+            Err(_) => return true,
+        };
+    let head = cmd("git", ["rev-parse", "HEAD"]).dir(root).read().ok();
+    let upstream_sha = cmd("git", ["rev-parse", &upstream]).dir(root).read().ok();
+    match (head, upstream_sha) {
+        (Some(head), Some(upstream_sha)) => head.trim() == upstream_sha.trim(),
+        _ => true,
+    }
 }
 
-fn compute_scope_output(root: &Path) -> Result<ScopeOutput> {
-    let base = select_scope_base(root);
+fn compute_scope_output(root: &Path, base: &str) -> Result<ScopeOutput> {
     let changed_files = cmd("git", ["diff", "--name-only", &format!("{base}...HEAD")])
         .dir(root)
         .read()
@@ -864,7 +1499,7 @@ fn compute_scope_output(root: &Path) -> Result<ScopeOutput> {
 
     let workspace_root = root.to_string_lossy().replace('\\', "/");
     let mut scope = ci_scope::classify_files(&changed_files, &metadata, &workspace_root)?;
-    scope.base = base;
+    scope.base = base.to_string();
     scope.head_sha = cmd("git", ["rev-parse", "HEAD"]).dir(root).read()?.trim().to_string();
     scope.changed_files = changed_files;
     Ok(scope)
@@ -877,9 +1512,16 @@ fn select_scope_base(root: &Path) -> String {
         std::env::var("GITHUB_BASE_REF").ok(),
     ];
     let mut candidates: Vec<String> = env_candidates.into_iter().flatten().collect();
-    candidates.extend(["origin/master", "master", "HEAD~1"].into_iter().map(str::to_string));
+    candidates.extend(
+        ["origin/master", "origin/main", "origin/HEAD", "master", "main", "HEAD~1"]
+            .into_iter()
+            .map(str::to_string),
+    );
     for candidate in candidates {
-        let exists = cmd("git", ["rev-parse", "--verify", &candidate]).dir(root).run().is_ok();
+        // Suppress stderr: in shallow clones "HEAD~1" does not exist and git prints
+        // "fatal: Needed a single revision" to stderr, polluting CI output.
+        let exists =
+            cmd("git", ["rev-parse", "--verify", &candidate]).dir(root).stderr_null().run().is_ok();
         if exists {
             return candidate;
         }
@@ -927,6 +1569,7 @@ fn run_single_gate(
             log_path: None,
             metrics: None,
             artifacts: None,
+            first_failure: None,
         });
     }
 
@@ -942,38 +1585,59 @@ fn run_single_gate(
         });
     }
 
-    // Run the command
-    let result = cmd!("bash", "-lc", command).stderr_to_stdout().stdout_capture().unchecked().run();
+    if command == "just ci-publish-closure" || command == "cargo xtask publish-closure" {
+        return run_internal_xtask_gate(gate, &log_path, command, start, || {
+            super::publish_closure::run(None)
+        });
+    }
 
+    if command == "just ci-publish-manifest-check"
+        || command == "cargo xtask publish-manifest-check"
+    {
+        return run_internal_xtask_gate(gate, &log_path, command, start, || {
+            super::publish_manifest_check::run()
+        });
+    }
+
+    if command == "just ci-layer-check" || command == "cargo xtask layer-check" {
+        return run_internal_xtask_gate(gate, &log_path, command, start, || {
+            super::layer_check::run()
+        });
+    }
+
+    if command == "just ci-published-crate-count" || command == "cargo xtask published-crate-count"
+    {
+        return run_internal_xtask_gate(gate, &log_path, command, start, || {
+            super::count_ratchet::run()
+        });
+    }
+
+    let execution = run_shell_command_with_timeout(command, &log_path, timeout_secs);
     let duration_ms = start.elapsed().as_millis() as u64;
 
-    match result {
-        Ok(output) => {
-            let exit_code = output.status.code().unwrap_or(-1);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-
-            // Write log file
-            if let Err(e) = fs::write(&log_path, stdout.as_bytes()) {
-                eprintln!("Warning: Failed to write log file: {}", e);
-            }
-
-            // Check if timed out
-            let timed_out = duration_ms > (timeout_secs * 1000);
-
-            let status = if timed_out {
+    match execution {
+        Ok(execution) => {
+            let status = if execution.timed_out {
                 "timeout".to_string()
-            } else if exit_code == 0 {
+            } else if execution.exit_code == 0 {
                 "pass".to_string()
             } else {
                 "fail".to_string()
             };
 
             // Extract output summary (last 10 lines or error message)
-            let output_summary = extract_output_summary(&stdout, 10);
+            let output_summary = extract_output_summary(&execution.stdout, 10);
 
             // Parse metrics if this is a test gate
             let metrics = if gate.tags.contains(&"test".to_string()) {
-                parse_test_metrics(&stdout)
+                parse_test_metrics(&execution.stdout)
+            } else {
+                None
+            };
+
+            // For failing cargo test gates, extract the first failure details
+            let first_failure = if status == "fail" && is_cargo_test_command(command) {
+                parse_first_failure(&execution.stdout, execution.exit_code)
             } else {
                 None
             };
@@ -985,7 +1649,7 @@ fn run_single_gate(
                 required: Some(gate.required),
                 duration_ms,
                 command: command.to_string(),
-                exit_code: Some(exit_code),
+                exit_code: Some(execution.exit_code),
                 output_summary: Some(output_summary),
                 log_path: Some(format!("logs/{}.log", gate.name)),
                 metrics,
@@ -994,6 +1658,7 @@ fn run_single_gate(
                 } else {
                     Some(gate.artifacts.clone())
                 },
+                first_failure,
             })
         }
         Err(e) => {
@@ -1010,9 +1675,64 @@ fn run_single_gate(
                 log_path: None,
                 metrics: None,
                 artifacts: None,
+                first_failure: None,
             })
         }
     }
+}
+
+struct ShellExecutionResult {
+    stdout: String,
+    exit_code: i32,
+    timed_out: bool,
+}
+
+fn run_shell_command_with_timeout(command: &str, log_path: &Path, timeout_secs: u64) -> Result<ShellExecutionResult> {
+    let log_file =
+        fs::File::create(log_path).with_context(|| format!("Failed to create log file: {}", log_path.display()))?;
+    let log_file_err = log_file
+        .try_clone()
+        .with_context(|| format!("Failed to clone log file handle: {}", log_path.display()))?;
+
+    let mut child = shell_command_process(command)
+        .stdout(Stdio::from(log_file))
+        .stderr(Stdio::from(log_file_err))
+        .spawn()
+        .with_context(|| format!("Failed to spawn gate command: {command}"))?;
+
+    let start = Instant::now();
+    let timeout = Duration::from_secs(timeout_secs);
+    let timed_out = loop {
+        if let Some(_status) = child.try_wait().context("Failed waiting on gate process")? {
+            break false;
+        }
+        if start.elapsed() >= timeout {
+            child.kill().ok();
+            child.wait().ok();
+            break true;
+        }
+        thread::sleep(Duration::from_millis(100));
+    };
+
+    let status = child.wait().context("Failed to read gate process exit status")?;
+    let stdout = fs::read_to_string(log_path).unwrap_or_default();
+    let exit_code = status.code().unwrap_or(if timed_out { 124 } else { -1 });
+
+    Ok(ShellExecutionResult { stdout, exit_code, timed_out })
+}
+
+#[cfg(windows)]
+fn shell_command_process(command: &str) -> Command {
+    let mut cmd = Command::new("cmd");
+    cmd.args(["/C", command]);
+    cmd
+}
+
+#[cfg(not(windows))]
+fn shell_command_process(command: &str) -> Command {
+    let mut cmd = Command::new("bash");
+    cmd.args(["-lc", command]);
+    cmd
 }
 
 fn run_internal_xtask_gate(
@@ -1046,6 +1766,7 @@ fn run_internal_xtask_gate(
         log_path: Some(format!("logs/{}.log", gate.name)),
         metrics: None,
         artifacts: if gate.artifacts.is_empty() { None } else { Some(gate.artifacts.clone()) },
+        first_failure: None,
     })
 }
 
@@ -1061,11 +1782,20 @@ fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
     let git_sha_short =
         if git_sha.len() >= 7 { git_sha[..7].to_string() } else { "UNVERIF".to_string() };
 
-    let git_branch = cmd!("git", "rev-parse", "--abbrev-ref", "HEAD")
-        .read()
-        .unwrap_or_else(|_| "unknown".to_string())
-        .trim()
-        .to_string();
+    // In a detached HEAD (GitHub Actions PR runs check out by SHA), `git rev-parse
+    // --abbrev-ref HEAD` returns the literal string "HEAD" rather than a branch name.
+    // Prefer the CI environment variable that carries the real source branch name.
+    let git_branch = std::env::var("GITHUB_HEAD_REF")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| std::env::var("GITHUB_REF_NAME").ok().filter(|s| !s.is_empty()))
+        .unwrap_or_else(|| {
+            cmd!("git", "rev-parse", "--abbrev-ref", "HEAD")
+                .read()
+                .unwrap_or_else(|_| "unknown".to_string())
+                .trim()
+                .to_string()
+        });
 
     let git_dirty =
         cmd!("git", "status", "--porcelain").read().map(|s| !s.trim().is_empty()).unwrap_or(false);
@@ -1234,6 +1964,155 @@ fn extract_number(line: &str, suffix: &str) -> Option<u32> {
     })
 }
 
+/// Parse the first failing test name, panic site, and message from `cargo test` stdout.
+///
+/// Returns `None` only if the output contains no recognisable failure markers (e.g. a
+/// pure compilation error with no test output).  All three sub-fields (`test`, `site`,
+/// `message`) are individually optional because any one may be absent in edge cases.
+///
+/// # Patterns detected
+///
+/// * Test name — `test <path> ... FAILED` or `---- <path> stdout ----`
+/// * Panic site — `panicked at '<file>:<line>:<col>:'` (Rust <1.73 style) or
+///   `panicked at <file>:<line>:<col>:` (Rust ≥1.73 style)
+/// * Message — the first non-empty line that follows the `panicked at` line
+pub fn parse_first_failure(output: &str, exit_code: i32) -> Option<FirstFailure> {
+    let mut test_name: Option<String> = None;
+    let mut site: Option<String> = None;
+    let mut message: Option<String> = None;
+
+    let lines: Vec<&str> = output.lines().collect();
+
+    // --- Pass 1: find the first "test ... FAILED" line ---
+    // Cargo test emits either:
+    //   test module::path::test_name ... FAILED
+    // or (for individual test stdout sections):
+    //   ---- module::path::test_name stdout ----
+    for line in &lines {
+        let trimmed = line.trim();
+        // "test <path> ... FAILED"
+        if trimmed.starts_with("test ") && trimmed.ends_with("... FAILED") {
+            let inner = trimmed
+                .strip_prefix("test ")
+                .and_then(|s| s.strip_suffix("... FAILED"))
+                .map(str::trim);
+            if let Some(name) = inner
+                && !name.is_empty()
+            {
+                test_name = Some(name.to_string());
+                break;
+            }
+        }
+        // "---- <path> stdout ----"
+        if test_name.is_none() && trimmed.starts_with("---- ") && trimmed.ends_with(" stdout ----")
+        {
+            let inner = trimmed
+                .strip_prefix("---- ")
+                .and_then(|s| s.strip_suffix(" stdout ----"))
+                .map(str::trim);
+            if let Some(name) = inner
+                && !name.is_empty()
+            {
+                test_name = Some(name.to_string());
+                // don't break — keep looking for a "... FAILED" line to prefer
+            }
+        }
+    }
+
+    // --- Pass 2: find the first "panicked at" line and the message line after it ---
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+
+        // Rust ≥1.73: `panicked at src/lib.rs:42:5:`
+        // Rust <1.73:  `panicked at 'message', src/lib.rs:42:5`
+        //
+        // The line may be prefixed with thread info:
+        //   `thread 'test::name' panicked at src/lib.rs:42:5:`
+        // or may start directly with `panicked at`:
+        //   `panicked at src/lib.rs:42:5:`
+        //
+        // We find the `panicked at ` substring anywhere in the line.
+        if let Some(panic_pos) = trimmed.find("panicked at ") {
+            let rest = &trimmed[panic_pos + "panicked at ".len()..];
+
+            // Try new-style first (Rust ≥1.73), then fall back to old-style (Rust <1.73)
+            let parsed_site =
+                parse_panic_site_new_style(rest).or_else(|| parse_panic_site_old_style(rest));
+
+            site = parsed_site;
+
+            // The message is the next non-empty line
+            message = lines[idx + 1..]
+                .iter()
+                .find(|l| !l.trim().is_empty())
+                .map(|l| l.trim().to_string());
+
+            break;
+        }
+    }
+
+    // Only return Some if we found at least one piece of useful info
+    if test_name.is_some() || site.is_some() {
+        Some(FirstFailure { test: test_name, site, message, exit_code })
+    } else {
+        None
+    }
+}
+
+/// Parse a Rust ≥1.73 panic site: `src/lib.rs:42:5:` → `src/lib.rs:42`
+fn parse_panic_site_new_style(rest: &str) -> Option<String> {
+    // Strip trailing colon if present
+    let rest = rest.trim_end_matches(':');
+    // Format is typically: path/to/file.rs:LINE:COL
+    // Split by ':' and find the first pure-integer segment, treating everything before as path.
+    let parts: Vec<&str> = rest.splitn(4, ':').collect();
+    // We need at least path:line
+    match parts.len() {
+        2.. => {
+            // Detect Windows drive letter: single alpha char
+            let (path_part, line_part) = if parts[0].len() == 1
+                && parts[0].chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+                && parts.len() >= 3
+            {
+                // Windows path: C:\path\file.rs  -> parts = ["C", "\\path\\file.rs", "LINE", ...]
+                (format!("{}:{}", parts[0], parts[1]), parts[2])
+            } else {
+                (parts[0].to_string(), parts[1])
+            };
+            // line_part must be a valid integer
+            if line_part.parse::<u64>().is_ok() && !path_part.is_empty() {
+                return Some(format!("{}:{}", path_part, line_part));
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Parse a Rust <1.73 panic site: `'assertion failed', src/lib.rs:42:5` → `src/lib.rs:42`
+fn parse_panic_site_old_style(rest: &str) -> Option<String> {
+    // Format: `'<message>', <path>:<line>:<col>`
+    // Find the last `', ` to split message from location
+    let loc_start = rest.rfind("', ").map(|i| i + 3)?;
+    let loc = &rest[loc_start..];
+    // Now parse loc as new-style
+    parse_panic_site_new_style(loc)
+}
+
+/// Check whether a gate command is a `cargo test`-class command.
+///
+/// Returns `true` for commands whose first word-token is `cargo` and second is `test`,
+/// ignoring leading whitespace and path prefixes.  This covers:
+/// - `cargo test ...`
+/// - `cargo test -p foo ...`
+pub fn is_cargo_test_command(command: &str) -> bool {
+    let mut tokens = command.split_whitespace();
+    let first = tokens.next().unwrap_or("");
+    // Allow for path-prefixed cargo (e.g. `/usr/local/bin/cargo`)
+    let is_cargo = first == "cargo" || first.ends_with("/cargo") || first.ends_with("\\cargo");
+    is_cargo && tokens.next().is_some_and(|t| t == "test")
+}
+
 /// Output results in the requested format
 fn output_results(receipt: &Receipt, config: &GateRunnerConfig) -> Result<()> {
     match config.output_format {
@@ -1308,8 +2187,33 @@ fn output_human(receipt: &Receipt) -> Result<()> {
     {
         writeln!(term)?;
         writeln!(term, "{}", red.apply_to("Blocking failures:"))?;
-        for gate in failures {
-            writeln!(term, "  - {}", gate)?;
+        // Build a lookup from gate name to GateResult so we can print first_failure details
+        let gate_by_name: HashMap<&str, &GateResult> =
+            receipt.gates.iter().map(|g| (g.gate_name.as_str(), g)).collect();
+        for gate_name in failures {
+            let exit_code_str = gate_by_name
+                .get(gate_name.as_str())
+                .and_then(|g| g.exit_code)
+                .map(|c| format!(" (exit {})", c))
+                .unwrap_or_default();
+            writeln!(term, "  - {}{}", gate_name, exit_code_str)?;
+            // Print first_failure details if available
+            if let Some(ff) =
+                gate_by_name.get(gate_name.as_str()).and_then(|g| g.first_failure.as_ref())
+            {
+                if let Some(ref test) = ff.test {
+                    writeln!(term, "      test:   {}", test)?;
+                }
+                if let Some(ref site) = ff.site {
+                    writeln!(term, "      site:   {}", site)?;
+                }
+                if let Some(ref msg) = ff.message {
+                    writeln!(term, "      msg:    {}", msg)?;
+                }
+                if let Some(gate) = gate_by_name.get(gate_name.as_str()) {
+                    writeln!(term, "      repro:  {}", gate.command)?;
+                }
+            }
         }
     }
 
@@ -1624,9 +2528,19 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{BTreeMap, HashMap, HashSet};
+
     use super::{
-        DiffResult, GateMetrics, GateResult, MetricChange, Receipt, blocking_failure_gate_names,
-        compare_receipts, determine_overall_status, failure_guidance, is_blocking_gate_status,
+        DiffResult, FirstFailure, GateDefinition, GateMetrics, GatePlanningConfig,
+        GatePlanningRole, GatePolicy, GateResult, GateTier, GlobalSettings, MetricChange,
+        PackageTargetIndex, Receipt, blocking_failure_gate_names, build_pr_fast_plan_from_scope,
+        build_pr_fast_plan_from_scope_with_targets, compare_receipts, determine_overall_status,
+        extend_plan_with_non_pr_fast_static_gates, extend_plan_with_static_tiers, failure_guidance,
+        is_blocking_gate_status, is_cargo_test_command, load_policy_for_inspection,
+        parse_first_failure,
+    };
+    use crate::tasks::ci_scope::{
+        ArchWidener, DirectCrate, LaneDecisions, PlatformOverrides, RevDepCrate, ScopeOutput,
     };
 
     fn gate_result(name: &str, status: &str, required: bool) -> GateResult {
@@ -1642,7 +2556,412 @@ mod tests {
             log_path: None,
             metrics: None,
             artifacts: None,
+            first_failure: None,
         }
+    }
+
+    fn pr_gate(name: &str, role: GatePlanningRole, command: &str) -> GateDefinition {
+        GateDefinition {
+            name: name.to_string(),
+            tier: "pr_fast".to_string(),
+            description: name.to_string(),
+            required: true,
+            command: command.to_string(),
+            timeout_seconds: 30,
+            retry_count: 0,
+            budgets: None,
+            quarantine: false,
+            tags: Vec::new(),
+            artifacts: Vec::new(),
+            matrix: None,
+            planning: Some(GatePlanningConfig { role, packages: Vec::new() }),
+        }
+    }
+
+    fn tier_gate(name: &str, tier: &str, command: &str) -> GateDefinition {
+        GateDefinition {
+            tier: tier.to_string(),
+            planning: None,
+            ..pr_gate(name, GatePlanningRole::Static, command)
+        }
+    }
+
+    fn policy_with_gates(gates: Vec<GateDefinition>) -> GatePolicy {
+        GatePolicy {
+            schema_version: 1,
+            global: GlobalSettings {
+                default_timeout_seconds: 30,
+                artifact_retention_days: 0,
+                default_retry_count: 0,
+                environment: HashMap::new(),
+                toolchain: None,
+            },
+            tiers: HashMap::new(),
+            gates,
+            flake_policy: None,
+            audit: None,
+        }
+    }
+
+    fn package_pr_gate(name: &str, packages: Vec<String>) -> GateDefinition {
+        GateDefinition {
+            planning: Some(GatePlanningConfig {
+                role: GatePlanningRole::RustPackageScoped,
+                packages,
+            }),
+            ..pr_gate(name, GatePlanningRole::RustPackageScoped, "cargo test -p perl-token")
+        }
+    }
+
+    fn scope_output(
+        diff_class: &str,
+        direct: &[&str],
+        reverse: &[&str],
+        wideners: &[&str],
+    ) -> ScopeOutput {
+        ScopeOutput {
+            schema_version: 2,
+            base: "origin/master".to_string(),
+            head_sha: "head".to_string(),
+            changed_files: Vec::new(),
+            diff_class: diff_class.to_string(),
+            direct_crates: direct
+                .iter()
+                .map(|name| DirectCrate { name: (*name).to_string(), reason: "direct".to_string() })
+                .collect(),
+            reverse_dep_closure: reverse
+                .iter()
+                .map(|name| RevDepCrate {
+                    name: (*name).to_string(),
+                    reason: "reverse".to_string(),
+                })
+                .collect(),
+            architecture_wideners: wideners
+                .iter()
+                .map(|name| ArchWidener { name: (*name).to_string(), rule: "widener".to_string() })
+                .collect(),
+            risk_tags: Vec::new(),
+            platform_overrides: PlatformOverrides::default(),
+            selected_lanes: Vec::new(),
+            selected_heavy_lanes: Vec::new(),
+            lanes: LaneDecisions::default(),
+            explanations: BTreeMap::new(),
+        }
+    }
+
+    fn selected_gate_names(plan: &super::GatePlan) -> Vec<String> {
+        plan.selected.iter().map(|planned| planned.gate.name.clone()).collect()
+    }
+
+    fn skipped_gate_names(plan: &super::GatePlan) -> Vec<String> {
+        plan.skipped.iter().map(|skipped| skipped.name.clone()).collect()
+    }
+
+    #[test]
+    fn pr_fast_prose_only_keeps_always_on_and_skips_rust_lanes() -> color_eyre::eyre::Result<()> {
+        let gates = vec![
+            pr_gate("fmt", GatePlanningRole::AlwaysOn, "cargo xtask fmt --check"),
+            pr_gate("clippy_scoped", GatePlanningRole::RustScoped, "cargo clippy {package_args}"),
+            pr_gate("unit_core", GatePlanningRole::RustFallback, "cargo test -p perl-parser"),
+        ];
+
+        let plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates,
+            Some(scope_output("prose_only", &[], &[], &[])),
+            true,
+            false,
+            None,
+        )?;
+
+        assert_eq!(selected_gate_names(&plan), vec!["fmt"]);
+        assert_eq!(skipped_gate_names(&plan), vec!["clippy_scoped", "unit_core"]);
+        assert!(!plan.fallback_used);
+        assert!(plan.skipped.iter().all(|gate| gate.reason.contains("diff_class=prose_only")));
+        Ok(())
+    }
+
+    #[test]
+    fn pr_fast_code_diff_selects_scoped_rust_lanes_with_full_package_scope()
+    -> color_eyre::eyre::Result<()> {
+        let gates = vec![
+            pr_gate("fmt", GatePlanningRole::AlwaysOn, "cargo xtask fmt --check"),
+            pr_gate(
+                "clippy_scoped",
+                GatePlanningRole::RustScoped,
+                "cargo clippy --locked {package_args} -- -D warnings",
+            ),
+            pr_gate(
+                "unit_scoped",
+                GatePlanningRole::RustScoped,
+                "cargo test --locked --lib {package_args}",
+            ),
+            pr_gate(
+                "check_tests_scoped",
+                GatePlanningRole::RustScoped,
+                "cargo check --locked --tests {package_args}",
+            ),
+            pr_gate("clippy_core", GatePlanningRole::RustFallback, "cargo clippy -p perl-parser"),
+        ];
+
+        let plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates,
+            Some(scope_output("code", &["perl-parser"], &["perl-lsp-rs"], &["perl-dap"])),
+            true,
+            false,
+            None,
+        )?;
+
+        assert_eq!(
+            selected_gate_names(&plan),
+            vec!["fmt", "clippy_scoped", "unit_scoped", "check_tests_scoped"]
+        );
+        assert_eq!(
+            plan.package_args,
+            vec!["-p", "perl-dap", "-p", "perl-lsp-rs", "-p", "perl-parser"]
+        );
+        assert_eq!(skipped_gate_names(&plan), vec!["clippy_core"]);
+        let clippy = plan
+            .selected
+            .iter()
+            .find(|planned| planned.gate.name == "clippy_scoped")
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing clippy_scoped plan"))?;
+        assert!(clippy.gate.command.contains("-p perl-parser"));
+        assert!(clippy.gate.command.contains("-p perl-lsp-rs"));
+        assert!(clippy.gate.command.contains("-p perl-dap"));
+        Ok(())
+    }
+
+    #[test]
+    fn pr_fast_scope_failure_preserves_always_on_and_uses_fallback() -> color_eyre::eyre::Result<()>
+    {
+        let gates = vec![
+            pr_gate("fmt", GatePlanningRole::AlwaysOn, "cargo xtask fmt --check"),
+            pr_gate("clippy_scoped", GatePlanningRole::RustScoped, "cargo clippy {package_args}"),
+            pr_gate("clippy_core", GatePlanningRole::RustFallback, "cargo clippy -p perl-parser"),
+            pr_gate("unit_core", GatePlanningRole::RustFallback, "cargo test -p perl-parser"),
+        ];
+
+        let plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates,
+            None,
+            false,
+            true,
+            Some("scope failed".to_string()),
+        )?;
+
+        assert_eq!(selected_gate_names(&plan), vec!["fmt", "clippy_core", "unit_core"]);
+        assert_eq!(skipped_gate_names(&plan), vec!["clippy_scoped"]);
+        assert!(!plan.scope_ok);
+        assert!(plan.fallback_used);
+        assert_eq!(plan.fallback_reason.as_deref(), Some("scope failed"));
+        Ok(())
+    }
+
+    #[test]
+    fn pr_fast_package_scoped_gate_runs_only_when_package_selected() -> color_eyre::eyre::Result<()>
+    {
+        let gates = vec![
+            pr_gate("fmt", GatePlanningRole::AlwaysOn, "cargo xtask fmt --check"),
+            package_pr_gate("perl_token_leaf_contract", vec!["perl-token".to_string()]),
+        ];
+
+        let selected_plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates.clone(),
+            Some(scope_output("code", &["perl-token"], &[], &[])),
+            true,
+            false,
+            None,
+        )?;
+        assert_eq!(selected_gate_names(&selected_plan), vec!["fmt", "perl_token_leaf_contract"]);
+
+        let skipped_plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates,
+            Some(scope_output("code", &["perl-parser"], &[], &[])),
+            true,
+            false,
+            None,
+        )?;
+        assert_eq!(selected_gate_names(&skipped_plan), vec!["fmt"]);
+        assert_eq!(skipped_gate_names(&skipped_plan), vec!["perl_token_leaf_contract"]);
+        Ok(())
+    }
+
+    #[test]
+    fn pr_fast_package_scoped_gate_runs_on_scope_failure() -> color_eyre::eyre::Result<()> {
+        let gates = vec![
+            pr_gate("fmt", GatePlanningRole::AlwaysOn, "cargo xtask fmt --check"),
+            package_pr_gate("perl_token_leaf_contract", vec!["perl-token".to_string()]),
+            pr_gate("unit_core", GatePlanningRole::RustFallback, "cargo test -p perl-parser"),
+        ];
+
+        let plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates,
+            None,
+            false,
+            true,
+            Some("scope failed".to_string()),
+        )?;
+
+        assert_eq!(
+            selected_gate_names(&plan),
+            vec!["fmt", "perl_token_leaf_contract", "unit_core"]
+        );
+        assert!(plan.fallback_used);
+        Ok(())
+    }
+
+    #[test]
+    fn pr_fast_lib_scoped_gate_filters_packages_without_lib_targets() -> color_eyre::eyre::Result<()>
+    {
+        let gates = vec![
+            pr_gate(
+                "unit_scoped",
+                GatePlanningRole::RustScoped,
+                "cargo test --locked --lib {package_args}",
+            ),
+            pr_gate(
+                "check_tests_scoped",
+                GatePlanningRole::RustScoped,
+                "cargo check --locked --tests {package_args}",
+            ),
+        ];
+        let target_index =
+            PackageTargetIndex { lib_packages: HashSet::from(["perl-parser".to_string()]) };
+
+        let plan = build_pr_fast_plan_from_scope_with_targets(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            gates,
+            Some(scope_output("code", &["perl-parser", "xtask"], &[], &[])),
+            true,
+            false,
+            None,
+            Some(&target_index),
+        )?;
+
+        let Some(unit) = plan.selected.iter().find(|planned| planned.gate.name == "unit_scoped")
+        else {
+            color_eyre::eyre::bail!("missing unit_scoped plan");
+        };
+        assert!(unit.gate.command.contains("-p perl-parser"));
+        assert!(!unit.gate.command.contains("-p xtask"));
+
+        let Some(check_tests) =
+            plan.selected.iter().find(|planned| planned.gate.name == "check_tests_scoped")
+        else {
+            color_eyre::eyre::bail!("missing check_tests_scoped plan");
+        };
+        assert!(check_tests.gate.command.contains("-p perl-parser"));
+        assert!(check_tests.gate.command.contains("-p xtask"));
+        Ok(())
+    }
+
+    #[test]
+    fn pr_fast_policy_planning_roles_are_complete() -> color_eyre::eyre::Result<()> {
+        let root = crate::utils::project_root()?;
+        let policy_path = root.join(".ci/gate-policy.yaml");
+        let policy = load_policy_for_inspection(&policy_path)?;
+
+        for gate in policy.gates.iter().filter(|gate| gate.tier == "pr_fast") {
+            let Some(planning) = &gate.planning else {
+                color_eyre::eyre::bail!("pr_fast gate '{}' missing planning.role", gate.name);
+            };
+            if planning.role == GatePlanningRole::Static {
+                color_eyre::eyre::bail!(
+                    "pr_fast gate '{}' must not use planning.role=static",
+                    gate.name
+                );
+            }
+            if planning.role == GatePlanningRole::RustScoped
+                && !gate.command.contains("{package_args}")
+            {
+                color_eyre::eyre::bail!(
+                    "rust_scoped gate '{}' missing {{package_args}} placeholder",
+                    gate.name
+                );
+            }
+            if planning.role == GatePlanningRole::RustPackageScoped && planning.packages.is_empty()
+            {
+                color_eyre::eyre::bail!(
+                    "rust_package_scoped gate '{}' missing planning.packages",
+                    gate.name
+                );
+            }
+            if planning.role == GatePlanningRole::RustFallback
+                && gate.command.contains("{package_args}")
+            {
+                color_eyre::eyre::bail!(
+                    "rust_fallback gate '{}' must not contain {{package_args}}",
+                    gate.name
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn merge_gate_static_extension_does_not_add_raw_pr_fast_templates()
+    -> color_eyre::eyre::Result<()> {
+        let mut plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            vec![pr_gate("fmt", GatePlanningRole::AlwaysOn, "true")],
+            Some(scope_output("prose_only", &[], &[], &[])),
+            true,
+            false,
+            None,
+        )?;
+        let policy = policy_with_gates(vec![
+            pr_gate("clippy_scoped", GatePlanningRole::RustScoped, "cargo clippy {package_args}"),
+            tier_gate("clippy_full", "merge_gate", "cargo clippy --workspace"),
+        ]);
+
+        extend_plan_with_static_tiers(&mut plan, &policy, &["merge_gate"]);
+
+        assert_eq!(selected_gate_names(&plan), vec!["fmt", "clippy_full"]);
+        assert!(
+            plan.selected.iter().all(|planned| !planned.gate.command.contains("{package_args}"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn all_static_extension_includes_release_gates() -> color_eyre::eyre::Result<()> {
+        let mut plan = build_pr_fast_plan_from_scope(
+            GateTier::PrFast,
+            "origin/master".to_string(),
+            vec![pr_gate("fmt", GatePlanningRole::AlwaysOn, "true")],
+            Some(scope_output("prose_only", &[], &[], &[])),
+            true,
+            false,
+            None,
+        )?;
+        let policy = policy_with_gates(vec![
+            pr_gate("clippy_scoped", GatePlanningRole::RustScoped, "cargo clippy {package_args}"),
+            tier_gate("clippy_full", "merge_gate", "cargo clippy --workspace"),
+            tier_gate("nightly_corpus", "nightly", "cargo xtask corpus"),
+            tier_gate("release_build", "release", "cargo build --release"),
+        ]);
+
+        extend_plan_with_non_pr_fast_static_gates(&mut plan, &policy);
+
+        assert_eq!(
+            selected_gate_names(&plan),
+            vec!["fmt", "clippy_full", "nightly_corpus", "release_build"]
+        );
+        Ok(())
     }
 
     #[test]
@@ -1682,15 +3001,143 @@ mod tests {
             gate_result("doc", "pass", true),
             gate_result("lint", "fail", false),
         ];
-        let (blocking, repro, next_actions) = failure_guidance(&results);
-        assert_eq!(blocking, vec!["clippy"]);
-        assert_eq!(repro, vec!["true # gate=clippy"]);
+        let (failures, next_actions) = failure_guidance(&results);
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].lane, "clippy");
+        assert_eq!(failures[0].repro, "true # gate=clippy");
         assert_eq!(
             next_actions,
             vec![
                 "Reproduce and fix gate 'clippy' locally, then rerun: cargo xtask gates --gate clippy"
             ]
         );
+    }
+
+    #[test]
+    fn agent_receipt_phase1_fields_roundtrip_with_correct_values() {
+        // Verify that the phase-1 agent receipt shape deserializes correctly
+        // and that values survive the serde round-trip unchanged.
+        // Uses Option<AgentReceipt> to confirm old receipts without the field
+        // still deserialize successfully (backward compat).
+        let receipt: Receipt = serde_json::from_str(r#"{
+            "schema_version": "1.0.0",
+            "metadata": {
+                "timestamp": "2026-04-23T00:00:00Z",
+                "git_sha": "abc123",
+                "git_sha_short": "abc123",
+                "git_branch": "work",
+                "git_dirty": false,
+                "toolchain": {"rustc_version": "1.0.0"},
+                "platform": {"os": "linux", "arch": "x86_64"},
+                "environment": {"type": "local"}
+            },
+            "gates": [],
+            "summary": {
+                "total_gates": 0,
+                "passed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "total_duration_ms": 10,
+                "overall_status": "pass"
+            },
+            "agent_receipt": {
+                "sha": "deadbeef1234567890abcdef1234567890abcdef",
+                "is_latest": false,
+                "tier": "pr_fast",
+                "scope": {
+                    "direct_crates": ["xtask", "perl-parser"],
+                    "reverse_deps": ["perl-lsp-rs"],
+                    "risk_tags": ["ci_policy", "parser_recovery"]
+                },
+                "selected_lanes": [
+                    {"name":"clippy_scoped","reason":"direct_crate_change","status":"passed"},
+                    {"name":"test_scoped","reason":"direct_crate_change","status":"not_run"}
+                ],
+                "failures": [{"lane":"clippy","summary":"clippy found 3 warnings","repro":"cargo clippy -p xtask"}],
+                "suggested_next_actions": ["fix clippy warnings", "rerun gate"]
+            }
+        }"#)
+        .expect("phase-1 agent receipt shape should deserialize");
+
+        // agent_receipt must be present (Some, not None)
+        let ar = receipt.agent_receipt.expect("agent_receipt should be Some when present in JSON");
+
+        // Verify field values, not just key presence — these would fail if
+        // a field were silently dropped or misnamed in the struct definition.
+        assert_eq!(ar.sha, "deadbeef1234567890abcdef1234567890abcdef");
+        assert!(!ar.is_latest, "is_latest should be false");
+        assert_eq!(ar.tier, "pr_fast");
+        assert_eq!(ar.scope.direct_crates, vec!["xtask", "perl-parser"]);
+        assert_eq!(ar.scope.reverse_deps, vec!["perl-lsp-rs"]);
+        assert_eq!(ar.scope.risk_tags, vec!["ci_policy", "parser_recovery"]);
+        assert_eq!(ar.selected_lanes.len(), 2);
+        assert_eq!(ar.selected_lanes[0].name, "clippy_scoped");
+        assert_eq!(ar.selected_lanes[0].status, "passed");
+        assert_eq!(ar.selected_lanes[1].status, "not_run");
+        assert_eq!(ar.failures.len(), 1);
+        assert_eq!(ar.failures[0].lane, "clippy");
+        assert_eq!(ar.failures[0].repro, "cargo clippy -p xtask");
+        assert_eq!(ar.suggested_next_actions.len(), 2);
+
+        // Confirm backward compatibility: a receipt WITHOUT agent_receipt deserializes to None.
+        let old_receipt: Receipt = serde_json::from_str(
+            r#"{
+            "schema_version": "1.0.0",
+            "metadata": {
+                "timestamp": "2026-04-23T00:00:00Z",
+                "git_sha": "abc123",
+                "git_sha_short": "abc123",
+                "git_branch": "work",
+                "git_dirty": false,
+                "toolchain": {"rustc_version": "1.0.0"},
+                "platform": {"os": "linux", "arch": "x86_64"},
+                "environment": {"type": "local"}
+            },
+            "gates": [],
+            "summary": {
+                "total_gates": 0,
+                "passed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "total_duration_ms": 10,
+                "overall_status": "pass"
+            }
+        }"#,
+        )
+        .expect("receipt without agent_receipt should deserialize for backward compat");
+        assert!(
+            old_receipt.agent_receipt.is_none(),
+            "receipt without agent_receipt field must deserialize to None"
+        );
+    }
+
+    #[test]
+    fn failure_guidance_with_no_gates_produces_proceed_action() {
+        // Edge case: no gates ran at all (empty results slice).
+        let (failures, next_actions) = failure_guidance(&[]);
+        assert!(failures.is_empty(), "no failures expected when no gates ran");
+        assert_eq!(next_actions.len(), 1);
+        assert!(
+            next_actions[0].contains("No blocking failures"),
+            "expected proceed action, got: {:?}",
+            next_actions[0]
+        );
+    }
+
+    #[test]
+    fn failure_guidance_all_required_and_failing_each_gets_action() {
+        // Multiple blocking failures — each should produce its own next_action entry.
+        let results = vec![
+            gate_result("fmt", "fail", true),
+            gate_result("clippy", "error", true),
+            gate_result("tests", "timeout", true),
+        ];
+        let (failures, next_actions) = failure_guidance(&results);
+        assert_eq!(failures.len(), 3, "all three blocking gates should appear in failures");
+        assert_eq!(next_actions.len(), 3, "each failure gets one next_action");
+        // Repro command must include the gate's command string
+        assert!(failures[0].repro.contains("fmt"), "repro should reference the gate");
+        assert!(failures[2].summary.contains("timeout"), "summary should mention the status");
     }
 
     fn test_receipt_with_metrics(metrics: GateMetrics) -> Receipt {
@@ -1722,18 +3169,13 @@ mod tests {
                 "overall_status": "pass"
             },
             "agent_receipt": {
-                "scope": {
-                    "base": "",
-                    "diff_class": "",
-                    "changed_files": [],
-                    "direct_crates": [],
-                    "reverse_dep_closure": []
-                },
+                "sha": "abc123",
+                "is_latest": true,
+                "tier": "merge_gate",
+                "scope": {"direct_crates": [], "reverse_deps": [], "risk_tags": []},
                 "selected_lanes": [],
-                "reasons": {},
-                "failures": {"blocking": [], "repro": []},
-                "baselines": [],
-                "next_actions": []
+                "failures": [],
+                "suggested_next_actions": []
             }
         }"#,
         )
@@ -1750,6 +3192,7 @@ mod tests {
             log_path: None,
             metrics: Some(metrics),
             artifacts: None,
+            first_failure: None,
         });
         receipt
     }
@@ -1817,5 +3260,232 @@ mod tests {
         assert_eq!(warning_change.delta_percent, 100.0);
         assert!(!warning_change.delta_percent.is_nan());
         assert!(!warning_change.delta_percent.is_infinite());
+    }
+
+    // ==========================================================================
+    // Tests for parse_first_failure and is_cargo_test_command
+    // ==========================================================================
+
+    /// Fixture: realistic cargo test output for a failing test (Rust ≥1.73 style).
+    /// Based on the evidence from issue #7031 investigation.
+    const CARGO_TEST_FAILURE_NEW_STYLE: &str = r#"
+running 4 tests
+test refactor::refactoring::tests::validation_tests::test_cleanup_preserves_required ... ok
+test refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count ... FAILED
+test refactor::refactoring::tests::validation_tests::test_basic_refactoring ... ok
+test refactor::refactoring::tests::validation_tests::test_empty_input ... ok
+
+failures:
+
+---- refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count stdout ----
+thread 'refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count' panicked at crates/perl-parser/src/refactor/refactoring.rs:2859:9:
+assertion `left == right` failed
+  left: 0
+  right: 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+failures:
+    refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+"#;
+
+    /// Fixture: Rust <1.73 style panic output (quoted message before location).
+    const CARGO_TEST_FAILURE_OLD_STYLE: &str = r#"
+running 2 tests
+test module::tests::test_something ... ok
+test module::tests::test_other ... FAILED
+
+failures:
+
+---- module::tests::test_other stdout ----
+thread 'module::tests::test_other' panicked at 'assertion failed: x == y', src/module.rs:42:5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+failures:
+    module::tests::test_other
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+"#;
+
+    /// Fixture: output with no test failure markers (compile error only).
+    const COMPILE_ERROR_OUTPUT: &str = r#"
+error[E0308]: mismatched types
+ --> src/lib.rs:10:5
+  |
+10 |     42
+   |     ^^ expected `()`, found integer
+
+error: aborting due to previous error
+"#;
+
+    #[test]
+    fn parse_first_failure_extracts_test_name_site_and_message_new_style() {
+        let ff = parse_first_failure(CARGO_TEST_FAILURE_NEW_STYLE, 101)
+            .expect("should find failure in new-style output");
+
+        assert_eq!(
+            ff.test.as_deref(),
+            Some(
+                "refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count"
+            ),
+            "test name should be the first FAILED test"
+        );
+        assert_eq!(
+            ff.site.as_deref(),
+            Some("crates/perl-parser/src/refactor/refactoring.rs:2859"),
+            "site should be file:line (no column)"
+        );
+        // The message is the first non-empty line after `panicked at`
+        assert_eq!(
+            ff.message.as_deref(),
+            Some("assertion `left == right` failed"),
+            "message should be the line immediately after panicked at"
+        );
+        assert_eq!(ff.exit_code, 101);
+    }
+
+    #[test]
+    fn parse_first_failure_extracts_site_old_style() {
+        let ff = parse_first_failure(CARGO_TEST_FAILURE_OLD_STYLE, 101)
+            .expect("should find failure in old-style output");
+
+        assert_eq!(
+            ff.test.as_deref(),
+            Some("module::tests::test_other"),
+            "test name should come from the FAILED line"
+        );
+        assert_eq!(
+            ff.site.as_deref(),
+            Some("src/module.rs:42"),
+            "site should be extracted from old-style quoted panic location"
+        );
+    }
+
+    #[test]
+    fn parse_first_failure_returns_none_for_compile_error_only() {
+        // No test failure markers — should return None since nothing useful to extract
+        let result = parse_first_failure(COMPILE_ERROR_OUTPUT, 101);
+        assert!(
+            result.is_none(),
+            "compile-only errors with no test failure markers should yield None"
+        );
+    }
+
+    #[test]
+    fn parse_first_failure_returns_none_for_empty_output() {
+        let result = parse_first_failure("", 101);
+        assert!(result.is_none(), "empty output should yield None");
+    }
+
+    #[test]
+    fn parse_first_failure_exit_code_is_preserved() {
+        let ff = parse_first_failure(CARGO_TEST_FAILURE_NEW_STYLE, 42)
+            .expect("should find failure markers");
+        assert_eq!(ff.exit_code, 42, "exit_code should match what was passed in");
+    }
+
+    #[test]
+    fn parse_first_failure_prefers_failed_line_over_stdout_section() {
+        // When both `... FAILED` and `---- ... stdout ----` are present,
+        // the test name from `... FAILED` should win (it appears first).
+        let ff =
+            parse_first_failure(CARGO_TEST_FAILURE_NEW_STYLE, 101).expect("should find failure");
+        // The `... FAILED` line should be chosen
+        assert_eq!(
+            ff.test.as_deref(),
+            Some(
+                "refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count"
+            )
+        );
+    }
+
+    #[test]
+    fn parse_first_failure_roundtrips_through_first_failure_struct() {
+        // Verify that FirstFailure serializes and deserializes without loss.
+        let ff = FirstFailure {
+            test: Some("my::test::path".to_string()),
+            site: Some("src/lib.rs:10".to_string()),
+            message: Some("assertion failed".to_string()),
+            exit_code: 101,
+        };
+        let json = serde_json::to_string(&ff).expect("should serialize");
+        let roundtripped: FirstFailure = serde_json::from_str(&json).expect("should deserialize");
+        assert_eq!(ff, roundtripped);
+    }
+
+    #[test]
+    fn first_failure_skips_serializing_none_fields() {
+        // None fields should be omitted from JSON (skip_serializing_if = "Option::is_none")
+        let ff = FirstFailure { test: None, site: None, message: None, exit_code: 1 };
+        let json = serde_json::to_string(&ff).expect("should serialize");
+        assert!(!json.contains("\"test\""), "None test field should be omitted from JSON");
+        assert!(!json.contains("\"site\""), "None site field should be omitted from JSON");
+        assert!(!json.contains("\"message\""), "None message field should be omitted from JSON");
+        assert!(json.contains("\"exit_code\""), "exit_code is always present");
+    }
+
+    #[test]
+    fn is_cargo_test_command_matches_standard_forms() {
+        assert!(is_cargo_test_command("cargo test"), "bare cargo test");
+        assert!(is_cargo_test_command("cargo test -p perl-parser --lib"), "with flags");
+        assert!(is_cargo_test_command("cargo test --workspace"), "workspace flag");
+        assert!(is_cargo_test_command("/usr/local/bin/cargo test"), "absolute path cargo");
+    }
+
+    #[test]
+    fn is_cargo_test_command_rejects_non_test_commands() {
+        assert!(!is_cargo_test_command("cargo clippy"), "clippy is not test");
+        assert!(!is_cargo_test_command("cargo build"), "build is not test");
+        assert!(!is_cargo_test_command("cargo check"), "check is not test");
+        assert!(!is_cargo_test_command("cargo xtask fmt --check"), "xtask fmt is not test");
+        assert!(!is_cargo_test_command("true"), "bare true is not test");
+        assert!(!is_cargo_test_command(""), "empty string is not test");
+    }
+
+    #[test]
+    fn gate_result_first_failure_field_roundtrips_in_json() {
+        // Verify that GateResult with first_failure serializes / deserializes correctly,
+        // and that old receipts (without first_failure) still deserialize (backward compat).
+        let result = GateResult {
+            gate_name: "unit_core".to_string(),
+            tier: "pr_fast".to_string(),
+            status: "fail".to_string(),
+            required: Some(true),
+            duration_ms: 1000,
+            command: "cargo test -p perl-parser --lib".to_string(),
+            exit_code: Some(101),
+            output_summary: None,
+            log_path: None,
+            metrics: None,
+            artifacts: None,
+            first_failure: Some(FirstFailure {
+                test: Some("parser::tests::test_foo".to_string()),
+                site: Some("src/lib.rs:99".to_string()),
+                message: Some("assertion failed".to_string()),
+                exit_code: 101,
+            }),
+        };
+        let json = serde_json::to_string(&result).expect("should serialize");
+        let roundtripped: GateResult = serde_json::from_str(&json).expect("should deserialize");
+        let ff = roundtripped.first_failure.expect("first_failure should be Some after roundtrip");
+        assert_eq!(ff.test.as_deref(), Some("parser::tests::test_foo"));
+        assert_eq!(ff.site.as_deref(), Some("src/lib.rs:99"));
+        assert_eq!(ff.exit_code, 101);
+    }
+
+    #[test]
+    fn gate_result_without_first_failure_deserializes_for_backward_compat() {
+        // Old receipts (before this feature) won't have `first_failure` in JSON.
+        // Deserialization must succeed and produce None.
+        let json = r#"{
+            "gate_name": "unit_core",
+            "tier": "pr_fast",
+            "status": "fail",
+            "duration_ms": 500,
+            "command": "cargo test -p perl-parser"
+        }"#;
+        let result: GateResult = serde_json::from_str(json).expect("backward compat deserialize");
+        assert!(result.first_failure.is_none(), "first_failure must be None when absent from JSON");
     }
 }

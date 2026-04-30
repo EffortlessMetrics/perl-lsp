@@ -5,6 +5,9 @@ pub mod class_model;
 /// Go-to-declaration support and parent map construction.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod declaration;
+/// Export symbol extraction for Exporter-based Perl modules.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod export_analyzer;
 /// Lightweight workspace symbol index.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod index;

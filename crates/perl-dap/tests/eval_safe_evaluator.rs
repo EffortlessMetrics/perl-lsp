@@ -63,14 +63,13 @@ fn safe_comparison_operators_without_equals() -> Result<(), ValidationError> {
 }
 
 #[test]
-fn comparison_operators_containing_equals_are_blocked() {
-    // The validator does substring matching for `=`, so ==, !=, >=, <=, <=>
-    // all trigger the assignment operator check. This is a known trade-off.
-    assert!(eval().validate("$x == $y").is_err());
-    assert!(eval().validate("$x != $y").is_err());
-    assert!(eval().validate("$x >= $y").is_err());
-    assert!(eval().validate("$x <= $y").is_err());
-    assert!(eval().validate("$x <=> $y").is_err());
+fn comparison_operators_containing_equals_are_safe() -> Result<(), ValidationError> {
+    ok("$x == $y")?;
+    ok("$x != $y")?;
+    ok("$x >= $y")?;
+    ok("$x <= $y")?;
+    ok("$x <=> $y")?;
+    Ok(())
 }
 
 #[test]

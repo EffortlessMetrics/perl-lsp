@@ -27,6 +27,19 @@ pub enum CompletionItemKind {
     Property,
 }
 
+/// Secondary label information shown inline next to the main label (LSP 3.17+).
+///
+/// `detail` appears directly after the label (e.g. a function signature).
+/// `description` appears further right (e.g. a fully-qualified source module).
+/// Only populated when the client advertises `completionItem.labelDetailsSupport`.
+#[derive(Debug, Clone, Default)]
+pub struct CompletionItemLabelDetails {
+    /// Short annotation shown right after the label, e.g. `(arg: Type) -> Return`.
+    pub detail: Option<String>,
+    /// Qualifier shown to the far right, e.g. `POSIX` for `floor` from POSIX.
+    pub description: Option<String>,
+}
+
 /// A single completion suggestion.
 #[derive(Debug, Clone)]
 pub struct CompletionItem {
@@ -51,6 +64,9 @@ pub struct CompletionItem {
     /// Commit characters that trigger auto-insertion (LSP 3.0+).
     /// Each entry must be exactly one character per LSP spec.
     pub commit_characters: Option<Vec<String>>,
+    /// LSP 3.17+ label details shown inline in the completion list.
+    /// Only serialized when the client advertises `labelDetailsSupport`.
+    pub label_details: Option<CompletionItemLabelDetails>,
 }
 
 /// Remove duplicates and sort completions with stable, deterministic ordering.
@@ -138,6 +154,7 @@ mod tests {
             additional_edits: Vec::new(),
             text_edit_range: None,
             commit_characters: None,
+            label_details: None,
         }
     }
 

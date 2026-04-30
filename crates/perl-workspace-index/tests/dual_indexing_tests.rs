@@ -586,3 +586,107 @@ fn cross_file_function_call_references() -> Result<(), Box<dyn std::error::Error
     assert!(refs.len() >= 2, "expected at least 2 references for Math::add, got {}", refs.len());
     Ok(())
 }
+
+// =========================================================================
+// 7. Typed-reference edge baseline (pre-ReferenceEdge)
+// =========================================================================
+
+#[test]
+fn typed_reference_baseline_sub_definition_and_call_are_untyped_in_results()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/lib/Typed/Subs.pm")?;
+
+    let code = "\
+package Typed::Subs;
+sub foo { return 1; }
+foo();
+";
+    index.index_file(uri, code.to_string())?;
+
+    let refs = index.find_references("foo");
+    assert!(refs.len() >= 2, "expected at least definition+call refs for foo");
+    Ok(())
+}
+
+#[test]
+fn typed_reference_baseline_variable_read_write_collapse_to_same_symbol_refs()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/lib/Typed/Var.pm")?;
+
+    let code = "\
+package Typed::Var;
+my $count = 0;
+$count = $count + 1;
+";
+    index.index_file(uri, code.to_string())?;
+
+    let refs = index.find_references("count");
+    assert!(
+        refs.len() <= 1,
+        "current reference API does not reliably model lexical variable read/write edges"
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_reference_baseline_import_export_inheritance_role_and_generated_accessor_are_calls_only()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/lib/Typed/Edges.pm")?;
+
+    let code = "\
+package Typed::Edges;
+use Module qw(foo);
+our @EXPORT_OK = qw(foo);
+use parent 'Base';
+with 'Role';
+has 'name' => (is => 'ro');
+";
+    index.index_file(uri, code.to_string())?;
+
+    let foo_refs = index.find_references("foo");
+    assert!(
+        foo_refs.len() <= 1,
+        "current index does not preserve separate import/export edge kinds for foo"
+    );
+    assert!(
+        !index.find_references("parent").is_empty(),
+        "use parent currently appears as a generic reference"
+    );
+    assert!(
+        !index.find_references("with").is_empty(),
+        "with Role currently appears as a generic reference"
+    );
+    assert!(
+        !index.find_references("has").is_empty(),
+        "has accessor generation currently appears as a generic reference"
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_reference_baseline_code_ref_forms_and_dynamic_boundaries_are_not_typed()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/lib/Typed/Dynamic.pm")?;
+
+    let code = "\
+package Typed::Dynamic;
+sub foo { return 1; }
+&foo;
+my $cref = \\&foo;
+goto &foo;
+*alias = \\&foo;
+eval \"foo()\";
+";
+    index.index_file(uri, code.to_string())?;
+
+    let refs = index.find_references("foo");
+    assert!(
+        refs.len() >= 2,
+        "foo should have at least definition+direct callsite refs, but boundary kinds are currently untyped"
+    );
+    Ok(())
+}

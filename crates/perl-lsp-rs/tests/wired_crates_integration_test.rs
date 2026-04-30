@@ -125,6 +125,7 @@ fn test_wired_completion_item_dedup() {
         additional_edits: Vec::new(),
         text_edit_range: None,
         commit_characters: None,
+        label_details: None,
     };
     let items = vec![make("say"), make("say")];
     let deduped = deduplicate_and_sort(items);

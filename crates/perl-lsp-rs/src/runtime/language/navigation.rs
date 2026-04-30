@@ -6,7 +6,7 @@
 use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
-use crate::util::token_under_cursor;
+use crate::util::{read_text_file_with_encoding, token_under_cursor};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[cfg(feature = "workspace")]
@@ -342,7 +342,7 @@ fn xs_bootstrap_location(path: &Path, module_name: &str) -> Value {
     let uri = Url::from_file_path(path).map(|url| url.to_string()).unwrap_or_default();
     let boot_symbol = xs_boot_symbol_name(module_name);
 
-    if let Ok(text) = std::fs::read_to_string(path)
+    if let Ok(text) = read_text_file_with_encoding(path)
         && let Some(offset) = text.find(&boot_symbol)
     {
         let (start_line, start_char) = byte_to_line_col(&text, offset);
@@ -483,7 +483,7 @@ pub(super) fn workspace_document_text(
 ) -> Option<String> {
     workspace_index.document_store().get_text(uri).or_else(|| {
         crate::workspace_index::uri_to_fs_path(uri)
-            .and_then(|path| std::fs::read_to_string(path).ok())
+            .and_then(|path| read_text_file_with_encoding(&path).ok())
     })
 }
 
