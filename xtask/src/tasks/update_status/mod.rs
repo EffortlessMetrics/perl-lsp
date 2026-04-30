@@ -15,8 +15,10 @@
 //! Also keeps docs/project/ROADMAP.md compliance table in sync when lsp subsystem runs.
 
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, eyre};
@@ -73,23 +75,7 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
     let Some((&program, rest)) = args.split_first() else {
         return String::new();
     };
-
-    let result = Command::new(program).args(rest).current_dir(root).output();
-
-    let output = match result {
-        Ok(o) => o,
-        Err(_) => return String::new(),
-    };
-
-    // Basic timeout emulation: we cannot use `std::process::Command` timeout
-    // directly, so we rely on the process completing.  The Python version used
-    // subprocess.run with timeout; here we accept the default behavior but keep
-    // the parameter for API compatibility and future improvement.
-    let _ = timeout;
-
-    let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
-    combined.push_str(&String::from_utf8_lossy(&output.stderr));
-    combined
+    run_cmd_streaming(root, program, rest, timeout, false)
 }
 
 /// Like `run_cmd` but merges stderr into stdout via shell `2>&1`.
@@ -99,7 +85,6 @@ fn run_cmd(root: &Path, args: &[&str], timeout: Duration) -> String {
 /// can never associate a name with its crate.  Single-quote-escapes each argument to
 /// avoid shell injection while preserving flags like `--`.
 fn run_cmd_merged(root: &Path, args: &[&str], timeout: Duration) -> String {
-    let _ = timeout;
     if args.is_empty() {
         return String::new();
     }
@@ -107,13 +92,92 @@ fn run_cmd_merged(root: &Path, args: &[&str], timeout: Duration) -> String {
         args.iter().map(|&a| format!("'{}'", a.replace('\'', "'\\''"))).collect();
     let shell_cmd = format!("{} 2>&1", shell_args.join(" "));
     #[cfg(unix)]
-    let result = Command::new("sh").arg("-c").arg(&shell_cmd).current_dir(root).output();
+    let result = run_cmd_streaming(root, "sh", &["-c", &shell_cmd], timeout, true);
     #[cfg(not(unix))]
-    let result = Command::new("cmd").args(["/C", &shell_cmd]).current_dir(root).output();
-    match result {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
-        Err(_) => String::new(),
+    let result = run_cmd_streaming(root, "cmd", &["/C", &shell_cmd], timeout, true);
+    result
+}
+
+fn run_cmd_streaming(
+    root: &Path,
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+    merged: bool,
+) -> String {
+    eprintln!(
+        "[update-status] running command: {} {}",
+        program,
+        args.join(" ")
+    );
+    let mut command = Command::new(program);
+    command.args(args).current_dir(root).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let Ok(mut child) = command.spawn() else {
+        eprintln!("[update-status] failed to start command: {} {}", program, args.join(" "));
+        return String::new();
+    };
+    let Some(stdout) = child.stdout.take() else {
+        return String::new();
+    };
+    let Some(stderr) = child.stderr.take() else {
+        return String::new();
+    };
+    let (tx, rx) = mpsc::channel::<String>();
+    let tx_stdout = tx.clone();
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stdout);
+        let mut line = String::new();
+        while reader.read_line(&mut line).ok().is_some_and(|n| n > 0) {
+            let _ = tx_stdout.send(line.clone());
+            line.clear();
+        }
+    });
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stderr);
+        let mut line = String::new();
+        while reader.read_line(&mut line).ok().is_some_and(|n| n > 0) {
+            let _ = tx.send(line.clone());
+            line.clear();
+        }
+    });
+
+    let mut combined = String::new();
+    loop {
+        match rx.recv_timeout(Duration::from_secs(30)) {
+            Ok(line) => {
+                let rendered = line.trim_end();
+                if !rendered.is_empty() {
+                    eprintln!("[update-status][child] {rendered}");
+                }
+                combined.push_str(&line);
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                eprintln!(
+                    "[update-status] still running: {} {}",
+                    program,
+                    args.join(" ")
+                );
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
     }
+
+    let Ok(status) = child.wait() else {
+        eprintln!("[update-status] command failed to wait: {} {}", program, args.join(" "));
+        return String::new();
+    };
+    let _ = timeout;
+    if !status.success() {
+        eprintln!(
+            "[update-status] command exited with {:?}: {} {}",
+            status.code(),
+            program,
+            args.join(" ")
+        );
+    } else if merged {
+        eprintln!("[update-status] command completed: {} {}", program, args.join(" "));
+    }
+    combined
 }
 
 /// Replace content between `begin_marker\n...\nend_marker` (inclusive of markers).
@@ -182,6 +246,8 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
 
     // --- LSP subsystem ---
     if need_lsp {
+        let run_lsp = || -> Result<()> {
+        eprintln!("[update-status] subsystem start: lsp");
         let cov = lsp::count_lsp_coverage(&root)?;
         let compliance_table = lsp::compute_compliance_table(&root)?;
 
@@ -200,10 +266,18 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         if updated_roadmap != original_roadmap {
             files_to_update.push(("docs/project/ROADMAP.md", roadmap_path, updated_roadmap));
         }
+        eprintln!("[update-status] subsystem complete: lsp");
+        Ok(())
+        };
+        run_lsp().wrap_err(
+            "update-status subsystem failed: lsp (repro: cargo run -p xtask -- update-status --write --only lsp)",
+        )?;
     }
 
     // --- Tests subsystem ---
     if need_tests {
+        let run_tests = || -> Result<()> {
+        eprintln!("[update-status] subsystem start: tests");
         let test_counts = tests::count_tests(&root);
         let missing_docs_current = tests::count_missing_docs_perl_parser(&root);
         let missing_docs_baseline = tests::read_missing_docs_baseline(&root);
@@ -220,10 +294,18 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         if updated_tests != original_tests {
             files_to_update.push(("docs/project/status/tests.md", tests_path, updated_tests));
         }
+        eprintln!("[update-status] subsystem complete: tests");
+        Ok(())
+        };
+        run_tests().wrap_err(
+            "update-status subsystem failed: tests (repro: cargo run -p xtask -- update-status --write --only tests)",
+        )?;
     }
 
     // --- Parser subsystem ---
     if need_parser {
+        let run_parser = || -> Result<()> {
+        eprintln!("[update-status] subsystem start: parser");
         let parser_metrics = parser::collect_parser_metrics(&root);
 
         let parser_path = root.join("docs/project/status/parser.md");
@@ -233,10 +315,18 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         if updated_parser != original_parser {
             files_to_update.push(("docs/project/status/parser.md", parser_path, updated_parser));
         }
+        eprintln!("[update-status] subsystem complete: parser");
+        Ok(())
+        };
+        run_parser().wrap_err(
+            "update-status subsystem failed: parser (repro: cargo run -p xtask -- update-status --write --only parser)",
+        )?;
     }
 
     // --- Quality subsystem ---
     if need_quality {
+        let run_quality = || -> Result<()> {
+        eprintln!("[update-status] subsystem start: quality");
         let quality_path = root.join("docs/project/status/quality.md");
         let original_quality =
             fs::read_to_string(&quality_path).context("reading docs/project/status/quality.md")?;
@@ -251,10 +341,18 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         if updated_ux != original_ux {
             files_to_update.push(("docs/project/status/editor_ux.json", ux_path, updated_ux));
         }
+        eprintln!("[update-status] subsystem complete: quality");
+        Ok(())
+        };
+        run_quality().wrap_err(
+            "update-status subsystem failed: quality (repro: cargo run -p xtask -- update-status --write --only quality)",
+        )?;
     }
 
     // --- DAP subsystem ---
     if need_dap {
+        let run_dap = || -> Result<()> {
+        eprintln!("[update-status] subsystem start: dap");
         let dap_counts = dap::count_dap_tests(&root);
 
         let dap_path = root.join("docs/project/status/dap.md");
@@ -264,10 +362,18 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         if updated_dap != original_dap {
             files_to_update.push(("docs/project/status/dap.md", dap_path, updated_dap));
         }
+        eprintln!("[update-status] subsystem complete: dap");
+        Ok(())
+        };
+        run_dap().wrap_err(
+            "update-status subsystem failed: dap (repro: cargo run -p xtask -- update-status --write --only dap)",
+        )?;
     }
 
     // --- Workspace subsystem ---
     if need_workspace {
+        let run_workspace = || -> Result<()> {
+        eprintln!("[update-status] subsystem start: workspace");
         let workspace_path = root.join("docs/project/status/workspace.md");
         let original_workspace = fs::read_to_string(&workspace_path)
             .context("reading docs/project/status/workspace.md")?;
@@ -279,6 +385,12 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
                 updated_workspace,
             ));
         }
+        eprintln!("[update-status] subsystem complete: workspace");
+        Ok(())
+        };
+        run_workspace().wrap_err(
+            "update-status subsystem failed: workspace (repro: cargo run -p xtask -- update-status --write --only workspace)",
+        )?;
     }
 
     if files_to_update.is_empty() {
