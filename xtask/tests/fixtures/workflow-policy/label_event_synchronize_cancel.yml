@@ -1,0 +1,13 @@
+on:
+  pull_request:
+    types: [opened, synchronize, labeled]
+
+concurrency:
+  group: optional-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo test
