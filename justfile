@@ -2,6 +2,8 @@
 # Usage: just <command>
 # Install just: cargo install just
 
+cargo_safe := "./scripts/cargo-safe"
+
 # Default recipe (show available commands)
 default:
     @just --list
@@ -38,6 +40,34 @@ _timed name cmd:
         echo "<<< {{name}} FAILED in ${DURATION}s (exit $RC)"
         exit $RC
     fi
+
+
+# Initialize bounded build/cache directories.
+devplane-init:
+    ./scripts/devplane-init
+
+# Report repo-local build cruft and devplane state.
+storage-doctor:
+    ./scripts/storage-doctor
+
+agent-preflight: storage-doctor
+    @echo "agent preflight ok"
+
+# Agent-safe check: routed target/build dirs, incremental off, bounded sccache, build lock.
+agent-check:
+    {{cargo_safe}} check --workspace --all-targets --profile agent --locked
+
+agent-test:
+    {{cargo_safe}} test --workspace --all-targets --profile agent --locked
+
+agent-clippy:
+    {{cargo_safe}} clippy --workspace --all-targets --profile agent --locked -- -D warnings -A missing_docs
+
+agent-nextest:
+    {{cargo_safe}} nextest run --workspace --profile agent
+
+agent-pr-fast:
+    {{cargo_safe}} xtask gates --tier pr-fast --receipt
 
 # Tier: PR-fast (required for every PR iteration, must be fast ~1-2 min)
 pr-fast: _check-tools-basic

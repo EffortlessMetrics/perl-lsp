@@ -344,6 +344,15 @@ lto = true
 codegen-units = 1
 
 # The profile that 'dist' will build with
+
+[profile.agent]
+inherits = "dev"
+debug = "line-tables-only"
+incremental = false
+
+[profile.agent.build-override]
+debug = false
+incremental = false
 [profile.dist]
 inherits = "release"
 lto = "thin"

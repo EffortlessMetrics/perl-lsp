@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$repo_root"
+
+repo_name="$(basename "$repo_root")"
+devplane="${DEVPLANE:-${XDG_CACHE_HOME:-$HOME/.cache}/devplane/$repo_name}"
+
+fail=0
+
+echo "== disk =="
+df -h "$repo_root" "$devplane" 2>/dev/null || df -h "$repo_root"
+
+echo
+echo "== repo-local target dirs =="
+targets="$(
+  find "$repo_root" \
+    -type d -name target -prune \
+    -exec du -sk {} + 2>/dev/null || true
+)"
+
+if [ -z "$targets" ]; then
+  echo "none"
+else
+  echo "$targets" | sort -n | awk '{ printf "%.1fG\t%s\n", $1/1024/1024, $2 }'
+
+  while read -r kb path; do
+    [ -z "${kb:-}" ] && continue
+    if [ "$kb" -gt $((1024 * 1024)) ]; then
+      echo "ERROR: repo-local target dir exceeds 1G: $path" >&2
+      fail=1
+    fi
+  done <<< "$targets"
+fi
+
+echo
+echo "== devplane =="
+du -sh "$devplane"/* 2>/dev/null || echo "devplane not initialized: $devplane"
+
+echo
+echo "== cargo env =="
+printf 'DEVPLANE=%s\n' "${DEVPLANE:-}"
+printf 'CARGO_HOME=%s\n' "${CARGO_HOME:-}"
+printf 'CARGO_TARGET_DIR=%s\n' "${CARGO_TARGET_DIR:-}"
+printf 'CARGO_BUILD_BUILD_DIR=%s\n' "${CARGO_BUILD_BUILD_DIR:-}"
+printf 'CARGO_INCREMENTAL=%s\n' "${CARGO_INCREMENTAL:-}"
+printf 'CARGO_BUILD_JOBS=%s\n' "${CARGO_BUILD_JOBS:-}"
+printf 'RUSTC_WRAPPER=%s\n' "${RUSTC_WRAPPER:-}"
+printf 'SCCACHE_DIR=%s\n' "${SCCACHE_DIR:-}"
+printf 'SCCACHE_CACHE_SIZE=%s\n' "${SCCACHE_CACHE_SIZE:-}"
+
+echo
+echo "== sccache =="
+if command -v sccache >/dev/null 2>&1; then
+  sccache --show-stats || true
+else
+  echo "sccache not installed"
+fi
+
+exit "$fail"
