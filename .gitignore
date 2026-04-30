@@ -231,3 +231,24 @@ test_corpus/workspaces/xlarge/lib/
 test_corpus/workspaces/xlarge/bin/
 # Runtime scheduler lock file — ephemeral, never committed.
 /.claude/scheduled_tasks.lock
+
+# Machine-local Cargo policy
+/.cargo/config.local.toml
+
+# Local build/cache plane aliases
+/.devplane/
+/.cache/
+
+# Agent/test scratch
+/.tmp/
+/test-results/
+/coverage/
+/lcov.info
+/*.profraw
+/*.profdata
+
+# Nextest local output
+/.nextest/
+
+# Devplane-routed build output (not repo-local)
+/build/

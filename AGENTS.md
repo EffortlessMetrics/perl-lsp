@@ -123,14 +123,58 @@ No bare `unwrap()` in tests.
 
 ---
 
+
+## Build storage discipline
+
+This repo is often used with many disposable worktrees and agent sessions.
+Do not create large build output inside the worktree.
+
+Preferred commands:
+
+```bash
+just agent-check
+just agent-test
+just agent-clippy
+just agent-pr-fast
+```
+
+For direct Cargo, use:
+
+```bash
+./scripts/cargo-safe check -p <crate> --all-targets --profile agent --locked
+./scripts/cargo-safe test -p <crate> --profile agent --locked
+./scripts/cargo-safe clippy -p <crate> --profile agent --locked -- -D warnings -A missing_docs
+```
+
+Avoid:
+
+```bash
+cargo test --workspace
+cargo check --workspace --all-targets
+cargo clean
+rm -rf target
+```
+
+unless the orchestrator explicitly assigned a build lane.
+
+Storage invariant:
+
+```bash
+./scripts/storage-doctor
+```
+
+must not show large repo-local `target/` directories.
+
+---
+
 ## Verification before pushing
 
 ```bash
-cargo test -p <crate>            # crate under change
-cargo check --all-targets -p <crate>  # catches integration test bit-rot (--lib misses this)
-cargo xtask fmt                  # format (Windows-safe, per-crate)
-cargo clippy -p <crate>          # lint
-just pr-fast                     # full fast gate (required before opening PR)
+./scripts/cargo-safe test -p <crate> --profile agent --locked
+./scripts/cargo-safe check --all-targets -p <crate> --profile agent --locked
+./scripts/cargo-safe xtask fmt
+./scripts/cargo-safe clippy -p <crate> --profile agent --locked -- -D warnings -A missing_docs
+just agent-pr-fast
 ```
 
 For the canonical local merge gate (before a reviewer merges):

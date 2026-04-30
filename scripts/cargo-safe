@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# scripts/cargo-safe
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+repo_name="$(basename "$repo_root")"
+
+# Machine may override this. Default is user-cache, not repo-local.
+devplane="${DEVPLANE:-${XDG_CACHE_HOME:-$HOME/.cache}/devplane/$repo_name}"
+lock_root="$devplane/locks"
+
+mkdir -p \
+  "$devplane/cargo-home" \
+  "$devplane/target" \
+  "$devplane/build" \
+  "$devplane/sccache" \
+  "$devplane/tmp" \
+  "$lock_root"
+
+check_disk() {
+  local path="$1"
+  local min_free_gb="${MIN_FREE_GB:-40}"
+  local max_used_pct="${MAX_USED_PCT:-85}"
+
+  read -r used_pct avail_kb < <(
+    df -Pk "$path" | awk 'NR==2 { gsub("%","",$5); print $5, $4 }'
+  )
+
+  local avail_gb=$(( avail_kb / 1024 / 1024 ))
+
+  if [ "$used_pct" -ge "$max_used_pct" ] || [ "$avail_gb" -lt "$min_free_gb" ]; then
+    echo "DENY: $path used=${used_pct}% free=${avail_gb}G" >&2
+    exit 75
+  fi
+}
+
+export CARGO_HOME="${CARGO_HOME:-$devplane/cargo-home}"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$devplane/target}"
+export CARGO_BUILD_BUILD_DIR="${CARGO_BUILD_BUILD_DIR:-$devplane/build}"
+export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}"
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
+export TMPDIR="${TMPDIR:-$devplane/tmp}"
+
+if command -v sccache >/dev/null 2>&1; then
+  export RUSTC_WRAPPER="${RUSTC_WRAPPER:-sccache}"
+  export SCCACHE_DIR="${SCCACHE_DIR:-$devplane/sccache}"
+  export SCCACHE_CACHE_SIZE="${SCCACHE_CACHE_SIZE:-15G}"
+
+  # Helps cache hits across sibling worktrees.
+  worktree_parent="$(dirname "$repo_root")"
+  export SCCACHE_BASEDIRS="${SCCACHE_BASEDIRS:-$worktree_parent}"
+fi
+
+heavy="${1:-}"
+
+case "$heavy" in
+  build|check|test|run|bench|doc|clippy|nextest)
+    check_disk "$devplane"
+
+    if command -v flock >/dev/null 2>&1; then
+      exec flock -w "${CARGO_LOCK_WAIT:-180}" \
+        "$lock_root/cargo-build.lock" \
+        cargo "$@"
+    else
+      exec cargo "$@"
+    fi
+    ;;
+  *)
+    exec cargo "$@"
+    ;;
+esac

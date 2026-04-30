@@ -330,6 +330,16 @@ criterion = "0.8.1"
 [profile.dev]
 opt-level = 1
 
+# Profile for agent builds - optimized for lower artifact footprint
+[profile.agent]
+inherits = "dev"
+debug = "line-tables-only"
+incremental = false
+
+[profile.agent.build-override]
+debug = false
+incremental = false
+
 # Profile for release builds - fully optimized
 [profile.release]
 opt-level = 3

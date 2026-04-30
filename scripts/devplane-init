@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# scripts/devplane-init
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+repo_name="$(basename "$repo_root")"
+devplane="${DEVPLANE:-${XDG_CACHE_HOME:-$HOME/.cache}/devplane/$repo_name}"
+
+mkdir -p \
+  "$devplane/cargo-home" \
+  "$devplane/target" \
+  "$devplane/build" \
+  "$devplane/sccache" \
+  "$devplane/tmp" \
+  "$devplane/locks"
+
+cat <<EOM
+devplane ready:
+
+  DEVPLANE=$devplane
+  CARGO_HOME=$devplane/cargo-home
+  CARGO_TARGET_DIR=$devplane/target
+  CARGO_BUILD_BUILD_DIR=$devplane/build
+  SCCACHE_DIR=$devplane/sccache
+  TMPDIR=$devplane/tmp
+
+Recommended:
+
+  export DEVPLANE="$devplane"
+  ./scripts/cargo-safe check --workspace --all-targets --profile agent --locked
+EOM
