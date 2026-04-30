@@ -16,10 +16,9 @@ name = "Methodology Gate"
 workflow = ".github/workflows/methodology-gate.yml"
 required = false
 
-[[check]]
+[[checks]]
 name = "tokmd Advisory"
 workflow = ".github/workflows/tokmd.yml"
-required = false
 # Phase 1: advisory-only (visibility gate, no merge blocking).
 # Promotion to required = true tracked in #4993 (Phase 2/3).
 
