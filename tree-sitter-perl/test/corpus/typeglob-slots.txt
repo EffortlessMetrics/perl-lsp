@@ -888,10 +888,10 @@ local *FH = *STDOUT;
 
 (source_file
   (format_declaration)
-  (if_statement)
-  (statement)
-  (statement)
-  (statement))
+  (conditional_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement))
 
 ==================
 Advanced glob slot manipulation

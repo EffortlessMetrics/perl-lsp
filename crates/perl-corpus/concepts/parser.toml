@@ -1,0 +1,134 @@
+[[concept]]
+id = "parser.package.declaration"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["declaration"] }
+fixtures = { floors = ["test_corpus/package_production_enhanced.pl", "test_corpus/packages_versions.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = true }
+
+[[concept]]
+id = "parser.sub.named"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["subroutine"] }
+fixtures = { floors = ["test_corpus/basic_constructs.pl", "test_corpus/clean_misc_kinds.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = true }
+
+[[concept]]
+id = "parser.sub.anonymous"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["subroutine", "expression"] }
+fixtures = { floors = ["test_corpus/expressions_and_refs.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.sub.signature"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["signature", "prototype"] }
+fixtures = { floors = ["test_corpus/signatures_parameters_production_enhanced.pl", "test_corpus/clean_signatures.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = true }
+
+[[concept]]
+id = "parser.variable.my_our_local_state"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["variable-decl"] }
+fixtures = { floors = ["test_corpus/variable_list_declaration_comprehensive.pl", "test_corpus/variable_list_declaration_production_enhanced.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.expression.fat_arrow"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["expression", "operator"] }
+fixtures = { floors = ["test_corpus/expressions_and_refs.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.expression.range"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["expression", "operator"] }
+fixtures = { floors = ["test_corpus/parser_stress_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = false, release = false }
+
+[[concept]]
+id = "parser.expression.word_operators"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["expression", "keyword-op"] }
+fixtures = { floors = ["test_corpus/builtins_context_sensitive.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.hash.array_literals"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["literal", "container"] }
+fixtures = { floors = ["test_corpus/expressions_and_refs.pl", "test_corpus/basic_constructs.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.method_call.arrow"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["method-call", "oo"] }
+fixtures = { floors = ["test_corpus/method_class.pl", "test_corpus/class_method_production_enhanced.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = true }
+
+[[concept]]
+id = "parser.indirect_object_call"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["call-ambiguity"] }
+fixtures = { floors = ["test_corpus/indirect_call_production_enhanced.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.statement_modifier.if_unless"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["modifier", "control-flow"] }
+fixtures = { floors = ["test_corpus/statement_modifier_comprehensive.pl", "test_corpus/statement_modifier_production_enhanced.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.loop_control.next_last_redo"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["control-flow"] }
+fixtures = { floors = ["test_corpus/loop_control_comprehensive.pl", "test_corpus/continue_redo_statements.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.goto.labeled"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["control-flow", "label"] }
+fixtures = { floors = ["test_corpus/goto_statements_comprehensive.pl", "test_corpus/labeled_statement_comprehensive.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = false }
+run = { pr = true, nightly = true, release = false }
+
+[[concept]]
+id = "parser.try_catch.syntax"
+status = "seed"
+scope = { crates = ["perl-parser"], risk_tags = ["exceptions"] }
+fixtures = { floors = ["test_corpus/try_catch.pl", "test_corpus/try_catch_production_enhanced.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = true, nightly = true, release = false }

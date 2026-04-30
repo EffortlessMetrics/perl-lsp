@@ -380,10 +380,16 @@ pub fn add_regex_flag_completions(
             additional_edits: vec![],
             text_edit_range: Some((context.position, context.position)),
             commit_characters: None,
+            label_details: None,
         });
     }
 }
 
+/// Append regex-aware completion items to `completions` based on the cursor context.
+///
+/// Detects whether the cursor is inside a regex literal and, if so, contributes
+/// modifier flags, character-class names, and quantifier snippets appropriate
+/// for the current regex prefix.
 pub fn add_regex_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
@@ -411,6 +417,7 @@ pub fn add_regex_completions(
                 additional_edits: vec![],
                 text_edit_range: Some((replace_start, context.position)),
                 commit_characters: None,
+                label_details: None,
             });
         }
     }
