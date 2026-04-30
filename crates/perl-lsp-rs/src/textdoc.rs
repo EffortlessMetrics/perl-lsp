@@ -39,6 +39,67 @@ pub enum PosEnc {
     Utf8,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Exact range mapping data for safe incremental parser edits.
+pub struct SafeRangeMapping {
+    /// Start of the mapped range as a Rope char index.
+    pub start_char: usize,
+    /// End of the mapped range as a Rope char index.
+    pub end_char: usize,
+    /// Start of the mapped range as a byte offset.
+    pub start_byte: usize,
+    /// End of the mapped range as a byte offset.
+    pub end_byte: usize,
+}
+
+fn is_forward_range(range: &Range) -> bool {
+    (range.start.line, range.start.character) <= (range.end.line, range.end.character)
+}
+
+fn lsp_pos_to_char_with_alignment(rope: &Rope, pos: Position, enc: PosEnc) -> (usize, bool) {
+    if pos.line as usize >= rope.len_lines() {
+        return (rope.len_chars(), true);
+    }
+
+    let line_char0 = rope.line_to_char(pos.line as usize);
+    let line_slice = rope.line(pos.line as usize);
+
+    match enc {
+        PosEnc::Utf8 => {
+            let mut char_idx = 0usize;
+            let mut bytes = 0u32;
+            for ch in line_slice.chars() {
+                let next = bytes + ch.len_utf8() as u32;
+                if next == pos.character {
+                    return (line_char0 + char_idx + 1, true);
+                }
+                if next > pos.character {
+                    return (line_char0 + char_idx, false);
+                }
+                bytes = next;
+                char_idx += 1;
+            }
+            (line_char0 + char_idx, bytes == pos.character)
+        }
+        PosEnc::Utf16 => {
+            let mut char_idx = 0usize;
+            let mut utf16_units = 0u32;
+            for ch in line_slice.chars() {
+                let next = utf16_units + ch.len_utf16() as u32;
+                if next == pos.character {
+                    return (line_char0 + char_idx + 1, true);
+                }
+                if next > pos.character {
+                    return (line_char0 + char_idx, false);
+                }
+                utf16_units = next;
+                char_idx += 1;
+            }
+            (line_char0 + char_idx, utf16_units == pos.character)
+        }
+    }
+}
+
 /// Convert LSP position to char index with UTF-16/UTF-8 encoding support
 ///
 /// This function handles the conversion from LSP Position (line, character)
@@ -53,53 +114,8 @@ pub enum PosEnc {
 /// # Returns
 /// Char index clamped to valid rope boundaries
 pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
-    // Handle edge case: if line is beyond document end, clamp to end
-    if pos.line as usize >= rope.len_lines() {
-        return rope.len_chars();
-    }
-
-    let line_char0 = rope.line_to_char(pos.line as usize);
-    let line_slice = rope.line(pos.line as usize);
-
-    let col_chars = match enc {
-        PosEnc::Utf8 => {
-            // UTF-8: pos.character is byte offset within line
-            let mut char_idx = 0usize;
-            let mut bytes = 0u32;
-            for ch in line_slice.chars() {
-                let next = bytes + ch.len_utf8() as u32;
-                if next > pos.character {
-                    break; // clamp before splitting multi-byte char
-                }
-                bytes = next;
-                char_idx += 1;
-            }
-            char_idx
-        }
-        PosEnc::Utf16 => {
-            // UTF-16: pos.character is UTF-16 code unit offset
-            // Must clamp BEFORE splitting surrogate pair (2-unit chars like emoji)
-            let mut char_idx = 0usize;
-            let mut utf16_units = 0u32;
-
-            for ch in line_slice.chars() {
-                let next = utf16_units + ch.len_utf16() as u32;
-                if next > pos.character {
-                    break; // clamp before splitting surrogate pair
-                }
-                utf16_units = next;
-                char_idx += 1;
-            }
-            char_idx
-        }
-    };
-
-    // Clamp to line boundaries
-    let line_chars = line_slice.chars().count();
-    let clamped_col = col_chars.min(line_chars);
-    let target_char = line_char0 + clamped_col;
-
-    target_char.min(rope.len_chars())
+    let (char_idx, _) = lsp_pos_to_char_with_alignment(rope, pos, enc);
+    char_idx.min(rope.len_chars())
 }
 
 /// Convert LSP position to byte offset with UTF-16/UTF-8 encoding support
@@ -192,6 +208,27 @@ pub fn range_to_bytes(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize)
     (s.min(rope.len_bytes()), e.min(rope.len_bytes()))
 }
 
+/// Safely map an LSP range for parser-incremental use.
+///
+/// Returns `None` when the range is malformed (reversed) or either endpoint lands
+/// inside a multi-byte / surrogate boundary where exact mapping is ambiguous.
+pub fn safe_range_mapping(rope: &Rope, range: &Range, enc: PosEnc) -> Option<SafeRangeMapping> {
+    if !is_forward_range(range) {
+        return None;
+    }
+
+    let (start_char, start_aligned) = lsp_pos_to_char_with_alignment(rope, range.start, enc);
+    let (end_char, end_aligned) = lsp_pos_to_char_with_alignment(rope, range.end, enc);
+
+    if !start_aligned || !end_aligned || start_char > end_char {
+        return None;
+    }
+
+    let start_byte = rope.char_to_byte(start_char.min(rope.len_chars()));
+    let end_byte = rope.char_to_byte(end_char.min(rope.len_chars()));
+    Some(SafeRangeMapping { start_char, end_char, start_byte, end_byte })
+}
+
 /// Apply incremental LSP text changes to a Rope-backed document
 ///
 /// Processes an array of LSP TextDocumentContentChangeEvent objects,
@@ -215,6 +252,9 @@ pub fn range_to_bytes(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize)
 pub fn apply_changes(doc: &mut Doc, changes: &[TextDocumentContentChangeEvent], enc: PosEnc) {
     for ch in changes {
         if let Some(r) = &ch.range {
+            if !is_forward_range(r) {
+                continue;
+            }
             // IMPORTANT: Rope::remove and Rope::insert use char indices, not byte offsets
             let (s, e) = range_to_chars(&doc.rope, r, enc);
             if s <= e {
