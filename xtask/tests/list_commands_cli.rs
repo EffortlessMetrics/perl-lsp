@@ -12,7 +12,12 @@ fn list_commands_emits_sorted_top_level_names() -> Result<()> {
 
     assert!(lines.contains(&"ci"));
     assert!(lines.contains(&"check-only"));
+    assert!(lines.contains(&"check-test-wiring"));
+    assert!(lines.contains(&"layer-check"));
     assert!(lines.contains(&"list-commands"));
+    assert!(lines.contains(&"srp"));
+    assert!(lines.contains(&"srp-microcrates"));
+    assert!(lines.contains(&"unwired-scan"));
 
     let mut sorted = lines.clone();
     sorted.sort_unstable();

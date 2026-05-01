@@ -4,9 +4,11 @@
 //! and maintaining the tree-sitter-perl project.
 
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use cli::srp::{SrpCommand, SrpMicrocratesArgs, UnwiredScanArgs};
 use color_eyre::eyre::{Result, eyre};
 use std::path::PathBuf;
 
+mod cli;
 mod tasks;
 mod types;
 mod utils;
@@ -1033,36 +1035,25 @@ enum Commands {
         only: Option<update_status::StatusSubsystem>,
     },
 
-    /// Generate SRP microcrate inventory and split-candidate report
-    SrpMicrocrates {
-        /// Optional output path (default: docs/SRP_MICROCRATES.md)
-        #[arg(long)]
-        output: Option<PathBuf>,
+    /// SRP-oriented crate topology and wiring checks.
+    Srp {
+        #[command(subcommand)]
+        command: SrpCommand,
     },
 
-    /// Enforce crate layer-dependency constraints (leaf crates must not depend on higher layers).
-    ///
-    /// Current rules:
-    ///   - perl-diagnostics must NOT depend on any perl-lsp-* crate.
+    /// Generate SRP microcrate inventory and split-candidate report.
+    SrpMicrocrates {
+        #[command(flatten)]
+        args: SrpMicrocratesArgs,
+    },
+
+    /// Enforce crate layer-dependency constraints.
     LayerCheck,
 
-    /// Scan for built-but-not-wired crates: those with tests but zero import by perl-lsp
-    ///
-    /// Finds crates that have `#[test]` annotations but are not listed as direct
-    /// dependencies of `perl-lsp`. Also surfaces TODO/FIXME wiring comments.
-    /// Use `--check` to make CI fail when unwired crates are found.
+    /// Scan for built-but-not-wired crates.
     UnwiredScan {
-        /// Emit JSON to stdout instead of human-readable output
-        #[arg(long)]
-        json: bool,
-
-        /// Exit 1 if any unwired crates are found (CI gate mode)
-        #[arg(long)]
-        check: bool,
-
-        /// Name of the root LSP crate to check (default: perl-lsp-rs)
-        #[arg(long, default_value = "perl-lsp-rs")]
-        lsp_crate: String,
+        #[command(flatten)]
+        args: UnwiredScanArgs,
     },
 
     /// Check that test-bearing Rust files are reachable from their module tree.
@@ -2125,10 +2116,23 @@ fn main() -> Result<()> {
             FixForwardCommand::ListPlaybooks => fix_forward::list_playbooks(),
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
-        Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
-        Commands::UnwiredScan { json, check, lsp_crate } => {
-            unwired_scan::run(UnwiredScanConfig { lsp_crate, json, check })
-        }
+        Commands::Srp { command } => match command {
+            SrpCommand::Microcrates(args) => srp_microcrates::run(args.output),
+            SrpCommand::LayerCheck => layer_check::run(),
+            SrpCommand::UnwiredScan(args) => unwired_scan::run(UnwiredScanConfig {
+                lsp_crate: args.lsp_crate,
+                json: args.json,
+                check: args.check,
+            }),
+            SrpCommand::CheckTestWiring => check_test_wiring::run(),
+        },
+        Commands::SrpMicrocrates { args } => srp_microcrates::run(args.output),
+        Commands::LayerCheck => layer_check::run(),
+        Commands::UnwiredScan { args } => unwired_scan::run(UnwiredScanConfig {
+            lsp_crate: args.lsp_crate,
+            json: args.json,
+            check: args.check,
+        }),
         Commands::CheckTestWiring => check_test_wiring::run(),
         Commands::Metrics { command } => match command {
             MetricsCommand::ParserStats { input, json } => metrics::parser_stats::run(input, json),
@@ -2243,7 +2247,6 @@ fn main() -> Result<()> {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }
         Commands::PopulateBook => populate_book::run(),
-        Commands::LayerCheck => layer_check::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),
         Commands::BuildTimingReceipt { clean, incremental, tests, output, baseline } => {
             build_timing::run_receipt(clean, incremental, tests, output, baseline)
