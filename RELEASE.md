@@ -493,3 +493,6 @@ gh release view vX.Y.Z --json body --jq '.body' | head -1   # should be "# vX.Y.
 Use [`.github/pull_request_template_release.md`](.github/pull_request_template_release.md)
 when opening release-prep PRs so release-history surfaces are consistently
 updated and reviewed.
+
+
+- Each release note in `docs/releases/vX.Y.Z.md` must include the “Which file should I download?” section or link to the canonical install guide. This prevents raw target triples from being the only guidance visible on the GitHub release page.

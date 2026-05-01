@@ -9,7 +9,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { BinaryDownloader, parseLocalVersion, compareVersions } from '../downloader';
+import { BinaryDownloader, compareVersions, describeDownloadTarget, linuxLibcChoiceToTargetSuffix, parseLocalVersion } from '../downloader';
 
 // ---------------------------------------------------------------------------
 // Helpers: build a minimal mock ExtensionContext
@@ -31,6 +31,31 @@ function makeOutputChannel(): any {
   };
 }
 
+
+describe('describeDownloadTarget', () => {
+  test('describes Linux glibc target in human terms', () => {
+    expect(describeDownloadTarget('aarch64-unknown-linux-gnu')).toContain('Linux ARM64');
+    expect(describeDownloadTarget('aarch64-unknown-linux-gnu')).toContain('glibc');
+  });
+
+  test('falls back to raw target for unknown targets', () => {
+    expect(describeDownloadTarget('weird-target')).toBe('weird-target');
+  });
+});
+
+describe('linuxLibcChoiceToTargetSuffix', () => {
+  test('maps glibc and gnu to gnu', () => {
+    expect(linuxLibcChoiceToTargetSuffix('glibc')).toBe('gnu');
+    expect(linuxLibcChoiceToTargetSuffix('gnu')).toBe('gnu');
+  });
+
+  test('maps musl and handles auto/invalid', () => {
+    expect(linuxLibcChoiceToTargetSuffix('musl')).toBe('musl');
+    expect(linuxLibcChoiceToTargetSuffix('auto')).toBeNull();
+    expect(linuxLibcChoiceToTargetSuffix('bogus')).toBeNull();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Platform target detection
 // ---------------------------------------------------------------------------
@@ -42,6 +67,8 @@ describe('BinaryDownloader.getPlatformTarget', () => {
 
   beforeEach(() => {
     downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
+    const vscode = require('vscode');
+    vscode.workspace.getConfiguration.mockReturnValue({ get: (_k: string, d: unknown) => d, update: jest.fn() });
     androidRootBackup = process.env.ANDROID_ROOT;
     androidDataBackup = process.env.ANDROID_DATA;
     termuxVersionBackup = process.env.TERMUX_VERSION;
@@ -72,6 +99,25 @@ describe('BinaryDownloader.getPlatformTarget', () => {
   test('target contains platform component', () => {
     const target = getPlatformTarget(downloader);
     expect(target).toMatch(/(apple-darwin|unknown-linux|pc-windows)/);
+  });
+
+
+  test('linux libc override can force musl', () => {
+    if (process.platform !== 'linux') return;
+    const vscode = require('vscode');
+    vscode.workspace.getConfiguration.mockReturnValue({ get: (k: string, d: unknown) => (k === 'linuxLibc' ? 'musl' : d), update: jest.fn() });
+    jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(false);
+    jest.spyOn(downloader as any, 'isAndroidEnvironment').mockReturnValue(false);
+    expect(getPlatformTarget(downloader)).toMatch(/-unknown-linux-musl$/);
+  });
+
+  test('linux libc override can force glibc', () => {
+    if (process.platform !== 'linux') return;
+    const vscode = require('vscode');
+    vscode.workspace.getConfiguration.mockReturnValue({ get: (k: string, d: unknown) => (k === 'linuxLibc' ? 'glibc' : d), update: jest.fn() });
+    jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(false);
+    jest.spyOn(downloader as any, 'isAndroidEnvironment').mockReturnValue(false);
+    expect(getPlatformTarget(downloader)).toMatch(/-unknown-linux-gnu$/);
   });
 
   test('uses linux-android target in Termux environments', () => {

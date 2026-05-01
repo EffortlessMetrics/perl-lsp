@@ -248,3 +248,6 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
 ## License
 
 MIT
+
+
+- `perl-lsp.linuxLibc` (advanced): `auto` (default), `glibc`, or `musl` to override Linux runtime detection.

@@ -1172,3 +1172,5 @@ MCP.
 - [THREADING_CONFIGURATION_GUIDE.md](../how-to/THREADING_CONFIGURATION_GUIDE.md) — Threading options
 - [CONFIGURATION_SCHEMA.md](CONFIGURATION_SCHEMA.md) — JSON Schema for machine validation
 - [DAP User Guide](../tutorials/DAP_USER_GUIDE.md) — Debugger setup and usage
+
+| `perl-lsp.linuxLibc` | `"auto" \| "glibc" \| "musl"` | `"auto"` | Advanced Linux-only override for choosing the glibc (`gnu`) or musl release asset. Leave as `auto` unless detection is wrong. |

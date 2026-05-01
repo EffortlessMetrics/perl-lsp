@@ -440,6 +440,20 @@
             "description": "Specific release tag (for example v0.12.1) to pin when channel is set to tag.",
             "markdownDescription": "Specific release tag (for example `v0.12.1`) to pin when `channel` is set to `tag`."
           },
+          "perl-lsp.linuxLibc": {
+            "type": "string",
+            "enum": ["auto", "glibc", "musl"],
+            "enumDescriptions": [
+              "Detect automatically. This is the default.",
+              "Use the GNU/glibc Linux binary. This is correct for most Linux distributions.",
+              "Use the musl Linux binary. This is mainly for Alpine Linux and musl-based containers."
+            ],
+            "default": "auto",
+            "scope": "machine",
+            "order": 31,
+            "description": "Advanced: override Linux binary runtime detection. Leave as auto unless auto-download selects the wrong Linux asset.",
+            "markdownDescription": "Advanced: override Linux binary runtime detection. `glibc` means the `gnu` release asset for most Linux distributions. `musl` is mainly for Alpine Linux and musl-based containers. Leave as `auto` unless auto-download selects the wrong Linux asset."
+          },
           "perl-lsp.downloadBaseUrl": {
             "type": "string",
             "default": "",
