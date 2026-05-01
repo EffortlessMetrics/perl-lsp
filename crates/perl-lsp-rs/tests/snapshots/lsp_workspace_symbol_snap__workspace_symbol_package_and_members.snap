@@ -1,0 +1,24 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_workspace_symbol_snap.rs
+expression: normalized
+---
+- name: "Acme::Inventory"
+  kind: 2
+  container_name: ~
+  uri: "file:///ws_package_symbols.pl"
+  start_line: 0
+- name: "Acme::Inventory::Query"
+  kind: 5
+  container_name: "Acme::Inventory"
+  uri: "file:///ws_package_symbols.pl"
+  start_line: 6
+- name: ws_snap_build_index
+  kind: 12
+  container_name: "Acme::Inventory"
+  uri: "file:///ws_package_symbols.pl"
+  start_line: 2
+- name: ws_snap_lookup_sku
+  kind: 6
+  container_name: "Acme::Inventory::Query"
+  uri: "file:///ws_package_symbols.pl"
+  start_line: 7

@@ -110,6 +110,36 @@ fn workspace_symbol_native_class_snapshot() -> TestResult {
 }
 
 #[test]
+fn workspace_symbol_package_and_member_snapshot() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    harness.open(
+        "file:///ws_package_symbols.pl",
+        r#"package Acme::Inventory;
+
+sub ws_snap_build_index {
+    return {};
+}
+
+class Acme::Inventory::Query {
+    method ws_snap_lookup_sku {
+        return shift;
+    }
+}
+
+1;
+"#,
+    )?;
+
+    let response = harness.request("workspace/symbol", json!({ "query": "Acme::Inventory" }))?;
+    let normalized = normalize_symbols(&response)?;
+
+    assert_yaml_snapshot!("workspace_symbol_package_and_members", normalized);
+    Ok(())
+}
+
+#[test]
 fn workspace_symbol_capability_shape_snapshot() -> TestResult {
     let mut harness = LspHarness::new();
     let init_response = harness.initialize(None)?;
