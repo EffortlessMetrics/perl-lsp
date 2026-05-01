@@ -9,7 +9,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::env;
 use std::ffi::OsStr;
 use std::fs;
-use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -18,10 +17,16 @@ use std::time::{Duration, Instant};
 use toml::Value as TomlValue;
 use walkdir::{DirEntry, WalkDir};
 
+mod ci_policy;
 mod cli;
 mod commands;
+mod process_io;
 
+use crate::ci_policy::is_excluded_test_path;
 use crate::cli::{Cli, CliCommand};
+use crate::process_io::{
+    command_with_input_with_status, command_with_output, command_with_output_all,
+};
 
 const RED: &str = "\x1b[0;31m";
 const GREEN: &str = "\x1b[0;32m";
@@ -98,125 +103,6 @@ fn run() -> Result<i32> {
         CliCommand::TestHeredocs => cmd_test_heredocs(&repo_root)?,
     };
     Ok(code)
-}
-
-const CI_REPORT_CRATES_EXCLUDE: [&str; 5] = [
-    "tree-sitter-perl-c",
-    "perl-parser-pest",
-    "perl-tdd-support",
-    "perl-test-must",
-    "perl-ci-hygiene",
-];
-
-const CI_TEST_FILE_SUFFIXES: [&str; 3] = ["_test.rs", "_tests.rs", "tests.rs"];
-
-fn is_excluded_test_path(path: &Path) -> bool {
-    if path.components().any(|component| {
-        let value = component.as_os_str();
-        value == OsStr::new("tests")
-            || value == OsStr::new("benches")
-            || value == OsStr::new("examples")
-            || value == OsStr::new("bin")
-    }) {
-        return true;
-    }
-
-    if let Some(file_name) = path.file_name().and_then(|name| name.to_str())
-        && CI_TEST_FILE_SUFFIXES.iter().any(|suffix| file_name.ends_with(suffix))
-    {
-        return true;
-    }
-
-    if path.components().any(|component| {
-        CI_REPORT_CRATES_EXCLUDE.iter().any(|item| component.as_os_str() == OsStr::new(item))
-    }) {
-        return true;
-    }
-
-    false
-}
-
-fn command_with_output(
-    repo_root: &Path,
-    command: &str,
-    args: &[&str],
-    env_vars: &[(&str, &str)],
-) -> Result<String> {
-    let mut child = Command::new(command);
-    child.current_dir(repo_root).args(args);
-    for (key, value) in env_vars {
-        child.env(key, value);
-    }
-    child.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let output = child.output().wrap_err_with(|| format!("running {command}"))?;
-    let status = output.status.code().unwrap_or(1);
-    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    if status != 0 {
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        return Err(color_eyre::eyre::eyre!(
-            "command '{command}' failed (exit {status}): {stderr}"
-        ));
-    }
-    Ok(stdout)
-}
-
-fn command_with_output_all(
-    repo_root: &Path,
-    command: &str,
-    args: &[&str],
-    env_vars: &[(&str, &str)],
-) -> Result<String> {
-    let mut child = Command::new(command);
-    child.current_dir(repo_root).args(args);
-    for (key, value) in env_vars {
-        child.env(key, value);
-    }
-    child.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let output = child.output().wrap_err_with(|| format!("running {command}"))?;
-    let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
-    if !output.stderr.is_empty() {
-        combined.push_str(&String::from_utf8_lossy(&output.stderr));
-    }
-    let status = output.status.code().unwrap_or(1);
-    if status != 0 {
-        return Err(color_eyre::eyre::eyre!(
-            "command '{command}' failed (exit {status}): {combined}"
-        ));
-    }
-    Ok(combined)
-}
-
-fn command_with_input_with_status(
-    repo_root: &Path,
-    command: &str,
-    args: &[&str],
-    env_vars: &[(&str, &str)],
-    stdin_payload: &str,
-) -> Result<(i32, String)> {
-    let mut child = Command::new(command);
-    child.current_dir(repo_root).args(args);
-    for (key, value) in env_vars {
-        child.env(key, value);
-    }
-    child.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-
-    let mut child = child.spawn().wrap_err_with(|| format!("running {command}"))?;
-    {
-        let mut stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| color_eyre::eyre::eyre!("failed to open stdin for command {command}"))?;
-        stdin
-            .write_all(stdin_payload.as_bytes())
-            .wrap_err_with(|| format!("writing to stdin for {command}"))?;
-    }
-    let output = child.wait_with_output().wrap_err_with(|| format!("running {command}"))?;
-    let status = output.status.code().unwrap_or(1);
-    let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
-    if !output.stderr.is_empty() {
-        combined.push_str(&String::from_utf8_lossy(&output.stderr));
-    }
-    Ok((status, combined))
 }
 
 fn command_output_with_status(
