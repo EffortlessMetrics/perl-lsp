@@ -154,18 +154,18 @@ impl SafeEvaluator {
             return Ok(());
         };
 
-        if let Some(mat) = re.find(expression) {
+        for mat in re.find_iter(expression) {
             let op = mat.as_str();
             let start = mat.start();
 
             // Allow sigil-prefixed identifiers ($s, $tr, $y)
             if is_sigil_prefixed_identifier(expression, start) {
-                return Ok(());
+                continue;
             }
 
             // Allow escape sequences like \s, \y
             if is_escape_sequence(expression, start) {
-                return Ok(());
+                continue;
             }
 
             return Err(ValidationError::RegexMutation(op.trim().to_string()));
@@ -397,6 +397,21 @@ mod tests {
         assert!(evaluator.validate("s/foo/bar/").is_err());
         assert!(evaluator.validate("tr/a-z/A-Z/").is_err());
         assert!(evaluator.validate("y/abc/xyz/").is_err());
+    }
+
+    #[test]
+    fn test_regex_mutation_detected_after_allowed_identifier() {
+        let evaluator = SafeEvaluator::new();
+
+        assert!(evaluator.validate("$s + s/foo/bar/").is_err());
+        assert!(evaluator.validate("$tr + tr/a-z/A-Z/").is_err());
+    }
+
+    #[test]
+    fn test_regex_mutation_detected_after_allowed_escape_sequence() {
+        let evaluator = SafeEvaluator::new();
+
+        assert!(evaluator.validate("/\\s+/ && s/foo/bar/").is_err());
     }
 
     #[test]
