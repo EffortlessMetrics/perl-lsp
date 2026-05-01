@@ -68,8 +68,7 @@ BREW_FORMULA=$(cat <<RUBY
 class Perllsp < Formula
   desc "Native Rust language server and debug adapter for Perl"
   homepage "https://github.com/$OWNER/$REPO"
-  version "$VERSION"
-  license "MIT"
+  license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do
     on_arm do
@@ -95,10 +94,10 @@ class Perllsp < Formula
 
   def install
     extracted_dir = Dir.glob("perllsp-#{version}-*").find { |path| File.directory?(path) }
-    raise "expected release archive directory perllsp-#{version}-<target>" unless extracted_dir
+    package_dir = extracted_dir || "."
 
-    bin.install "#{extracted_dir}/perllsp"
-    bin.install "#{extracted_dir}/perl-dap"
+    bin.install "#{package_dir}/perllsp"
+    bin.install "#{package_dir}/perl-dap"
   end
 
   test do
