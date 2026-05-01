@@ -29,3 +29,35 @@ impl Default for LexerConfig {
         Self { parse_interpolation: true, track_positions: true, max_lookahead: 1024 }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::LexerConfig;
+
+    #[test]
+    fn default_enables_interpolation_and_position_tracking() {
+        let config = LexerConfig::default();
+
+        assert!(config.parse_interpolation);
+        assert!(config.track_positions);
+    }
+
+    #[test]
+    fn default_uses_expected_lookahead_limit() {
+        let config = LexerConfig::default();
+
+        assert_eq!(config.max_lookahead, 1024);
+    }
+
+    #[test]
+    fn clone_preserves_field_values() {
+        let config =
+            LexerConfig { parse_interpolation: false, track_positions: false, max_lookahead: 256 };
+
+        let cloned = config.clone();
+
+        assert!(!cloned.parse_interpolation);
+        assert!(!cloned.track_positions);
+        assert_eq!(cloned.max_lookahead, 256);
+    }
+}
