@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-05-01
+
+Release notes: [v0.13.1](docs/releases/v0.13.1.md)
+
+### Changed
+
+- Hardened public-alpha release channels after the `v0.13.0` launch.
+- Decoupled Open VSX publishing from VS Code Marketplace publishing.
+- Clarified release naming: package versions use normal SemVer while product
+  posture remains public alpha.
+- Improved CI Gate timeout headroom and diagnostics for release runs.
+- Corrected Homebrew/tap naming and formula generation around the `perllsp`
+  binary.
+
 ## [0.13.0-rc1] - 2026-04-30
 
 Release notes: [v0.13.0-rc1](docs/releases/v0.13.0-rc1.md)
@@ -1241,6 +1255,7 @@ During the alpha phase (pre-v0.15.0):
 For the full cross-channel release history, see [RELEASE_HISTORY.md](RELEASE_HISTORY.md).
 
 <!-- Compare ranges -->
+[0.13.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.0...v0.13.1
 [0.12.4]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.3...v0.12.4
 [0.12.3]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.2...v0.12.3
 [0.12.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.1...v0.12.2
@@ -1252,4 +1267,4 @@ For the full cross-channel release history, see [RELEASE_HISTORY.md](RELEASE_HIS
 [0.9.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.9.0
 [0.8.8]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.8.8
 [0.13.0-rc1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.4...v0.13.0-rc1
-[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.0-rc1...HEAD
+[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.1...HEAD

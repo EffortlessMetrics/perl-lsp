@@ -35,7 +35,7 @@ cargo install perllsp
 ### Homebrew
 
 ```bash
-brew install perl-lsp
+brew install effortlessmetrics/tap/perllsp
 ```
 
 ### From source

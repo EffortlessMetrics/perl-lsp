@@ -59,6 +59,9 @@ See [project status](docs/project/status/index.md), [parser status](docs/project
 
 Install and editor setup live in [Install and Editor Setup](docs/how-to/EDITOR_SETUP.md).
 
+Current public install artifacts are public alpha. Verify the binary before
+wiring it into shared editor or CI configuration.
+
 The VS Code extension downloads the matching `perllsp` binary automatically. Other editors use the `perllsp --stdio` server command after installing a release binary.
 
 Do not install `perl-lsp` from crates.io; that is a different project.

@@ -8,7 +8,11 @@
 
 ## Goal
 
-Turn "cool project" into "people actually use it" with frictionless installation and setup.
+Turn "cool project" into "people actually use it" with frictionless public-alpha
+installation and setup.
+
+All install and package-manager surfaces for the current release line should
+say public alpha and avoid implying a final-support channel.
 
 ---
 
@@ -25,7 +29,7 @@ Complete setup instructions for each major editor.
 ### Installation
 
 ```bash
-# Install the language server
+# Install the public-alpha language server
 cargo install perllsp
 
 # Or download pre-built binary

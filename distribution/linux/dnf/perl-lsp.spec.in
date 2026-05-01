@@ -8,8 +8,8 @@ BuildArch:      __RPM_ARCH__
 Source0:        __SOURCE_TARBALL__
 
 %description
-perl-lsp is a native Perl language server written in Rust.
-This package installs the perllsp and perl-dap executables from the release artifact.
+perl-lsp is a public-alpha Perl language server written in Rust.
+This package installs the perllsp and perl-dap executables from the public-alpha release artifact.
 
 %prep
 %autosetup -n __SOURCE_DIR__

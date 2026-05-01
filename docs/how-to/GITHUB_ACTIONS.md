@@ -37,7 +37,7 @@ Common downstream commands are:
 
 ## Version pinning
 
-Use `version: '0.12.3'` when you want a stable release.
+Use an explicit version when you want a reproducible public-alpha install.
 Use `version: latest` when you want the newest published binary at workflow
 runtime.
 

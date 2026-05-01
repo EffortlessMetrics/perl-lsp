@@ -3,6 +3,9 @@
 Use this page after `perllsp` is installed and visible on your `PATH`. If you
 still need the binary, start with [INSTALLATION.md](INSTALLATION.md).
 
+Current public install artifacts are public alpha. Verify `perllsp --version`
+and `perllsp --health` before changing editor settings.
+
 If the server starts but the editor does not behave correctly, see
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 

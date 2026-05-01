@@ -12,13 +12,13 @@
     <iconUrl>https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/vscode-extension/images/icon.png</iconUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>
-perl-lsp is a high-performance Language Server Protocol implementation for Perl,
+perl-lsp is a public-alpha Language Server Protocol implementation for Perl,
 providing advanced IDE features including real-time syntax checking, code completion,
 go-to-definition, find references, symbol search, and refactoring support.
 
 ## Features
 
-- ~100% Perl syntax coverage
+- Public-alpha Perl language-server support
 - Real-time syntax checking and diagnostics
 - Code completion with type inference
 - Go-to-definition and find references
@@ -36,7 +36,7 @@ After installation, configure your editor to use `perllsp --stdio`.
 
 See https://github.com/EffortlessMetrics/perl-lsp for full documentation.
     </description>
-    <summary>High-performance Perl Language Server with 100% syntax coverage</summary>
+    <summary>Public-alpha Perl language server and debug adapter</summary>
     <releaseNotes>https://github.com/EffortlessMetrics/perl-lsp/releases</releaseNotes>
     <copyright>2025 EffortlessMetrics</copyright>
     <tags>perl lsp language-server development ide</tags>
