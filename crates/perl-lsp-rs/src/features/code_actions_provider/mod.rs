@@ -4,52 +4,11 @@ use crate::features::diagnostics::Diagnostic;
 use perl_diagnostics::codes::DiagnosticCode;
 
 mod fixes;
+mod parse_errors;
 mod source_utils;
+mod types;
 
-/// Represents a code action (quick-fix) that can be applied to resolve a diagnostic
-///
-/// Code actions provide automated fixes and refactoring operations for Perl code.
-#[derive(Debug, Clone)]
-pub struct CodeAction {
-    /// Human-readable title describing the action
-    pub title: String,
-    /// The kind/category of code action
-    pub kind: CodeActionKind,
-    /// The text edit to apply
-    pub edit: TextEdit,
-    /// ID of the diagnostic this action fixes
-    pub diagnostic_id: Option<String>,
-    /// Exact diagnostic range this action was derived from
-    pub diagnostic_range: Option<(usize, usize)>,
-}
-
-/// Kind of code action
-///
-/// Categorizes the type of code action to help editors organize actions.
-#[derive(Debug, Clone, PartialEq)]
-pub enum CodeActionKind {
-    /// Quick fix for a diagnostic issue
-    QuickFix,
-    /// General refactoring operation
-    Refactor,
-    /// Extract code into a new construct
-    RefactorExtract,
-    /// Inline a construct into its usage sites
-    RefactorInline,
-    /// Rewrite code using a different pattern
-    RefactorRewrite,
-}
-
-/// Text edit operation
-///
-/// Represents a change to be made to source code.
-#[derive(Debug, Clone)]
-pub struct TextEdit {
-    /// The range of text to replace (start, end)
-    pub range: (usize, usize),
-    /// The new text to insert
-    pub new_text: String,
-}
+pub use types::{CodeAction, CodeActionKind, TextEdit};
 
 /// Provides code actions (quick-fixes) for diagnostics
 ///
@@ -139,8 +98,10 @@ impl CodeActionsProvider {
             }
             // PL001 / PL002 are general parse error codes. Route known parse
             // message patterns through the same targeted parse quick-fixes.
-            Some("PL001") | Some("PL002") => parse_error_fix_code_from_message(&diagnostic.message)
-                .map_or_else(Vec::new, |code| fixes::fix_parse_error(self, diagnostic, code)),
+            Some("PL001") | Some("PL002") => {
+                parse_errors::parse_error_fix_code_from_message(&diagnostic.message)
+                    .map_or_else(Vec::new, |code| fixes::fix_parse_error(self, diagnostic, code))
+            }
             _ => Vec::new(),
         }
     }
@@ -148,26 +109,6 @@ impl CodeActionsProvider {
     pub(super) fn source(&self) -> &str {
         &self.source
     }
-}
-
-fn parse_error_fix_code_from_message(message: &str) -> Option<&'static str> {
-    let message_lower = message.to_ascii_lowercase();
-    if message_lower.contains("missing semicolon") {
-        return Some("parse-error-missingsemicolon");
-    }
-    if message_lower.contains("unclosed string") || message_lower.contains("unterminated string") {
-        return Some("parse-error-unclosedstring");
-    }
-    if message_lower.contains("unclosed parenthesis") {
-        return Some("parse-error-unclosedparen");
-    }
-    if message_lower.contains("unclosed brace")
-        || message_lower.contains("missing '}'")
-        || message_lower.contains("unclosed `{`")
-    {
-        return Some("parse-error-unclosedbrace");
-    }
-    None
 }
 
 #[cfg(test)]
