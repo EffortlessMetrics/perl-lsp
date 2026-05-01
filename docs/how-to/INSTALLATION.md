@@ -15,7 +15,7 @@ If you are wiring `perllsp` into a GitHub Actions workflow, see
 Use one of the public install paths that matches how you work:
 
 - VS Code: install the `EffortlessMetrics.perl-lsp-rs` extension and let it download the matching `perllsp` binary.
-- macOS or Linux: install via Homebrew (see below).
+- macOS or Linux: install via the EffortlessMetrics Homebrew tap (see below).
 - Other editors: download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and put it on your `PATH`.
 - Local testing or pre-release validation: install from this repo with `cargo install --path crates/perllsp`.
 
@@ -34,10 +34,12 @@ perllsp --info
 Install the latest release with one command:
 
 ```bash
-brew install perl-lsp
+brew install EffortlessMetrics/tap/perllsp
 ```
 
-This covers macOS Intel, macOS Apple Silicon, Linux x86_64, and Linux aarch64 via Linuxbrew. The formula is automatically bumped on each release.
+This installs the `perllsp` binary and covers macOS Intel, macOS Apple Silicon, Linux x86_64, and Linux aarch64 via Linuxbrew.
+
+Plain `brew install perl-lsp` is not supported; use the `perllsp` package name.
 
 Shell completions are not installed by default. To add them:
 

@@ -1,8 +1,9 @@
-class PerlLsp < Formula
+class Perllsp < Formula
   desc "High-performance Perl Language Server with 100% syntax coverage"
   homepage "https://github.com/EffortlessMetrics/perl-lsp"
-  # PLACEHOLDER-GUARD: __RELEASE_VERSION__ and all sha placeholders must be replaced in CI.
+  # PLACEHOLDER-GUARD: __RELEASE_VERSION__ must be replaced in CI before merge.
   version "__RELEASE_VERSION__"
+  # PLACEHOLDER-GUARD: all sha256 values must be replaced in CI before merge.
   license "MIT"
 
   on_macos do

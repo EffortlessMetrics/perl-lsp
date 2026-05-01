@@ -252,11 +252,11 @@ enum Commands {
         repo: String,
 
         /// Artifact prefix for release filenames.
-        #[arg(long, default_value = "perl-lsp")]
+        #[arg(long, default_value = "perllsp")]
         prefix: String,
 
         /// Output path for generated Homebrew formula.
-        #[arg(long, default_value = "homebrew/perl-lsp.rb")]
+        #[arg(long, default_value = "Formula/perllsp.rb")]
         output: PathBuf,
     },
 

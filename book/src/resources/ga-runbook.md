@@ -104,10 +104,10 @@ git init
 mkdir Formula
 ```
 
-Create `Formula/perl-lsp.rb`:
+Create `Formula/perllsp.rb`:
 
 ```ruby
-class PerlLsp < Formula
+class Perllsp < Formula
   desc "Perl language server with 100% edge case coverage"
   homepage "https://github.com/EffortlessMetrics/perl-lsp"
   version "0.8.3"
@@ -115,22 +115,22 @@ class PerlLsp < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perllsp-${VERSION}-aarch64-apple-darwin.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
     on_intel do
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perllsp-${VERSION}-x86_64-apple-darwin.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-unknown-linux-musl.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perllsp-${VERSION}-aarch64-unknown-linux-gnu.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
     on_intel do
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-unknown-linux-musl.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perllsp-${VERSION}-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
   end
@@ -148,7 +148,7 @@ end
 Push the tap:
 
 ```bash
-git add Formula/perl-lsp.rb
+git add Formula/perllsp.rb
 git commit -m "Add perl-lsp v0.8.3"
 git remote add origin https://github.com/EffortlessMetrics/homebrew-tap.git
 git push -u origin main
@@ -157,8 +157,7 @@ git push -u origin main
 Test the formula:
 
 ```bash
-brew tap effortlesssteven/tap
-brew install perl-lsp
+brew install EffortlessMetrics/tap/perllsp
 perl-lsp --version
 ```
 
@@ -193,8 +192,7 @@ irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.
 
 #### Homebrew
 ```bash
-brew tap effortlesssteven/tap
-brew install perl-lsp
+brew install EffortlessMetrics/tap/perllsp
 ```
 
 ### Manual Download
@@ -233,8 +231,7 @@ curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/i
 irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.ps1 | iex
 
 # Homebrew
-brew tap effortlesssteven/tap
-brew install perl-lsp
+brew install EffortlessMetrics/tap/perllsp
 ```
 
 ### 📊 Performance
