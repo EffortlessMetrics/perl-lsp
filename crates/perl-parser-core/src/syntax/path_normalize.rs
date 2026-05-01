@@ -94,4 +94,28 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn rejects_absolute_paths() -> TestResult {
+        let temp_dir = tempfile::tempdir()?;
+        let workspace = temp_dir.path().canonicalize()?;
+
+        let absolute = workspace.join("lib").join("Foo.pm");
+        let result = normalize_path_within_workspace(&absolute, &workspace);
+        assert!(matches!(result, Err(NormalizePathError::PathTraversalAttempt(_))));
+
+        Ok(())
+    }
+
+    #[test]
+    fn normalizes_mixed_current_and_parent_components() -> TestResult {
+        let temp_dir = tempfile::tempdir()?;
+        let workspace = temp_dir.path().canonicalize()?;
+
+        let normalized =
+            normalize_path_within_workspace(&PathBuf::from("./lib/./../bin/tool.pl"), &workspace)?;
+        assert_eq!(normalized, workspace.join("bin").join("tool.pl"));
+
+        Ok(())
+    }
 }
