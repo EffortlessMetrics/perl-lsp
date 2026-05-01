@@ -471,6 +471,12 @@ impl Default for WorkspaceSymbolProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+
+    fn symbol_identifier_strategy() -> impl Strategy<Value = String> {
+        "[A-Za-z_][A-Za-z0-9_]{0,31}".prop_map(|name| name.to_string())
+    }
+
 
     #[test]
     fn test_workspace_symbol_provider_creation() {
@@ -518,6 +524,52 @@ mod tests {
         
         // No match
         assert!(!provider.fuzzy_match("process_data", "xyz"));
+    }
+
+    proptest! {
+        #[test]
+        fn prop_fuzzy_match_accepts_any_symbol_subsequence(
+            symbol in symbol_identifier_strategy().prop_flat_map(|symbol| {
+                let chars: Vec<char> = symbol.chars().collect();
+                proptest::collection::vec(any::<bool>(), chars.len()).prop_map(move |keep| {
+                    let query = chars
+                        .iter()
+                        .zip(keep.iter())
+                        .filter_map(|(ch, include)| include.then_some(*ch))
+                        .collect::<String>();
+                    (symbol.clone(), query)
+                })
+            }),
+        ) {
+            let provider = WorkspaceSymbolProvider::new();
+            let (symbol, query) = symbol;
+            prop_assert!(provider.fuzzy_match(&symbol, &query));
+        }
+
+        #[test]
+        fn prop_case_insensitive_equivalence(
+            symbol in symbol_identifier_strategy(),
+            query in "[A-Za-z0-9_]{0,16}",
+        ) {
+            let provider = WorkspaceSymbolProvider::new();
+
+            let mixed_symbol = symbol
+                .chars()
+                .enumerate()
+                .map(|(idx, ch)| if idx % 2 == 0 { ch.to_ascii_uppercase() } else { ch.to_ascii_lowercase() })
+                .collect::<String>();
+
+            let mixed_query = query
+                .chars()
+                .enumerate()
+                .map(|(idx, ch)| if idx % 2 == 0 { ch.to_ascii_lowercase() } else { ch.to_ascii_uppercase() })
+                .collect::<String>();
+
+            prop_assert_eq!(
+                provider.fuzzy_match(&mixed_symbol, &mixed_query),
+                provider.fuzzy_match(&mixed_symbol.to_lowercase(), &mixed_query.to_lowercase())
+            );
+        }
     }
 
     #[test]
