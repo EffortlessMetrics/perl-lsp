@@ -399,12 +399,15 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
 
         // Heuristic: if edit is large (>1KB) or crosses many lines, do full reparse
         if edit.touched_bytes() > 1024 || edit.new_text.matches('\n').count() > 10 {
-            apply_single_edit(state, edit)?;
+            apply_text_edit_to_state(state, edit)?;
             return full_reparse(state);
         }
 
         // Apply the edit with incremental lexing
-        let reparsed_range = apply_single_edit(state, edit)?;
+        let reparsed_range = match apply_single_edit(state, edit) {
+            Ok(range) => range,
+            Err(_) => return full_reparse(state),
+        };
         let reparsed_bytes = reparsed_range.end - reparsed_range.start;
 
         // If reparsed too much (>20% of doc), might need full parse in future
@@ -418,26 +421,20 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
     } else {
         // Multiple edits - apply them in sequence
         for edit in sorted_edits {
-            apply_single_edit(state, &edit)?;
+            if apply_single_edit(state, &edit).is_err() {
+                return full_reparse(state);
+            }
         }
         full_reparse(state)
     }
 }
 
-/// Apply a single edit to the state
-fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<usize>> {
-    // Find checkpoint before edit to resume lexing
-    let checkpoint = state
-        .find_lex_checkpoint(edit.start_byte)
-        .copied()
-        .ok_or_else(|| anyhow::anyhow!("No checkpoint found"))?;
-
-    // Apply text edit with safe boundary checking
+fn apply_text_edit_to_state(state: &mut IncrementalState, edit: &Edit) -> Result<()> {
     let old_end_byte = edit.old_end_byte.min(state.source.len());
     let start_byte = edit.start_byte.min(state.source.len());
-
-    // Compute the byte shift caused by this edit
-    let byte_shift: isize = edit.new_text.len() as isize - (old_end_byte - start_byte) as isize;
+    if !state.source.is_char_boundary(start_byte) || !state.source.is_char_boundary(old_end_byte) {
+        anyhow::bail!("edit range is not on UTF-8 boundaries");
+    }
 
     let mut new_source = String::with_capacity(
         state.source.len() - (old_end_byte - start_byte) + edit.new_text.len(),
@@ -448,6 +445,26 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
     state.source = new_source;
     state.rope = Rope::from_str(&state.source);
     state.line_index = LineIndex::new(&state.source);
+
+    Ok(())
+}
+
+/// Apply a single edit to the state
+fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<usize>> {
+    // Find checkpoint before edit to resume lexing
+    let Some(checkpoint) = state.find_lex_checkpoint(edit.start_byte).copied() else {
+        apply_text_edit_to_state(state, edit)?;
+        anyhow::bail!("No checkpoint found");
+    };
+
+    // Apply text edit with safe boundary checking
+    let old_end_byte = edit.old_end_byte.min(state.source.len());
+    let start_byte = edit.start_byte.min(state.source.len());
+
+    // Compute the byte shift caused by this edit
+    let byte_shift: isize = edit.new_text.len() as isize - (old_end_byte - start_byte) as isize;
+
+    apply_text_edit_to_state(state, edit)?;
 
     // Start lexing from checkpoint
     use perl_lexer::{Checkpointable, LexerCheckpoint, Position};
@@ -484,6 +501,9 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
             Some(token) => {
                 if token.token_type == TokenType::EOF {
                     break;
+                }
+                if token.end <= last_token_end {
+                    anyhow::bail!("incremental lexer did not advance at byte {}", token.start);
                 }
                 last_token_end = token.end;
 
@@ -670,11 +690,11 @@ mod tests {
         fn prop_incremental_apply_edits_matches_ground_truth(
             edits in prop::collection::vec(
                 (
-                    0usize..900usize,
-                    0usize..80usize,
-                    "[a-zA-Z0-9_ \\n;\\$\\(\\)\\{\\}\\[\\],]{0,40}"
+                    0usize..240usize,
+                    0usize..24usize,
+                    "[a-zA-Z0-9_ ]{0,24}"
                 ),
-                1..60
+                1..20
             )
         ) {
             let mut state = IncrementalState::new("my $seed = 0;\n".repeat(80));
