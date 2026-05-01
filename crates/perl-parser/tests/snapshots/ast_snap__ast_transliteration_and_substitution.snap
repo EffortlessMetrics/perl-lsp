@@ -1,0 +1,6 @@
+---
+source: crates/perl-parser/tests/ast_snap.rs
+assertion_line: 208
+expression: "parse_sexp(\"$_ =~ tr/a-z/A-Z/; $text =~ s{foo}{bar}g;\")"
+---
+(source_file (transliteration (variable $ _) "a-z" "A-Z" "") (substitution (variable $ text) "foo" "bar" "g"))
