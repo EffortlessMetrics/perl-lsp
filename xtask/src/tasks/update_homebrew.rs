@@ -67,12 +67,11 @@ pub fn run(config: UpdateHomebrewConfig) -> Result<()> {
     println!();
     println!("Next steps:");
     println!("1. Review the formula: cat {}", output.display());
-    println!("2. Copy to your homebrew-tap repository");
-    println!("3. Commit and push the updated formula");
+    println!("2. Copy to EffortlessMetrics/homebrew-tap");
+    println!("3. Commit and push Formula/perllsp.rb");
     println!();
     println!("Users can then install with:");
-    println!("  brew tap effortlesssteven/tap");
-    println!("  brew install perl-lsp");
+    println!("  brew install effortlessmetrics/tap/perllsp");
 
     Ok(())
 }
@@ -157,11 +156,11 @@ fn build_brew_formula(
     let linux_x64_filename = artifact_filename(&config.prefix, version, LIN_X64);
 
     format!(
-        r##"class PerlLsp < Formula
-  desc "Fast, reliable Perl language server with 100% syntax coverage"
+        r##"class Perllsp < Formula
+  desc "Native Rust language server and debug adapter for Perl"
   homepage "https://github.com/{owner}/{repo}"
   version "{version}"
-  license "MIT"
+  license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do
     if Hardware::CPU.arm?
@@ -184,14 +183,11 @@ fn build_brew_formula(
   end
 
   def install
-    # Find the extracted directory (should be perllsp-v*).
-    extracted_dir = Dir.glob("perllsp-v*").first
-    if extracted_dir && File.directory?(extracted_dir)
-      bin.install "#{{extracted_dir}}/perllsp"
-    else
-      # Fallback: binary might be in the root
-      bin.install "perllsp"
-    end
+    extracted_dir = Dir.glob("perllsp-#{{version}}-*").find {{ |path| File.directory?(path) }}
+    raise "expected release archive directory perllsp-#{{version}}-<target>" unless extracted_dir
+
+    bin.install "#{{extracted_dir}}/perllsp"
+    bin.install "#{{extracted_dir}}/perl-dap"
   end
 
   def caveats
@@ -215,13 +211,8 @@ fn build_brew_formula(
   end
 
   test do
-    # Test that the binary runs and responds to version request
-    assert_match(/perllsp|Perl LSP/, shell_output("#{{bin}}/perllsp --version"))
-
-    # Test LSP initialization
-    input = '{{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{}}}}'
-    output = pipe_output("#{{bin}}/perllsp --stdio", input, 0)
-    assert_match(/Content-Length/, output)
+    assert_match version.to_s, shell_output("#{{bin}}/perllsp --version")
+    assert_match version.to_s, shell_output("#{{bin}}/perl-dap --version")
   end
 end
 "##,

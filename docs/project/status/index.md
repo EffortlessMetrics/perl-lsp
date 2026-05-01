@@ -5,7 +5,7 @@
 
 ## What's True Right Now
 
-- **Release posture**: GitHub Releases plus the editor channels (VS Code Marketplace and Open VSX) are live on `v0.12.3` as of 2026-04-09, the workspace version line is `v0.12.3`, crates.io intentionally remains on `v0.12.2`, and the active milestone is the `v0.13.0` public alpha announcement
+- **Release posture**: `v0.13.1` is the current public-alpha patch train. The workspace version line is `v0.13.1`, the published crate surface is 32 crates, and the release is being verified across GitHub Releases, crates.io, Docker, VS Code Marketplace, Open VSX, and the owned `effortlessmetrics/tap/perllsp` Homebrew path.
 - **Status discipline**: this file is for narrative, subsystem files are for evidence, and `just status-update` plus `just status-check` are the anti-drift workflow
 - **LSP server**: `features.toml` is the canonical capability catalog; 58 user-visible features at 100% coverage (116/116 including plumbing protocol methods and DAP handlers — corrected in PR #4107 after the DAP catalog undercount audit) — computed coverage is generated from it
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `cargo xtask ignored-tests` is the tracked-test-debt source
@@ -29,19 +29,19 @@
 
 ## What's Next
 
-**Now (active milestone: v0.13.0 public alpha announcement)**
-- Close out `#3302` demo-asset recording — the main remaining human-owned blocker before the `v0.13.0` public alpha announcement
-- Keep the public release split explicit: GitHub Releases, VS Code Marketplace, and Open VSX are on `v0.12.3`, while crates.io remains on `v0.12.2` until the registry window reopens
+**Now (active milestone: v0.13.1 public-alpha channel verification)**
+- Monitor the `v0.13.1` downstream release workflows and keep each channel status explicit until it is green or deliberately deferred
+- Keep public-alpha wording consistent: package versions use normal SemVer, but the product posture is not stable/GA
 - Keep the three parser verification lanes explicit and green: `just corpus-sweep-check`, `just cpan-corpus-check`, and `just parser-audit`, with `just common-corpus-check` covering the pinned strict-clean subset
-- Keep the top-level README, status docs, and release runbooks aligned with the actual `perllsp` asset line, the `perl-lsp-rs` extension package, and the delayed crates.io surface
-- Resume parser, corpus, and semantic hardening while the `v0.13.0` announcement pass stays open
+- Keep the top-level README, status docs, and release runbooks aligned with the actual `perllsp` asset line, the `perl-lsp-rs` extension package, and the 32-crate published surface
+- Follow up any post-merge status regeneration gaps before declaring the release ledger closed
 
-**Next (v0.13.0 public alpha)**
+**Next (post v0.13.1 public alpha)**
 - Keep all three parser corpus lanes current: Ubuntu system Perl, the cached CPAN top 1000 install, and the repo-owned corpus audit
 - Fold internal torture and edge-case suites into routine verification receipts
-- Publish benchmark and release-readiness receipts for the alpha burndown
+- Resume parser, corpus, semantic, and DAP hardening after the release-channel receipts are closed
 
-**Later (post v0.13.0)**
+**Later**
 - DAP preview hardening (deeper live variables/evaluate, shim packaging, cross-editor native receipts)
 - Full LSP 3.18 compliance
 - Broader distribution packaging
@@ -68,5 +68,5 @@ See [ROADMAP.md](../ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-04-09 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
+*Last Updated: 2026-05-01 (narrative sections only; run `just status-update` to refresh subsystem metrics)*
 *Canonical docs: [ROADMAP.md](../ROADMAP.md), [../../features.toml](../../features.toml)*

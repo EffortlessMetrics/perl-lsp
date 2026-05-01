@@ -208,6 +208,7 @@ jobs:
     permissions:
       contents: write
     env:
+      GH_REPO: ${{ github.repository }}
       GITHUB_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ needs.prepare-vsix.outputs.release_tag }}
       VSIX_FILE: ${{ needs.prepare-vsix.outputs.vsix_file }}
