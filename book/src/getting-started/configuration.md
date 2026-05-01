@@ -639,7 +639,7 @@ Timeout for continue operations (5 minutes).
 Enable incremental text synchronization (requires `incremental` feature).
 
 ```bash
-PERL_LSP_INCREMENTAL=1 perl-lsp --stdio
+PERL_LSP_INCREMENTAL=1 perllsp --stdio
 ```
 
 ### `RUST_LOG`
@@ -647,8 +647,8 @@ PERL_LSP_INCREMENTAL=1 perl-lsp --stdio
 Enable debug logging for troubleshooting.
 
 ```bash
-RUST_LOG=perl_lsp=debug perl-lsp --stdio
-RUST_LOG=perl_parser=trace perl-lsp --stdio
+RUST_LOG=perl_lsp=debug perllsp --stdio
+RUST_LOG=perl_parser=trace perllsp --stdio
 ```
 
 ### `RUST_TEST_THREADS`
@@ -748,7 +748,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 You can verify configuration is being applied by enabling trace logging:
 
 ```bash
-RUST_LOG=perl_parser::lsp::state=debug perl-lsp --stdio
+RUST_LOG=perl_parser::lsp::state=debug perllsp --stdio
 ```
 
 ---

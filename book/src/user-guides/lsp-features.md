@@ -508,7 +508,7 @@ Using nvim-lspconfig:
 
 ```lua
 require('lspconfig').perl_lsp.setup{
-  cmd = {'perl-lsp', '--stdio'},
+  cmd = {'perllsp', '--stdio'},
   settings = {
     perl = {
       lsp = {
@@ -534,7 +534,7 @@ With lsp-mode or eglot:
 
 ;; eglot
 (add-to-list 'eglot-server-programs
-             '((perl-mode cperl-mode) . ("perl-lsp" "--stdio")))
+             '((perl-mode cperl-mode) . ("perllsp" "--stdio")))
 ```
 
 ### Sublime Text
@@ -589,10 +589,10 @@ With lsp-mode or eglot:
 **LSP not starting:**
 ```bash
 # Check if perl-lsp is in PATH
-which perl-lsp
+which perllsp
 
 # Test standalone
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perllsp --stdio
 ```
 
 **Slow performance:**
@@ -602,7 +602,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --s
 - Check for recursive includes
 
 **Missing features:**
-- Ensure latest version: `perl-lsp --version`
+- Ensure latest version: `perllsp --version`
 - Check editor LSP client capabilities
 - Verify configuration is loaded
 
@@ -612,10 +612,10 @@ Enable debug logging for troubleshooting:
 
 ```bash
 # Command line
-perl-lsp --stdio --log-level=debug --log-file=perl-lsp.log
+perllsp --stdio --log-level=debug --log-file=perl-lsp.log
 
 # Environment variable
-RUST_LOG=debug perl-lsp --stdio
+RUST_LOG=debug perllsp --stdio
 ```
 
 ## Contributing

@@ -99,6 +99,11 @@ The extension automatically downloads the correct `perllsp` binary for your plat
 | **macOS** | Intel (x64), Apple Silicon (ARM64) |
 | **Linux** | x64, ARM64 (glibc and musl) |
 
+On Linux, `auto` selects the GNU/glibc archive for mainstream distributions and
+the musl archive for Alpine Linux or musl-based containers. Set
+`perl-lsp.linuxLibc` to `gnu`, `glibc`, or `musl` only when you need to override
+that detection.
+
 ### Enterprise / offline / air-gapped deployments
 
 The extension downloads the Perl LSP server binary on first activation. If your environment blocks internet access during extension install or uses a strict proxy, see [`INTERNAL_DEPLOYMENT.md`](./INTERNAL_DEPLOYMENT.md) for:
@@ -112,7 +117,7 @@ The extension downloads the Perl LSP server binary on first activation. If your 
 If you prefer to manage the binary yourself:
 
 ```bash
-# Homebrew (macOS/Linux)
+# Homebrew via the EffortlessMetrics tap (macOS/Linux)
 brew install effortlessmetrics/tap/perllsp
 
 # One-liner (Linux/macOS)
@@ -134,6 +139,7 @@ All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` a
 | `perl-lsp.serverPath` | `""` | Absolute path to a `perllsp` binary (overrides auto-download) |
 | `perl-lsp.channel` | `"latest"` | Release channel. Use `latest` for the current public-alpha line or `tag` for a pinned public-alpha release |
 | `perl-lsp.versionTag` | `""` | Specific release tag (e.g. `v0.12.1`) when channel is `tag` |
+| `perl-lsp.linuxLibc` | `"auto"` | Linux libc release asset selection: `auto`, `gnu`, `glibc`, or `musl` |
 | `perl-lsp.enableDiagnostics` | `true` | Enable real-time syntax diagnostics |
 | `perl-lsp.enableSemanticTokens` | `true` | Enable semantic syntax highlighting |
 | `perl-lsp.enableFormatting` | `true` | Enable document formatting (requires `perltidy`) |

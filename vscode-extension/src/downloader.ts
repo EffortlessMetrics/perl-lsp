@@ -239,6 +239,12 @@ export class BinaryDownloader {
                 const availableAssets = release.assets.map(a => a.name).join(', ');
                 this.outputChannel.appendLine(`Target platform: ${target}`);
                 this.outputChannel.appendLine(`Available assets: ${availableAssets}`);
+                if (target.includes('unknown-linux-')) {
+                    this.outputChannel.appendLine(
+                        'Linux binary selection: most distributions use gnu/glibc; Alpine Linux and musl containers use musl. ' +
+                        'Override with perl-lsp.linuxLibc if auto-detection chose the wrong target.'
+                    );
+                }
                 throw new Error(`No binary found for platform: ${target}. Available assets: ${availableAssets}`);
             }
 
@@ -612,7 +618,8 @@ export class BinaryDownloader {
                 };
                 return androidArchMap[arch] ?? `${arch}-linux-android`;
             }
-            const libc = this.detectMusl() ? 'musl' : 'gnu';
+            const libc = this.getLinuxLibcTarget();
+            this.outputChannel.appendLine(`Linux binary target libc: ${libc}`);
             return `${archPrefix}-unknown-linux-${libc}`;
         } else if (platform === 'win32') {
             return arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc';
@@ -636,6 +643,28 @@ export class BinaryDownloader {
         return `${rustArch}-${rustPlatform}`;
     }
 
+    private getLinuxLibcTarget(): 'gnu' | 'musl' {
+        const config = vscode.workspace.getConfiguration('perl-lsp');
+        const rawValue = config.get<string>('linuxLibc', 'auto');
+        const value = rawValue.trim().toLowerCase();
+
+        if (value === 'gnu' || value === 'glibc') {
+            return 'gnu';
+        }
+
+        if (value === 'musl') {
+            return 'musl';
+        }
+
+        if (value !== 'auto') {
+            this.outputChannel.appendLine(
+                `Unknown perl-lsp.linuxLibc value "${rawValue}", falling back to auto`
+            );
+        }
+
+        return this.detectMusl() ? 'musl' : 'gnu';
+    }
+
     private isAndroidEnvironment(): boolean {
         if (process.platform !== 'linux') {
             return false;
@@ -650,7 +679,27 @@ export class BinaryDownloader {
     }
     
     private detectMusl(): boolean {
-        // Check for Alpine or musl
+        const ldd = child_process.spawnSync('ldd', ['--version'], {
+            encoding: 'utf8',
+            timeout: 1000
+        });
+        const lddOutput = `${ldd.stdout ?? ''}${ldd.stderr ?? ''}`.toLowerCase();
+        if (lddOutput.includes('musl')) {
+            return true;
+        }
+        if (lddOutput.includes('glibc') || lddOutput.includes('gnu libc')) {
+            return false;
+        }
+
+        const getconf = child_process.spawnSync('getconf', ['GNU_LIBC_VERSION'], {
+            encoding: 'utf8',
+            timeout: 1000
+        });
+        if (getconf.status === 0) {
+            return false;
+        }
+
+        // Check for Alpine or musl when active-libc probes are unavailable.
         if (fs.existsSync('/etc/alpine-release')) {
             return true;
         }

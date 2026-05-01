@@ -6,6 +6,7 @@
 
 - **VS Code (recommended)**: install the [Perl LSP extension](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs) — it downloads the server binary automatically.
 - **Pre-built binary**: download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
+- **Homebrew tap**: `brew install effortlessmetrics/tap/perllsp`.
 - **Installer script (Linux/macOS, best-effort)**:
   `curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash`
 - **From source**:
@@ -17,11 +18,32 @@ No. perl-lsp is a self-contained Rust binary. It parses Perl using a native recu
 
 ### Does the installer also install perl-dap?
 
-No. The installer installs `perl-lsp`. Build or install `perl-dap` separately when you need debugging support:
+Yes, when the release archive includes `perl-dap`. The installer always installs
+`perllsp` and installs the companion `perl-dap` binary when it is present in the
+downloaded archive. Build or install `perl-dap` separately only when you are
+working from source or using an older archive that did not include it:
 
 ```bash
 cargo install --path crates/perl-dap
 ```
+
+### What is the difference between GNU and musl release files?
+
+Most Linux users should choose `gnu`, which means the normal glibc Linux build.
+Use it for Ubuntu, Debian, Raspberry Pi OS, Fedora, RHEL, Arch, Amazon Linux,
+WSL, and most other Linux systems.
+
+Use `musl` mainly for Alpine Linux or musl-based containers. You do not need
+both GNU and musl archives.
+
+For common cases:
+
+| System | Download suffix |
+|---|---|
+| WSL2 x86_64 GNU/Linux | `x86_64-unknown-linux-gnu` |
+| Raspberry Pi OS / Debian aarch64 | `aarch64-unknown-linux-gnu` |
+| Alpine Linux x86_64 | `x86_64-unknown-linux-musl` |
+| Alpine Linux aarch64 | `aarch64-unknown-linux-musl` |
 
 ### Which platforms are supported?
 

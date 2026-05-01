@@ -6,8 +6,10 @@
 #
 # Or with options via environment variables:
 #   VERSION=v0.12.0 INSTALL_DIR=/usr/local/bin bash scripts/install.sh
-#   PREFER_GNU=1 bash scripts/install.sh   # prefer glibc over musl on Linux
+#   PERL_LSP_LINUX_LIBC=gnu bash scripts/install.sh
+#   PERL_LSP_LINUX_LIBC=musl bash scripts/install.sh
 #   BUILD_FROM_SOURCE=1 bash scripts/install.sh   # force cargo build/install
+#   bash scripts/install.sh --print-target
 #
 # Supported platforms:
 #   Linux x86_64 (musl/gnu), Linux aarch64 (musl/gnu), macOS x86_64, macOS aarch64
@@ -17,8 +19,10 @@ REPO="EffortlessMetrics/perl-lsp"
 BIN_NAME="perllsp"
 DAP_BIN_NAME="perl-dap"
 VERSION="${VERSION:-latest}"
+PERL_LSP_LINUX_LIBC="${PERL_LSP_LINUX_LIBC:-auto}"
 PREFER_GNU="${PREFER_GNU:-0}"
 BUILD_FROM_SOURCE="${BUILD_FROM_SOURCE:-0}"
+PRINT_TARGET=0
 
 # Determine install directory: user-local by default, system-wide if explicitly set
 if [ -z "${INSTALL_DIR:-}" ]; then
@@ -49,6 +53,95 @@ need_cmd() {
     fi
 }
 
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --print-target)
+            PRINT_TARGET=1
+            shift
+            ;;
+        -h|--help)
+            cat <<'USAGE'
+Usage: scripts/install.sh [--print-target]
+
+Environment:
+  VERSION=<latest|vX.Y.Z|X.Y.Z>        Release to install.
+  INSTALL_DIR=/path/to/bin             Install destination.
+  PERL_LSP_LINUX_LIBC=auto|gnu|glibc|musl
+                                      Linux libc target. Default: auto.
+  BUILD_FROM_SOURCE=1                  Build with cargo instead of downloading.
+
+Most Linux distributions use gnu/glibc. Use musl mainly for Alpine Linux and
+musl-based containers. --print-target prints the selected release target and
+exits without downloading.
+USAGE
+            exit 0
+            ;;
+        *)
+            err "unknown argument: $1"
+            ;;
+    esac
+done
+
+is_musl_system() {
+    if command -v ldd >/dev/null 2>&1; then
+        local _ldd
+        _ldd="$(ldd --version 2>&1 || true)"
+        if printf '%s\n' "$_ldd" | grep -qi musl; then
+            return 0
+        fi
+        if printf '%s\n' "$_ldd" | grep -Eqi 'glibc|gnu libc'; then
+            return 1
+        fi
+    fi
+
+    if command -v getconf >/dev/null 2>&1 && getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
+        return 1
+    fi
+
+    if [ -f /etc/alpine-release ]; then
+        return 0
+    fi
+
+    if compgen -G "/lib/ld-musl-*.so.1" >/dev/null 2>&1 ||
+       compgen -G "/usr/lib/ld-musl-*.so.1" >/dev/null 2>&1 ||
+       compgen -G "/lib/libc.musl-*.so.1" >/dev/null 2>&1 ||
+       compgen -G "/usr/lib/libc.musl-*.so.1" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    return 1
+}
+
+resolve_linux_libc() {
+    local _choice
+    _choice="$(printf '%s' "$PERL_LSP_LINUX_LIBC" | tr '[:upper:]' '[:lower:]')"
+
+    # Backwards-compatible escape hatch from older docs/scripts. The new public
+    # spelling is PERL_LSP_LINUX_LIBC=gnu.
+    if [ "$_choice" = "auto" ] && [ "$PREFER_GNU" = "1" ]; then
+        _choice="gnu"
+    fi
+
+    case "$_choice" in
+        auto)
+            if is_musl_system; then
+                printf '%s\n' "musl"
+            else
+                printf '%s\n' "gnu"
+            fi
+            ;;
+        gnu|glibc)
+            printf '%s\n' "gnu"
+            ;;
+        musl)
+            printf '%s\n' "musl"
+            ;;
+        *)
+            err "invalid PERL_LSP_LINUX_LIBC=${PERL_LSP_LINUX_LIBC}; expected auto, gnu, glibc, or musl"
+            ;;
+    esac
+}
+
 # ── Platform detection ─────────────────────────────────────────────────────────
 
 detect_platform() {
@@ -67,14 +160,13 @@ detect_platform() {
     case "$_os" in
         Linux)
             _os="linux"
-            # Termux uses Android's bionic libc. Prefer static musl binaries there.
-            # For other Linux environments, prefer musl unless caller overrides.
             if [ "$_termux" = "1" ]; then
-                _libc="musl"
-            elif [ "$PREFER_GNU" = "1" ]; then
-                _libc="gnu"
+                # Termux uses Android's bionic libc. The release artifacts are
+                # Linux glibc/musl binaries, not Android/bionic binaries.
+                INSTALL_MODE="source"
+                SOURCE_TARGET=""
             else
-                _libc="musl"
+                _libc="$(resolve_linux_libc)"
             fi
             ;;
         Darwin)
@@ -96,7 +188,9 @@ detect_platform() {
         armv8l|armv7l|armv7*|armhf)
             if [ "$_os" = "linux" ]; then
                 _arch="armv7"
-                SOURCE_TARGET="armv7-unknown-linux-gnueabihf"
+                if [ "$_termux" != "1" ]; then
+                    SOURCE_TARGET="armv7-unknown-linux-gnueabihf"
+                fi
                 INSTALL_MODE="source"
             else
                 err "unsupported architecture: $_arch"
@@ -105,7 +199,9 @@ detect_platform() {
         armv6l|armv6*|arm)
             if [ "$_os" = "linux" ]; then
                 _arch="armv6"
-                SOURCE_TARGET="arm-unknown-linux-gnueabihf"
+                if [ "$_termux" != "1" ]; then
+                    SOURCE_TARGET="arm-unknown-linux-gnueabihf"
+                fi
                 INSTALL_MODE="source"
             else
                 err "unsupported architecture: $_arch"
@@ -124,16 +220,20 @@ detect_platform() {
         else
             TARGET="${_arch}-apple-darwin"
         fi
-        info "platform: $_os $_arch (target: $TARGET)"
-        if [ "$_termux" = "1" ]; then
-            info "termux environment detected; using musl release artifacts for compatibility"
+        if [ "$PRINT_TARGET" != "1" ]; then
+            info "platform: $_os $_arch (target: $TARGET)"
         fi
     else
         TARGET="${SOURCE_TARGET:-}"
-        if [ -n "$TARGET" ]; then
-            info "platform: $_os $_arch (source build target: $TARGET)"
-        else
-            info "platform: $_os $_arch (source build mode)"
+        if [ "$PRINT_TARGET" != "1" ]; then
+            if [ -n "$TARGET" ]; then
+                info "platform: $_os $_arch (source build target: $TARGET)"
+            else
+                info "platform: $_os $_arch (source build mode)"
+            fi
+            if [ "$_termux" = "1" ]; then
+                info "termux environment detected; no Android/bionic release asset is available, using source build mode"
+            fi
         fi
     fi
 }
@@ -242,14 +342,19 @@ The release archive may have an unexpected layout."
 
 build_from_source() {
     need_cmd cargo
-    need_cmd rustup
 
-    local _cargo_target
-    _cargo_target="${TARGET:-$(rustc -vV | awk -F': ' '/host:/ {print $2}')}"
+    local _target_arg=()
 
-    info "building from source for target: $_cargo_target"
-    rustup target add "$_cargo_target"
-    cargo install perllsp --locked --target "$_cargo_target" --root "$TMPDIR/install-root"
+    if [ -n "${TARGET:-}" ]; then
+        need_cmd rustup
+        info "building from source for target: $TARGET"
+        rustup target add "$TARGET"
+        _target_arg=(--target "$TARGET")
+    else
+        info "building from source for host target"
+    fi
+
+    cargo install perllsp --locked "${_target_arg[@]}" --root "$TMPDIR/install-root"
 
     EXTRACT_DIR="${TMPDIR}/install-root/bin"
 }
@@ -324,15 +429,29 @@ check_path() {
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 main() {
-    say ""
-    say "Perl LSP installer"
-    say "=================="
-    say ""
+    if [ "$PRINT_TARGET" != "1" ]; then
+        say ""
+        say "Perl LSP installer"
+        say "=================="
+        say ""
+    fi
+
+    detect_platform
+
+    if [ "$PRINT_TARGET" = "1" ]; then
+        if [ "$INSTALL_MODE" = "release" ]; then
+            say "$TARGET"
+        elif [ -n "${TARGET:-}" ]; then
+            say "source:$TARGET"
+        else
+            say "source"
+        fi
+        exit 0
+    fi
 
     need_cmd curl
     need_cmd tar
 
-    detect_platform
     resolve_version
     TMPDIR="$(mktemp -d)"
     # shellcheck disable=SC2064

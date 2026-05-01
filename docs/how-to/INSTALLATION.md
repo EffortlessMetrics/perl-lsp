@@ -19,11 +19,12 @@ shared automation.
 Use one of the public install paths that matches how you work:
 
 - VS Code: install the `EffortlessMetrics.perl-lsp-rs` extension and let it download the matching `perllsp` binary.
-- macOS or Linux: install via Homebrew (see below).
+- macOS or Linux: install via the EffortlessMetrics Homebrew tap (see below).
 - Other editors: download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and put it on your `PATH`.
 - Local testing or pre-release validation: install from this repo with `cargo install --path crates/perllsp`.
 
-Do not use `cargo install perl-lsp` on crates.io. That package name is owned by another project, so the supported Cargo package is `perllsp`.
+Do not install the unrelated crates.io package named `perl-lsp`. That package
+name is owned by another project, so the supported Cargo package is `perllsp`.
 
 Verify the install before wiring it into an editor:
 
@@ -33,12 +34,20 @@ perllsp --health
 perllsp --info
 ```
 
-## Homebrew (macOS and Linux)
+## Homebrew via the EffortlessMetrics tap
 
-Install the current public-alpha release with one command:
+`perllsp` is distributed through the owned EffortlessMetrics Homebrew tap, not
+Homebrew/core. Install the current public-alpha release with one command:
 
 ```bash
 brew install effortlessmetrics/tap/perllsp
+```
+
+Equivalent two-step form:
+
+```bash
+brew tap effortlessmetrics/tap
+brew install perllsp
 ```
 
 This covers macOS Intel, macOS Apple Silicon, Linux x86_64, and Linux aarch64 via Linuxbrew. The formula is automatically bumped on each public-alpha release.
@@ -73,10 +82,15 @@ cargo install perllsp
 GitHub Releases provides public-alpha downloadable archives for the supported platforms.
 Check the latest release page before copying a version number.
 
-| Platform | Asset suffix |
+Most Linux users should choose the `gnu` archive. Use `musl` mainly for Alpine
+Linux or musl-based containers. You do not need both GNU and musl archives.
+
+| Your system | Asset suffix |
 | --- | --- |
-| Linux x86_64 | `x86_64-unknown-linux-gnu` |
-| Linux aarch64 | `aarch64-unknown-linux-gnu` |
+| Linux x64 / AMD64, most distributions | `x86_64-unknown-linux-gnu` |
+| Linux ARM64, most distributions | `aarch64-unknown-linux-gnu` |
+| Linux x64 / AMD64, Alpine or musl containers | `x86_64-unknown-linux-musl` |
+| Linux ARM64, Alpine or musl containers | `aarch64-unknown-linux-musl` |
 | macOS Intel | `x86_64-apple-darwin` |
 | macOS Apple Silicon | `aarch64-apple-darwin` |
 | Windows x86_64 | `x86_64-pc-windows-msvc` |

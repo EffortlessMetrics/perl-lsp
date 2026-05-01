@@ -448,6 +448,26 @@
             "description": "Internal base URL hosting perllsp archives and SHA256SUMS, bypassing GitHub releases. Leave empty to use GitHub releases.",
             "markdownDescription": "Internal base URL hosting perllsp archives and SHA256SUMS, bypassing GitHub releases. Example: `https://internal.example.com/perllsp/`. Leave empty to use GitHub releases."
           },
+          "perl-lsp.linuxLibc": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "gnu",
+              "glibc",
+              "musl"
+            ],
+            "enumDescriptions": [
+              "Detect Linux libc automatically.",
+              "Use the GNU/glibc Linux release asset.",
+              "Alias for gnu.",
+              "Use the musl Linux release asset."
+            ],
+            "default": "auto",
+            "scope": "machine",
+            "order": 34,
+            "description": "Linux libc release asset selection. Keep auto unless you need to force GNU/glibc or musl.",
+            "markdownDescription": "Linux libc release asset selection for managed `perllsp` downloads. Keep `auto` unless you need to force `gnu`/`glibc` or `musl`."
+          },
           "perl-lsp.updateCheckInterval": {
             "type": "number",
             "default": 24,

@@ -266,10 +266,10 @@ This runs the **full CI pipeline** (~10-20 minutes) including:
 
 ```bash
 # 1. Build release binary
-cargo build -p perl-lsp-rs --release
+cargo build -p perllsp --release
 
 # 2. Test LSP server health
-./target/release/perl-lsp --version
+./target/release/perllsp --version
 
 # 3. Editor integration (choose your editor)
 # - VS Code: Open a Perl file, verify:

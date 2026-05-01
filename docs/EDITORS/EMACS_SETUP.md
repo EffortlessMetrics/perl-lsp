@@ -24,13 +24,8 @@ or use `lsp-mode`.
 
 Install `perllsp` using the project installation guide or README.
 
-Do not use:
-
-```bash
-cargo install perl-lsp
-```
-
-That crates.io package name belongs to a different project. Use:
+Do not install the unrelated crates.io package named `perl-lsp`; that package
+name belongs to a different project. Use:
 
 ```bash
 cargo install perllsp

@@ -137,6 +137,15 @@ else
     if ! grep -q "## \[${NEWEST_TAG}\]" CHANGELOG.md 2>/dev/null; then
         error "Newest tag v${NEWEST_TAG} not found in CHANGELOG.md"
     fi
+
+    newest_notes_file="docs/releases/v${NEWEST_TAG}.md"
+    if [[ -f "$newest_notes_file" ]] && grep -Eq 'unknown-linux-(gnu|musl)' "$newest_notes_file"; then
+        if ! grep -q 'Which file should I download?' "$newest_notes_file" &&
+           ! grep -q 'docs/how-to/INSTALLATION.md' "$newest_notes_file" &&
+           ! grep -q 'INSTALLATION.md' "$newest_notes_file"; then
+            error "Newest release notes with Linux GNU/musl assets must explain which file to download: ${newest_notes_file}"
+        fi
+    fi
 fi
 
 # ── Exit ──────────────────────────────────────────────────────────────────────

@@ -37,7 +37,7 @@ export function classifyStartupError(output: string): StartupErrorDiagnosis {
         return {
             kind: StartupErrorKind.GlibcMismatch,
             hint: `glibc version mismatch: binary requires ${version} but your system has an older version. This typically happens on Alpine/musl or older Linux distros.`,
-            remediation: 'Install from source with: cargo install perl-lsp-rs\nOr set perl-lsp.serverPath to a locally-built binary.',
+            remediation: 'Install from source with: cargo install perllsp\nOr set perl-lsp.serverPath to a locally-built binary.',
         };
     }
 
@@ -50,7 +50,7 @@ export function classifyStartupError(output: string): StartupErrorDiagnosis {
         return {
             kind: StartupErrorKind.MissingSharedLibrary,
             hint: `Missing shared library: ${lib}. The pre-built binary depends on system libraries not present on your machine.`,
-            remediation: `Install the missing library (e.g. apt install ${lib.replace(/\.so.*/, '')} or equivalent), or install from source: cargo install perl-lsp-rs`,
+            remediation: `Install the missing library (e.g. apt install ${lib.replace(/\.so.*/, '')} or equivalent), or install from source: cargo install perllsp`,
         };
     }
 
@@ -59,7 +59,7 @@ export function classifyStartupError(output: string): StartupErrorDiagnosis {
         return {
             kind: StartupErrorKind.ExecFormatError,
             hint: 'Architecture mismatch: the pre-built binary is for a different CPU architecture than your system.',
-            remediation: 'Reinstall the extension to get a binary for your architecture, or build from source: cargo install perl-lsp-rs',
+            remediation: 'Reinstall the extension to get a binary for your architecture, or build from source: cargo install perllsp',
         };
     }
 
@@ -82,7 +82,7 @@ export function classifyStartupError(output: string): StartupErrorDiagnosis {
         return {
             kind: StartupErrorKind.WindowsBinaryError,
             hint: 'Windows could not load the LSP binary. The binary may be corrupt, for a different Windows architecture (x86 vs x64), or missing a required DLL.',
-            remediation: 'Reinstall the extension to get a matching binary, or build from source: cargo install perl-lsp-rs',
+            remediation: 'Reinstall the extension to get a matching binary, or build from source: cargo install perllsp',
         };
     }
 

@@ -58,10 +58,22 @@ describe('BinaryDownloader.getPlatformTarget', () => {
     process.env.ANDROID_ROOT = androidRootBackup;
     process.env.ANDROID_DATA = androidDataBackup;
     process.env.TERMUX_VERSION = termuxVersionBackup;
+    jest.restoreAllMocks();
   });
 
   function getPlatformTarget(dl: any): string {
     return dl.getPlatformTarget();
+  }
+
+  function mockConfig(overrides: Record<string, unknown>): void {
+    const vscode = require('vscode');
+    vscode.workspace.getConfiguration.mockImplementationOnce(() => ({
+      get: jest.fn((key: string, defaultValue?: unknown) => {
+        if (key in overrides) { return overrides[key]; }
+        return defaultValue;
+      }),
+      update: jest.fn(),
+    }));
   }
 
   test('returns a non-empty target triple', () => {
@@ -89,6 +101,39 @@ describe('BinaryDownloader.getPlatformTarget', () => {
     jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(true);
     const target = getPlatformTarget(downloader);
     expect(target).toMatch(/-linux-android$/);
+  });
+
+  test('linuxLibc=glibc selects GNU Linux release target', () => {
+    if (process.platform !== 'linux') {
+      return;
+    }
+
+    mockConfig({ linuxLibc: 'glibc' });
+    jest.spyOn(downloader as any, 'detectMusl').mockReturnValue(true);
+
+    expect(getPlatformTarget(downloader)).toMatch(/-unknown-linux-gnu$/);
+  });
+
+  test('linuxLibc=musl selects musl Linux release target', () => {
+    if (process.platform !== 'linux') {
+      return;
+    }
+
+    mockConfig({ linuxLibc: 'musl' });
+    jest.spyOn(downloader as any, 'detectMusl').mockReturnValue(false);
+
+    expect(getPlatformTarget(downloader)).toMatch(/-unknown-linux-musl$/);
+  });
+
+  test('linuxLibc=auto follows musl detection', () => {
+    if (process.platform !== 'linux') {
+      return;
+    }
+
+    mockConfig({ linuxLibc: 'auto' });
+    jest.spyOn(downloader as any, 'detectMusl').mockReturnValue(true);
+
+    expect(getPlatformTarget(downloader)).toMatch(/-unknown-linux-musl$/);
   });
 });
 
