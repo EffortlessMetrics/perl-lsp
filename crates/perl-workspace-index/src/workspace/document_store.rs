@@ -245,6 +245,39 @@ mod tests {
     }
 
     #[test]
+    fn test_update_accepts_same_version() {
+        let store = DocumentStore::new();
+        let uri = "file:///same-version.pl".to_string();
+
+        store.open(uri.clone(), 5, "first".to_string());
+        assert!(store.update(&uri, 5, "second".to_string()));
+
+        let doc = must_some(store.get(&uri));
+        assert_eq!(doc.version, 5);
+        assert_eq!(doc.text, "second");
+    }
+
+    #[test]
+    fn test_open_replaces_existing_document() {
+        let store = DocumentStore::new();
+        let uri = "file:///replace.pl".to_string();
+
+        store.open(uri.clone(), 1, "old".to_string());
+        store.open(uri.clone(), 7, "new".to_string());
+
+        assert_eq!(store.count(), 1);
+        let doc = must_some(store.get(&uri));
+        assert_eq!(doc.version, 7);
+        assert_eq!(doc.text, "new");
+    }
+
+    #[test]
+    fn test_close_returns_false_for_missing_document() {
+        let store = DocumentStore::new();
+        assert!(!store.close("file:///missing.pl"));
+    }
+
+    #[test]
     fn test_update_rebuilds_line_index() {
         let store = DocumentStore::new();
         let uri = "file:///lines.pl".to_string();
