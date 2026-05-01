@@ -145,6 +145,7 @@ pub mod config;
 pub mod error;
 mod heredoc;
 pub mod keywords;
+mod lexer;
 pub mod limits;
 pub mod mode;
 mod quote_handler;
@@ -156,6 +157,7 @@ pub use api::*;
 pub use checkpoint::{CheckpointCache, Checkpointable, LexerCheckpoint};
 pub use config::LexerConfig;
 pub use error::{LexerError, Result};
+pub use lexer::PerlLexer;
 pub use limits::MAX_REGEX_PARSE_STEPS;
 pub use mode::LexerMode;
 pub use perl_position_tracking::Position;
@@ -168,107 +170,7 @@ use crate::limits::{
     HEREDOC_TIMEOUT_MS, MAX_DELIM_NEST, MAX_HEREDOC_BYTES, MAX_HEREDOC_DEPTH, MAX_REGEX_BYTES,
 };
 
-/// Context-aware Perl lexer that produces a token stream from source text.
-///
-/// The lexer tracks an internal [`LexerMode`] to disambiguate context-sensitive
-/// syntax (e.g., `/` as division vs. regex delimiter). Construct with
-/// [`PerlLexer::new`] and call [`PerlLexer::next_token`] or
-/// [`PerlLexer::collect_tokens`] to consume the stream.
-///
-/// # Examples
-///
-/// ```rust
-/// use perl_lexer::{PerlLexer, TokenType};
-///
-/// let mut lexer = PerlLexer::new("my $x = 42;");
-/// let tokens = lexer.collect_tokens();
-/// assert!(!tokens.is_empty());
-/// ```
-pub struct PerlLexer<'a> {
-    input: &'a str,
-    /// Cached input bytes for faster access
-    input_bytes: &'a [u8],
-    position: usize,
-    mode: LexerMode,
-    config: LexerConfig,
-    /// Stack for nested delimiters in s{}{} constructs
-    delimiter_stack: Vec<char>,
-    /// Track if we're inside prototype parens after 'sub'
-    in_prototype: bool,
-    /// Paren depth to track when we exit prototype
-    prototype_depth: usize,
-    /// Track if we just saw a 'sub' keyword (waiting for possible prototype)
-    after_sub: bool,
-    /// Track if we just saw a '->' operator (to suppress s/tr/y as substitution)
-    after_arrow: bool,
-    /// Depth of hash-subscript brace nesting.
-    /// When > 0, suppresses quote-op detection so `m`, `s`, `q*`, `tr`, `y`
-    /// are treated as bareword identifiers (hash keys) rather than regex operators.
-    /// Depth tracking means all positions inside `$h{...}` — including after commas
-    /// in hash slices like `@h{m, s}` — correctly suppress quote-op misidentification.
-    hash_brace_depth: usize,
-    /// Set to `true` immediately after emitting a complete `$var`, `@var`, or `%var`
-    /// token (not bare sigils used for dereference). Cleared by any operator,
-    /// punctuation, or keyword token. The `{` handler increments `hash_brace_depth`
-    /// only when this flag is set, ensuring only genuine hash/slice subscripts
-    /// (e.g. `$h{m}`, `@h{s, tr}`) suppress quote-op detection — not block-opening
-    /// braces after `sub foo`, `if (cond)`, `else`, `while (cond)`, etc.
-    after_var_subscript: bool,
-    /// Depth of open parentheses — used to distinguish `(1<<func())` (bitshift)
-    /// from `print $fh <<END` (heredoc at statement level, paren_depth == 0).
-    paren_depth: usize,
-    /// Current position with line/column tracking
-    #[allow(dead_code)]
-    current_pos: Position,
-    /// Track if we just skipped a newline (for __DATA__/__END__ detection)
-    after_newline: bool,
-    /// Queue of pending heredocs waiting for their bodies
-    pending_heredocs: Vec<HeredocSpec>,
-    /// Track the byte offset of the current line's start
-    line_start_offset: usize,
-    /// If true, emit `HeredocBody` tokens; otherwise just consume them.
-    emit_heredoc_body_tokens: bool,
-    /// Current quote operator being parsed
-    current_quote_op: Option<quote_handler::QuoteOperatorInfo>,
-    /// Track if EOF has been emitted to prevent infinite loops
-    eof_emitted: bool,
-    /// Start time for timeout protection
-    start_time: std::time::Instant,
-}
-
 impl<'a> PerlLexer<'a> {
-    /// Create a new lexer for the given input
-    pub fn new(input: &'a str) -> Self {
-        Self::with_config(input, LexerConfig::default())
-    }
-
-    /// Create a new lexer with custom configuration
-    pub fn with_config(input: &'a str, config: LexerConfig) -> Self {
-        Self {
-            input,
-            input_bytes: input.as_bytes(),
-            position: 0,
-            mode: LexerMode::ExpectTerm,
-            config,
-            delimiter_stack: Vec::new(),
-            in_prototype: false,
-            prototype_depth: 0,
-            after_sub: false,
-            after_arrow: false,
-            hash_brace_depth: 0,
-            after_var_subscript: false,
-            paren_depth: 0,
-            current_pos: Position::start(),
-            after_newline: true, // Start of file counts as after newline
-            pending_heredocs: Vec::new(),
-            line_start_offset: 0,
-            emit_heredoc_body_tokens: false,
-            current_quote_op: None,
-            eof_emitted: false,
-            start_time: std::time::Instant::now(),
-        }
-    }
-
     /// Create a new lexer that emits `HeredocBody` tokens (for LSP folding)
     pub fn with_body_tokens(input: &'a str) -> Self {
         let mut lexer = Self::new(input);
