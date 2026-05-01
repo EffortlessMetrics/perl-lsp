@@ -61,6 +61,12 @@ Install and editor setup live in [Install and Editor Setup](docs/how-to/EDITOR_S
 
 The VS Code extension downloads the matching `perllsp` binary automatically. Other editors use the `perllsp --stdio` server command after installing a release binary.
 
+Homebrew users can install from the official tap:
+
+```bash
+brew install EffortlessMetrics/tap/perllsp
+```
+
 Do not install `perl-lsp` from crates.io; that is a different project.
 
 ## Crate surface

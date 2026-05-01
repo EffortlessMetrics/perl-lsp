@@ -34,7 +34,7 @@ perllsp --info
 Install the latest release with one command:
 
 ```bash
-brew install perl-lsp
+brew install EffortlessMetrics/tap/perllsp
 ```
 
 This covers macOS Intel, macOS Apple Silicon, Linux x86_64, and Linux aarch64 via Linuxbrew. The formula is automatically bumped on each release.

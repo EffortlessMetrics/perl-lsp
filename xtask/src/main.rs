@@ -256,7 +256,7 @@ enum Commands {
         prefix: String,
 
         /// Output path for generated Homebrew formula.
-        #[arg(long, default_value = "homebrew/perl-lsp.rb")]
+        #[arg(long, default_value = "Formula/perllsp.rb")]
         output: PathBuf,
     },
 

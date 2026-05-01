@@ -8,17 +8,11 @@ use std::process::Command;
 
 use crate::utils::project_root;
 
-/// Arguments for `cargo xtask update-homebrew`.
 pub struct UpdateHomebrewConfig {
-    /// Release tag used by the artifact URLs (for example `v0.8.3`).
     pub version: String,
-    /// GitHub organization owning the release repository.
     pub owner: String,
-    /// GitHub repository name.
     pub repo: String,
-    /// Artifact filename prefix.
     pub prefix: String,
-    /// Output path for generated Homebrew formula.
     pub output: PathBuf,
 }
 
@@ -58,22 +52,7 @@ pub fn run(config: UpdateHomebrewConfig) -> Result<()> {
     write_formula(&output, &formula)?;
 
     println!("✅ Homebrew formula updated for version {release_version}");
-    println!();
-    println!("Checksums:");
-    println!("  macOS ARM64:  {mac_sha_arm}");
-    println!("  macOS x86_64: {mac_sha_x64}");
-    println!("  Linux ARM64:  {linux_sha_arm}");
-    println!("  Linux x86_64: {linux_sha_x64}");
-    println!();
-    println!("Next steps:");
-    println!("1. Review the formula: cat {}", output.display());
-    println!("2. Copy to your homebrew-tap repository");
-    println!("3. Commit and push the updated formula");
-    println!();
-    println!("Users can then install with:");
-    println!("  brew tap effortlesssteven/tap");
-    println!("  brew install perl-lsp");
-
+    println!("Users can install with: brew install EffortlessMetrics/tap/perllsp");
     Ok(())
 }
 
@@ -92,7 +71,6 @@ fn resolve_output_path(path: PathBuf) -> Result<PathBuf> {
     if path.is_absolute() {
         return Ok(path);
     }
-
     let root = project_root()?;
     Ok(root.join(path))
 }
@@ -102,12 +80,12 @@ fn download_sha256sums(url: &str) -> Result<String> {
         .args(["-sSfL", url])
         .output()
         .with_context(|| format!("failed to run curl for {url}"))?;
-
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(eyre!("failed to fetch SHA256SUMS from {url}: {stderr}"));
+        return Err(eyre!(
+            "failed to fetch SHA256SUMS from {url}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
     }
-
     String::from_utf8(output.stdout)
         .with_context(|| format!("response from {url} was not valid UTF-8"))
 }
@@ -116,18 +94,13 @@ fn parse_sha256sums(raw: &str) -> Result<BTreeMap<String, String>> {
     let mut map = BTreeMap::new();
     for line in raw.lines() {
         let mut parts = line.split_whitespace();
-        let hash = parts.next();
-        let file = parts.next();
-
-        if let (Some(hash), Some(file)) = (hash, file) {
+        if let (Some(hash), Some(file)) = (parts.next(), parts.next()) {
             map.insert(file.to_string(), hash.to_string());
         }
     }
-
     if map.is_empty() {
         return Err(eyre!("SHA256SUMS did not contain any valid checksums"));
     }
-
     Ok(map)
 }
 
@@ -151,88 +124,60 @@ fn build_brew_formula(
         "https://github.com/{}/{}/releases/download/{release_tag}",
         config.owner, config.repo
     );
-    let mac_arm_filename = artifact_filename(&config.prefix, version, MAC_ARM);
-    let mac_x64_filename = artifact_filename(&config.prefix, version, MAC_X64);
-    let linux_arm_filename = artifact_filename(&config.prefix, version, LIN_ARM);
-    let linux_x64_filename = artifact_filename(&config.prefix, version, LIN_X64);
-
     format!(
-        r##"class PerlLsp < Formula
-  desc "Fast, reliable Perl language server with 100% syntax coverage"
+        r##"class Perllsp < Formula
+  desc "Native Rust language server and debug adapter for Perl"
   homepage "https://github.com/{owner}/{repo}"
   version "{version}"
-  license "MIT"
+  license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do
     if Hardware::CPU.arm?
-      url "{base}/{mac_arm_filename}"
+      url "{base}/{mac_arm}"
       sha256 "{mac_arm_sha}"
     else
-      url "{base}/{mac_x64_filename}"
+      url "{base}/{mac_x64}"
       sha256 "{mac_x64_sha}"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "{base}/{linux_arm_filename}"
+      url "{base}/{linux_arm}"
       sha256 "{linux_arm_sha}"
     else
-      url "{base}/{linux_x64_filename}"
+      url "{base}/{linux_x64}"
       sha256 "{linux_x64_sha}"
     end
   end
 
   def install
-    # Find the extracted directory (should be perllsp-v*).
-    extracted_dir = Dir.glob("perllsp-v*").first
-    if extracted_dir && File.directory?(extracted_dir)
+    extracted_dir = Dir.glob("perllsp-*").find {{ |dir| File.directory?(dir) }}
+
+    if extracted_dir
       bin.install "#{{extracted_dir}}/perllsp"
+      bin.install "#{{extracted_dir}}/perl-dap" if File.exist?("#{{extracted_dir}}/perl-dap")
     else
-      # Fallback: binary might be in the root
       bin.install "perllsp"
+      bin.install "perl-dap" if File.exist?("perl-dap")
     end
   end
 
-  def caveats
-    <<~EOS
-      To use perl-lsp with your editor:
-
-      VS Code:
-        Install the "Perl Language Server" extension from the marketplace
-
-      Neovim (with lspconfig):
-        require('lspconfig').perl_lsp.setup{{
-          cmd = {{'#{{opt_bin}}/perllsp', '--stdio'}}
-        }}
-
-      Emacs (with lsp-mode):
-        (lsp-register-client
-         (make-lsp-client :new-connection (lsp-stdio-connection '#{{opt_bin}}/perllsp' "--stdio")
-                          :activation-fn (lsp-activate-on "perl")
-                          :server-id 'perl-lsp))
-    EOS
-  end
-
   test do
-    # Test that the binary runs and responds to version request
-    assert_match(/perllsp|Perl LSP/, shell_output("#{{bin}}/perllsp --version"))
-
-    # Test LSP initialization
-    input = '{{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{}}}}'
-    output = pipe_output("#{{bin}}/perllsp --stdio", input, 0)
-    assert_match(/Content-Length/, output)
+    output = shell_output("#{{bin}}/perllsp --version")
+    assert_match "perllsp", output
+    assert_match version.to_s, output
   end
 end
 "##,
         owner = config.owner,
         repo = config.repo,
-        base = base,
         version = version,
-        mac_arm_filename = mac_arm_filename,
-        mac_x64_filename = mac_x64_filename,
-        linux_arm_filename = linux_arm_filename,
-        linux_x64_filename = linux_x64_filename,
+        base = base,
+        mac_arm = artifact_filename(&config.prefix, version, MAC_ARM),
+        mac_x64 = artifact_filename(&config.prefix, version, MAC_X64),
+        linux_arm = artifact_filename(&config.prefix, version, LIN_ARM),
+        linux_x64 = artifact_filename(&config.prefix, version, LIN_X64),
         mac_arm_sha = checksums.mac_arm,
         mac_x64_sha = checksums.mac_x64,
         linux_arm_sha = checksums.linux_arm,
@@ -249,10 +194,61 @@ fn write_formula(path: &std::path::Path, content: &str) -> Result<()> {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create directory for {}", path.display()))?;
     }
-
     fs::write(path, format!("{content}\n"))
         .with_context(|| format!("failed to write Homebrew formula to {}", path.display()))?;
-    println!("[homebrew] wrote {}", path.display());
-
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config() -> UpdateHomebrewConfig {
+        UpdateHomebrewConfig {
+            version: "v0.13.0".to_string(),
+            owner: "EffortlessMetrics".to_string(),
+            repo: "perl-lsp".to_string(),
+            prefix: "perllsp".to_string(),
+            output: PathBuf::from("Formula/perllsp.rb"),
+        }
+    }
+
+    #[test]
+    fn generated_formula_uses_perllsp_artifacts() {
+        let formula = build_brew_formula(
+            &config(),
+            "v0.13.0",
+            "0.13.0",
+            &Checksums { mac_arm: "a", mac_x64: "b", linux_arm: "c", linux_x64: "d" },
+        );
+        assert!(formula.contains("perllsp-0.13.0-x86_64-apple-darwin.tar.gz"));
+        assert!(formula.contains("perllsp-0.13.0-aarch64-apple-darwin.tar.gz"));
+        assert!(formula.contains("perllsp-0.13.0-x86_64-unknown-linux-gnu.tar.gz"));
+        assert!(formula.contains("perllsp-0.13.0-aarch64-unknown-linux-gnu.tar.gz"));
+        assert!(!formula.contains("perl-lsp-0.13.0-"));
+    }
+
+    #[test]
+    fn generated_formula_installs_perllsp_and_optional_perl_dap() {
+        let formula = build_brew_formula(
+            &config(),
+            "v0.13.0",
+            "0.13.0",
+            &Checksums { mac_arm: "a", mac_x64: "b", linux_arm: "c", linux_x64: "d" },
+        );
+        assert!(formula.contains("class Perllsp < Formula"));
+        assert!(formula.contains("Dir.glob(\"perllsp-*\")"));
+        assert!(formula.contains("bin.install \"#{extracted_dir}/perllsp\""));
+        assert!(formula.contains("bin.install \"#{extracted_dir}/perl-dap\" if File.exist?(\"#{extracted_dir}/perl-dap\")"));
+        assert!(!formula.contains("__RELEASE_VERSION__"));
+        assert!(!formula.contains("__SHA256_"));
+    }
+
+    #[test]
+    fn default_artifact_prefix_matches_release_workflow() {
+        assert_eq!(
+            artifact_filename("perllsp", "0.13.0", MAC_X64),
+            "perllsp-0.13.0-x86_64-apple-darwin.tar.gz"
+        );
+    }
 }
