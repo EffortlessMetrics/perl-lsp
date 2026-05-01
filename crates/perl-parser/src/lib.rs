@@ -366,19 +366,22 @@
 
 /// Parser engine components and supporting utilities.
 pub mod engine;
+/// Canonical parser-kernel facade and types.
+pub mod core;
+/// Canonical convenience imports for parser consumers.
+pub mod prelude;
+mod compat;
 /// Legacy module aliases for moved engine components.
-pub use engine::{error, parser, position};
+pub use compat::{error, parser, position};
 
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
-pub use engine::ast;
+pub use core::ast;
 /// Experimental second-generation AST (work in progress).
 pub use engine::ast_v2;
 /// Edit tracking for incremental parsing.
 pub use engine::edit;
 /// Heredoc content collector with FIFO ordering and indent stripping.
 pub use engine::heredoc_collector;
-/// Recursive descent Perl parser with error recovery and AST generation.
-pub use engine::parser::Parser;
 /// Parser context with error recovery support.
 pub use engine::parser_context;
 /// Pragma tracking for `use` and related directives.
@@ -525,9 +528,9 @@ pub use workspace::workspace_refactor;
 pub use workspace::workspace_rename;
 
 /// AST node, node kind enum, and source location types.
-pub use ast::{Node, NodeKind, SourceLocation};
-/// Parse error and result types for parser output.
-pub use error::{ParseError, ParseResult, RecoverySalvageClass, RecoverySalvageProfile};
+pub use core::{Node, NodeKind, ParseError, ParseOutput, ParseResult, Parser, SourceLocation};
+/// Parse recovery profile classifications for resilient parsing.
+pub use error::{RecoverySalvageClass, RecoverySalvageProfile};
 #[cfg(feature = "incremental")]
 /// Checkpointed incremental parser with simple edit tracking.
 pub use incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};
