@@ -123,6 +123,8 @@ cargo install --git https://github.com/EffortlessMetrics/perl-lsp --package perl
 
 Then point the extension to your `perllsp` binary via `perl-lsp.serverPath`.
 
+The extension selects the correct Linux binary automatically. Manual Linux downloads only need to distinguish between glibc (`gnu`, most distributions) and musl (`musl`, commonly Alpine Linux).
+
 ## Configuration
 
 All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` and search for "perl-lsp".
@@ -248,3 +250,6 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
 ## License
 
 MIT
+
+
+- `perl-lsp.linuxLibc` (advanced): `auto` (default), `glibc`, or `musl` for Linux binary selection overrides.

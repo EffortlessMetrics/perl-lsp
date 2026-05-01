@@ -18,7 +18,9 @@ BIN_NAME="perllsp"
 DAP_BIN_NAME="perl-dap"
 VERSION="${VERSION:-latest}"
 PREFER_GNU="${PREFER_GNU:-0}"
+PERL_LSP_LINUX_LIBC="${PERL_LSP_LINUX_LIBC:-auto}"
 BUILD_FROM_SOURCE="${BUILD_FROM_SOURCE:-0}"
+PRINT_TARGET=0
 
 # Determine install directory: user-local by default, system-wide if explicitly set
 if [ -z "${INSTALL_DIR:-}" ]; then
@@ -64,18 +66,44 @@ detect_platform() {
         _termux=1
     fi
 
+    if [ "${1:-}" = "--print-target" ]; then
+        PRINT_TARGET=1
+    fi
+
+    if [ "$_termux" = "1" ]; then
+        err "Termux/Android does not currently have a pre-built release asset.
+
+Install from source instead:
+  pkg install rust
+  cargo install perllsp
+
+Then configure your editor to run:
+  perllsp --stdio"
+    fi
+
+    detect_linux_libc() {
+        local choice
+        case "${PERL_LSP_LINUX_LIBC:-auto}" in
+            auto|"") choice="auto" ;;
+            glibc|gnu) choice="gnu" ;;
+            musl) choice="musl" ;;
+            *)
+                err "invalid PERL_LSP_LINUX_LIBC value: ${PERL_LSP_LINUX_LIBC}
+Expected one of: auto, glibc, gnu, musl"
+                ;;
+        esac
+        if [ "$choice" != "auto" ]; then echo "$choice"; return; fi
+        if [ "$PREFER_GNU" = "1" ]; then echo "gnu"; return; fi
+        if [ -f /etc/alpine-release ]; then echo "musl"; return; fi
+        if command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; then echo "musl"; return; fi
+        if ls /lib/ld-musl-*.so.1 /usr/lib/ld-musl-*.so.1 >/dev/null 2>&1; then echo "musl"; return; fi
+        echo "gnu"
+    }
+
     case "$_os" in
         Linux)
             _os="linux"
-            # Termux uses Android's bionic libc. Prefer static musl binaries there.
-            # For other Linux environments, prefer musl unless caller overrides.
-            if [ "$_termux" = "1" ]; then
-                _libc="musl"
-            elif [ "$PREFER_GNU" = "1" ]; then
-                _libc="gnu"
-            else
-                _libc="musl"
-            fi
+            _libc="$(detect_linux_libc)"
             ;;
         Darwin)
             _os="darwin"
@@ -124,10 +152,12 @@ detect_platform() {
         else
             TARGET="${_arch}-apple-darwin"
         fi
-        info "platform: $_os $_arch (target: $TARGET)"
-        if [ "$_termux" = "1" ]; then
-            info "termux environment detected; using musl release artifacts for compatibility"
+        if [ "$_os" = "linux" ] && [ "$_libc" = "musl" ]; then
+            info "detected: Linux ${_arch} using musl (Alpine/musl)"
+        elif [ "$_os" = "linux" ]; then
+            info "detected: Linux ${_arch} using glibc (most distributions)"
         fi
+        info "selected release asset target: $TARGET"
     else
         TARGET="${SOURCE_TARGET:-}"
         if [ -n "$TARGET" ]; then
@@ -332,7 +362,11 @@ main() {
     need_cmd curl
     need_cmd tar
 
-    detect_platform
+    detect_platform "${1:-}"
+    if [ "${1:-}" = "--print-target" ]; then
+        printf '%s\n' "$TARGET"
+        exit 0
+    fi
     resolve_version
     TMPDIR="$(mktemp -d)"
     # shellcheck disable=SC2064

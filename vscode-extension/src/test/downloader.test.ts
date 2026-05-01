@@ -9,7 +9,14 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { BinaryDownloader, parseLocalVersion, compareVersions } from '../downloader';
+import * as vscode from 'vscode';
+import {
+  BinaryDownloader,
+  parseLocalVersion,
+  compareVersions,
+  describeDownloadTarget,
+  linuxLibcChoiceToTargetSuffix,
+} from '../downloader';
 
 // ---------------------------------------------------------------------------
 // Helpers: build a minimal mock ExtensionContext
@@ -30,6 +37,39 @@ function makeOutputChannel(): any {
     dispose: jest.fn(),
   };
 }
+
+describe('describeDownloadTarget', () => {
+  test('describes Linux glibc targets in human terms', () => {
+    expect(describeDownloadTarget('aarch64-unknown-linux-gnu')).toContain('Linux ARM64');
+    expect(describeDownloadTarget('aarch64-unknown-linux-gnu')).toContain('glibc');
+  });
+
+  test('describes Linux musl targets in human terms', () => {
+    expect(describeDownloadTarget('x86_64-unknown-linux-musl')).toContain('musl');
+    expect(describeDownloadTarget('x86_64-unknown-linux-musl')).toContain('Alpine');
+  });
+
+  test('falls back to raw target for unknown targets', () => {
+    expect(describeDownloadTarget('weird-target')).toBe('weird-target');
+  });
+});
+
+describe('linuxLibcChoiceToTargetSuffix', () => {
+  test('maps glibc and gnu to gnu', () => {
+    expect(linuxLibcChoiceToTargetSuffix('glibc')).toBe('gnu');
+    expect(linuxLibcChoiceToTargetSuffix('gnu')).toBe('gnu');
+  });
+
+  test('maps musl to musl', () => {
+    expect(linuxLibcChoiceToTargetSuffix('musl')).toBe('musl');
+  });
+
+  test('auto and invalid values return null', () => {
+    expect(linuxLibcChoiceToTargetSuffix('auto')).toBeNull();
+    expect(linuxLibcChoiceToTargetSuffix('')).toBeNull();
+    expect(linuxLibcChoiceToTargetSuffix('bogus')).toBeNull();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Platform target detection
@@ -82,6 +122,32 @@ describe('BinaryDownloader.getPlatformTarget', () => {
     jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(true);
     const target = getPlatformTarget(downloader);
     expect(target).toMatch(/-linux-android$/);
+  });
+
+  test('Linux libc override can force musl', () => {
+    if (process.platform !== 'linux') {
+      return;
+    }
+    jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+      get: ((k: string, d: string) => (k === 'linuxLibc' ? 'musl' : d)),
+    } as any);
+    jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(false);
+    jest.spyOn(downloader as any, 'isAndroidEnvironment').mockReturnValue(false);
+    const target = getPlatformTarget(downloader);
+    expect(target).toMatch(/-unknown-linux-musl$/);
+  });
+
+  test('Linux libc override can force glibc/gnu', () => {
+    if (process.platform !== 'linux') {
+      return;
+    }
+    jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
+      get: ((k: string, d: string) => (k === 'linuxLibc' ? 'glibc' : d)),
+    } as any);
+    jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(false);
+    jest.spyOn(downloader as any, 'isAndroidEnvironment').mockReturnValue(false);
+    const target = getPlatformTarget(downloader);
+    expect(target).toMatch(/-unknown-linux-gnu$/);
   });
 });
 
