@@ -1890,6 +1890,7 @@ dependencies = [
  "perl-parser-core",
  "perl-semantic-facts",
  "perl-tdd-support",
+ "proptest",
  "serde",
  "serde_json",
 ]
