@@ -24,6 +24,7 @@ serde_json.workspace = true
 anyhow.workspace = true
 # (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
 perl-lsp-rs-core = { workspace = true }
+perl-ci-hygiene = { workspace = true }
 indicatif = "0.18.4"
 console = "0.16.2"
 chrono = { version = "0.4.43", features = ["serde"] }
@@ -31,7 +32,6 @@ perl-parser = { workspace = true }
 perl-corpus = { workspace = true }
 perl-lsp-ux-tests = { workspace = true }
 perl-parser-pest = { workspace = true, optional = true }
-perl-ci-hygiene = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-perl-c = { path = "../crates/tree-sitter-perl-c", optional = true }
 regex.workspace = true
