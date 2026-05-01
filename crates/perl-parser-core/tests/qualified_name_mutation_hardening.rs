@@ -196,6 +196,30 @@ fn double_separator_returns_empty_segment_error() {
     assert!(result.is_err(), "'Foo::::Bar' must be rejected");
 }
 
+#[test]
+fn invalid_segment_reports_precise_index() {
+    let result = validate_perl_qualified_name("Alpha::1beta::Gamma");
+    assert!(
+        matches!(
+            result,
+            Err(perl_parser_core::qualified_name::QualifiedNameError::InvalidSegment { index: 1 })
+        ),
+        "invalid middle segment must report index 1, got {result:?}"
+    );
+}
+
+#[test]
+fn invalid_final_segment_reports_precise_index() {
+    let result = validate_perl_qualified_name("Alpha::Beta::bad-segment");
+    assert!(
+        matches!(
+            result,
+            Err(perl_parser_core::qualified_name::QualifiedNameError::InvalidSegment { index: 2 })
+        ),
+        "invalid final segment must report index 2, got {result:?}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // is_valid_identifier_part — start-character rule
 //
