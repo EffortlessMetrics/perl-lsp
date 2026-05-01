@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-05-01
+
+Release notes: [v0.13.0](docs/releases/v0.13.0.md)
+
+### Release
+
+- **Public alpha `v0.13.0` release** — promotes the `0.13.0-rc1` train to the
+  public alpha release line for GitHub Releases, crates.io, Docker Hub, VS Marketplace,
+  and Open VSX.
+- **Microcrate collapse release surface** — finalizes the v0.13.0 published crate
+  surface at 32 crates, including `perl-semantic-facts`; downstream crate consumers
+  should use [`docs/MIGRATION_v0.13.md`](docs/MIGRATION_v0.13.md) for retired-crate
+  to owning-crate mappings.
+- **Parser/LSP/DAP release hardening** — carries forward the RC train's parser,
+  LSP, DAP, feature-catalog, and release-gate hardening without expanding the
+  published crate surface.
+- **Marketplace/Open VSX publish path** — extension publishes use non-prerelease
+  SemVer `0.13.0`; Open VSX has a standalone channel path so Marketplace rejection
+  cannot cascade-skip the Open VSX publish.
+
 ## [0.13.0-rc1] - 2026-04-30
 
 Release notes: [v0.13.0-rc1](docs/releases/v0.13.0-rc1.md)
@@ -529,7 +549,7 @@ Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://g
 
 Release notes: [v0.12.3](docs/releases/v0.12.3.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.3)
 
-<!-- Pipeline rehearsal release — validates the full publish + extension + Docker cycle before v0.13.0 public alpha -->
+<!-- Pipeline rehearsal release — validates the full publish + extension + Docker cycle before the v0.13.0 release train -->
 <!-- Rolls up publish pipeline fixes, UX P0 improvements, and CI hardening from Waves 10/11/12 -->
 
 ### Headlines
@@ -1251,5 +1271,6 @@ For the full cross-channel release history, see [RELEASE_HISTORY.md](RELEASE_HIS
 [0.9.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.9.1
 [0.9.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.9.0
 [0.8.8]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.8.8
+[0.13.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.0-rc1...v0.13.0
 [0.13.0-rc1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.4...v0.13.0-rc1
-[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.0-rc1...HEAD
+[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.0...HEAD

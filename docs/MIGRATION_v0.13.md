@@ -38,7 +38,7 @@ The same applies to the other 28 crates in the published set:
 ## If you depend on a retired crate
 
 If your `Cargo.toml` lists a dependency on any crate not in the list above, that crate
-has been retired. Its code now lives as a module inside one of the 30 published crates.
+has been retired. Its code now lives as a module inside one of the 32 published crates.
 
 **Steps to migrate:**
 
@@ -111,7 +111,7 @@ perl-workspace-index = "0.12.4"
 perl-workspace = "0.13.0"
 ```
 
-> The root `Cargo.toml` aliases `perl-workspace = { path = "crates/perl-workspace-index", version = "0.12.4" }`
+> The root `Cargo.toml` aliases `perl-workspace = { path = "crates/perl-workspace-index", version = "0.13.0" }`
 > so the package is published under the new name. Your `Cargo.toml` dependency key changes
 > from `perl-workspace-index` to `perl-workspace`.
 
@@ -544,8 +544,11 @@ their owning published crate in v0.13.0.
 **Enabling feature flags in v0.13.0:**
 
 ```toml
-# Enable incremental parsing and workspace-wide indexing
-perl-parser = { version = "0.13.0", features = ["incremental", "workspace"] }
+# Enable incremental parsing
+perl-parser = { version = "0.13.0", features = ["incremental"] }
+
+# Enable workspace-wide indexing
+perl-workspace = { version = "0.13.0", features = ["workspace"] }
 
 # Enable the lsp-compat shim (needed if you consume lsp-types alongside perl-lsp types)
 perl-lsp-rs-core = { version = "0.13.0", features = ["lsp-compat"] }
@@ -607,7 +610,7 @@ artifact and a semver contract. The full analysis is in
 ## Timeline
 
 - The collapse ran across 14 PRs from 2026-04-15 to 2026-04-21.
-- v0.13.0 is the first release with the new 30-crate surface.
+- v0.13.0 is the first release with the new 32-crate surface.
 - There is no extended migration window — old crate names are not re-published as shims.
 
 If you have questions, open a discussion on
