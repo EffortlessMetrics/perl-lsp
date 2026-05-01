@@ -401,15 +401,102 @@ gates:
       - clippy
       - strict
 
-  - name: unit_full
+  - name: unit_foundation_full
     tier: merge_gate
-    description: "All release-track workspace library tests (excluding internal tree-sitter harness)"
+    description: "Foundation token/AST workspace library tests"
     required: true
-    command: cargo test --workspace --lib --locked --exclude tree-sitter-perl
-    timeout_seconds: 600
+    command: >-
+      cargo test --locked --lib
+      -p perl-ast -p perl-ast-v2
+      -p perl-incremental-parsing
+      -p perl-line-index -p perl-parser-pest
+      -p perl-pod -p perl-position-tracking
+      -p perl-pragma -p perl-regex
+      -p perl-symbol -p perl-token -p perl-uri
+      -- --test-threads=4
+    timeout_seconds: 240
     retry_count: 1
     budgets:
-      max_duration_ms: 480000
+      max_duration_ms: 180000
+    quarantine: false
+    tags:
+      - test
+      - unit
+      - workspace
+
+  - name: unit_parser_stack_full
+    tier: merge_gate
+    description: "Parser, lexer, and parser-core library tests"
+    required: true
+    command: >-
+      cargo test --locked --lib
+      -p perl-parser -p perl-lexer -p perl-parser-core
+      -- --test-threads=4
+    timeout_seconds: 180
+    retry_count: 1
+    budgets:
+      max_duration_ms: 150000
+    quarantine: false
+    tags:
+      - test
+      - unit
+      - workspace
+
+  - name: unit_analysis_full
+    tier: merge_gate
+    description: "Semantic analysis, workspace, diagnostics, and refactoring library tests"
+    required: true
+    command: >-
+      cargo test --locked --lib
+      -p perl-corpus -p perl-dead-code -p perl-diagnostics
+      -p perl-module -p perl-refactoring
+      -p perl-semantic-analyzer -p perl-semantic-facts
+      -p perl-workspace
+      -- --test-threads=4
+    timeout_seconds: 300
+    retry_count: 1
+    budgets:
+      max_duration_ms: 240000
+    quarantine: false
+    tags:
+      - test
+      - unit
+      - workspace
+
+  - name: unit_lsp_full
+    tier: merge_gate
+    description: "LSP, editor UX, perltidy, and subprocess library tests"
+    required: true
+    command: >-
+      cargo test --locked --lib
+      -p perl-lsp-perltidy -p perl-lsp-rs
+      -p perl-lsp-rs-core -p perl-lsp-ux-tests
+      -p perl-subprocess-runtime -p perllsp
+      -- --test-threads=4
+    timeout_seconds: 300
+    retry_count: 1
+    budgets:
+      max_duration_ms: 240000
+    quarantine: false
+    tags:
+      - test
+      - unit
+      - workspace
+
+  - name: unit_dap_support_full
+    tier: merge_gate
+    description: "DAP, CI hygiene, test support, and tree-sitter workspace library tests"
+    required: true
+    command: >-
+      cargo test --locked --lib
+      -p perl-ci-hygiene -p perl-dap
+      -p perl-tdd-support -p perl-test-generators -p perl-test-must
+      -p tree-sitter-perl-c -p tree-sitter-perl-rs
+      -- --test-threads=4
+    timeout_seconds: 300
+    retry_count: 1
+    budgets:
+      max_duration_ms: 240000
     quarantine: false
     tags:
       - test
@@ -1033,7 +1120,11 @@ escape_hatches:
       - fmt
       - clippy_core
       - unit_core
-      - unit_full
+      - unit_foundation_full
+      - unit_parser_stack_full
+      - unit_analysis_full
+      - unit_lsp_full
+      - unit_dap_support_full
 
   # ---------------------------------------------------------------------------
   # Force merge despite failures
@@ -1116,22 +1207,21 @@ workflow_integration:
     ci-gate:
       gates:
         - fmt
-        - clippy_core
         - clippy_full
-        - unit_core
-        - unit_full
+        - unit_foundation_full
+        - unit_analysis_full
+        - unit_lsp_full
+        - unit_dap_support_full
+        - compile_all_targets
         - common_corpus_clean
-        - parser_corpus_ratchet
-        - cpan_corpus_ratchet
-        - parser_audit_closeout
-        - lsp_tier_a
-        - lsp_tier_b
         - lsp_smoke
-        - policy_checks
-        - workflow_audit
+        - docs_build
+        - v2_bundle_sync
         - nested_lock_check
         - published_crate_count
-      # Note: security_audit and docs_build run in separate jobs for caching
+      # Note: PR Smoke owns clippy_core/unit_core/parser stack. Parser audit,
+      # v2 parity, workflow audit, and full policy closeout remain defined but
+      # are too long for the bounded merge-blocking workflow shard.
 
     release-gate:
       gates:

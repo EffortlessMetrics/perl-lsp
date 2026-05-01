@@ -25,9 +25,9 @@ use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -1706,6 +1706,8 @@ struct ShellExecutionResult {
     timed_out: bool,
 }
 
+const MAX_GATE_OUTPUT_BYTES: u64 = 4 * 1024 * 1024;
+
 fn run_shell_command_with_timeout(
     command: &str,
     log_path: &Path,
@@ -1736,7 +1738,7 @@ fn run_shell_command_with_timeout(
             break (false, status.code().unwrap_or(-1));
         }
         if start.elapsed() >= timeout {
-            child.kill().ok();
+            terminate_shell_command(&mut child);
             child.wait().ok();
             break (true, 124_i32);
         }
@@ -1751,9 +1753,57 @@ fn run_shell_command_with_timeout(
         thread::sleep(Duration::from_millis(100));
     };
 
-    let stdout = fs::read_to_string(log_path).unwrap_or_default();
+    println!(
+        "gate command exited exit_code={} timed_out={} elapsed_ms={} log_path={}",
+        exit_code,
+        timed_out,
+        start.elapsed().as_millis(),
+        log_path.display()
+    );
+
+    let stdout = read_gate_output(log_path);
 
     Ok(ShellExecutionResult { stdout, exit_code, timed_out })
+}
+
+fn read_gate_output(log_path: &Path) -> String {
+    let metadata = match fs::metadata(log_path) {
+        Ok(metadata) => metadata,
+        Err(_) => return String::new(),
+    };
+
+    if metadata.len() <= MAX_GATE_OUTPUT_BYTES {
+        return fs::read_to_string(log_path).unwrap_or_default();
+    }
+
+    let tail_start = metadata.len().saturating_sub(MAX_GATE_OUTPUT_BYTES);
+    let mut file = match fs::File::open(log_path) {
+        Ok(file) => file,
+        Err(_) => return String::new(),
+    };
+
+    if file.seek(SeekFrom::Start(tail_start)).is_err() {
+        return String::new();
+    }
+
+    let mut bytes = Vec::with_capacity(MAX_GATE_OUTPUT_BYTES as usize);
+    if file.read_to_end(&mut bytes).is_err() {
+        return String::new();
+    }
+
+    let mut tail = String::from_utf8_lossy(&bytes).into_owned();
+    if tail_start > 0
+        && let Some(first_newline) = tail.find('\n')
+    {
+        tail = tail[first_newline + 1..].to_string();
+    }
+
+    format!(
+        "[gate log truncated to last {} bytes of {}]\n{}",
+        MAX_GATE_OUTPUT_BYTES,
+        metadata.len(),
+        tail
+    )
 }
 
 #[cfg(windows)]
@@ -1765,9 +1815,26 @@ fn shell_command_process(command: &str) -> Command {
 
 #[cfg(not(windows))]
 fn shell_command_process(command: &str) -> Command {
+    use std::os::unix::process::CommandExt;
+
     let mut cmd = Command::new("bash");
     cmd.args(["-lc", command]);
+    cmd.process_group(0);
     cmd
+}
+
+#[cfg(windows)]
+fn terminate_shell_command(child: &mut Child) {
+    child.kill().ok();
+}
+
+#[cfg(not(windows))]
+fn terminate_shell_command(child: &mut Child) {
+    let process_group = format!("-{}", child.id());
+    Command::new("kill").args(["-TERM", &process_group]).status().ok();
+    thread::sleep(Duration::from_secs(1));
+    Command::new("kill").args(["-KILL", &process_group]).status().ok();
+    child.kill().ok();
 }
 
 fn run_internal_xtask_gate(
@@ -2564,18 +2631,19 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, HashMap, HashSet};
+    use std::fs;
 
     use tempfile::tempdir;
 
     use super::{
         DiffResult, FirstFailure, GateDefinition, GateMetrics, GatePlanningConfig,
         GatePlanningRole, GatePolicy, GateResult, GateRunnerConfig, GateTier, GlobalSettings,
-        MetricChange, PackageTargetIndex, Receipt, blocking_failure_gate_names,
-        build_pr_fast_plan_from_scope, build_pr_fast_plan_from_scope_with_targets,
-        compare_receipts, determine_overall_status, extend_plan_with_non_pr_fast_static_gates,
-        extend_plan_with_static_tiers, failure_guidance, is_blocking_gate_status,
-        is_cargo_test_command, load_policy_for_inspection, parse_first_failure,
-        run_shell_command_with_timeout, run_single_gate,
+        MAX_GATE_OUTPUT_BYTES, MetricChange, PackageTargetIndex, Receipt,
+        blocking_failure_gate_names, build_pr_fast_plan_from_scope,
+        build_pr_fast_plan_from_scope_with_targets, compare_receipts, determine_overall_status,
+        extend_plan_with_non_pr_fast_static_gates, extend_plan_with_static_tiers, failure_guidance,
+        is_blocking_gate_status, is_cargo_test_command, load_policy_for_inspection,
+        parse_first_failure, read_gate_output, run_shell_command_with_timeout, run_single_gate,
     };
     use crate::tasks::ci_scope::{
         ArchWidener, DirectCrate, LaneDecisions, PlatformOverrides, RevDepCrate, ScopeOutput,
@@ -3176,6 +3244,21 @@ mod tests {
             execution.exit_code, 42,
             "natural exit code must be preserved (not overwritten with 124)"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn gate_output_reader_truncates_large_logs_to_tail() -> color_eyre::eyre::Result<()> {
+        let tmp = tempdir()?;
+        let log_path = tmp.path().join("large.log");
+        let mut contents = vec![b'a'; MAX_GATE_OUTPUT_BYTES as usize + 1024];
+        contents.extend_from_slice(b"\nlast important line\n");
+        fs::write(&log_path, contents)?;
+
+        let output = read_gate_output(&log_path);
+
+        assert!(output.starts_with("[gate log truncated"), "large log should be marked truncated");
+        assert!(output.contains("last important line"), "tail should preserve useful diagnostics");
         Ok(())
     }
 

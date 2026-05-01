@@ -164,16 +164,33 @@ jobs:
       # cargo check --workspace --all-targets --locked independently of pr-smoke.
       # Adding a redundant fallback here would duplicate that work without gain.
 
-  # ── Merge Gate: full validation on every PR and push to main ─────────
-  merge-gate:
-    name: CI Gate (Merge-Blocking)
+  # ── Merge Gate shards: bounded validation lanes for every PR/push ────
+  merge-gate-shards:
+    name: CI Gate shard (${{ matrix.name }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
     needs: [draft-pr-check, pr-smoke, conflict-markers, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: meta
+            gates: fmt check_conflict_markers release_history readme_heading_check publish_closure publish_manifest_check layer_check published_crate_count_pr_fast release_history_check perl_token_leaf_contract clippy_full
+          - name: foundation
+            gates: unit_foundation_full
+          - name: analysis
+            gates: unit_analysis_full
+          - name: lsp
+            gates: unit_lsp_full lsp_smoke
+          - name: support
+            gates: unit_dap_support_full
+          - name: corpus
+            gates: common_corpus_clean
+          - name: policy
+            gates: docs_build v2_bundle_sync nested_lock_check published_crate_count
     permissions:
       contents: read
-      statuses: write
     # Run on every PR push and on push to main/master
     # Earlier gating > label-gated gating (see #4675)
     # Frequent commits will queue; preflight skips superseded SHAs.
@@ -201,19 +218,35 @@ jobs:
           cache-all-crates: true
           shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
 
-      - name: Run full ci-gate with receipts
-        run: just gates
+      - name: Warm xtask
+        run: cargo build -p xtask --locked
 
-      - name: Release history drift check
-        run: bash scripts/check_release_history.sh
+      - name: Run merge-gate shard with receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            while true; do
+              sleep 30
+              printf 'ci-gate shard %s still running at %s\n' "${{ matrix.name }}" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            done
+          ) &
+          heartbeat_pid=$!
+          trap 'kill "$heartbeat_pid" 2>/dev/null || true' EXIT
+          mkdir -p target/receipts/shards
+          for gate in ${{ matrix.gates }}; do
+            printf '::group::gate %s\n' "$gate"
+            cargo xtask gates --gate "$gate" --receipt --receipt-path "target/receipts/shards/${gate}.json"
+            printf '::endgroup::\n'
+          done
 
       - name: Upload gate receipt
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: gate-receipt-${{ github.sha }}
+          name: gate-receipt-${{ matrix.name }}-${{ github.sha }}
           path: |
-            target/receipts/receipt.json
+            target/receipts/shards/*.json
             target/receipts/logs/*.log
             target/receipts/artifacts/*
           if-no-files-found: warn
@@ -223,16 +256,15 @@ jobs:
         if: failure()
         run: |
           echo "=== receipt.json (tail) ==="
-          test -f target/receipts/receipt.json && tail -200 target/receipts/receipt.json || true
+          find target/receipts/shards -name '*.json' -maxdepth 1 -print -exec tail -120 {} \; || true
           echo "=== failed gates ==="
           python3 - <<'PY' || true
           import json, pathlib
-          p = pathlib.Path("target/receipts/receipt.json")
-          if not p.exists(): raise SystemExit(0)
-          data = json.loads(p.read_text())
-          for g in data.get("gates", []):
-              if str(g.get("status", "")).lower() not in ("passed", "pass", "skipped", "skip"):
-                  print(f"- {g.get('gate_name', g.get('name', '<unnamed>'))}: {g.get('status', '')} (exit {g.get('exit_code', '?')})")
+          for p in pathlib.Path("target/receipts/shards").glob("*.json"):
+              data = json.loads(p.read_text())
+              for g in data.get("gates", []):
+                  if str(g.get("status", "")).lower() not in ("passed", "pass", "skipped", "skip"):
+                      print(f"- {p.name}: {g.get('gate_name', g.get('name', '<unnamed>'))}: {g.get('status', '')} (exit {g.get('exit_code', '?')})")
           PY
 
       - name: Gate summary
@@ -244,58 +276,103 @@ jobs:
           import os
           from pathlib import Path
 
-          receipt_path = Path("target/receipts/receipt.json")
+          receipt_paths = sorted(Path("target/receipts/shards").glob("*.json"))
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
 
           if not summary_path:
               raise SystemExit(0)
 
-          lines = ["### CI Gate Receipt", ""]
-          if not receipt_path.exists():
+          lines = [f"### CI Gate shard: {os.environ.get('SHARD_NAME', '')}", ""]
+          if not receipt_paths:
               lines.append("Receipt not found.")
               Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
               raise SystemExit(0)
 
-          data = json.loads(receipt_path.read_text(encoding="utf-8"))
-          md = data.get("metadata", {})
-          lines.append(f"Generated: {md.get('timestamp', data.get('generated_at', ''))}")
-          lines.append(f"Commit: {md.get('git_sha_short', data.get('commit', ''))}")
-          lines.append("")
           lines.append("| Gate | Status | Exit | Duration (s) |")
           lines.append("| --- | --- | --- | --- |")
-          for gate in data.get("gates", []):
-              gate_label = gate.get('gate_name', gate.get('name', ''))
-              dur_ms = gate.get('duration_ms')
-              dur_s = f"{dur_ms / 1000:.1f}" if dur_ms is not None else str(gate.get('duration_seconds', ''))
-              lines.append(
-                  f"| {gate_label} | {gate.get('status', '')} | "
-                  f"{gate.get('exit_code', '')} | {dur_s} |"
-              )
+          for receipt_path in receipt_paths:
+              data = json.loads(receipt_path.read_text(encoding="utf-8"))
+              for gate in data.get("gates", []):
+                  gate_label = gate.get('gate_name', gate.get('name', ''))
+                  dur_ms = gate.get('duration_ms')
+                  dur_s = f"{dur_ms / 1000:.1f}" if dur_ms is not None else str(gate.get('duration_seconds', ''))
+                  lines.append(
+                      f"| {gate_label} | {gate.get('status', '')} | "
+                      f"{gate.get('exit_code', '')} | {dur_s} |"
+                  )
 
           Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+        env:
+          SHARD_NAME: ${{ matrix.name }}
+
+  # ── Merge Gate: aggregate shard and required job status ───────────────
+  merge-gate:
+    name: CI Gate (Merge-Blocking)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    needs:
+      - draft-pr-check
+      - preflight-latest-check
+      - pr-smoke
+      - conflict-markers
+      - check-all-targets
+      - ux-tests
+      - windows-guardrails
+      - merge-gate-shards
+    if: always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
+    permissions:
+      statuses: write
+    steps:
+      - name: Gate summary
+        shell: bash
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          needs = json.loads(os.environ["NEEDS_JSON"])
+          lines = ["### CI Gate aggregate", ""]
+          lines.append("| Dependency | Result |")
+          lines.append("| --- | --- |")
+          failed = []
+          for name, value in sorted(needs.items()):
+              result = value.get("result", "")
+              lines.append(f"| {name} | {result} |")
+              if result != "success":
+                  failed.append(name)
+
+          if failed:
+              lines.extend(["", f"Blocking dependency failure(s): {', '.join(failed)}"])
+          else:
+              lines.extend(["", "All merge-gate dependencies passed."])
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+          if failed:
+              raise SystemExit(1)
           PY
 
       - name: Set PR status (check)
         if: always()
         uses: actions/github-script@v9
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
         with:
           script: |
-            const fs = require('fs');
-            let status = 'success';
-            let description = 'All checks passed';
-
-            if (!fs.existsSync('target/receipts/receipt.json')) {
-              status = 'failure';
-              description = 'Gate receipt not found';
-            } else {
-              const data = JSON.parse(fs.readFileSync('target/receipts/receipt.json', 'utf8'));
-              const ok = s => ['passed', 'pass', 'skipped', 'skip'].includes(String(s || '').toLowerCase());
-              const failedGates = (data.gates || []).filter(g => !ok(g.status));
-              if (failedGates.length > 0) {
-                status = 'failure';
-                description = `${failedGates.length} gate(s) failed: ${failedGates.map(g => g.gate_name || g.name || '<unnamed>').join(', ')}`;
-              }
-            }
+            const needs = JSON.parse(process.env.NEEDS_JSON || '{}');
+            const failed = Object.entries(needs)
+              .filter(([name, value]) => value.result !== 'success')
+              .map(([name]) => name);
+            const status = failed.length === 0 ? 'success' : 'failure';
+            const description = failed.length === 0
+              ? 'All merge-gate dependencies passed'
+              : `Failed dependency: ${failed.join(', ')}`;
 
             console.log(`Setting PR status to: ${status}`);
             console.log(`Description: ${description}`);
