@@ -994,7 +994,7 @@ gates tier='merge-gate' *args='':
 
 # Validate release-history surfaces (tags ↔ ledger ↔ notes ↔ changelog).
 ci-release-history:
-    bash scripts/check_release_history.sh
+    cargo xtask release-history
 
 # Run gates with JSON output (for CI)
 gates-json tier='merge-gate':
@@ -1113,7 +1113,7 @@ ci-published-crate-count:
 # Release-history drift check: tags, notes, ledger, changelog
 ci-release-history-check:
     @echo "📚 Checking release-history surface drift..."
-    bash scripts/check_release_history.sh
+    cargo xtask release-history
     @echo "✅ Release-history drift check passed"
 
 # Offline manifest validation: allowlist drift + LICENSE present (see #4499)

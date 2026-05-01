@@ -54,6 +54,9 @@ enum Commands {
         doctor: bool,
     },
 
+    /// Validate release-history surfaces (tags ↔ ledger ↔ notes ↔ changelog).
+    ReleaseHistory,
+
     /// Capture a GitHub PR queue snapshot for disconnected maintainership.
     Queue {
         #[command(subcommand)]
@@ -1775,6 +1778,7 @@ fn main() -> Result<()> {
                 queue_health::run(queue_health::QueueHealthArgs { receipt, fixture })
             }
         },
+        Commands::ReleaseHistory => release_history::run(),
         Commands::Build { release, features, c_scanner, rust_scanner } => {
             build::run(release, features, c_scanner, rust_scanner)
         }
