@@ -35,6 +35,9 @@ use std::time::Instant;
 use crate::tasks::ci_scope::{self, ScopeOutput};
 use crate::utils::project_root;
 
+mod first_failure;
+pub use first_failure::{is_cargo_test_command, parse_first_failure};
+
 // =============================================================================
 // CLI Types
 // =============================================================================
@@ -2084,155 +2087,6 @@ fn extract_number(line: &str, suffix: &str) -> Option<u32> {
         let before = &line[..idx];
         before.split_whitespace().last().and_then(|s| s.parse().ok())
     })
-}
-
-/// Parse the first failing test name, panic site, and message from `cargo test` stdout.
-///
-/// Returns `None` only if the output contains no recognisable failure markers (e.g. a
-/// pure compilation error with no test output).  All three sub-fields (`test`, `site`,
-/// `message`) are individually optional because any one may be absent in edge cases.
-///
-/// # Patterns detected
-///
-/// * Test name — `test <path> ... FAILED` or `---- <path> stdout ----`
-/// * Panic site — `panicked at '<file>:<line>:<col>:'` (Rust <1.73 style) or
-///   `panicked at <file>:<line>:<col>:` (Rust ≥1.73 style)
-/// * Message — the first non-empty line that follows the `panicked at` line
-pub fn parse_first_failure(output: &str, exit_code: i32) -> Option<FirstFailure> {
-    let mut test_name: Option<String> = None;
-    let mut site: Option<String> = None;
-    let mut message: Option<String> = None;
-
-    let lines: Vec<&str> = output.lines().collect();
-
-    // --- Pass 1: find the first "test ... FAILED" line ---
-    // Cargo test emits either:
-    //   test module::path::test_name ... FAILED
-    // or (for individual test stdout sections):
-    //   ---- module::path::test_name stdout ----
-    for line in &lines {
-        let trimmed = line.trim();
-        // "test <path> ... FAILED"
-        if trimmed.starts_with("test ") && trimmed.ends_with("... FAILED") {
-            let inner = trimmed
-                .strip_prefix("test ")
-                .and_then(|s| s.strip_suffix("... FAILED"))
-                .map(str::trim);
-            if let Some(name) = inner
-                && !name.is_empty()
-            {
-                test_name = Some(name.to_string());
-                break;
-            }
-        }
-        // "---- <path> stdout ----"
-        if test_name.is_none() && trimmed.starts_with("---- ") && trimmed.ends_with(" stdout ----")
-        {
-            let inner = trimmed
-                .strip_prefix("---- ")
-                .and_then(|s| s.strip_suffix(" stdout ----"))
-                .map(str::trim);
-            if let Some(name) = inner
-                && !name.is_empty()
-            {
-                test_name = Some(name.to_string());
-                // don't break — keep looking for a "... FAILED" line to prefer
-            }
-        }
-    }
-
-    // --- Pass 2: find the first "panicked at" line and the message line after it ---
-    for (idx, line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-
-        // Rust ≥1.73: `panicked at src/lib.rs:42:5:`
-        // Rust <1.73:  `panicked at 'message', src/lib.rs:42:5`
-        //
-        // The line may be prefixed with thread info:
-        //   `thread 'test::name' panicked at src/lib.rs:42:5:`
-        // or may start directly with `panicked at`:
-        //   `panicked at src/lib.rs:42:5:`
-        //
-        // We find the `panicked at ` substring anywhere in the line.
-        if let Some(panic_pos) = trimmed.find("panicked at ") {
-            let rest = &trimmed[panic_pos + "panicked at ".len()..];
-
-            // Try new-style first (Rust ≥1.73), then fall back to old-style (Rust <1.73)
-            let parsed_site =
-                parse_panic_site_new_style(rest).or_else(|| parse_panic_site_old_style(rest));
-
-            site = parsed_site;
-
-            // The message is the next non-empty line
-            message = lines[idx + 1..]
-                .iter()
-                .find(|l| !l.trim().is_empty())
-                .map(|l| l.trim().to_string());
-
-            break;
-        }
-    }
-
-    // Only return Some if we found at least one piece of useful info
-    if test_name.is_some() || site.is_some() {
-        Some(FirstFailure { test: test_name, site, message, exit_code })
-    } else {
-        None
-    }
-}
-
-/// Parse a Rust ≥1.73 panic site: `src/lib.rs:42:5:` → `src/lib.rs:42`
-fn parse_panic_site_new_style(rest: &str) -> Option<String> {
-    // Strip trailing colon if present
-    let rest = rest.trim_end_matches(':');
-    // Format is typically: path/to/file.rs:LINE:COL
-    // Split by ':' and find the first pure-integer segment, treating everything before as path.
-    let parts: Vec<&str> = rest.splitn(4, ':').collect();
-    // We need at least path:line
-    match parts.len() {
-        2.. => {
-            // Detect Windows drive letter: single alpha char
-            let (path_part, line_part) = if parts[0].len() == 1
-                && parts[0].chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
-                && parts.len() >= 3
-            {
-                // Windows path: C:\path\file.rs  -> parts = ["C", "\\path\\file.rs", "LINE", ...]
-                (format!("{}:{}", parts[0], parts[1]), parts[2])
-            } else {
-                (parts[0].to_string(), parts[1])
-            };
-            // line_part must be a valid integer
-            if line_part.parse::<u64>().is_ok() && !path_part.is_empty() {
-                return Some(format!("{}:{}", path_part, line_part));
-            }
-            None
-        }
-        _ => None,
-    }
-}
-
-/// Parse a Rust <1.73 panic site: `'assertion failed', src/lib.rs:42:5` → `src/lib.rs:42`
-fn parse_panic_site_old_style(rest: &str) -> Option<String> {
-    // Format: `'<message>', <path>:<line>:<col>`
-    // Find the last `', ` to split message from location
-    let loc_start = rest.rfind("', ").map(|i| i + 3)?;
-    let loc = &rest[loc_start..];
-    // Now parse loc as new-style
-    parse_panic_site_new_style(loc)
-}
-
-/// Check whether a gate command is a `cargo test`-class command.
-///
-/// Returns `true` for commands whose first word-token is `cargo` and second is `test`,
-/// ignoring leading whitespace and path prefixes.  This covers:
-/// - `cargo test ...`
-/// - `cargo test -p foo ...`
-pub fn is_cargo_test_command(command: &str) -> bool {
-    let mut tokens = command.split_whitespace();
-    let first = tokens.next().unwrap_or("");
-    // Allow for path-prefixed cargo (e.g. `/usr/local/bin/cargo`)
-    let is_cargo = first == "cargo" || first.ends_with("/cargo") || first.ends_with("\\cargo");
-    is_cargo && tokens.next().is_some_and(|t| t == "test")
 }
 
 /// Output results in the requested format
