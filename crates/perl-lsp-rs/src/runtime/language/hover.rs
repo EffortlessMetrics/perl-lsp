@@ -6,52 +6,11 @@ use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
 
-/// Intermediate result from phase-1 hover extraction (under document lock).
-///
-/// The document lock must be released before calling module resolution to avoid
-/// deadlock, so we extract what we need first and resolve afterwards.
-enum HoverExtracted {
-    /// Hover content fully built (symbol, builtin, or token hover).
-    Complete(Value),
-    /// A `use Module` was found; module name needs resolution without lock.
-    /// Carries (module_name, doc_text, doc_uri, doc_offset) for use lib / FindBin wiring.
-    UseModule(String, String, String, usize),
-    /// Cursor is on a `->method()` call where the method belongs to an inherited or
-    /// role-composed ancestor class. Carries (receiver_pkg, method_name, doc_uri).
-    /// Phase 2 resolves the hover using the workspace index BFS (same logic as
-    /// `inherited_method_definition_location` in navigation.rs).
-    InheritedMethod(String, String, String),
-    /// Cursor is on a package-name token (contains `::`) that was not handled by an
-    /// earlier semantic or `use` path. Carries (package_name, doc_text, doc_uri, doc_offset).
-    /// Phase 2 resolves it via `build_module_hover` (same as `UseModule`).
-    PossiblePackage(String, String, String, usize),
-    /// Nothing hoverable at this position.
-    None,
-}
-
+mod hover_extracted;
 #[cfg(test)]
-mod tests {
-    use super::LspServer;
+mod hover_tests;
 
-    #[test]
-    fn test_internal_pl_sv_yes_hover_from_sigiled_token() {
-        let text = "print $PL_sv_yes;\n";
-        let offset = text.find('$').expect("sigil should exist");
-
-        assert_eq!(
-            LspServer::extract_special_variable(text, offset).as_deref(),
-            Some("$PL_sv_yes")
-        );
-
-        let hover = LspServer::get_special_variable_hover("$PL_sv_yes")
-            .expect("hover should exist for $PL_sv_yes");
-        let value = hover["contents"]["value"].as_str().expect("markdown hover text");
-        assert!(
-            value.contains("true scalar"),
-            "hover should describe the shared true scalar: {value}"
-        );
-    }
-}
+use hover_extracted::HoverExtracted;
 
 impl LspServer {
     /// Handle textDocument/hover request for symbol information display
