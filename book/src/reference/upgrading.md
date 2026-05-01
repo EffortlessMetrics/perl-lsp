@@ -87,12 +87,12 @@ let ast = parser.parse(source)?;
 **After (v0.9.x):**
 ```json
 // Setting removed - use standard installation methods
-// Install via: cargo install perl-lsp-rs
+// Install via: cargo install perllsp
 ```
 
 **Action Required:**
 - Remove `downloadBaseUrl` from VS Code settings
-- Use standard installation: `cargo install perl-lsp-rs`
+- Use standard installation: `cargo install perllsp`
 - Internal archive hosting no longer supported
 
 ### 4. UTF-16 Position Encoding
@@ -187,7 +187,7 @@ my $total = calculate_total($price, $quantity, $discount);
 
 ```bash
 # Start LSP server on TCP port
-perl-lsp --tcp 9257
+perllsp --tcp 9257
 
 # Connect from LSP client
 {

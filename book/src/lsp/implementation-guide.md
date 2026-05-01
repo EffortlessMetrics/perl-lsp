@@ -3853,7 +3853,7 @@ impl LspServer {
 **Usage Example**:
 ```bash
 # Test malformed frame recovery
-echo 'Content-Length: 50\r\n\r\n{"jsonrpc":"2.0","invalid_json":}' | perl-lsp --stdio
+echo 'Content-Length: 50\r\n\r\n{"jsonrpc":"2.0","invalid_json":}' | perllsp --stdio
 
 # Expected behavior:
 # - Server logs parsing error safely
@@ -4885,7 +4885,7 @@ VS Code ↔ perl-dap (Rust) ↔ Devel::TSPerlDAP (Perl shim) ↔ perl -d
 4. **Test with Protocol Examples**
    ```bash
    # Test specific LSP method
-   echo '{"jsonrpc":"2.0","id":1,"method":"workspace/symbol","params":{"query":"test"}}' | perl-lsp --stdio
+   echo '{"jsonrpc":"2.0","id":1,"method":"workspace/symbol","params":{"query":"test"}}' | perllsp --stdio
    ```
 
 ## Security Considerations in LSP Testing

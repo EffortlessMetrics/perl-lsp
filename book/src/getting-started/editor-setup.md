@@ -20,12 +20,12 @@ This guide provides copy/paste ready configurations for setting up the Perl LSP 
 
 ```bash
 # Option 1: Install from crates.io (recommended)
-cargo install perl-lsp-rs
+cargo install perllsp
 
 # Option 2: Install from source
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
-cargo install --path crates/perl-lsp
+cargo install --path crates/perllsp
 
 # Option 3: Download pre-built binary
 # See https://github.com/EffortlessMetrics/perl-lsp/releases
@@ -35,13 +35,13 @@ cargo install --path crates/perl-lsp
 
 ```bash
 # Check binary is in PATH
-which perl-lsp
+which perllsp
 
 # Check version
-perl-lsp --version
+perllsp --version
 
 # Quick health check
-perl-lsp --health
+perllsp --health
 ```
 
 ---
@@ -122,7 +122,7 @@ local configs = require('lspconfig.configs')
 if not configs.perl_lsp then
   configs.perl_lsp = {
     default_config = {
-      cmd = { 'perl-lsp', '--stdio' },
+      cmd = { 'perllsp', '--stdio' },
       filetypes = { 'perl' },
       root_dir = lspconfig.util.root_pattern(
         'Makefile.PL',
@@ -197,7 +197,7 @@ local configs = require('lspconfig.configs')
 if not configs.perl_lsp then
   configs.perl_lsp = {
     default_config = {
-      cmd = { 'perl-lsp', '--stdio' },
+      cmd = { 'perllsp', '--stdio' },
       filetypes = { 'perl' },
       root_dir = lspconfig.util.root_pattern('.git'),
       single_file_support = true,
@@ -236,7 +236,7 @@ Add to your Emacs configuration:
   ;; Register perl-lsp
   (lsp-register-client
    (make-lsp-client
-    :new-connection (lsp-stdio-connection '("perl-lsp" "--stdio"))
+    :new-connection (lsp-stdio-connection '("perllsp" "--stdio"))
     :major-modes '(cperl-mode perl-mode)
     :priority -1
     :server-id 'perl-lsp
@@ -274,7 +274,7 @@ Add to your Emacs configuration:
          (perl-mode . eglot-ensure))
   :config
   (add-to-list 'eglot-server-programs
-               '((cperl-mode perl-mode) . ("perl-lsp" "--stdio")))
+               '((cperl-mode perl-mode) . ("perllsp" "--stdio")))
 
   ;; Optional: Configure initialization options
   (setq-default eglot-workspace-configuration
@@ -316,7 +316,7 @@ indent = { tab-width = 4, unit = "    " }
 language-servers = ["perl-lsp"]
 
 [language-server.perl-lsp]
-command = "perl-lsp"
+command = "perllsp"
 args = ["--stdio"]
 
 [language-server.perl-lsp.config.perl]
@@ -376,19 +376,19 @@ limits.referencesCap = 500
 
 1. **Verify binary location**:
    ```bash
-   which perl-lsp
+   which perllsp
    # Should output path like: /home/user/.cargo/bin/perl-lsp
    ```
 
 2. **Check binary works**:
    ```bash
-   perl-lsp --version
-   perl-lsp --health
+   perllsp --version
+   perllsp --health
    ```
 
 3. **Test JSON-RPC communication**:
    ```bash
-   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perl-lsp --stdio
+   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perllsp --stdio
    ```
 
 ### No Diagnostics
@@ -402,7 +402,7 @@ limits.referencesCap = 500
 
 3. **Enable debug logging**:
    ```bash
-   RUST_LOG=perl_lsp=debug perl-lsp --stdio
+   RUST_LOG=perl_lsp=debug perllsp --stdio
    ```
 
 ### Slow Performance
@@ -468,7 +468,7 @@ limits.referencesCap = 500
 
 2. Run with logging enabled:
    ```bash
-   perl-lsp --stdio --log 2>perl-lsp.log
+   perllsp --stdio --log 2>perl-lsp.log
    ```
 
 3. Report issues with reproduction steps on [GitHub](https://github.com/EffortlessMetrics/perl-lsp/issues)
@@ -492,13 +492,13 @@ Options:
 
 Examples:
   # Run in stdio mode (for editors)
-  perl-lsp --stdio
+  perllsp --stdio
 
   # Run with logging enabled
-  perl-lsp --stdio --log
+  perllsp --stdio --log
 
   # Run with debug output
-  RUST_LOG=perl_lsp=debug perl-lsp --stdio
+  RUST_LOG=perl_lsp=debug perllsp --stdio
 ```
 
 ---

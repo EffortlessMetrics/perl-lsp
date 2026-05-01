@@ -671,6 +671,7 @@ options or client-specific configuration mechanisms.
 | `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perllsp` binary. Empty = auto-download. |
 | `perl-lsp.autoDownload` | `boolean` | `true` | Download the binary automatically if not found locally. |
 | `perl-lsp.downloadBaseUrl` | `string` | `""` | Override the GitHub releases base URL for internal mirrors. |
+| `perl-lsp.linuxLibc` | `"auto"\|"gnu"\|"glibc"\|"musl"` | `"auto"` | Linux libc release asset selection for managed downloads. Most Linux distributions use `gnu`/`glibc`; use `musl` mainly for Alpine Linux and musl-based containers. |
 | `perl-lsp.channel` | `"latest"\|"stable"\|"tag"` | `"latest"` | Release channel to track. |
 | `perl-lsp.versionTag` | `string` | `""` | Specific release tag (e.g., `v0.8.3`) when `channel` is `"tag"`. |
 

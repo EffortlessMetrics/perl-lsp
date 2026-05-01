@@ -46,9 +46,8 @@ code --install-extension EffortlessMetrics.perl-lsp-rs
 # Best-effort install script (Linux/macOS)
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
-# Homebrew (macOS)
-brew tap tree-sitter-perl/tap
-brew install perl-lsp
+# Homebrew via the EffortlessMetrics tap (macOS/Linux)
+brew install effortlessmetrics/tap/perllsp
 
 # Build from source
 cargo build -p perllsp --release

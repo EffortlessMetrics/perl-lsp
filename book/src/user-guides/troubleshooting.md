@@ -6,13 +6,13 @@ Common issues and their solutions when using perl-lsp.
 
 ```bash
 # Check installation
-which perl-lsp && perl-lsp --version
+which perllsp && perllsp --version
 
 # Health check
-perl-lsp --health
+perllsp --health
 
 # Test JSON-RPC communication
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perl-lsp --stdio
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perllsp --stdio
 ```
 
 ## Build Issues
@@ -32,12 +32,12 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}
 2. Clean and rebuild:
    ```bash
    cargo clean
-   cargo build -p perl-lsp-rs --release
+   cargo build -p perllsp --release
    ```
 
 3. If using Nix:
    ```bash
-   nix develop -c cargo build -p perl-lsp-rs --release
+   nix develop -c cargo build -p perllsp --release
    ```
 
 ### Missing Dependencies
@@ -47,7 +47,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}
 **Solution**: perl-lsp is pure Rust and should not require system dependencies. If you see C compiler or libclang errors, you may be building optional crates. Use:
 
 ```bash
-cargo build -p perl-lsp-rs --release
+cargo build -p perllsp --release
 ```
 
 Not `cargo build --workspace` which includes optional native crates.
@@ -96,7 +96,7 @@ chmod +x ~/.cargo/bin/perl-lsp
 
 1. Run with debug logging:
    ```bash
-   RUST_LOG=perl_lsp=debug perl-lsp --stdio 2>debug.log
+   RUST_LOG=perl_lsp=debug perllsp --stdio 2>debug.log
    ```
 
 2. Check for conflicting processes:
@@ -106,7 +106,7 @@ chmod +x ~/.cargo/bin/perl-lsp
 
 3. Verify the binary is not corrupted:
    ```bash
-   cargo install --path crates/perl-lsp --force
+   cargo install --path crates/perllsp --force
    ```
 
 ### High Memory Usage
@@ -298,7 +298,7 @@ chmod +x ~/.cargo/bin/perl-lsp
    EOF
 
    # Test parsing
-   perl-lsp --parse test.pl
+   perllsp --parse test.pl
    ```
 
 3. File an issue at: https://github.com/EffortlessMetrics/perl-lsp/issues
@@ -406,7 +406,7 @@ For detailed editor configuration and troubleshooting:
 
 2. Verify the command works in shell:
    ```bash
-   perl-lsp --stdio
+   perllsp --stdio
    ```
 
 3. Try lsp-mode as an alternative:
@@ -423,11 +423,11 @@ For detailed editor configuration and troubleshooting:
 
 2. Enable debug logging and include logs in bug reports:
    ```bash
-   RUST_LOG=perl_lsp=debug,perl_parser=debug perl-lsp --stdio 2>debug.log
+   RUST_LOG=perl_lsp=debug,perl_parser=debug perllsp --stdio 2>debug.log
    ```
 
 3. Include:
-   - perl-lsp version (`perl-lsp --version`)
+   - perl-lsp version (`perllsp --version`)
    - Rust version (`rustc --version`)
    - OS and editor
    - Minimal code reproduction

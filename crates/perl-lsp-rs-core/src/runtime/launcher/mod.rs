@@ -588,9 +588,9 @@ pub fn help_text() -> String {
     let mut out = String::with_capacity(1024);
     out.push_str("Perl Language Server\n");
     out.push('\n');
-    out.push_str("Usage: perl-lsp [options]\n");
-    out.push_str("       perl-lsp --check <file.pl> [file2.pm ...]\n");
-    out.push_str("       perl-lsp --check-project [dir]\n");
+    out.push_str("Usage: perllsp [options]\n");
+    out.push_str("       perllsp --check <file.pl> [file2.pm ...]\n");
+    out.push_str("       perllsp --check-project [dir]\n");
     out.push('\n');
     out.push_str("Server options:\n");
     out.push_str("  --stdio, --mcp       Use stdio for communication (default)\n");
@@ -615,15 +615,15 @@ pub fn help_text() -> String {
     out.push_str("  --help               Show this help message\n");
     out.push('\n');
     out.push_str("Examples:\n");
-    out.push_str("  perl-lsp --stdio                        # stdio mode (default)\n");
-    out.push_str("  perl-lsp --mcp                          # stdio mode alias for MCP clients\n");
-    out.push_str("  perl-lsp --stdio --log                   # with logging\n");
-    out.push_str("  perl-lsp --socket --port 9257            # TCP socket mode\n");
-    out.push_str("  perl-lsp --stdio --feature-profile=prod  # production profile\n");
-    out.push_str("  perl-lsp --check lib/MyModule.pm         # syntax check\n");
-    out.push_str("  perl-lsp --check-project lib/             # project scan\n");
-    out.push_str("  perl-lsp --info                          # server information\n");
-    out.push_str("  perl-lsp --completion bash >> ~/.bashrc   # install completions\n");
+    out.push_str("  perllsp --stdio                        # stdio mode (default)\n");
+    out.push_str("  perllsp --mcp                          # stdio mode alias for MCP clients\n");
+    out.push_str("  perllsp --stdio --log                   # with logging\n");
+    out.push_str("  perllsp --socket --port 9257            # TCP socket mode\n");
+    out.push_str("  perllsp --stdio --feature-profile=prod  # production profile\n");
+    out.push_str("  perllsp --check lib/MyModule.pm         # syntax check\n");
+    out.push_str("  perllsp --check-project lib/             # project scan\n");
+    out.push_str("  perllsp --info                          # server information\n");
+    out.push_str("  perllsp --completion bash >> ~/.bashrc   # install completions\n");
     out.push('\n');
     out.push_str("Environment:\n");
     out.push_str("  PERL_LSP_LOG=1       Enable logging (alternative to --log)\n");
@@ -840,8 +840,8 @@ pub fn port_in_use_message(port: u16) -> String {
         "Port {port} is already in use. Another instance of perl-lsp may be running.\n\
          Try a different port:\n\
          \n\
-         \x20 perl-lsp --socket --port {alt1}\n\
-         \x20 perl-lsp --socket --port {alt2}\n\
+         \x20 perllsp --socket --port {alt1}\n\
+         \x20 perllsp --socket --port {alt2}\n\
          \n\
          Or stop the existing process using port {port}."
     )
@@ -920,7 +920,7 @@ mod tests {
         let help = super::help_text();
         assert!(help.contains("--mcp"), "help_text is missing --mcp: {help}");
         assert!(
-            help.contains("perl-lsp --mcp"),
+            help.contains("perllsp --mcp"),
             "help_text examples are missing a --mcp invocation: {help}"
         );
 

@@ -54,7 +54,7 @@
 - `nix develop -c just ci-gate` green on MSRV
 - `bash scripts/ignored-test-count.sh` shows BUG=0, MANUAL≤1
 - README / CURRENT_STATUS / ROADMAP agree (no unbacked claims)
-- `cargo install --path crates/perl-lsp` works cleanly
+- `cargo install --path crates/perllsp` works cleanly
 - Capability snapshot remains stable
 - Release notes match advertised capabilities
 

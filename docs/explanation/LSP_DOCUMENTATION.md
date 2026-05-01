@@ -119,8 +119,7 @@ irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.
 
 ### Homebrew (macOS/Linux)
 ```bash
-brew tap effortlesssteven/tap
-brew install perl-lsp
+brew install effortlessmetrics/tap/perllsp
 ```
 
 ### Build from Source

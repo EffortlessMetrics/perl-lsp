@@ -434,6 +434,11 @@ Every public release **must** update three surfaces. See [RELEASE_HISTORY.md](RE
   **Required** — `release-orchestration.yml` refuses to tag without this file,
   and `release.yml` uses its body (minus YAML frontmatter) as the GitHub
   Release body.
+- [ ] If the release ships Linux GNU and musl binaries, include a
+  `Which file should I download?` section or link to
+  `docs/how-to/INSTALLATION.md`. The GitHub asset list exposes raw target
+  triples; release notes must explain that most Linux users choose `gnu`, while
+  `musl` is mainly for Alpine Linux and musl-based containers.
 - [ ] Add a new row to `RELEASE_HISTORY.md` for vX.Y.Z (fill what you know; mark unknowns with `—`)
 - [ ] Ensure `CHANGELOG.md` has a `[X.Y.Z]` section with links to:
   - `docs/releases/vX.Y.Z.md`
