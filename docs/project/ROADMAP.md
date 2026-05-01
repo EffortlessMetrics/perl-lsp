@@ -9,12 +9,12 @@
 ## Current Framing
 
 - Workspace version line: `v0.13.1`
-- Latest published GitHub/editor release: `v0.12.4` (GitHub Releases and VS Code Marketplace, shipped 2026-04-12)
-- crates.io published line: `v0.12.2` (registry line, published 2026-04-08)
-- Active work: finish the `v0.13.0` public alpha announcement pass (demo assets, distribution-truth cleanup, post-release docs/automation cleanup) while keeping the shipped `v0.12.4` line stable across GitHub Releases and the editor marketplaces
+- Current release train: `v0.13.1` public-alpha patch, dispatched 2026-05-01 for channel publication and verification
+- Published crate surface target: 32 crates from `[workspace.metadata.publish.allow]`
+- Active work: monitor the `v0.13.1` downstream publish workflows, close package-manager receipts, and keep release language public-alpha rather than stable/GA
 - Canonical local receipt: `nix develop -c just ci-gate`
 
-Publication discipline: public release truth is intentionally split right now. GitHub Releases and the editor marketplaces are on `v0.12.4`; crates.io remains on `v0.12.2` until the registry window reopens. See [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md) for the full cross-channel ledger. Milestone sections below can describe the intended `0.12.x` breakdown, but they must not blur that channel split.
+Publication discipline: `v0.13.1` uses a normal SemVer package version for release channels while the human-facing product posture remains public alpha. See [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md) for the cross-channel ledger, and do not mark the release complete until every intended channel is green or explicitly deferred.
 
 ## How To Read This File
 
@@ -90,16 +90,16 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - End-to-end LSP feature development guide (#3027, PR #3115)
 - GIF recording guide and asset structure (#2336, PR #3130)
 
-## Active: Quality Cleanup (post-v0.12.3 / pre-v0.13.0)
+## Active: Public-Alpha Channel Verification (v0.13.1)
 
-- Debug println removal from library code (in progress)
-- Unused dependency removal across 6 crates (in progress)
-- Banned unwrap()/expect() replacement in production code (in progress)
-- Clippy zero-warning enforcement (done, PR #3138)
+- GitHub Release, crates.io, Docker, VS Code Marketplace, Open VSX, and Homebrew tap receipts are tracked separately
+- The owned Homebrew path is `brew install effortlessmetrics/tap/perllsp`
+- Public install language must say public alpha, not stable/GA
+- Follow-on quality cleanup resumes after the release-channel receipts are closed
 
 ## Now / Next / Later
 
-### Now (post-v0.12.3 / pre-v0.13.0)
+### Now (v0.13.1 public-alpha patch)
 
 - CI/control-plane Wave 2 substrate already landed and should not be re-implemented in parallel follow-up PRs:
   - Per-gate timeout regression coverage in gate receipts (#7525)
@@ -116,7 +116,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
   6. Merge-train planner/receipt protocol with stop conditions
   7. Tokmd advisory stabilization (explicitly non-required while calibrating signal)
 - Wave guardrails: no bulk stale-closure automation, no full merge bot scope, no global pre-push hooks, no broad CI architecture rewrite in this pass.
-- `v0.12.3` shipped to GitHub Releases, VS Code Marketplace, and Open VSX on 2026-04-09; crates.io remains on `v0.12.2`
+- `v0.13.1` has been dispatched as the public-alpha patch release; verify each downstream publish channel before declaring the train complete
 - Pre-announcement license badge fix (PR #3193): canonical SPDX text in all 126 LICENSE files
 - Pre-announcement Docker arm64 timeout fix (#3188 → PR #3191, merged)
 - Per-release dependency triage: 7 dependabot PRs merged 2026-04-07 (#3178–#3184)
@@ -129,12 +129,12 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Semantic substrate migration status now tracks Wave 2 reality (facts vocabulary, SymbolDecl adapter, FileFactShard write-through, and DefinitionCandidate multimap landed; SymbolRef adapter and typed-reference global index still staged; ExportInfo -> ExportSet landed) in [SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md](SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md); provider cutover remains explicitly deferred until Wave 3 foundations (`ImportSpec` + `visible_symbols_at`) are proven
 - CI/control-plane next-wave execution sequencing is tracked in [CI_WAVE_EXECUTION_PLAN.md](CI_WAVE_EXECUTION_PLAN.md), with #7404 (`update-status --write` streaming) as the top urgency lane.
 
-### Next (v0.13.0 — public alpha announcement)
+### Next (post v0.13.1)
 
 - The 0.12.x line has built confidence across parser, diagnostics, refactoring, and distribution
-- Quality cleanup PRs land, version bump to 0.13.0
-- Seamless install story verified across all distribution channels
-- Announcement blog post / release notes
+- Resume parser, corpus, semantic, and DAP hardening after the release-channel receipts close
+- Keep the install story verified across all distribution channels
+- Keep public-alpha release notes concise and tied to concrete channel receipts
 
 ## Milestone Ladder
 
@@ -169,7 +169,7 @@ Follow-on diagnostics and semantics scope retained on the prep track, not yet a 
 ### v0.12.5–v0.12.8
 
 Parser confidence, performance, distribution, and announcement-polish scopes retained on the prep track.
-Treat these as internal milestone slices until the next public GitHub release beyond `v0.12.3` is actually cut.
+Treat these as historical prep slices superseded by the `v0.13.x` public-alpha line.
 
 ### v0.13.0
 
@@ -207,9 +207,9 @@ For live capability posture, run `just status-check` or read [CURRENT_STATUS.md]
 | Topic | Source |
 | --- | --- |
 | Workspace version line | [`../../Cargo.toml`](../../Cargo.toml) |
-| Latest published release | GitHub Releases (`v0.12.3`) + crates.io API (`0.12.2` when channel split matters) |
+| Latest published release | [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md) records the cross-channel ledger; verify live channel state before citing completion |
 | Capability catalog | [`../../features.toml`](../../features.toml) |
 | Evidence-backed metrics | [CURRENT_STATUS.md](CURRENT_STATUS.md) |
 | Top-level summary docs | [../../ROADMAP.md](../../ROADMAP.md), [../../NOW_NEXT_LATER.md](../../NOW_NEXT_LATER.md) |
 
-<!-- Last Updated: 2026-04-09 -->
+<!-- Last Updated: 2026-05-01 -->

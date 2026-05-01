@@ -14,6 +14,7 @@ Tag commit timestamps may differ from release dates.
 
 | Version | Tag | GitHub Release | Released | Tag commit | Compare | Assets | crates.io | VS Code Marketplace | Notes file |
 |---------|-----|----------------|----------|------------|---------|--------|-----------|---------------------|------------|
+| [0.13.1] | `v0.13.1` | [yes][gh-0.13.1] (prerelease) | 2026-05-01 | `6ef20484` | [v0.13.0...v0.13.1] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | 0.13.1 (32 crates) | [perl-lsp-rs][vsce] | [v0.13.1][n-0.13.1] |
 | [0.12.4] | `v0.12.4` | [yes][gh-0.12.4] | 2026-04-12 | `5ebb37aa` | [v0.12.3...v0.12.4] | 9 (7 binaries, SHA256SUMS, SBOM) | deferred | [perl-lsp-rs][vsce] | [v0.12.4][n-0.12.4] |
 | [0.12.3] | `v0.12.3` | [yes][gh-0.12.3] | 2026-04-09 | `a86af221` | [v0.12.2...v0.12.3] | 10 (+ VSIX) | deferred | [perl-lsp-rs][vsce] | [v0.12.3][n-0.12.3] |
 | [0.12.2] | `v0.12.2` | [yes][gh-0.12.2] | 2026-04-04 | `1c0620d8` | [v0.12.1...v0.12.2] | 9 | 0.12.2 (2026-04-08) | [perl-lsp-rs][vsce] | [v0.12.2][n-0.12.2] |
@@ -55,6 +56,7 @@ Tag commit timestamps may differ from release dates.
 ## Links
 
 <!-- Notes files -->
+[n-0.13.1]: docs/releases/v0.13.1.md
 [n-0.12.4]: docs/releases/v0.12.4.md
 [n-0.12.3]: docs/releases/v0.12.3.md
 [n-0.12.2]: docs/releases/v0.12.2.md
@@ -69,6 +71,7 @@ Tag commit timestamps may differ from release dates.
 [n-0.8.3]: docs/releases/v0.8.3.md
 
 <!-- Version links (to notes files) -->
+[0.13.1]: docs/releases/v0.13.1.md
 [0.12.4]: docs/releases/v0.12.4.md
 [0.12.3]: docs/releases/v0.12.3.md
 [0.12.2]: docs/releases/v0.12.2.md
@@ -83,6 +86,7 @@ Tag commit timestamps may differ from release dates.
 [0.8.3]: docs/releases/v0.8.3.md
 
 <!-- GitHub Releases -->
+[gh-0.13.1]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.1
 [gh-0.12.4]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.4
 [gh-0.12.3]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.3
 [gh-0.12.2]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.2
@@ -93,6 +97,7 @@ Tag commit timestamps may differ from release dates.
 [gh-0.8.3]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.8.3
 
 <!-- Compare ranges -->
+[v0.13.0...v0.13.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.0...v0.13.1
 [v0.12.3...v0.12.4]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.3...v0.12.4
 [v0.12.2...v0.12.3]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.2...v0.12.3
 [v0.12.1...v0.12.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.1...v0.12.2

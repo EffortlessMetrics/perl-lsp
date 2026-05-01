@@ -104,43 +104,46 @@ git init
 mkdir Formula
 ```
 
-Create `Formula/perl-lsp.rb`:
+Create `Formula/perllsp.rb`:
 
 ```ruby
-class PerlLsp < Formula
-  desc "Perl language server with 100% edge case coverage"
+class Perllsp < Formula
+  desc "Native Rust language server and debug adapter for Perl"
   homepage "https://github.com/EffortlessMetrics/perl-lsp"
-  version "0.8.3"
-  license "MIT"
+  version "0.13.1"
+  license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do
-    on_arm do
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-apple-darwin.tar.gz"
+    if Hardware::CPU.arm?
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perllsp-#{version}-aarch64-apple-darwin.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
-    end
-    on_intel do
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-apple-darwin.tar.gz"
+    else
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perllsp-#{version}-x86_64-apple-darwin.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
   end
 
   on_linux do
-    on_arm do
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-unknown-linux-musl.tar.gz"
+    if Hardware::CPU.arm?
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perllsp-#{version}-aarch64-unknown-linux-gnu.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
-    end
-    on_intel do
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-unknown-linux-musl.tar.gz"
+    else
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perllsp-#{version}-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
   end
 
   def install
-    bin.install "perllsp"
+    extracted_dir = Dir.glob("perllsp-#{version}-*").find { |path| File.directory?(path) }
+    raise "expected release archive directory perllsp-#{version}-<target>" unless extracted_dir
+
+    bin.install "#{extracted_dir}/perllsp"
+    bin.install "#{extracted_dir}/perl-dap"
   end
 
   test do
-    assert_match "perllsp", shell_output("#{bin}/perllsp --version")
+    assert_match version.to_s, shell_output("#{bin}/perllsp --version")
+    assert_match version.to_s, shell_output("#{bin}/perl-dap --version")
   end
 end
 ```
@@ -148,8 +151,8 @@ end
 Push the tap:
 
 ```bash
-git add Formula/perl-lsp.rb
-git commit -m "Add perl-lsp v0.8.3"
+git add Formula/perllsp.rb
+git commit -m "Add perllsp v0.13.1"
 git remote add origin https://github.com/EffortlessMetrics/homebrew-tap.git
 git push -u origin main
 ```
@@ -157,8 +160,7 @@ git push -u origin main
 Test the formula:
 
 ```bash
-brew tap effortlesssteven/tap
-brew install perl-lsp
+brew install effortlessmetrics/tap/perllsp
 perllsp --version
 ```
 
@@ -193,8 +195,7 @@ irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.
 
 #### Homebrew
 ```bash
-brew tap effortlesssteven/tap
-brew install perl-lsp
+brew install effortlessmetrics/tap/perllsp
 ```
 
 ### Manual Download
@@ -233,8 +234,7 @@ curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/i
 irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.ps1 | iex
 
 # Homebrew
-brew tap effortlesssteven/tap
-brew install perl-lsp
+brew install effortlessmetrics/tap/perllsp
 ```
 
 ### 📊 Performance

@@ -1,10 +1,8 @@
 class Perllsp < Formula
   desc "Native Rust language server and debug adapter for Perl"
   homepage "https://github.com/EffortlessMetrics/perl-lsp"
-  # PLACEHOLDER-GUARD: __RELEASE_VERSION__ must be replaced in CI before merge.
   version "__RELEASE_VERSION__"
-  # PLACEHOLDER-GUARD: all sha256 values must be replaced in CI before merge.
-  license "MIT"
+  license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do
     if Hardware::CPU.arm?

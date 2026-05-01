@@ -5,17 +5,31 @@
 
 ## Current Release Call
 
-**Latest GitHub/editor release**: `v0.12.3` (2026-04-09)
-**crates.io line**: `v0.12.2` (2026-04-07)
-**Release target**: `v0.13.0` public alpha announcement
-**Ship readiness**: `v0.12.3` is live on GitHub Releases, VS Code Marketplace, and Open VSX; the remaining launch work is announcement-path cleanup, with `#3302` demo assets still the main human-owned blocker before the `v0.13.0` public alpha announcement
+**Current release train**: `v0.13.1` public-alpha patch (dispatched 2026-05-01)
+**Workspace version line**: `v0.13.1`
+**Published crate surface**: 32 crates
+**Release target**: channel verification across GitHub Releases, crates.io, Docker, VS Code Marketplace, Open VSX, and the owned Homebrew tap
+**Ship readiness**: release orchestration validated the default-branch tip, created `v0.13.1`, and dispatched downstream publish workflows. Do not declare all channels complete until post-publish verification is done.
 
 ## Active Blockers
 
-- `#3302` demo GIFs remain the main human-owned blocker before the `v0.13.0` public alpha announcement
-- Public install guidance must keep the channel split explicit while crates.io remains on `v0.12.2`
+- No known code release blocker after `#7676`, `#7781`, `#7782`, and `#7791`
+- Remaining work is operational: monitor downstream channel workflows, run post-publish verification, and record final channel receipts
 
-## 0.12.3 Ship Receipts (2026-04-09)
+## 0.13.1 Release Receipts (2026-05-01)
+
+- Release-channel hardening landed in `#7676`: Marketplace-safe version handling, independent Open VSX publishing, explicit token/channel status, and CI timeout classification
+- Homebrew tap targeting landed in `#7781`: owned `EffortlessMetrics/homebrew-tap`, `Formula/perllsp.rb`, `class Perllsp`, strict release asset validation, and `brew install effortlessmetrics/tap/perllsp`
+- Release naming/docs landed in `#7782`: `docs/releases/v0.13.1.md`, concise changelog entry, and public-alpha wording
+- Version bump landed in `#7791`: workspace and package surfaces moved to `0.13.1`; release checks reported 32 published crates
+- Release orchestration run `25209777861` created tag `v0.13.1` at `6ef20484` and dispatched GitHub Release, crates.io, extension, and Docker workflows
+- crates.io publish run `25209810591` completed and verified all 32 crates at `0.13.1`
+- GitHub Release run `25209810124` published `v0.13.1` binaries, `SHA256SUMS`, and SBOM; the VSIX was attached after the release object existed
+- VS Code Marketplace and Open VSX publish jobs completed independently; the failed attach job exposed a missing `GH_REPO` environment setting and is patched in the follow-up release-hygiene PR
+- Homebrew manual bump run `25210359468` reached the owned-tap path but exposed the same missing `GH_REPO` setting for release asset downloads outside the source checkout; the follow-up release-hygiene PR patches that before rerunning the tap bump
+- Homebrew patched-branch run `25210881000` validated the `v0.13.1` release asset layout and checksums, then stopped because `HOMEBREW_TAP_TOKEN` is not configured; `EffortlessMetrics/homebrew-tap` was bootstrapped and `EffortlessMetrics/homebrew-tap#1` merged the `perllsp 0.13.1` formula
+
+## Historical 0.12.3 Ship Receipts (2026-04-09)
 
 - GitHub release `v0.12.3` published 2026-04-09 against `cc801735`
 - `Release` workflow completed successfully and attached the cross-platform `perllsp` archives plus `SHA256SUMS`
@@ -60,4 +74,4 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ---
 
-*Last Updated: 2026-04-09*
+*Last Updated: 2026-05-01*

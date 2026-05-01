@@ -104,11 +104,11 @@ fn build_brew_formula(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) 
     let lin_x64_filename = artifact_filename(&config.prefix, &config.version, LIN_X64);
 
     format!(
-        r##"class PerlLsp < Formula
-  desc "Perl language server"
+        r##"class Perllsp < Formula
+  desc "Native Rust language server and debug adapter for Perl"
   homepage "https://github.com/{owner}/{repo}"
   version "{version}"
-  license "MIT"
+  license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do
     on_arm do
@@ -133,11 +133,16 @@ fn build_brew_formula(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) 
   end
 
   def install
-    bin.install "perllsp"
+    extracted_dir = Dir.glob("perllsp-#{{version}}-*").find {{ |path| File.directory?(path) }}
+    raise "expected release archive directory perllsp-#{{version}}-<target>" unless extracted_dir
+
+    bin.install "#{{extracted_dir}}/perllsp"
+    bin.install "#{{extracted_dir}}/perl-dap"
   end
 
   test do
-    assert_match "perllsp", shell_output("#{{bin}}/perllsp --version")
+    assert_match version.to_s, shell_output("#{{bin}}/perllsp --version")
+    assert_match version.to_s, shell_output("#{{bin}}/perl-dap --version")
   end
 end
 "##,

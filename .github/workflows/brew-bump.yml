@@ -26,6 +26,7 @@ permissions:
 
 env:
   FORMULA_NAME: perllsp
+  GH_REPO: ${{ github.repository }}
   HOMEBREW_TAP_NAME: effortlessmetrics/tap
   HOMEBREW_TAP_REPOSITORY: EffortlessMetrics/homebrew-tap
 
