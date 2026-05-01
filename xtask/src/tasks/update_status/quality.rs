@@ -44,7 +44,9 @@ pub(super) fn collect_per_crate_mutation(root: &Path) -> BTreeMap<String, usize>
     };
     let mut by_crate: BTreeMap<String, usize> = BTreeMap::new();
     for entry in entries {
-        if let Some(pkg) = entry.get("package").and_then(|v| v.as_str()) {
+        if let Some(pkg) = entry.get("package").and_then(|v| v.as_str())
+            && !pkg.trim().is_empty()
+        {
             *by_crate.entry(pkg.to_string()).or_default() += 1;
         }
     }
@@ -210,6 +212,23 @@ mod tests {
         let result = collect_per_crate_mutation(dir.path());
         assert_eq!(result.len(), 1);
         assert_eq!(result.get("perl-quote"), Some(&2));
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_per_crate_mutation_ignores_blank_package_names() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let out_dir = dir.path().join("mutants.out");
+        fs::create_dir_all(&out_dir)?;
+        let json = r#"[
+            {"package":"perl-quote","file":"crates/perl-quote/src/lib.rs"},
+            {"package":"","file":"crates/perl-parser/src/lib.rs"},
+            {"package":"   ","file":"crates/perl-parser/src/lib.rs"}
+        ]"#;
+        fs::write(out_dir.join("mutants.json"), json)?;
+        let result = collect_per_crate_mutation(dir.path());
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.get("perl-quote"), Some(&1));
         Ok(())
     }
 
