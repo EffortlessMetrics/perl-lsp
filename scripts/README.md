@@ -9,7 +9,7 @@ Run these locally during normal contribution work.
 | Script | Purpose |
 |--------|---------|
 | `install-githooks.sh` | Install the pre-push hook (run once after cloning) |
-| `check-rust-toolchain.sh` | Verify MSRV compatibility before building |
+| `check-rust-toolchain.sh` | Legacy wrapper to `cargo xtask check-toolchain` (MSRV compatibility check) |
 | `devex-doctor.sh` | Environment diagnostics (tool availability, paths) |
 | `devex-targeted-checks.sh` | Targeted subset of diagnostics for a specific area |
 | `preflight.sh` | Quick pre-flight checks before a PR |

@@ -119,7 +119,7 @@ just doctor-env
 #### Proposed Solutions
 | Solution | Effort | Status |
 |----------|--------|--------|
-| Automatic version check in justfile | Low | Implemented via `scripts/check-rust-toolchain.sh` |
+| Automatic version check in justfile | Low | Implemented via `cargo xtask check-toolchain` (legacy wrapper: `scripts/check-rust-toolchain.sh`) |
 | Better error messages for version mismatch | Low | Proposed |
 
 #### Related Documentation
