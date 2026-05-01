@@ -1,224 +1,71 @@
 //! DAP Message Dispatcher
-//!
-//! This module handles routing of incoming DAP requests to appropriate handlers
-//! and constructs responses following the JSON-RPC 2.0 protocol.
-//!
-//! **Deprecated**: Use [`DebugAdapter`](crate::DebugAdapter) directly.
-//! This dispatcher is kept for backward compatibility and protocol conformance tests.
 #![allow(deprecated)]
-//!
-//! # Architecture
-//!
-//! - **DapDispatcher**: Central message router with handler registry
-//! - **Handler Pattern**: Command-specific handlers for initialize, setBreakpoints, etc.
-//! - **Error Handling**: Consistent error response formatting with proper status codes
-//! - **Event Emission**: Supports DAP events like `initialized` after capability exchange
-//!
-//! # Message Flow
-//!
-//! 1. Client sends Request with command and arguments
-//! 2. Dispatcher routes to command handler
-//! 3. Handler processes request and returns Result
-//! 4. Dispatcher wraps in Response with success/error status
-//! 5. For `initialize`, also queues an `initialized` event
-//!
-//! # DAP Protocol Requirements
-//!
-//! The DAP spec requires:
-//! - Client sends `initialize` request
-//! - Adapter responds with capabilities
-//! - Adapter sends `initialized` event (signals ready for configuration)
-//! - Client sends configuration requests like `setBreakpoints`, `configurationDone`
-//!
-//! # References
-//!
-//! - [DAP Protocol Schema](../../docs/reference/DAP_PROTOCOL_SCHEMA.md)
-//! - [DAP Implementation Spec](../../docs/reference/DAP_IMPLEMENTATION_SPECIFICATION.md#ac5-adapter-scaffolding)
-//! - [DAP Spec - Initialization](https://microsoft.github.io/debug-adapter-protocol/specification#Requests_Initialize)
 
-use crate::breakpoints::BreakpointStore;
-use crate::feature_catalog::has_feature as catalog_has_feature;
-use crate::inline_values::collect_inline_values;
-use crate::protocol::{
-    Breakpoint, Capabilities, Event, ExceptionBreakpointFilter, InitializeRequestArguments,
-    InlineValuesArguments, InlineValuesResponseBody, Request, Response, SetBreakpointsArguments,
-    SetBreakpointsResponseBody,
-};
-use anyhow::{Context, Result};
+mod handlers;
+mod state;
+
+use crate::protocol::{Event, Request, Response};
+use anyhow::Result;
 use serde_json::Value;
-use std::sync::{Arc, Mutex};
 
-/// Result of dispatching a request
-///
-/// Contains the response and any events that should be sent to the client.
+use handlers::{
+    handle_configuration_done, handle_initialize, handle_inline_values, handle_set_breakpoints,
+};
+use state::DispatcherState;
+
 #[deprecated(
     since = "0.2.0",
     note = "Use DebugAdapter directly; DapDispatcher will be removed in a future release"
 )]
 pub struct DispatchResult {
-    /// The response to send
     pub response: Response,
-    /// Events to send after the response (e.g., `initialized` after `initialize`)
     pub events: Vec<Event>,
 }
 
-/// DAP message dispatcher
-///
-/// Routes incoming requests to command handlers and manages session state
-/// including breakpoint storage and sequence number tracking.
-///
-/// **Deprecated**: Use [`DebugAdapter`](crate::DebugAdapter) directly. `DapDispatcher` handles
-/// only 4 commands and maintains its own state separate from the main adapter. It will be
-/// removed in a future release.
 #[deprecated(
     since = "0.2.0",
     note = "Use DebugAdapter directly; DapDispatcher will be removed in a future release"
 )]
 #[derive(Debug, Clone)]
 pub struct DapDispatcher {
-    /// Breakpoint storage (shared across session)
-    breakpoint_store: BreakpointStore,
-    /// Response sequence number (monotonically increasing)
-    response_seq: Arc<Mutex<i64>>,
-    /// Event sequence number (monotonically increasing)
-    event_seq: Arc<Mutex<i64>>,
-    /// Whether initialization is complete
-    initialized: Arc<Mutex<bool>>,
+    state: DispatcherState,
 }
 
 impl DapDispatcher {
-    /// Create a new DAP dispatcher
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use perl_dap::dispatcher::DapDispatcher;
-    ///
-    /// let dispatcher = DapDispatcher::new();
-    /// ```
     pub fn new() -> Self {
-        Self {
-            breakpoint_store: BreakpointStore::new(),
-            response_seq: Arc::new(Mutex::new(1)),
-            event_seq: Arc::new(Mutex::new(1)),
-            initialized: Arc::new(Mutex::new(false)),
-        }
+        Self { state: DispatcherState::new() }
     }
 
-    /// Dispatch a request to the appropriate handler
-    ///
-    /// Routes the request based on command name and returns a Response.
-    /// All errors are caught and converted to error responses.
-    ///
-    /// # Arguments
-    ///
-    /// * `request` - Incoming DAP request
-    ///
-    /// # Returns
-    ///
-    /// DAP response with success=true and body, or success=false with message.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use perl_dap::dispatcher::DapDispatcher;
-    /// use perl_dap::protocol::{Request, Source, SourceBreakpoint, SetBreakpointsArguments};
-    /// use serde_json::json;
-    ///
-    /// let dispatcher = DapDispatcher::new();
-    /// let request = Request {
-    ///     seq: 1,
-    ///     msg_type: "request".to_string(),
-    ///     command: "setBreakpoints".to_string(),
-    ///     arguments: Some(json!({
-    ///         "source": { "path": "/workspace/script.pl" },
-    ///         "breakpoints": [{ "line": 10 }]
-    ///     })),
-    /// };
-    ///
-    /// let response = dispatcher.dispatch(&request);
-    /// assert!(response.success);
-    /// ```
     pub fn dispatch(&self, request: &Request) -> Response {
         self.dispatch_with_events(request).response
     }
 
-    /// Dispatch a request and return both response and any events
-    ///
-    /// This method should be used when you need to send events after responses.
-    /// For example, after `initialize`, the adapter must send an `initialized` event.
-    ///
-    /// # Arguments
-    ///
-    /// * `request` - Incoming DAP request
-    ///
-    /// # Returns
-    ///
-    /// `DispatchResult` containing the response and any events to send.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use perl_dap::dispatcher::DapDispatcher;
-    /// use perl_dap::protocol::Request;
-    ///
-    /// let dispatcher = DapDispatcher::new();
-    /// let request = Request {
-    ///     seq: 1,
-    ///     msg_type: "request".to_string(),
-    ///     command: "initialize".to_string(),
-    ///     arguments: None,
-    /// };
-    ///
-    /// let result = dispatcher.dispatch_with_events(&request);
-    /// assert!(result.response.success);
-    /// // After initialize, we get an initialized event
-    /// assert_eq!(result.events.len(), 1);
-    /// assert_eq!(result.events[0].event, "initialized");
-    /// ```
     pub fn dispatch_with_events(&self, request: &Request) -> DispatchResult {
         let result = self.dispatch_inner(request);
         let success = result.is_ok();
-        let command = request.command.as_str();
         let response = self.create_response(request, result);
-
-        // Generate events based on command
-        let events = match (command, success) {
-            ("initialize", true) => {
-                // After successful initialize, send initialized event
-                vec![self.create_initialized_event()]
-            }
+        let events = match (request.command.as_str(), success) {
+            ("initialize", true) => vec![self.create_initialized_event()],
             _ => Vec::new(),
         };
-
         DispatchResult { response, events }
     }
 
-    /// Internal dispatch logic (returns Result for error handling)
     fn dispatch_inner(&self, request: &Request) -> Result<Value> {
         match request.command.as_str() {
-            "initialize" => self.handle_initialize(request),
-            "configurationDone" => self.handle_configuration_done(request),
-            "setBreakpoints" => self.handle_set_breakpoints(request),
-            "inlineValues" => self.handle_inline_values(request),
-            _ => {
-                // Unknown command - return error
-                anyhow::bail!("Unknown command: {}", request.command)
-            }
+            "initialize" => handle_initialize(request),
+            "configurationDone" => handle_configuration_done(&self.state),
+            "setBreakpoints" => handle_set_breakpoints(&self.state, request),
+            "inlineValues" => handle_inline_values(request),
+            _ => anyhow::bail!("Unknown command: {}", request.command),
         }
     }
 
-    /// Create an initialized event
-    ///
-    /// This event signals to the client that the adapter is ready to receive
-    /// configuration requests (breakpoints, etc.)
     fn create_initialized_event(&self) -> Event {
-        let mut seq = self.event_seq.lock().unwrap_or_else(|e| e.into_inner());
+        let mut seq = self.state.event_seq.lock().unwrap_or_else(|e| e.into_inner());
         let event_seq = *seq;
         *seq += 1;
-
-        // Mark as initialized
-        if let Ok(mut init) = self.initialized.lock() {
+        if let Ok(mut init) = self.state.initialized.lock() {
             *init = true;
         }
 
@@ -226,136 +73,12 @@ impl DapDispatcher {
             seq: event_seq,
             msg_type: "event".to_string(),
             event: "initialized".to_string(),
-            body: None, // initialized event has no body
+            body: None,
         }
     }
 
-    /// Handle initialize request
-    ///
-    /// Returns adapter capabilities to the client.
-    fn handle_initialize(&self, request: &Request) -> Result<Value> {
-        // Parse initialize arguments (optional validation)
-        let _args: InitializeRequestArguments = request
-            .arguments
-            .as_ref()
-            .map(|v| serde_json::from_value(v.clone()))
-            .transpose()
-            .context("Failed to parse initialize arguments")?
-            .unwrap_or(InitializeRequestArguments {
-                client_id: None,
-                client_name: None,
-                adapter_id: "perl-rs".to_string(),
-                locale: None,
-                lines_start_at1: Some(true),
-                columns_start_at1: Some(true),
-                path_format: None,
-            });
-
-        // Return adapter capabilities using the feature catalog for runtime gating
-        let supports_breakpoints = catalog_has_feature("dap.breakpoints.basic");
-        let supports_hit_conditions = catalog_has_feature("dap.breakpoints.hit_condition");
-        let supports_log_points = catalog_has_feature("dap.breakpoints.logpoints");
-        let supports_exceptions = catalog_has_feature("dap.exceptions.die");
-        let supports_inline_values = catalog_has_feature("dap.inline_values");
-
-        let capabilities = Capabilities {
-            supports_configuration_done_request: Some(true),
-            supports_evaluate_for_hovers: Some(true),
-            supports_conditional_breakpoints: Some(supports_breakpoints),
-            supports_hit_conditional_breakpoints: Some(supports_hit_conditions),
-            supports_log_points: Some(supports_log_points),
-            supports_exception_options: Some(supports_exceptions),
-            supports_exception_filter_options: Some(supports_exceptions),
-            supports_terminate_request: Some(true),
-            supports_inline_values: Some(supports_inline_values),
-            supports_function_breakpoints: Some(supports_breakpoints),
-            supports_set_variable: Some(true),
-            supports_value_formatting_options: Some(false),
-            support_terminate_debuggee: Some(true),
-            supports_step_back: Some(false),
-            supports_data_breakpoints: Some(false),
-            exception_breakpoint_filters: if supports_exceptions {
-                Some(vec![ExceptionBreakpointFilter {
-                    filter: "die".to_string(),
-                    label: "Break on die/croak".to_string(),
-                    default: Some(false),
-                }])
-            } else {
-                None
-            },
-        };
-
-        serde_json::to_value(&capabilities).context("Failed to serialize capabilities")
-    }
-
-    /// Handle configurationDone request
-    ///
-    /// This request is sent by the client after it has finished sending all
-    /// configuration requests (breakpoints, exception filters, etc.)
-    /// The adapter can use this to start the debuggee if needed.
-    fn handle_configuration_done(&self, _request: &Request) -> Result<Value> {
-        // Verify we're in initialized state
-        let initialized = self.initialized.lock().unwrap_or_else(|e| e.into_inner());
-        if !*initialized {
-            anyhow::bail!("configurationDone received before initialized");
-        }
-
-        // configurationDone has no response body per spec
-        Ok(serde_json::Value::Null)
-    }
-
-    /// Handle setBreakpoints request
-    ///
-    /// Sets breakpoints for a source file using REPLACE semantics.
-    /// Returns verified breakpoints in SAME ORDER as request.
-    fn handle_set_breakpoints(&self, request: &Request) -> Result<Value> {
-        // Parse setBreakpoints arguments
-        let args: SetBreakpointsArguments = request
-            .arguments
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Missing arguments for setBreakpoints"))
-            .and_then(|v| serde_json::from_value(v.clone()).context("Invalid arguments"))?;
-
-        // Set breakpoints (REPLACE semantics)
-        let breakpoints: Vec<Breakpoint> = self.breakpoint_store.set_breakpoints(&args);
-
-        // Create response body
-        let body = SetBreakpointsResponseBody { breakpoints };
-
-        serde_json::to_value(&body).context("Failed to serialize setBreakpoints response")
-    }
-
-    /// Handle inlineValues request
-    ///
-    /// Returns inline value text hints for scalar variables in the specified range.
-    fn handle_inline_values(&self, request: &Request) -> Result<Value> {
-        let args: InlineValuesArguments = request
-            .arguments
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Missing arguments for inlineValues"))
-            .and_then(|v| serde_json::from_value(v.clone()).context("Invalid arguments"))?;
-
-        let source_path =
-            args.source.path.ok_or_else(|| anyhow::anyhow!("inlineValues requires source.path"))?;
-
-        if args.start_line <= 0 || args.end_line <= 0 {
-            anyhow::bail!("inlineValues requires positive startLine/endLine");
-        }
-
-        let start_line = args.start_line.min(args.end_line);
-        let end_line = args.end_line.max(args.start_line);
-        let content = std::fs::read_to_string(&source_path)
-            .with_context(|| format!("Failed to read source file: {}", source_path))?;
-
-        let inline_values = collect_inline_values(&content, start_line, end_line);
-        let body = InlineValuesResponseBody { inline_values };
-
-        serde_json::to_value(&body).context("Failed to serialize inlineValues response")
-    }
-
-    /// Create response from request and result
     fn create_response(&self, request: &Request, result: Result<Value>) -> Response {
-        let mut seq = self.response_seq.lock().unwrap_or_else(|e| e.into_inner());
+        let mut seq = self.state.response_seq.lock().unwrap_or_else(|e| e.into_inner());
         let response_seq = *seq;
         *seq += 1;
 
@@ -381,10 +104,9 @@ impl DapDispatcher {
         }
     }
 
-    /// Get reference to breakpoint store (for testing)
     #[cfg(test)]
-    pub fn breakpoint_store(&self) -> &BreakpointStore {
-        &self.breakpoint_store
+    pub fn breakpoint_store(&self) -> &crate::breakpoints::BreakpointStore {
+        &self.state.breakpoint_store
     }
 }
 
@@ -397,7 +119,7 @@ impl Default for DapDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::InlineValuesResponseBody;
+    use crate::protocol::{Capabilities, InlineValuesResponseBody, SetBreakpointsResponseBody};
     use perl_tdd_support::must;
     use serde_json::json;
     use std::io::Write;
@@ -444,7 +166,7 @@ print "result: $final\n";
     #[test]
     fn test_dispatcher_new() {
         let dispatcher = DapDispatcher::new();
-        let breakpoints = dispatcher.breakpoint_store.get_breakpoints("/test.pl");
+        let breakpoints = dispatcher.breakpoint_store().get_breakpoints("/test.pl");
         assert_eq!(breakpoints.len(), 0);
     }
 
