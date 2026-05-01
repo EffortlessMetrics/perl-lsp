@@ -8,26 +8,15 @@
 //! reparsed — incremental *parsing* is future work.  The sync kind is about
 //! how document text is transferred, not the parsing strategy.
 
+mod classification;
+
 use super::*;
 use crate::protocol::invalid_params;
+use crate::runtime::text_sync::classification::{is_embedded_template_uri, is_perl_language_id};
 use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 use perl_parser_core::source_file::is_binary_content;
-
-const TEMPLATE_EXTENSIONS: [&str; 4] = ["ep", "tt", "tt2", "mason"];
-
-fn is_embedded_template_uri(uri: &str) -> bool {
-    perl_uri::uri_extension(uri)
-        .is_some_and(|ext| TEMPLATE_EXTENSIONS.iter().any(|t| t.eq_ignore_ascii_case(ext)))
-}
-
-fn is_perl_language_id(language_id: &str) -> bool {
-    matches!(
-        language_id.to_ascii_lowercase().as_str(),
-        "perl" | "perl5" | "perl-cpanfile" | "embedded-perl" | "mojolicious"
-    )
-}
 
 #[cfg(feature = "incremental")]
 fn build_incremental_edit_set(
