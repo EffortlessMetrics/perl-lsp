@@ -1,6 +1,6 @@
 name: Publish VSCode Extension
 
-# Publish VSCode extension to marketplace
+# Publish VSCode extension packages to VS Code Marketplace and Open VSX.
 # Cost: ~$0.05 per publish
 
 on:
@@ -16,15 +16,19 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  publish:
+  prepare-vsix:
+    name: Prepare VSIX
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      VSCE_PAT: ${{ secrets.VSCE_PAT }}
-      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+    outputs:
+      artifact_name: ${{ steps.version.outputs.artifact_name }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+      release_tag: ${{ steps.version.outputs.release_tag }}
+      version: ${{ steps.version.outputs.version }}
+      vsix_file: ${{ steps.package.outputs.vsix_file }}
 
     steps:
       - name: Checkout
@@ -41,7 +45,7 @@ jobs:
         working-directory: vscode-extension
         run: |
           npm ci
-          npm install -g @vscode/vsce ovsx
+          npm install -g @vscode/vsce
 
       - name: Set version
         working-directory: vscode-extension
@@ -57,6 +61,18 @@ jobs:
             fi
           fi
 
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::Invalid extension version: $VERSION"
+            exit 1
+          fi
+
+          if [[ "$VERSION" == *-* ]]; then
+            IS_PRERELEASE=true
+            echo "::notice::Prerelease version $VERSION will be packaged for GitHub/Open VSX; VS Code Marketplace publish will be skipped."
+          else
+            IS_PRERELEASE=false
+          fi
+
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           if [ "$CURRENT_VERSION" = "$VERSION" ]; then
@@ -64,21 +80,73 @@ jobs:
           else
             npm version "$VERSION" --no-git-tag-version
           fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          echo "artifact_name=perl-lsp-rs-${VERSION}.vsix" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
           echo "release_tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build release VSIX
         working-directory: vscode-extension
+        id: package
         run: |
           npm run verify:marketplace
 
-          MARKETPLACE_VSIX=$(ls -1 perl-lsp-rs-*.vsix | head -n 1)
+          shopt -s nullglob
+          vsix_files=(perl-lsp-rs-*.vsix)
+          if [ "${#vsix_files[@]}" -ne 1 ]; then
+            echo "::error::Expected one VSIX package, found ${#vsix_files[@]}"
+            printf '%s\n' "${vsix_files[@]}"
+            exit 1
+          fi
 
-          echo "VSIX_FILE=$MARKETPLACE_VSIX" >> "$GITHUB_ENV"
-          echo "OPENVSX_VSIX_FILE=$MARKETPLACE_VSIX" >> "$GITHUB_ENV"
+          echo "vsix_file=${vsix_files[0]}" >> "$GITHUB_OUTPUT"
 
-      - name: Publish to VSCode Marketplace
-        if: ${{ env.VSCE_PAT != '' }}
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.version.outputs.artifact_name }}
+          path: vscode-extension/${{ steps.package.outputs.vsix_file }}
+          retention-days: 30
+
+  publish-vscode-marketplace:
+    name: Publish VS Code Marketplace
+    needs: prepare-vsix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VERSION: ${{ needs.prepare-vsix.outputs.version }}
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      VSIX_FILE: ${{ needs.prepare-vsix.outputs.vsix_file }}
+
+    steps:
+      - name: Download VSIX artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.prepare-vsix.outputs.artifact_name }}
+          path: vscode-extension
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Install Marketplace publisher
+        run: npm install -g @vscode/vsce
+
+      - name: Skip prerelease Marketplace publish
+        if: ${{ needs.prepare-vsix.outputs.is_prerelease == 'true' }}
+        run: |
+          echo "::notice::VS Code Marketplace publish skipped for prerelease $VERSION; Marketplace accepts non-prerelease SemVer package versions only."
+
+      - name: Require Marketplace publish token
+        if: ${{ needs.prepare-vsix.outputs.is_prerelease != 'true' && env.VSCE_PAT == '' }}
+        run: |
+          echo "::error::VSCE_PAT is not configured; VS Code Marketplace publish cannot run."
+          exit 1
+
+      - name: Publish to VS Code Marketplace
+        if: ${{ needs.prepare-vsix.outputs.is_prerelease != 'true' && env.VSCE_PAT != '' }}
         working-directory: vscode-extension
         run: |
           # Idempotency guard: skip if this version is already on the marketplace.
@@ -86,40 +154,77 @@ jobs:
             | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['versions'][0]['version'])" \
             2>/dev/null || echo "")
           if [ "$PUBLISHED_VERSION" = "$VERSION" ]; then
-            echo "::warning::VSCode Marketplace already has version $VERSION — skipping publish."
+            echo "::warning::VS Code Marketplace already has version $VERSION; skipping publish."
             exit 0
           fi
-          vsce publish --pat "$VSCE_PAT" --packagePath "${{ env.VSIX_FILE }}"
+          vsce publish --pat "$VSCE_PAT" --packagePath "$VSIX_FILE"
+
+  publish-open-vsx:
+    name: Publish Open VSX
+    needs: prepare-vsix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+      VERSION: ${{ needs.prepare-vsix.outputs.version }}
+      VSIX_FILE: ${{ needs.prepare-vsix.outputs.vsix_file }}
+
+    steps:
+      - name: Download VSIX artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.prepare-vsix.outputs.artifact_name }}
+          path: vscode-extension
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Install Open VSX publisher
+        run: npm install -g ovsx
 
       - name: Verify Open VSX CLI
-        working-directory: vscode-extension
+        run: ovsx --version
+
+      - name: Require Open VSX publish token
+        if: ${{ env.OVSX_PAT == '' }}
         run: |
-          npm run check:openvsx
+          echo "::error::OVSX_PAT is not configured; Open VSX publish cannot run."
+          exit 1
 
       - name: Publish to Open VSX
         if: ${{ env.OVSX_PAT != '' }}
         working-directory: vscode-extension
         run: |
-          # --skip-duplicate exits 0 with a notice if the version already exists (idempotent).
-          ovsx publish "${{ env.OPENVSX_VSIX_FILE }}" --pat "$OVSX_PAT" --skip-duplicate
+          # --skip-duplicate exits 0 with a notice if the version already exists.
+          ovsx publish "$VSIX_FILE" --pat "$OVSX_PAT" --skip-duplicate
 
-      - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v7
+  github-release-asset:
+    name: Attach VSIX to GitHub Release
+    needs: prepare-vsix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.prepare-vsix.outputs.release_tag }}
+      VSIX_FILE: ${{ needs.prepare-vsix.outputs.vsix_file }}
+
+    steps:
+      - name: Download VSIX artifact
+        uses: actions/download-artifact@v8
         with:
-          name: perl-lsp-rs-${{ env.VERSION }}.vsix
-          path: vscode-extension/${{ env.VSIX_FILE }}
-          retention-days: 30
+          name: ${{ needs.prepare-vsix.outputs.artifact_name }}
+          path: vscode-extension
 
       - name: Create GitHub Release asset
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
           for attempt in $(seq 1 30); do
-            if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-              gh release upload "${RELEASE_TAG}" \
-                "vscode-extension/${{ env.VSIX_FILE }}" \
+            if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+              gh release upload "$RELEASE_TAG" \
+                "vscode-extension/$VSIX_FILE" \
                 --clobber
               exit 0
             fi
@@ -131,14 +236,31 @@ jobs:
           echo "::error::Release ${RELEASE_TAG} was not available in time for VSIX attachment."
           exit 1
 
+  publish-summary:
+    name: Publish Extension Summary
+    needs:
+      - prepare-vsix
+      - publish-vscode-marketplace
+      - publish-open-vsx
+      - github-release-asset
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
       - name: Post publish summary
-        if: always()
         run: |
           {
             echo "## VS Code extension publish"
             echo ""
-            echo "- Marketplace VSIX: ${{ env.VSIX_FILE }}"
-            echo "- Open VSX VSIX: ${{ env.OPENVSX_VSIX_FILE }}"
+            echo "- Version: ${{ needs.prepare-vsix.outputs.version }}"
+            echo "- VSIX artifact: ${{ needs.prepare-vsix.outputs.artifact_name }}"
+            echo "- VS Code Marketplace job: ${{ needs.publish-vscode-marketplace.result }}"
+            echo "- Open VSX job: ${{ needs.publish-open-vsx.result }}"
+            echo "- GitHub release asset job: ${{ needs.github-release-asset.result }}"
+            if [ "${{ needs.prepare-vsix.outputs.is_prerelease }}" = "true" ]; then
+              echo "- Marketplace prerelease policy: skipped; publish Marketplace only for non-prerelease SemVer versions."
+            fi
             echo "- Marketplace: https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs"
             echo "- Open VSX: https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs"
           } >> "$GITHUB_STEP_SUMMARY"

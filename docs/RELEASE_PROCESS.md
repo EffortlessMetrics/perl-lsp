@@ -19,7 +19,7 @@ The perl-lsp release process is fully automated and supports:
 - **Multi-platform binaries**: Linux (x86_64, aarch64), macOS (x86_64, aarch64), Windows (x86_64)
 - **Package managers**: Homebrew, Scoop, Chocolatey
 - **Docker images**: Multi-arch (linux/amd64, linux/arm64)
-- **VSCode extension**: VSCode Marketplace and Open VSX
+- **VSCode extension**: VSCode Marketplace and Open VSX, published by independent jobs
 - **crates.io**: Crates in `[workspace.metadata.publish.allow]`
 
 ### Release Architecture
@@ -164,7 +164,7 @@ Monitor the following workflows:
 
 1. **Release** - Builds binaries and creates GitHub release
 2. **Publish to crates.io** - Publishes crates in `[workspace.metadata.publish.allow]`
-3. **Publish VSCode Extension** - Publishes to VSCode Marketplace and Open VSX
+3. **Publish VSCode Extension** - Builds one VSIX, then publishes VSCode Marketplace and Open VSX in separate jobs
 4. **Publish Docker Images** - Builds and pushes multi-arch images
 5. **Homebrew Auto-Bump** - Creates PR to Homebrew
 6. **Scoop Auto-Bump** - Creates PR to Scoop
@@ -188,6 +188,7 @@ After all workflows complete, verify:
 3. **VSCode Extension**
    - Check VSCode Marketplace for new version
    - Check Open VSX for new version
+   - Confirm the workflow summary reports Marketplace and Open VSX as separate channel statuses
    - Test extension installation
 
 4. **Docker Images**
@@ -321,6 +322,12 @@ VSCode extension is published to:
 - VSCode Marketplace: `EffortlessMetrics.perl-lsp-rs`
 - Open VSX: `EffortlessMetrics.perl-lsp-rs`
 
+The `Publish VSCode Extension` workflow builds a single VSIX and then runs separate
+`publish-vscode-marketplace` and `publish-open-vsx` jobs. A Marketplace failure must
+not prevent Open VSX from attempting its publish. Marketplace accepts non-prerelease SemVer
+extension versions, so prerelease versions such as `0.13.0-rc1` are packaged as VSIX
+assets for GitHub release/sideload validation and are skipped for Marketplace publish.
+
 **Installation:**
 ```bash
 # From VSCode Marketplace
@@ -428,6 +435,11 @@ For a complete rollback:
 - Check Dockerfile syntax
 - Verify base image is available
 - Check for platform-specific issues
+
+**Issue: VS Code Marketplace rejects a prerelease version**
+- Publish Marketplace only for non-prerelease SemVer versions such as `0.13.0`
+- Use the GitHub release VSIX asset for prerelease sideload validation
+- Check the Open VSX job separately; it does not depend on Marketplace success
 
 ### Binary Issues
 

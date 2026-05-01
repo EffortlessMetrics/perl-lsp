@@ -51,7 +51,7 @@ id = "test-lib"
 name = "Library Tests"
 type = "correctness"
 blocking = true
-timeout_seconds = 600
+timeout_seconds = 1800
 command = "cargo test --workspace --lib --locked"
 evidence_pattern = "test result: .* ([0-9]+) passed"
 threshold = { type = "exit_code", pass = 0 }

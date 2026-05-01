@@ -1719,7 +1719,7 @@ fn run_shell_command_with_timeout(
         .try_clone()
         .with_context(|| format!("Failed to clone log file handle: {}", log_path.display()))?;
 
-    let mut child = shell_command_process(command)
+    let mut child = shell_command_process(command, timeout_secs)
         .stdout(Stdio::from(log_file))
         .stderr(Stdio::from(log_file_err))
         .spawn()
@@ -1727,13 +1727,13 @@ fn run_shell_command_with_timeout(
 
     let start = Instant::now();
     let mut last_heartbeat = start;
-    let timeout = Duration::from_secs(timeout_secs);
+    let timeout = shell_command_watchdog_timeout(timeout_secs);
 
     // Poll until the process exits or the deadline elapses.
     // Capture exit_code inside the loop so the timed-out branch never calls
     // wait() a second time (which would be a double-wait and returns an error
     // on Windows). Synthetic exit code 124 follows the GNU timeout(1) convention.
-    let (timed_out, exit_code) = loop {
+    let (watchdog_timed_out, exit_code) = loop {
         if let Some(status) = child.try_wait().context("Failed waiting on gate process")? {
             break (false, status.code().unwrap_or(-1));
         }
@@ -1753,6 +1753,7 @@ fn run_shell_command_with_timeout(
         thread::sleep(Duration::from_millis(100));
     };
 
+    let timed_out = watchdog_timed_out || exit_code == 124;
     println!(
         "gate command exited exit_code={} timed_out={} elapsed_ms={} log_path={}",
         exit_code,
@@ -1807,18 +1808,27 @@ fn read_gate_output(log_path: &Path) -> String {
 }
 
 #[cfg(windows)]
-fn shell_command_process(command: &str) -> Command {
+fn shell_command_process(command: &str, _timeout_secs: u64) -> Command {
     let mut cmd = Command::new("cmd");
     cmd.args(["/C", command]);
     cmd
 }
 
 #[cfg(not(windows))]
-fn shell_command_process(command: &str) -> Command {
+fn shell_command_process(command: &str, timeout_secs: u64) -> Command {
     use std::os::unix::process::CommandExt;
 
     let mut cmd = Command::new("bash");
-    cmd.args(["-lc", command]);
+    let timeout_arg = format!("{timeout_secs}s");
+    cmd.arg("-lc")
+        .arg(
+            "if command -v timeout >/dev/null 2>&1; then \
+             exec timeout --signal=TERM --kill-after=60s \"$1\" bash -lc \"$2\"; \
+             else exec bash -lc \"$2\"; fi",
+        )
+        .arg("xtask-gate-timeout")
+        .arg(timeout_arg)
+        .arg(command);
     cmd.process_group(0);
     cmd
 }
@@ -1835,6 +1845,16 @@ fn terminate_shell_command(child: &mut Child) {
     thread::sleep(Duration::from_secs(1));
     Command::new("kill").args(["-KILL", &process_group]).status().ok();
     child.kill().ok();
+}
+
+#[cfg(windows)]
+fn shell_command_watchdog_timeout(timeout_secs: u64) -> Duration {
+    Duration::from_secs(timeout_secs)
+}
+
+#[cfg(not(windows))]
+fn shell_command_watchdog_timeout(timeout_secs: u64) -> Duration {
+    Duration::from_secs(timeout_secs.saturating_add(75))
 }
 
 fn run_internal_xtask_gate(

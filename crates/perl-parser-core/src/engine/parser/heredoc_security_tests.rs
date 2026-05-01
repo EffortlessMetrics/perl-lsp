@@ -157,14 +157,23 @@ fn test_nested_heredocs_within_limit() {
 #[test]
 fn test_deeply_nested_heredocs_hit_limit() {
     // Test that exceeding 100 heredocs triggers the depth limit
-    let mut code = String::from("my @h = (");
-    for i in 0..150 {
+    let mut code = String::from("print ");
+    for i in 0..101 {
         code.push_str(&format!("<<EOF{}, ", i));
     }
-    code.push_str(");\n");
+    code.push_str(";\n");
 
+    for i in 0..101 {
+        code.push_str(&format!("Content for heredoc {}\n", i));
+        code.push_str(&format!("EOF{}\n", i));
+    }
+
+    let start = Instant::now();
     let mut parser = Parser::new(&code);
     let _result = parser.parse();
+    let duration = start.elapsed();
+
+    assert!(duration.as_secs() < 2, "Parser should hit heredoc depth limit efficiently");
 
     let errors = parser.errors();
     assert!(
