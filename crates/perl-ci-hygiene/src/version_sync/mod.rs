@@ -20,81 +20,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
-/// A discovered reference to the workspace version somewhere on disk.
-#[derive(Debug, Clone)]
-pub struct VersionSite {
-    /// Repo-relative path of the file.
-    pub path: PathBuf,
-    /// 1-based line number inside the file.
-    pub line: usize,
-    /// Human description of what this site is (for error messages).
-    pub description: String,
-    /// The version currently written at that site.
-    pub found: String,
-    /// When true, this site tracks the published/released channel (VS Code Marketplace,
-    /// GitHub Releases) and is intentionally allowed to lag behind a pre-release workspace
-    /// version. During a pre-release cycle (workspace version contains `-`), mismatches
-    /// on channel-split sites are reported as warnings rather than hard failures.
-    pub channel_split: bool,
-}
+mod model;
+mod validate;
 
-impl VersionSite {
-    /// Construct a standard (non-channel-split) site.
-    fn new(path: PathBuf, line: usize, description: String, found: String) -> Self {
-        Self { path, line, description, found, channel_split: false }
-    }
-
-    /// Construct a channel-split site that is allowed to lag during pre-release cycles.
-    fn channel(path: PathBuf, line: usize, description: String, found: String) -> Self {
-        Self { path, line, description, found, channel_split: true }
-    }
-}
-
-/// Semantic version X.Y.Z[-pre] validation. Accepts stable versions (`X.Y.Z`)
-/// and pre-release versions (`X.Y.Z-alpha`, `X.Y.Z-rc1`, `X.Y.Z-beta.2`, etc.).
-/// The pre-release suffix must consist of alphanumeric segments separated by dots or
-/// dashes. Keep in sync with bump's CLI validation — they must accept the same shape.
-pub fn validate_version_format(version: &str) -> Result<()> {
-    // Split on the first '-' to separate the base version from the optional pre-release tag.
-    let (base, pre_release) =
-        version.split_once('-').map(|(b, p)| (b, Some(p))).unwrap_or((version, None));
-
-    let mut parts = base.split('.');
-
-    let major = parts.next().ok_or_else(|| {
-        eyre!("invalid version format: {version:?} (expected X.Y.Z or X.Y.Z-pre)")
-    })?;
-    let minor = parts.next().ok_or_else(|| {
-        eyre!("invalid version format: {version:?} (expected X.Y.Z or X.Y.Z-pre)")
-    })?;
-    let patch = parts.next().ok_or_else(|| {
-        eyre!("invalid version format: {version:?} (expected X.Y.Z or X.Y.Z-pre)")
-    })?;
-
-    if parts.next().is_some()
-        || major.is_empty()
-        || minor.is_empty()
-        || patch.is_empty()
-        || !major.chars().all(|ch| ch.is_ascii_digit())
-        || !minor.chars().all(|ch| ch.is_ascii_digit())
-        || !patch.chars().all(|ch| ch.is_ascii_digit())
-    {
-        bail!("invalid version format: {version:?} (expected X.Y.Z or X.Y.Z-pre)");
-    }
-
-    // Validate the pre-release tag if present: alphanumeric segments separated by '.' or '-'.
-    if let Some(pre) = pre_release {
-        let invalid = pre.is_empty()
-            || !pre.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '.' || ch == '-');
-        if invalid {
-            bail!(
-                "invalid pre-release suffix in {version:?}: {pre:?} (expected alphanumeric segments)"
-            );
-        }
-    }
-
-    Ok(())
-}
+pub use model::{BumpReport, VersionSite};
+pub use validate::{is_pre_release, validate_version_format};
 
 /// Read the canonical workspace version from `Cargo.toml`.
 pub fn read_workspace_version(repo_root: &Path) -> Result<String> {
@@ -136,12 +66,6 @@ pub fn collect_sites(repo_root: &Path) -> Result<Vec<VersionSite>> {
     collect_doc_sites(repo_root, &mut sites)?;
 
     Ok(sites)
-}
-
-/// Returns `true` when `version` is a pre-release version (contains a `-` suffix,
-/// e.g. `0.13.0-rc1`, `1.2.3-alpha`).
-pub fn is_pre_release(version: &str) -> bool {
-    version.contains('-')
 }
 
 /// Check that every discovered site matches the canonical workspace
@@ -298,16 +222,6 @@ pub fn bump(repo_root: &Path, new_version: &str) -> Result<BumpReport> {
     }
 
     Ok(report)
-}
-
-/// Summary returned from [`bump`].
-#[derive(Debug, Default)]
-pub struct BumpReport {
-    pub sites_total: usize,
-    pub sites_updated: usize,
-    pub sites_unchanged: usize,
-    pub files_updated: usize,
-    pub touched_files: Vec<PathBuf>,
 }
 
 // ---------------------------------------------------------------------------
