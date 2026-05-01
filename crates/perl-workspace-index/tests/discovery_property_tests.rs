@@ -5,6 +5,7 @@ use proptest::prelude::*;
 use proptest::test_runner::Config as ProptestConfig;
 use std::collections::HashSet;
 use std::fs;
+use std::path::Path;
 
 fn extension_strategy() -> impl Strategy<Value = String> {
     prop_oneof![
@@ -30,6 +31,36 @@ fn extension_strategy() -> impl Strategy<Value = String> {
         Just("txt".to_string()),
         Just("json".to_string()),
     ]
+}
+
+fn supported_extension_strategy() -> impl Strategy<Value = String> {
+    prop_oneof![
+        Just("pl".to_string()),
+        Just("pm".to_string()),
+        Just("t".to_string()),
+        Just("psgi".to_string()),
+        Just("i".to_string()),
+        Just("xs".to_string()),
+        Just("ep".to_string()),
+        Just("tt".to_string()),
+        Just("tt2".to_string()),
+    ]
+}
+
+fn randomize_case(input: &str, uppercase: &[bool]) -> String {
+    input
+        .chars()
+        .zip(uppercase.iter().copied())
+        .map(
+            |(ch, use_upper)| {
+                if use_upper { ch.to_ascii_uppercase() } else { ch.to_ascii_lowercase() }
+            },
+        )
+        .collect()
+}
+
+fn has_path_component(path: &Path, component: &str) -> bool {
+    path.components().any(|part| part.as_os_str() == component)
 }
 
 proptest! {
@@ -111,15 +142,66 @@ proptest! {
         let result = discover_perl_files(root);
 
         for path in &result.files {
-            let rendered = path.to_string_lossy();
-            prop_assert!(!rendered.contains("/.git/"));
-            prop_assert!(!rendered.contains("/.hg/"));
-            prop_assert!(!rendered.contains("/.svn/"));
-            prop_assert!(!rendered.contains("/target/"));
-            prop_assert!(!rendered.contains("/node_modules/"));
-            prop_assert!(!rendered.contains("/.cache/"));
+            for skipped_dir in skipped_dirs {
+                prop_assert!(!has_path_component(path, skipped_dir));
+            }
         }
 
         prop_assert!(result.files.iter().any(|path| path.ends_with(&visible)));
+    }
+
+    #[test]
+    fn prop_discovery_output_is_lexically_sorted(
+        specs in prop::collection::vec(("[a-z]{1,8}", extension_strategy()), 1..36)
+    ) {
+        let tmp = match tempfile::tempdir() {
+            Ok(dir) => dir,
+            Err(_) => return Ok(()),
+        };
+        let root = tmp.path();
+
+        for (idx, (stem, ext)) in specs.iter().enumerate() {
+            let nested = idx % 3;
+            let relative = format!("lib/{nested}/f_{stem}_{idx}.{ext}");
+            let path = root.join(relative);
+            if let Some(parent) = path.parent() {
+                prop_assert!(fs::create_dir_all(parent).is_ok());
+            }
+            prop_assert!(fs::write(path, "# generated\n").is_ok());
+        }
+
+        let result = discover_perl_files(root);
+        let mut expected = result.files.clone();
+        expected.sort_unstable_by(|left, right| left.as_os_str().cmp(right.as_os_str()));
+        prop_assert_eq!(result.files, expected);
+    }
+
+    #[test]
+    fn prop_supported_extensions_are_case_insensitive(
+        stem in "[a-z]{1,10}",
+        base_ext in supported_extension_strategy(),
+        case_mask in prop::collection::vec(any::<bool>(), 2..8)
+    ) {
+        let tmp = match tempfile::tempdir() {
+            Ok(dir) => dir,
+            Err(_) => return Ok(()),
+        };
+        let root = tmp.path();
+
+        let mask_len = base_ext.len();
+        let mut normalized_mask = vec![false; mask_len];
+        for (idx, value) in case_mask.into_iter().cycle().take(mask_len).enumerate() {
+            normalized_mask[idx] = value;
+        }
+
+        let ext = randomize_case(&base_ext, &normalized_mask);
+        let path = root.join(format!("lib/{stem}.{ext}"));
+        if let Some(parent) = path.parent() {
+            prop_assert!(fs::create_dir_all(parent).is_ok());
+        }
+        prop_assert!(fs::write(&path, "# generated\n").is_ok());
+
+        let result = discover_perl_files(root);
+        prop_assert!(result.files.iter().any(|candidate| candidate == &path));
     }
 }
