@@ -15,85 +15,10 @@ use crate::state::DegradationTier;
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 use perl_parser_core::source_file::is_binary_content;
 
-const TEMPLATE_EXTENSIONS: [&str; 4] = ["ep", "tt", "tt2", "mason"];
-
-fn is_embedded_template_uri(uri: &str) -> bool {
-    perl_uri::uri_extension(uri)
-        .is_some_and(|ext| TEMPLATE_EXTENSIONS.iter().any(|t| t.eq_ignore_ascii_case(ext)))
-}
-
-fn is_perl_language_id(language_id: &str) -> bool {
-    matches!(
-        language_id.to_ascii_lowercase().as_str(),
-        "perl" | "perl5" | "perl-cpanfile" | "embedded-perl" | "mojolicious"
-    )
-}
-
+mod srp_helpers;
 #[cfg(feature = "incremental")]
-fn build_incremental_edit_set(
-    original_rope: &ropey::Rope,
-    lsp_changes: &[lsp_types::TextDocumentContentChangeEvent],
-) -> Option<perl_parser::incremental::incremental_edit::IncrementalEditSet> {
-    use crate::textdoc::{PosEnc, safe_range_mapping};
-    use perl_parser::incremental::incremental_edit::{IncrementalEdit, IncrementalEditSet};
-
-    fn map_offset_to_original_space(evolving: usize, cumulative_shift: isize) -> Option<usize> {
-        if cumulative_shift >= 0 {
-            evolving.checked_sub(cumulative_shift as usize)
-        } else {
-            evolving.checked_add((-cumulative_shift) as usize)
-        }
-    }
-
-    let mut working_rope = original_rope.clone();
-    let mut edit_set = IncrementalEditSet::new();
-    // Track the cumulative byte shift introduced by all prior edits so we can
-    // map evolving-document byte offsets back to original-document space.
-    //
-    // `apply_edits` / `apply_to_string` sort edits in *reverse* `start_byte`
-    // order and apply them against the *original* source string.  All byte
-    // offsets stored in `IncrementalEditSet` must therefore be in
-    // original-document space, not in the space of the progressively-mutated
-    // working rope.
-    let mut cumulative_shift: isize = 0;
-
-    for change in lsp_changes {
-        let range = change.range.as_ref()?;
-        let Some(mapping) = safe_range_mapping(&working_rope, range, PosEnc::Utf16) else {
-            // Range is malformed or lands inside UTF boundary; conservative fallback.
-            return None;
-        };
-        // Measure byte positions against the evolving rope so that the
-        // character-to-byte mapping for this edit is correct (the working rope
-        // already reflects all preceding edits in this notification batch).
-        let evolving_start = mapping.start_byte;
-        let evolving_end = mapping.end_byte;
-
-        // Map back to original-document space by undoing the byte shift that
-        // prior edits introduced into the working rope.
-        let (Some(orig_start), Some(orig_end)) = (
-            map_offset_to_original_space(evolving_start, cumulative_shift),
-            map_offset_to_original_space(evolving_end, cumulative_shift),
-        ) else {
-            tracing::debug!(
-                "Incremental edit batch cannot be mapped to original space; falling back to full reparse"
-            );
-            return None;
-        };
-        edit_set.add(IncrementalEdit::new(orig_start, orig_end, change.text.clone()));
-
-        // Apply this edit to the working rope so the next iteration's
-        // `range_to_bytes` / `range_to_chars` calls see the correct document.
-        working_rope.remove(mapping.start_char..mapping.end_char);
-        working_rope.insert(mapping.start_char, &change.text);
-
-        // Accumulate the byte delta: positive for insertions, negative for deletions.
-        cumulative_shift +=
-            change.text.len() as isize - (evolving_end as isize - evolving_start as isize);
-    }
-
-    if edit_set.is_empty() { None } else { Some(edit_set) }
-}
+use srp_helpers::build_incremental_edit_set;
+use srp_helpers::{is_embedded_template_uri, is_perl_language_id};
 
 impl LspServer {
     fn reindex_document_symbols(&self, uri: &str, ast: &Node, source: &str) {
