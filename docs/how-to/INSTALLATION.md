@@ -15,8 +15,8 @@ If you are wiring `perllsp` into a GitHub Actions workflow, see
 Use one of the public install paths that matches how you work:
 
 - VS Code: install the `EffortlessMetrics.perl-lsp-rs` extension and let it download the matching `perllsp` binary.
-- macOS or Linux: install via Homebrew (see below).
-- Other editors: download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and put it on your `PATH`.
+- macOS or Linux: install via Homebrew, or use the installer script.
+- Other editors: install `perllsp`, then configure your editor to run `perllsp --stdio`.
 - Local testing or pre-release validation: install from this repo with `cargo install --path crates/perllsp`.
 
 Do not use `cargo install perl-lsp` on crates.io. That package name is owned by another project, so the supported Cargo package is `perllsp`.
@@ -64,18 +64,29 @@ If you want the binary installed into Cargo's bin directory instead:
 cargo install perllsp
 ```
 
-## Prebuilt Releases
+## Which file should I download?
 
-GitHub Releases provides downloadable archives for the supported platforms.
-Check the latest release page before copying a version number.
+Most users should not choose a release asset manually:
 
-| Platform | Asset suffix |
+- VS Code / VSCodium / Cursor: install the Perl Language Server extension; it downloads the right server automatically.
+- macOS or Linux with Homebrew: `brew install perl-lsp`
+- Linux/macOS without Homebrew: use the installer script.
+
+Manual downloads: choose exactly one archive for your operating system and CPU.
+
+| Your system | Download suffix |
 | --- | --- |
-| Linux x86_64 | `x86_64-unknown-linux-gnu` |
-| Linux aarch64 | `aarch64-unknown-linux-gnu` |
+| Linux x64 / AMD64, most distributions | `x86_64-unknown-linux-gnu` |
+| Linux ARM64, most distributions | `aarch64-unknown-linux-gnu` |
+| Linux x64 / AMD64, Alpine or other musl systems | `x86_64-unknown-linux-musl` |
+| Linux ARM64, Alpine or other musl systems | `aarch64-unknown-linux-musl` |
 | macOS Intel | `x86_64-apple-darwin` |
 | macOS Apple Silicon | `aarch64-apple-darwin` |
-| Windows x86_64 | `x86_64-pc-windows-msvc` |
+| Windows x64 | `x86_64-pc-windows-msvc` |
+
+For Linux, `gnu` means glibc, used by most distributions such as Ubuntu, Debian, Fedora, RHEL, Arch, and Amazon Linux. `musl` is mainly for Alpine Linux and musl-based containers.
+
+You do not need both GNU and musl archives.
 
 ## After Installation
 

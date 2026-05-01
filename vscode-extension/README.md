@@ -97,6 +97,8 @@ The extension automatically downloads the correct `perllsp` binary for your plat
 | **macOS** | Intel (x64), Apple Silicon (ARM64) |
 | **Linux** | x64, ARM64 (glibc and musl) |
 
+The extension selects the correct Linux binary automatically. Manual Linux downloads only need to distinguish between glibc (`gnu`, most distributions) and musl (`musl`, commonly Alpine Linux).
+
 ### Enterprise / offline / air-gapped deployments
 
 The extension downloads the Perl LSP server binary on first activation. If your environment blocks internet access during extension install or uses a strict proxy, see [`INTERNAL_DEPLOYMENT.md`](./INTERNAL_DEPLOYMENT.md) for:
@@ -144,6 +146,7 @@ All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` a
 | `perl-lsp.trace.server` | `"off"` | LSP trace level for debugging: `off`, `messages`, `verbose` |
 | `perl-lsp.featureProfile` | `"auto"` | Runtime feature profile: `auto`, `ga`, `ga-lock`, `prod`, `all` |
 | `perl-lsp.downloadBaseUrl` | `""` | Internal mirror URL for air-gapped deployments |
+| `perl-lsp.linuxLibc` | `"auto"` | Advanced Linux-only override: auto, glibc, or musl |
 | `perl-lsp.mcp.servers` | `[]` | Optional MCP stdio server definitions (`label`, `command`, `args`, `cwd`, `env`, `version`, `enabled`) published to VS Code language models |
 
 ### Internal / Air-Gapped Deployment

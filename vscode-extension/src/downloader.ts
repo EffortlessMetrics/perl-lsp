@@ -54,6 +54,31 @@ export function compareVersions(a: string, b: string): -1 | 0 | 1 {
     return 0;
 }
 
+
+
+export function describeDownloadTarget(target: string): string {
+    switch (target) {
+        case 'x86_64-unknown-linux-gnu': return 'Linux x64 / AMD64 using glibc (most distributions)';
+        case 'aarch64-unknown-linux-gnu': return 'Linux ARM64 using glibc (most distributions)';
+        case 'x86_64-unknown-linux-musl': return 'Linux x64 / AMD64 using musl (Alpine/musl)';
+        case 'aarch64-unknown-linux-musl': return 'Linux ARM64 using musl (Alpine/musl)';
+        case 'x86_64-apple-darwin': return 'macOS Intel';
+        case 'aarch64-apple-darwin': return 'macOS Apple Silicon';
+        case 'x86_64-pc-windows-msvc': return 'Windows x64';
+        case 'aarch64-pc-windows-msvc': return 'Windows ARM64';
+        case 'x86_64-linux-android': return 'Android/Termux x64';
+        case 'aarch64-linux-android': return 'Android/Termux ARM64';
+        default: return target;
+    }
+}
+
+export function linuxLibcChoiceToTargetSuffix(choice: string | undefined): 'gnu' | 'musl' | null {
+    const normalized = (choice ?? 'auto').trim().toLowerCase();
+    if (normalized === 'glibc' || normalized === 'gnu') { return 'gnu'; }
+    if (normalized === 'musl') { return 'musl'; }
+    return null;
+}
+
 export class BinaryDownloader {
     private static readonly REPO_OWNER = 'EffortlessMetrics';
     private static readonly REPO_NAME = 'perl-lsp';
@@ -113,18 +138,19 @@ export class BinaryDownloader {
                     'Check your proxy/VPN settings (http.proxy in VS Code settings). ' +
                     manualInstallNote;
                 buttons = ['Open Proxy Settings', 'Install Manually'];
-            } else if (errorMsg.includes('No binary found for platform')) {
+            } else if (errorMsg.includes('No binary found for platform') || errorMsg.includes('No pre-built binary found for')) {
                 // Architecture or OS not supported by the release
-                const platformMatch = /platform:\s*([^\s.]+)/.exec(errorMsg);
+                const platformMatch = /detected target:\s*([^)]+)/.exec(errorMsg) ?? /platform:\s*([^\s.]+)/.exec(errorMsg);
                 const platformStr = platformMatch ? platformMatch[1] : 'your platform';
+                const platformDescription = describeDownloadTarget(platformStr);
                 if (this.isTermuxEnvironment() || platformStr.includes('linux-android')) {
                     message =
-                        `perl-lsp: No pre-built binary for ${platformStr} (Termux/Android). ` +
+                        `perl-lsp: No pre-built binary for ${platformDescription} (Termux/Android). ` +
                         'Install from source in Termux (for example: pkg install rust && cargo install --locked --path crates/perllsp), then configure perl-lsp.serverPath. ' +
                         manualInstallNote;
                 } else {
                     message =
-                        `perl-lsp: No pre-built binary for ${platformStr}. ` +
+                        `perl-lsp: No pre-built binary for ${platformDescription}. ` +
                         'Build from source or download a compatible binary manually. ' +
                         manualInstallNote;
                 }
@@ -223,9 +249,10 @@ export class BinaryDownloader {
             
             if (!asset || !assetName) {
                 const availableAssets = release.assets.map(a => a.name).join(', ');
-                this.outputChannel.appendLine(`Target platform: ${target}`);
+                this.outputChannel.appendLine(`Detected platform: ${describeDownloadTarget(target)}`);
+                this.outputChannel.appendLine(`Detected target: ${target}`);
                 this.outputChannel.appendLine(`Available assets: ${availableAssets}`);
-                throw new Error(`No binary found for platform: ${target}. Available assets: ${availableAssets}`);
+                throw new Error(`No pre-built binary found for ${describeDownloadTarget(target)} (detected target: ${target}). Available assets: ${availableAssets}`);
             }
 
             // Security check: Validate asset name to prevent path traversal
@@ -233,6 +260,7 @@ export class BinaryDownloader {
                 throw new Error(`Invalid asset name detected: ${assetName}`);
             }
             
+            this.outputChannel.appendLine(`Selected platform: ${describeDownloadTarget(target)}`);
             this.outputChannel.appendLine(`Found matching asset: ${assetName}`);
             
             // Find checksum file (SHA256SUMS file contains all checksums)

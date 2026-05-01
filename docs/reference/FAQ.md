@@ -9,7 +9,7 @@
 - **Installer script (Linux/macOS, best-effort)**:
   `curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash`
 - **From source**:
-  `cargo install --path crates/perllsp`
+  `cargo install perllsp`
 
 ### Does perl-lsp require Perl to be installed?
 
@@ -17,11 +17,7 @@ No. perl-lsp is a self-contained Rust binary. It parses Perl using a native recu
 
 ### Does the installer also install perl-dap?
 
-No. The installer installs `perl-lsp`. Build or install `perl-dap` separately when you need debugging support:
-
-```bash
-cargo install --path crates/perl-dap
-```
+The installer installs `perllsp` and also installs `perl-dap` when the release archive includes it.
 
 ### Which platforms are supported?
 
@@ -167,3 +163,14 @@ are ready, such as parser coverage gains, new LSP features, or release-surface
 hardening. The workspace version on `main` can move ahead of the latest
 published release during release prep, so check GitHub Releases for the
 currently shipped public release.
+
+
+### What is the difference between GNU and musl release files?
+
+You do not need both. They are alternative Linux builds for the same CPU architecture.
+
+Use `gnu` for most Linux distributions, including Ubuntu, Debian, Fedora, RHEL, Arch, Amazon Linux, and Raspberry Pi OS.
+
+Use `musl` for Alpine Linux or other musl-based systems and containers.
+
+If you are not sure and you are not using Alpine Linux, choose `gnu`. The VS Code extension and installer script normally choose this automatically.

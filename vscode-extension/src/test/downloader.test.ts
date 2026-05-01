@@ -9,7 +9,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { BinaryDownloader, parseLocalVersion, compareVersions } from '../downloader';
+import { BinaryDownloader, parseLocalVersion, compareVersions, describeDownloadTarget, linuxLibcChoiceToTargetSuffix } from '../downloader';
 
 // ---------------------------------------------------------------------------
 // Helpers: build a minimal mock ExtensionContext
@@ -1007,5 +1007,21 @@ describe('ensureBinary error classification', () => {
     );
     const uriArg = vscode.env.openExternal.mock.calls[0][0];
     expect(uriArg.toString()).toMatch(/github\.com.*perl-lsp/i);
+  });
+});
+
+
+describe('download target helpers', () => {
+  test('describes Linux musl and glibc targets', () => {
+    expect(describeDownloadTarget('aarch64-unknown-linux-gnu')).toContain('glibc');
+    expect(describeDownloadTarget('x86_64-unknown-linux-musl')).toContain('musl');
+  });
+
+  test('maps libc override values', () => {
+    expect(linuxLibcChoiceToTargetSuffix('glibc')).toBe('gnu');
+    expect(linuxLibcChoiceToTargetSuffix('gnu')).toBe('gnu');
+    expect(linuxLibcChoiceToTargetSuffix('musl')).toBe('musl');
+    expect(linuxLibcChoiceToTargetSuffix('auto')).toBeNull();
+    expect(linuxLibcChoiceToTargetSuffix('bogus')).toBeNull();
   });
 });

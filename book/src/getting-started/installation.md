@@ -14,7 +14,7 @@ Choose one method:
 ### Option 1: Install from crates.io (Recommended)
 
 ```bash
-cargo install perl-lsp-rs
+cargo install perllsp
 ```
 
 ### Option 2: Install Script (Linux/macOS)
@@ -30,17 +30,17 @@ curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/i
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
-cargo install --path crates/perl-lsp
+cargo install --path crates/perllsp
 ```
 
 ## Verify Installation
 
 ```bash
 # Check binary is available
-perl-lsp --version
+perllsp --version
 
 # Quick health check
-perl-lsp --health
+perllsp --health
 # Should output: ok 0.10.0
 ```
 
@@ -50,7 +50,7 @@ perl-lsp --health
 
 1. Install the extension:
    ```bash
-   code --install-extension effortlesssteven.perl-lsp
+   code --install-extension EffortlessMetrics.perl-lsp-rs
    ```
 
 2. Open a `.pl` or `.pm` file - the server starts automatically.
@@ -66,7 +66,7 @@ local configs = require('lspconfig.configs')
 if not configs.perl_lsp then
   configs.perl_lsp = {
     default_config = {
-      cmd = { 'perl-lsp', '--stdio' },
+      cmd = { 'perllsp', '--stdio' },
       filetypes = { 'perl' },
       root_dir = lspconfig.util.root_pattern('.git'),
       single_file_support = true,
@@ -81,7 +81,7 @@ lspconfig.perl_lsp.setup({})
 
 ```elisp
 (add-to-list 'eglot-server-programs
-             '((cperl-mode perl-mode) . ("perl-lsp" "--stdio")))
+             '((cperl-mode perl-mode) . ("perllsp" "--stdio")))
 ```
 
 Then run `M-x eglot` in a Perl buffer.
@@ -96,7 +96,7 @@ name = "perl"
 language-servers = ["perl-lsp"]
 
 [language-server.perl-lsp]
-command = "perl-lsp"
+command = "perllsp"
 args = ["--stdio"]
 ```
 
@@ -192,7 +192,7 @@ See [CONFIG.md](../reference/CONFIG.md) for all configuration options.
 
 ```bash
 # Test if the binary works
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perl-lsp --stdio
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perllsp --stdio
 ```
 
 ### No Diagnostics Appearing

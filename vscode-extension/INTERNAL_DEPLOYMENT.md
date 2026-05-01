@@ -69,11 +69,15 @@ Host binaries on an internal web server for automatic distribution.
    
    # Copy your pre-built binaries
    # Naming convention: perllsp-VERSION-TARGET.tar.gz
-   cp perllsp-0.8.3-x86_64-unknown-linux-gnu.tar.gz .
-   cp perllsp-0.8.3-x86_64-apple-darwin.tar.gz .
-   cp perllsp-0.8.3-x86_64-pc-windows-msvc.zip .
+   cp perllsp-VERSION-x86_64-unknown-linux-gnu.tar.gz .
+   cp perllsp-VERSION-aarch64-unknown-linux-gnu.tar.gz .
+   cp perllsp-VERSION-x86_64-unknown-linux-musl.tar.gz .
+   cp perllsp-VERSION-aarch64-unknown-linux-musl.tar.gz .
+   cp perllsp-VERSION-x86_64-apple-darwin.tar.gz .
+   cp perllsp-VERSION-aarch64-apple-darwin.tar.gz .
+   cp perllsp-VERSION-x86_64-pc-windows-msvc.zip .
    
-   # Optional: Create checksum file
+   # Required: Create checksum file
    sha256sum *.tar.gz *.zip > SHA256SUMS
    ```
 
