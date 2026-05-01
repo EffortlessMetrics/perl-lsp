@@ -212,7 +212,7 @@ run = { pr = true, nightly = true, release = false }
     }
 
     #[test]
-    fn duplicate_ids_are_rejected() {
+    fn duplicate_ids_are_rejected() -> Result<()> {
         let root = temp_dir("concept_registry_dupe");
         must(fs::create_dir_all(root.join("fixtures")));
         must(fs::write(root.join("fixtures/ok.pl"), "my $x = 1;\n"));
@@ -240,13 +240,15 @@ run = { pr = true, nightly = true, release = false }
 "#,
         );
 
-        let err = load_concept_registry_from(&root.join("concepts"), &root)
-            .expect_err("expected duplicate id failure");
+        let Err(err) = load_concept_registry_from(&root.join("concepts"), &root) else {
+            bail!("expected duplicate id failure");
+        };
         assert!(err.to_string().contains("duplicate concept id"));
+        Ok(())
     }
 
     #[test]
-    fn missing_fixture_path_is_rejected() {
+    fn missing_fixture_path_is_rejected() -> Result<()> {
         let root = temp_dir("concept_registry_fixture");
 
         write_registry(
@@ -263,13 +265,15 @@ run = { pr = true, nightly = false, release = false }
 "#,
         );
 
-        let err = load_concept_registry_from(&root.join("concepts"), &root)
-            .expect_err("expected fixture existence failure");
+        let Err(err) = load_concept_registry_from(&root.join("concepts"), &root) else {
+            bail!("expected fixture existence failure");
+        };
         assert!(err.to_string().contains("does not exist"));
+        Ok(())
     }
 
     #[test]
-    fn unknown_top_level_sections_are_rejected() {
+    fn unknown_top_level_sections_are_rejected() -> Result<()> {
         let root = temp_dir("concept_registry_unknown");
         must(fs::create_dir_all(root.join("fixtures")));
         must(fs::write(root.join("fixtures/ok.pl"), "my $x = 1;\n"));
@@ -291,9 +295,11 @@ hello = "world"
 "#,
         );
 
-        let err = load_concept_registry_from(&root.join("concepts"), &root)
-            .expect_err("expected unknown section failure");
+        let Err(err) = load_concept_registry_from(&root.join("concepts"), &root) else {
+            bail!("expected unknown section failure");
+        };
         let message = err.to_string();
         assert!(message.contains("unknown") || message.contains("extra"));
+        Ok(())
     }
 }
