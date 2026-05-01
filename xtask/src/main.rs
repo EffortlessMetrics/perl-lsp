@@ -1033,11 +1033,10 @@ enum Commands {
         only: Option<update_status::StatusSubsystem>,
     },
 
-    /// Generate SRP microcrate inventory and split-candidate report
-    SrpMicrocrates {
-        /// Optional output path (default: docs/SRP_MICROCRATES.md)
-        #[arg(long)]
-        output: Option<PathBuf>,
+    /// SRP-focused reporting and decomposition utilities.
+    Srp {
+        #[command(subcommand)]
+        command: SrpCommand,
     },
 
     /// Enforce crate layer-dependency constraints (leaf crates must not depend on higher layers).
@@ -1744,6 +1743,16 @@ enum AgentReceiptCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum SrpCommand {
+    /// Generate SRP microcrate inventory and split-candidate report
+    Microcrates {
+        /// Optional output path (default: docs/SRP_MICROCRATES.md)
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+}
+
 #[derive(ValueEnum, Clone)]
 enum PrepCratesMode {
     Core,
@@ -2125,7 +2134,9 @@ fn main() -> Result<()> {
             FixForwardCommand::ListPlaybooks => fix_forward::list_playbooks(),
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
-        Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
+        Commands::Srp { command } => match command {
+            SrpCommand::Microcrates { output } => srp_microcrates::run(output),
+        },
         Commands::UnwiredScan { json, check, lsp_crate } => {
             unwired_scan::run(UnwiredScanConfig { lsp_crate, json, check })
         }
