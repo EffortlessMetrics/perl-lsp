@@ -9,7 +9,10 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { BinaryDownloader, parseLocalVersion, compareVersions } from '../downloader';
+import * as vscode from 'vscode';
+import {
+  BinaryDownloader, parseLocalVersion, compareVersions, describeDownloadTarget, linuxLibcChoiceToTargetSuffix
+} from '../downloader';
 
 // ---------------------------------------------------------------------------
 // Helpers: build a minimal mock ExtensionContext
@@ -82,6 +85,33 @@ describe('BinaryDownloader.getPlatformTarget', () => {
     jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(true);
     const target = getPlatformTarget(downloader);
     expect(target).toMatch(/-linux-android$/);
+  });
+
+  test('linux libc override can force musl', () => {
+    if (process.platform !== 'linux') { return; }
+    vscode.workspace.getConfiguration.mockReturnValue({ get: (k: string, d: string) => k === 'linuxLibc' ? 'musl' : d });
+    jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(false);
+    jest.spyOn(downloader as any, 'isAndroidEnvironment').mockReturnValue(false);
+    expect(getPlatformTarget(downloader)).toMatch(/-unknown-linux-musl$/);
+  });
+
+  test('linux libc override can force gnu', () => {
+    if (process.platform !== 'linux') { return; }
+    vscode.workspace.getConfiguration.mockReturnValue({ get: (k: string, d: string) => k === 'linuxLibc' ? 'glibc' : d });
+    jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(false);
+    jest.spyOn(downloader as any, 'isAndroidEnvironment').mockReturnValue(false);
+    expect(getPlatformTarget(downloader)).toMatch(/-unknown-linux-gnu$/);
+  });
+});
+
+describe('download target descriptions', () => {
+  test('describes linux gnu target', () => {
+    expect(describeDownloadTarget('aarch64-unknown-linux-gnu')).toContain('glibc');
+  });
+  test('maps linuxLibc choices', () => {
+    expect(linuxLibcChoiceToTargetSuffix('glibc')).toBe('gnu');
+    expect(linuxLibcChoiceToTargetSuffix('musl')).toBe('musl');
+    expect(linuxLibcChoiceToTargetSuffix('bogus')).toBeNull();
   });
 });
 
