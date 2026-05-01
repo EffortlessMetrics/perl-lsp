@@ -25,7 +25,7 @@ Perl has decades of real production code, but editor tooling still struggles wit
 
 ## Status at a glance
 
-These are behavioral and corpus-backed signals, not feature inventory counts. Protocol coverage and full feature catalogs live in the generated status docs.
+These are behavioral and corpus-backed signals, not feature-inventory counts. Protocol coverage and full capability catalogs live in the generated status docs.
 
 <!-- BEGIN: README_STATUS -->
 | Area | Current signal |
@@ -37,7 +37,7 @@ These are behavioral and corpus-backed signals, not feature inventory counts. Pr
 | Project parser corpus | 100.0% clean (`95/95`) |
 | Parser NodeKind coverage | 65/69 |
 | Parser reliability | 0 project-corpus timeouts / 0 panics |
-| Editor UX scenarios | 27 scenario files tracked |
+| Editor UX scenarios | 23 scenario files tracked |
 | First-five-minutes UX workflows | 21 workflows tracked |
 | Issue-regression UX workflows | 13 workflows tracked |
 | Workspace stale-index defects | 0 / 7 tested scenarios |
@@ -50,7 +50,7 @@ See [project status](docs/project/status/index.md), [parser status](docs/project
 
 - **Editor workflows**: completion, diagnostics, hover, go-to-definition, references, rename, formatting, semantic tokens, inlay hints, code actions, code lens, and workspace symbols.
 - **Parser stack**: native lexer, parser-core, parser facade, corpus ratchets, and tree-sitter integration.
-- **UX testing**: 27 tracked editor UX scenarios, including first-five-minutes flows, issue-regression guards, cross-file navigation, diagnostics-after-edit, workspace churn, and rename.
+- **UX testing**: 23 tracked editor UX scenarios, including first-five-minutes flows, issue-regression guards, cross-file navigation, diagnostics-after-edit, workspace churn, and rename.
 - **Workspace intelligence**: module resolution, symbol indexing, stale-index guards, multi-root workspaces, and workspace-aware rename.
 - **Debug adapter**: breakpoints, stepping, stack frames, variables, evaluate, and launch/attach flows.
 - **Editor support**: VS Code, Open VSX, Neovim, Vim, Emacs, Helix, Zed, Sublime, and any editor with LSP support.
