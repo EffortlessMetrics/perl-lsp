@@ -7,13 +7,13 @@ set -euo pipefail
 #     --version v0.8.3 \
 #     --owner EffortlessMetrics \
 #     --repo perl-lsp \
-#     --prefix perl-lsp \
+#     --prefix perllsp \
 #     --checksums target/release-v0.8.3/checksums.json \
-#     --brew-out Formula/perl-lsp.rb \
+#     --brew-out Formula/perllsp.rb \
 #     --asset-map-out extension/assets.v0.8.3.json
 #
-# Notes: expects cargo-dist artifact names:
-#   <prefix>-<ver>-{x86_64,aarch64}-{apple-darwin,unknown-linux-musl,pc-windows-msvc}.{tar.gz,zip}
+# Notes: expects release.yml artifact names:
+#   <prefix>-<ver>-{x86_64,aarch64}-{apple-darwin,unknown-linux-gnu,pc-windows-msvc}.{tar.gz,zip}
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1" >&2; exit 1; }; }
 need jq
@@ -54,8 +54,8 @@ sha() { local k; k="$(fn "$1")"; echo "${SHA[$k]:-}"; }
 
 MAC_ARM="aarch64-apple-darwin.tar.gz"
 MAC_X64="x86_64-apple-darwin.tar.gz"
-LIN_ARM="aarch64-unknown-linux-musl.tar.gz"
-LIN_X64="x86_64-unknown-linux-musl.tar.gz"
+LIN_ARM="aarch64-unknown-linux-gnu.tar.gz"
+LIN_X64="x86_64-unknown-linux-gnu.tar.gz"
 WIN_X64="x86_64-pc-windows-msvc.zip"
 WIN_ARM="aarch64-pc-windows-msvc.zip"
 
@@ -65,8 +65,8 @@ for key in "$MAC_ARM" "$MAC_X64" "$LIN_ARM" "$LIN_X64" "$WIN_X64" "$WIN_ARM"; do
 done
 
 BREW_FORMULA=$(cat <<RUBY
-class PerlLsp < Formula
-  desc "Perl language server"
+class Perllsp < Formula
+  desc "Native Rust language server and debug adapter for Perl"
   homepage "https://github.com/$OWNER/$REPO"
   version "$VERSION"
   license "MIT"
@@ -94,11 +94,16 @@ class PerlLsp < Formula
   end
 
   def install
-    bin.install "perllsp"
+    extracted_dir = Dir.glob("perllsp-#{version}-*").find { |path| File.directory?(path) }
+    raise "expected release archive directory perllsp-#{version}-<target>" unless extracted_dir
+
+    bin.install "#{extracted_dir}/perllsp"
+    bin.install "#{extracted_dir}/perl-dap"
   end
 
   test do
-    assert_match "perllsp", shell_output("#{bin}/perllsp --version")
+    assert_match version.to_s, shell_output("#{bin}/perllsp --version")
+    assert_match version.to_s, shell_output("#{bin}/perl-dap --version")
   end
 end
 RUBY
@@ -115,8 +120,8 @@ ASSET_MAP=$(jq -n --arg v "$VERSION" \
   --arg sha_wa "$(sha "$WIN_ARM")" \
   '{
     v: $v,
-    "linux-x64":   { url: "\($base)/\($p)-\($v)-x86_64-unknown-linux-musl.tar.gz",   sha256: $sha_lx },
-    "linux-arm64": { url: "\($base)/\($p)-\($v)-aarch64-unknown-linux-musl.tar.gz", sha256: $sha_la },
+    "linux-x64":   { url: "\($base)/\($p)-\($v)-x86_64-unknown-linux-gnu.tar.gz",   sha256: $sha_lx },
+    "linux-arm64": { url: "\($base)/\($p)-\($v)-aarch64-unknown-linux-gnu.tar.gz", sha256: $sha_la },
     "macos-x64":   { url: "\($base)/\($p)-\($v)-x86_64-apple-darwin.tar.gz",        sha256: $sha_mx },
     "macos-arm64": { url: "\($base)/\($p)-\($v)-aarch64-apple-darwin.tar.gz",       sha256: $sha_ma },
     "win-x64":     { url: "\($base)/\($p)-\($v)-x86_64-pc-windows-msvc.zip",        sha256: $sha_wx },

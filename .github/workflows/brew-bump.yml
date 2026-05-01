@@ -1,6 +1,6 @@
 name: Homebrew Auto-Bump
 
-# Update Homebrew formula on release
+# Update the owned Homebrew tap on release.
 # Cost: ~$0.02 per bump
 
 on:
@@ -9,137 +9,309 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to bump (e.g., v0.10.0)'
+        description: 'Release tag to bump (e.g., v0.13.1)'
+        required: true
+      include_prerelease:
+        description: 'Allow bumping a prerelease tag'
         required: false
+        type: boolean
+        default: false
 
-# Cancel in-flight runs
 concurrency:
-  group: brew-bump-${{ github.ref }}
-  cancel-in-progress: false  # Don't cancel brew bumps
+  group: brew-bump-${{ github.event.release.tag_name || github.event.inputs.tag || github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
-  pull-requests: write
+
+env:
+  FORMULA_NAME: perllsp
+  HOMEBREW_TAP_NAME: effortlessmetrics/tap
+  HOMEBREW_TAP_REPOSITORY: EffortlessMetrics/homebrew-tap
 
 jobs:
   bump:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          path: source
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.x'
-          cache: 'pip'
-
-      - name: Get release tag
-        id: tag
+      - name: Resolve release
+        id: release
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG_INPUT: ${{ github.event.inputs.tag }}
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
+          INCLUDE_PRERELEASE: ${{ github.event.inputs.include_prerelease || 'false' }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
-            TAG="${{ github.event.inputs.tag }}"
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG="${RELEASE_TAG_INPUT}"
           else
-            TAG="${GITHUB_REF#refs/tags/}"
+            TAG="${RELEASE_TAG_NAME:-${GITHUB_REF#refs/tags/}}"
           fi
-          VERSION="${TAG#v}"
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
-      - name: Wait for release assets
+          if [[ -z "${TAG}" ]]; then
+            echo "::error::Release tag is required"
+            exit 1
+          fi
+
+          if ! [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::Invalid release tag: ${TAG}"
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          IS_GITHUB_PRERELEASE="$(gh release view "${TAG}" --json isPrerelease --jq '.isPrerelease')"
+          IS_SEMVER_PRERELEASE="false"
+          if [[ "${VERSION}" == *-* ]]; then
+            IS_SEMVER_PRERELEASE="true"
+          fi
+
+          IS_PRERELEASE="false"
+          if [[ "${IS_GITHUB_PRERELEASE}" == "true" || "${IS_SEMVER_PRERELEASE}" == "true" ]]; then
+            IS_PRERELEASE="true"
+          fi
+          SHOULD_BUMP="true"
+
+          if [[ "${IS_PRERELEASE}" == "true" && "${INCLUDE_PRERELEASE}" != "true" ]]; then
+            SHOULD_BUMP="false"
+          fi
+
+          {
+            echo "tag=${TAG}"
+            echo "version=${VERSION}"
+            echo "is_prerelease=${IS_PRERELEASE}"
+            echo "should_bump=${SHOULD_BUMP}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Resolved Homebrew bump tag: ${TAG}"
+          echo "Resolved Homebrew bump version: ${VERSION}"
+          echo "GitHub release prerelease: ${IS_GITHUB_PRERELEASE}"
+          echo "SemVer prerelease: ${IS_SEMVER_PRERELEASE}"
+          echo "Should bump tap: ${SHOULD_BUMP}"
+
+      - name: Summarize skipped prerelease
+        if: steps.release.outputs.should_bump == 'false'
         run: |
-          # Wait up to 10 minutes for release assets to be available
-          for i in {1..20}; do
-            echo "Checking for release assets (attempt $i/20)..."
-            if gh release view "${{ steps.tag.outputs.tag }}" --json assets -q '.assets | length' | grep -q '^[1-9]'; then
-              echo "Assets found!"
+          cat >> "${GITHUB_STEP_SUMMARY}" <<EOF
+          ## Homebrew Tap Bump Skipped
+
+          - **Channel**: owned tap (${HOMEBREW_TAP_NAME})
+          - **Repository**: ${HOMEBREW_TAP_REPOSITORY}
+          - **Formula**: ${FORMULA_NAME}
+          - **Release**: ${{ steps.release.outputs.tag }}
+          - **Reason**: prerelease; rerun manually with `include_prerelease=true` to bump it.
+          EOF
+
+      - name: Validate release asset layout
+        if: steps.release.outputs.should_bump == 'true'
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t RELEASE_TARGETS < <(
+            awk '/^[[:space:]]*-[[:space:]]target:[[:space:]]/ { print $3 }' .github/workflows/release.yml
+          )
+
+          if [[ "${#RELEASE_TARGETS[@]}" -eq 0 ]]; then
+            echo "::error file=.github/workflows/release.yml::No release matrix targets found"
+            exit 1
+          fi
+
+          HOMEBREW_TARGETS=(
+            "x86_64-apple-darwin"
+            "aarch64-apple-darwin"
+            "x86_64-unknown-linux-gnu"
+            "aarch64-unknown-linux-gnu"
+          )
+
+          for target in "${HOMEBREW_TARGETS[@]}"; do
+            if ! printf '%s\n' "${RELEASE_TARGETS[@]}" | grep -Fxq "${target}"; then
+              echo "::error file=.github/workflows/release.yml::Homebrew target ${target} is missing from release.yml"
+              exit 1
+            fi
+          done
+
+          EXPECTED_ASSETS=()
+          for target in "${RELEASE_TARGETS[@]}"; do
+            extension=".tar.gz"
+            if [[ "${target}" == *"windows"* ]]; then
+              extension=".zip"
+            fi
+            EXPECTED_ASSETS+=("perllsp-${VERSION}-${target}${extension}")
+          done
+          EXPECTED_ASSETS+=("SHA256SUMS")
+
+          missing=()
+          for attempt in {1..20}; do
+            mapfile -t RELEASE_ASSETS < <(gh release view "${TAG}" --json assets --jq '.assets[].name' | sort)
+            missing=()
+
+            if [[ "${#RELEASE_ASSETS[@]}" -eq 0 ]]; then
+              missing=("${EXPECTED_ASSETS[@]}")
+            else
+              for asset in "${EXPECTED_ASSETS[@]}"; do
+                if ! printf '%s\n' "${RELEASE_ASSETS[@]}" | grep -Fxq "${asset}"; then
+                  missing+=("${asset}")
+                fi
+              done
+            fi
+
+            if [[ "${#missing[@]}" -eq 0 ]]; then
+              echo "Release ${TAG} contains the expected release.yml asset layout."
               break
             fi
+
+            echo "Release ${TAG} is missing expected assets (attempt ${attempt}/20)."
+            if [[ "${attempt}" -eq 20 ]]; then
+              printf '::error::Release %s is missing expected assets from release.yml:\n' "${TAG}"
+              printf '  - %s\n' "${missing[@]}"
+              exit 1
+            fi
+
             sleep 30
           done
+
+      - name: Download Homebrew assets and checksums
+        if: steps.release.outputs.should_bump == 'true'
+        id: checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download and compute SHA256
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
-          VERSION="${{ steps.tag.outputs.version }}"
+          set -euo pipefail
 
-          # Download assets
-          mkdir -p /tmp/brew-assets
-          cd /tmp/brew-assets
+          ASSET_DIR="${RUNNER_TEMP}/brew-assets"
+          mkdir -p "${ASSET_DIR}"
 
-          # Download each platform asset
-          # Asset naming follows release.yml: perllsp-${VERSION}-${platform}.tar.gz
-          for platform in "x86_64-apple-darwin" "aarch64-apple-darwin" "x86_64-unknown-linux-gnu" "aarch64-unknown-linux-gnu"; do
-            echo "Downloading perllsp-${VERSION}-${platform}.tar.gz..."
-            gh release download "${TAG}" --pattern "perllsp-${VERSION}-${platform}.tar.gz" || true
+          gh release download "${TAG}" --pattern "SHA256SUMS" --dir "${ASSET_DIR}"
+
+          declare -A OUTPUT_NAMES=(
+            ["x86_64-apple-darwin"]="macos_x86_64"
+            ["aarch64-apple-darwin"]="macos_aarch64"
+            ["x86_64-unknown-linux-gnu"]="linux_x86_64"
+            ["aarch64-unknown-linux-gnu"]="linux_aarch64"
+          )
+
+          for target in "${!OUTPUT_NAMES[@]}"; do
+            asset="perllsp-${VERSION}-${target}.tar.gz"
+            asset_path="${ASSET_DIR}/${asset}"
+
+            gh release download "${TAG}" --pattern "${asset}" --dir "${ASSET_DIR}"
+
+            if [[ ! -f "${asset_path}" ]]; then
+              echo "::error::Missing downloaded Homebrew release asset: ${asset}"
+              exit 1
+            fi
+
+            checksum="$(awk -v file="${asset}" '$2 == file { print $1 }' "${ASSET_DIR}/SHA256SUMS")"
+            if [[ -z "${checksum}" ]]; then
+              echo "::error::SHA256SUMS is missing checksum for ${asset}"
+              exit 1
+            fi
+
+            printf '%s  %s\n' "${checksum}" "${asset_path}" | sha256sum --check --status
+            echo "${OUTPUT_NAMES[${target}]}=${checksum}" >> "${GITHUB_OUTPUT}"
+            echo "${asset}: ${checksum}"
           done
 
-          # Compute SHA256
-          echo "Computing SHA256 checksums..."
-          sha256sum *.tar.gz > checksums.txt
-          cat checksums.txt
+      - name: Verify tap token
+        if: steps.release.outputs.should_bump == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update Homebrew formula
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          VERSION="${{ steps.tag.outputs.version }}"
+          set -euo pipefail
 
-          # Update version
-          sed -i "s/version \"[^\"]*\"/version \"${VERSION}\"/" Formula/perl-lsp.rb
-
-          # Update SHA256 for each platform
-          cd /tmp/brew-assets
-
-          # macOS Intel
-          if [ -f "perllsp-${VERSION}-x86_64-apple-darwin.tar.gz" ]; then
-            SHA=$(sha256sum "perllsp-${VERSION}-x86_64-apple-darwin.tar.gz" | cut -d' ' -f1)
-            sed -i "/x86_64-apple-darwin/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
+          if [[ -z "${HOMEBREW_TAP_TOKEN}" ]]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is required to open a PR against ${HOMEBREW_TAP_REPOSITORY}"
+            exit 1
           fi
 
-          # macOS ARM
-          if [ -f "perllsp-${VERSION}-aarch64-apple-darwin.tar.gz" ]; then
-            SHA=$(sha256sum "perllsp-${VERSION}-aarch64-apple-darwin.tar.gz" | cut -d' ' -f1)
-            sed -i "/aarch64-apple-darwin/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
-          fi
+      - name: Checkout Homebrew tap
+        if: steps.release.outputs.should_bump == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.HOMEBREW_TAP_REPOSITORY }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
 
-          # Linux x64
-          if [ -f "perllsp-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" ]; then
-            SHA=$(sha256sum "perllsp-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
-            sed -i "/x86_64-unknown-linux-gnu/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
-          fi
+      - name: Update tap formula
+        if: steps.release.outputs.should_bump == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          SHA_MACOS_AARCH64: ${{ steps.checksums.outputs.macos_aarch64 }}
+          SHA_MACOS_X86_64: ${{ steps.checksums.outputs.macos_x86_64 }}
+          SHA_LINUX_AARCH64: ${{ steps.checksums.outputs.linux_aarch64 }}
+          SHA_LINUX_X86_64: ${{ steps.checksums.outputs.linux_x86_64 }}
+        run: |
+          set -euo pipefail
 
-          # Linux ARM
-          if [ -f "perllsp-${VERSION}-aarch64-unknown-linux-gnu.tar.gz" ]; then
-            SHA=$(sha256sum "perllsp-${VERSION}-aarch64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
-            sed -i "/aarch64-unknown-linux-gnu/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
-          fi
+          mkdir -p homebrew-tap/Formula
+          cp source/Formula/perllsp.rb homebrew-tap/Formula/perllsp.rb
 
-          if grep -q "__RELEASE_VERSION__\|__SHA256_" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"; then
+          sed -i \
+            -e "s/__RELEASE_VERSION__/${VERSION}/g" \
+            -e "s/__SHA256_MACOS_AARCH64__/${SHA_MACOS_AARCH64}/g" \
+            -e "s/__SHA256_MACOS_X86_64__/${SHA_MACOS_X86_64}/g" \
+            -e "s/__SHA256_LINUX_AARCH64__/${SHA_LINUX_AARCH64}/g" \
+            -e "s/__SHA256_LINUX_X86_64__/${SHA_LINUX_X86_64}/g" \
+            homebrew-tap/Formula/perllsp.rb
+
+          rm -f homebrew-tap/Formula/perl-lsp.rb
+
+          if grep -q "__RELEASE_VERSION__\|__SHA256_" homebrew-tap/Formula/perllsp.rb; then
             echo "::error::Formula still contains unreplaced placeholders after update."
             exit 1
           fi
 
       - name: Show updated formula
-        run: cat Formula/perl-lsp.rb
+        if: steps.release.outputs.should_bump == 'true'
+        run: cat homebrew-tap/Formula/perllsp.rb
 
-      - name: Create PR to Homebrew
+      - name: Create PR to Homebrew tap
+        if: steps.release.outputs.should_bump == 'true'
+        id: cpr
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          path: Formula
-          branch: bump-perl-lsp-${{ steps.tag.outputs.version }}
-          title: "perl-lsp ${{ steps.tag.outputs.version }}"
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+          branch: bump-perllsp-${{ steps.release.outputs.version }}
+          title: "perllsp ${{ steps.release.outputs.version }}"
           body: |
-            Bump perl-lsp to version ${{ steps.tag.outputs.version }}
-
-            Created by automated workflow from [EffortlessMetrics/perl-lsp](https://github.com/EffortlessMetrics/perl-lsp).
-          commit-message: "perl-lsp ${{ steps.tag.outputs.version }}"
+            Problem: the owned Homebrew tap needs a perllsp formula bump for ${{ steps.release.outputs.tag }}.
+            Fix: update Formula/perllsp.rb with release.yml-aligned release assets and SHA256 checksums.
+            Verification: release assets were downloaded and checked against SHA256SUMS in the bump workflow.
+          commit-message: "perllsp ${{ steps.release.outputs.version }}"
+          add-paths: |
+            Formula/perllsp.rb
+            Formula/perl-lsp.rb
           labels: automated-pr
-          repository: Homebrew/homebrew-core
           signoff: false
+          delete-branch: true
+
+      - name: Summary
+        if: steps.release.outputs.should_bump == 'true'
+        run: |
+          cat >> "${GITHUB_STEP_SUMMARY}" <<EOF
+          ## Homebrew Tap Bump
+
+          - **Channel**: owned tap (${HOMEBREW_TAP_NAME})
+          - **Repository**: ${HOMEBREW_TAP_REPOSITORY}
+          - **Formula**: ${FORMULA_NAME}
+          - **Release**: ${{ steps.release.outputs.tag }}
+          - **Install**: \`brew install ${HOMEBREW_TAP_NAME}/${FORMULA_NAME}\`
+          - **PR**: ${{ steps.cpr.outputs.pull-request-url }}
+          EOF

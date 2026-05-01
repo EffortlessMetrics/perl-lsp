@@ -1,8 +1,9 @@
-class PerlLsp < Formula
-  desc "High-performance Perl Language Server with 100% syntax coverage"
+class Perllsp < Formula
+  desc "Native Rust language server and debug adapter for Perl"
   homepage "https://github.com/EffortlessMetrics/perl-lsp"
-  # PLACEHOLDER-GUARD: __RELEASE_VERSION__ and all sha placeholders must be replaced in CI.
+  # PLACEHOLDER-GUARD: __RELEASE_VERSION__ must be replaced in CI before merge.
   version "__RELEASE_VERSION__"
+  # PLACEHOLDER-GUARD: all sha256 values must be replaced in CI before merge.
   license "MIT"
 
   on_macos do
@@ -26,19 +27,15 @@ class PerlLsp < Formula
   end
 
   def install
-    # Expected extracted layout: perllsp-<version>-<target>/{perllsp,perl-dap}
-    # If the release packaging layout changes, update this extraction logic with a follow-up.
-    extracted_dir = Dir.glob("perllsp-*").find { |dir| Dir.exist?(dir) }
-    if extracted_dir
-      bin.install "#{extracted_dir}/perllsp"
-      bin.install "#{extracted_dir}/perl-dap" if File.exist?("#{extracted_dir}/perl-dap")
-    else
-      bin.install "perllsp"
-      bin.install "perl-dap" if File.exist?("perl-dap")
-    end
+    extracted_dir = Dir.glob("perllsp-#{version}-*").find { |path| File.directory?(path) }
+    raise "expected release archive directory perllsp-#{version}-<target>" unless extracted_dir
+
+    bin.install "#{extracted_dir}/perllsp"
+    bin.install "#{extracted_dir}/perl-dap"
   end
 
   test do
-    assert_match(/perllsp|Perl LSP/, shell_output("#{bin}/perllsp --version"))
+    assert_match version.to_s, shell_output("#{bin}/perllsp --version")
+    assert_match version.to_s, shell_output("#{bin}/perl-dap --version")
   end
 end
