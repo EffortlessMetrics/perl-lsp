@@ -13,7 +13,9 @@ mod variables;
 
 mod dispatch;
 mod parsing;
+mod regexes;
 pub(crate) mod safe_eval;
+mod sync_utils;
 mod transport;
 
 use crate::breakpoint::{AstBreakpointValidator, BreakpointValidator};
@@ -51,7 +53,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{Sender, channel};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -62,51 +64,10 @@ use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
 use regex::Regex;
+use regexes::*;
 use safe_eval::validate_safe_expression;
+use sync_utils::{emit_event_safe, lock_or_recover};
 
-/// Poison-safe mutex lock that recovers from poisoned state
-fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, ctx: &'static str) -> MutexGuard<'a, T> {
-    match mutex.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            tracing::warn!(ctx, "Poisoned mutex recovered");
-            poisoned.into_inner()
-        }
-    }
-}
-
-/// Send a DAP event through the event channel with poison-safe sequence numbering.
-///
-/// Returns `true` if the event was successfully sent, `false` otherwise.
-fn emit_event_safe(
-    sender: &Sender<DapMessage>,
-    seq: &Mutex<i64>,
-    event: &str,
-    body: Option<Value>,
-) -> bool {
-    let mut seq_lock = lock_or_recover(seq, "emit_event_safe.seq");
-    *seq_lock += 1;
-    sender.send(DapMessage::Event { seq: *seq_lock, event: event.to_string(), body }).is_ok()
-}
-
-/// Compiled regex patterns for debugger output parsing
-static CONTEXT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static PROMPT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static STACK_FRAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-#[allow(dead_code)] // Reserved for future variable parsing enhancements
-static VARIABLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static ERROR_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static EXCEPTION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static DANGEROUS_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static REGEX_MUTATION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static ASSIGNMENT_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static DEREF_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static GLOB_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static ANSI_ESCAPE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static SET_VARIABLE_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static FUNCTION_BREAKPOINT_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static WARNING_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static INC_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 const RECENT_OUTPUT_MAX_LINES: usize = 2048;
 const DEBUG_SESSION_TERMINATE_WAIT_MS: u64 = 250;
 const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
