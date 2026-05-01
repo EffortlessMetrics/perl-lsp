@@ -148,6 +148,7 @@ pub mod keywords;
 pub mod limits;
 pub mod mode;
 mod quote_handler;
+mod lexer;
 pub mod token;
 pub mod tokenizer;
 mod unicode;
@@ -276,61 +277,9 @@ impl<'a> PerlLexer<'a> {
         lexer
     }
 
-    /// Normalize file start by skipping BOM if present
-    fn normalize_file_start(&mut self) {
-        // Skip UTF-8 BOM (EF BB BF) if at file start
-        if self.position == 0 && self.matches_bytes(&[0xEF, 0xBB, 0xBF]) {
-            self.position = 3;
-            self.line_start_offset = 3;
-        }
-    }
-
     /// Set the lexer mode (for resetting state at statement boundaries)
     pub fn set_mode(&mut self, mode: LexerMode) {
         self.mode = mode;
-    }
-
-    /// Helper to check if remaining bytes on a line are only spaces/tabs
-    #[inline]
-    fn trailing_ws_only(bytes: &[u8], mut p: usize) -> bool {
-        while p < bytes.len() && bytes[p] != b'\n' && bytes[p] != b'\r' {
-            match bytes[p] {
-                b' ' | b'\t' => p += 1,
-                _ => return false,
-            }
-        }
-        true
-    }
-
-    /// Consume a newline sequence (CRLF or LF) and update state
-    #[inline]
-    fn consume_newline(&mut self) {
-        if self.position >= self.input.len() {
-            return;
-        }
-        match self.input_bytes[self.position] {
-            b'\r' => {
-                self.position += 1;
-                if self.position < self.input.len() && self.input_bytes[self.position] == b'\n' {
-                    self.position += 1;
-                }
-            }
-            b'\n' => self.advance(),
-            _ => return, // not at a newline
-        }
-        self.after_newline = true;
-        self.line_start_offset = self.position;
-    }
-
-    /// Find the end of the current line, returning both raw end and visible end (without trailing CR)
-    #[inline]
-    fn find_line_end(bytes: &[u8], start: usize) -> (usize, usize) {
-        let mut end = start;
-        while end < bytes.len() && bytes[end] != b'\n' && bytes[end] != b'\r' {
-            end += 1;
-        }
-        let visible_end = end;
-        (end, visible_end)
     }
 
     #[inline]
@@ -772,71 +721,6 @@ impl<'a> PerlLexer<'a> {
     /// line containing only `.` (the Perl format terminator).
     pub fn enter_format_mode(&mut self) {
         self.mode = LexerMode::InFormatBody;
-    }
-
-    // Internal helper methods
-
-    #[allow(clippy::inline_always)] // Performance critical in lexer hot path
-    #[inline(always)]
-    fn byte_at(bytes: &[u8], index: usize) -> u8 {
-        debug_assert!(index < bytes.len());
-        match bytes.get(index) {
-            Some(&byte) => byte,
-            None => 0,
-        }
-    }
-
-    #[allow(clippy::inline_always)] // Performance critical in lexer hot path
-    #[inline(always)]
-    fn current_char(&self) -> Option<char> {
-        if self.position < self.input_bytes.len() {
-            // For ASCII, direct access is safe
-            let byte = Self::byte_at(self.input_bytes, self.position);
-            if byte < 128 {
-                Some(byte as char)
-            } else {
-                // For non-ASCII, fall back to proper UTF-8 parsing
-                self.input.get(self.position..).and_then(|s| s.chars().next())
-            }
-        } else {
-            None
-        }
-    }
-
-    #[inline(always)]
-    fn peek_char(&self, offset: usize) -> Option<char> {
-        if offset > self.config.max_lookahead {
-            return None;
-        }
-
-        let pos = self.position.checked_add(offset)?;
-        if pos < self.input_bytes.len() {
-            // For ASCII, direct access is safe
-            let byte = Self::byte_at(self.input_bytes, pos);
-            if byte < 128 {
-                Some(byte as char)
-            } else {
-                // For non-ASCII, use chars iterator
-                self.input.get(self.position..).and_then(|s| s.chars().nth(offset))
-            }
-        } else {
-            None
-        }
-    }
-
-    #[allow(clippy::inline_always)] // Performance critical in lexer hot path
-    #[inline(always)]
-    fn advance(&mut self) {
-        if self.position < self.input_bytes.len() {
-            let byte = Self::byte_at(self.input_bytes, self.position);
-            if byte < 128 {
-                // ASCII fast path
-                self.position += 1;
-            } else if let Some(ch) = self.input.get(self.position..).and_then(|s| s.chars().next())
-            {
-                self.position += ch.len_utf8();
-            }
-        }
     }
 
     /// General-purpose balanced-segment consumer (no quote-boundary recovery).
