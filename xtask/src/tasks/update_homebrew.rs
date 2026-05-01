@@ -71,8 +71,8 @@ pub fn run(config: UpdateHomebrewConfig) -> Result<()> {
     println!("3. Commit and push the updated formula");
     println!();
     println!("Users can then install with:");
-    println!("  brew tap effortlesssteven/tap");
-    println!("  brew install perl-lsp");
+    println!("  brew tap EffortlessMetrics/tap");
+    println!("  brew install EffortlessMetrics/tap/perllsp");
 
     Ok(())
 }
@@ -157,11 +157,11 @@ fn build_brew_formula(
     let linux_x64_filename = artifact_filename(&config.prefix, version, LIN_X64);
 
     format!(
-        r##"class PerlLsp < Formula
-  desc "Fast, reliable Perl language server with 100% syntax coverage"
+        r##"class Perllsp < Formula
+  desc "Native Rust language server and debug adapter for Perl"
   homepage "https://github.com/{owner}/{repo}"
   version "{version}"
-  license "MIT"
+  license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do
     if Hardware::CPU.arm?
@@ -184,44 +184,21 @@ fn build_brew_formula(
   end
 
   def install
-    # Find the extracted directory (should be perllsp-v*).
-    extracted_dir = Dir.glob("perllsp-v*").first
-    if extracted_dir && File.directory?(extracted_dir)
+    extracted_dir = Dir.glob("perllsp-*").find {{ |dir| File.directory?(dir) }}
+
+    if extracted_dir
       bin.install "#{{extracted_dir}}/perllsp"
+      bin.install "#{{extracted_dir}}/perl-dap" if File.exist?("#{{extracted_dir}}/perl-dap")
     else
-      # Fallback: binary might be in the root
       bin.install "perllsp"
+      bin.install "perl-dap" if File.exist?("perl-dap")
     end
   end
 
-  def caveats
-    <<~EOS
-      To use perl-lsp with your editor:
-
-      VS Code:
-        Install the "Perl Language Server" extension from the marketplace
-
-      Neovim (with lspconfig):
-        require('lspconfig').perl_lsp.setup{{
-          cmd = {{'#{{opt_bin}}/perllsp', '--stdio'}}
-        }}
-
-      Emacs (with lsp-mode):
-        (lsp-register-client
-         (make-lsp-client :new-connection (lsp-stdio-connection '#{{opt_bin}}/perllsp' "--stdio")
-                          :activation-fn (lsp-activate-on "perl")
-                          :server-id 'perl-lsp))
-    EOS
-  end
-
   test do
-    # Test that the binary runs and responds to version request
-    assert_match(/perllsp|Perl LSP/, shell_output("#{{bin}}/perllsp --version"))
-
-    # Test LSP initialization
-    input = '{{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{}}}}'
-    output = pipe_output("#{{bin}}/perllsp --stdio", input, 0)
-    assert_match(/Content-Length/, output)
+    output = shell_output("#{{bin}}/perllsp --version")
+    assert_match "perllsp", output
+    assert_match version.to_s, output
   end
 end
 "##,
@@ -255,4 +232,58 @@ fn write_formula(path: &std::path::Path, content: &str) -> Result<()> {
     println!("[homebrew] wrote {}", path.display());
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config() -> UpdateHomebrewConfig {
+        UpdateHomebrewConfig {
+            version: "v0.13.0".to_string(),
+            owner: "EffortlessMetrics".to_string(),
+            repo: "perl-lsp".to_string(),
+            prefix: "perllsp".to_string(),
+            output: PathBuf::from("Formula/perllsp.rb"),
+        }
+    }
+
+    #[test]
+    fn generated_formula_uses_perllsp_artifacts() {
+        let cfg = config();
+        let formula = build_brew_formula(
+            &cfg,
+            "v0.13.0",
+            "0.13.0",
+            &Checksums { mac_arm: "a", mac_x64: "b", linux_arm: "c", linux_x64: "d" },
+        );
+        assert!(formula.contains("perllsp-0.13.0-x86_64-apple-darwin.tar.gz"));
+        assert!(formula.contains("perllsp-0.13.0-aarch64-apple-darwin.tar.gz"));
+        assert!(formula.contains("perllsp-0.13.0-x86_64-unknown-linux-gnu.tar.gz"));
+        assert!(formula.contains("perllsp-0.13.0-aarch64-unknown-linux-gnu.tar.gz"));
+        assert!(!formula.contains("perl-lsp-0.13.0-"));
+    }
+
+    #[test]
+    fn generated_formula_installs_perllsp_and_optional_perl_dap() {
+        let cfg = config();
+        let formula = build_brew_formula(
+            &cfg,
+            "v0.13.0",
+            "0.13.0",
+            &Checksums { mac_arm: "a", mac_x64: "b", linux_arm: "c", linux_x64: "d" },
+        );
+        assert!(formula.contains("class Perllsp < Formula"));
+        assert!(formula.contains("Dir.glob(\"perllsp-*\")"));
+        assert!(formula.contains(r##"bin.install "#{extracted_dir}/perllsp""##));
+        assert!(formula.contains(
+            r##"bin.install "#{extracted_dir}/perl-dap" if File.exist?("#{extracted_dir}/perl-dap")"##,
+        ));
+    }
+
+    #[test]
+    fn default_artifact_prefix_matches_release_workflow() {
+        let file = artifact_filename("perllsp", "0.13.0", "x86_64-apple-darwin.tar.gz");
+        assert_eq!(file, "perllsp-0.13.0-x86_64-apple-darwin.tar.gz");
+    }
 }

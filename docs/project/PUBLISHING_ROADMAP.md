@@ -498,6 +498,13 @@ docker pull ghcr.io/effortlessmetrics/perl-lsp:${NEW_VERSION}
 
 # Homebrew (automated — verify brew-bump.yml succeeded)
 gh run list --workflow=brew-bump.yml --limit 3
+gh pr list --repo EffortlessMetrics/homebrew-tap --search "perllsp" --state open
+
+# After tap PR merges
+brew update
+brew install EffortlessMetrics/tap/perllsp
+perllsp --version
+perllsp --health
 ```
 
 ### 4.2 Install path spot-check (within 24 hours)
