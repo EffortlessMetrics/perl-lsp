@@ -16,6 +16,8 @@ pub mod feature_catalog;
 pub mod features;
 /// Policy and governance APIs for feature profiles and rollout controls.
 pub mod governance;
+/// Hashing helpers shared by workspace tooling and verification pipelines.
+pub mod hashing;
 /// Performance-focused caches and allocation strategies for large workspaces.
 pub mod performance;
 /// Cross-platform interpreter and toolchain detection helpers.

@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::utils::project_root;
+use perl_lsp_rs_core::hashing::fnv1a64_hex;
 
 const SCHEMA_VERSION: u32 = 1;
 const CHECK_NAME: &str = "merge-readiness";
@@ -327,15 +328,6 @@ fn is_required_workflow_candidate(path: &Path) -> bool {
     };
 
     name.contains("ci") || name.contains("gate") || name.contains("merge")
-}
-
-fn fnv1a64_hex(bytes: &[u8]) -> String {
-    let mut hash: u64 = 0xcbf29ce484222325;
-    for byte in bytes {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    format!("fnv1a64:{hash:016x}")
 }
 
 #[cfg(test)]
