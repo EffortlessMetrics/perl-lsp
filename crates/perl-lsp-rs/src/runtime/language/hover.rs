@@ -168,6 +168,30 @@ impl LspServer {
         Ok(Some(json!(null)))
     }
 
+    fn method_modifier_description(modifier_kind: &str) -> &'static str {
+        match modifier_kind {
+            "before" => "runs **before** the method — use for preconditions and logging",
+            "after" => "runs **after** the method — use for postconditions and cleanup",
+            "around" => {
+                "wraps the method — receives `$orig` as first arg, must call `$orig->($self, @_)`"
+            }
+            "override" => "overrides the parent method — use to replace inherited behavior",
+            "augment" => "extends the parent method — call `inner()` to invoke the next layer",
+            _ => "modifies the method",
+        }
+    }
+
+    fn build_method_modifier_hover(modifier_kind: &str, method_name: &str, doc: &str) -> Value {
+        let kind_label = Self::method_modifier_description(modifier_kind);
+        json!({
+            "contents": {
+                "kind": "markdown",
+                "value": format!(
+                    "**Method Modifier (`{modifier_kind}`)**\n\n`{method_name}` — {kind_label}\n\n{doc}"
+                ),
+            },
+        })
+    }
     /// Extract hover information from semantic analysis (called under document lock).
     ///
     /// Uses `get_or_build_analyzer` so repeated hovers on the same document version
@@ -191,25 +215,12 @@ impl LspServer {
                 symbol_info.attributes.iter().find_map(|a| a.strip_prefix("modifier="))
         {
             let method_name = &symbol_info.name;
-            let kind_label = match modifier_kind {
-                "before" => "runs **before** the method — use for preconditions and logging",
-                "after" => "runs **after** the method — use for postconditions and cleanup",
-                "around" => {
-                    "wraps the method — receives `$orig` as first arg, must call `$orig->($self, @_)`"
-                }
-                "override" => "overrides the parent method — use to replace inherited behavior",
-                "augment" => "extends the parent method — call `inner()` to invoke the next layer",
-                _ => "modifies the method",
-            };
             let doc = symbol_info.documentation.as_deref().unwrap_or("");
-            return HoverExtracted::Complete(json!({
-                "contents": {
-                    "kind": "markdown",
-                    "value": format!(
-                        "**Method Modifier (`{modifier_kind}`)**\n\n`{method_name}` — {kind_label}\n\n{doc}"
-                    ),
-                },
-            }));
+            return HoverExtracted::Complete(Self::build_method_modifier_hover(
+                modifier_kind,
+                method_name,
+                doc,
+            ));
         }
 
         if let Some(symbol_info) = analyzer.find_definition(offset) {
@@ -233,27 +244,12 @@ impl LspServer {
                 symbol_info.attributes.iter().find_map(|a| a.strip_prefix("modifier="))
             {
                 let method_name = &symbol_info.name;
-                let kind_label = match modifier_kind {
-                    "before" => "runs **before** the method — use for preconditions and logging",
-                    "after" => "runs **after** the method — use for postconditions and cleanup",
-                    "around" => {
-                        "wraps the method — receives `$orig` as first arg, must call `$orig->($self, @_)`"
-                    }
-                    "override" => "overrides the parent method — use to replace inherited behavior",
-                    "augment" => {
-                        "extends the parent method — call `inner()` to invoke the next layer"
-                    }
-                    _ => "modifies the method",
-                };
                 let doc = symbol_info.documentation.as_deref().unwrap_or("");
-                return HoverExtracted::Complete(json!({
-                    "contents": {
-                        "kind": "markdown",
-                        "value": format!(
-                            "**Method Modifier (`{modifier_kind}`)**\n\n`{method_name}` — {kind_label}\n\n{doc}"
-                        ),
-                    },
-                }));
+                return HoverExtracted::Complete(Self::build_method_modifier_hover(
+                    modifier_kind,
+                    method_name,
+                    doc,
+                ));
             }
 
             use crate::symbol::VarKind;
