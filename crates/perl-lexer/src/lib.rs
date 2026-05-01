@@ -178,94 +178,9 @@ impl<'a> PerlLexer<'a> {
         lexer
     }
 
-    /// Normalize file start by skipping BOM if present
-    fn normalize_file_start(&mut self) {
-        // Skip UTF-8 BOM (EF BB BF) if at file start
-        if self.position == 0 && self.matches_bytes(&[0xEF, 0xBB, 0xBF]) {
-            self.position = 3;
-            self.line_start_offset = 3;
-        }
-    }
-
     /// Set the lexer mode (for resetting state at statement boundaries)
     pub fn set_mode(&mut self, mode: LexerMode) {
         self.mode = mode;
-    }
-
-    /// Helper to check if remaining bytes on a line are only spaces/tabs
-    #[inline]
-    fn trailing_ws_only(bytes: &[u8], mut p: usize) -> bool {
-        while p < bytes.len() && bytes[p] != b'\n' && bytes[p] != b'\r' {
-            match bytes[p] {
-                b' ' | b'\t' => p += 1,
-                _ => return false,
-            }
-        }
-        true
-    }
-
-    /// Consume a newline sequence (CRLF or LF) and update state
-    #[inline]
-    fn consume_newline(&mut self) {
-        if self.position >= self.input.len() {
-            return;
-        }
-        match self.input_bytes[self.position] {
-            b'\r' => {
-                self.position += 1;
-                if self.position < self.input.len() && self.input_bytes[self.position] == b'\n' {
-                    self.position += 1;
-                }
-            }
-            b'\n' => self.advance(),
-            _ => return, // not at a newline
-        }
-        self.after_newline = true;
-        self.line_start_offset = self.position;
-    }
-
-    /// Find the end of the current line, returning both raw end and visible end (without trailing CR)
-    #[inline]
-    fn find_line_end(bytes: &[u8], start: usize) -> (usize, usize) {
-        let mut end = start;
-        while end < bytes.len() && bytes[end] != b'\n' && bytes[end] != b'\r' {
-            end += 1;
-        }
-        let visible_end = end;
-        (end, visible_end)
-    }
-
-    #[inline]
-    fn parse_quoted_heredoc_delimiter(&mut self, quote: char, text: &mut String) -> Option<String> {
-        text.push(quote);
-        self.advance();
-
-        let mut delim = String::new();
-        while self.position < self.input.len() {
-            let Some(ch) = self.current_char() else {
-                break;
-            };
-
-            if ch == quote {
-                text.push(ch);
-                self.advance();
-                return Some(delim);
-            }
-
-            // Delimiter quoting cannot span a line. If we hit CR/LF before the
-            // closing quote, this is not a valid heredoc opener.
-            if ch == '\n' || ch == '\r' {
-                return None;
-            }
-
-            delim.push(ch);
-            text.push(ch);
-            self.advance();
-        }
-
-        // Unterminated quoted delimiter: degrade gracefully by treating this as
-        // not-a-heredoc so normal tokenization can continue.
-        None
     }
 
     /// Advance the lexer and return the next token.
