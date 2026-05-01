@@ -104,8 +104,8 @@ That aligns with the roadmap: parser robustness and corpus ratchets are the
 hardening sprint, and `90%+` CPAN clean parse rate is the release target.
 
 Version truth is also a blocker until it is updated. PR `#2035` explicitly
-describes the version bump as a release blocker because `perl-lsp --version`
-was still reporting `0.11.0`.
+describes the version bump as a release blocker because the server version
+command was still reporting `0.11.0`.
 
 So the blocker set is not broad:
 

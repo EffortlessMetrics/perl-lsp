@@ -148,6 +148,28 @@ else
     fi
 fi
 
+# ── Check 4: Active install docs must not advertise retired Homebrew commands ─
+
+for forbidden_homebrew_pattern in \
+    'brew install perl''-lsp' \
+    'brew tap effortlesssteven''/tap' \
+    'brew tap tree-sitter-perl''/tap'
+do
+    forbidden_output="$(
+        git grep -n -F "$forbidden_homebrew_pattern" -- \
+            ':!**/target/**' \
+            ':!docs/reference/archive/**' \
+            ':!docs/issues/**' \
+            ':!scripts/check_release_history.sh' \
+            || true
+    )"
+    if [[ -n "$forbidden_output" ]]; then
+        while IFS= read -r line; do
+            error "Forbidden retired Homebrew command in active docs: ${line}"
+        done <<< "$forbidden_output"
+    fi
+done
+
 # ── Exit ──────────────────────────────────────────────────────────────────────
 
 if [[ "$DRIFT_FOUND" -eq 1 ]]; then

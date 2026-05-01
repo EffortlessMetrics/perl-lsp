@@ -45,8 +45,8 @@ already treats install verification as part of the product surface:
 The user-facing docs mirror that. [`docs/how-to/INSTALLATION.md`](/home/steven/code/Rust/perl-lsp/tree-sitter-perl-rs/docs/how-to/INSTALLATION.md)
 explicitly tells users to run:
 
-- `perl-lsp --health`
-- `perl-lsp --info`
+- `perllsp --health`
+- `perllsp --info`
 
 and documents the expected behavior:
 

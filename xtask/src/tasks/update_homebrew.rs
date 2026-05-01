@@ -159,7 +159,6 @@ fn build_brew_formula(
         r##"class Perllsp < Formula
   desc "Native Rust language server and debug adapter for Perl"
   homepage "https://github.com/{owner}/{repo}"
-  version "{version}"
   license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do
@@ -184,10 +183,10 @@ fn build_brew_formula(
 
   def install
     extracted_dir = Dir.glob("perllsp-#{{version}}-*").find {{ |path| File.directory?(path) }}
-    raise "expected release archive directory perllsp-#{{version}}-<target>" unless extracted_dir
+    package_dir = extracted_dir || "."
 
-    bin.install "#{{extracted_dir}}/perllsp"
-    bin.install "#{{extracted_dir}}/perl-dap"
+    bin.install "#{{package_dir}}/perllsp"
+    bin.install "#{{package_dir}}/perl-dap"
   end
 
   def caveats
@@ -219,7 +218,6 @@ end
         owner = config.owner,
         repo = config.repo,
         base = base,
-        version = version,
         mac_arm_filename = mac_arm_filename,
         mac_x64_filename = mac_x64_filename,
         linux_arm_filename = linux_arm_filename,

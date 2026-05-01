@@ -26,8 +26,8 @@ pub struct InjectShaAssetsConfig {
 
 const MAC_ARM: &str = "aarch64-apple-darwin.tar.gz";
 const MAC_X64: &str = "x86_64-apple-darwin.tar.gz";
-const LIN_ARM: &str = "aarch64-unknown-linux-musl.tar.gz";
-const LIN_X64: &str = "x86_64-unknown-linux-musl.tar.gz";
+const LIN_ARM: &str = "aarch64-unknown-linux-gnu.tar.gz";
+const LIN_X64: &str = "x86_64-unknown-linux-gnu.tar.gz";
 const WIN_X64: &str = "x86_64-pc-windows-msvc.zip";
 const WIN_ARM: &str = "aarch64-pc-windows-msvc.zip";
 
@@ -107,7 +107,6 @@ fn build_brew_formula(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) 
         r##"class Perllsp < Formula
   desc "Native Rust language server and debug adapter for Perl"
   homepage "https://github.com/{owner}/{repo}"
-  version "{version}"
   license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do
@@ -134,10 +133,10 @@ fn build_brew_formula(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) 
 
   def install
     extracted_dir = Dir.glob("perllsp-#{{version}}-*").find {{ |path| File.directory?(path) }}
-    raise "expected release archive directory perllsp-#{{version}}-<target>" unless extracted_dir
+    package_dir = extracted_dir || "."
 
-    bin.install "#{{extracted_dir}}/perllsp"
-    bin.install "#{{extracted_dir}}/perl-dap"
+    bin.install "#{{package_dir}}/perllsp"
+    bin.install "#{{package_dir}}/perl-dap"
   end
 
   test do
@@ -148,7 +147,6 @@ end
 "##,
         owner = config.owner,
         repo = config.repo,
-        version = config.version,
         base = base,
         mac_arm_filename = mac_arm_filename,
         mac_x64_filename = mac_x64_filename,
