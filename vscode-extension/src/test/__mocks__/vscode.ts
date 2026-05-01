@@ -6,6 +6,8 @@
  * @vscode/test-electron instead of this mock.
  */
 
+import { jest } from '@jest/globals';
+
 export const Uri = {
   parse: (value: string) => ({ toString: () => value, fsPath: value }),
   file: (path: string) => ({ toString: () => `file://${path}`, fsPath: path }),
