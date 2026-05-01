@@ -96,6 +96,7 @@ mod functions;
 mod import_map;
 mod items;
 mod keywords;
+mod lexical_context;
 mod methods;
 mod packages;
 mod regex_patterns;
@@ -1705,180 +1706,20 @@ impl CompletionProvider {
         false
     }
 
-    /// Simple heuristic to check if position is in a string
     fn is_in_string(&self, source: &str, position: usize) -> bool {
-        let before = &source[..position];
-        let single_quotes = before.matches('\'').count();
-        let double_quotes = before.matches('"').count();
-
-        // Very simple: odd number of quotes means we're inside
-        single_quotes % 2 == 1 || double_quotes % 2 == 1
+        lexical_context::is_in_string(source, position)
     }
 
-    /// Heuristic to check if position is inside a regex literal.
-    ///
-    /// Detects the following regex contexts:
-    /// - Binding operators: `=~ /…/` and `!~ /…/`
-    /// - Explicit regex operators: `m/…/`, `qr/…/`, `s/…/…/`, `tr/…/…/`, `y/…/…/`
-    /// - Bare regex after operators/keywords that expect a regex value
     fn is_in_regex(source: &str, position: usize) -> bool {
-        let before = &source[..position];
-
-        // Find the last unescaped `/` before the cursor -- that could be the
-        // opening delimiter of the regex we are inside.
-        let Some(last_slash) = before.rfind('/') else {
-            return false;
-        };
-
-        // Check if the slash is preceded by a regex binding operator.
-        let pre_slash = before[..last_slash].trim_end();
-        if pre_slash.ends_with("=~") || pre_slash.ends_with("!~") {
-            return true;
-        }
-
-        // Check for explicit regex operators: m/, qr/, s/, tr/, y/
-        // We look for the operator keyword immediately before the slash (with
-        // optional whitespace).
-        if Self::pre_slash_has_regex_op(pre_slash) {
-            return true;
-        }
-
-        if matches!(
-            pre_slash.split_ascii_whitespace().next_back(),
-            Some("or") | Some("and") | Some("not")
-        ) {
-            return true;
-        }
-
-        // Bare `/` after certain tokens that unambiguously start a regex.
-        if let Some(last_char) = pre_slash.chars().next_back() {
-            // After `(`, `,`, `=`, `!`, `&&`, `||`, `or`, `and`, `not`, `;`, `{`
-            // a `/` starts a regex rather than a division.
-            if matches!(last_char, '(' | ',' | '=' | '!' | '&' | '|' | ';' | '{' | '~') {
-                return true;
-            }
-        }
-
-        // If pre_slash is empty, the slash is at position 0 -- that is a regex.
-        pre_slash.is_empty()
+        lexical_context::is_in_regex(source, position)
     }
 
-    /// Return true when the text immediately before a `/` is one of the
-    /// explicit regex operators (`m`, `qr`, `s`, `tr`, `y`).
-    fn pre_slash_has_regex_op(pre_slash: &str) -> bool {
-        let trimmed = pre_slash.trim_end();
-        for op in &["qr", "m", "s", "tr", "y"] {
-            if let Some(before_op) = trimmed.strip_suffix(op) {
-                // The operator must be at a word boundary -- the character
-                // before it (if any) must not be alphanumeric or `_`.
-                let boundary_ok = before_op
-                    .chars()
-                    .next_back()
-                    .is_none_or(|c| !c.is_ascii_alphanumeric() && c != '_');
-                if boundary_ok {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    /// Return true when the cursor is positioned in the flag region after a
-    /// closing regex delimiter — e.g., `$x =~ /foo/|` or `m/foo/i|`.
-    ///
-    /// Algorithm:
-    /// 1. Strip any trailing flag characters from the text before the cursor.
-    /// 2. The stripped text must end with `/` (the closing delimiter).
-    /// 3. The text before the closing `/` must look like a regex body:
-    ///    - For single-delimiter operators (`/…/`, `m/…/`, `qr/…/`): the
-    ///      character just before the closing `/` must be inside a regex body
-    ///      per `is_in_regex`.
-    ///    - For multi-delimiter operators (`s/…/…/`, `tr/…/…/`, `y/…/…/`):
-    ///      count the number of unescaped `/` chars; an even count (≥2) with
-    ///      a known operator keyword confirms the closing delimiter.
-    ///
-    /// The `is_in_regex_flags` check MUST be dispatched before `is_in_regex`
-    /// in the completion pipeline, because the cursor after the closing `/` is
-    /// not itself `in_regex`.
     pub(crate) fn is_in_regex_flags(source: &str, position: usize) -> bool {
-        if position == 0 || position > source.len() {
-            return false;
-        }
-        let before = &source[..position];
-        let flag_chars: &[char] =
-            &['g', 'i', 'm', 's', 'x', 'e', 'r', 'a', 'd', 'u', 'p', 'l', 'c'];
-        let without_flags = before.trim_end_matches(|c: char| flag_chars.contains(&c));
-        // Must end with the closing delimiter '/'.
-        if !without_flags.ends_with('/') {
-            return false;
-        }
-        let close_pos = without_flags.len();
-        if close_pos < 2 {
-            return false;
-        }
-
-        // Fast path for single-delimiter operators: the position just before the
-        // closing '/' must be inside a regex body per is_in_regex.
-        if Self::is_in_regex(source, close_pos - 1) {
-            return true;
-        }
-
-        // Slow path for multi-delimiter operators (s///, tr///, y///):
-        // count unescaped '/' chars in `without_flags`. If there are exactly 3
-        // (i.e., op/pattern/replacement/) and the operator is s/tr/y, we are
-        // in flags position.
-        let body = without_flags.trim();
-        Self::is_multi_delim_regex_at_close(body)
+        lexical_context::is_in_regex_flags(source, position)
     }
 
-    /// Return true when `text` looks like `s/…/…/`, `tr/…/…/`, or `y/…/…/`
-    /// with a complete closing delimiter (three `/` chars for s, tr, y).
-    fn is_multi_delim_regex_at_close(text: &str) -> bool {
-        // Identify whether the text starts with a known multi-delimiter operator.
-        let (op_len, required_slashes) = if text.starts_with("tr/") || text.starts_with("y/") {
-            let op = if text.starts_with("tr/") { 2 } else { 1 };
-            (op, 3usize) // tr/search/replacement/ has 3 '/'
-        } else if text.starts_with("s/") {
-            (1, 3usize) // s/pattern/replacement/ has 3 '/'
-        } else {
-            // Not a multi-delimiter operator we handle — also try with a
-            // binding operator prefix like `$x =~ s/…/…/`.
-            let stripped = text
-                .find("=~")
-                .map(|p| text[p + 2..].trim_start())
-                .or_else(|| text.find("!~").map(|p| text[p + 2..].trim_start()));
-            if let Some(rhs) = stripped {
-                return Self::is_multi_delim_regex_at_close(rhs);
-            }
-            return false;
-        };
-        // Count unescaped '/' characters in the operator body.
-        let body_after_op = &text[op_len..];
-        let slash_count = Self::count_unescaped_slashes(body_after_op);
-        slash_count == required_slashes
-    }
-
-    /// Count the number of unescaped `/` characters in `s`.
-    fn count_unescaped_slashes(s: &str) -> usize {
-        let mut count = 0usize;
-        let mut escaped = false;
-        for ch in s.chars() {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '/' {
-                count += 1;
-            }
-        }
-        count
-    }
-
-    /// Simple heuristic to check if position is in a comment
     fn is_in_comment(&self, source: &str, position: usize) -> bool {
-        let line_start = source[..position].rfind('\n').map(|p| p + 1).unwrap_or(0);
-        let line = &source[line_start..position];
-        line.contains('#')
+        lexical_context::is_in_comment(source, position)
     }
 
     /// Check if we're in a test context
