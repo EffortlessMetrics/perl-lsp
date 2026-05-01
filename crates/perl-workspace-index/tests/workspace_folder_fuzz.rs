@@ -78,3 +78,21 @@ fn fuzz_workspace_folder_targeted_uri_like_inputs() {
         assert_no_file_uri_leak(sample);
     }
 }
+
+#[test]
+fn fuzz_workspace_folder_authority_edge_cases_do_not_leak_uri_scheme() {
+    let samples = [
+        "file://LOCALHOST/tmp/case-insensitive",
+        "file://localhost./tmp/trailing-dot",
+        "file://127.0.0.1/tmp/loopback-ipv4",
+        "file://[::1]/tmp/loopback-ipv6",
+        "file://%6cocalhost/tmp/percent-host",
+        "file://localhost/%2Ftmp%2Fencoded-slashes",
+        "file://localhost/tmp/space%20here",
+        "file:///tmp/emoji-%F0%9F%A6%80",
+    ];
+
+    for sample in samples {
+        assert_no_file_uri_leak(sample);
+    }
+}

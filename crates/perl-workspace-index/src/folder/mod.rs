@@ -75,8 +75,17 @@ fn file_uri_has_remote_host(value: &str) -> bool {
     url::Url::parse(value)
         .ok()
         .filter(|u| u.scheme() == "file")
-        .and_then(|u| u.host_str().map(|h| !matches!(h, "" | "localhost")))
+        .and_then(|u| u.host_str().map(|h| !is_local_file_host(h)))
         .unwrap_or(false)
+}
+
+fn is_local_file_host(host: &str) -> bool {
+    let normalized = host
+        .trim_end_matches('.')
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_ascii_lowercase();
+    matches!(normalized.as_str(), "" | "localhost" | "127.0.0.1" | "::1")
 }
 
 fn parse_file_uri_fallback(workspace_folder: &str) -> Option<PathBuf> {
@@ -95,7 +104,8 @@ fn parse_file_uri_fallback(workspace_folder: &str) -> Option<PathBuf> {
     }
 
     match parsed.host_str() {
-        None | Some("") | Some("localhost") => Some(PathBuf::from(path)),
+        None => Some(PathBuf::from(path)),
+        Some(host) if is_local_file_host(host) => Some(PathBuf::from(path)),
         Some(_) => None,
     }
 }
@@ -295,6 +305,19 @@ mod tests {
         let parsed = workspace_folder_to_path("file://localhost/tmp/project");
         assert!(parsed.to_string_lossy().contains("tmp"));
         assert!(parsed.to_string_lossy().contains("project"));
+    }
+
+    #[test]
+    fn parses_file_uri_with_localhost_variants() {
+        for uri in [
+            "file://LOCALHOST/tmp/project",
+            "file://localhost./tmp/project",
+            "file://127.0.0.1/tmp/project",
+            "file://[::1]/tmp/project",
+        ] {
+            let parsed = workspace_folder_to_path(uri);
+            assert!(!parsed.to_string_lossy().contains("file://"), "uri leaked: {uri}");
+        }
     }
 
     #[test]
