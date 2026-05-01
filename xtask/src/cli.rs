@@ -1,0 +1,1745 @@
+use clap::{Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
+
+use crate::tasks::*;
+use crate::tasks::dead_code::DeadCodeMode;
+use crate::tasks::gate_policy::GatePolicyProfile;
+use crate::tasks::gates::{GateTier, OutputFormat as GatesOutputFormat};
+use crate::tasks::methodology_gate::MethodologyOutputFormat;
+use crate::tasks::targeted_checks::CheckMode;
+use crate::tasks::workflow_trigger_lint::WorkflowTriggerLintFormat;
+use crate::tasks::worktree_allocator::AgentWorktreeCommand;
+use crate::types::TestSuite;
+#[cfg(any(feature = "legacy", feature = "parser-tasks"))]
+use crate::types::*;
+
+#[derive(Parser)]
+#[command(name = "xtask")]
+#[command(about = "Custom tasks for tree-sitter-perl")]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Commands,
+}
+
+#[derive(Subcommand)]
+pub enum Commands {
+    /// Print all available top-level xtask commands.
+    #[command(name = "list-commands")]
+    List,
+
+    /// Run lean CI suite (format, clippy, tests) for constrained environments
+    Ci,
+
+    /// Run format and clippy checks only (no tests)
+    CheckOnly,
+
+    /// Verify local Rust toolchain meets the pinned MSRV in rust-toolchain.toml.
+    CheckToolchain {
+        /// Show a warning when rustc satisfies the minimum MSRV but differs
+        /// from the exact pinned channel string.
+        #[arg(long)]
+        doctor: bool,
+    },
+
+    /// Capture a GitHub PR queue snapshot for disconnected maintainership.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
+
+    /// Build project with various configurations
+    Build {
+        /// Build in release mode
+        #[arg(long)]
+        release: bool,
+
+        /// Build with specific features
+        #[arg(long, value_delimiter = ',')]
+        features: Option<Vec<String>>,
+
+        /// Build only C scanner
+        #[arg(long)]
+        c_scanner: bool,
+
+        /// Build only Rust scanner
+        #[arg(long)]
+        rust_scanner: bool,
+    },
+
+    /// Run tests with various configurations
+    Test {
+        /// Run tests in release mode
+        #[arg(long)]
+        release: bool,
+
+        /// Run specific test suite
+        #[arg(long, value_enum)]
+        suite: Option<TestSuite>,
+
+        /// Run tests with specific features
+        #[arg(long, value_delimiter = ',')]
+        features: Option<Vec<String>>,
+
+        /// Run tests with verbose output
+        #[arg(long)]
+        verbose: bool,
+
+        /// Run tests with coverage
+        #[arg(long)]
+        coverage: bool,
+    },
+
+    /// Run benchmarks
+    Bench {
+        /// Run specific benchmark
+        #[arg(long)]
+        name: Option<String>,
+
+        /// Save benchmark results
+        #[arg(long)]
+        save: bool,
+
+        /// Output file for results
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Run C vs Rust benchmark comparison
+    Compare {
+        /// Run only C implementation benchmarks
+        #[arg(long)]
+        c_only: bool,
+
+        /// Run only Rust implementation benchmarks
+        #[arg(long)]
+        rust_only: bool,
+
+        /// Run scanner comparison only
+        #[arg(long)]
+        scanner_only: bool,
+
+        /// Validate existing results only
+        #[arg(long)]
+        validate_only: bool,
+
+        /// Output directory for results
+        #[arg(long, default_value = "benchmark_results")]
+        output_dir: PathBuf,
+
+        /// Check performance gates
+        #[arg(long)]
+        check_gates: bool,
+
+        /// Generate detailed report
+        #[arg(long)]
+        report: bool,
+    },
+
+    /// Run the benchmark script wrapper (`benchmarks/scripts/run-benchmarks.sh`).
+    BenchRun {
+        /// Write benchmark results to a JSON file.
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Run quick smoke benchmarks with reduced sample size.
+        #[arg(long)]
+        quick: bool,
+
+        /// Restrict benchmarks to a specific category.
+        #[arg(long)]
+        category: Option<String>,
+    },
+
+    /// Compare benchmark output receipts (`benchmarks/scripts/compare.sh`).
+    BenchCompare {
+        /// Enable strict mode (exit non-zero on regression).
+        #[arg(long)]
+        fail_on_regression: bool,
+    },
+
+    /// Format benchmark JSON via `benchmarks/scripts/format-results.py`.
+    BenchFormat {
+        /// Emit a receipt summary for CI.
+        #[arg(long)]
+        receipt: bool,
+
+        /// Emit markdown summary.
+        #[arg(long)]
+        markdown: bool,
+    },
+
+    /// Extract and normalize Criterion benchmark outputs (`target/criterion/.../estimates.json`).
+    BenchExtract {
+        /// Root path that contains `target/criterion`.
+        #[arg(long)]
+        base_path: Option<PathBuf>,
+
+        /// Output JSON path.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Run benchmark alert checks (`benchmarks/scripts/alert.py`).
+    BenchAlert {
+        /// Output markdown alerts.
+        #[arg(long)]
+        format: Option<String>,
+
+        /// Run checks and fail on warning conditions.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Run the local benchmark alert regression test suite.
+    BenchAlertTest,
+
+    /// Generate Homebrew formula and VS Code asset map from checksums JSON.
+    InjectShaAssets {
+        /// Version tag used by release artifacts (e.g. v0.8.3).
+        #[arg(long)]
+        version: String,
+
+        /// GitHub organization owning the release repository.
+        #[arg(long)]
+        owner: String,
+
+        /// GitHub repository name for releases.
+        #[arg(long)]
+        repo: String,
+
+        /// Artifact prefix for release filenames.
+        #[arg(long)]
+        prefix: String,
+
+        /// Path to checksums JSON from cargo-dist.
+        #[arg(long)]
+        checksums: PathBuf,
+
+        /// Optional output path for generated Homebrew formula.
+        #[arg(long)]
+        brew_out: Option<PathBuf>,
+
+        /// Optional output path for generated VS Code extension asset map.
+        #[arg(long)]
+        asset_map_out: Option<PathBuf>,
+    },
+
+    /// Generate Homebrew formula from a release SHA256SUMS file.
+    UpdateHomebrew {
+        /// Release version tag used by release artifacts (e.g. v0.8.3).
+        #[arg(long)]
+        version: String,
+
+        /// GitHub organization owning the release repository.
+        #[arg(long, default_value = "EffortlessMetrics")]
+        owner: String,
+
+        /// GitHub repository name for releases.
+        #[arg(long, default_value = "perl-lsp")]
+        repo: String,
+
+        /// Artifact prefix for release filenames.
+        #[arg(long, default_value = "perl-lsp")]
+        prefix: String,
+
+        /// Output path for generated Homebrew formula.
+        #[arg(long, default_value = "homebrew/perl-lsp.rb")]
+        output: PathBuf,
+    },
+
+    /// Generate documentation
+    Doc {
+        /// Open docs in browser
+        #[arg(long)]
+        open: bool,
+
+        /// Build docs for all features
+        #[arg(long)]
+        all_features: bool,
+    },
+
+    /// Run code quality checks
+    Check {
+        /// Run clippy
+        #[arg(long)]
+        clippy: bool,
+
+        /// Run formatting check
+        #[arg(long)]
+        fmt: bool,
+
+        /// Run all checks
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Format code
+    Fmt {
+        /// Check formatting without making changes
+        #[arg(long)]
+        check: bool,
+
+        /// Restrict formatting to one or more package names.
+        ///
+        /// Accepts repeated flags (`--package xtask --package perl-parser`) or
+        /// a comma-delimited list (`--package xtask,perl-parser`).
+        #[arg(long, short = 'p', value_delimiter = ',')]
+        package: Option<Vec<String>>,
+    },
+
+    /// Run corpus tests
+    #[cfg(feature = "legacy")]
+    Corpus {
+        /// Path to corpus directory
+        #[arg(long, default_value = "tree-sitter-perl/test/corpus")]
+        path: PathBuf,
+
+        /// Run with specific scanner
+        #[arg(long, value_enum)]
+        scanner: Option<ScannerType>,
+
+        /// Run diagnostic analysis on first failing test
+        #[arg(long)]
+        diagnose: bool,
+
+        /// Test current parser behavior with simple expressions
+        #[arg(long)]
+        test: bool,
+    },
+
+    /// Run highlight tests
+    #[cfg(feature = "parser-tasks")]
+    Highlight {
+        /// Path to highlight test directory
+        #[arg(long, default_value = "c/test/highlight")]
+        path: PathBuf,
+
+        /// Run with specific scanner
+        #[arg(long, value_enum)]
+        scanner: Option<ScannerType>,
+    },
+
+    /// Clean build artifacts
+    Clean {
+        /// Clean all artifacts including target
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Detect dead code, unused dependencies, and unused imports
+    ///
+    /// Combines cargo-machete/cargo-udeps with clippy dead_code lints.
+    /// Supports check (against baseline), baseline generation, and JSON report modes.
+    DeadCode {
+        /// Mode: check (default), baseline, or report
+        #[arg(value_enum, default_value = "check")]
+        mode: DeadCodeMode,
+
+        /// Strict mode: fail on any regression above baseline
+        #[arg(long)]
+        strict: bool,
+    },
+
+    /// Run a developer environment smoke check.
+    DevexDoctor,
+
+    /// Audit CI workflows for PR-safety and spend-risk controls.
+    CiAuditWorkflows,
+
+    /// Lint GitHub workflow security policy invariants.
+    WorkflowPolicyLint {
+        /// Write a JSON receipt artifact for CI consumption.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Lint a single workflow fixture instead of repository workflows.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+
+    /// Measure CI lane runtimes and emit timing artifacts.
+    CiMeasure,
+
+    /// Analyze GitHub Actions costs over a recent period.
+    CiCostMonitor {
+        /// Number of days to analyze.
+        #[arg(long, default_value_t = 30)]
+        days: u64,
+
+        /// Emit machine-readable output.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Measure CI baseline from recent workflow runs.
+    CiBaseline {
+        /// Branch to analyze.
+        #[arg(short, long, default_value = "master")]
+        branch: String,
+
+        /// Number of days to analyze.
+        #[arg(short, long, default_value_t = 30)]
+        days: u64,
+
+        /// Max runs to fetch.
+        #[arg(short, long, default_value_t = 200)]
+        limit: usize,
+
+        /// Output directory for ci_baseline artifacts.
+        #[arg(short, long, default_value = ".ci")]
+        output: PathBuf,
+    },
+
+    /// Compute the CI scope — changed crates, reverse-dep closure, and architectural wideners.
+    ///
+    /// Emits a JSON (or text) payload listing changed files, mapped crates, the
+    /// reverse-dependency closure, architectural wideners applied, and the
+    /// selected CI lanes with reasons. Deterministic given the same diff and
+    /// `cargo metadata` output.
+    ///
+    /// Example: `cargo xtask ci-scope --base auto --format json`
+    CiScope {
+        /// Base git reference to diff against (default: auto-detect).
+        #[arg(long, default_value = "auto")]
+        base: String,
+
+        /// Output format: `json` or `text` (default: json).
+        #[arg(long, default_value = "json")]
+        format: String,
+    },
+
+    /// Lint required workflow triggers against policy.
+    WorkflowTriggerLint {
+        /// Policy TOML path listing conventional required checks.
+        #[arg(long)]
+        policy: Option<PathBuf>,
+
+        /// Optional receipt output path (JSON).
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Validate a single workflow fixture file instead of policy workflows.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Output format.
+        #[arg(long, value_enum, default_value = "text")]
+        format: WorkflowTriggerLintFormat,
+    },
+
+    /// Run version-sync checks from `perl-ci-hygiene`.
+    CheckVersionSync,
+
+    /// Check for disallowed direct `ExitStatus::from_raw()` usage.
+    CheckFromRaw,
+
+    /// Run production security hardening checks.
+    SecurityHardening,
+
+    /// Run production performance hardening checks.
+    PerformanceHardening,
+
+    /// Validate production hardening gate posture and SLOs.
+    ProductionGatesValidation,
+
+    /// Harvest forensics data for a merged PR.
+    ForensicsHarvest {
+        /// PR number or identifier.
+        pr: String,
+    },
+
+    /// Analyze temporal behavior for a merged PR.
+    ForensicsTemporal {
+        /// PR number or identifier.
+        pr: String,
+    },
+
+    /// Run quick static telemetry for a merged PR.
+    ForensicsTelemetryQuick {
+        /// PR number or identifier.
+        pr: String,
+    },
+
+    /// Run full static telemetry for a merged PR.
+    ForensicsTelemetryFull {
+        /// PR number or identifier.
+        pr: String,
+    },
+
+    /// Generate a full forensics dossier for a merged PR.
+    ForensicsDossier {
+        /// PR number or identifier.
+        pr: String,
+    },
+
+    /// Render a forensics dossier for a merged PR.
+    ForensicsRender {
+        /// PR number or identifier.
+        pr: String,
+
+        /// Output format for the rendered dossier (`full` or `summary`).
+        #[arg(default_value = "full")]
+        format: String,
+    },
+
+    /// Verify publication claims from `docs/project/PUBLICATION_FACTS_LEDGER.md`.
+    VerifyPublicationFacts {
+        /// Forward extra args to the checker (`--strict`, `--json`).
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// Ensure issue labels are present and correctly configured in GitHub.
+    GhLabels,
+
+    /// Show open issues missing required taxonomy labels from GitHub.
+    GhTriage {
+        /// Maximum number of issues to list.
+        #[arg(default_value = "500")]
+        limit: usize,
+    },
+
+    /// Backfill prefixed labels on GitHub issues (dry run by default).
+    GhBackfillPrefixedLabels {
+        /// Apply label updates instead of dry run.
+        #[arg(long)]
+        apply: bool,
+    },
+
+    /// Generate bindings
+    #[cfg(feature = "parser-tasks")]
+    Bindings {
+        /// Header file to generate bindings from
+        #[arg(long, default_value = "archive/crates/tree-sitter-perl-rs/src/tree_sitter/parser.h")]
+        header: PathBuf,
+
+        /// Output file for bindings
+        #[arg(long, default_value = "archive/crates/tree-sitter-perl-rs/src/bindings.rs")]
+        output: PathBuf,
+    },
+
+    /// Run development server
+    Dev {
+        /// Watch for changes
+        #[arg(long)]
+        watch: bool,
+
+        /// Port for development server
+        #[arg(long, default_value = "8080")]
+        port: u16,
+    },
+
+    /// Run pure Rust parser
+    ParseRust {
+        /// Source file to parse
+        source: PathBuf,
+
+        /// Output S-expression
+        #[arg(long)]
+        sexp: bool,
+
+        /// Output AST debug format
+        #[arg(long)]
+        ast: bool,
+
+        /// Benchmark parsing time
+        #[arg(long)]
+        bench: bool,
+    },
+
+    /// Release automation commands.
+    Release {
+        #[command(subcommand)]
+        command: ReleaseCommand,
+    },
+
+    /// Extract the curated release body from `docs/releases/<tag>.md`.
+    ///
+    /// Reads the file, strips its YAML frontmatter, and emits the body to
+    /// stdout (or to `--output` if provided). Used by the `release.yml`
+    /// workflow to drive GitHub Release bodies from the curated per-release
+    /// notes that ship in the repo.
+    ReleaseNotes {
+        /// Release tag (e.g. `v0.12.4`). A bare version like `0.12.4` is
+        /// accepted and normalized to `v0.12.4`.
+        #[arg(long)]
+        tag: String,
+
+        /// Optional output file. When omitted, the body is written to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Override the repository root used to resolve `docs/releases/`.
+        /// Intended as a testing seam; the release workflow never passes this.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
+    },
+
+    /// Trigger PR-driven release orchestration workflow
+    ReleaseTurnkey {
+        /// Release version (preferred: use `--version`; positional is also accepted).
+        #[arg(long)]
+        version: Option<String>,
+
+        /// Release version as positional argument.
+        #[arg(value_name = "VERSION")]
+        positional_version: Option<String>,
+
+        /// Trigger prerelease mode for workflows.
+        #[arg(long)]
+        prerelease: bool,
+
+        /// Validate commands only; do not trigger workflows.
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip crates.io publish workflow.
+        #[arg(long)]
+        skip_crates: bool,
+
+        /// Skip VSCode extension publish workflow.
+        #[arg(long)]
+        skip_extension: bool,
+
+        /// Skip Docker image publish workflow.
+        #[arg(long)]
+        skip_docker: bool,
+
+        /// Base branch for release orchestration.
+        #[arg(long)]
+        base_branch: Option<String>,
+
+        /// Do not auto-merge the version bump PR.
+        #[arg(long)]
+        no_auto_merge: bool,
+
+        /// Do not wait for the version bump PR merge.
+        #[arg(long)]
+        no_wait_pr_merge: bool,
+
+        /// Do not wait for release workflows to finish.
+        #[arg(long)]
+        no_wait_release: bool,
+
+        /// Workflow wait timeout in seconds.
+        #[arg(long)]
+        workflow_timeout: Option<u64>,
+    },
+
+    /// Run crates.io launch-preparation checks.
+    PrepCratesIoLaunch {
+        /// Launch mode: `core` for launch-critical crates, `all` for all publishable crates.
+        #[arg(long, value_enum, default_value = "core")]
+        mode: PrepCratesMode,
+    },
+
+    /// Run heredoc-specific tests
+    TestHeredoc {
+        /// Run tests in release mode
+        #[arg(long)]
+        release: bool,
+
+        /// Run tests with verbose output
+        #[arg(long)]
+        verbose: bool,
+    },
+
+    /// Test edge case handling functionality
+    TestEdgeCases {
+        /// Run benchmarks
+        #[arg(long)]
+        bench: bool,
+
+        /// Generate coverage report
+        #[arg(long)]
+        coverage: bool,
+
+        /// Run specific edge case test
+        #[arg(long)]
+        test: Option<String>,
+    },
+
+    /// Run corpus audit for coverage analysis
+    CorpusAudit {
+        /// Path to corpus directory
+        #[arg(long, default_value = ".")]
+        corpus_path: PathBuf,
+
+        /// Output path for audit report
+        #[arg(long, default_value = "corpus_audit_report.json")]
+        output: PathBuf,
+
+        /// Check mode for CI (fails if issues found)
+        #[arg(long)]
+        check: bool,
+
+        /// Fresh mode (regenerate report even if it exists)
+        #[arg(long)]
+        fresh: bool,
+    },
+
+    /// Generate parser feature matrix from a parser-audit report.
+    ParserMatrix {
+        /// Path to parser audit report JSON.
+        #[arg(long, default_value = "corpus_audit_report.json")]
+        report: PathBuf,
+
+        /// Output path for generated matrix documentation.
+        #[arg(long, default_value = "docs/reference/PARSER_FEATURE_MATRIX.md")]
+        output: PathBuf,
+    },
+
+    /// Run three-way parser comparison
+    #[cfg(feature = "parser-tasks")]
+    CompareThree {
+        /// Show detailed output
+        #[arg(long)]
+        verbose: bool,
+
+        /// Output format (table, json, markdown)
+        #[arg(long, default_value = "table")]
+        format: String,
+    },
+
+    /// Test LSP features with demo scripts
+    TestLsp {
+        /// Create test files only (don't run tests)
+        #[arg(long)]
+        create_only: bool,
+
+        /// Run specific test
+        #[arg(long)]
+        test: Option<String>,
+
+        /// Clean up test files after running
+        #[arg(long)]
+        cleanup: bool,
+    },
+
+    /// Bump the workspace version across every tracked site.
+    ///
+    /// Non-interactive and idempotent. Delegates to `perl-ci-hygiene
+    /// bump-version`, which owns the canonical site list shared with the
+    /// `check-version-sync` CI gate.
+    BumpVersion {
+        /// New version to set (X.Y.Z format).
+        version: String,
+    },
+
+    /// Publish crates to crates.io
+    PublishCrates {
+        /// Skip confirmation
+        #[arg(long)]
+        yes: bool,
+
+        /// Dry run (don't actually publish)
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Dispatch the "Publish to crates.io" workflow for a release
+    PublishRelease {
+        /// Release version (for example 0.x.y)
+        version: String,
+
+        /// Dry run (don't actually publish)
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Target git ref (defaults to v<version>)
+        #[arg(long = "ref")]
+        git_ref: Option<String>,
+    },
+
+    /// Run a full release smoke test via installed binaries
+    SmokeTestRelease {
+        /// Release version to smoke-test (for example 0.x.y)
+        version: String,
+    },
+
+    /// Run forbidden-fatal construct checks from `perl-ci-hygiene`.
+    ForbidFatalConstructs {
+        /// Forwarded arguments for `forbid-fatal-constructs`.
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// Run arbitrary `perl-ci-hygiene` subcommands.
+    CiHygiene {
+        /// Subcommand name for `perl-ci-hygiene`.
+        command: String,
+
+        /// Arguments to pass to the subcommand.
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// Publish a review receipt bundle in `review/receipts/YYYY-MM-DD/`.
+    PublishReceipts {
+        /// Optional date override in `YYYY-MM-DD` format.
+        date: Option<String>,
+    },
+
+    /// Publish VSCode extension to marketplace
+    PublishVscode {
+        /// Skip confirmation
+        #[arg(long)]
+        yes: bool,
+
+        /// PAT token for authentication
+        #[arg(long)]
+        token: Option<String>,
+    },
+
+    /// Verify transitive normal-dep closure of published crates contains only publishable deps
+    PublishClosure {
+        /// Check only this crate (default: all allowlisted crates)
+        #[arg(long)]
+        crate_name: Option<String>,
+    },
+
+    /// Ratchet gate: published-crate count must not increase above baseline.
+    ///
+    /// Reads the current entry count from `[workspace.metadata.publish.allow]`
+    /// (via `cargo metadata --no-deps`), compares against the baseline stored in
+    /// `xtask/published-crate-baseline.txt`, and fails if the count increased.
+    /// When the count has decreased, the baseline is auto-tightened.
+    PublishedCrateCount,
+
+    /// Offline manifest validation: allowlist drift + LICENSE present.
+    ///
+    /// Checks that every entry in `[workspace.metadata.publish.allow]` is a
+    /// publishable workspace member and vice versa (allowlist drift), and that
+    /// every allowlisted crate has a `license` or `license-file` field set.
+    /// Uses `cargo metadata --no-deps` — no network contact.
+    ///
+    /// Replaces the Python `--check-drift` step in `publish-dry-run.yml` and
+    /// is wired into `just pr-fast` and `just ci-gate`.
+    PublishManifestCheck,
+
+    /// Sweep system Perl corpus for parser error rates
+    ParserCorpusSweep {
+        /// Comma-separated corpus root directories
+        #[arg(long, value_delimiter = ',', conflicts_with = "manifest")]
+        roots: Option<Vec<PathBuf>>,
+
+        /// Manifest file listing module names to resolve via perl
+        #[arg(long, conflicts_with = "roots")]
+        manifest: Option<PathBuf>,
+
+        /// Write JSON report to file
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Compare against baseline JSON file
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+
+        /// Return nonzero if regression detected
+        #[arg(long)]
+        enforce: bool,
+
+        /// Include per-file details in output
+        #[arg(long)]
+        verbose: bool,
+
+        /// Write receipt JSON to target/receipts/corpus-sweep.json
+        #[arg(long)]
+        receipt: bool,
+    },
+
+    /// Emit parser-ratchet scaffold receipts.
+    ParserRatchet {
+        #[command(subcommand)]
+        command: ParserRatchetCommand,
+    },
+
+    /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
+    CpanCorpus {
+        #[command(subcommand)]
+        command: CpanCorpusCommand,
+    },
+
+    /// Generate canonical receipts (test summary, doc metrics, consolidated state)
+    ///
+    /// Runs workspace tests and doc builds, parses output, and produces
+    /// JSON artifacts in the artifacts/ directory. Replaces scripts/generate-receipts.sh.
+    Receipts {
+        /// Only generate test receipts (skip doc build)
+        #[arg(long)]
+        tests_only: bool,
+
+        /// Only generate doc receipts (skip test run)
+        #[arg(long)]
+        docs_only: bool,
+
+        /// Output directory for artifacts (default: artifacts/)
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+
+        /// Number of test threads (default: 2)
+        #[arg(long, default_value = "2")]
+        test_threads: u32,
+    },
+
+    /// Aggregate CI subreceipt fragments into one stable final receipt.
+    AggregateReceipts {
+        /// Stable final check name.
+        #[arg(long)]
+        check: String,
+        /// Input directory containing subreceipt JSON files.
+        #[arg(long)]
+        inputs: PathBuf,
+        /// Output path for aggregate receipt JSON.
+        #[arg(long)]
+        output: PathBuf,
+        /// Allow required lanes to no-op without failing the final check.
+        #[arg(long, default_value_t = true)]
+        allow_noop: bool,
+    },
+
+    /// Compute final pass/fail outcome from an aggregate receipt.
+    FinalizeCheck {
+        /// Path to aggregate receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+        /// Allow required lanes to no-op without failing the final check.
+        #[arg(long, default_value_t = true)]
+        allow_noop: bool,
+        /// Treat advisory warnings/failures as fatal.
+        #[arg(long, default_value_t = false)]
+        fail_on_advisory: bool,
+    },
+
+    /// Emit, verify, and reconcile SHA-bound merge-readiness receipts.
+    MergeReady {
+        #[command(subcommand)]
+        command: MergeReadyCommand,
+    },
+
+    /// Track ignored tests and enforce gate policy
+    IgnoredTests {
+        /// Write current counts back to baseline
+        #[arg(long)]
+        update: bool,
+        /// CI gate mode: fail when ignored count increases
+        #[arg(long)]
+        check: bool,
+        /// Print detailed per-category breakdown
+        #[arg(long, short)]
+        verbose: bool,
+    },
+
+    /// Manage gate receipt schema registry and validate receipt payloads.
+    GateReceipts {
+        #[command(subcommand)]
+        command: GateReceiptsCommand,
+    },
+
+    /// Show technical debt report from debt ledger
+    ///
+    /// Reads `.ci/debt-ledger.yaml` and reports on quarantined tests,
+    /// known issues, and technical debt items with budget tracking.
+    DebtReport {
+        /// CI gate mode: exit 1 if over budget or expired quarantines
+        #[arg(long)]
+        check: bool,
+
+        /// Output JSON format for receipt integration
+        #[arg(long)]
+        json: bool,
+
+        /// Output a compact markdown summary table.
+        #[arg(long)]
+        summary: bool,
+
+        /// Show only expired quarantines
+        #[arg(long)]
+        expired: bool,
+
+        /// Path to debt ledger (default: .ci/debt-ledger.yaml)
+        #[arg(long)]
+        ledger: Option<PathBuf>,
+    },
+
+    /// Check invariants in features.toml
+    DocClaims,
+
+    /// Validate PR intent/title/body against changed paths and closeout evidence.
+    IntentDiffGate {
+        /// Pull request number to inspect via `gh pr view`.
+        #[arg(long)]
+        pr: Option<u64>,
+
+        /// Load PR metadata from a local JSON fixture file.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Output receipt path (default: target/receipts/intent-diff-gate.json).
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+
+    /// Manage feature catalog and LSP compliance
+    Features {
+        #[command(subcommand)]
+        command: FeaturesCommand,
+    },
+
+    /// Agent lease + receipt primitives for disconnected orchestration.
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
+
+    /// Classify failed CI receipts into typed fix-forward playbooks.
+    FixForward {
+        #[command(subcommand)]
+        command: FixForwardCommand,
+    },
+
+    /// Update derived metrics in docs/project/status/ subsystem files.
+    ///
+    /// Computes workspace test counts, ignored test counts, feature catalog
+    /// metrics from features.toml, corpus statistics, and missing-docs
+    /// warnings, then patches the markdown files between fenced markers.
+    ///
+    /// Subsystem files: docs/project/status/{lsp,tests,parser,quality}.md
+    UpdateStatus {
+        /// Write updates back to docs/project/status/
+        #[arg(long)]
+        write: bool,
+
+        /// Check whether docs are up-to-date (CI gate); exit non-zero if stale
+        #[arg(long)]
+        check: bool,
+
+        /// Only regenerate one subsystem (lsp, tests, parser, quality).
+        /// When omitted, all four subsystems are regenerated.
+        #[arg(long, value_enum)]
+        only: Option<update_status::StatusSubsystem>,
+    },
+
+    /// Generate SRP microcrate inventory and split-candidate report
+    SrpMicrocrates {
+        /// Optional output path (default: docs/SRP_MICROCRATES.md)
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Enforce crate layer-dependency constraints (leaf crates must not depend on higher layers).
+    ///
+    /// Current rules:
+    ///   - perl-diagnostics must NOT depend on any perl-lsp-* crate.
+    LayerCheck,
+
+    /// Scan for built-but-not-wired crates: those with tests but zero import by perl-lsp
+    ///
+    /// Finds crates that have `#[test]` annotations but are not listed as direct
+    /// dependencies of `perl-lsp`. Also surfaces TODO/FIXME wiring comments.
+    /// Use `--check` to make CI fail when unwired crates are found.
+    UnwiredScan {
+        /// Emit JSON to stdout instead of human-readable output
+        #[arg(long)]
+        json: bool,
+
+        /// Exit 1 if any unwired crates are found (CI gate mode)
+        #[arg(long)]
+        check: bool,
+
+        /// Name of the root LSP crate to check (default: perl-lsp-rs)
+        #[arg(long, default_value = "perl-lsp-rs")]
+        lsp_crate: String,
+    },
+
+    /// Check that test-bearing Rust files are reachable from their module tree.
+    CheckTestWiring,
+
+    /// Emit per-subsystem engineering-health metrics.
+    Metrics {
+        #[command(subcommand)]
+        command: MetricsCommand,
+    },
+
+    /// Publish structured editor UX scorecard artifact/status from harness fixtures.
+    UxScorecard {
+        /// Output format for stdout.
+        #[arg(long, value_enum, default_value = "human")]
+        format: UxScorecardOutputFormat,
+        /// Optional path to scenario measurements JSON.
+        #[arg(long)]
+        input: Option<PathBuf>,
+        /// Optional path to emitted scorecard JSON artifact.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Optional path to generated status markdown.
+        #[arg(long)]
+        status_md: Option<PathBuf>,
+        /// Enforce regression-only ratchet against committed baseline.
+        #[arg(long)]
+        ratchet_check: bool,
+    },
+
+    /// Emit structured UX regression receipt from test output
+    UxRegressionReceipt {
+        /// Path to test output file (e.g., /tmp/ux-test-output.txt)
+        #[arg(long)]
+        input: PathBuf,
+        /// Optional path to write receipt JSON
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+        /// Git SHA for receipt metadata
+        #[arg(long)]
+        sha: Option<String>,
+    },
+
+    /// Validate memory profiling functionality
+    ValidateMemoryProfiler,
+
+    /// Run end-to-end validation sweep
+    ///
+    /// Tests core crates in release mode, runs a large workspace smoke
+    /// test against the LSP server, checks benchmark compilation, and
+    /// produces an optional JSON report.
+    E2eValidate {
+        /// Number of Perl files to generate for the workspace smoke test
+        #[arg(long, default_value = "200")]
+        workspace_size: usize,
+
+        /// Write a JSON report to this path
+        #[arg(long)]
+        report: Option<PathBuf>,
+
+        /// Skip the large-workspace smoke test
+        #[arg(long)]
+        skip_workspace: bool,
+
+        /// Skip the benchmark compilation check
+        #[arg(long)]
+        skip_bench: bool,
+
+        /// Show verbose output from test runs
+        #[arg(long, short)]
+        verbose: bool,
+    },
+
+    /// Run CI gates with receipt generation
+    ///
+    /// Executes gates defined in .ci/gate-policy.yaml and generates
+    /// machine-readable receipts for tracking and comparison.
+    Gates {
+        /// Gate tier to run (default: merge-gate)
+        #[arg(long, short, value_enum, default_value = "merge-gate")]
+        tier: GateTier,
+
+        /// Run a specific gate by name
+        #[arg(long, short)]
+        gate: Option<String>,
+
+        /// Base git ref used for scope-aware PR-fast planning
+        #[arg(long)]
+        base: Option<String>,
+
+        /// List available gates without running them
+        #[arg(long, short)]
+        list: bool,
+
+        /// Output format (default: human)
+        #[arg(long, short, value_enum, default_value = "human")]
+        format: GatesOutputFormat,
+
+        /// Emit receipt JSON (also writes to target/receipts/receipt.json)
+        #[arg(long, short)]
+        receipt: bool,
+
+        /// Path to write receipt (default: target/receipts/receipt.json)
+        #[arg(long)]
+        receipt_path: Option<PathBuf>,
+
+        /// Compare against a baseline receipt JSON
+        #[arg(long, short)]
+        diff: Option<PathBuf>,
+
+        /// Stop on first failure (fail-fast mode)
+        #[arg(long)]
+        fail_fast: bool,
+
+        /// Run gates in parallel where safe (experimental)
+        #[arg(long)]
+        parallel: bool,
+
+        /// Verbose output (include quarantined gates)
+        #[arg(long, short)]
+        verbose: bool,
+    },
+
+    /// Inspect and validate effective gate policy profiles.
+    GatePolicy {
+        #[command(subcommand)]
+        command: GatePolicyCommand,
+    },
+
+    /// Detect contradictory PR label states and emit a methodology receipt.
+    MethodologyGate {
+        /// Fixture JSON file (local snapshot or GitHub event payload).
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Pull request number to inspect via gh CLI.
+        #[arg(long)]
+        pr: Option<u64>,
+
+        /// Path to output receipt JSON.
+        #[arg(long, default_value = "target/receipts/methodology-gate.json")]
+        receipt: PathBuf,
+
+        /// Do not write receipt to disk.
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Enforce mode: contradictory states fail the command.
+        #[arg(long)]
+        enforce: bool,
+
+        /// Output format.
+        #[arg(long, value_enum, default_value = "human")]
+        format: MethodologyOutputFormat,
+    },
+
+    /// Verify hook scripts are executable.
+    HookCheck,
+
+    /// Verify hook registry references are present and executable.
+    HookRegistryCheck,
+
+    /// Run hook behavior tests and output summaries.
+    HookTests,
+
+    /// Run targeted clippy/test checks for crates changed since a base ref
+    ///
+    /// Detects which crates have changed since the given base git ref
+    /// and runs clippy and/or tests only for those crates. This gives
+    /// fast feedback during active development.
+    TargetedChecks {
+        /// Base git reference for diff (default: auto-detect)
+        #[arg(long, default_value = "auto")]
+        base: String,
+
+        /// Check mode: clippy, test, or all (default: all)
+        #[arg(long, value_enum, default_value = "all")]
+        mode: CheckMode,
+    },
+
+    /// Resolve the Cargo package name for a crate directory.
+    ///
+    /// Prints the package name from Cargo.toml to stdout (one line, no trailing noise).
+    /// Used by the pre-push hook to convert a directory basename into the correct -p argument.
+    ///
+    /// Example: `cargo xtask resolve-package-name crates/perl-lsp-rs` outputs `perl-lsp-rs`
+    ResolvePackageName {
+        /// Crate directory path, relative to workspace root (e.g., "crates/perl-lsp-rs")
+        crate_dir: String,
+    },
+
+    /// Remove stale `.claude/worktrees` entries and prune Git metadata.
+    WorktreeCleanup,
+
+    /// Show summary statistics from swarm-metrics.jsonl.
+    SwarmSummary {
+        /// Path to operations directory (defaults to `.ops-perl-lsp`).
+        #[arg(default_value = ".ops-perl-lsp")]
+        ops_dir: PathBuf,
+
+        /// Summarize only entries at or after the given window, e.g. `24h`, `7d`, `30m`, or `all`.
+        #[arg(long)]
+        since: Option<String>,
+
+        /// Maximum number of rows to show in each summary section.
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+
+        /// Output format for the swarm summary.
+        #[arg(long, value_enum, default_value = "human")]
+        format: swarm_summary::SwarmSummaryOutputFormat,
+    },
+
+    /// Populate mdBook source directory from `docs/`.
+    PopulateBook,
+
+    /// Validate workspace exclusion strategy and dependency invariants.
+    ValidateWorkspaceExclusions,
+
+    /// Generate a build-timing receipt JSON with workspace duration metrics.
+    BuildTimingReceipt {
+        /// Measure clean build with `cargo build --workspace --locked`.
+        #[arg(long)]
+        clean: bool,
+
+        /// Measure incremental rebuild using incremental crate touch.
+        #[arg(long)]
+        incremental: bool,
+
+        /// Measure test build with `cargo test --workspace --lib --locked`.
+        #[arg(long)]
+        tests: bool,
+
+        /// Output file for the generated receipt.
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Write the baseline artifact (`artifacts/build-timing-baseline.json`).
+        #[arg(long)]
+        baseline: bool,
+    },
+
+    /// Compare two build-timing receipts and print a markdown report.
+    CompareBuildTiming {
+        /// Baseline receipt JSON path.
+        baseline: PathBuf,
+        /// Current receipt JSON path.
+        current: PathBuf,
+    },
+
+    /// Validate generated-file ownership and associated receipts.
+    GeneratedFiles {
+        #[command(subcommand)]
+        command: GeneratedFilesCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum GeneratedFilesCommand {
+    /// List generated-file ownership rules.
+    List {
+        /// Optional fixture JSON for deterministic tests.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+    /// Check changed generated files for matching generator receipts.
+    Check {
+        /// Path where generated-file receipt JSON is written.
+        #[arg(long, default_value = "target/receipts/generated-files.json")]
+        receipt: PathBuf,
+        /// Optional fixture JSON for deterministic tests.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+        /// Path(s) to generator receipt JSON artifacts.
+        #[arg(long = "generator-receipt")]
+        generator_receipt: Vec<PathBuf>,
+        /// Explicit override for manual edits in this run.
+        #[arg(long)]
+        allow_manual_edits: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum CpanCorpusCommand {
+    /// Fetch top N distributions from MetaCPAN by reverse dependency count
+    FetchList {
+        /// Number of distributions to fetch (default: 1000)
+        #[arg(long, default_value = "1000")]
+        top_n: usize,
+
+        /// Output path for distribution list
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Install distributions from the list via cpanm
+    Install {
+        /// Path to distribution list file
+        #[arg(long)]
+        dist_list: Option<PathBuf>,
+
+        /// Local install directory
+        #[arg(long)]
+        install_dir: Option<PathBuf>,
+
+        /// Verbose output
+        #[arg(long)]
+        verbose: bool,
+
+        /// Force a full wipe of the install directory before installing.
+        /// Default is an incremental install that keeps `lib/perl5` between
+        /// runs and lets cpanm skip already-installed modules.
+        #[arg(long)]
+        reset: bool,
+    },
+
+    /// Run parser corpus sweep against installed CPAN modules
+    Sweep {
+        /// Write JSON report to file
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Return nonzero if regression detected
+        #[arg(long)]
+        enforce: bool,
+
+        /// Verbose output
+        #[arg(long)]
+        verbose: bool,
+
+        /// Local install directory containing CPAN modules
+        #[arg(long)]
+        install_dir: Option<PathBuf>,
+    },
+
+    /// Auto-append newly-clean modules to the CPAN manifest
+    Ratchet {
+        /// Verbose output
+        #[arg(long)]
+        verbose: bool,
+
+        /// Local install directory containing CPAN modules
+        #[arg(long)]
+        install_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum ParserRatchetCommand {
+    /// Produce an initial parser-ratchet scaffold receipt.
+    Run {
+        /// Ratchet execution profile.
+        #[arg(long, value_enum)]
+        profile: parser_ratchet::RatchetProfile,
+
+        /// Explicit git revision for the base side.
+        #[arg(long)]
+        base: String,
+
+        /// Explicit git revision for the head side.
+        #[arg(long)]
+        head: String,
+
+        /// Output path for the receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+
+        /// Force selection in scaffold mode.
+        #[arg(long)]
+        force_selected: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum GateReceiptsCommand {
+    /// List registered receipt schemas.
+    List {
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+    /// Validate a single receipt JSON file.
+    Validate {
+        /// Path to receipt JSON file.
+        path: PathBuf,
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+    /// Validate all receipt JSON files under a directory.
+    ValidateAll {
+        /// Root directory containing receipt JSON files.
+        dir: PathBuf,
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum GatePolicyCommand {
+    /// Validate policy/registry invariants for PR safety.
+    Check,
+    /// Show effective required/advisory gates for a profile.
+    Effective {
+        /// Profile to evaluate (pr/nightly/release).
+        #[arg(long, value_enum, default_value = "pr")]
+        profile: GatePolicyProfile,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum GateReceiptsFormat {
+    Human,
+    Json,
+}
+
+#[derive(Subcommand)]
+pub enum MergeReadyCommand {
+    /// Emit a merge-readiness receipt for a PR.
+    Emit {
+        /// Pull request number.
+        #[arg(long)]
+        pr: u64,
+        /// Output path for receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+    /// Verify receipt freshness and verdict.
+    Verify {
+        /// Pull request number (advisory context).
+        #[arg(long)]
+        pr: Option<u64>,
+        /// Verify a fixture file instead of the default receipt path.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+    /// Reconcile merge-ready label state from receipts.
+    Reconcile {
+        /// Apply changes (default is advisory dry-run).
+        #[arg(long)]
+        apply: bool,
+        /// Force dry-run mode.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Scan all open PRs and resolve label contradictions queue-wide.
+    ///
+    /// Uses live CI state for ci-green/needs-ci-fix decisions, and
+    /// "later-applied wins" timeline logic for other contradiction pairs.
+    /// Apply mode is the default; pass --dry-run for advisory mode.
+    ReconcileQueue {
+        /// Apply label changes (default when neither flag given).
+        #[arg(long)]
+        apply: bool,
+        /// Dry-run: report what would change without applying.
+        #[arg(long, conflicts_with = "apply")]
+        dry_run: bool,
+        /// Limit to a single PR number (useful for testing).
+        #[arg(long)]
+        pr: Option<u64>,
+        /// Output path for the queue-reconcile.json receipt.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum FeaturesCommand {
+    /// Sync documentation from features.toml
+    SyncDocs,
+
+    /// Verify features match capabilities
+    Verify,
+
+    /// Run feature catalog invariant checks
+    Invariants,
+
+    /// Generate compliance report
+    Report,
+}
+
+#[derive(Subcommand)]
+pub enum ReleaseCommand {
+    /// Prepare release artifacts.
+    Prepare {
+        /// Version to release
+        version: String,
+
+        /// Skip confirmation
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Create release evidence scaffold receipt list.
+    Evidence {
+        /// Release version without `v` prefix (for example: 0.13.0)
+        #[arg(long)]
+        version: String,
+        /// Output bundle directory.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Verify release evidence bundle and emit summary receipt.
+    VerifyEvidence {
+        /// Release version without `v` prefix (for example: 0.13.0)
+        #[arg(long)]
+        version: String,
+        /// Output summary receipt path.
+        #[arg(long)]
+        receipt: PathBuf,
+        /// Bundle directory to validate.
+        #[arg(long)]
+        bundle_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum FixForwardCommand {
+    /// Classify a failing receipt into a typed fix-forward playbook.
+    Classify {
+        /// Path to a CI receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+
+        /// Output path for fix-forward receipt JSON.
+        #[arg(long)]
+        output: PathBuf,
+    },
+
+    /// List configured fix-forward playbooks.
+    ListPlaybooks,
+}
+
+#[derive(Subcommand)]
+pub enum MetricsCommand {
+    /// Emit parser phase timings and benchmark summary.
+    ParserStats {
+        /// Path to benchmark JSON (default: most recent in benchmarks/results/)
+        #[arg(long)]
+        input: Option<PathBuf>,
+        /// Write output to .ci/metrics/parser.json
+        #[arg(long)]
+        json: bool,
+    },
+    /// LSP editor-intelligence scorecard — fixture inventory and pass rates.
+    LspStats {
+        /// Write output to .ci/metrics/editor_intelligence.json
+        #[arg(long)]
+        json: bool,
+        /// Directory containing ux_scenario_run receipt JSON files.
+        #[arg(long)]
+        receipt_dir: Option<PathBuf>,
+    },
+    /// [stub] Workspace index memory and timing statistics.
+    WorkspaceStats,
+    /// [stub] Diagnostics accuracy and latency statistics.
+    DiagnosticsStats,
+    /// [stub] Hierarchical memory breakdown across LSP subsystems.
+    Memory,
+    /// Release-health dashboard — debt ledger + merge-gate baseline summary.
+    ReleaseHealth {
+        /// Number of days of history reported in the receipt window field.
+        #[arg(long, default_value_t = 30)]
+        days: u64,
+        /// Write output to .ci/metrics/release-health.json
+        #[arg(long)]
+        json: bool,
+    },
+    /// Check scorecard floor metrics against the committed baseline.
+    ///
+    /// Loads `.ci/metrics/baselines/<subsystem>.json` and compares against the
+    /// current metric receipt.  Exits nonzero on any floor breach.
+    RatchetCheck {
+        /// Subsystem name (e.g. "parser", "engineering_health").
+        subsystem: String,
+        /// Path to current-metrics JSON (default: target/receipts/metrics/<subsystem>.json).
+        #[arg(long)]
+        current: Option<PathBuf>,
+        /// Record this run in target/metrics/stable_wins/<subsystem>.json.
+        #[arg(long)]
+        record: bool,
+    },
+    /// Show which improvement metrics are stable enough to raise the floor baseline.
+    PromoteBaseline {
+        /// Subsystem name.
+        subsystem: String,
+        /// Minimum fractional improvement required (default: 1%).
+        #[arg(long, default_value_t = 0.01)]
+        delta_pct: f64,
+    },
+    /// Summarize a parser corpus sweep receipt (phase timings, slowest files,
+    /// median error density, first-error buckets).
+    ///
+    /// Reads the JSON written by `cargo xtask parser-corpus-sweep --receipt`
+    /// (or any other path via `--input`) and emits the same human-readable
+    /// report that the sweep prints at end-of-run — useful for analyzing
+    /// historical receipts without re-running the sweep.
+    SweepStats {
+        /// Path to a sweep receipt JSON. Defaults to
+        /// `target/receipts/system-corpus-sweep.json`.
+        #[arg(long)]
+        input: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum QueueCommand {
+    /// Capture the open PR queue into a stable JSON snapshot document.
+    Snapshot {
+        /// Output file for the generated snapshot JSON.
+        #[arg(long)]
+        out: PathBuf,
+
+        /// Optional fixture JSON to parse instead of live GitHub data.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+
+    /// Classify master queue health into GREEN/PENDING/RED modes.
+    Health {
+        /// Output path for queue-health receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Fixture JSON input for deterministic health classification.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum AgentCommand {
+    /// Lease lifecycle commands.
+    Lease {
+        #[command(subcommand)]
+        command: AgentLeaseCommand,
+    },
+    /// Receipt commands.
+    Receipt {
+        #[command(subcommand)]
+        command: AgentReceiptCommand,
+    },
+    /// Manage leased local worktrees for agent orchestration.
+    Worktree {
+        #[command(subcommand)]
+        command: AgentWorktreeCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum AgentLeaseCommand {
+    /// Acquire a lease from a typed task JSON.
+    Acquire {
+        /// Path to task JSON.
+        #[arg(long)]
+        task: PathBuf,
+        /// Path to write lease JSON.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Verify lease against current snapshot state.
+    Verify {
+        /// Path to lease JSON.
+        #[arg(long)]
+        lease: PathBuf,
+        /// Path to current snapshot JSON.
+        #[arg(long)]
+        current: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum AgentReceiptCommand {
+    /// Validate a receipt against its lease and mutation rules.
+    Validate {
+        /// Path to receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+}
+
+#[derive(ValueEnum, Clone)]
+pub enum PrepCratesMode {
+    Core,
+    All,
+}
+
+#[derive(ValueEnum, Clone)]
+pub enum UxScorecardOutputFormat {
+    Human,
+    Json,
+}
+
