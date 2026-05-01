@@ -136,6 +136,33 @@ fn snapshot_duplicate_declaration_and_shadowing() {
 }
 
 #[test]
+fn snapshot_unused_import_hint() {
+    let source = concat!(
+        "use strict;\n",
+        "use warnings;\n",
+        "use File::Spec;\n",
+        "my $value = 1;\n",
+        "print $value;\n",
+    );
+    let snapshot = normalize(diagnostics_for(source));
+    assert_snapshot!("unused_import_hint", snapshot);
+}
+
+#[test]
+fn snapshot_phase_scoped_pragma_warning() {
+    let source = concat!(
+        "BEGIN {\n",
+        "    use strict;\n",
+        "    use warnings;\n",
+        "}\n",
+        "my $value = 1;\n",
+        "print $value;\n",
+    );
+    let snapshot = normalize(diagnostics_for(source));
+    assert_snapshot!("phase_scoped_pragma_warning", snapshot);
+}
+
+#[test]
 fn snapshot_suspicious_regex_and_tainted_system_call() {
     let source = concat!(
         "use strict;\n",
