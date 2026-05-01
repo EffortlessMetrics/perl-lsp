@@ -239,11 +239,12 @@ sudo cp perllsp-<0.x.y>-x86_64-unknown-linux-gnu/perllsp /usr/local/bin/
 
 ### Homebrew
 
-Homebrew formula is automatically updated via PR to Homebrew/homebrew-core.
+Homebrew formula is automatically updated via PR to the owned
+`EffortlessMetrics/homebrew-tap` repository.
 
 **Installation:**
 ```bash
-brew install perl-lsp
+brew install effortlessmetrics/tap/perllsp
 ```
 
 ### Scoop
@@ -531,7 +532,7 @@ For a complete rollback:
 cargo install perllsp
 
 # Using Homebrew (macOS/Linux)
-brew install perl-lsp
+brew install effortlessmetrics/tap/perllsp
 
 # Using Scoop (Windows)
 scoop install perl-lsp
