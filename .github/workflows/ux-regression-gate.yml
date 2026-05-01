@@ -40,7 +40,7 @@ jobs:
   ux-regression-gate:
     name: UX Regression Gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout

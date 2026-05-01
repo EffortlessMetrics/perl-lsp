@@ -113,7 +113,7 @@ jobs:
   pr-smoke:
     name: PR Smoke (Fast Feedback)
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 35
     needs: [draft-pr-check, preflight-latest-check]
     if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
@@ -146,7 +146,20 @@ jobs:
         run: cargo build -p xtask --locked
 
       - name: Run PR-fast via shared xtask gate runner
-        run: ./target/debug/xtask gates --tier pr-fast --base origin/master --receipt
+        run: |
+          set +e
+          echo "PR-fast timeout policy: GitHub job 35m, outer runner watchdog 30m, per-gate timeouts recorded in target/receipts/receipt.json"
+          timeout --signal=TERM --kill-after=60s 1800s ./target/debug/xtask gates --tier pr-fast --base origin/master --receipt
+          status=$?
+          case "$status" in
+            124)
+              echo "::error::PR-fast hit the 30m runner watchdog before xtask produced a final receipt"
+              ;;
+            137|143)
+              echo "::error::PR-fast was cancelled by the runner or process group (exit $status)"
+              ;;
+          esac
+          exit "$status"
 
       - name: Upload PR-fast receipt
         if: always()

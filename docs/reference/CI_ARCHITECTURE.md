@@ -55,8 +55,9 @@ CI hasn't broken since their last look).
 
 | Job | Timeout | Scope |
 |-----|---------|-------|
-| `pr-smoke` | 10 min | Format, scoped clippy, scoped test, integration-test compile |
-| `merge-gate` | 30 min | Full `just gates` via gate policy (see Section 2) |
+| `pr-smoke` | 35 min | Format, scoped clippy, scoped test, integration-test compile |
+| `merge-gate-shards` | 20 min | Bounded merge-gate shards via gate policy (see Section 2) |
+| `merge-gate` | 2 min | Aggregates shard results into the required merge-blocking status |
 | `ux-tests` | 15 min | UX regression suite against live binary |
 | `check-all-targets` | 10 min | `cargo check --workspace --all-targets` (bit-rot guard) |
 | `windows-guardrails` | 20 min | Three Windows-specific lanes (compile, module-sep, sandbox) |
@@ -304,6 +305,22 @@ If `ci-scope` fails (timeout, cargo metadata error, or other failure), the pr-sm
 falls back to a hardcoded baseline: `just clippy-core` and `just test-core`. This ensures
 a broken `ci-scope` does not produce a false-green PR — it produces a broader (slower)
 check rather than no check.
+
+### Timeout Classification
+
+`pr-smoke` has a 35-minute GitHub job timeout and wraps `xtask gates --tier pr-fast`
+with a 30-minute runner watchdog. Individual shell-backed gates still use their
+`.ci/gate-policy.yaml` `timeout_seconds` values. On Unix runners, xtask delegates those
+per-gate deadlines to GNU `timeout` when available so a timed-out cargo or test command
+terminates as a process group, writes a receipt entry with `status: "timeout"`, and does
+not continue running until the outer job timeout cancels the runner.
+
+`merge-gate-shards` runs bounded groups of required gates with per-shard receipts and a
+20-minute GitHub job timeout. The gate runner writes a receipt and log for each shard,
+truncates very large gate logs before summarizing them, and records per-gate timeout
+status from `.ci/gate-policy.yaml`. The `merge-gate` aggregate job reports those shard
+results as the required merge-blocking status instead of hiding failures behind one
+monolithic runner timeout.
 
 ---
 

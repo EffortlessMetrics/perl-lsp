@@ -286,7 +286,7 @@ jobs:
             echo "- ~~Publish to crates.io~~ (skipped)" >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ "${{ github.event.inputs.skip_extension }}" != "true" ]; then
-            echo "- [Publish VSCode Extension](https://github.com/${{ github.repository }}/actions/workflows/publish-extension.yml)" >> "$GITHUB_STEP_SUMMARY"
+            echo "- [Publish VSCode Extension](https://github.com/${{ github.repository }}/actions/workflows/publish-extension.yml) - Marketplace and Open VSX jobs report separately" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "- ~~Publish VSCode Extension~~ (skipped)" >> "$GITHUB_STEP_SUMMARY"
           fi
