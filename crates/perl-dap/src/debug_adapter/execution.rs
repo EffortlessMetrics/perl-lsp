@@ -1,6 +1,7 @@
 //! Execution control: continue, next, step in, step out, pause, goto, cancel.
 
 use super::*;
+use regex::Regex;
 use std::sync::LazyLock;
 
 static STEP_IN_TARGET_CALL_RE: LazyLock<Option<Regex>> =
