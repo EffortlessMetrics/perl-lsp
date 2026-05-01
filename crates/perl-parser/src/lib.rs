@@ -364,44 +364,12 @@
 //! }
 //! ```
 
-/// Parser engine components and supporting utilities.
-pub mod engine;
-/// Legacy module aliases for moved engine components.
-pub use engine::{error, parser, position};
-
-/// Abstract Syntax Tree (AST) definitions for Perl parsing.
-pub use engine::ast;
-/// Experimental second-generation AST (work in progress).
-pub use engine::ast_v2;
-/// Edit tracking for incremental parsing.
-pub use engine::edit;
-/// Heredoc content collector with FIFO ordering and indent stripping.
-pub use engine::heredoc_collector;
-/// Recursive descent Perl parser with error recovery and AST generation.
-pub use engine::parser::Parser;
-/// Parser context with error recovery support.
-pub use engine::parser_context;
-/// Pragma tracking for `use` and related directives.
-pub use engine::pragma_tracker;
-/// Parser for Perl quote and quote-like operators.
-pub use engine::quote_parser;
-#[cfg(not(target_arch = "wasm32"))]
-/// Error classification and recovery strategies for parse failures.
-pub use error::classifier as error_classifier;
-/// Error recovery strategies for resilient parsing.
-pub use error::recovery as error_recovery;
-/// Parser utilities and helpers.
-pub use perl_parser_core::util;
-
-/// Line-to-byte offset index for fast position lookups.
-pub use perl_parser_core::line_index;
-/// Line ending detection and UTF-16 position mapping for LSP compliance.
-pub use position::{LineEnding, PositionMapper};
-
 /// Semantic analysis, scope resolution, and type inference.
 pub mod analysis;
 /// Perl builtin function signatures and metadata.
 pub mod builtins;
+/// Parser engine components and supporting utilities.
+pub mod engine;
 #[cfg(feature = "incremental")]
 /// Incremental parsing for efficient re-parsing during editing.
 pub mod incremental;
@@ -420,104 +388,22 @@ pub mod workspace;
 
 /// AST range and insertion helpers for Perl LSP features (previously `perl-ast-utils`).
 pub mod ast_utils;
+/// Dead code detection for Perl workspaces (absorbed from `perl-dead-code`).
+#[cfg(not(target_arch = "wasm32"))]
+pub mod dead_code;
 /// Anti-pattern detection for problematic Perl heredoc patterns (previously `perl-heredoc-anti-patterns`).
 // Wave D: allow missing_docs — original crate had an explicit exception per CLAUDE.md
 #[allow(missing_docs)]
 pub mod heredoc_anti_patterns;
-/// Secure workspace-relative path normalization (previously `perl-path-normalize`; from perl-parser-core).
-pub use perl_parser_core::path_normalize;
-/// Workspace-bound path validation and traversal prevention (previously `perl-path-security`; from perl-parser-core).
-pub use perl_parser_core::path_security;
-/// Nearest-rank percentile helpers for integer latency samples (previously `perl-percentile`; from perl-parser-core).
-pub use perl_parser_core::percentile;
-/// Perl qualified-name parsing, splitting, and validation helpers (previously `perl-qualified-name`; from perl-parser-core).
-pub use perl_parser_core::qualified_name;
-/// Shared Perl source-file classification helpers (previously `perl-source-file`; from perl-parser-core).
-pub use perl_parser_core::source_file;
-/// Text-line cursor and boundary helpers (previously `perl-text-line`; from perl-parser-core).
-pub use perl_parser_core::text_line;
-
-/// Variable and subroutine declaration analysis.
-pub use analysis::declaration;
-#[cfg(not(target_arch = "wasm32"))]
-/// File and symbol indexing for workspace-wide navigation.
-pub use analysis::index;
-/// Scope analysis for variable and subroutine resolution.
-pub use analysis::scope_analyzer;
-/// Semantic model with hover information and token classification.
-pub use analysis::semantic;
-/// Symbol table, extraction, and reference tracking.
-pub use analysis::symbol;
-/// Type inference engine for Perl variable analysis.
-pub use analysis::type_inference;
-/// Builtin function signature lookup tables.
-pub use builtins::builtin_signatures;
-/// Perfect hash function (PHF) based builtin signature lookup.
-pub use builtins::builtin_signatures_phf;
-/// Dead code detection for Perl workspaces (absorbed from `perl-dead-code`).
-#[cfg(not(target_arch = "wasm32"))]
-pub mod dead_code;
 /// Backwards-compatibility alias: `perl_parser::dead_code_detector` still works.
 #[cfg(not(target_arch = "wasm32"))]
 pub use dead_code as dead_code_detector;
 
-/// Import statement analysis and optimization.
-pub use refactor::import_optimizer;
-/// Code modernization utilities for Perl best practices.
-pub use refactor::modernize;
-/// Enhanced code modernization with refactoring capabilities.
-pub use refactor::modernize_refactored;
-/// Unified refactoring engine for comprehensive code transformations.
-pub use refactor::refactoring;
-/// Token stream with position-aware iteration.
-pub use tokens::token_stream;
-/// Lightweight token wrapper for AST integration.
-pub use tokens::token_wrapper;
-/// Trivia (whitespace and comments) representation.
-pub use tokens::trivia;
-/// Parser that preserves trivia tokens for formatting.
-pub use tokens::trivia_parser;
+pub mod api;
 
-#[cfg(feature = "incremental")]
-/// Advanced AST node reuse strategies for incremental parsing.
-pub use incremental::incremental_advanced_reuse;
-#[cfg(feature = "incremental")]
-/// Checkpoint-based incremental parsing with rollback support.
-pub use incremental::incremental_checkpoint;
-#[cfg(feature = "incremental")]
-/// Document-level incremental parsing state management.
-pub use incremental::incremental_document;
-#[cfg(feature = "incremental")]
-/// Edit representation and application for incremental updates.
-pub use incremental::incremental_edit;
-#[cfg(feature = "incremental")]
-#[deprecated(note = "LSP server moved to perl-lsp; perl-parser no longer handles didChange")]
-/// Legacy incremental handler (deprecated, use `perl-lsp` crate instead).
-pub use incremental::incremental_handler_v2;
-#[cfg(feature = "incremental")]
-/// Integration layer connecting incremental parsing with the full parser.
-pub use incremental::incremental_integration;
-#[cfg(feature = "incremental")]
-/// Simplified incremental parsing interface for common use cases.
-pub use incremental::incremental_simple;
-#[cfg(feature = "incremental")]
-/// Second-generation incremental parsing with improved node reuse.
-pub use incremental::incremental_v2;
+/// SRP-grouped public exports for parser engine, domain services, and optional features.
+pub use api::{core::*, domain::*};
 
-/// Basic TDD utilities and test helpers.
-pub use tdd::tdd_basic;
-#[cfg(test)]
-/// TDD workflow integration for Test-Driven Development support.
-pub use tdd::tdd_workflow;
-/// Intelligent test case generation from parsed Perl code.
-pub use tdd::test_generator;
-/// Test execution and TDD support functionality.
-pub use tdd::test_runner;
-
-/// In-memory document storage for open editor buffers.
-pub use workspace::document_store;
-/// Cross-file symbol index for workspace-wide navigation.
-pub use workspace::workspace_index;
 #[cfg(not(target_arch = "wasm32"))]
 /// Multi-file refactoring operations across a workspace.
 pub use workspace::workspace_refactor;
