@@ -275,7 +275,7 @@ docker pull ghcr.io/effortlessmetrics/perl-lsp:0.12.1
 
 ### 6. Homebrew auto-bump
 
-The `brew-bump.yml` workflow triggers automatically on `release.published`. It downloads all four platform archives (`perllsp-${VERSION}-{x86_64,aarch64}-{apple-darwin,unknown-linux-gnu}.tar.gz`), computes SHA256 checksums, updates `Formula/perl-lsp.rb`, and creates a bump PR.
+The `brew-bump.yml` workflow triggers automatically on `release.published`. It downloads all four platform archives (`perllsp-${VERSION}-{x86_64,aarch64}-{apple-darwin,unknown-linux-gnu}.tar.gz`), computes SHA256 checksums, updates `Formula/perllsp.rb`, and creates a bump PR.
 
 To verify the workflow ran:
 
@@ -296,7 +296,7 @@ gh workflow run brew-bump.yml --field tag=v0.12.1
 To test that the formula works locally (requires macOS or Linuxbrew):
 
 ```bash
-brew install --build-from-source Formula/perl-lsp.rb
+brew install --build-from-source Formula/perllsp.rb
 perllsp --health
 ```
 
