@@ -1021,6 +1021,30 @@ mod tests {
     }
 
     #[test]
+    fn test_find_declaration_range_prefers_same_line_binding() {
+        let source = "my $name = 'global';\nmy $name = 'local';\nprint $name;\n".to_string();
+        let provider = CodeActionsProvider::new(source.clone());
+        let near = source.find("print $name").unwrap_or(0);
+
+        let (start, end) =
+            must_some(source_utils::find_declaration_range(&provider, "$name", near));
+
+        assert_eq!(&source[start..end], "my $name = 'local';\n");
+    }
+
+    #[test]
+    fn test_find_declaration_range_without_semicolon_falls_back_to_pattern_length() {
+        let source = "my $unterminated\nprint $unterminated\n".to_string();
+        let provider = CodeActionsProvider::new(source.clone());
+        let near = source.find("print $unterminated").unwrap_or(0);
+
+        let (start, end) =
+            must_some(source_utils::find_declaration_range(&provider, "$unterminated", near));
+
+        assert_eq!(&source[start..end], "my $unterminated");
+    }
+
+    #[test]
     fn test_find_declaration_position_first_line() {
         let source = "print $x;".to_string();
         let provider = CodeActionsProvider::new(source);
