@@ -3873,6 +3873,7 @@ dependencies = [
  "indicatif",
  "notify",
  "peak_alloc",
+ "perl-ci-hygiene",
  "perl-corpus",
  "perl-lsp-rs-core",
  "perl-lsp-ux-tests",
