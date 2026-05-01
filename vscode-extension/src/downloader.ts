@@ -23,6 +23,38 @@ interface Release {
     assets: ReleaseAsset[];
 }
 
+export function buildBinaryAssetCandidateNames(versionOrTag: string, target: string, ext: string): string[] {
+    const normalizedVersion = versionOrTag.replace(/^v/, '');
+    const tagVersion = `v${normalizedVersion}`;
+    const candidates = [
+        `perllsp-${normalizedVersion}-${target}${ext}`,
+        `perllsp-${versionOrTag}-${target}${ext}`,
+        `perllsp-${tagVersion}-${target}${ext}`,
+        `perllsp-${target}${ext}`,
+        `perl-lsp-${normalizedVersion}-${target}${ext}`,
+        `perl-lsp-${versionOrTag}-${target}${ext}`,
+        `perl-lsp-${tagVersion}-${target}${ext}`,
+        `perl-lsp-${target}${ext}`,
+    ];
+
+    return [...new Set(candidates)];
+}
+
+export function findReleaseAssetName(
+    assets: ReadonlyArray<{ name: string }>,
+    versionOrTag: string,
+    target: string,
+    ext: string
+): string | undefined {
+    for (const name of buildBinaryAssetCandidateNames(versionOrTag, target, ext)) {
+        if (assets.some(asset => asset.name === name)) {
+            return name;
+        }
+    }
+
+    return undefined;
+}
+
 /**
  * Parse the local version string from `perllsp --version` stdout.
  *
@@ -200,26 +232,8 @@ export class BinaryDownloader {
             
             // Try multiple naming patterns for our release format
             const ext = process.platform === 'win32' ? '.zip' : '.tar.gz';
-            const possibleNames = [
-                `perllsp-${release.tag_name}-${target}${ext}`,
-                `perllsp-v${release.tag_name.replace('v', '')}-${target}${ext}`,
-                `perllsp-${target}${ext}`,
-                `perl-lsp-${release.tag_name}-${target}${ext}`,
-                `perl-lsp-v${release.tag_name.replace('v', '')}-${target}${ext}`,
-                `perl-lsp-${target}${ext}`
-            ];
-            
-            let assetName: string | undefined;
-            let asset: ReleaseAsset | undefined;
-            
-            // Find the first matching asset
-            for (const name of possibleNames) {
-                asset = release.assets.find(a => a.name === name);
-                if (asset) {
-                    assetName = name;
-                    break;
-                }
-            }
+            const assetName = findReleaseAssetName(release.assets, release.tag_name, target, ext);
+            const asset = assetName ? release.assets.find(a => a.name === assetName) : undefined;
             
             if (!asset || !assetName) {
                 const availableAssets = release.assets.map(a => a.name).join(', ');
@@ -434,13 +448,8 @@ export class BinaryDownloader {
         
         // Try multiple naming patterns that might be used internally
         const possibleFilenames = [
-            `perllsp-${version}-${target}${ext}`,
-            `perllsp-v${version.replace('v', '')}-${target}${ext}`,
-            `perllsp-${target}${ext}`,
+            ...buildBinaryAssetCandidateNames(version, target, ext),
             `perllsp${ext}`,
-            `perl-lsp-${version}-${target}${ext}`,
-            `perl-lsp-v${version.replace('v', '')}-${target}${ext}`,
-            `perl-lsp-${target}${ext}`,
             `perl-lsp${ext}`
         ];
         

@@ -9,7 +9,14 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { BinaryDownloader, parseLocalVersion, compareVersions } from '../downloader';
+import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
+import {
+  BinaryDownloader,
+  buildBinaryAssetCandidateNames,
+  compareVersions,
+  findReleaseAssetName,
+  parseLocalVersion,
+} from '../downloader';
 
 // ---------------------------------------------------------------------------
 // Helpers: build a minimal mock ExtensionContext
@@ -358,6 +365,46 @@ describe('asset name validation', () => {
     for (const name of maliciousNames) {
       expect(pattern.test(name) && !name.includes('..')).toBe(false);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Release asset candidate selection
+// ---------------------------------------------------------------------------
+describe('release asset candidate selection', () => {
+  test('finds non-v Windows asset for v-prefixed release tag', () => {
+    const assetName = 'perllsp-0.13.1-x86_64-pc-windows-msvc.zip';
+    const found = findReleaseAssetName(
+      [{ name: assetName }, { name: 'SHA256SUMS' }],
+      'v0.13.1',
+      'x86_64-pc-windows-msvc',
+      '.zip'
+    );
+
+    expect(found).toBe(assetName);
+  });
+
+  test('finds non-v Linux asset for v-prefixed release tag', () => {
+    const assetName = 'perllsp-0.13.1-x86_64-unknown-linux-gnu.tar.gz';
+    const found = findReleaseAssetName(
+      [{ name: assetName }, { name: 'SHA256SUMS' }],
+      'v0.13.1',
+      'x86_64-unknown-linux-gnu',
+      '.tar.gz'
+    );
+
+    expect(found).toBe(assetName);
+  });
+
+  test('prefers release workflow non-v asset before v-prefixed alias', () => {
+    const candidates = buildBinaryAssetCandidateNames(
+      'v0.13.1',
+      'x86_64-pc-windows-msvc',
+      '.zip'
+    );
+
+    expect(candidates[0]).toBe('perllsp-0.13.1-x86_64-pc-windows-msvc.zip');
+    expect(candidates).toContain('perllsp-v0.13.1-x86_64-pc-windows-msvc.zip');
   });
 });
 
