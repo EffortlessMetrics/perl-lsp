@@ -327,3 +327,42 @@ impl<'a> Parser<'a> {
     }
 
 }
+
+#[cfg(test)]
+mod heredoc_fuzz_tests {
+    use super::{map_heredoc_quote_kind, parse_heredoc_delimiter};
+    use crate::engine::parser::heredoc_collector::QuoteKind;
+    use proptest::prelude::*;
+
+    fn heredoc_text_strategy() -> impl Strategy<Value = String> {
+        prop::collection::vec(any::<char>(), 0..64).prop_map(|chars| chars.into_iter().collect())
+    }
+
+    proptest! {
+        #[test]
+        fn fuzz_parse_heredoc_delimiter_never_panics(input in heredoc_text_strategy()) {
+            let source = format!("<<{input}");
+            let (delimiter, _interpolated, _indented, _command) = parse_heredoc_delimiter(&source);
+            prop_assert!(delimiter.len() <= source.len());
+        }
+
+        #[test]
+        fn fuzz_tilde_prefix_sets_indent_flag(payload in heredoc_text_strategy()) {
+            let source = format!("<<~{payload}");
+            let (_delimiter, _interpolated, indented, _command) = parse_heredoc_delimiter(&source);
+            prop_assert!(indented);
+        }
+
+        #[test]
+        fn fuzz_quote_kind_matches_outer_delimiters(label in "[^\n\r']{0,32}") {
+            let single = format!("<<'{label}'");
+            prop_assert!(matches!(map_heredoc_quote_kind(&single, false), QuoteKind::Single));
+
+            let double = format!("<<\"{label}\"");
+            prop_assert!(matches!(map_heredoc_quote_kind(&double, true), QuoteKind::Double));
+
+            let backtick = format!("<<`{label}`");
+            prop_assert!(matches!(map_heredoc_quote_kind(&backtick, true), QuoteKind::Backtick));
+        }
+    }
+}
