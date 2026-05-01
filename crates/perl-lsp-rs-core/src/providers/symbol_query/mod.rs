@@ -108,6 +108,7 @@ fn is_subsequence(haystack: &str, needle: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{compare_names_by_query, matches_query};
+    use proptest::prelude::*;
 
     #[test]
     fn query_matching_covers_exact_prefix_contains_and_fuzzy() {
@@ -170,5 +171,23 @@ mod tests {
         assert_eq!(names[1], "logger", "tier 1: prefix");
         assert_eq!(names[2], "get_log", "tier 2: contains");
         assert_eq!(names[3], "lxoxg", "tier 3: fuzzy");
+    }
+
+    proptest! {
+        #[test]
+        fn case_insensitive_matching_is_equivalent(name in "[a-zA-Z]{1,24}", query in "[a-zA-Z]{0,12}") {
+            let expected = matches_query(&name.to_lowercase(), &query.to_lowercase());
+            let actual = matches_query(&name.to_uppercase(), &query.to_lowercase());
+
+            prop_assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn comparison_is_antisymmetric(a in "[a-zA-Z_]{1,20}", b in "[a-zA-Z_]{1,20}", query in "[a-zA-Z]{0,10}") {
+            let ab = compare_names_by_query(&a, &b, &query);
+            let ba = compare_names_by_query(&b, &a, &query);
+
+            prop_assert_eq!(ab, ba.reverse());
+        }
     }
 }
