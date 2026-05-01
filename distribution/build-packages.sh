@@ -5,7 +5,7 @@ set -e
 
 VERSION="1.0.0"
 PACKAGE_NAME="perl-lsp"
-DESCRIPTION="High-performance Perl Language Server with 100% syntax coverage"
+DESCRIPTION="Public-alpha Perl language server and debug adapter"
 MAINTAINER="Steven Zimmerman, CPA <git@effortlesssteven.com>"
 HOMEPAGE="https://github.com/EffortlessMetrics/perl-lsp"
 
@@ -43,7 +43,7 @@ mkdir -p "$MAN_DIR"
 cat > "$MAN_DIR/perllsp.1" << 'EOF'
 .TH PERLLSP 1 "February 2026" "perllsp 1.0.0" "User Commands"
 .SH NAME
-perllsp \- Perl Language Server Protocol implementation
+perllsp \- public-alpha Perl Language Server Protocol implementation
 .SH SYNOPSIS
 .B perllsp
 [\fB\-\-stdio\fR]
@@ -53,7 +53,7 @@ perllsp \- Perl Language Server Protocol implementation
 [\fB\-\-help\fR]
 .SH DESCRIPTION
 .B perllsp
-is a high-performance Language Server Protocol implementation for Perl,
+is a public-alpha Language Server Protocol implementation for Perl,
 providing IDE features like code completion, go-to-definition, find references,
 and more.
 .SH OPTIONS
@@ -126,7 +126,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: ${MAINTAINER}
 Description: ${DESCRIPTION}
- perl-lsp provides a Language Server Protocol implementation for Perl,
+ perl-lsp provides a public-alpha Language Server Protocol implementation for Perl,
  offering advanced IDE features including:
  - Real-time syntax checking
  - Code completion
@@ -134,7 +134,7 @@ Description: ${DESCRIPTION}
  - Find references
  - Symbol search
  - Refactoring support
- - 100% Perl syntax coverage
+ - Public-alpha Perl language-server support
 Homepage: ${HOMEPAGE}
 EOF
     
@@ -187,10 +187,10 @@ URL:            ${HOMEPAGE}
 Source0:        %{name}-%{version}.tar.gz
 
 %description
-perl-lsp provides a Language Server Protocol implementation for Perl,
+perl-lsp provides a public-alpha Language Server Protocol implementation for Perl,
 offering advanced IDE features including real-time syntax checking,
 code completion, go-to-definition, find references, symbol search,
-refactoring support, and 100% Perl syntax coverage.
+and refactoring support.
 
 %prep
 %setup -q -c

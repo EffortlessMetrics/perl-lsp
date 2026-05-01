@@ -77,6 +77,8 @@ media assets and recording notes live in:
 
 Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs) or [Open VSX Registry](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs).
 
+Current extension and managed-binary artifacts are public alpha.
+
 ```bash
 # VS Code
 code --install-extension EffortlessMetrics.perl-lsp-rs
@@ -111,8 +113,7 @@ If you prefer to manage the binary yourself:
 
 ```bash
 # Homebrew (macOS/Linux)
-brew tap tree-sitter-perl/tap
-brew install perl-lsp
+brew install effortlessmetrics/tap/perllsp
 
 # One-liner (Linux/macOS)
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
@@ -131,7 +132,7 @@ All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` a
 |---------|---------|-------------|
 | `perl-lsp.autoDownload` | `true` | Automatically download `perllsp` if not found locally |
 | `perl-lsp.serverPath` | `""` | Absolute path to a `perllsp` binary (overrides auto-download) |
-| `perl-lsp.channel` | `"latest"` | Release channel: `latest`, `stable`, or `tag` |
+| `perl-lsp.channel` | `"latest"` | Release channel. Use `latest` for the current public-alpha line or `tag` for a pinned public-alpha release |
 | `perl-lsp.versionTag` | `""` | Specific release tag (e.g. `v0.12.1`) when channel is `tag` |
 | `perl-lsp.enableDiagnostics` | `true` | Enable real-time syntax diagnostics |
 | `perl-lsp.enableSemanticTokens` | `true` | Enable semantic syntax highlighting |
@@ -142,7 +143,7 @@ All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` a
 | `perl-lsp.includePaths` | `["lib", "local/lib/perl5"]` | Additional library paths for module resolution |
 | `perl-lsp.perltidyConfig` | `""` | Path to `.perltidyrc` (auto-detected if empty) |
 | `perl-lsp.trace.server` | `"off"` | LSP trace level for debugging: `off`, `messages`, `verbose` |
-| `perl-lsp.featureProfile` | `"auto"` | Runtime feature profile: `auto`, `ga`, `ga-lock`, `prod`, `all` |
+| `perl-lsp.featureProfile` | `"auto"` | Runtime capability profile. Keep `auto` unless you need a specific compatibility profile |
 | `perl-lsp.downloadBaseUrl` | `""` | Internal mirror URL for air-gapped deployments |
 | `perl-lsp.mcp.servers` | `[]` | Optional MCP stdio server definitions (`label`, `command`, `args`, `cwd`, `env`, `version`, `enabled`) published to VS Code language models |
 

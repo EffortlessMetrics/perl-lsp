@@ -121,7 +121,9 @@ If you prefer using a generic LSP client extension:
 
 ## Configuration
 
-The extension exposes settings in the `perl-lsp.*` namespace.
+The extension exposes settings in the `perl-lsp.*` namespace. Current public
+install artifacts are public alpha; keep pinned deployments explicit when you
+need reproducible editor setup.
 
 ### Basic Configuration
 
@@ -177,8 +179,8 @@ Or edit `settings.json` directly:
 ### Common Extension Settings
 
 For the authoritative settings list, use VS Code Settings UI or the extension
-manifest (`vscode-extension/package.json`). This table focuses on common
-production settings.
+manifest (`vscode-extension/package.json`). This table focuses on commonly used
+settings.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
@@ -196,12 +198,12 @@ production settings.
 | `perl-lsp.perlcritic.enabled` | boolean | `false` | Enable external `perlcritic` diagnostics. |
 | `perl-lsp.perlcritic.severity` | string | `"warning"` | Severity level for `perlcritic` diagnostics. |
 | `perl-lsp.perlcritic.profile` | string | `""` | Path to `.perlcriticrc` profile file. |
-| `perl-lsp.featureProfile` | string | `"auto"` | Runtime feature profile: `auto`, `ga`, `ga-lock`, `prod`, `all`. |
+| `perl-lsp.featureProfile` | string | `"auto"` | Runtime capability profile. Keep `auto` unless you need a specific compatibility profile. |
 | `perl-lsp.disabledFeatures` | array | `[]` | Disable selected server features at client startup. |
 | `perl-lsp.autoUpdate` | boolean | `true` | Allow extension-managed server auto-updates. |
 | `perl-lsp.updateCheckInterval` | number | `24` | Hours between automatic update checks. |
 | `perl-lsp.trace.server` | string | `"off"` | LSP traffic logging: `off`, `messages`, `verbose`. |
-| `perl-lsp.channel` | string | `"latest"` | Release channel: `latest`, `stable`, or `tag`. |
+| `perl-lsp.channel` | string | `"latest"` | Release channel. Use `latest` for the current public-alpha line or `tag` for a pinned public-alpha release. |
 | `perl-lsp.versionTag` | string | `""` | Specific release tag when channel is `tag`. |
 | `perl-lsp.downloadBaseUrl` | string | `""` | Internal base URL for hosting perl-lsp archives (bypasses GitHub). |
 
@@ -557,16 +559,13 @@ Control which LSP features are active:
 
 ```json
 {
-  "perl-lsp.featureProfile": "ga"
+  "perl-lsp.featureProfile": "auto"
 }
 ```
 
-Available profiles:
-- `auto` (default) — follows the server binary build mode
-- `ga-lock` — GA features only, no experimental
-- `ga` — general availability features
-- `prod` / `production` — alias for `ga`
-- `all` — all features including experimental
+Available profile values are compatibility tokens, not release-support claims:
+`auto`, `ga-lock`, `ga`, `prod`, `production`, and `all`. Keep `auto` unless
+you are testing a narrower or broader capability set.
 
 ### Release Channel
 
@@ -579,7 +578,8 @@ Pin to a specific release or use a different download channel:
 }
 ```
 
-Available channels: `latest`, `stable`, `tag`.
+Use `latest` for the current public-alpha line or `tag` when you need a pinned
+public-alpha release.
 
 ### Internal Deployment
 

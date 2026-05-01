@@ -1,7 +1,7 @@
 # Windows Distribution Manifests
 
 This directory holds the shared update logic for Windows package-manager
-metadata.
+metadata. The current manifests describe public-alpha artifacts.
 
 ## Source Of Truth
 
@@ -20,3 +20,4 @@ and then call `update-manifests.ps1`.
 - Winget refreshes the repo-local manifest first. Submitting that manifest to
   `winget-pkgs` remains a manual follow-up until that external workflow is
   added.
+- Keep descriptions explicit that this is the public-alpha release line.
