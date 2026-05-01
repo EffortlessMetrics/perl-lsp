@@ -10,3 +10,6 @@ pub mod workspace_rename;
 
 #[cfg(test)]
 mod scoped_rename_tests;
+
+/// SRP-oriented namespaces for refactor features.
+pub mod srp;
