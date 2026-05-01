@@ -230,6 +230,50 @@ mod corpus_gap_tests {
         Ok(())
     }
 
+    /// Coverage: parses `do { ... }` expression assignment used in lazy setup paths.
+    #[test]
+    fn test_do_block_expression_assignment() -> Result<(), Box<dyn std::error::Error>> {
+        let input = r#"
+            my $value = do {
+                my $tmp = 40;
+                $tmp + 2;
+            };
+        "#;
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for do-block expression assignment, got: {sexp}"
+        );
+        assert!(sexp.contains("do"), "expected do-block in AST, got: {sexp}");
+        Ok(())
+    }
+
+    /// Coverage: parses `given/when/default` switch syntax that still appears in legacy code.
+    #[test]
+    fn test_given_when_default_switch() -> Result<(), Box<dyn std::error::Error>> {
+        let input = r#"
+            use feature 'switch';
+            given ($code) {
+                when (/^2/) { return 'ok'; }
+                default { return 'other'; }
+            }
+        "#;
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for given/when/default snippet, got: {sexp}"
+        );
+        assert!(sexp.contains("given"), "expected given node in AST, got: {sexp}");
+        assert!(sexp.contains("when"), "expected when node in AST, got: {sexp}");
+        Ok(())
+    }
+
     // Property-based test for delimiters
     #[test]
     fn test_arbitrary_delimiters() {
