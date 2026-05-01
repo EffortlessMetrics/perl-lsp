@@ -367,3 +367,92 @@ impl Default for IndexInstrumentation {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Result;
+    use std::thread;
+    use std::time::Duration;
+
+    #[test]
+    fn test_metrics_threshold_and_parse_storm_detection() -> Result<()> {
+        let metrics = IndexMetrics::with_threshold(2);
+        assert_eq!(metrics.pending_count(), 0);
+        assert!(!metrics.is_parse_storm());
+
+        assert_eq!(metrics.increment_pending_parses(), 1);
+        assert_eq!(metrics.increment_pending_parses(), 2);
+        assert!(!metrics.is_parse_storm());
+
+        assert_eq!(metrics.increment_pending_parses(), 3);
+        assert!(metrics.is_parse_storm());
+        assert_eq!(metrics.parse_storm_threshold(), 2);
+
+        assert_eq!(metrics.decrement_pending_parses(), 2);
+        assert!(!metrics.is_parse_storm());
+        Ok(())
+    }
+
+    #[test]
+    fn test_instrumentation_records_transitions_and_early_exits() -> Result<()> {
+        let instrumentation = IndexInstrumentation::new();
+
+        instrumentation.record_phase_transition(IndexPhase::Idle, IndexPhase::Scanning);
+        thread::sleep(Duration::from_millis(1));
+        instrumentation.record_phase_transition(IndexPhase::Scanning, IndexPhase::Indexing);
+
+        instrumentation.record_state_transition(IndexStateKind::Building, IndexStateKind::Ready);
+
+        let record = EarlyExitRecord {
+            reason: EarlyExitReason::FileLimit,
+            elapsed_ms: 17,
+            indexed_files: 100,
+            total_files: 200,
+        };
+        instrumentation.record_early_exit(record.clone());
+
+        let snapshot = instrumentation.snapshot();
+
+        assert_eq!(
+            snapshot
+                .phase_transition_counts
+                .get(&IndexPhaseTransition { from: IndexPhase::Idle, to: IndexPhase::Scanning }),
+            Some(&1)
+        );
+        assert_eq!(
+            snapshot.phase_transition_counts.get(&IndexPhaseTransition {
+                from: IndexPhase::Scanning,
+                to: IndexPhase::Indexing,
+            }),
+            Some(&1)
+        );
+        assert_eq!(
+            snapshot.state_transition_counts.get(&IndexStateTransition {
+                from: IndexStateKind::Building,
+                to: IndexStateKind::Ready,
+            }),
+            Some(&1)
+        );
+        assert_eq!(snapshot.early_exit_counts.get(&EarlyExitReason::FileLimit), Some(&1));
+        assert_eq!(snapshot.last_early_exit, Some(record));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_snapshot_includes_active_state_duration() -> Result<()> {
+        let instrumentation = IndexInstrumentation::new();
+        thread::sleep(Duration::from_millis(1));
+        let snapshot = instrumentation.snapshot();
+
+        let building_duration =
+            snapshot.state_durations_ms.get(&IndexStateKind::Building).copied().unwrap_or_default();
+        let idle_phase_duration =
+            snapshot.phase_durations_ms.get(&IndexPhase::Idle).copied().unwrap_or_default();
+
+        assert!(building_duration >= 1);
+        assert!(idle_phase_duration >= 1);
+        Ok(())
+    }
+}
