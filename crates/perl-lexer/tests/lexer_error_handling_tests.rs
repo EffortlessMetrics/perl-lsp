@@ -336,7 +336,7 @@ fn test_ac7_lexer_documentation_presence() -> TestResult {
     // Verify that the source code contains TokenType::Error pattern (not unreachable!)
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let source_path =
-        manifest_dir.parent().ok_or("Expected parent directory")?.join("perl-lexer/src/lib.rs");
+        manifest_dir.parent().ok_or("Expected parent directory")?.join("perl-lexer/src/lexer/mod.rs");
 
     if source_path.exists() {
         let source_content = std::fs::read_to_string(&source_path)?;
