@@ -14,7 +14,9 @@ Regex validation and safety analysis for Perl regular expression patterns.
 | Type | Purpose |
 |------|---------|
 | `RegexValidator` | Configurable validator with safety limits (nesting depth, Unicode properties) |
-| `RegexError` | Error type with source offset for syntax/security issues |
+| `RegexError` | Offset-aware validation error |
+| `RegexAnalyzer` | IDE-facing regex analysis: named captures and hover text |
+| `CaptureGroup` | Named capture metadata: name, index, sub-pattern |
 
 ## Workspace Role
 
