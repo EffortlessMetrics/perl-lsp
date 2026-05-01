@@ -30,8 +30,8 @@ These are behavioral and corpus-backed signals, not feature inventory counts. Pr
 <!-- BEGIN: README_STATUS -->
 | Area | Current signal |
 |---|---:|
-| Release track | `v0.13.0-alpha` release prep |
-| Published crate surface | 34 crates after the v0.13 collapse |
+| Release track | `v0.13.0` public alpha release prep |
+| Published crate surface | 32 crates after the v0.13 collapse |
 | Ubuntu system Perl corpus | 94.5% clean (`2825/2990`) |
 | CPAN top 1000 corpus | 95.3% clean (`8931/9372`) |
 | Project parser corpus | 100.0% clean (`95/95`) |

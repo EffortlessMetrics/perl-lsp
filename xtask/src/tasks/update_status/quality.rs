@@ -21,7 +21,7 @@ use super::{replace_block, run_cmd_merged};
 
 static RUNNING_TEST_BINARY_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+(?:\.exe)?\)",
+        r"Running unittests[^\(]*\([^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+(?:\.exe)?\)",
     )
     .expect("running-test regex is valid")
 });
@@ -142,7 +142,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
          - **Mutation testing**: {mutation_note}\n\
          - **Lexer performance scorecard**: `cargo bench -p perl-lexer --bench lexer_benchmarks` writes `benchmarks/results/lexer_scorecard.json` for trend comparisons
 \
-         - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
+- **Production Status**: LSP server public alpha for `v0.13.0` (`just ci-gate` passing)"
     );
 
     let crate_table = format_crate_quality_table(&mutation_by_crate, &tests_by_crate);

@@ -22,11 +22,12 @@
 
 | Metric | Value | Source |
 | --- | --- | --- |
-| **Workspace version line** | `v0.12.4` | [`Cargo.toml`](../../Cargo.toml) |
-| **Latest GitHub/editor release** | `v0.12.4`, 2026-04-12 | GitHub Releases, VS Code Marketplace |
-| **crates.io line** | `v0.12.2`, 2026-04-08 | crates.io |
+| **Workspace version line** | `v0.13.0-rc1` | [`Cargo.toml`](../../Cargo.toml) |
+| **Latest release candidate** | `v0.13.0-rc1`, 2026-04-30 | GitHub Releases, crates.io, Docker Hub |
+| **crates.io line** | `0.13.0-rc1` across 32 published crates | `[workspace.metadata.publish.allow]` |
+| **Editor marketplace line** | Non-prerelease `0.13.0` pending | VS Marketplace requires non-prerelease SemVer; Open VSX must publish independently |
 | **Release history** | [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md) | Canonical cross-channel ledger |
-| **Active milestone** | `v0.13.0` public alpha announcement | [status/index.md](status/index.md) |
+| **Active milestone** | `v0.13.0` public alpha launch | [status/index.md](status/index.md) |
 | **Merge gate** | `nix develop -c just ci-gate` | [protocols/verification.md](protocols/verification.md) |
 | **LSP Coverage** | See [status/lsp.md](status/lsp.md) | Generated per-merge |
 | **Test counts** | See [status/tests.md](status/tests.md) | Generated per-merge |

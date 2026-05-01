@@ -11,7 +11,7 @@
 - **UX workflow harness**: 27 scenario files in `perl-lsp-ux-tests`; `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds the integration-only 10k-line large-file case; confidence signals (manual smoke, first-5-minutes coverage, issue-burndown regression guards) are tracked in `docs/project/status/editor_ux.json`
 - **Mutation testing**: mutation data pending first nightly CI run — run `just mutation-subset` locally to populate
 - **Lexer performance scorecard**: `cargo bench -p perl-lexer --bench lexer_benchmarks` writes `benchmarks/results/lexer_scorecard.json` for trend comparisons
-- **Production Status**: LSP server public alpha (`just ci-gate` passing)
+- **Production Status**: LSP server public alpha for `v0.13.0` (`just ci-gate` passing)
 <!-- END: QUALITY_METRICS_BULLETS -->
 
 ## Per-Crate Engineering Health

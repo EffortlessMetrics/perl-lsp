@@ -5,33 +5,34 @@
 
 ## Current Release Call
 
-**Latest GitHub/editor release**: `v0.12.3` (2026-04-09)
-**crates.io line**: `v0.12.2` (2026-04-07)
-**Release target**: `v0.13.0` public alpha announcement
-**Ship readiness**: `v0.12.3` is live on GitHub Releases, VS Code Marketplace, and Open VSX; the remaining launch work is announcement-path cleanup, with `#3302` demo assets still the main human-owned blocker before the `v0.13.0` public alpha announcement
+**Latest release candidate**: `v0.13.0-rc1` (2026-04-30)
+**crates.io line**: `0.13.0-rc1` across 32 published crates
+**Release target**: `v0.13.0` public alpha
+**Ship readiness**: RC1 validated GitHub Releases, crates.io, and Docker Hub. Public alpha release is pending Marketplace-compatible extension versioning, independent Open VSX publish, docs/version finalization, and one final release verification receipt.
 
 ## Active Blockers
 
-- `#3302` demo GIFs remain the main human-owned blocker before the `v0.13.0` public alpha announcement
-- Public install guidance must keep the channel split explicit while crates.io remains on `v0.12.2`
+- VS Marketplace must publish the non-prerelease extension version `0.13.0`, not prerelease `0.13.0-rc1`
+- Open VSX must run independently rather than cascading behind Marketplace
+- Master needs one clean release-verification cycle before tagging `v0.13.0`
 
-## 0.12.3 Ship Receipts (2026-04-09)
+## 0.13.0-rc1 Ship Receipts (2026-04-30)
 
-- GitHub release `v0.12.3` published 2026-04-09 against `cc801735`
-- `Release` workflow completed successfully and attached the cross-platform `perllsp` archives plus `SHA256SUMS`
-- `Publish VSCode Extension` completed successfully; `perl-lsp-rs` `0.12.3` is live on both VS Code Marketplace and Open VSX
-- workspace version line is `v0.12.3`; `check-version-sync` still expects all 140 version sites to agree with it
-- crates.io intentionally remains on `v0.12.2` as of 2026-04-09, so docs and install guidance must keep that split explicit
+- GitHub release `v0.13.0-rc1` published with cross-platform `perllsp`/`perl-dap` archives and `SHA256SUMS`
+- crates.io published all 32 crates listed in `[workspace.metadata.publish.allow]`, including `perl-semantic-facts`, at `0.13.0-rc1`
+- Docker Hub published multi-arch images for the RC
+- VS Marketplace rejected the prerelease suffix; non-prerelease `0.13.0` is the Marketplace publish version
+- Open VSX was skipped because it was sequenced behind Marketplace; the `0.13.0` path must report Open VSX separately
 
 ## Component Summary
 
 | Component | Status | Notes |
 | --- | --- | --- |
-| `perl-parser` | Public alpha | Native parser path |
-| `perl-lsp` | Public alpha | Coverage tracked via `features.toml` |
+| `perl-parser` | Public alpha 0.13.0 | Native parser path |
+| `perl-lsp` | Public alpha 0.13.0 | Coverage tracked via `features.toml` |
 | `perl-dap` | Preview (Native + Bridge) | Native adapter is present; compatibility path retained |
-| `perl-lexer` | Public alpha | Context-aware tokenizer |
-| `perl-corpus` | Public alpha | Corpus counts tracked in computed metrics |
+| `perl-lexer` | Public alpha 0.13.0 | Context-aware tokenizer |
+| `perl-corpus` | Public alpha 0.13.0 | Corpus counts tracked in computed metrics |
 
 ## DAP Stance
 
@@ -60,4 +61,4 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ---
 
-*Last Updated: 2026-04-09*
+*Last Updated: 2026-05-01*
