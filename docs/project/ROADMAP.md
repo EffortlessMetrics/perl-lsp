@@ -8,7 +8,7 @@
 
 ## Current Framing
 
-- Workspace version line: `v0.13.0-rc1`
+- Workspace version line: `v0.13.0`
 - Latest published GitHub/editor release: `v0.12.4` (GitHub Releases and VS Code Marketplace, shipped 2026-04-12)
 - crates.io published line: `v0.12.2` (registry line, published 2026-04-08)
 - Active work: finish the `v0.13.0` public alpha announcement pass (demo assets, distribution-truth cleanup, post-release docs/automation cleanup) while keeping the shipped `v0.12.4` line stable across GitHub Releases and the editor marketplaces

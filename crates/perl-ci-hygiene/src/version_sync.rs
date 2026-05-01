@@ -360,12 +360,12 @@ static BARE_VERSION_RE: LazyLock<Regex> =
     LazyLock::new(|| compile_regex(&format!(r#"^\s*version\s*=\s*"({VERSION_FRAGMENT})""#)));
 static WORKSPACE_DEP_WITH_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
     compile_regex(&format!(
-        r#"\{{\s*path\s*=\s*"crates/[^"]+"[^}}]*version\s*=\s*"({VERSION_FRAGMENT})""#
+        r#"\{{\s*path\s*=\s*['"]crates/[^'"]+['"][^}}]*version\s*=\s*"({VERSION_FRAGMENT})""#
     ))
 });
 static CRATE_DEP_WITH_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
     compile_regex(&format!(
-        r#"\{{\s*path\s*=\s*"\.\.?/[^"]+"[^}}]*version\s*=\s*"({VERSION_FRAGMENT})""#
+        r#"\{{\s*path\s*=\s*['"]\.\.?/[^'"]+['"][^}}]*version\s*=\s*"({VERSION_FRAGMENT})""#
     ))
 });
 static JSON_VERSION_RE: LazyLock<Regex> =
@@ -947,6 +947,14 @@ perl-token = { path = "../perl-token", version = "0.42.0" }
         let line = r#"perl-foo = { path = "crates/perl-foo", version = "0.13.0-rc1" }"#;
         let caps = WORKSPACE_DEP_WITH_VERSION_RE.captures(line);
         assert!(caps.is_some(), "WORKSPACE_DEP_WITH_VERSION_RE must match pre-release versions");
+        assert_eq!(&caps.unwrap()[1], "0.13.0-rc1");
+    }
+
+    #[test]
+    fn workspace_dep_re_matches_single_quoted_path() {
+        let line = r#"perl-module = { path = 'crates/perl-module', version = "0.13.0-rc1" }"#;
+        let caps = WORKSPACE_DEP_WITH_VERSION_RE.captures(line);
+        assert!(caps.is_some(), "WORKSPACE_DEP_WITH_VERSION_RE must match single-quoted paths");
         assert_eq!(&caps.unwrap()[1], "0.13.0-rc1");
     }
 
