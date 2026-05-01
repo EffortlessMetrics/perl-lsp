@@ -36,6 +36,8 @@ use std::time::Instant;
 use url::Url;
 
 #[cfg(feature = "workspace")]
+mod configuration_response;
+#[cfg(feature = "workspace")]
 mod text_decode;
 
 const WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -193,35 +195,14 @@ impl LspServer {
             );
             return;
         };
-        let global_settings = if pending.includes_global_item { results.first() } else { None };
-        let folder_results_start = usize::from(pending.includes_global_item);
-
         let mut folders = self.workspace_folders.lock();
-        for (idx, folder_uri) in pending.folder_uris.iter().enumerate() {
-            let Some(folder) = folders.iter_mut().find(|folder| &folder.uri == folder_uri) else {
-                continue;
-            };
-
-            let mut effective_config = perl_lsp_rs_core::config::WorkspaceConfig::default();
-            if let Some(project_config) = &folder.project_config {
-                project_config.apply_to_workspace_config(&mut effective_config);
-            }
-
-            if let Some(global_settings) = global_settings {
-                effective_config.update_from_value(global_settings);
-            }
-            if let Some(perl_settings) = results.get(folder_results_start + idx) {
-                effective_config.update_from_value(perl_settings);
-            } else {
-                tracing::warn!(
-                    request_id = id,
-                    folder_uri = %folder_uri,
-                    "workspace/configuration response missing folder item; using TOML/default config for folder"
-                );
-            }
-
-            folder.effective_workspace_config = effective_config;
-        }
+        configuration_response::apply_workspace_configuration_results(
+            &mut folders,
+            &pending.folder_uris,
+            pending.includes_global_item,
+            results,
+            id,
+        );
     }
 
     /// Handle workspace/symbol request (v2 implementation with lifecycle-aware dispatch)
