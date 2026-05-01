@@ -439,6 +439,8 @@ fn crates_from_files(
         let parts: Vec<&str> = file.splitn(3, '/').collect();
         if parts.len() >= 2 && parts[0] == "crates" && !parts[1].is_empty() {
             crate_dirs.insert(format!("crates/{}", parts[1]));
+        } else if file == "xtask/Cargo.toml" || file.starts_with("xtask/") {
+            crate_dirs.insert("xtask".to_string());
         }
     }
 
@@ -1082,6 +1084,16 @@ mod tests {
         let metadata = fake_metadata(&[("perl-parser", "crates/perl-parser")]);
         let crates = crates_from_files(&files, &metadata, "/workspace")?;
         assert!(crates.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_crates_from_files_maps_xtask_workspace_member() -> Result<()> {
+        let files = vec!["xtask/src/tasks/gates.rs".to_string()];
+        let metadata = fake_metadata(&[("xtask", "xtask")]);
+        let crates = crates_from_files(&files, &metadata, "/workspace")?;
+        assert!(crates.contains("xtask"));
+        assert_eq!(crates.len(), 1);
         Ok(())
     }
 
