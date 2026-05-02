@@ -6,13 +6,13 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
 
 ## Tasks
 
-- [ ] 1. Define the scorecard contract
-  - [ ] 1.1 Add `.ci/schemas/parser-accuracy.schema.json`
+- [x] 1. Define the scorecard contract
+  - [x] 1.1 Add `.ci/schemas/parser-accuracy.schema.json`
     - Include top-level fields: `schema_version`, `subsystem`, `generated_at`, `commit`, `cadence`, `denominator`, `families`, `metrics`, `failure_packets`, `gold_drift`, and `metric_runtime`
     - Require each metric row to be either `measured` or `insufficient_data`
     - Require measured rows to include value, sample_count, direction, and confidence
     - _Verify: schema validation test in xtask or a dedicated fixture test_
-  - [ ] 1.2 Add a tiny example fixture artifact
+  - [x] 1.2 Add a tiny example fixture artifact
     - Create a committed example under a test fixture path, not under `target/`
     - Include denominator rows and `insufficient_data` line/AST/symbol rows
     - _Verify: JSON parses and validates_
