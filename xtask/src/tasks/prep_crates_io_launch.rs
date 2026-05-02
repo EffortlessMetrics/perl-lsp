@@ -240,8 +240,9 @@ fn run_cargo_package_check(
     }
 
     let unpack_dir = unpack_crate_archive(target_directory, package)?;
-    let packaged_manifest =
-        unpack_dir.path().join(format!("{}-{}", package.name, package.version)).join("Cargo.toml");
+    let packaged_dir = unpack_dir.path().join(format!("{}-{}", package.name, package.version));
+    let packaged_manifest = packaged_dir.join("Cargo.toml");
+    strip_packaged_dev_dependencies(&packaged_manifest)?;
 
     let mut verify_args = vec![
         "check".to_string(),
@@ -252,7 +253,7 @@ fn run_cargo_package_check(
     verify_args.extend(patch_args.iter().cloned());
 
     let verify_output = Command::new("cargo")
-        .current_dir(root)
+        .current_dir(&packaged_dir)
         .args(verify_args)
         .output()
         .context("failed to run cargo check on packaged manifest")?;
@@ -268,6 +269,32 @@ fn run_cargo_package_check(
     Ok(())
 }
 
+fn strip_packaged_dev_dependencies(manifest_path: &Path) -> Result<()> {
+    let manifest_text = fs::read_to_string(manifest_path)
+        .with_context(|| format!("failed to read packaged manifest {}", manifest_path.display()))?;
+    let mut manifest: toml::Value = toml::from_str(&manifest_text).with_context(|| {
+        format!("failed to parse packaged manifest {}", manifest_path.display())
+    })?;
+
+    if let Some(table) = manifest.as_table_mut() {
+        table.remove("dev-dependencies");
+
+        if let Some(targets) = table.get_mut("target").and_then(toml::Value::as_table_mut) {
+            for (_target_name, target) in targets.iter_mut() {
+                if let Some(target_table) = target.as_table_mut() {
+                    target_table.remove("dev-dependencies");
+                }
+            }
+        }
+    }
+
+    let rendered = toml::to_string_pretty(&manifest).with_context(|| {
+        format!("failed to render stripped packaged manifest {}", manifest_path.display())
+    })?;
+    fs::write(manifest_path, rendered)
+        .with_context(|| format!("failed to write packaged manifest {}", manifest_path.display()))
+}
+
 fn unpack_crate_archive(target_directory: &Path, package: &MetadataPackage) -> Result<TempDir> {
     let archive_path = crate_archive_path(target_directory, package);
     if !archive_path.is_file() {
@@ -276,7 +303,7 @@ fn unpack_crate_archive(target_directory: &Path, package: &MetadataPackage) -> R
 
     let unpack_dir = tempfile::Builder::new()
         .prefix(&format!("{}-{}-", package.name, package.version))
-        .tempdir_in(package_output_dir(target_directory))
+        .tempdir()
         .context("failed to create temp directory for crate verification")?;
 
     let archive_file = File::open(&archive_path)
@@ -300,9 +327,11 @@ fn unpack_crate_archive(target_directory: &Path, package: &MetadataPackage) -> R
 mod tests {
     use super::{
         CargoMetadata, MetadataPackage, crate_archive_path, package_output_dir, package_patch_args,
-        toml_safe_path,
+        strip_packaged_dev_dependencies, toml_safe_path,
     };
+    use color_eyre::eyre::Result;
     use serde_json::Value as JsonValue;
+    use std::fs;
     use std::path::{Path, PathBuf};
 
     #[test]
@@ -360,5 +389,39 @@ mod tests {
         let path = crate_archive_path(Path::new("/workspace/custom-target"), &package);
 
         assert_eq!(path, Path::new("/workspace/custom-target/package/perl-parser-0.12.1.crate"));
+    }
+
+    #[test]
+    fn strip_packaged_dev_dependencies_removes_publish_only_test_graph() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let manifest_path = dir.path().join("Cargo.toml");
+        fs::write(
+            &manifest_path,
+            r#"
+[package]
+name = "perl-parser"
+version = "0.13.2"
+
+[dependencies]
+perl-parser-core = "0.13.2"
+
+[dev-dependencies]
+perl-lsp-rs-core = "0.13.2"
+
+[target.'cfg(unix)'.dev-dependencies]
+perl-corpus = "0.13.2"
+"#,
+        )?;
+
+        strip_packaged_dev_dependencies(&manifest_path)?;
+
+        let stripped = fs::read_to_string(&manifest_path)?;
+        assert!(stripped.contains("[dependencies]"));
+        assert!(stripped.contains("perl-parser-core"));
+        assert!(!stripped.contains("[dev-dependencies]"));
+        assert!(!stripped.contains("perl-lsp-rs-core"));
+        assert!(!stripped.contains("perl-corpus"));
+
+        Ok(())
     }
 }

@@ -3,9 +3,11 @@
 //! This module provides timeout protection for parsing operations and
 //! detection of files that may cause timeouts or hangs.
 
+use color_eyre::eyre::{Context, Result};
 use perl_parser::Parser;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// Error category for targeting improvements (Issue #180)
@@ -204,10 +206,14 @@ pub struct TimeoutRisk {
 /// This function attempts to parse the given file content within the specified timeout.
 /// If parsing exceeds the timeout, it returns a Timeout outcome.
 pub fn parse_with_timeout(
-    _path: &std::path::Path,
+    path: &std::path::Path,
     content: &str,
     timeout: Duration,
 ) -> ParseOutcome {
+    if let Some(outcome) = parse_with_child_process(path, timeout) {
+        return outcome;
+    }
+
     let start = Instant::now();
     let content_clone = content.to_string();
     let (tx, rx) = std::sync::mpsc::channel();
@@ -238,6 +244,75 @@ pub fn parse_with_timeout(
             ParseOutcome::Timeout { timeout_ms: timeout.as_millis() as u64 }
         }
         Err(_) => ParseOutcome::Error { message: "Channel disconnected unexpectedly".to_string() },
+    }
+}
+
+pub fn run_parse_one(path: PathBuf) -> Result<()> {
+    let content = std::fs::read_to_string(&path)
+        .with_context(|| format!("failed to read parser corpus file {}", path.display()))?;
+    let start = Instant::now();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut parser = Parser::new(&content);
+        parser.parse()
+    }));
+
+    let outcome = match result {
+        Ok(Ok(_)) => ParseOutcome::Ok { duration_ms: start.elapsed().as_millis() as u64 },
+        Ok(Err(error)) => ParseOutcome::Error { message: error.to_string() },
+        Err(_) => ParseOutcome::Panic { message: "Parser panicked".to_string() },
+    };
+
+    println!("{}", serde_json::to_string(&outcome)?);
+
+    Ok(())
+}
+
+fn parse_with_child_process(path: &Path, timeout: Duration) -> Option<ParseOutcome> {
+    if !path.is_file() {
+        return None;
+    }
+
+    let exe = std::env::current_exe().ok()?;
+    let stem = exe.file_stem()?.to_str()?;
+    if !stem.starts_with("xtask") {
+        return None;
+    }
+
+    let mut child = Command::new(exe)
+        .arg("corpus-audit-parse-one")
+        .arg("--path")
+        .arg(path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .ok()?;
+
+    let start = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let output = child.wait_with_output().ok()?;
+                if status.success() {
+                    let stdout = String::from_utf8(output.stdout).ok()?;
+                    return serde_json::from_str(stdout.trim()).ok();
+                }
+
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                let message = if stderr.is_empty() {
+                    format!("parser child exited with status {status}")
+                } else {
+                    format!("parser child exited with status {status}: {stderr}")
+                };
+                return Some(ParseOutcome::Panic { message });
+            }
+            Ok(None) if start.elapsed() >= timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Some(ParseOutcome::Timeout { timeout_ms: timeout.as_millis() as u64 });
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            Err(_) => return None,
+        }
     }
 }
 

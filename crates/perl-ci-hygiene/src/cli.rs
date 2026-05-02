@@ -81,7 +81,7 @@ pub(crate) enum CliCommand {
     InstallGithooks,
     /// Check docs for machine-specific paths.
     CheckDocPaths { docs_dir: Option<String> },
-    /// Enforce linked-only TODO/FIXME markers policy.
+    /// Enforce linked-only task-marker policy.
     CheckTodos {
         #[arg(long)]
         list: bool,

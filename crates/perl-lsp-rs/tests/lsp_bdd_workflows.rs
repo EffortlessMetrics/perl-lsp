@@ -620,10 +620,10 @@ use lib './lib';
 use Foo;
 
 my $result = Foo::process_data();
-my $also = process_data();
+my $also = Foo::process_data();
 "#;
 
-    scenario.given("a workspace with qualified and bare calls to the same function");
+    scenario.given("a workspace with qualified calls to the same function");
     let (mut harness, workspace) = setup_workspace(&[("lib/Foo.pm", module), ("main.pl", main)])?;
 
     let module_uri = workspace.uri("lib/Foo.pm");

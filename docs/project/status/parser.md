@@ -9,7 +9,7 @@
 | <!-- BEGIN: PARSER_TRACKING_TABLE -->
 | **Ubuntu system Perl** | 96.8% clean (`6871/7095`) / 20.5% salvage | Compatibility baseline; Perl `5.038002`, `48` unreadable, `36` recovery-only, `140` ERROR-node files, `0` catastrophic, baseline `2026-04-28` | `.ci/parser-corpus-baseline.json` |
 | **CPAN top 1000** | 95.3% clean (`8931/9372`) / insufficient_data salvage | Ecosystem breadth baseline; `6` unreadable, `0` recovery-only, `0` ERROR-node files, `0` catastrophic, cached downloads in `target/cpan-corpus/.cpanm`, baseline `2026-04-09` | `.ci/cpan-corpus-baseline.json` |
-| **Project corpus** | 100.0% clean (`95/95`) | Deterministic regression baseline; `73` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
+| **Project corpus** | 74.7% clean (`71/95`) | Deterministic regression baseline; `73` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `24` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
 <!-- END: PARSER_TRACKING_TABLE -->
 
 ## Parser Scorecard
@@ -20,10 +20,10 @@
 | **Node-kind coverage** | 65/69 (94.2%) | 4 never-seen node kinds | `corpus_audit` |
 <!-- END: PARSER_NODEKIND_ROW -->
 <!-- BEGIN: PARSER_RELIABILITY_ROW -->
-| **Reliability** | Ubuntu: 48 unread / CPAN: 6 unread / Project: 0 timeout, 0 panic, 0 unread | -- | `.ci/*-baseline.json` |
+| **Reliability** | Ubuntu: 48 unread / CPAN: 6 unread / Project: 24 timeout, 0 panic, 0 unread | -- | `.ci/*-baseline.json` |
 <!-- END: PARSER_RELIABILITY_ROW -->
 <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->
-| **Strict-clean subset** | insufficient_data | 10 pinned modules; run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |
+| **Strict-clean subset** | 10/10 (100%) | 10 pinned modules, zero-error gate | `.ci/common-corpus-manifest.txt` |
 <!-- END: PARSER_STRICT_CLEAN_ROW -->
 
 ## Parser Accuracy Observability

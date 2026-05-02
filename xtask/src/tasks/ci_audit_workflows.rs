@@ -23,6 +23,10 @@ const ALLOWED_WORKFLOWS: &[&str] = &[
     // ci-gate-self-tests.yml is path-filtered to gate scripts only.
     // Runs only when the gate scripts or self-test scripts change.
     "ci-gate-self-tests.yml",
+    // vscode-managed-binary-smoke.yml is path-filtered to the VS Code extension
+    // and this workflow file only. It locks the managed binary download/startup
+    // path before extension changes merge.
+    "vscode-managed-binary-smoke.yml",
     // workflow-policy.yml is path-filtered to workflow-policy lint sources only.
     // Runs only when .github/workflows/, the workflow_policy_lint xtask, or its
     // fixtures/schema change.

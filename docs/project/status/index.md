@@ -5,7 +5,7 @@
 
 ## What's True Right Now
 
-- **Release posture**: `v0.13.1` is the current public-alpha patch train. The workspace version line is `v0.13.1`, the published crate surface is 32 crates, and the release is being verified across GitHub Releases, crates.io, Docker, VS Code Marketplace, Open VSX, and the owned `effortlessmetrics/tap/perllsp` Homebrew path.
+- **Release posture**: `v0.13.2` is staged as the next public-alpha patch train. The workspace version line is `v0.13.2`, the published crate surface is 31 crates, and release dispatch is intentionally pending until the prep checks pass.
 - **Status discipline**: this file is for narrative, subsystem files are for evidence, and `just status-update` plus `just status-check` are the anti-drift workflow
 - **LSP server**: `features.toml` is the canonical capability catalog; 58 user-visible features at 100% coverage (116/116 including plumbing protocol methods and DAP handlers — corrected in PR #4107 after the DAP catalog undercount audit) — computed coverage is generated from it
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `cargo xtask ignored-tests` is the tracked-test-debt source
@@ -29,14 +29,14 @@
 
 ## What's Next
 
-**Now (active milestone: v0.13.1 public-alpha channel verification)**
-- Monitor the `v0.13.1` downstream release workflows and keep each channel status explicit until it is green or deliberately deferred
+**Now (active milestone: v0.13.2 public-alpha release prep)**
+- Run the `v0.13.2` release-prep checks before dispatching release orchestration
 - Keep public-alpha wording consistent: package versions use normal SemVer, but the product posture is not stable/GA
 - Keep the three parser verification lanes explicit and green: `just corpus-sweep-check`, `just cpan-corpus-check`, and `just parser-audit`, with `just common-corpus-check` covering the pinned strict-clean subset
 - Keep the top-level README, status docs, and release runbooks aligned with the actual `perllsp` asset line, the `perl-lsp-rs` extension package, and the 32-crate published surface
-- Follow up any post-merge status regeneration gaps before declaring the release ledger closed
+- Keep Homebrew, GitHub release assets, VS Code Marketplace, and Open VSX install receipts explicit in the release closeout
 
-**Next (post v0.13.1 public alpha)**
+**Next (post v0.13.2 public alpha)**
 - Keep all three parser corpus lanes current: Ubuntu system Perl, the cached CPAN top 1000 install, and the repo-owned corpus audit
 - Fold internal torture and edge-case suites into routine verification receipts
 - Resume parser, corpus, semantic, and DAP hardening after the release-channel receipts are closed

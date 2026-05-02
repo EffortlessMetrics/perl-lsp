@@ -21,23 +21,23 @@
 |-------|---------------|-------------|
 | perl-ast | — | 2 |
 | perl-ast-v2 | — | 2 |
-| perl-ci-hygiene | — | 18 |
+| perl-ci-hygiene | — | 20 |
 | perl-corpus | — | 158 |
-| perl-dap | — | 384 |
+| perl-dap | — | 386 |
 | perl-diagnostics | — | 4 |
-| perl-lexer | — | 88 |
+| perl-lexer | — | 91 |
 | perl-line-index | — | 7 |
-| perl-lsp | — | 512 |
-| perl-lsp-rs-core | — | 1010 |
+| perl-lsp | — | 514 |
+| perl-lsp-rs-core | — | 1210 |
 | perl-lsp-ux-tests | — | 67 |
-| perl-parser | — | 233 |
-| perl-parser-core | — | 584 |
+| perl-parser | — | 231 |
+| perl-parser-core | — | 592 |
 | perl-parser-pest | — | 10 |
 | perl-position-tracking | — | 33 |
 | perl-refactoring | — | 113 |
-| perl-regex | — | 35 |
-| perl-semantic-analyzer | — | 154 |
-| perl-semantic-facts | — | 8 |
+| perl-regex | — | 37 |
+| perl-semantic-analyzer | — | 226 |
+| perl-semantic-facts | — | 42 |
 | perl-subprocess-runtime | — | 16 |
 | perl-symbol | — | 31 |
 | perl-tdd-support | — | 15 |
@@ -45,7 +45,7 @@
 | perl-test-must | — | 6 |
 | perl-token | — | 35 |
 | perl-uri | — | 33 |
-| perl-workspace | — | 276 |
+| perl-workspace | — | 515 |
 | tree-sitter-perl-c | — | 13 |
 | tree-sitter-perl-rs | — | 48 |
 <!-- END: QUALITY_CRATE_TABLE -->

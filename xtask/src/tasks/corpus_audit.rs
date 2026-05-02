@@ -210,6 +210,10 @@ pub fn run(config: AuditConfig) -> Result<()> {
     Ok(())
 }
 
+pub fn run_parse_one(path: PathBuf) -> Result<()> {
+    timeout_detection::run_parse_one(path)
+}
+
 /// Parse all corpus files with timeout protection
 fn parse_corpus_with_timeout(
     corpus_files: &[CorpusFile],
