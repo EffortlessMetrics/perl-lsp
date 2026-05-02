@@ -74,11 +74,11 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
     - first_error_line_accuracy, error_region_precision/recall, spillover mean/p95/max, salvaged lines, salvaged symbols, post_error_symbol_recall, post_error_line_f1
     - _Verify: malformed heredoc fixture distinguishes local recovery from EOF spillover_
 
-- [ ] 9. Add incremental equivalence scoring
-  - [ ] 9.1 Add full-vs-incremental comparison fixtures
+- [x] 9. Add incremental equivalence scoring
+  - [x] 9.1 Add full-vs-incremental comparison fixtures
     - Compare full parse of final source with incremental parse after edit sequence
     - Run with `--features incremental`
-  - [ ] 9.2 Emit incremental rows
+  - [x] 9.2 Emit incremental rows
     - equivalence rate, edit apply equivalence, no panic, no-progress count, timeout count, fallback rate, checkpoint hit/miss, reparse byte ratio, reused token/node ratios, changed range accuracy
     - _Verify: `cargo test -p perl-parser --features incremental --locked incremental`_
 

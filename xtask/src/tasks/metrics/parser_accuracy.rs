@@ -5,13 +5,18 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
 use chrono::Utc;
 use color_eyre::eyre::{Context, Result, bail, eyre};
-use perl_parser::{Node, NodeKind, ParseError, Parser};
+use perl_parser::apply_edits;
+use perl_parser::edit::Edit as CoreEdit;
+use perl_parser::incremental_v2::IncrementalParserV2;
+use perl_parser::position::Position;
+use perl_parser::{Edit as TextEdit, IncrementalState, Node, NodeKind, ParseError, Parser};
 use perl_semantic_facts::{AnchorId, EntityId};
 use perl_workspace::workspace::workspace_index::{FileFactShard, WorkspaceIndex};
 use serde::{Deserialize, Serialize};
@@ -53,6 +58,8 @@ struct FixtureMetadata {
     symbol_safety_regions: Vec<SymbolSafetyRegion>,
     #[serde(default)]
     recovery_expectations: Vec<RecoveryExpectation>,
+    #[serde(default)]
+    incremental_expectations: Vec<IncrementalExpectation>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -169,6 +176,21 @@ struct RecoveryExpectation {
 struct LineRange {
     start: u64,
     end: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct IncrementalExpectation {
+    id: String,
+    #[serde(default)]
+    edits: Vec<IncrementalEditExpectation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct IncrementalEditExpectation {
+    old_text: String,
+    new_text: String,
+    #[serde(default)]
+    occurrence: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -490,6 +512,23 @@ struct RecoveryScore {
     post_error_symbol_found_count: u64,
 }
 
+#[derive(Debug, Clone, Default, PartialEq)]
+struct IncrementalScore {
+    expectation_count: u64,
+    full_parse_equivalent_count: u64,
+    edit_apply_equivalent_count: u64,
+    no_panic_count: u64,
+    no_progress_count: u64,
+    timeout_count: u64,
+    fallback_count: u64,
+    checkpoint_hit_count: u64,
+    checkpoint_miss_count: u64,
+    reparse_byte_ratios: Vec<f64>,
+    reused_node_ratios: Vec<f64>,
+    changed_range_sample_count: u64,
+    changed_range_correct_count: u64,
+}
+
 /// Run `cargo xtask metrics parser-accuracy`.
 pub fn run(
     json: bool,
@@ -562,6 +601,7 @@ fn build_artifact(
     let ast_score = score_manifest_ast(root, manifest)?;
     let symbol_score = score_manifest_symbols(root, manifest)?;
     let recovery_score = score_manifest_recovery(root, manifest)?;
+    let incremental_score = score_manifest_incremental(root, manifest)?;
     let mut metrics = vec![MetricRow::Measured {
         metric: "denominator_fixture_count".to_string(),
         value: fixture_count,
@@ -575,6 +615,7 @@ fn build_artifact(
     metrics.extend(symbol_metrics(&symbol_score, cadence));
     metrics.extend(safety_metrics(&line_score, &symbol_score, cadence));
     metrics.extend(recovery_metrics(&recovery_score, cadence));
+    metrics.extend(incremental_metrics(&incremental_score, cadence));
 
     Ok(ParserAccuracyArtifact {
         schema_version: 1,
@@ -1010,6 +1051,255 @@ fn line_range_set(range: LineRange) -> BTreeSet<u64> {
         return BTreeSet::new();
     }
     (range.start..=range.end).collect()
+}
+
+fn score_manifest_incremental(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+) -> Result<IncrementalScore> {
+    let mut score = IncrementalScore::default();
+    for fixture in &manifest.fixtures {
+        if fixture.incremental_expectations.is_empty() {
+            continue;
+        }
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy incremental fixture source {}", source_path.display())
+        })?;
+        for expectation in &fixture.incremental_expectations {
+            score_incremental_expectation(&source, expectation, &mut score);
+        }
+    }
+    Ok(score)
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+struct IncrementalExpectationResult {
+    full_parse_equivalent: bool,
+    edit_apply_equivalent: bool,
+    fallback_used: bool,
+    checkpoint_hit_count: u64,
+    checkpoint_miss_count: u64,
+    reparse_byte_ratio: Option<f64>,
+    reused_node_ratio: Option<f64>,
+    changed_range_correct: Option<bool>,
+}
+
+fn score_incremental_expectation(
+    source: &str,
+    expectation: &IncrementalExpectation,
+    score: &mut IncrementalScore,
+) {
+    score.expectation_count += 1;
+    let outcome =
+        catch_unwind(AssertUnwindSafe(|| run_incremental_expectation(source, expectation)));
+
+    let result = match outcome {
+        Ok(Ok(result)) => {
+            score.no_panic_count += 1;
+            result
+        }
+        Ok(Err(error)) => {
+            score.no_panic_count += 1;
+            if error.to_string().contains("did not advance") {
+                score.no_progress_count += 1;
+            }
+            return;
+        }
+        Err(_) => return,
+    };
+
+    if result.full_parse_equivalent {
+        score.full_parse_equivalent_count += 1;
+    }
+    if result.edit_apply_equivalent {
+        score.edit_apply_equivalent_count += 1;
+    }
+    if result.fallback_used {
+        score.fallback_count += 1;
+    }
+    score.checkpoint_hit_count += result.checkpoint_hit_count;
+    score.checkpoint_miss_count += result.checkpoint_miss_count;
+    if let Some(value) = result.reparse_byte_ratio {
+        score.reparse_byte_ratios.push(value);
+    }
+    if let Some(value) = result.reused_node_ratio {
+        score.reused_node_ratios.push(value);
+    }
+    if let Some(correct) = result.changed_range_correct {
+        score.changed_range_sample_count += 1;
+        if correct {
+            score.changed_range_correct_count += 1;
+        }
+    }
+}
+
+fn run_incremental_expectation(
+    source: &str,
+    expectation: &IncrementalExpectation,
+) -> Result<IncrementalExpectationResult> {
+    let resolved_edits = resolve_incremental_edits(source, &expectation.edits)
+        .with_context(|| format!("resolving incremental expectation '{}'", expectation.id))?;
+    let expected_source = apply_resolved_edits(source, &resolved_edits)?;
+    let mut parser = IncrementalParserV2::new();
+    let _initial_ast = parser.parse(source)?;
+    for edit in &resolved_edits {
+        parser.edit(edit.core_edit.clone());
+    }
+    let incremental_ast = parser.parse(&expected_source)?;
+    let mut full_parser = Parser::new(&expected_source);
+    let full_ast = full_parser.parse()?;
+
+    let apply_result = run_incremental_apply_path(source, &resolved_edits)?;
+    let total_nodes = parser.reused_nodes + parser.reparsed_nodes;
+    let reused_node_ratio =
+        if total_nodes == 0 { None } else { Some(parser.reused_nodes as f64 / total_nodes as f64) };
+
+    Ok(IncrementalExpectationResult {
+        full_parse_equivalent: incremental_ast == full_ast,
+        edit_apply_equivalent: apply_result.edit_apply_equivalent,
+        fallback_used: apply_result.fallback_used,
+        checkpoint_hit_count: apply_result.checkpoint_hit_count,
+        checkpoint_miss_count: apply_result.checkpoint_miss_count,
+        reparse_byte_ratio: apply_result.reparse_byte_ratio,
+        reused_node_ratio,
+        changed_range_correct: apply_result.changed_range_correct,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ResolvedIncrementalEdit {
+    start_byte: usize,
+    old_end_byte: usize,
+    new_end_byte: usize,
+    new_text: String,
+    core_edit: CoreEdit,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+struct IncrementalApplyResult {
+    edit_apply_equivalent: bool,
+    fallback_used: bool,
+    checkpoint_hit_count: u64,
+    checkpoint_miss_count: u64,
+    reparse_byte_ratio: Option<f64>,
+    changed_range_correct: Option<bool>,
+}
+
+fn run_incremental_apply_path(
+    source: &str,
+    resolved_edits: &[ResolvedIncrementalEdit],
+) -> Result<IncrementalApplyResult> {
+    let mut state = IncrementalState::new(source.to_string());
+    let expected_source = apply_resolved_edits(source, resolved_edits)?;
+    let mut result = IncrementalApplyResult::default();
+    let mut total_reparsed_bytes = 0usize;
+    let mut changed_ranges_cover_edits = true;
+
+    for edit in resolved_edits {
+        if state.find_lex_checkpoint(edit.start_byte).is_some() {
+            result.checkpoint_hit_count += 1;
+        } else {
+            result.checkpoint_miss_count += 1;
+        }
+        let text_edit = TextEdit {
+            start_byte: edit.start_byte,
+            old_end_byte: edit.old_end_byte,
+            new_end_byte: edit.new_end_byte,
+            new_text: edit.new_text.clone(),
+        };
+        let reparse =
+            apply_edits(&mut state, &[text_edit]).map_err(|error| eyre!(error.to_string()))?;
+        if reparse
+            .changed_ranges
+            .iter()
+            .any(|range| range.start == 0 && range.end == state.source.len())
+        {
+            result.fallback_used = true;
+        }
+        total_reparsed_bytes += reparse.reparsed_bytes;
+        let expected_range = edit.start_byte..edit.new_end_byte;
+        changed_ranges_cover_edits &= reparse
+            .changed_ranges
+            .iter()
+            .any(|range| range.start <= expected_range.start && range.end >= expected_range.end);
+    }
+
+    result.edit_apply_equivalent = state.source == expected_source;
+    if !resolved_edits.is_empty() {
+        result.changed_range_correct = Some(changed_ranges_cover_edits);
+    }
+    if !state.source.is_empty() {
+        result.reparse_byte_ratio = Some(total_reparsed_bytes as f64 / state.source.len() as f64);
+    }
+    Ok(result)
+}
+
+fn resolve_incremental_edits(
+    source: &str,
+    edits: &[IncrementalEditExpectation],
+) -> Result<Vec<ResolvedIncrementalEdit>> {
+    let mut current = source.to_string();
+    let mut resolved = Vec::new();
+    for edit in edits {
+        let occurrence = edit.occurrence.unwrap_or(1);
+        let start =
+            find_text_occurrence(&current, &edit.old_text, occurrence).ok_or_else(|| {
+                eyre!("could not find edit text '{}' occurrence {}", edit.old_text, occurrence)
+            })?;
+        let old_end = start + edit.old_text.len();
+        let new_end = start + edit.new_text.len();
+        let mut next = current.clone();
+        next.replace_range(start..old_end, &edit.new_text);
+        let core_edit = CoreEdit::new(
+            start,
+            old_end,
+            new_end,
+            position_at(&current, start)?,
+            position_at(&current, old_end)?,
+            position_at(&next, new_end)?,
+        );
+        resolved.push(ResolvedIncrementalEdit {
+            start_byte: start,
+            old_end_byte: old_end,
+            new_end_byte: new_end,
+            new_text: edit.new_text.clone(),
+            core_edit,
+        });
+        current = next;
+    }
+    Ok(resolved)
+}
+
+fn apply_resolved_edits(source: &str, edits: &[ResolvedIncrementalEdit]) -> Result<String> {
+    let mut current = source.to_string();
+    for edit in edits {
+        current.replace_range(edit.start_byte..edit.old_end_byte, &edit.new_text);
+    }
+    Ok(current)
+}
+
+fn find_text_occurrence(source: &str, needle: &str, occurrence: u64) -> Option<usize> {
+    if needle.is_empty() || occurrence == 0 {
+        return None;
+    }
+    let mut seen = 0u64;
+    for (offset, _) in source.match_indices(needle) {
+        seen += 1;
+        if seen == occurrence {
+            return Some(offset);
+        }
+    }
+    None
+}
+
+fn position_at(source: &str, byte: usize) -> Result<Position> {
+    if byte > source.len() || !source.is_char_boundary(byte) {
+        bail!("byte offset {byte} is not a valid source boundary");
+    }
+    let mut position = Position::start();
+    position.advance(&source[..byte]);
+    Ok(position)
 }
 
 fn score_manifest_ast(root: &Path, manifest: &ParserAccuracyManifest) -> Result<AstScore> {
@@ -1925,6 +2215,95 @@ fn recovery_metrics(score: &RecoveryScore, cadence: Cadence) -> Vec<MetricRow> {
     ]
 }
 
+fn incremental_metrics(score: &IncrementalScore, cadence: Cadence) -> Vec<MetricRow> {
+    if score.expectation_count == 0 {
+        return vec![insufficient(
+            "incremental_full_parse_equivalence_rate",
+            "incremental equivalence gold labels are not available",
+        )];
+    }
+
+    let checkpoint_sample_count = score.checkpoint_hit_count + score.checkpoint_miss_count;
+
+    vec![
+        measured_rate(
+            "incremental_full_parse_equivalence_rate",
+            score.full_parse_equivalent_count,
+            score.expectation_count,
+            cadence,
+        ),
+        measured_rate(
+            "incremental_edit_apply_equivalence_rate",
+            score.edit_apply_equivalent_count,
+            score.expectation_count,
+            cadence,
+        ),
+        measured_rate(
+            "incremental_no_panic_rate",
+            score.no_panic_count,
+            score.expectation_count,
+            cadence,
+        ),
+        measured_count(
+            "incremental_no_progress_count",
+            score.no_progress_count,
+            score.expectation_count,
+            cadence,
+        ),
+        measured_count(
+            "incremental_timeout_count",
+            score.timeout_count,
+            score.expectation_count,
+            cadence,
+        ),
+        measured_rate(
+            "incremental_full_reparse_fallback_rate",
+            score.fallback_count,
+            score.expectation_count,
+            cadence,
+        ),
+        optional_measured_rate(
+            "incremental_checkpoint_hit_rate",
+            ratio(score.checkpoint_hit_count, checkpoint_sample_count),
+            checkpoint_sample_count,
+            "no incremental checkpoint probes are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "incremental_checkpoint_miss_rate",
+            ratio(score.checkpoint_miss_count, checkpoint_sample_count),
+            checkpoint_sample_count,
+            "no incremental checkpoint probes are available",
+            cadence,
+        ),
+        optional_measured_value(
+            "incremental_reparse_byte_ratio_p95",
+            p95_f64(&score.reparse_byte_ratios),
+            score.reparse_byte_ratios.len() as u64,
+            "no incremental reparse byte samples are available",
+            cadence,
+        ),
+        insufficient(
+            "incremental_reused_token_ratio",
+            "incremental reparse result does not report token reuse yet",
+        ),
+        optional_measured_value(
+            "incremental_reused_node_ratio",
+            mean_f64(&score.reused_node_ratios),
+            score.reused_node_ratios.len() as u64,
+            "no incremental node reuse samples are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "incremental_changed_range_accuracy",
+            ratio(score.changed_range_correct_count, score.changed_range_sample_count),
+            score.changed_range_sample_count,
+            "no incremental changed-range samples are available",
+            cadence,
+        ),
+    ]
+}
+
 #[derive(Debug, Clone, Copy)]
 enum SymbolMetricSource {
     Entity,
@@ -2097,6 +2476,24 @@ fn p95_u64(values: &[u64]) -> Option<f64> {
     let rank = ((sorted.len() as f64) * 0.95).ceil() as usize;
     let index = rank.saturating_sub(1).min(sorted.len() - 1);
     Some(sorted[index] as f64)
+}
+
+fn mean_f64(values: &[f64]) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    Some(values.iter().sum::<f64>() / values.len() as f64)
+}
+
+fn p95_f64(values: &[f64]) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    let rank = ((sorted.len() as f64) * 0.95).ceil() as usize;
+    let index = rank.saturating_sub(1).min(sorted.len() - 1);
+    Some(sorted[index])
 }
 
 fn insufficient(metric: &str, reason: &str) -> MetricRow {
@@ -2288,6 +2685,7 @@ mod tests {
                     },
                     symbol_safety_regions: vec![],
                     recovery_expectations: vec![],
+                    incremental_expectations: vec![],
                 },
                 FixtureMetadata {
                     id: "dynamic_require_boundary".to_string(),
@@ -2347,6 +2745,7 @@ mod tests {
                     symbol_expectations: SymbolExpectations::default(),
                     symbol_safety_regions: vec![],
                     recovery_expectations: vec![],
+                    incremental_expectations: vec![],
                 },
             ],
         }
@@ -2779,6 +3178,67 @@ mod tests {
                 MetricRow::Measured { metric, value, sample_count: 1, .. }
                     if metric == "recovery_post_error_symbol_recall"
                         && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+    }
+
+    #[test]
+    fn incremental_scorer_compares_full_parse_and_apply_path() {
+        let source =
+            "package Accuracy::IncrementalSmallEdit;\n\nmy $value = 1;\n\nsub value { $value }\n";
+        let expectation = IncrementalExpectation {
+            id: "small_value_edit_matches_full_parse".to_string(),
+            edits: vec![IncrementalEditExpectation {
+                old_text: "my $value = 1;".to_string(),
+                new_text: "my $value = 2;".to_string(),
+                occurrence: None,
+            }],
+        };
+        let mut score = IncrementalScore::default();
+
+        score_incremental_expectation(source, &expectation, &mut score);
+
+        assert_eq!(score.expectation_count, 1);
+        assert_eq!(score.no_panic_count, 1);
+        assert_eq!(score.edit_apply_equivalent_count, 1);
+        assert_eq!(score.full_parse_equivalent_count, 1);
+        assert_eq!(score.changed_range_correct_count, 1);
+        assert_eq!(score.checkpoint_hit_count, 1);
+        assert_eq!(score.checkpoint_miss_count, 0);
+        assert_eq!(score.reparse_byte_ratios.len(), 1);
+        assert_eq!(score.reused_node_ratios.len(), 1);
+    }
+
+    #[test]
+    fn incremental_metrics_emit_equivalence_rows_and_token_reuse_gap() {
+        let score = IncrementalScore {
+            expectation_count: 1,
+            full_parse_equivalent_count: 1,
+            edit_apply_equivalent_count: 1,
+            no_panic_count: 1,
+            checkpoint_hit_count: 1,
+            reparse_byte_ratios: vec![0.25],
+            reused_node_ratios: vec![0.75],
+            changed_range_sample_count: 1,
+            changed_range_correct_count: 1,
+            ..IncrementalScore::default()
+        };
+
+        let metrics = incremental_metrics(&score, Cadence::Pr);
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "incremental_full_parse_equivalence_rate"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "incremental_reused_token_ratio"
             )
         }));
     }
