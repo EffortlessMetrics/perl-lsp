@@ -1,1 +1,4 @@
-# placeholder fixture: dynamic_require_boundary
+package DynamicRequireBoundary;
+
+my $module = "Some::Module";
+require $module;

@@ -1,1 +1,5 @@
-# placeholder fixture: imported_function_visibility
+package ImportedFunctionVisibility;
+
+use ExportTagExpansion qw(optional);
+
+optional();

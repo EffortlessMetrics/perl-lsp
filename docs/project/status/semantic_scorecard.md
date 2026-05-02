@@ -4,6 +4,38 @@ Measured: `deterministic-fixture-baseline`
 Fixture family version: `1`  
 Fixtures loaded: `12`
 
+## Fact Coverage
+
+| Row | Status | Facts | Coverage | Exact | High | Heuristic | Dynamic boundary |
+|---|---|---:|---:|---:|---:|---:|---:|
+| declaration_facts | available | 31 | 12/12 | 109 | 109 | 1 | 0 |
+| definition_candidates | available | 31 | 12/12 | 109 | 109 | 1 | 0 |
+| export_facts | available | 3 | 12/12 | 109 | 109 | 1 | 0 |
+| import_specs | available | 7 | 12/12 | 109 | 109 | 1 | 0 |
+| occurrence_facts | available | 14 | 12/12 | 109 | 109 | 1 | 0 |
+| reference_edges | available | 1 | 12/12 | 109 | 109 | 1 | 0 |
+
+## Readiness Rows
+
+| Row | Status | Value | Threshold | Evidence |
+|---|---|---:|---:|---|
+| completion_import_fixture_pass_rate | pass | 100% | 100% | import/export visibility fixtures |
+| definition_shadow_regressions | pass | 0 | 0 | semantic shadow compare receipts |
+| reference_shadow_regressions | pass | 0 | 0 | semantic shadow compare receipts |
+| rename_unsafe_edit_count | pass | 0 | 0 | rename blocker fixtures |
+| safe_delete_blocker_fixture_pass_rate | pass | 100% | 100% | safe-delete blocker fixtures |
+| semantic_fact_counts_nonzero | pass | 56 | > 0 | semantic fixture indexing |
+| undefined_symbol_false_positive_fixture_rate | pass | 0% | 0% | diagnostics fixture receipts |
+| visible_symbols_fixture_pass_rate | pass | 100% | 100% | workspace scorecard fixtures |
+
+## Unavailable Rows
+
+| Row | Status | Reason |
+|---|---|---|
+| package_graph | unavailable | planned for future scorecard waves |
+| rename_plan | unavailable | planned for future scorecard waves |
+| safe_delete_plan | unavailable | planned for future scorecard waves |
+
 ## Fixture IDs
 
 - `autoload_dynamic_boundary`
@@ -19,20 +51,4 @@ Fixtures loaded: `12`
 - `same_bare_sub_two_packages`
 - `typeglob_alias`
 
-## Metrics
-
-| Metric | Status | Value |
-|---|---|---:|
-| completion_top1 | baseline_pending | n/a |
-| completion_top5 | baseline_pending | n/a |
-| definition_hit_at_1 | baseline_pending | n/a |
-| definition_hit_at_5 | baseline_pending | n/a |
-| query_latency_p50 | baseline_pending | n/a |
-| query_latency_p95 | baseline_pending | n/a |
-| reference_precision | baseline_pending | n/a |
-| reference_recall | baseline_pending | n/a |
-| rename_unsafe_edit_count | baseline_pending | n/a |
-| safe_delete_external_ref_detection | baseline_pending | n/a |
-| undefined_symbol_false_positive_rate | baseline_pending | n/a |
-
-Initial harness: metrics intentionally baseline_pending until semantic facts land.
+RC2 proof rail: scorecard rows are deterministic and fixture-backed; provider cutover remains conservative for unavailable rows.
