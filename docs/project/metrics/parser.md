@@ -10,6 +10,23 @@ The parser scorecard answers the question **"can we ingest real Perl without err
 
 It is one of the seven subsystem scorecards defined in [`README.md`](README.md) and the first one to graduate from *proposed* to *stood up, improvement-only* in the scorecard lifecycle.
 
+## Next Layer: Accuracy Observability
+
+The current scorecard is the parser ingestion and recovery floor. The next layer is the parser accuracy scorecard, captured in [`.kiro/specs/parser-accuracy-observability`](../../../.kiro/specs/parser-accuracy-observability). That spec extends the parser answer from "did it parse cleanly?" to:
+
+- What input denominator did we score?
+- Did we identify the right line-level constructs?
+- Did the AST have the right node kinds, spans, and parent-child edges?
+- Did semantic facts contain the right declarations, references, imports, exports, scopes, and definition/reference edges?
+- Did we falsely invent symbols or false exact resolutions?
+- Did recovery stay contained after bad syntax?
+- Did incremental parsing match full parsing?
+- Were byte, line, and UTF-16 ranges correct?
+- Did fast paths, cache reuse, and speed improvements preserve correctness?
+- Did gold fixtures change in a way that weakens the denominator?
+
+Those rows are intentionally separate from the clean-parse floor. A clean parse can still produce the wrong tree, the wrong span, or unsafe false precision for dynamic Perl. The accuracy layer must report `insufficient_data` until each row has a real denominator; it must not report missing measurements as zero or pass.
+
 ## 1. The four shape-questions, answered
 
 Every scorecard in this repo answers the same four questions, in the same order:
