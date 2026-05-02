@@ -206,9 +206,12 @@ fn classify_hover_result(
 ) -> HoverCutoverResult {
     match entity_occ {
         Some((ref entity, ref occurrence)) => {
-            // Dynamic boundary: provenance is DynamicBoundary or occurrence kind is DynamicBoundary
+            // Dynamic boundary: provenance is DynamicBoundary or occurrence kind marks one.
             if entity.provenance == Provenance::DynamicBoundary
-                || occurrence.kind == OccurrenceKind::DynamicBoundary
+                || matches!(
+                    occurrence.kind,
+                    OccurrenceKind::DynamicBoundary | OccurrenceKind::TypeglobReference
+                )
             {
                 let explanation = build_dynamic_boundary_explanation(entity, occurrence, symbol);
                 return HoverCutoverResult::DynamicBoundary(explanation);
@@ -435,6 +438,8 @@ fn occurrence_kind_label(kind: OccurrenceKind) -> &'static str {
         OccurrenceKind::Call => "call",
         OccurrenceKind::MethodCall => "method call",
         OccurrenceKind::StaticMethodCall => "static method call",
+        OccurrenceKind::CoderefReference => "coderef reference",
+        OccurrenceKind::TypeglobReference => "typeglob reference",
         OccurrenceKind::Import => "import",
         OccurrenceKind::Export => "export",
         OccurrenceKind::Inheritance => "inheritance",
@@ -1294,6 +1299,8 @@ mod tests {
             OccurrenceKind::Call,
             OccurrenceKind::MethodCall,
             OccurrenceKind::StaticMethodCall,
+            OccurrenceKind::CoderefReference,
+            OccurrenceKind::TypeglobReference,
             OccurrenceKind::Import,
             OccurrenceKind::Export,
             OccurrenceKind::Inheritance,

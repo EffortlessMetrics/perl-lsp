@@ -113,6 +113,8 @@ fn arb_symbol_ref_kind() -> impl Strategy<Value = SymbolRefKind> {
         Just(SymbolRefKind::SubroutineCall),
         Just(SymbolRefKind::MethodCall),
         Just(SymbolRefKind::StaticMethodCall),
+        Just(SymbolRefKind::CoderefReference),
+        Just(SymbolRefKind::TypeglobReference),
     ]
 }
 
@@ -126,6 +128,8 @@ fn arb_symbol_ref() -> impl Strategy<Value = SymbolRef> {
             Just("$".to_string()),
             Just("@".to_string()),
             Just("%".to_string()),
+            Just("&".to_string()),
+            Just("*".to_string()),
         ]),
         prop::option::of(arb_qualified_name()),
         arb_spans(),

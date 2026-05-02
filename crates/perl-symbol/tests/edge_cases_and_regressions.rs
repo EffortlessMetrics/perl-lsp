@@ -65,6 +65,8 @@ fn api_regression_every_documented_name_is_reachable_at_crate_root() -> Result<(
     let _rk = SymbolRefKind::SubroutineCall;
     let _method = SymbolRefKind::MethodCall;
     let _static_method = SymbolRefKind::StaticMethodCall;
+    let _coderef = SymbolRefKind::CoderefReference;
+    let _typeglob = SymbolRefKind::TypeglobReference;
 
     Ok(())
 }

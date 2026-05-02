@@ -4,14 +4,13 @@
 //! - variable references (`$x`, `@items`, `%opts`, `$#array`)
 //! - subroutine call references (`foo(...)` / bareword calls via `NodeKind::FunctionCall`)
 //! - method call references (`$obj->method(...)`, `Pkg->method(...)`)
+//! - coderef and typeglob boundary references (`&foo`, `\&foo`, `*alias`)
 //! - package-qualified forms where the AST encodes them directly
 //!   (`$Pkg::var`, `Pkg::func(...)`)
 //!
 //! # Phase-1 Intentional Exclusions
 //!
 //! The following reference types are **not** emitted in this phase:
-//! - `&foo` / `\&foo` code-reference variables (sigil `&`) — `VarKind` has no `CodeRef` variant
-//! - `*foo` typeglob variables (sigil `*`) — reserved for a future phase
 //! - Indirect-object calls (`new Class @args`, `NodeKind::IndirectCall`) — same reason
 //! - Subroutine signature parameter bindings (`MandatoryParameter`, `SlurpyParameter`,
 //!   `NamedParameter`) — these are declaration sites, not reference sites.  Optional
@@ -31,6 +30,10 @@ pub enum SymbolRefKind {
     MethodCall,
     /// Static/package method invocation (`Package->method(...)`).
     StaticMethodCall,
+    /// Coderef-oriented reference (`&foo`, `\&foo`, `goto &foo`).
+    CoderefReference,
+    /// Typeglob reference or alias boundary (`*foo`, `*alias = ...`).
+    TypeglobReference,
 }
 
 /// A projected view of a symbol reference/use site in Perl source.
@@ -85,18 +88,20 @@ fn walk(node: &Node, out: &mut Vec<SymbolRef>) {
         }
 
         NodeKind::Variable { sigil, name } => {
-            if let Some(var_kind) = var_kind_from_sigil(sigil) {
-                let (package_qualifier, bare_name, qualified_name) = split_qualified_name(name);
-                out.push(SymbolRef {
-                    kind: SymbolRefKind::Variable(var_kind),
-                    name: bare_name,
-                    qualified_name,
-                    sigil: Some(sigil.clone()),
-                    package_qualifier,
-                    full_span: (node.location.start, node.location.end),
-                    anchor_span: Some((node.location.start, node.location.end)),
-                });
-            }
+            push_variable_like_ref(node, sigil, name, out);
+        }
+
+        NodeKind::Typeglob { name } => {
+            let (package_qualifier, bare_name, qualified_name) = split_qualified_name(name);
+            out.push(SymbolRef {
+                kind: SymbolRefKind::TypeglobReference,
+                name: bare_name,
+                qualified_name,
+                sigil: Some("*".to_string()),
+                package_qualifier,
+                full_span: (node.location.start, node.location.end),
+                anchor_span: Some((node.location.start, node.location.end)),
+            });
         }
 
         NodeKind::FunctionCall { name, args } => {
@@ -165,6 +170,29 @@ fn static_method_target(object: &Node, method: &str) -> Option<(String, String)>
     Some((name.clone(), format!("{name}::{method}")))
 }
 
+fn push_variable_like_ref(node: &Node, sigil: &str, name: &str, out: &mut Vec<SymbolRef>) {
+    let kind = match sigil {
+        "&" => SymbolRefKind::CoderefReference,
+        "*" => SymbolRefKind::TypeglobReference,
+        _ => {
+            let Some(var_kind) = var_kind_from_sigil(sigil) else {
+                return;
+            };
+            SymbolRefKind::Variable(var_kind)
+        }
+    };
+    let (package_qualifier, bare_name, qualified_name) = split_qualified_name(name);
+    out.push(SymbolRef {
+        kind,
+        name: bare_name,
+        qualified_name,
+        sigil: Some(sigil.to_string()),
+        package_qualifier,
+        full_span: (node.location.start, node.location.end),
+        anchor_span: Some((node.location.start, node.location.end)),
+    });
+}
+
 /// Split a potentially package-qualified name into `(qualifier, bare, full)`.
 ///
 /// Returns `(Some("Pkg::Sub"), "baz", "Pkg::Sub::baz")` for `"Pkg::Sub::baz"`.
@@ -188,7 +216,6 @@ fn var_kind_from_sigil(sigil: &str) -> Option<VarKind> {
         "$#" => Some(VarKind::Scalar),
         "@" => Some(VarKind::Array),
         "%" => Some(VarKind::Hash),
-        // `&` (code reference) and `*` (typeglob) are phase-1 exclusions.
         _ => None,
     }
 }

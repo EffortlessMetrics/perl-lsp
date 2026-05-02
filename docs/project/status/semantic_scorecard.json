@@ -58,7 +58,7 @@
         "exact_facts": 111,
         "high_confidence_facts": 111,
         "heuristic_facts": 1,
-        "dynamic_boundary_facts": 0
+        "dynamic_boundary_facts": 2
       }
     },
     "definition_candidates": {
@@ -86,7 +86,7 @@
         "exact_facts": 111,
         "high_confidence_facts": 111,
         "heuristic_facts": 1,
-        "dynamic_boundary_facts": 0
+        "dynamic_boundary_facts": 2
       }
     },
     "export_facts": {
@@ -114,7 +114,7 @@
         "exact_facts": 111,
         "high_confidence_facts": 111,
         "heuristic_facts": 1,
-        "dynamic_boundary_facts": 0
+        "dynamic_boundary_facts": 2
       }
     },
     "import_specs": {
@@ -142,7 +142,7 @@
         "exact_facts": 111,
         "high_confidence_facts": 111,
         "heuristic_facts": 1,
-        "dynamic_boundary_facts": 0
+        "dynamic_boundary_facts": 2
       }
     },
     "inheritance_edges": {
@@ -170,12 +170,12 @@
         "exact_facts": 111,
         "high_confidence_facts": 111,
         "heuristic_facts": 1,
-        "dynamic_boundary_facts": 0
+        "dynamic_boundary_facts": 2
       }
     },
     "occurrence_facts": {
       "status": "available",
-      "total_facts": 14,
+      "total_facts": 15,
       "fixture_coverage": {
         "covered_fixture_count": 12,
         "total_fixture_count": 12,
@@ -198,7 +198,7 @@
         "exact_facts": 111,
         "high_confidence_facts": 111,
         "heuristic_facts": 1,
-        "dynamic_boundary_facts": 0
+        "dynamic_boundary_facts": 2
       }
     },
     "package_graph_edges": {
@@ -226,7 +226,7 @@
         "exact_facts": 111,
         "high_confidence_facts": 111,
         "heuristic_facts": 1,
-        "dynamic_boundary_facts": 0
+        "dynamic_boundary_facts": 2
       }
     },
     "reference_edges": {
@@ -254,7 +254,7 @@
         "exact_facts": 111,
         "high_confidence_facts": 111,
         "heuristic_facts": 1,
-        "dynamic_boundary_facts": 0
+        "dynamic_boundary_facts": 2
       }
     },
     "role_composition_edges": {
@@ -282,7 +282,7 @@
         "exact_facts": 111,
         "high_confidence_facts": 111,
         "heuristic_facts": 1,
-        "dynamic_boundary_facts": 0
+        "dynamic_boundary_facts": 2
       }
     }
   },
@@ -343,7 +343,7 @@
     },
     "semantic_fact_counts_nonzero": {
       "status": "pass",
-      "value": "58",
+      "value": "59",
       "threshold": "> 0",
       "evidence": "semantic fixture indexing"
     },

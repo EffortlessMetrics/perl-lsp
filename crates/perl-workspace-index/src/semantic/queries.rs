@@ -429,7 +429,7 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
                 let category = classify_occurrence(occ.kind);
 
                 // Dynamic boundary references → add blocker (Req 16.2).
-                if occ.kind == OccurrenceKind::DynamicBoundary {
+                if is_dynamic_boundary_occurrence(occ.kind) {
                     blockers.push(PlanBlocker::new(
                         PlanBlockerReason::DynamicBoundary,
                         Some(occ.anchor_id),
@@ -467,7 +467,7 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
         // ── Collect reference occurrences from the reference index ──
         let ref_edges = self.reference_index.get_by_entity(entity_id);
         for edge in ref_edges {
-            if edge.kind == OccurrenceKind::DynamicBoundary {
+            if is_dynamic_boundary_occurrence(edge.kind) {
                 blockers.push(PlanBlocker::new(
                     PlanBlockerReason::DynamicBoundary,
                     Some(edge.anchor_id),
@@ -574,7 +574,7 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
         // If the symbol has references in the workspace, block deletion.
         let ref_edges = self.reference_index.get_by_entity(entity_id);
         let dynamic_ref_count =
-            ref_edges.iter().filter(|edge| edge.kind == OccurrenceKind::DynamicBoundary).count();
+            ref_edges.iter().filter(|edge| is_dynamic_boundary_occurrence(edge.kind)).count();
         let concrete_ref_count = ref_edges.len().saturating_sub(dynamic_ref_count);
         if dynamic_ref_count > 0 {
             blockers.push(PlanBlocker::new(
@@ -604,7 +604,7 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
             .values()
             .flat_map(|s| s.occurrences.iter())
             .filter(|occ| {
-                occ.entity_id == Some(entity_id) && occ.kind == OccurrenceKind::DynamicBoundary
+                occ.entity_id == Some(entity_id) && is_dynamic_boundary_occurrence(occ.kind)
             })
             .count();
         let shard_ref_count: usize = self
@@ -613,10 +613,8 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
             .flat_map(|s| s.occurrences.iter())
             .filter(|occ| {
                 occ.entity_id == Some(entity_id)
-                    && !matches!(
-                        occ.kind,
-                        OccurrenceKind::Definition | OccurrenceKind::DynamicBoundary
-                    )
+                    && !matches!(occ.kind, OccurrenceKind::Definition)
+                    && !is_dynamic_boundary_occurrence(occ.kind)
             })
             .count();
 
@@ -882,13 +880,18 @@ fn classify_occurrence(kind: OccurrenceKind) -> Option<PlannedEditCategory> {
         | OccurrenceKind::Call
         | OccurrenceKind::MethodCall
         | OccurrenceKind::StaticMethodCall
+        | OccurrenceKind::CoderefReference
         | OccurrenceKind::GeneratedUse => Some(PlannedEditCategory::Reference),
         // Inheritance and role-composition are structural edges, not rename
         // targets — warn rather than silently omitting.
         OccurrenceKind::Inheritance | OccurrenceKind::RoleComposition => None,
-        // DynamicBoundary is handled as a blocker before this function is called.
-        OccurrenceKind::DynamicBoundary => None,
+        // Dynamic-boundary classes are handled as blockers before this function is called.
+        OccurrenceKind::DynamicBoundary | OccurrenceKind::TypeglobReference => None,
     }
+}
+
+fn is_dynamic_boundary_occurrence(kind: OccurrenceKind) -> bool {
+    matches!(kind, OccurrenceKind::DynamicBoundary | OccurrenceKind::TypeglobReference)
 }
 
 #[cfg(test)]
@@ -3187,8 +3190,8 @@ mod tests {
 
         /// An occurrence kind that the rename plan can classify into a
         /// `PlannedEditCategory`.  We exclude `DynamicBoundary`,
-        /// `Inheritance`, and `RoleComposition` because those are handled
-        /// as blockers/warnings rather than edits.
+        /// `TypeglobReference`, `Inheritance`, and `RoleComposition` because
+        /// those are handled as blockers/warnings rather than edits.
         #[derive(Debug, Clone, Copy)]
         struct ClassifiableOccurrence {
             kind: OccurrenceKind,
@@ -3233,6 +3236,10 @@ mod tests {
                 }),
                 Just(ClassifiableOccurrence {
                     kind: OccurrenceKind::StaticMethodCall,
+                    expected_category: PlannedEditCategory::Reference,
+                }),
+                Just(ClassifiableOccurrence {
+                    kind: OccurrenceKind::CoderefReference,
                     expected_category: PlannedEditCategory::Reference,
                 }),
                 Just(ClassifiableOccurrence {

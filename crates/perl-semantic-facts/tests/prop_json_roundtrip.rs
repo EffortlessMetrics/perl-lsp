@@ -60,6 +60,8 @@ fn arb_occurrence_kind() -> impl Strategy<Value = OccurrenceKind> {
         Just(OccurrenceKind::Call),
         Just(OccurrenceKind::MethodCall),
         Just(OccurrenceKind::StaticMethodCall),
+        Just(OccurrenceKind::CoderefReference),
+        Just(OccurrenceKind::TypeglobReference),
         Just(OccurrenceKind::Import),
         Just(OccurrenceKind::Export),
         Just(OccurrenceKind::Inheritance),
