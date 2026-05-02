@@ -1,5 +1,8 @@
 * text eol=lf
 
+# Parser accuracy span fixture intentionally preserves BOM and mixed newlines.
+crates/perl-corpus/fixtures/parser_accuracy/span_coordinates.pl -text !eol whitespace=-blank-at-eol
+
 # =============================================================================
 # Image and font files (must not have line endings modified)
 # =============================================================================

@@ -16,7 +16,9 @@ use perl_parser::apply_edits;
 use perl_parser::edit::Edit as CoreEdit;
 use perl_parser::incremental_v2::IncrementalParserV2;
 use perl_parser::position::Position;
-use perl_parser::{Edit as TextEdit, IncrementalState, Node, NodeKind, ParseError, Parser};
+use perl_parser::{
+    Edit as TextEdit, IncrementalState, Node, NodeKind, ParseError, Parser, PositionMapper,
+};
 use perl_semantic_facts::{AnchorId, EntityId};
 use perl_workspace::workspace::workspace_index::{FileFactShard, WorkspaceIndex};
 use serde::{Deserialize, Serialize};
@@ -60,6 +62,8 @@ struct FixtureMetadata {
     recovery_expectations: Vec<RecoveryExpectation>,
     #[serde(default)]
     incremental_expectations: Vec<IncrementalExpectation>,
+    #[serde(default)]
+    span_expectations: Vec<SpanExpectation>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -191,6 +195,26 @@ struct IncrementalEditExpectation {
     new_text: String,
     #[serde(default)]
     occurrence: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct SpanExpectation {
+    id: String,
+    span_text: String,
+    #[serde(default)]
+    occurrence: Option<u64>,
+    byte_start: usize,
+    byte_end: usize,
+    line_start: u64,
+    line_end: u64,
+    utf16_start: SpanPositionExpectation,
+    utf16_end: SpanPositionExpectation,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+struct SpanPositionExpectation {
+    line: u32,
+    character: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -529,6 +553,25 @@ struct IncrementalScore {
     changed_range_correct_count: u64,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct SpanScore {
+    expectation_count: u64,
+    byte_exact_count: u64,
+    line_exact_count: u64,
+    utf16_exact_count: u64,
+    near_count: u64,
+    invalid_count: u64,
+    out_of_bounds_count: u64,
+    inverted_count: u64,
+    non_char_boundary_count: u64,
+    crlf_sample_count: u64,
+    crlf_position_error_count: u64,
+    unicode_sample_count: u64,
+    unicode_position_error_count: u64,
+    tab_sample_count: u64,
+    tab_column_mismatch_count: u64,
+}
+
 /// Run `cargo xtask metrics parser-accuracy`.
 pub fn run(
     json: bool,
@@ -602,6 +645,7 @@ fn build_artifact(
     let symbol_score = score_manifest_symbols(root, manifest)?;
     let recovery_score = score_manifest_recovery(root, manifest)?;
     let incremental_score = score_manifest_incremental(root, manifest)?;
+    let span_score = score_manifest_spans(root, manifest)?;
     let mut metrics = vec![MetricRow::Measured {
         metric: "denominator_fixture_count".to_string(),
         value: fixture_count,
@@ -616,6 +660,7 @@ fn build_artifact(
     metrics.extend(safety_metrics(&line_score, &symbol_score, cadence));
     metrics.extend(recovery_metrics(&recovery_score, cadence));
     metrics.extend(incremental_metrics(&incremental_score, cadence));
+    metrics.extend(span_metrics(&span_score, cadence));
 
     Ok(ParserAccuracyArtifact {
         schema_version: 1,
@@ -728,7 +773,7 @@ fn extract_line_tags(source: &str) -> BTreeMap<u64, BTreeSet<LineTag>> {
 fn line_starts(source: &str) -> Vec<usize> {
     let mut starts = vec![0];
     for (index, byte) in source.bytes().enumerate() {
-        if byte == b'\n' && index + 1 < source.len() {
+        if byte == b'\n' {
             starts.push(index + 1);
         }
     }
@@ -1300,6 +1345,145 @@ fn position_at(source: &str, byte: usize) -> Result<Position> {
     let mut position = Position::start();
     position.advance(&source[..byte]);
     Ok(position)
+}
+
+fn score_manifest_spans(root: &Path, manifest: &ParserAccuracyManifest) -> Result<SpanScore> {
+    let mut score = SpanScore::default();
+    for fixture in &manifest.fixtures {
+        if fixture.span_expectations.is_empty() {
+            continue;
+        }
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy span fixture source {}", source_path.display())
+        })?;
+        for expectation in &fixture.span_expectations {
+            score_span_expectation(&source, expectation, &mut score);
+        }
+    }
+    Ok(score)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ActualSpanCoordinates {
+    byte_start: usize,
+    byte_end: usize,
+    line_start: u64,
+    line_end: u64,
+    utf16_start: SpanPositionExpectation,
+    utf16_end: SpanPositionExpectation,
+}
+
+fn score_span_expectation(source: &str, expectation: &SpanExpectation, score: &mut SpanScore) {
+    score.expectation_count += 1;
+
+    let has_crlf = source.contains("\r\n");
+    let has_unicode = !expectation.span_text.is_ascii();
+    let has_tab = expectation.span_text.contains('\t');
+    if has_crlf {
+        score.crlf_sample_count += 1;
+    }
+    if has_unicode {
+        score.unicode_sample_count += 1;
+    }
+    if has_tab {
+        score.tab_sample_count += 1;
+    }
+
+    if expectation.byte_end < expectation.byte_start {
+        score.invalid_count += 1;
+        score.inverted_count += 1;
+        return;
+    }
+    if expectation.byte_end > source.len() {
+        score.invalid_count += 1;
+        score.out_of_bounds_count += 1;
+        return;
+    }
+    if !source.is_char_boundary(expectation.byte_start)
+        || !source.is_char_boundary(expectation.byte_end)
+    {
+        score.invalid_count += 1;
+        score.non_char_boundary_count += 1;
+        return;
+    }
+
+    let actual = match resolve_actual_span_coordinates(source, expectation) {
+        Some(actual) => actual,
+        None => {
+            score.invalid_count += 1;
+            return;
+        }
+    };
+
+    let byte_exact =
+        actual.byte_start == expectation.byte_start && actual.byte_end == expectation.byte_end;
+    let line_exact =
+        actual.line_start == expectation.line_start && actual.line_end == expectation.line_end;
+    let utf16_exact =
+        actual.utf16_start == expectation.utf16_start && actual.utf16_end == expectation.utf16_end;
+
+    if byte_exact {
+        score.byte_exact_count += 1;
+    }
+    if line_exact {
+        score.line_exact_count += 1;
+    }
+    if utf16_exact {
+        score.utf16_exact_count += 1;
+    }
+    if span_is_near(expectation, &actual) {
+        score.near_count += 1;
+    }
+    if has_crlf && (!line_exact || !utf16_exact) {
+        score.crlf_position_error_count += 1;
+    }
+    if has_unicode && !utf16_exact {
+        score.unicode_position_error_count += 1;
+    }
+    if has_tab && !utf16_exact {
+        score.tab_column_mismatch_count += 1;
+    }
+}
+
+fn resolve_actual_span_coordinates(
+    source: &str,
+    expectation: &SpanExpectation,
+) -> Option<ActualSpanCoordinates> {
+    let (byte_start, byte_end) = if expectation.span_text.is_empty() {
+        (expectation.byte_start, expectation.byte_end)
+    } else {
+        let occurrence = expectation.occurrence.unwrap_or(1);
+        let byte_start = find_text_occurrence(source, &expectation.span_text, occurrence)?;
+        (byte_start, byte_start + expectation.span_text.len())
+    };
+
+    if byte_end > source.len()
+        || byte_end < byte_start
+        || !source.is_char_boundary(byte_start)
+        || !source.is_char_boundary(byte_end)
+    {
+        return None;
+    }
+
+    let line_starts = line_starts(source);
+    let mapper = PositionMapper::new(source);
+    let start = mapper.byte_to_lsp_pos(byte_start);
+    let end = mapper.byte_to_lsp_pos(byte_end);
+
+    Some(ActualSpanCoordinates {
+        byte_start,
+        byte_end,
+        line_start: line_for_offset(&line_starts, byte_start),
+        line_end: line_for_offset(&line_starts, byte_end),
+        utf16_start: SpanPositionExpectation { line: start.line, character: start.character },
+        utf16_end: SpanPositionExpectation { line: end.line, character: end.character },
+    })
+}
+
+fn span_is_near(expectation: &SpanExpectation, actual: &ActualSpanCoordinates) -> bool {
+    expectation.byte_start.abs_diff(actual.byte_start) <= 2
+        && expectation.byte_end.abs_diff(actual.byte_end) <= 2
 }
 
 fn score_manifest_ast(root: &Path, manifest: &ParserAccuracyManifest) -> Result<AstScore> {
@@ -2304,6 +2488,74 @@ fn incremental_metrics(score: &IncrementalScore, cadence: Cadence) -> Vec<Metric
     ]
 }
 
+fn span_metrics(score: &SpanScore, cadence: Cadence) -> Vec<MetricRow> {
+    if score.expectation_count == 0 {
+        return vec![insufficient("byte_span_exact_rate", "span gold labels are not available")];
+    }
+
+    vec![
+        measured_rate(
+            "byte_span_exact_rate",
+            score.byte_exact_count,
+            score.expectation_count,
+            cadence,
+        ),
+        measured_rate(
+            "line_span_exact_rate",
+            score.line_exact_count,
+            score.expectation_count,
+            cadence,
+        ),
+        measured_rate(
+            "utf16_range_exact_rate",
+            score.utf16_exact_count,
+            score.expectation_count,
+            cadence,
+        ),
+        measured_rate("span_near_rate", score.near_count, score.expectation_count, cadence),
+        measured_count("span_invalid_count", score.invalid_count, score.expectation_count, cadence),
+        measured_count(
+            "span_out_of_bounds_count",
+            score.out_of_bounds_count,
+            score.expectation_count,
+            cadence,
+        ),
+        measured_count(
+            "span_inverted_count",
+            score.inverted_count,
+            score.expectation_count,
+            cadence,
+        ),
+        measured_count(
+            "span_non_char_boundary_count",
+            score.non_char_boundary_count,
+            score.expectation_count,
+            cadence,
+        ),
+        optional_measured_count(
+            "crlf_position_error_count",
+            score.crlf_position_error_count,
+            score.crlf_sample_count,
+            "no CRLF span samples are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "unicode_position_error_count",
+            score.unicode_position_error_count,
+            score.unicode_sample_count,
+            "no Unicode span samples are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "tab_column_mismatch_count",
+            score.tab_column_mismatch_count,
+            score.tab_sample_count,
+            "no tab span samples are available",
+            cadence,
+        ),
+    ]
+}
+
 #[derive(Debug, Clone, Copy)]
 enum SymbolMetricSource {
     Entity,
@@ -2686,6 +2938,7 @@ mod tests {
                     symbol_safety_regions: vec![],
                     recovery_expectations: vec![],
                     incremental_expectations: vec![],
+                    span_expectations: vec![],
                 },
                 FixtureMetadata {
                     id: "dynamic_require_boundary".to_string(),
@@ -2746,6 +2999,7 @@ mod tests {
                     symbol_safety_regions: vec![],
                     recovery_expectations: vec![],
                     incremental_expectations: vec![],
+                    span_expectations: vec![],
                 },
             ],
         }
@@ -3239,6 +3493,81 @@ mod tests {
                 metric,
                 MetricRow::InsufficientData { metric, sample_count: 0, .. }
                     if metric == "incremental_reused_token_ratio"
+            )
+        }));
+    }
+
+    #[test]
+    fn span_scorer_counts_utf16_unicode_crlf_and_tab_coordinates() {
+        let source = "package Span;\r\nmy $emoji = \"😀\";\n\treturn \"café\";\r\n";
+        let expectation = SpanExpectation {
+            id: "emoji_string".to_string(),
+            span_text: "\"😀\"".to_string(),
+            occurrence: None,
+            byte_start: 27,
+            byte_end: 33,
+            line_start: 2,
+            line_end: 2,
+            utf16_start: SpanPositionExpectation { line: 1, character: 12 },
+            utf16_end: SpanPositionExpectation { line: 1, character: 16 },
+        };
+        let tab_expectation = SpanExpectation {
+            id: "tabbed_return".to_string(),
+            span_text: "\treturn \"café\";".to_string(),
+            occurrence: None,
+            byte_start: 35,
+            byte_end: 51,
+            line_start: 3,
+            line_end: 3,
+            utf16_start: SpanPositionExpectation { line: 2, character: 0 },
+            utf16_end: SpanPositionExpectation { line: 2, character: 15 },
+        };
+        let mut score = SpanScore::default();
+
+        score_span_expectation(source, &expectation, &mut score);
+        score_span_expectation(source, &tab_expectation, &mut score);
+
+        assert_eq!(score.expectation_count, 2);
+        assert_eq!(score.byte_exact_count, 2);
+        assert_eq!(score.line_exact_count, 2);
+        assert_eq!(score.utf16_exact_count, 2);
+        assert_eq!(score.crlf_sample_count, 2);
+        assert_eq!(score.unicode_sample_count, 2);
+        assert_eq!(score.tab_sample_count, 1);
+        assert_eq!(score.unicode_position_error_count, 0);
+        assert_eq!(score.tab_column_mismatch_count, 0);
+    }
+
+    #[test]
+    fn span_metrics_emit_coordinate_rows() {
+        let score = SpanScore {
+            expectation_count: 2,
+            byte_exact_count: 2,
+            line_exact_count: 2,
+            utf16_exact_count: 2,
+            near_count: 2,
+            crlf_sample_count: 1,
+            unicode_sample_count: 1,
+            tab_sample_count: 1,
+            ..SpanScore::default()
+        };
+
+        let metrics = span_metrics(&score, Cadence::Pr);
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "utf16_range_exact_rate"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "unicode_position_error_count"
+                        && (*value - 0.0).abs() < f64::EPSILON
             )
         }));
     }
