@@ -4067,6 +4067,54 @@ print exported_func;
 }
 
 #[test]
+fn dynamic_require_with_matching_variable_import_suppresses_strict_subs()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $module = 'Dynamic::Loader';
+require $module;
+$module->import(qw(dynamic_func other_func));
+print dynamic_func;
+print other_func;
+"#;
+    let issues = scope_issues_strict(code);
+
+    for symbol in &["dynamic_func", "other_func"] {
+        assert!(
+            !issues.iter().any(|issue| {
+                matches!(issue.kind, IssueKind::UnquotedBareword) && &issue.variable_name == symbol
+            }),
+            "matching dynamic require/import pair should suppress exact strict 'subs' for {}",
+            symbol
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn dynamic_import_symbol_list_does_not_suppress_unrelated_bareword()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $module = 'Dynamic::Loader';
+my @names = ('dynamic_func');
+require $module;
+$module->import(@names);
+print dynamic_func;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "dynamic_func"
+        }),
+        "runtime-computed import lists must not claim exact imported barewords"
+    );
+    Ok(())
+}
+
+#[test]
 fn multiple_imports_from_same_required_module() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use strict 'subs';

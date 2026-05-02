@@ -1919,6 +1919,20 @@ fn collect_imported_barewords(ast: &Node) -> HashSet<String> {
         }
     }
 
+    fn require_variable_name(node: &Node) -> Option<String> {
+        let NodeKind::FunctionCall { name, args } = &node.kind else {
+            return None;
+        };
+        if name != "require" {
+            return None;
+        }
+        let first = args.first()?;
+        let NodeKind::Variable { sigil, name } = &first.kind else {
+            return None;
+        };
+        (sigil == "$" && !name.contains("::")).then(|| name.clone())
+    }
+
     fn maybe_record_manual_imports(
         node: &Node,
         required_modules: &HashSet<String>,
@@ -1964,6 +1978,52 @@ fn collect_imported_barewords(ast: &Node) -> HashSet<String> {
         }
     }
 
+    fn maybe_record_dynamic_manual_imports(
+        node: &Node,
+        dynamic_require_vars: &HashSet<String>,
+        imported: &mut HashSet<String>,
+    ) {
+        let NodeKind::MethodCall { object, method, args } = &node.kind else {
+            return;
+        };
+        if method != "import" {
+            return;
+        }
+        let NodeKind::Variable { sigil, name } = &object.kind else {
+            return;
+        };
+        if sigil != "$" || !dynamic_require_vars.contains(name) {
+            return;
+        }
+
+        for arg in args {
+            match &arg.kind {
+                NodeKind::String { value, .. } => push_symbol(imported, "", value),
+                NodeKind::Identifier { name } => {
+                    if name.starts_with("qw") {
+                        let content = name
+                            .trim_start_matches("qw")
+                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                        for token in content.split_whitespace() {
+                            push_symbol(imported, "", token);
+                        }
+                    } else {
+                        push_symbol(imported, "", name);
+                    }
+                }
+                NodeKind::ArrayLiteral { elements } => {
+                    for el in elements {
+                        if let NodeKind::String { value, .. } = &el.kind {
+                            push_symbol(imported, "", value);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// Unwrap an `ExpressionStatement` node to its inner expression, or return
     /// the node itself if it is not an expression statement.
     fn inner_node(stmt: &Node) -> &Node {
@@ -1998,9 +2058,15 @@ fn collect_imported_barewords(ast: &Node) -> HashSet<String> {
                     .iter()
                     .filter_map(|stmt| require_module_name(inner_node(stmt)))
                     .collect();
-                if !required_modules.is_empty() {
+                let dynamic_require_vars: HashSet<String> = statements
+                    .iter()
+                    .filter_map(|stmt| require_variable_name(inner_node(stmt)))
+                    .collect();
+                if !required_modules.is_empty() || !dynamic_require_vars.is_empty() {
                     for stmt in statements {
-                        maybe_record_manual_imports(inner_node(stmt), &required_modules, imported);
+                        let inner = inner_node(stmt);
+                        maybe_record_manual_imports(inner, &required_modules, imported);
+                        maybe_record_dynamic_manual_imports(inner, &dynamic_require_vars, imported);
                     }
                 }
             }
