@@ -3,6 +3,7 @@
 //! This phase intentionally targets a narrow, high-confidence subset:
 //! - variable references (`$x`, `@items`, `%opts`, `$#array`)
 //! - subroutine call references (`foo(...)` / bareword calls via `NodeKind::FunctionCall`)
+//! - method call references (`$obj->method(...)`, `Pkg->method(...)`)
 //! - package-qualified forms where the AST encodes them directly
 //!   (`$Pkg::var`, `Pkg::func(...)`)
 //!
@@ -11,8 +12,6 @@
 //! The following reference types are **not** emitted in this phase:
 //! - `&foo` / `\&foo` code-reference variables (sigil `&`) — `VarKind` has no `CodeRef` variant
 //! - `*foo` typeglob variables (sigil `*`) — reserved for a future phase
-//! - Method calls (`$obj->method(...)`, `NodeKind::MethodCall`) — method name is not a
-//!   `Node`, so extraction requires a dedicated `MethodCallRef` kind (future phase)
 //! - Indirect-object calls (`new Class @args`, `NodeKind::IndirectCall`) — same reason
 //! - Subroutine signature parameter bindings (`MandatoryParameter`, `SlurpyParameter`,
 //!   `NamedParameter`) — these are declaration sites, not reference sites.  Optional
@@ -28,6 +27,10 @@ pub enum SymbolRefKind {
     Variable(VarKind),
     /// Subroutine invocation (`foo(...)`).
     SubroutineCall,
+    /// Instance method invocation (`$obj->method(...)`, `$self->method(...)`).
+    MethodCall,
+    /// Static/package method invocation (`Package->method(...)`).
+    StaticMethodCall,
 }
 
 /// A projected view of a symbol reference/use site in Perl source.
@@ -123,10 +126,43 @@ fn walk(node: &Node, out: &mut Vec<SymbolRef>) {
             }
         }
 
+        NodeKind::MethodCall { object, method, args } => {
+            let (package_qualifier, qualified_name, kind) = static_method_target(object, method)
+                .map(|(package, qualified)| {
+                    (Some(package), qualified, SymbolRefKind::StaticMethodCall)
+                })
+                .unwrap_or_else(|| (None, method.clone(), SymbolRefKind::MethodCall));
+
+            out.push(SymbolRef {
+                kind,
+                name: method.clone(),
+                qualified_name,
+                sigil: None,
+                package_qualifier,
+                full_span: (node.location.start, node.location.end),
+                anchor_span: None,
+            });
+
+            walk(object, out);
+            for arg in args {
+                walk(arg, out);
+            }
+        }
+
         _ => {
             node.for_each_child(|child| walk(child, out));
         }
     }
+}
+
+fn static_method_target(object: &Node, method: &str) -> Option<(String, String)> {
+    let NodeKind::Identifier { name } = &object.kind else {
+        return None;
+    };
+    if name.is_empty() || method.is_empty() {
+        return None;
+    }
+    Some((name.clone(), format!("{name}::{method}")))
 }
 
 /// Split a potentially package-qualified name into `(qualifier, bare, full)`.

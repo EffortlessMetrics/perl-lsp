@@ -209,6 +209,64 @@ fn function_call_args_are_walked_for_refs() -> Result<()> {
 }
 
 #[test]
+fn static_method_call_reference_is_projected() -> Result<()> {
+    let object = Node::new(NodeKind::Identifier { name: "My::Class".to_string() }, loc(0, 9));
+    let call = Node::new(
+        NodeKind::MethodCall {
+            object: Box::new(object),
+            method: "build".to_string(),
+            args: vec![],
+        },
+        loc(0, 16),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![call] }, loc(0, 16));
+
+    let refs = extract_symbol_refs(&program);
+
+    assert_eq!(refs.len(), 1);
+    assert_eq!(refs[0].kind, SymbolRefKind::StaticMethodCall);
+    assert_eq!(refs[0].name, "build");
+    assert_eq!(refs[0].qualified_name, "My::Class::build");
+    assert_eq!(refs[0].package_qualifier.as_deref(), Some("My::Class"));
+    assert_eq!(refs[0].sigil, None);
+    Ok(())
+}
+
+#[test]
+fn instance_method_call_reference_is_projected_with_receiver_refs() -> Result<()> {
+    let object = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "self".to_string() },
+        loc(0, 5),
+    );
+    let arg = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "value".to_string() },
+        loc(13, 19),
+    );
+    let call = Node::new(
+        NodeKind::MethodCall {
+            object: Box::new(object),
+            method: "save".to_string(),
+            args: vec![arg],
+        },
+        loc(0, 20),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![call] }, loc(0, 20));
+
+    let refs = extract_symbol_refs(&program);
+
+    assert_eq!(refs.len(), 3);
+    assert_eq!(refs[0].kind, SymbolRefKind::MethodCall);
+    assert_eq!(refs[0].name, "save");
+    assert_eq!(refs[0].qualified_name, "save");
+    assert_eq!(refs[0].anchor_span, None);
+    assert_eq!(refs[1].kind, SymbolRefKind::Variable(VarKind::Scalar));
+    assert_eq!(refs[1].name, "self");
+    assert_eq!(refs[2].kind, SymbolRefKind::Variable(VarKind::Scalar));
+    assert_eq!(refs[2].name, "value");
+    Ok(())
+}
+
+#[test]
 fn parser_sentinel_names_are_not_emitted_as_refs() -> Result<()> {
     // The parser uses synthetic FunctionCall names for constructs that are not real
     // subroutine calls: "->()"/\&{}\" for coderef invocations, "field" for OOP
