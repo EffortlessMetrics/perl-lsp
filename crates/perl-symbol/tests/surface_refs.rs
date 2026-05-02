@@ -120,9 +120,7 @@ fn array_last_index_sigil_is_treated_as_scalar_reference() -> Result<()> {
 }
 
 #[test]
-fn code_ref_and_typeglob_sigils_are_excluded_in_phase1() -> Result<()> {
-    // `&` (code ref) and `*` (typeglob) are phase-1 exclusions documented in the
-    // module; they must not produce SymbolRef entries.
+fn coderef_and_typeglob_sigils_are_classified() -> Result<()> {
     let code_ref = Node::new(
         NodeKind::Variable { sigil: "&".to_string(), name: "handler".to_string() },
         loc(0, 8),
@@ -134,11 +132,13 @@ fn code_ref_and_typeglob_sigils_are_excluded_in_phase1() -> Result<()> {
     let program = Node::new(NodeKind::Program { statements: vec![code_ref, typeglob] }, loc(0, 14));
 
     let refs = extract_symbol_refs(&program);
-    assert!(
-        refs.is_empty(),
-        "phase-1 should not emit refs for & or * sigil variables, got: {:?}",
-        refs
-    );
+    assert_eq!(refs.len(), 2);
+    assert_eq!(refs[0].kind, SymbolRefKind::CoderefReference);
+    assert_eq!(refs[0].name, "handler");
+    assert_eq!(refs[0].sigil.as_deref(), Some("&"));
+    assert_eq!(refs[1].kind, SymbolRefKind::TypeglobReference);
+    assert_eq!(refs[1].name, "slot");
+    assert_eq!(refs[1].sigil.as_deref(), Some("*"));
     Ok(())
 }
 
@@ -353,9 +353,9 @@ fn variable_reads_and_writes_collapse_to_variable_refs() -> Result<()> {
 }
 
 #[test]
-fn coderef_syntax_forms_are_intentionally_not_emitted_in_phase1() -> Result<()> {
+fn coderef_syntax_forms_are_classified_conservatively() -> Result<()> {
     // Covers `&foo`, `\\&foo`, and `goto &foo` style sigil usage: all are represented
-    // as `Variable` nodes with sigil `&` and intentionally excluded in phase-1.
+    // as `Variable` nodes with sigil `&` and classify as coderef references.
     let amp = Node::new(
         NodeKind::Variable { sigil: "&".to_string(), name: "foo".to_string() },
         loc(0, 4),
@@ -368,24 +368,53 @@ fn coderef_syntax_forms_are_intentionally_not_emitted_in_phase1() -> Result<()> 
         NodeKind::Variable { sigil: "&".to_string(), name: "foo".to_string() },
         loc(11, 19),
     );
+    let goto = Node::new(NodeKind::Goto { target: Box::new(goto_amp) }, loc(11, 19));
     let program =
-        Node::new(NodeKind::Program { statements: vec![amp, backslash_amp, goto_amp] }, loc(0, 19));
+        Node::new(NodeKind::Program { statements: vec![amp, backslash_amp, goto] }, loc(0, 19));
 
     let refs = extract_symbol_refs(&program);
-    assert!(refs.is_empty(), "phase-1 SymbolRef extraction does not model coderef boundary edges");
+    assert_eq!(refs.len(), 3);
+    assert!(refs.iter().all(|r| r.kind == SymbolRefKind::CoderefReference));
+    assert!(refs.iter().all(|r| r.name == "foo"));
     Ok(())
 }
 
 #[test]
-fn typeglob_alias_boundary_is_not_typed_in_phase1() -> Result<()> {
-    let typeglob = Node::new(
-        NodeKind::Variable { sigil: "*".to_string(), name: "foo".to_string() },
-        loc(0, 4),
-    );
+fn typeglob_alias_boundary_is_classified() -> Result<()> {
+    let typeglob = Node::new(NodeKind::Typeglob { name: "foo".to_string() }, loc(0, 4));
     let program = Node::new(NodeKind::Program { statements: vec![typeglob] }, loc(0, 4));
 
     let refs = extract_symbol_refs(&program);
-    assert!(refs.is_empty(), "typeglob aliases are a future typed-edge boundary");
+    assert_eq!(refs.len(), 1);
+    assert_eq!(refs[0].kind, SymbolRefKind::TypeglobReference);
+    assert_eq!(refs[0].name, "foo");
+    assert_eq!(refs[0].sigil.as_deref(), Some("*"));
+    Ok(())
+}
+
+#[test]
+fn typeglob_assignment_keeps_rhs_coderef_reference() -> Result<()> {
+    let lhs = Node::new(NodeKind::Typeglob { name: "alias".to_string() }, loc(0, 6));
+    let rhs_target = Node::new(
+        NodeKind::Variable { sigil: "&".to_string(), name: "target".to_string() },
+        loc(10, 17),
+    );
+    let rhs = Node::new(
+        NodeKind::Unary { op: "\\".to_string(), operand: Box::new(rhs_target) },
+        loc(9, 17),
+    );
+    let assign = Node::new(
+        NodeKind::Assignment { lhs: Box::new(lhs), rhs: Box::new(rhs), op: "=".to_string() },
+        loc(0, 17),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![assign] }, loc(0, 17));
+
+    let refs = extract_symbol_refs(&program);
+    assert_eq!(refs.len(), 2);
+    assert_eq!(refs[0].kind, SymbolRefKind::TypeglobReference);
+    assert_eq!(refs[0].name, "alias");
+    assert_eq!(refs[1].kind, SymbolRefKind::CoderefReference);
+    assert_eq!(refs[1].name, "target");
     Ok(())
 }
 

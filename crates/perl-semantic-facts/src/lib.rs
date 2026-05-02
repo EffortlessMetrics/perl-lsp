@@ -52,6 +52,8 @@ pub enum OccurrenceKind {
     Call,
     MethodCall,
     StaticMethodCall,
+    CoderefReference,
+    TypeglobReference,
     Import,
     Export,
     Inheritance,

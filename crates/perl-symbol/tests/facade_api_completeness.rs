@@ -88,6 +88,8 @@ fn surface_ref_accessible() {
     let _kind = SymbolRefKind::SubroutineCall;
     let _method = SymbolRefKind::MethodCall;
     let _static_method = SymbolRefKind::StaticMethodCall;
+    let _coderef = SymbolRefKind::CoderefReference;
+    let _typeglob = SymbolRefKind::TypeglobReference;
     let _fn: fn(&perl_ast::Node) -> Vec<SymbolRef> = extract_symbol_refs;
 }
 

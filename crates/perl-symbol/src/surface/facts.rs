@@ -40,6 +40,9 @@ pub fn symbol_refs_to_semantic_facts(
     let mut reference_edges = Vec::new();
 
     for symbol_ref in refs {
+        let occurrence_kind = occurrence_kind(&symbol_ref.kind);
+        let provenance = occurrence_provenance(&symbol_ref.kind);
+        let confidence = occurrence_confidence(&symbol_ref.kind);
         let anchor_span = symbol_ref.anchor_span.unwrap_or(symbol_ref.full_span);
         let anchor_id = AnchorId(stable_id(
             "ref-anchor",
@@ -53,20 +56,10 @@ pub fn symbol_refs_to_semantic_facts(
             span_start_byte: anchor_span.0 as u32,
             span_end_byte: anchor_span.1 as u32,
             scope_id: None,
-            provenance: Provenance::ExactAst,
-            confidence: Confidence::High,
+            provenance,
+            confidence,
         });
 
-        let occurrence_kind = match symbol_ref.kind {
-            SymbolRefKind::Variable(_) => OccurrenceKind::Read,
-            SymbolRefKind::SubroutineCall => OccurrenceKind::Call,
-            SymbolRefKind::MethodCall => OccurrenceKind::MethodCall,
-            SymbolRefKind::StaticMethodCall => OccurrenceKind::StaticMethodCall,
-        };
-        let confidence = match symbol_ref.kind {
-            SymbolRefKind::MethodCall => Confidence::Medium,
-            _ => Confidence::High,
-        };
         let entity_id = entity_ids_by_qualified_name.get(&symbol_ref.qualified_name).copied();
         let occurrence_id = OccurrenceId(stable_id(
             "occurrence",
@@ -80,7 +73,7 @@ pub fn symbol_refs_to_semantic_facts(
             entity_id,
             anchor_id,
             scope_id: None,
-            provenance: Provenance::ExactAst,
+            provenance,
             confidence,
         });
 
@@ -105,6 +98,32 @@ pub fn symbol_refs_to_semantic_facts(
     }
 
     SymbolRefSemanticFacts { anchors, occurrences, reference_edges }
+}
+
+fn occurrence_kind(kind: &SymbolRefKind) -> OccurrenceKind {
+    match kind {
+        SymbolRefKind::Variable(_) => OccurrenceKind::Read,
+        SymbolRefKind::SubroutineCall => OccurrenceKind::Call,
+        SymbolRefKind::MethodCall => OccurrenceKind::MethodCall,
+        SymbolRefKind::StaticMethodCall => OccurrenceKind::StaticMethodCall,
+        SymbolRefKind::CoderefReference => OccurrenceKind::CoderefReference,
+        SymbolRefKind::TypeglobReference => OccurrenceKind::TypeglobReference,
+    }
+}
+
+fn occurrence_provenance(kind: &SymbolRefKind) -> Provenance {
+    match kind {
+        SymbolRefKind::TypeglobReference => Provenance::DynamicBoundary,
+        _ => Provenance::ExactAst,
+    }
+}
+
+fn occurrence_confidence(kind: &SymbolRefKind) -> Confidence {
+    match kind {
+        SymbolRefKind::MethodCall => Confidence::Medium,
+        SymbolRefKind::TypeglobReference => Confidence::Low,
+        _ => Confidence::High,
+    }
 }
 
 pub fn symbol_decls_to_semantic_facts(
@@ -537,24 +556,50 @@ mod tests {
                 full_span: (33, 45),
                 anchor_span: None,
             },
+            SymbolRef {
+                kind: SymbolRefKind::CoderefReference,
+                name: "callback".to_string(),
+                qualified_name: "Foo::callback".to_string(),
+                sigil: Some("&".to_string()),
+                package_qualifier: Some("Foo".to_string()),
+                full_span: (46, 59),
+                anchor_span: Some((47, 59)),
+            },
+            SymbolRef {
+                kind: SymbolRefKind::TypeglobReference,
+                name: "alias".to_string(),
+                qualified_name: "alias".to_string(),
+                sigil: Some("*".to_string()),
+                package_qualifier: None,
+                full_span: (60, 66),
+                anchor_span: None,
+            },
         ];
         let mut entity_map = BTreeMap::new();
         entity_map.insert("Foo::run".to_string(), EntityId(42));
         entity_map.insert("Foo::new".to_string(), EntityId(43));
+        entity_map.insert("Foo::callback".to_string(), EntityId(44));
 
         let facts = symbol_refs_to_semantic_facts(&refs, FileId(7), &entity_map);
-        assert_eq!(facts.anchors.len(), 4);
-        assert_eq!(facts.occurrences.len(), 4);
-        assert_eq!(facts.reference_edges.len(), 2);
+        assert_eq!(facts.anchors.len(), 6);
+        assert_eq!(facts.occurrences.len(), 6);
+        assert_eq!(facts.reference_edges.len(), 3);
         assert_eq!(facts.occurrences[0].kind, OccurrenceKind::Call);
         assert_eq!(facts.occurrences[1].kind, OccurrenceKind::Read);
         assert_eq!(facts.occurrences[2].kind, OccurrenceKind::StaticMethodCall);
         assert_eq!(facts.occurrences[3].kind, OccurrenceKind::MethodCall);
+        assert_eq!(facts.occurrences[4].kind, OccurrenceKind::CoderefReference);
+        assert_eq!(facts.occurrences[5].kind, OccurrenceKind::TypeglobReference);
         assert_eq!(facts.occurrences[0].entity_id, Some(EntityId(42)));
         assert_eq!(facts.occurrences[1].entity_id, None);
         assert_eq!(facts.occurrences[2].entity_id, Some(EntityId(43)));
         assert_eq!(facts.occurrences[3].entity_id, None);
+        assert_eq!(facts.occurrences[4].entity_id, Some(EntityId(44)));
+        assert_eq!(facts.occurrences[5].entity_id, None);
         assert_eq!(facts.occurrences[2].confidence, Confidence::High);
         assert_eq!(facts.occurrences[3].confidence, Confidence::Medium);
+        assert_eq!(facts.occurrences[4].confidence, Confidence::High);
+        assert_eq!(facts.occurrences[5].confidence, Confidence::Low);
+        assert_eq!(facts.occurrences[5].provenance, Provenance::DynamicBoundary);
     }
 }
