@@ -9,7 +9,8 @@
 //!
 //! 2. **Cutover mode** ([`completion_visibility_cutover`]) — uses the semantic
 //!    path as the primary source of truth:
-//!    - *Exact*: high-confidence visible symbol → rank high.
+//!    - *Exact*: high-confidence visible symbol → rank high, ordered by
+//!      provenance.
 //!    - *Ambiguous*: lower-confidence or heuristic → rank lower.
 //!    - *Dynamic / Unavailable*: dynamic-boundary or unavailable → show low
 //!      or omit.
@@ -170,8 +171,11 @@ pub struct CompletionCutoverOutcome {
 ///      `CompletionRankTier::Medium`.
 ///    - DynamicUnknown or Low-confidence symbols →
 ///      `CompletionRankTier::Low`.
-/// 3. If no symbols are returned, fall back to legacy.
-/// 4. Emit a shadow-compare receipt regardless of outcome.
+/// 3. Sort ranked symbols by tier, then semantic provenance: local lexical,
+///    same-package/constant, explicit import, default export, export tag,
+///    generated, external, dynamic unknown.
+/// 4. If no symbols are returned, fall back to legacy.
+/// 5. Emit a shadow-compare receipt regardless of outcome.
 ///
 /// # Arguments
 ///
@@ -213,8 +217,9 @@ pub fn completion_visibility_cutover<Q: SemanticQueries>(
     let result = if all_visible.is_empty() {
         CompletionCutoverResult::LegacyFallback(legacy_symbols)
     } else {
-        let ranked: Vec<RankedCompletionSymbol> =
+        let mut ranked: Vec<RankedCompletionSymbol> =
             all_visible.into_iter().map(rank_visible_symbol).collect();
+        ranked.sort_by(compare_ranked_completion_symbols);
         CompletionCutoverResult::Semantic(ranked)
     };
 
@@ -276,6 +281,34 @@ fn rank_visible_symbol(symbol: VisibleSymbol) -> RankedCompletionSymbol {
     };
 
     RankedCompletionSymbol { symbol, tier }
+}
+
+fn compare_ranked_completion_symbols(
+    a: &RankedCompletionSymbol,
+    b: &RankedCompletionSymbol,
+) -> std::cmp::Ordering {
+    a.tier
+        .cmp(&b.tier)
+        .then_with(|| {
+            completion_source_priority(&a.symbol.source)
+                .cmp(&completion_source_priority(&b.symbol.source))
+        })
+        .then_with(|| a.symbol.confidence.cmp(&b.symbol.confidence))
+        .then_with(|| a.symbol.name.cmp(&b.symbol.name))
+}
+
+fn completion_source_priority(source: &VisibleSymbolSource) -> u8 {
+    match source {
+        VisibleSymbolSource::LocalLexical => 0,
+        VisibleSymbolSource::LocalPackage => 1,
+        VisibleSymbolSource::Constant => 2,
+        VisibleSymbolSource::ExplicitImport => 3,
+        VisibleSymbolSource::DefaultExport => 4,
+        VisibleSymbolSource::ExportTag => 5,
+        VisibleSymbolSource::Generated => 6,
+        VisibleSymbolSource::External => 7,
+        VisibleSymbolSource::DynamicUnknown => 8,
+    }
 }
 
 /// Convert legacy completion symbol names into a [`ShadowResultSummary`].
@@ -666,6 +699,48 @@ mod tests {
                 assert_eq!(ranked[0].tier, CompletionRankTier::High);
                 assert_eq!(ranked[1].tier, CompletionRankTier::Medium);
                 assert_eq!(ranked[2].tier, CompletionRankTier::Low);
+            }
+            other => return Err(format!("expected Semantic, got {:?}", other).into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_sorts_by_semantic_provenance() -> Result<(), Box<dyn std::error::Error>> {
+        let symbols = vec![
+            make_visible("dyn", VisibleSymbolSource::DynamicUnknown, Confidence::Low),
+            make_visible("defaulted", VisibleSymbolSource::DefaultExport, Confidence::High),
+            make_visible("imported", VisibleSymbolSource::ExplicitImport, Confidence::High),
+            make_visible("tagged", VisibleSymbolSource::ExportTag, Confidence::High),
+            make_visible("external", VisibleSymbolSource::External, Confidence::High),
+            make_visible("accessor", VisibleSymbolSource::Generated, Confidence::Medium),
+            make_visible("CONST", VisibleSymbolSource::Constant, Confidence::High),
+            make_visible("same_package", VisibleSymbolSource::LocalPackage, Confidence::High),
+            make_visible("$local", VisibleSymbolSource::LocalLexical, Confidence::High),
+        ];
+        let queries = StubSemanticQueries { visible_result: symbols };
+
+        let outcome =
+            completion_visibility_cutover(vec![], &queries, FileId(1), 10, None, "ranked");
+
+        match &outcome.result {
+            CompletionCutoverResult::Semantic(ranked) => {
+                let names: Vec<&str> =
+                    ranked.iter().map(|entry| entry.symbol.name.as_str()).collect();
+                assert_eq!(
+                    names,
+                    vec![
+                        "$local",
+                        "same_package",
+                        "CONST",
+                        "imported",
+                        "defaulted",
+                        "tagged",
+                        "accessor",
+                        "external",
+                        "dyn",
+                    ]
+                );
             }
             other => return Err(format!("expected Semantic, got {:?}", other).into()),
         }
