@@ -6,8 +6,9 @@ import { LanguageClient, TransportKind, Trace } from 'vscode-languageclient/node
 import type { LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger, rewriteTestLensCommand, parseDebugTestLaunchTarget } from './debugAdapter';
-import { BinaryDownloader } from './downloader';
+import { BinaryDownloader, parseLocalVersion } from './downloader';
 import { OnboardingManager } from './onboarding';
+import type { HealthCheckResult } from './onboarding';
 import { WhatsNewManager } from './whatsNew';
 import { generateBoilerplate } from './fileCreation';
 import { handleFormattingError } from './formattingErrors';
@@ -24,6 +25,12 @@ import {
     StartupErrorKind,
 } from './startupDiagnosis';
 import type { StartupErrorDiagnosis } from './startupDiagnosis';
+import type {
+    HealthCheckCommandResult,
+    HealthCheckCommandStatus,
+    ManagedBinarySource,
+    ReinstallCommandResult,
+} from './commandResults';
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -332,7 +339,7 @@ export async function activate(context: vscode.ExtensionContext) {
         outputChannel.show();
     });
     const reinstallCommand = vscode.commands.registerCommand('perl-lsp.reinstall', async () => {
-        await reinstallServerBinary(context);
+        return reinstallServerBinary(context);
     });
 
     // Register commands
@@ -513,6 +520,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const resolvedPath = serverPath !== undefined ? serverPath : currentServerPath;
         const onboarding = new OnboardingManager(context, outputChannel);
         const results = await onboarding.runSetupHealthCheck(resolvedPath ?? null);
+        const commandResult = toHealthCheckCommandResult(results);
 
         const errors = results.filter(r => !r.ok && r.status === 'error');
         const warnings = results.filter(r => !r.ok && r.status === 'warning');
@@ -542,6 +550,8 @@ export async function activate(context: vscode.ExtensionContext) {
                 if (sel === 'Show Output') { outputChannel.show(); }
             });
         }
+
+        return commandResult;
     });
 
     const checkSyntaxCommand = vscode.commands.registerCommand('perl-lsp.checkSyntax', async () => {
@@ -937,6 +947,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize debug adapter
     activateDebugger(context);
+
+    if (
+        context.extensionMode === vscode.ExtensionMode.Test &&
+        process.env.PERL_LSP_EXTENSION_TEST_SKIP_STARTUP === '1'
+    ) {
+        outputChannel.appendLine('[extension-test] Skipping automatic server startup.');
+        return;
+    }
+
     await initializeLanguageClient(context);
     await validateIncludePaths(context);
     await warnAboutPerlExtensionConflicts(context);
@@ -1939,11 +1958,43 @@ async function showParserAst(): Promise<void> {
     }
 }
 
-async function reinstallServerBinary(context: vscode.ExtensionContext) {
+function getManagedBinarySource(): ManagedBinarySource {
+    const downloadBaseUrl = vscode.workspace.getConfiguration('perl-lsp').get<string>('downloadBaseUrl', '');
+    return downloadBaseUrl ? 'internal-base-url' : 'github-release';
+}
+
+function toHealthCheckCommandResult(results: HealthCheckResult[]): HealthCheckCommandResult {
+    const checks = results.map(result => ({
+        label: result.label,
+        status: result.status as HealthCheckCommandStatus,
+        detail: result.detail,
+    }));
+
+    return {
+        ok: checks.every(check => check.status !== 'error'),
+        checks,
+    };
+}
+
+async function readInstalledServerVersion(serverPath: string): Promise<string | undefined> {
+    return new Promise(resolve => {
+        execFile(serverPath, ['--version'], { timeout: 3000 }, (error: Error | null, stdout: string) => {
+            if (error) {
+                resolve(undefined);
+                return;
+            }
+            resolve(parseLocalVersion(stdout) ?? undefined);
+        });
+    });
+}
+
+async function reinstallServerBinary(context: vscode.ExtensionContext): Promise<ReinstallCommandResult> {
     outputChannel.show(true);
     outputChannel.appendLine('Reinstalling perllsp binary...');
 
     const downloader = new BinaryDownloader(context, outputChannel);
+    const target = downloader.getTargetTriple();
+    const source = getManagedBinarySource();
     const downloadedPath = await downloader.ensureBinary(true);
 
     if (!downloadedPath) {
@@ -1956,11 +2007,18 @@ async function reinstallServerBinary(context: vscode.ExtensionContext) {
                 void vscode.commands.executeCommand('workbench.action.openSettings', 'http.proxy');
             }
         });
-        return;
+        return {
+            ok: false,
+            serverPath: '',
+            target,
+            source,
+            error: downloader.getLastErrorMessage() ?? 'download failed',
+        };
     }
 
     currentServerPath = downloadedPath;
     const healthOk = await runHealthCheck(downloadedPath);
+    const version = await readInstalledServerVersion(downloadedPath);
     if (!healthOk) {
         vscode.window.showErrorMessage(
             'The downloaded perl-lsp binary failed its health check — it may be corrupted or incompatible with your platform.',
@@ -1971,17 +2029,34 @@ async function reinstallServerBinary(context: vscode.ExtensionContext) {
                 void vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp/issues'));
             }
         });
-        return;
+        return {
+            ok: false,
+            serverPath: downloadedPath,
+            target,
+            source,
+            version,
+            checksumVerified: true,
+            error: 'health check failed',
+        };
     }
 
-    const choice = await vscode.window.showInformationMessage(
+    vscode.window.showInformationMessage(
         'perl-lsp was reinstalled successfully.',
         client ? 'Restart Server' : 'OK'
-    );
+    ).then(selection => {
+        if (selection === 'Restart Server' && client) {
+            void restartServer(context);
+        }
+    });
 
-    if (choice === 'Restart Server' && client) {
-        await restartServer(context);
-    }
+    return {
+        ok: true,
+        serverPath: downloadedPath,
+        target,
+        source,
+        version,
+        checksumVerified: true,
+    };
 }
 
 function bindClientState(languageClient: LanguageClient) {

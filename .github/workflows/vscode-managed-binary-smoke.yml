@@ -1,0 +1,61 @@
+name: VS Code Managed Binary Smoke
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'vscode-extension/**'
+      - '.github/workflows/vscode-managed-binary-smoke.yml'
+  schedule:
+    - cron: '0 13 * * 1'
+
+concurrency:
+  group: vscode-managed-binary-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  managed-binary-smoke:
+    name: VS Code smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    defaults:
+      run:
+        working-directory: vscode-extension
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile extension
+        run: npm run compile
+
+      - name: Run extension-host smoke
+        if: runner.os != 'Linux'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm run test:integration
+
+      - name: Run extension-host smoke under Xvfb
+        if: runner.os == 'Linux'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: xvfb-run -a npm run test:integration
