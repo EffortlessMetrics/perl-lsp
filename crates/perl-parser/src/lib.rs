@@ -369,6 +369,8 @@ pub mod engine;
 /// Legacy module aliases for moved engine components.
 pub use engine::{error, parser, position};
 
+/// Recursive descent Perl parser with error recovery and AST generation.
+pub use core::{Node, NodeKind, ParseError, ParseOutput, ParseResult, Parser, SourceLocation};
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 pub use engine::ast;
 /// Experimental second-generation AST (work in progress).
@@ -377,8 +379,6 @@ pub use engine::ast_v2;
 pub use engine::edit;
 /// Heredoc content collector with FIFO ordering and indent stripping.
 pub use engine::heredoc_collector;
-/// Recursive descent Perl parser with error recovery and AST generation.
-pub use engine::parser::Parser;
 /// Parser context with error recovery support.
 pub use engine::parser_context;
 /// Pragma tracking for `use` and related directives.
@@ -398,21 +398,27 @@ pub use perl_parser_core::line_index;
 /// Line ending detection and UTF-16 position mapping for LSP compliance.
 pub use position::{LineEnding, PositionMapper};
 
-/// Semantic analysis, scope resolution, and type inference.
+/// Facade over `perl-semantic-analyzer` for compatibility imports.
 pub mod analysis;
 /// Perl builtin function signatures and metadata.
 pub mod builtins;
+/// Facade over parser-kernel types from `perl-parser-core`.
+pub mod core;
 #[cfg(feature = "incremental")]
 /// Incremental parsing for efficient re-parsing during editing.
 pub mod incremental;
+/// Canonical convenience imports for consumers.
+pub mod prelude;
 /// Code refactoring, modernization, and import optimization.
 pub mod refactor;
 /// Test-driven development support and test generation.
 pub mod tdd;
 /// Token stream, trivia, and token wrapper utilities.
 pub mod tokens;
-/// Workspace indexing, document store, and cross-file operations.
+/// Facade over `perl-workspace` for compatibility imports.
 pub mod workspace;
+
+pub mod compat;
 
 // =============================================================================
 // Wave D absorbed satellite crates (as internal modules)
@@ -525,9 +531,8 @@ pub use workspace::workspace_refactor;
 pub use workspace::workspace_rename;
 
 /// AST node, node kind enum, and source location types.
-pub use ast::{Node, NodeKind, SourceLocation};
 /// Parse error and result types for parser output.
-pub use error::{ParseError, ParseResult, RecoverySalvageClass, RecoverySalvageProfile};
+pub use error::{RecoverySalvageClass, RecoverySalvageProfile};
 #[cfg(feature = "incremental")]
 /// Checkpointed incremental parser with simple edit tracking.
 pub use incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};
