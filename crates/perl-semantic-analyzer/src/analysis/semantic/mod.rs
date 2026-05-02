@@ -41,8 +41,10 @@ pub use tokens::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
 use crate::SourceLocation;
 use crate::analysis::class_model::{ClassModel, ClassModelBuilder, MethodResolutionOrder};
+use crate::analysis::package_graph_extractor::PackageGraphExtractor;
 use crate::ast::Node;
 use crate::symbol::{Symbol, SymbolExtractor, SymbolTable, is_universal_method};
+use perl_semantic_facts::{FileId, PackageEdge};
 use std::collections::{HashMap, HashSet};
 
 const MAX_MRO_TRAVERSAL_DEPTH: usize = 1024;
@@ -101,6 +103,8 @@ pub struct SemanticAnalyzer {
     pub class_models: Vec<ClassModel>,
     /// Per-file Exporter metadata extracted from statically readable assignments.
     pub export_metadata: FileExportMetadata,
+    /// Package graph edges extracted from inheritance and role composition forms.
+    package_edges: Vec<PackageEdge>,
 }
 
 impl SemanticAnalyzer {
@@ -146,6 +150,7 @@ impl SemanticAnalyzer {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
         let export_metadata = exporter_metadata::ExportMetadataBuilder::new().build(ast);
+        let package_edges = PackageGraphExtractor::extract(ast, FileId(0));
 
         let mut analyzer = SemanticAnalyzer {
             symbol_table,
@@ -154,6 +159,7 @@ impl SemanticAnalyzer {
             source: source.to_string(),
             class_models,
             export_metadata,
+            package_edges,
         };
 
         analyzer.analyze_node(ast, 0);
@@ -173,6 +179,11 @@ impl SemanticAnalyzer {
     /// Get per-file Exporter metadata for statically readable exports.
     pub fn export_metadata(&self) -> &FileExportMetadata {
         &self.export_metadata
+    }
+
+    /// Get package graph edges extracted from inheritance and role-composition patterns.
+    pub fn package_edges(&self) -> &[PackageEdge] {
+        &self.package_edges
     }
 
     /// Get hover information at a location for Navigate/Analyze stages.
@@ -620,6 +631,7 @@ mod tests {
     use crate::ast::{Node, NodeKind};
     use crate::parser::Parser;
     use crate::symbol::SymbolKind;
+    use perl_semantic_facts::PackageEdgeKind;
 
     #[test]
     fn test_semantic_tokens() -> Result<(), Box<dyn std::error::Error>> {
@@ -962,6 +974,40 @@ sub foo {
 
         let foo_symbols = symbol_table.find_symbol("foo", 0, SymbolKind::Subroutine);
         assert!(!foo_symbols.is_empty(), "Should find sub foo in symbol table");
+        Ok(())
+    }
+
+    #[test]
+    fn test_semantic_model_package_edges() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+package Child;
+use parent 'Base';
+use Moose;
+with 'Role';
+1;
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let model = SemanticModel::build(&ast, code);
+        let edges = model.package_edges();
+
+        assert!(
+            edges.iter().any(|edge| {
+                edge.from_package == "Child"
+                    && edge.to_package == "Base"
+                    && edge.kind == PackageEdgeKind::Inherits
+            }),
+            "SemanticModel should expose the use-parent package edge, got: {edges:?}"
+        );
+        assert!(
+            edges.iter().any(|edge| {
+                edge.from_package == "Child"
+                    && edge.to_package == "Role"
+                    && edge.kind == PackageEdgeKind::ComposesRole
+            }),
+            "SemanticModel should expose the role-composition package edge, got: {edges:?}"
+        );
         Ok(())
     }
 
