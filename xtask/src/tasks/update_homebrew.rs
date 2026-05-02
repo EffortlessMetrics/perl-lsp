@@ -245,3 +245,62 @@ fn write_formula(path: &std::path::Path, content: &str) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_config() -> UpdateHomebrewConfig {
+        UpdateHomebrewConfig {
+            version: "v0.13.1".to_string(),
+            owner: "EffortlessMetrics".to_string(),
+            repo: "perl-lsp".to_string(),
+            prefix: "perllsp".to_string(),
+            output: PathBuf::from("Formula/perllsp.rb"),
+        }
+    }
+
+    fn sample_checksums() -> Checksums<'static> {
+        Checksums {
+            mac_arm: "mac-arm-sha",
+            mac_x64: "mac-x64-sha",
+            linux_arm: "linux-arm-sha",
+            linux_x64: "linux-x64-sha",
+        }
+    }
+
+    fn assert_homebrew_formula_shape(formula: &str) {
+        assert!(formula.contains(r#"license any_of: ["MIT", "Apache-2.0"]"#));
+        assert!(formula.contains("x86_64-unknown-linux-gnu"));
+        assert!(formula.contains("aarch64-unknown-linux-gnu"));
+        assert!(formula.contains(r#"package_dir = extracted_dir || ".""#));
+        assert!(formula.contains(r##"bin.install "#{package_dir}/perllsp""##));
+        assert!(formula.contains(r##"bin.install "#{package_dir}/perl-dap""##));
+        assert!(
+            !formula.contains(r#"version ""#),
+            "Homebrew should infer the formula version from release URLs"
+        );
+        assert!(
+            !formula.contains("unknown-linux-musl"),
+            "Homebrew formula URLs must use GNU/glibc Linux assets"
+        );
+    }
+
+    #[test]
+    fn generated_formula_locks_owned_tap_shape() -> Result<()> {
+        let config = sample_config();
+        let checksums = sample_checksums();
+        let formula = build_brew_formula(&config, "v0.13.1", "0.13.1", &checksums);
+
+        assert_homebrew_formula_shape(&formula);
+        Ok(())
+    }
+
+    #[test]
+    fn source_formula_template_locks_owned_tap_shape() -> Result<()> {
+        let formula = include_str!("../../../Formula/perllsp.rb");
+
+        assert_homebrew_formula_shape(formula);
+        Ok(())
+    }
+}

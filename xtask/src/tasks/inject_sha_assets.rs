@@ -219,3 +219,58 @@ fn write_output(path: Option<&Path>, content: &str, name: &str) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_config() -> InjectShaAssetsConfig {
+        InjectShaAssetsConfig {
+            version: "0.13.1".to_string(),
+            owner: "EffortlessMetrics".to_string(),
+            repo: "perl-lsp".to_string(),
+            prefix: "perllsp".to_string(),
+            checksums: PathBuf::from("checksums.json"),
+            brew_out: None,
+            asset_map_out: None,
+        }
+    }
+
+    fn sample_assets() -> AssetShaMap<'static> {
+        AssetShaMap {
+            mac_arm: "mac-arm-sha",
+            mac_x64: "mac-x64-sha",
+            lin_arm: "linux-arm-sha",
+            lin_x64: "linux-x64-sha",
+            win_x64: "win-x64-sha",
+            win_arm: "win-arm-sha",
+        }
+    }
+
+    fn assert_homebrew_formula_shape(formula: &str) {
+        assert!(formula.contains(r#"license any_of: ["MIT", "Apache-2.0"]"#));
+        assert!(formula.contains("x86_64-unknown-linux-gnu"));
+        assert!(formula.contains("aarch64-unknown-linux-gnu"));
+        assert!(formula.contains(r#"package_dir = extracted_dir || ".""#));
+        assert!(formula.contains(r##"bin.install "#{package_dir}/perllsp""##));
+        assert!(formula.contains(r##"bin.install "#{package_dir}/perl-dap""##));
+        assert!(
+            !formula.contains(r#"version ""#),
+            "Homebrew should infer the formula version from release URLs"
+        );
+        assert!(
+            !formula.contains("unknown-linux-musl"),
+            "Homebrew formula URLs must use GNU/glibc Linux assets"
+        );
+    }
+
+    #[test]
+    fn generated_formula_locks_owned_tap_shape() -> Result<()> {
+        let config = sample_config();
+        let assets = sample_assets();
+        let formula = build_brew_formula(&config, &assets);
+
+        assert_homebrew_formula_shape(&formula);
+        Ok(())
+    }
+}
