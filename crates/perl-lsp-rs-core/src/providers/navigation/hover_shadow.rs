@@ -20,10 +20,10 @@
 //!   Dynamic/Unavailable → explain dynamic boundary.
 
 use perl_semantic_facts::{
-    Confidence, EntityFact, EntityKind, FileId, OccurrenceFact, OccurrenceKind, Provenance,
-    ScopeId, VisibleSymbol, VisibleSymbolSource,
+    Confidence, DefinitionCandidate, DefinitionRankReason, EntityFact, EntityKind, FileId,
+    OccurrenceFact, OccurrenceKind, Provenance, ScopeId, VisibleSymbol, VisibleSymbolSource,
 };
-use perl_workspace::semantic::queries::SemanticQueries;
+use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
 use perl_workspace::semantic_shadow_compare::{
     SemanticShadowCompareReceipt, ShadowQueryInput, ShadowQueryName, ShadowResultSummary,
     summarize_identities,
@@ -159,6 +159,8 @@ pub fn hover_cutover<Q: SemanticQueries>(
     // ── Semantic path (primary) ──
     let entity_occ = semantic_queries.symbol_at(file_id, byte_offset);
     let visible = semantic_queries.visible_symbols_at(file_id, byte_offset, scope_id);
+    let query_context = QueryContext::new(file_id, scope_id, Some(byte_offset));
+    let definitions = semantic_queries.definitions(symbol, &query_context);
     let new_summary = semantic_hover_to_summary(entity_occ.as_ref(), &visible, symbol);
 
     // ── Legacy path (for fallback and receipt) ──
@@ -174,7 +176,8 @@ pub fn hover_cutover<Q: SemanticQueries>(
     );
 
     // ── Classify result ──
-    let result = classify_hover_result(entity_occ, &visible, symbol, legacy_hover_text);
+    let result =
+        classify_hover_result(entity_occ, &visible, &definitions, symbol, legacy_hover_text);
 
     tracing::debug!(
         symbol = %symbol,
@@ -197,6 +200,7 @@ pub fn hover_cutover<Q: SemanticQueries>(
 fn classify_hover_result(
     entity_occ: Option<(EntityFact, OccurrenceFact)>,
     visible: &[VisibleSymbol],
+    definitions: &[DefinitionCandidate],
     symbol: &str,
     legacy_text: Option<String>,
 ) -> HoverCutoverResult {
@@ -222,7 +226,8 @@ fn classify_hover_result(
                 visible.iter().filter(|v| v.name == symbol).collect();
 
             if matching_visible.len() > 1 {
-                let explanation = build_ambiguous_explanation(entity, &matching_visible, symbol);
+                let explanation =
+                    build_ambiguous_explanation(entity, &matching_visible, definitions, symbol);
                 return HoverCutoverResult::Ambiguous(explanation);
             }
 
@@ -304,11 +309,13 @@ fn build_exact_explanation(
 fn build_ambiguous_explanation(
     entity: &EntityFact,
     matching: &[&VisibleSymbol],
+    definitions: &[DefinitionCandidate],
     symbol: &str,
 ) -> HoverExplanation {
     let mut parts: Vec<String> = Vec::new();
 
-    parts.push(format!("**Ambiguous symbol** `{symbol}` — {} candidates", matching.len()));
+    let candidate_count = matching.len().max(definitions.len());
+    parts.push(format!("**Ambiguous symbol** `{symbol}` — {candidate_count} candidates"));
 
     // Show the primary entity
     let kind_label = entity_kind_label(entity.kind);
@@ -320,6 +327,18 @@ fn build_ambiguous_explanation(
         let module_info =
             vis.context.as_ref().and_then(|c| c.source_module.as_deref()).unwrap_or("unknown");
         parts.push(format!("- `{}` via {source_label} from `{module_info}`", vis.name));
+    }
+
+    if !definitions.is_empty() {
+        parts.push("Definition candidates:".to_string());
+        for candidate in definitions.iter().take(5) {
+            parts.push(format!(
+                "- `{}` ({}, {})",
+                candidate.canonical_name,
+                entity_kind_label(candidate.kind),
+                definition_rank_reason_label(&candidate.rank_reason)
+            ));
+        }
     }
 
     HoverExplanation { markdown: parts.join("\n\n") }
@@ -484,6 +503,28 @@ fn visible_origin_phrase(vis: &VisibleSymbol) -> Option<String> {
     Some(phrase)
 }
 
+fn definition_rank_reason_label(reason: &DefinitionRankReason) -> String {
+    match reason {
+        DefinitionRankReason::ExactQualifiedName => "ranked by exact qualified name".to_string(),
+        DefinitionRankReason::SamePackage => "ranked by same package".to_string(),
+        DefinitionRankReason::ExplicitImport { module } if module.is_empty() => {
+            "ranked by explicit import".to_string()
+        }
+        DefinitionRankReason::ExplicitImport { module } => {
+            format!("ranked by explicit import from `{module}`")
+        }
+        DefinitionRankReason::DefaultExport { module } if module.is_empty() => {
+            "ranked by default export".to_string()
+        }
+        DefinitionRankReason::DefaultExport { module } => {
+            format!("ranked by default export from `{module}`")
+        }
+        DefinitionRankReason::WorkspaceSymbol => "ranked as workspace symbol".to_string(),
+        DefinitionRankReason::HeuristicNameMatch => "ranked by heuristic name match".to_string(),
+        _ => "ranked by semantic query".to_string(),
+    }
+}
+
 // ── Summary helpers ──
 
 /// Convert legacy hover text into a [`ShadowResultSummary`].
@@ -526,9 +567,10 @@ fn semantic_hover_to_summary(
 mod tests {
     use super::*;
     use perl_semantic_facts::{
-        AnchorId, Confidence, DefinitionCandidate, EntityFact, EntityId, EntityKind, FileId,
-        OccurrenceFact, OccurrenceId, OccurrenceKind, Provenance, RenamePlan, SafeDeletePlan,
-        ScopeId, VisibleSymbol, VisibleSymbolContext, VisibleSymbolSource,
+        AnchorId, Confidence, DefinitionCandidate, DefinitionRank, DefinitionRankReason,
+        EntityFact, EntityId, EntityKind, FileId, OccurrenceFact, OccurrenceId, OccurrenceKind,
+        Provenance, RenamePlan, SafeDeletePlan, ScopeId, VisibleSymbol, VisibleSymbolContext,
+        VisibleSymbolSource,
     };
     use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
     use perl_workspace::semantic_shadow_compare::ShadowCompareVerdict;
@@ -551,6 +593,55 @@ mod tests {
 
         fn definitions(&self, _symbol: &str, _context: &QueryContext) -> Vec<DefinitionCandidate> {
             Vec::new()
+        }
+
+        fn references(&self, _entity_id: EntityId) -> Vec<OccurrenceFact> {
+            Vec::new()
+        }
+
+        fn visible_symbols_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _scope_id: Option<ScopeId>,
+        ) -> Vec<VisibleSymbol> {
+            self.visible_symbols_result.clone()
+        }
+
+        fn method_candidates(
+            &self,
+            _receiver_package: &str,
+            _method_name: &str,
+        ) -> Vec<DefinitionCandidate> {
+            Vec::new()
+        }
+
+        fn rename_plan(&self, entity_id: EntityId, new_name: &str) -> RenamePlan {
+            RenamePlan::new(entity_id, String::new(), new_name.to_string(), vec![], vec![], vec![])
+        }
+
+        fn safe_delete_plan(&self, entity_id: EntityId) -> SafeDeletePlan {
+            SafeDeletePlan::new(entity_id, String::new(), vec![], vec![])
+        }
+    }
+
+    struct RankedDefinitionStub {
+        symbol_at_result: Option<(EntityFact, OccurrenceFact)>,
+        visible_symbols_result: Vec<VisibleSymbol>,
+        definitions_result: Vec<DefinitionCandidate>,
+    }
+
+    impl SemanticQueries for RankedDefinitionStub {
+        fn symbol_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+        ) -> Option<(EntityFact, OccurrenceFact)> {
+            self.symbol_at_result.clone()
+        }
+
+        fn definitions(&self, _symbol: &str, _context: &QueryContext) -> Vec<DefinitionCandidate> {
+            self.definitions_result.clone()
         }
 
         fn references(&self, _entity_id: EntityId) -> Vec<OccurrenceFact> {
@@ -629,6 +720,27 @@ mod tests {
             confidence,
             context,
         }
+    }
+
+    fn make_definition_candidate(
+        id: u64,
+        canonical_name: &str,
+        package: &str,
+        rank: DefinitionRank,
+        rank_reason: DefinitionRankReason,
+    ) -> DefinitionCandidate {
+        DefinitionCandidate::new(
+            EntityId(id),
+            AnchorId(1_000 + id),
+            canonical_name.to_string(),
+            canonical_name.rsplit("::").next().unwrap_or(canonical_name).to_string(),
+            Some(package.to_string()),
+            EntityKind::Subroutine,
+            Provenance::ExactAst,
+            Confidence::High,
+            rank,
+            rank_reason,
+        )
     }
 
     // ── Shadow mode tests ──
@@ -823,6 +935,63 @@ mod tests {
                 assert!(explanation.markdown.contains("2 candidates"));
                 assert!(explanation.markdown.contains("Foo"));
                 assert!(explanation.markdown.contains("Baz"));
+            }
+            other => return Err(format!("expected Ambiguous, got {:?}", other).into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_ambiguous_definitions_explain_rank_reasons() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let entity = make_entity(
+            "Local::foo",
+            EntityKind::Subroutine,
+            Provenance::ExactAst,
+            Confidence::High,
+        );
+        let occ = make_occurrence(OccurrenceKind::Call, Provenance::ExactAst, Confidence::High);
+        let queries = RankedDefinitionStub {
+            symbol_at_result: Some((entity, occ)),
+            visible_symbols_result: vec![
+                make_visible(
+                    "foo",
+                    VisibleSymbolSource::LocalPackage,
+                    Confidence::High,
+                    Some(VisibleSymbolContext::new(Some("Local".to_string()), None, None)),
+                ),
+                make_visible(
+                    "foo",
+                    VisibleSymbolSource::ExplicitImport,
+                    Confidence::High,
+                    Some(VisibleSymbolContext::new(Some("Util".to_string()), None, None)),
+                ),
+            ],
+            definitions_result: vec![
+                make_definition_candidate(
+                    11,
+                    "Local::foo",
+                    "Local",
+                    DefinitionRank::SamePackage,
+                    DefinitionRankReason::SamePackage,
+                ),
+                make_definition_candidate(
+                    12,
+                    "Util::foo",
+                    "Util",
+                    DefinitionRank::ExplicitImport,
+                    DefinitionRankReason::ExplicitImport { module: "Util".to_string() },
+                ),
+            ],
+        };
+
+        let outcome = hover_cutover(None, &queries, "foo", FileId(1), 10, None);
+
+        match &outcome.result {
+            HoverCutoverResult::Ambiguous(explanation) => {
+                assert!(explanation.markdown.contains("Definition candidates:"));
+                assert!(explanation.markdown.contains("ranked by same package"));
+                assert!(explanation.markdown.contains("ranked by explicit import from `Util`"));
             }
             other => return Err(format!("expected Ambiguous, got {:?}", other).into()),
         }
