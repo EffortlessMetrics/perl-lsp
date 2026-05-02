@@ -3,7 +3,45 @@
 //! This module is primarily used to enable `cargo test --lib` CI runs.
 //! The primary entry point is the binary in `main.rs`.
 
+use std::fs;
+use std::path::{Path, PathBuf};
+
 pub mod version_sync;
+
+pub const PACKAGE_NAME: &str = "perl-ci-hygiene";
+
+#[must_use]
+pub fn binary_path(root: &Path) -> PathBuf {
+    let mut path = root.join("target").join("debug").join(PACKAGE_NAME);
+    if cfg!(windows) {
+        path.set_extension(std::env::consts::EXE_EXTENSION);
+    }
+    path
+}
+
+#[must_use]
+pub fn source_paths(root: &Path) -> Vec<PathBuf> {
+    let crate_root = root.join("crates").join(PACKAGE_NAME);
+    let mut paths = vec![crate_root.join("Cargo.toml")];
+    collect_rust_sources(&crate_root.join("src"), &mut paths);
+    paths.sort();
+    paths
+}
+
+fn collect_rust_sources(dir: &Path, paths: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rust_sources(&path, paths);
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            paths.push(path);
+        }
+    }
+}
 
 /// Categorize an `#[ignore]` reason/context into a policy bucket.
 pub fn categorize_ignore(reason: &str, context: &str) -> String {
@@ -140,4 +178,46 @@ pub fn categorize_ignore(reason: &str, context: &str) -> String {
         return "feature".to_string();
     }
     "other".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::source_paths;
+    use std::error::Error;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_repo_dir(label: &str) -> Result<PathBuf, Box<dyn Error>> {
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let dir = std::env::temp_dir()
+            .join(format!("perl-ci-hygiene-lib-{label}-{}-{nanos}", std::process::id()));
+        fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
+
+    fn contains_path(paths: &[PathBuf], suffix: &Path) -> bool {
+        paths.iter().any(|path| path.ends_with(suffix))
+    }
+
+    #[test]
+    fn source_paths_include_split_rust_modules() -> Result<(), Box<dyn Error>> {
+        let root = unique_temp_repo_dir("source-paths")?;
+        let crate_root = root.join("crates").join("perl-ci-hygiene");
+        let commands_dir = crate_root.join("src").join("commands");
+        fs::create_dir_all(&commands_dir)?;
+        fs::write(crate_root.join("Cargo.toml"), "")?;
+        fs::write(crate_root.join("src").join("main.rs"), "")?;
+        fs::write(crate_root.join("src").join("process.rs"), "")?;
+        fs::write(commands_dir.join("mod.rs"), "")?;
+
+        let paths = source_paths(&root);
+        assert!(contains_path(&paths, Path::new("crates/perl-ci-hygiene/Cargo.toml")));
+        assert!(contains_path(&paths, Path::new("crates/perl-ci-hygiene/src/main.rs")));
+        assert!(contains_path(&paths, Path::new("crates/perl-ci-hygiene/src/process.rs")));
+        assert!(contains_path(&paths, Path::new("crates/perl-ci-hygiene/src/commands/mod.rs")));
+
+        fs::remove_dir_all(&root)?;
+        Ok(())
+    }
 }
