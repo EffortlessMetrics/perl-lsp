@@ -34,7 +34,7 @@ Every scorecard in this repo answers the same four questions, in the same order:
 | Question | Parser answer | Source |
 | --- | --- | --- |
 | **Coverage** | How much of Perl do we try to parse? Headline number: node-kind coverage (which syntactic shapes have at least one green test) + GA-feature coverage. | `corpus_audit` on the project corpus, rendered in `docs/project/status/parser.md`. |
-| **Correctness** | When we try, are we right? Headline number: clean-parse rate on three separate corpora, plus strict-clean subset pass rate on the pinned manifest. | `just corpus-sweep-check`, `just cpan-corpus-check`, `just common-corpus-check`. Receipts in `.ci/parser-corpus-baseline.json`, `.ci/cpan-corpus-baseline.json`, `target/receipts/common-corpus-sweep.json`. |
+| **Correctness** | Current stood-up floor: clean-ingestion rate on three separate corpora, plus strict-clean subset pass rate on the pinned manifest. Real line/AST/symbol/span correctness belongs to the parser accuracy layer above. | `just corpus-sweep-check`, `just cpan-corpus-check`, `just common-corpus-check`. Receipts in `.ci/parser-corpus-baseline.json`, `.ci/cpan-corpus-baseline.json`, `target/receipts/common-corpus-sweep.json`. |
 | **Real-user behavior** | What does it look like on real code? Headline number: clean-parse rate on the CPAN top-1000 corpus (9 000+ files). | `just cpan-corpus-check`. |
 | **Cost** | What does it cost to run? Headline numbers: cold / warm / incremental parse time on a representative file. | `cargo bench -p perl-parser --features incremental -- parse_regime`; JSON receipts under `benchmarks/results/`. |
 
@@ -66,7 +66,7 @@ Improvement metrics are displayed on the status page and encouraged upward, but 
 | --- | --- | --- |
 | `node_kind_coverage` | `corpus_audit` project-corpus summary | Candidate for floor once the denominator (`NodeKind` total) has been stable across two releases. |
 | `error_density_per_1k_loc` | not yet instrumented | [#4063 PR 2 plan](https://github.com/perl-lsp/perl-lsp/issues/4063#issuecomment-4229331588): count lines in `parser_corpus_sweep` and divide by `total_error_nodes`, median over dirty files. |
-| `recovery_salvage_rate` | not yet instrumented | Follow-up issue after the first scorecard ships. Requires a malformed-fixture bank under `crates/perl-corpus/fixtures/malformed/` or equivalent. |
+| `recovery_salvage_rate` | `.ci/parser-corpus-baseline.json` when the sweep has dirty files | Improvement-only. The current value is a coarse structured-recovery share over dirty corpus files, not a floor. A ratchetable salvage floor requires a stable malformed-fixture denominator under `crates/perl-corpus/fixtures/malformed/` or equivalent. |
 
 ### 2.3 Cost metrics: cold / warm / incremental regimes
 
@@ -142,7 +142,7 @@ If you are unsure whether a change belongs on the parser scorecard or the engine
 
 ## 6. What's explicitly out of scope
 
-- **Recovery salvage rate** is listed in §2.2 but not yet instrumented. Tracking is in [#4063](https://github.com/perl-lsp/perl-lsp/issues/4063).
+- **Recovery salvage rate floor** is explicitly out of scope for now. The status page may render the coarse sweep value when a corpus receipt has dirty files, but ratcheting salvage waits for a stable malformed-fixture denominator. Tracking is in [#4063](https://github.com/perl-lsp/perl-lsp/issues/4063).
 - **Lex-phase timing separated from parse-phase timing** requires instrumentation in `perl-lexer` and is tracked as a TODO in [`xtask/src/tasks/parser_corpus_sweep.rs`](../../../xtask/src/tasks/parser_corpus_sweep.rs).
 - **Per-file timing roll-ups** (slowest-20 report) are owned by `cargo xtask metrics parser-stats`; see [`xtask/src/tasks/metrics/parser_stats.rs`](../../../xtask/src/tasks/metrics/parser_stats.rs).
 

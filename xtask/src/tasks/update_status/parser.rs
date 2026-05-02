@@ -142,7 +142,7 @@ fn format_clean_rate(clean_files: usize, total_files: usize) -> String {
 fn format_salvage_rate(salvage_rate: Option<f64>) -> String {
     match salvage_rate {
         Some(rate) => format!("{:.1}% salvage", rate * 100.0),
-        None => "n/a salvage".to_string(),
+        None => "insufficient_data salvage".to_string(),
     }
 }
 
@@ -274,7 +274,7 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
     let strict_clean_row = metrics.common_corpus_receipt.as_ref().map_or_else(
         || {
             format!(
-                "| **Strict-clean subset** | {pinned} modules (unverified) | run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |"
+                "| **Strict-clean subset** | insufficient_data | {pinned} pinned modules; run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |"
             )
         },
         |receipt| {
@@ -347,7 +347,10 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
     let tracking_table = [system_row, cpan_row, project_row].join("\n");
 
     let failure_worklist = metrics.system_receipt.as_ref().map_or_else(
-        || "| (no receipt — run `just corpus-sweep-check` to generate) | 0 |".to_string(),
+        || {
+            "| insufficient_data (no receipt — run `just corpus-sweep-check` to generate) | insufficient_data |"
+                .to_string()
+        },
         build_failure_worklist,
     );
 

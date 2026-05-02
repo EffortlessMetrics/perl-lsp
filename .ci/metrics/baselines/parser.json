@@ -12,13 +12,12 @@
     "cpan_total_error_nodes": 3015,
     "strict_clean_subset_pass_rate": 1.0,
     "valid_parser_gap_count": 0,
-    "node_kind_coverage": 0.942029,
-    "recovery_salvage_rate": 1.0
+    "node_kind_coverage": 0.942029
   },
   "improvement_metrics": {
     "node_kind_coverage": 0.942029,
     "error_density_per_1k_loc": 1.95,
-    "recovery_salvage_rate": 1.0
+    "recovery_salvage_rate": 0.204545
   },
   "tolerance_pct": 0.005
 }

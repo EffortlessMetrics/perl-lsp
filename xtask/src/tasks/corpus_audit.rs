@@ -391,21 +391,6 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
         }
     }
 
-    if let Some(Some(baseline_recovery_salvage_rate)) = floor_metrics.get("recovery_salvage_rate") {
-        let parsed_total = report.parse_outcomes.ok + report.parse_outcomes.error;
-        let current_recovery_salvage_rate = if parsed_total == 0 {
-            1.0
-        } else {
-            report.parse_outcomes.ok as f64 / parsed_total as f64
-        };
-        if current_recovery_salvage_rate + 1e-6 < *baseline_recovery_salvage_rate {
-            failures.push(format!(
-                "Recovery salvage regression: {:.4} < {:.4} baseline",
-                current_recovery_salvage_rate, baseline_recovery_salvage_rate
-            ));
-        }
-    }
-
     // Print error category breakdown if there are errors (Issue #180)
     if current_errors > 0 && !report.parse_outcomes.error_by_category.is_empty() {
         println!("\n   Error breakdown by category:");
@@ -495,13 +480,12 @@ mod tests {
     #[test]
     fn test_load_floor_metrics_parses_float_and_int_values() {
         let f = write_temp_baseline(
-            r#"{"floor_metrics":{"node_kind_coverage":0.942029,"valid_parser_gap_count":0,"recovery_salvage_rate":1.0}}"#,
+            r#"{"floor_metrics":{"node_kind_coverage":0.942029,"valid_parser_gap_count":0}}"#,
         );
         let metrics = load_parser_floor_metrics_from(f.path()).expect("should parse");
         assert_eq!(metrics.get("node_kind_coverage"), Some(&Some(0.942029)));
         // JSON integer 0 must coerce to Some(0.0), not None
         assert_eq!(metrics.get("valid_parser_gap_count"), Some(&Some(0.0)));
-        assert_eq!(metrics.get("recovery_salvage_rate"), Some(&Some(1.0)));
     }
 
     #[test]
@@ -536,19 +520,17 @@ mod tests {
     }
 
     // --------------------------------------------------------------------------
-    // Parser floor ratchet logic (nodekind / gap-count / recovery-salvage)
+    // Parser floor ratchet logic (nodekind / gap-count)
     // --------------------------------------------------------------------------
 
     /// Build a minimal floor_metrics map for ratchet tests.
     fn floor_metrics_from(
         nodekind: Option<f64>,
         gap_count: Option<f64>,
-        salvage_rate: Option<f64>,
     ) -> BTreeMap<String, Option<f64>> {
         let mut m = BTreeMap::new();
         m.insert("node_kind_coverage".to_string(), nodekind);
         m.insert("valid_parser_gap_count".to_string(), gap_count);
-        m.insert("recovery_salvage_rate".to_string(), salvage_rate);
         m
     }
 
@@ -561,7 +543,6 @@ mod tests {
         floor_metrics: &BTreeMap<String, Option<f64>>,
         nodekind_covered: usize,
         nodekind_total: usize,
-        parse_ok: usize,
         parse_error: usize,
     ) -> Vec<String> {
         let mut failures = Vec::new();
@@ -590,34 +571,22 @@ mod tests {
             }
         }
 
-        // -- recovery-salvage ratchet --
-        if let Some(Some(baseline_salvage)) = floor_metrics.get("recovery_salvage_rate") {
-            let parsed_total = parse_ok + parse_error;
-            let current =
-                if parsed_total == 0 { 1.0 } else { parse_ok as f64 / parsed_total as f64 };
-            if current + 1e-6 < *baseline_salvage {
-                failures.push(format!(
-                    "Recovery salvage regression: {current:.4} < {baseline_salvage:.4} baseline"
-                ));
-            }
-        }
-
         failures
     }
 
     #[test]
     fn test_nodekind_ratchet_no_regression() {
-        let m = floor_metrics_from(Some(0.90), None, None);
+        let m = floor_metrics_from(Some(0.90), None);
         // 95/100 = 0.95 >= 0.90 → no failure
-        let msgs = ratchet_failure_messages(&m, 95, 100, 100, 0);
+        let msgs = ratchet_failure_messages(&m, 95, 100, 0);
         assert!(msgs.is_empty(), "expected no failure: {msgs:?}");
     }
 
     #[test]
     fn test_nodekind_ratchet_fires_on_regression() {
-        let m = floor_metrics_from(Some(0.95), None, None);
+        let m = floor_metrics_from(Some(0.95), None);
         // 90/100 = 0.90 < 0.95 → failure
-        let msgs = ratchet_failure_messages(&m, 90, 100, 100, 0);
+        let msgs = ratchet_failure_messages(&m, 90, 100, 0);
         assert!(
             msgs.iter().any(|s| s.contains("NodeKind coverage regression")),
             "expected NodeKind failure: {msgs:?}"
@@ -627,17 +596,17 @@ mod tests {
     #[test]
     fn test_nodekind_ratchet_epsilon_prevents_false_positive() {
         // current = 0.9420290 + epsilon is still >= 0.9420290, should not fire
-        let m = floor_metrics_from(Some(0.942_029), None, None);
+        let m = floor_metrics_from(Some(0.942_029), None);
         // 942029/1000000 ≈ 0.942029 — should be within epsilon of baseline
-        let msgs = ratchet_failure_messages(&m, 942_029, 1_000_000, 100, 0);
+        let msgs = ratchet_failure_messages(&m, 942_029, 1_000_000, 0);
         assert!(msgs.is_empty(), "epsilon guard should prevent false positive: {msgs:?}");
     }
 
     #[test]
     fn test_gap_count_ratchet_zero_baseline_fires_on_any_error() {
-        let m = floor_metrics_from(None, Some(0.0), None);
+        let m = floor_metrics_from(None, Some(0.0));
         // baseline = 0 errors, current = 1 error → fires
-        let msgs = ratchet_failure_messages(&m, 100, 100, 99, 1);
+        let msgs = ratchet_failure_messages(&m, 100, 100, 1);
         assert!(
             msgs.iter().any(|s| s.contains("Valid parser gap regression")),
             "expected gap-count failure: {msgs:?}"
@@ -646,35 +615,16 @@ mod tests {
 
     #[test]
     fn test_gap_count_ratchet_zero_baseline_passes_with_no_errors() {
-        let m = floor_metrics_from(None, Some(0.0), None);
-        let msgs = ratchet_failure_messages(&m, 100, 100, 100, 0);
+        let m = floor_metrics_from(None, Some(0.0));
+        let msgs = ratchet_failure_messages(&m, 100, 100, 0);
         assert!(msgs.is_empty(), "zero errors should pass zero baseline: {msgs:?}");
-    }
-
-    #[test]
-    fn test_recovery_salvage_ratchet_fires_on_regression() {
-        // baseline = 1.0 (100% success); current = 99/100 = 0.99 < 1.0 − epsilon → fires
-        let m = floor_metrics_from(None, None, Some(1.0));
-        let msgs = ratchet_failure_messages(&m, 100, 100, 99, 1);
-        assert!(
-            msgs.iter().any(|s| s.contains("Recovery salvage regression")),
-            "expected salvage-rate failure: {msgs:?}"
-        );
-    }
-
-    #[test]
-    fn test_recovery_salvage_ratchet_passes_at_baseline() {
-        // baseline = 0.98; current = 100/100 = 1.0 → no failure
-        let m = floor_metrics_from(None, None, Some(0.98));
-        let msgs = ratchet_failure_messages(&m, 100, 100, 100, 0);
-        assert!(msgs.is_empty(), "perfect salvage rate should pass 0.98 baseline: {msgs:?}");
     }
 
     #[test]
     fn test_all_ratchets_pass_when_floor_metrics_absent() {
         // Empty map → all `if let Some(Some(...))` arms are skipped → no failures
         let m = BTreeMap::new();
-        let msgs = ratchet_failure_messages(&m, 0, 0, 0, 999);
+        let msgs = ratchet_failure_messages(&m, 0, 0, 999);
         assert!(msgs.is_empty(), "absent floor metrics must not fail: {msgs:?}");
     }
 }
