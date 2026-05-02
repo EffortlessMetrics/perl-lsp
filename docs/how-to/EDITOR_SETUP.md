@@ -1,7 +1,11 @@
 # Editor Setup Guide
 
-Use this page after `perllsp` is installed and visible on your `PATH`. If you
-still need the binary, start with [INSTALLATION.md](INSTALLATION.md).
+Use this page after choosing an install path.
+
+For VS Code-compatible editors, the extension can download `perllsp`
+automatically. For generic LSP clients, install `perllsp` first and make sure
+it is visible on your `PATH`. If you still need the binary, start with
+[INSTALLATION.md](INSTALLATION.md).
 
 Current public install artifacts are public alpha. Verify `perllsp --version`
 and `perllsp --health` before changing editor settings.

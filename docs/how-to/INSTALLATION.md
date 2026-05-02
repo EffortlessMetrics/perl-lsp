@@ -71,7 +71,8 @@ cd perl-lsp
 cargo build --release --bin perllsp -p perllsp
 ```
 
-If you want the published public-alpha binary installed into Cargo's bin directory instead:
+If you want Cargo to build and install the published public-alpha package into
+Cargo's bin directory instead:
 
 ```bash
 cargo install perllsp

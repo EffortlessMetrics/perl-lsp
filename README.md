@@ -57,7 +57,8 @@ See [project status](docs/project/status/index.md), [parser status](docs/project
 
 ## Install
 
-Install and editor setup live in [Install and Editor Setup](docs/how-to/EDITOR_SETUP.md).
+- Install: [docs/how-to/INSTALLATION.md](docs/how-to/INSTALLATION.md)
+- Editor setup: [docs/how-to/EDITOR_SETUP.md](docs/how-to/EDITOR_SETUP.md)
 
 Current public install artifacts are public alpha. Verify the binary before
 wiring it into shared editor or CI configuration.
@@ -88,7 +89,8 @@ The v0.13 architecture collapsed the old microcrate graph into a smaller publish
 
 | Task | Link |
 |---|---|
-| Install and editor setup | [docs/how-to/EDITOR_SETUP.md](docs/how-to/EDITOR_SETUP.md) |
+| Install | [docs/how-to/INSTALLATION.md](docs/how-to/INSTALLATION.md) |
+| Editor setup | [docs/how-to/EDITOR_SETUP.md](docs/how-to/EDITOR_SETUP.md) |
 | Getting started | [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md) |
 | Configuration | [docs/reference/CONFIG.md](docs/reference/CONFIG.md) |
 | Troubleshooting | [docs/how-to/TROUBLESHOOTING.md](docs/how-to/TROUBLESHOOTING.md) |
