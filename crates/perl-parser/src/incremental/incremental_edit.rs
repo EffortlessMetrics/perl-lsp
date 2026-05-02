@@ -183,18 +183,31 @@ impl IncrementalEditSet {
         self.edits.iter().map(|e| e.byte_shift()).sum()
     }
 
-    /// Apply edits to a string
+    /// Apply edits to a string using deterministic fallback semantics.
+    ///
+    /// This is intentionally more tolerant than [`Self::normalize_for_source`]:
+    /// the incremental fast path rejects overlapping or unmappable batches,
+    /// while this fallback applies every edit that still maps safely in reverse
+    /// byte order and skips edits that cannot be applied without panicking.
     pub fn apply_to_string(&self, source: &str) -> String {
         if self.edits.is_empty() {
             return source.to_string();
         }
 
-        let Some(normalized_edits) = self.normalize_for_source(source) else {
-            return source.to_string();
-        };
+        let mut edits = self.edits.clone();
+        edits.sort_by(|left, right| {
+            right
+                .start_byte
+                .cmp(&left.start_byte)
+                .then_with(|| right.old_end_byte.cmp(&left.old_end_byte))
+                .then_with(|| left.new_text.cmp(&right.new_text))
+        });
 
         let mut result = source.to_string();
-        for edit in &normalized_edits {
+        for edit in &edits {
+            if !Self::is_edit_mappable(&result, edit) {
+                continue;
+            }
             result.replace_range(edit.start_byte..edit.old_end_byte, &edit.new_text);
         }
 
@@ -310,14 +323,14 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_to_string_rejects_overlapping_edits() {
+    fn test_apply_to_string_applies_overlapping_edits_deterministically() {
         let mut edits = IncrementalEditSet::new();
         edits.add(IncrementalEdit::new(1, 4, "x".to_string()));
         edits.add(IncrementalEdit::new(3, 5, "y".to_string()));
 
         let source = "abcdef";
         let result = edits.apply_to_string(source);
-        assert_eq!(result, source);
+        assert_eq!(result, "axf");
     }
 
     #[test]
