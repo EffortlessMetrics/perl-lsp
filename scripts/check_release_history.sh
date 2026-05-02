@@ -161,6 +161,7 @@ do
             ':!docs/reference/archive/**' \
             ':!docs/issues/**' \
             ':!scripts/check_release_history.sh' \
+            ':!xtask/src/tasks/install_surface_check.rs' \
             || true
     )"
     if [[ -n "$forbidden_output" ]]; then
@@ -169,6 +170,26 @@ do
         done <<< "$forbidden_output"
     fi
 done
+
+# ── Check 5: Active install surfaces stay aligned with current package names ─
+
+run_install_surface_check() {
+    if [[ -x target/debug/xtask ]]; then
+        target/debug/xtask install-surface-check
+        return
+    fi
+
+    if [[ -x target/debug/xtask.exe ]]; then
+        target/debug/xtask.exe install-surface-check
+        return
+    fi
+
+    cargo xtask install-surface-check
+}
+
+if ! run_install_surface_check; then
+    error "Install surface drift check failed"
+fi
 
 # ── Exit ──────────────────────────────────────────────────────────────────────
 

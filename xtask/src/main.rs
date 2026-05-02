@@ -980,6 +980,9 @@ enum Commands {
     /// Check invariants in features.toml
     DocClaims,
 
+    /// Check active install docs and release notes for stale install command drift.
+    InstallSurfaceCheck,
+
     /// Validate PR intent/title/body against changed paths and closeout evidence.
     IntentDiffGate {
         /// Pull request number to inspect via `gh pr view`.
@@ -2117,6 +2120,7 @@ fn main() -> Result<()> {
             })
         }
         Commands::DocClaims => doc_claims::run(),
+        Commands::InstallSurfaceCheck => install_surface_check::run(),
         Commands::IntentDiffGate { pr, fixture, receipt } => {
             intent_diff_gate::run(intent_diff_gate::IntentDiffGateConfig { pr, fixture, receipt })
         }
