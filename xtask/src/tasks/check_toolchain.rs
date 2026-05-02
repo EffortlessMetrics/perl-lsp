@@ -113,18 +113,18 @@ mod tests {
 
     #[test]
     fn parse_version_parts_handles_channel_prefixed_versions() {
-        assert_eq!(parse_version_parts("stable-1.92.0-x86_64-unknown-linux-gnu"), vec![1, 92, 0]);
+        assert_eq!(parse_version_parts("stable-1.93.1-x86_64-unknown-linux-gnu"), vec![1, 93, 1]);
     }
 
     #[test]
     fn parse_rustc_version_extracts_second_token() -> Result<()> {
-        let version = parse_rustc_version("rustc 1.92.0 (2aaa62b89 2025-10-28)\n")?;
-        assert_eq!(version, "1.92.0");
+        let version = parse_rustc_version("rustc 1.93.1 (2aaa62b89 2025-10-28)\n")?;
+        assert_eq!(version, "1.93.1");
         Ok(())
     }
 
     #[test]
     fn compare_versions_treats_missing_patch_as_zero() {
-        assert_eq!(compare_versions(&[1, 92], &[1, 92, 0]), std::cmp::Ordering::Equal);
+        assert_eq!(compare_versions(&[1, 92], &[1, 93, 1]), std::cmp::Ordering::Equal);
     }
 }
