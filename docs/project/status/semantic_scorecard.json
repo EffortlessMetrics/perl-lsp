@@ -299,6 +299,12 @@
       "threshold": "0",
       "evidence": "semantic shadow compare release-readiness receipts"
     },
+    "method_candidates_fixture_pass_rate": {
+      "status": "pass",
+      "value": "100%",
+      "threshold": "100%",
+      "evidence": "method candidate query fixtures"
+    },
     "package_graph": {
       "status": "pass",
       "value": "2",

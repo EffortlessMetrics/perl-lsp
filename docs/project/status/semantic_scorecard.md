@@ -24,6 +24,7 @@ Fixtures loaded: `12`
 |---|---|---:|---:|---|
 | completion_import_fixture_pass_rate | pass | 100% | 100% | import/export visibility fixtures |
 | definition_shadow_regressions | pass | 0 | 0 | semantic shadow compare release-readiness receipts |
+| method_candidates_fixture_pass_rate | pass | 100% | 100% | method candidate query fixtures |
 | package_graph | pass | 2 | > 0 | package graph fixture edges |
 | reference_shadow_regressions | pass | 0 | 0 | semantic shadow compare release-readiness receipts |
 | rename_unsafe_edit_count | pass | 0 | 0 | rename blocker fixtures |
