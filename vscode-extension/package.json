@@ -1067,6 +1067,7 @@
     "test": "jest --verbose",
     "test:ci": "jest --ci --coverage",
     "test:integration": "npm run compile && tsc -p ./tsconfig.integration.json && node ./out/test/integration/runTest.js",
+    "test:published": "tsc -p ./tsconfig.published-smoke.json && node ./out/test/published/runPublishedSmoke.js",
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
     "package": "npx @vscode/vsce package",
     "publish": "npx @vscode/vsce publish",
