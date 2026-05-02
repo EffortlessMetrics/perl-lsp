@@ -1,8 +1,15 @@
 use crate::utils::project_root;
 use color_eyre::eyre::{Context, Result, bail};
 use perl_semantic_analyzer::{Parser, semantic::SemanticModel};
-use perl_semantic_facts::{Confidence, EdgeKind, OccurrenceKind, PackageEdgeKind, Provenance};
-use perl_workspace::workspace::workspace_index::WorkspaceIndex;
+use perl_semantic_facts::{
+    AnchorFact, AnchorId, Confidence, EdgeKind, EntityFact, EntityId, EntityKind, FileId,
+    OccurrenceKind, PackageEdge, PackageEdgeKind, Provenance,
+};
+use perl_workspace::semantic::imports::ImportExportIndex;
+use perl_workspace::semantic::package_graph::PackageGraphIndex;
+use perl_workspace::semantic::queries::{SemanticQueries, WorkspaceSemanticQueries};
+use perl_workspace::semantic::references::ReferenceIndex;
+use perl_workspace::workspace::workspace_index::{FileFactShard, WorkspaceIndex};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -104,6 +111,9 @@ struct FactMeasurement {
     package_graph_edges: usize,
     inheritance_edges: usize,
     role_composition_edges: usize,
+    method_candidate_fixture_passes: usize,
+    method_candidate_fixture_total: usize,
+    method_candidate_results: usize,
     exact_facts: usize,
     high_confidence_facts: usize,
     heuristic_facts: usize,
@@ -275,7 +285,159 @@ fn measure_fixtures(manifest_path: &Path, manifest: &SemanticManifest) -> Result
         }
     }
 
+    let method_candidates = measure_method_candidate_fixtures();
+    measurement.method_candidate_fixture_passes = method_candidates.passes;
+    measurement.method_candidate_fixture_total = method_candidates.total;
+    measurement.method_candidate_results = method_candidates.candidate_results;
+
     Ok(measurement)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MethodCandidateMeasurement {
+    passes: usize,
+    total: usize,
+    candidate_results: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MethodCandidateFixture {
+    receiver_package: &'static str,
+    method_name: &'static str,
+    expected_package: &'static str,
+    expected_kind: EntityKind,
+}
+
+fn measure_method_candidate_fixtures() -> MethodCandidateMeasurement {
+    let mut shards = std::collections::HashMap::new();
+    let shard = method_candidate_fact_shard();
+    shards.insert(shard.source_uri.clone(), shard);
+
+    let reference_index = ReferenceIndex::new();
+    let import_export_index = ImportExportIndex::new();
+    let mut package_graph = PackageGraphIndex::new();
+    package_graph.add_edges(
+        "file:///semantic/method_candidates_graph.pm",
+        FileId(700),
+        vec![
+            package_edge("Dog", "Animal", PackageEdgeKind::Inherits),
+            package_edge("Dog", "Tracker", PackageEdgeKind::ComposesRole),
+        ],
+    );
+
+    let queries = WorkspaceSemanticQueries::with_package_graph(
+        &reference_index,
+        &import_export_index,
+        &shards,
+        &package_graph,
+    );
+
+    let fixtures = [
+        MethodCandidateFixture {
+            receiver_package: "Dog",
+            method_name: "bark",
+            expected_package: "Dog",
+            expected_kind: EntityKind::Subroutine,
+        },
+        MethodCandidateFixture {
+            receiver_package: "Dog",
+            method_name: "speak",
+            expected_package: "Animal",
+            expected_kind: EntityKind::Subroutine,
+        },
+        MethodCandidateFixture {
+            receiver_package: "Dog",
+            method_name: "track",
+            expected_package: "Tracker",
+            expected_kind: EntityKind::Subroutine,
+        },
+        MethodCandidateFixture {
+            receiver_package: "Person",
+            method_name: "name",
+            expected_package: "Person",
+            expected_kind: EntityKind::GeneratedMember,
+        },
+    ];
+
+    let mut passes = 0;
+    let mut candidate_results = 0;
+    for fixture in fixtures {
+        let candidates = queries.method_candidates(fixture.receiver_package, fixture.method_name);
+        candidate_results += candidates.len();
+        if candidates.iter().any(|candidate| {
+            candidate.display_name == fixture.method_name
+                && candidate.package.as_deref() == Some(fixture.expected_package)
+                && candidate.kind == fixture.expected_kind
+        }) {
+            passes += 1;
+        }
+    }
+
+    MethodCandidateMeasurement { passes, total: fixtures.len(), candidate_results }
+}
+
+fn method_candidate_fact_shard() -> FileFactShard {
+    let file_id = FileId(701);
+    let entries = [
+        ("Dog::bark", EntityKind::Subroutine, Provenance::ExactAst, Confidence::High),
+        ("Animal::speak", EntityKind::Subroutine, Provenance::ExactAst, Confidence::High),
+        ("Tracker::track", EntityKind::Subroutine, Provenance::ExactAst, Confidence::High),
+        (
+            "Person::name",
+            EntityKind::GeneratedMember,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+        ),
+    ];
+
+    let mut anchors = Vec::new();
+    let mut entities = Vec::new();
+    for (idx, (canonical_name, kind, provenance, confidence)) in entries.into_iter().enumerate() {
+        let anchor_id = AnchorId(10_000 + idx as u64);
+        anchors.push(AnchorFact {
+            id: anchor_id,
+            file_id,
+            span_start_byte: (idx as u32) * 10,
+            span_end_byte: (idx as u32) * 10 + 5,
+            scope_id: None,
+            provenance,
+            confidence,
+        });
+        entities.push(EntityFact {
+            id: EntityId(20_000 + idx as u64),
+            kind,
+            canonical_name: canonical_name.to_string(),
+            anchor_id: Some(anchor_id),
+            scope_id: None,
+            provenance,
+            confidence,
+        });
+    }
+
+    FileFactShard {
+        source_uri: "file:///semantic/method_candidates.pm".to_string(),
+        file_id,
+        content_hash: 1,
+        anchors_hash: None,
+        entities_hash: None,
+        occurrences_hash: None,
+        edges_hash: None,
+        anchors,
+        entities,
+        occurrences: Vec::new(),
+        edges: Vec::new(),
+    }
+}
+
+fn package_edge(from: &str, to: &str, kind: PackageEdgeKind) -> PackageEdge {
+    PackageEdge::new(
+        from.to_string(),
+        to.to_string(),
+        kind,
+        Some(AnchorId(30_000)),
+        Provenance::ExactAst,
+        Confidence::High,
+    )
 }
 
 fn measure_package_graph_edges(
@@ -370,8 +532,34 @@ fn build_readiness_rows(
         + measurement.reference_edges
         + measurement.package_graph_edges;
     let fixture_rate = if fixture_count == 0 { "0%" } else { "100%" };
+    let method_candidate_rate = if measurement.method_candidate_fixture_total == 0 {
+        "0%".to_string()
+    } else {
+        format!(
+            "{}%",
+            measurement.method_candidate_fixture_passes * 100
+                / measurement.method_candidate_fixture_total
+        )
+    };
 
     BTreeMap::from([
+        (
+            "method_candidates_fixture_pass_rate".to_string(),
+            ReadinessRow {
+                status: if measurement.method_candidate_fixture_passes
+                    == measurement.method_candidate_fixture_total
+                    && measurement.method_candidate_fixture_total > 0
+                    && measurement.method_candidate_results > 0
+                {
+                    "pass"
+                } else {
+                    "fail"
+                },
+                value: method_candidate_rate,
+                threshold: "100%",
+                evidence: "method candidate query fixtures",
+            },
+        ),
         (
             "package_graph".to_string(),
             ReadinessRow {
@@ -668,6 +856,14 @@ sub local { 1 }
         assert_eq!(package_graph.value, "2");
         assert!(!artifact.unavailable_rows.contains_key("package_graph"));
         Ok(())
+    }
+
+    #[test]
+    fn method_candidate_rows_are_measured_from_queries() {
+        let measurement = measure_method_candidate_fixtures();
+        assert_eq!(measurement.total, 4);
+        assert_eq!(measurement.passes, 4);
+        assert_eq!(measurement.candidate_results, 4);
     }
 
     /// Verify that the full pipeline (load_manifest -> build_artifact) is stable
