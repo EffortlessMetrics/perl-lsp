@@ -317,11 +317,17 @@
       "threshold": "0",
       "evidence": "semantic shadow compare release-readiness receipts"
     },
+    "rename_plan": {
+      "status": "pass",
+      "value": "100%",
+      "threshold": "100%",
+      "evidence": "rename plan query fixtures"
+    },
     "rename_unsafe_edit_count": {
       "status": "pass",
       "value": "0",
       "threshold": "0",
-      "evidence": "rename blocker fixtures"
+      "evidence": "rename plan query fixtures"
     },
     "safe_delete_blocker_fixture_pass_rate": {
       "status": "pass",
@@ -349,10 +355,6 @@
     }
   },
   "unavailable_rows": {
-    "rename_plan": {
-      "status": "unavailable",
-      "reason": "planned for future scorecard waves"
-    },
     "safe_delete_plan": {
       "status": "unavailable",
       "reason": "planned for future scorecard waves"

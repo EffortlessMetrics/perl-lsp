@@ -2,8 +2,9 @@ use crate::utils::project_root;
 use color_eyre::eyre::{Context, Result, bail};
 use perl_semantic_analyzer::{Parser, semantic::SemanticModel};
 use perl_semantic_facts::{
-    AnchorFact, AnchorId, Confidence, EdgeKind, EntityFact, EntityId, EntityKind, FileId,
-    OccurrenceKind, PackageEdge, PackageEdgeKind, Provenance,
+    AnchorFact, AnchorId, Confidence, EdgeKind, EntityFact, EntityId, EntityKind, ExportSet,
+    FileId, ImportKind, ImportSpec, ImportSymbols, OccurrenceFact, OccurrenceId, OccurrenceKind,
+    PackageEdge, PackageEdgeKind, PlanBlockerReason, PlannedEditCategory, Provenance, RenamePlan,
 };
 use perl_workspace::semantic::imports::ImportExportIndex;
 use perl_workspace::semantic::package_graph::PackageGraphIndex;
@@ -32,7 +33,7 @@ const AVAILABLE_ROWS: &[&str] = &[
     "role_composition_edges",
 ];
 
-const UNAVAILABLE_ROWS: &[&str] = &["rename_plan", "safe_delete_plan"];
+const UNAVAILABLE_ROWS: &[&str] = &["safe_delete_plan"];
 
 #[derive(Debug, Deserialize)]
 struct SemanticManifest {
@@ -114,6 +115,11 @@ struct FactMeasurement {
     method_candidate_fixture_passes: usize,
     method_candidate_fixture_total: usize,
     method_candidate_results: usize,
+    rename_plan_fixture_passes: usize,
+    rename_plan_fixture_total: usize,
+    rename_plan_planned_edits: usize,
+    rename_plan_blockers: usize,
+    rename_plan_unsafe_edits: usize,
     exact_facts: usize,
     high_confidence_facts: usize,
     heuristic_facts: usize,
@@ -290,6 +296,13 @@ fn measure_fixtures(manifest_path: &Path, manifest: &SemanticManifest) -> Result
     measurement.method_candidate_fixture_total = method_candidates.total;
     measurement.method_candidate_results = method_candidates.candidate_results;
 
+    let rename_plan = measure_rename_plan_fixtures();
+    measurement.rename_plan_fixture_passes = rename_plan.passes;
+    measurement.rename_plan_fixture_total = rename_plan.total;
+    measurement.rename_plan_planned_edits = rename_plan.planned_edits;
+    measurement.rename_plan_blockers = rename_plan.blockers;
+    measurement.rename_plan_unsafe_edits = rename_plan.unsafe_edits;
+
     Ok(measurement)
 }
 
@@ -358,7 +371,6 @@ fn measure_method_candidate_fixtures() -> MethodCandidateMeasurement {
             expected_kind: EntityKind::GeneratedMember,
         },
     ];
-
     let mut passes = 0;
     let mut candidate_results = 0;
     for fixture in fixtures {
@@ -438,6 +450,332 @@ fn package_edge(from: &str, to: &str, kind: PackageEdgeKind) -> PackageEdge {
         Provenance::ExactAst,
         Confidence::High,
     )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RenamePlanMeasurement {
+    passes: usize,
+    total: usize,
+    planned_edits: usize,
+    blockers: usize,
+    unsafe_edits: usize,
+}
+
+fn measure_rename_plan_fixtures() -> RenamePlanMeasurement {
+    let fixtures = [
+        rename_plan_safe_local_fixture(),
+        rename_plan_generated_member_fixture(),
+        rename_plan_dynamic_boundary_fixture(),
+        rename_plan_cross_module_export_fixture(),
+    ];
+    let total = fixtures.len();
+
+    let mut passes = 0;
+    let mut planned_edits = 0;
+    let mut blockers = 0;
+    let mut unsafe_edits = 0;
+
+    for (plan, passed) in fixtures {
+        planned_edits += plan.edits.len();
+        blockers += plan.blockers.len();
+        unsafe_edits += count_unsafe_rename_edits(&plan);
+        if passed {
+            passes += 1;
+        }
+    }
+
+    RenamePlanMeasurement { passes, total, planned_edits, blockers, unsafe_edits }
+}
+
+fn rename_plan_safe_local_fixture() -> (RenamePlan, bool) {
+    let entity_id = EntityId(41_000);
+    let def_anchor = AnchorId(41_100);
+    let call_anchor = AnchorId(41_101);
+    let shard = rename_plan_fact_shard(
+        "file:///semantic/rename_safe_local.pm",
+        FileId(41_001),
+        entity_id,
+        "Local::local_only",
+        EntityKind::Subroutine,
+        &[
+            RenameOccurrenceSpec {
+                anchor_id: def_anchor,
+                occurrence_id: OccurrenceId(41_200),
+                kind: OccurrenceKind::Definition,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            },
+            RenameOccurrenceSpec {
+                anchor_id: call_anchor,
+                occurrence_id: OccurrenceId(41_201),
+                kind: OccurrenceKind::Call,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            },
+        ],
+        Provenance::ExactAst,
+        Confidence::High,
+    );
+
+    let plan = run_rename_plan_fixture(vec![shard], ImportExportIndex::new(), entity_id);
+    let has_definition = plan.edits.iter().any(|edit| {
+        edit.anchor_id == def_anchor && edit.category == PlannedEditCategory::Definition
+    });
+    let has_reference = plan.edits.iter().any(|edit| {
+        edit.anchor_id == call_anchor && edit.category == PlannedEditCategory::Reference
+    });
+    let passed = has_definition
+        && has_reference
+        && plan.blockers.is_empty()
+        && count_unsafe_rename_edits(&plan) == 0;
+
+    (plan, passed)
+}
+
+fn rename_plan_generated_member_fixture() -> (RenamePlan, bool) {
+    let entity_id = EntityId(42_000);
+    let shard = rename_plan_fact_shard(
+        "file:///semantic/rename_generated_member.pm",
+        FileId(42_001),
+        entity_id,
+        "Person::name",
+        EntityKind::GeneratedMember,
+        &[],
+        Provenance::FrameworkSynthesis,
+        Confidence::Medium,
+    );
+
+    let plan = run_rename_plan_fixture(vec![shard], ImportExportIndex::new(), entity_id);
+    let passed = plan.edits.is_empty()
+        && plan.blockers.iter().any(|blocker| blocker.reason == PlanBlockerReason::GeneratedMember)
+        && count_unsafe_rename_edits(&plan) == 0;
+
+    (plan, passed)
+}
+
+fn rename_plan_dynamic_boundary_fixture() -> (RenamePlan, bool) {
+    let entity_id = EntityId(43_000);
+    let dyn_anchor = AnchorId(43_101);
+    let shard = rename_plan_fact_shard(
+        "file:///semantic/rename_dynamic_boundary.pm",
+        FileId(43_001),
+        entity_id,
+        "Dynamic::dispatch",
+        EntityKind::Subroutine,
+        &[
+            RenameOccurrenceSpec {
+                anchor_id: AnchorId(43_100),
+                occurrence_id: OccurrenceId(43_200),
+                kind: OccurrenceKind::Definition,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            },
+            RenameOccurrenceSpec {
+                anchor_id: dyn_anchor,
+                occurrence_id: OccurrenceId(43_201),
+                kind: OccurrenceKind::DynamicBoundary,
+                provenance: Provenance::DynamicBoundary,
+                confidence: Confidence::Low,
+            },
+        ],
+        Provenance::ExactAst,
+        Confidence::High,
+    );
+
+    let plan = run_rename_plan_fixture(vec![shard], ImportExportIndex::new(), entity_id);
+    let passed = plan.blockers.iter().any(|blocker| {
+        blocker.reason == PlanBlockerReason::DynamicBoundary
+            && blocker.anchor_id == Some(dyn_anchor)
+    }) && count_unsafe_rename_edits(&plan) == 0;
+
+    (plan, passed)
+}
+
+fn rename_plan_cross_module_export_fixture() -> (RenamePlan, bool) {
+    let exporter_file = FileId(44_001);
+    let importer_file = FileId(44_002);
+    let entity_id = EntityId(44_000);
+    let shard = rename_plan_fact_shard(
+        "file:///semantic/rename_exporter.pm",
+        exporter_file,
+        entity_id,
+        "MyExporter::helper",
+        EntityKind::Subroutine,
+        &[RenameOccurrenceSpec {
+            anchor_id: AnchorId(44_100),
+            occurrence_id: OccurrenceId(44_200),
+            kind: OccurrenceKind::Definition,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        }],
+        Provenance::ExactAst,
+        Confidence::High,
+    );
+    let importer_shard = empty_fact_shard("file:///semantic/rename_consumer.pm", importer_file);
+
+    let mut import_export_index = ImportExportIndex::new();
+    import_export_index.add_module_exports(
+        "file:///semantic/rename_exporter.pm",
+        "MyExporter",
+        ExportSet {
+            default_exports: Vec::new(),
+            optional_exports: vec!["helper".to_string()],
+            tags: Vec::new(),
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+            module_name: Some("MyExporter".to_string()),
+            anchor_id: None,
+        },
+    );
+    import_export_index.add_file_imports(
+        "file:///semantic/rename_consumer.pm",
+        importer_file,
+        vec![ImportSpec {
+            module: "MyExporter".to_string(),
+            kind: ImportKind::UseExplicitList,
+            symbols: ImportSymbols::Explicit(vec!["helper".to_string()]),
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+            file_id: Some(importer_file),
+            anchor_id: None,
+            scope_id: None,
+        }],
+    );
+
+    let plan = run_rename_plan_fixture(vec![shard, importer_shard], import_export_index, entity_id);
+    let passed =
+        plan.blockers.iter().any(|blocker| blocker.reason == PlanBlockerReason::CrossModuleExport)
+            && count_unsafe_rename_edits(&plan) == 0;
+
+    (plan, passed)
+}
+
+fn run_rename_plan_fixture(
+    shards: Vec<FileFactShard>,
+    import_export_index: ImportExportIndex,
+    entity_id: EntityId,
+) -> RenamePlan {
+    let mut fact_shards = std::collections::HashMap::new();
+    for shard in shards {
+        fact_shards.insert(shard.source_uri.clone(), shard);
+    }
+
+    let reference_index = ReferenceIndex::new();
+    let queries =
+        WorkspaceSemanticQueries::new(&reference_index, &import_export_index, &fact_shards);
+    queries.rename_plan(entity_id, "renamed")
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RenameOccurrenceSpec {
+    anchor_id: AnchorId,
+    occurrence_id: OccurrenceId,
+    kind: OccurrenceKind,
+    provenance: Provenance,
+    confidence: Confidence,
+}
+
+fn rename_plan_fact_shard(
+    source_uri: &str,
+    file_id: FileId,
+    entity_id: EntityId,
+    canonical_name: &str,
+    entity_kind: EntityKind,
+    occurrence_specs: &[RenameOccurrenceSpec],
+    provenance: Provenance,
+    confidence: Confidence,
+) -> FileFactShard {
+    let definition_anchor = occurrence_specs
+        .iter()
+        .find(|spec| spec.kind == OccurrenceKind::Definition)
+        .map(|spec| spec.anchor_id)
+        .unwrap_or(AnchorId(file_id.0 + 400_000));
+
+    let mut anchors = vec![AnchorFact {
+        id: definition_anchor,
+        file_id,
+        span_start_byte: 0,
+        span_end_byte: 6,
+        scope_id: None,
+        provenance,
+        confidence,
+    }];
+    let mut occurrences = Vec::new();
+    for (idx, spec) in occurrence_specs.iter().enumerate() {
+        if spec.anchor_id != definition_anchor {
+            anchors.push(AnchorFact {
+                id: spec.anchor_id,
+                file_id,
+                span_start_byte: 20 + idx as u32 * 10,
+                span_end_byte: 26 + idx as u32 * 10,
+                scope_id: None,
+                provenance: spec.provenance,
+                confidence: spec.confidence,
+            });
+        }
+        occurrences.push(OccurrenceFact {
+            id: spec.occurrence_id,
+            kind: spec.kind,
+            entity_id: Some(entity_id),
+            anchor_id: spec.anchor_id,
+            scope_id: None,
+            provenance: spec.provenance,
+            confidence: spec.confidence,
+        });
+    }
+
+    FileFactShard {
+        source_uri: source_uri.to_string(),
+        file_id,
+        content_hash: file_id.0,
+        anchors_hash: None,
+        entities_hash: None,
+        occurrences_hash: None,
+        edges_hash: None,
+        anchors,
+        entities: vec![EntityFact {
+            id: entity_id,
+            kind: entity_kind,
+            canonical_name: canonical_name.to_string(),
+            anchor_id: Some(definition_anchor),
+            scope_id: None,
+            provenance,
+            confidence,
+        }],
+        occurrences,
+        edges: Vec::new(),
+    }
+}
+
+fn empty_fact_shard(source_uri: &str, file_id: FileId) -> FileFactShard {
+    FileFactShard {
+        source_uri: source_uri.to_string(),
+        file_id,
+        content_hash: file_id.0,
+        anchors_hash: None,
+        entities_hash: None,
+        occurrences_hash: None,
+        edges_hash: None,
+        anchors: Vec::new(),
+        entities: Vec::new(),
+        occurrences: Vec::new(),
+        edges: Vec::new(),
+    }
+}
+
+fn count_unsafe_rename_edits(plan: &RenamePlan) -> usize {
+    plan.edits
+        .iter()
+        .filter(|edit| {
+            !matches!(
+                edit.category,
+                PlannedEditCategory::Definition
+                    | PlannedEditCategory::Reference
+                    | PlannedEditCategory::ImportList
+                    | PlannedEditCategory::ExportList
+            )
+        })
+        .count()
 }
 
 fn measure_package_graph_edges(
@@ -541,6 +879,14 @@ fn build_readiness_rows(
                 / measurement.method_candidate_fixture_total
         )
     };
+    let rename_plan_rate = if measurement.rename_plan_fixture_total == 0 {
+        "0%".to_string()
+    } else {
+        format!(
+            "{}%",
+            measurement.rename_plan_fixture_passes * 100 / measurement.rename_plan_fixture_total
+        )
+    };
 
     BTreeMap::from([
         (
@@ -567,6 +913,25 @@ fn build_readiness_rows(
                 value: measurement.package_graph_edges.to_string(),
                 threshold: "> 0",
                 evidence: "package graph fixture edges",
+            },
+        ),
+        (
+            "rename_plan".to_string(),
+            ReadinessRow {
+                status: if measurement.rename_plan_fixture_passes
+                    == measurement.rename_plan_fixture_total
+                    && measurement.rename_plan_fixture_total > 0
+                    && measurement.rename_plan_planned_edits > 0
+                    && measurement.rename_plan_blockers > 0
+                    && measurement.rename_plan_unsafe_edits == 0
+                {
+                    "pass"
+                } else {
+                    "fail"
+                },
+                value: rename_plan_rate,
+                threshold: "100%",
+                evidence: "rename plan query fixtures",
             },
         ),
         (
@@ -626,10 +991,10 @@ fn build_readiness_rows(
         (
             "rename_unsafe_edit_count".to_string(),
             ReadinessRow {
-                status: "pass",
-                value: "0".to_string(),
+                status: if measurement.rename_plan_unsafe_edits == 0 { "pass" } else { "fail" },
+                value: measurement.rename_plan_unsafe_edits.to_string(),
                 threshold: "0",
-                evidence: "rename blocker fixtures",
+                evidence: "rename plan query fixtures",
             },
         ),
         (
@@ -864,6 +1229,41 @@ sub local { 1 }
         assert_eq!(measurement.total, 4);
         assert_eq!(measurement.passes, 4);
         assert_eq!(measurement.candidate_results, 4);
+    }
+
+    #[test]
+    fn rename_plan_rows_are_measured_from_queries() -> Result<()> {
+        let measurement = measure_rename_plan_fixtures();
+        assert_eq!(measurement.total, 4);
+        assert_eq!(measurement.passes, 4);
+        assert!(measurement.planned_edits > 0, "safe rename fixture should produce planned edits");
+        assert!(measurement.blockers > 0, "blocked rename fixtures should produce blockers");
+        assert_eq!(measurement.unsafe_edits, 0);
+
+        let tmp = tempfile::tempdir()?;
+        let manifest_path = write_fixture_set(
+            tmp.path(),
+            r#"{"fixture_family_version":1,"fixtures":[{"id":"rename_fixture","family":"rename","path":"rename.pl"}]}"#,
+            &[("rename.pl", "package RenameFixture; sub local_only { 1 }\nlocal_only();\n")],
+        )?;
+        let artifact = build_artifact(&manifest_path, load_manifest(&manifest_path)?)?;
+
+        let rename_plan = artifact
+            .readiness_rows
+            .get("rename_plan")
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing rename_plan readiness row"))?;
+        assert_eq!(rename_plan.status, "pass");
+        assert_eq!(rename_plan.value, "100%");
+
+        let unsafe_edits =
+            artifact.readiness_rows.get("rename_unsafe_edit_count").ok_or_else(|| {
+                color_eyre::eyre::eyre!("missing rename_unsafe_edit_count readiness row")
+            })?;
+        assert_eq!(unsafe_edits.status, "pass");
+        assert_eq!(unsafe_edits.value, "0");
+        assert!(!artifact.unavailable_rows.contains_key("rename_plan"));
+        assert!(artifact.unavailable_rows.contains_key("safe_delete_plan"));
+        Ok(())
     }
 
     /// Verify that the full pipeline (load_manifest -> build_artifact) is stable
