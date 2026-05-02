@@ -362,13 +362,13 @@ fn coderef_syntax_forms_are_classified_conservatively() -> Result<()> {
         loc(0, 4),
     );
     let backslash_amp_target =
-        Node::new(NodeKind::FunctionCall { name: "foo".to_string(), args: vec![] }, loc(7, 10));
+        Node::new(NodeKind::FunctionCall { name: "foo".to_string(), args: vec![] }, loc(6, 10));
     let backslash_amp = Node::new(
         NodeKind::Unary { op: "\\".to_string(), operand: Box::new(backslash_amp_target) },
         loc(5, 10),
     );
     let goto_amp =
-        Node::new(NodeKind::FunctionCall { name: "foo".to_string(), args: vec![] }, loc(17, 20));
+        Node::new(NodeKind::FunctionCall { name: "foo".to_string(), args: vec![] }, loc(16, 20));
     let goto = Node::new(NodeKind::Goto { target: Box::new(goto_amp) }, loc(11, 20));
     let program =
         Node::new(NodeKind::Program { statements: vec![amp, backslash_amp, goto] }, loc(0, 20));
@@ -377,6 +377,33 @@ fn coderef_syntax_forms_are_classified_conservatively() -> Result<()> {
     assert_eq!(refs.len(), 3);
     assert!(refs.iter().all(|r| r.kind == SymbolRefKind::CoderefReference));
     assert!(refs.iter().all(|r| r.name == "foo"));
+    Ok(())
+}
+
+#[test]
+fn non_ampersand_call_targets_stay_call_refs() -> Result<()> {
+    let call_target =
+        Node::new(NodeKind::FunctionCall { name: "foo".to_string(), args: vec![] }, loc(7, 12));
+    let reference_to_call_result = Node::new(
+        NodeKind::Unary { op: "\\".to_string(), operand: Box::new(call_target) },
+        loc(6, 12),
+    );
+
+    let goto_call_target =
+        Node::new(NodeKind::FunctionCall { name: "bar".to_string(), args: vec![] }, loc(18, 23));
+    let goto = Node::new(NodeKind::Goto { target: Box::new(goto_call_target) }, loc(13, 23));
+
+    let program = Node::new(
+        NodeKind::Program { statements: vec![reference_to_call_result, goto] },
+        loc(6, 23),
+    );
+
+    let refs = extract_symbol_refs(&program);
+
+    assert_eq!(refs.len(), 2);
+    assert!(refs.iter().all(|r| r.kind == SymbolRefKind::SubroutineCall));
+    assert_eq!(refs[0].name, "foo");
+    assert_eq!(refs[1].name, "bar");
     Ok(())
 }
 
@@ -397,7 +424,7 @@ fn typeglob_alias_boundary_is_classified() -> Result<()> {
 fn typeglob_assignment_keeps_rhs_coderef_reference() -> Result<()> {
     let lhs = Node::new(NodeKind::Typeglob { name: "alias".to_string() }, loc(0, 6));
     let rhs_target =
-        Node::new(NodeKind::FunctionCall { name: "target".to_string(), args: vec![] }, loc(11, 17));
+        Node::new(NodeKind::FunctionCall { name: "target".to_string(), args: vec![] }, loc(10, 17));
     let rhs = Node::new(
         NodeKind::Unary { op: "\\".to_string(), operand: Box::new(rhs_target) },
         loc(9, 17),
