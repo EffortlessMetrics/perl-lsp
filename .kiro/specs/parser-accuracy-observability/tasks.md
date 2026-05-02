@@ -59,10 +59,10 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
     - Include package, subroutine, method, lexical variable, global variable, import, export, typeglob alias, generated accessor, role method, inherited method, and dynamic boundary
     - _Verify: at least one fixture each for generated accessor and typeglob alias_
 
-- [ ] 7. Add false-positive and dynamic-boundary gates
-  - [ ] 7.1 Emit false-positive counts
+- [x] 7. Add false-positive and dynamic-boundary gates
+  - [x] 7.1 Emit false-positive counts
     - false symbols, false declarations, false references, false imports, false exports, false parse errors, false exact resolutions, false dynamic resolutions, and symbols emitted in comments/POD/strings/unknown regions
-  - [ ] 7.2 Add false precision safety rows
+  - [x] 7.2 Add false precision safety rows
     - Emit `dynamic_false_precision_count`
     - Prepare floor contract for `dynamic_false_precision_count == 0`
     - _Verify: dynamic fixture returns fallback/unavailable rather than false exact result_

@@ -49,6 +49,8 @@ struct FixtureMetadata {
     ast_expectations: Vec<AstExpectation>,
     #[serde(default)]
     symbol_expectations: SymbolExpectations,
+    #[serde(default)]
+    symbol_safety_regions: Vec<SymbolSafetyRegion>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -133,6 +135,22 @@ struct SymbolEdgeExpectation {
     confidence: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct SymbolSafetyRegion {
+    kind: SymbolSafetyRegionKind,
+    line: u64,
+    span_text: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SymbolSafetyRegionKind {
+    Comment,
+    Pod,
+    String,
+    Unknown,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct SymbolEntityKey {
     kind: String,
@@ -168,7 +186,14 @@ struct SymbolEdgeKey {
 struct SymbolPredictions {
     entities: BTreeSet<SymbolEntityKey>,
     occurrences: BTreeSet<SymbolOccurrenceKey>,
+    safety_spans: BTreeSet<SymbolSpanLocation>,
     edges: BTreeSet<SymbolEdgeKey>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct SymbolSpanLocation {
+    line: u64,
+    span_text: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -406,6 +431,21 @@ struct SymbolScore {
     edge_false_negative_count: u64,
     entity_by_kind: BTreeMap<String, KindScore>,
     occurrence_by_kind: BTreeMap<String, KindScore>,
+    false_positive_sample_count: u64,
+    false_import_count: u64,
+    false_export_count: u64,
+    false_exact_resolution_count: u64,
+    false_dynamic_resolution_count: u64,
+    dynamic_false_precision_count: u64,
+    dynamic_false_precision_sample_count: u64,
+    comment_safety_region_count: u64,
+    pod_safety_region_count: u64,
+    string_safety_region_count: u64,
+    unknown_safety_region_count: u64,
+    symbols_emitted_in_comments: u64,
+    symbols_emitted_in_pod: u64,
+    symbols_emitted_in_strings: u64,
+    symbols_emitted_in_unknown_regions: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -499,6 +539,7 @@ fn build_artifact(
     metrics.extend(line_metrics(&line_score, cadence));
     metrics.extend(ast_metrics(&ast_score, cadence));
     metrics.extend(symbol_metrics(&symbol_score, cadence));
+    metrics.extend(safety_metrics(&line_score, &symbol_score, cadence));
 
     Ok(ParserAccuracyArtifact {
         schema_version: 1,
@@ -988,6 +1029,7 @@ fn score_manifest_symbols(root: &Path, manifest: &ParserAccuracyManifest) -> Res
         if fixture.symbol_expectations.entities.is_empty()
             && fixture.symbol_expectations.occurrences.is_empty()
             && fixture.symbol_expectations.edges.is_empty()
+            && fixture.symbol_safety_regions.is_empty()
         {
             continue;
         }
@@ -1003,6 +1045,7 @@ fn score_manifest_symbols(root: &Path, manifest: &ParserAccuracyManifest) -> Res
             fixture.label_mode == LabelMode::Full,
             &mut score,
         );
+        score_symbol_safety_regions(&fixture.symbol_safety_regions, &predictions, &mut score);
     }
     Ok(score)
 }
@@ -1025,11 +1068,16 @@ fn symbol_predictions_from_shard(source: &str, shard: &FileFactShard) -> SymbolP
     let entities_by_id =
         shard.entities.iter().map(|entity| (entity.id, entity)).collect::<BTreeMap<EntityId, _>>();
 
+    let mut safety_spans = BTreeSet::new();
+
     let entities = shard
         .entities
         .iter()
         .map(|entity| {
             let anchor = entity.anchor_id.and_then(|anchor_id| anchors_by_id.get(&anchor_id));
+            if let Some(anchor) = anchor {
+                safety_spans.insert(symbol_span_location(source, anchor));
+            }
             SymbolEntityKey {
                 kind: format!("{:?}", entity.kind),
                 canonical_name: entity.canonical_name.clone(),
@@ -1047,6 +1095,9 @@ fn symbol_predictions_from_shard(source: &str, shard: &FileFactShard) -> SymbolP
         .iter()
         .map(|occurrence| {
             let anchor = anchors_by_id.get(&occurrence.anchor_id);
+            if let Some(anchor) = anchor {
+                safety_spans.insert(symbol_span_location(source, anchor));
+            }
             let canonical_name = occurrence
                 .entity_id
                 .and_then(|entity_id| entities_by_id.get(&entity_id))
@@ -1081,7 +1132,7 @@ fn symbol_predictions_from_shard(source: &str, shard: &FileFactShard) -> SymbolP
         })
         .collect();
 
-    SymbolPredictions { entities, occurrences, edges }
+    SymbolPredictions { entities, occurrences, safety_spans, edges }
 }
 
 fn anchor_text(source: &str, anchor: &perl_semantic_facts::AnchorFact) -> String {
@@ -1089,6 +1140,22 @@ fn anchor_text(source: &str, anchor: &perl_semantic_facts::AnchorFact) -> String
         .get(anchor.span_start_byte as usize..anchor.span_end_byte as usize)
         .unwrap_or_default()
         .to_string()
+}
+
+fn symbol_span_location(
+    source: &str,
+    anchor: &perl_semantic_facts::AnchorFact,
+) -> SymbolSpanLocation {
+    SymbolSpanLocation {
+        line: line_for_byte(source, anchor.span_start_byte as usize),
+        span_text: anchor_text(source, anchor),
+    }
+}
+
+fn line_for_byte(source: &str, byte: usize) -> u64 {
+    source.as_bytes().iter().take(byte.min(source.len())).filter(|byte| **byte == b'\n').count()
+        as u64
+        + 1
 }
 
 fn package_from_name(name: &str) -> Option<String> {
@@ -1110,6 +1177,9 @@ fn score_symbol_expectations(
     score.entity_true_positive_count += entity_tp;
     score.entity_false_positive_count += entity_fp;
     score.entity_false_negative_count += entity_fn;
+    if count_false_positives {
+        score.false_positive_sample_count += predictions.entities.len() as u64;
+    }
     score_kind_sets(
         &expected_entities,
         &predictions.entities,
@@ -1130,6 +1200,30 @@ fn score_symbol_expectations(
     score.occurrence_true_positive_count += occurrence_tp;
     score.occurrence_false_positive_count += occurrence_fp;
     score.occurrence_false_negative_count += occurrence_fn;
+    if count_false_positives {
+        score.false_positive_sample_count += predictions.occurrences.len() as u64;
+        for false_positive in predictions.occurrences.difference(&expected_occurrences) {
+            match false_positive.kind.as_str() {
+                "Import" => score.false_import_count += 1,
+                "Export" => score.false_export_count += 1,
+                _ => {}
+            }
+            if false_positive.canonical_name.is_some() && false_positive.confidence == "High" {
+                score.false_exact_resolution_count += 1;
+            }
+            if false_positive.provenance == "DynamicBoundary"
+                && false_positive.canonical_name.is_some()
+            {
+                score.false_dynamic_resolution_count += 1;
+            }
+        }
+    }
+    score.dynamic_false_precision_sample_count += expected_occurrences
+        .iter()
+        .filter(|expected| expected.provenance == "DynamicBoundary")
+        .count() as u64;
+    score.dynamic_false_precision_count +=
+        count_dynamic_false_precision(&expected_occurrences, &predictions.occurrences);
     score_kind_sets(
         &expected_occurrences,
         &predictions.occurrences,
@@ -1147,6 +1241,71 @@ fn score_symbol_expectations(
     score.edge_true_positive_count += edge_tp;
     score.edge_false_positive_count += edge_fp;
     score.edge_false_negative_count += edge_fn;
+    if count_false_positives {
+        score.false_positive_sample_count += predictions.edges.len() as u64;
+        score.false_exact_resolution_count += predictions
+            .edges
+            .difference(&expected_edges)
+            .filter(|false_positive| false_positive.confidence == "High")
+            .count() as u64;
+    }
+}
+
+fn count_dynamic_false_precision(
+    expected: &BTreeSet<SymbolOccurrenceKey>,
+    predicted: &BTreeSet<SymbolOccurrenceKey>,
+) -> u64 {
+    expected
+        .iter()
+        .filter(|expected| expected.provenance == "DynamicBoundary")
+        .filter(|expected| {
+            predicted.iter().any(|prediction| {
+                prediction.span_text == expected.span_text
+                    && (prediction.canonical_name.is_some()
+                        || prediction.provenance != "DynamicBoundary"
+                        || prediction.confidence == "High")
+            })
+        })
+        .count() as u64
+}
+
+fn score_symbol_safety_regions(
+    regions: &[SymbolSafetyRegion],
+    predictions: &SymbolPredictions,
+    score: &mut SymbolScore,
+) {
+    for region in regions {
+        let emitted = predictions.safety_spans.contains(&SymbolSpanLocation {
+            line: region.line,
+            span_text: region.span_text.clone(),
+        });
+        match region.kind {
+            SymbolSafetyRegionKind::Comment => {
+                score.comment_safety_region_count += 1;
+                if emitted {
+                    score.symbols_emitted_in_comments += 1;
+                }
+            }
+            SymbolSafetyRegionKind::Pod => {
+                score.pod_safety_region_count += 1;
+                if emitted {
+                    score.symbols_emitted_in_pod += 1;
+                }
+            }
+            SymbolSafetyRegionKind::String => {
+                score.string_safety_region_count += 1;
+                if emitted {
+                    score.symbols_emitted_in_strings += 1;
+                }
+            }
+            SymbolSafetyRegionKind::Unknown => {
+                score.unknown_safety_region_count += 1;
+                if emitted {
+                    score.symbols_emitted_in_unknown_regions += 1;
+                }
+            }
+        }
+    }
 }
 
 fn entity_key_from_expectation(expectation: &SymbolEntityExpectation) -> SymbolEntityKey {
@@ -1415,6 +1574,106 @@ fn symbol_metrics(score: &SymbolScore, cadence: Cadence) -> Vec<MetricRow> {
     rows
 }
 
+fn safety_metrics(
+    line_score: &LineScore,
+    symbol_score: &SymbolScore,
+    cadence: Cadence,
+) -> Vec<MetricRow> {
+    vec![
+        optional_measured_count(
+            "false_symbol_count",
+            symbol_score.entity_false_positive_count + symbol_score.occurrence_false_positive_count,
+            symbol_score.false_positive_sample_count,
+            "no fully labeled symbol fixtures are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "false_declaration_count",
+            symbol_score.entity_false_positive_count,
+            symbol_score.false_positive_sample_count,
+            "no fully labeled symbol fixtures are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "false_reference_count",
+            symbol_score.occurrence_false_positive_count,
+            symbol_score.false_positive_sample_count,
+            "no fully labeled symbol fixtures are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "false_import_count",
+            symbol_score.false_import_count,
+            symbol_score.false_positive_sample_count,
+            "no fully labeled symbol fixtures are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "false_export_count",
+            symbol_score.false_export_count,
+            symbol_score.false_positive_sample_count,
+            "no fully labeled symbol fixtures are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "false_parse_error_count",
+            line_score.false_parse_error_count,
+            line_score.line_count,
+            "no line labels are available for parse-error false positives",
+            cadence,
+        ),
+        optional_measured_count(
+            "false_exact_resolution_count",
+            symbol_score.false_exact_resolution_count,
+            symbol_score.false_positive_sample_count,
+            "no fully labeled symbol fixtures are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "false_dynamic_resolution_count",
+            symbol_score.false_dynamic_resolution_count,
+            symbol_score.false_positive_sample_count,
+            "no fully labeled symbol fixtures are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "dynamic_false_precision_count",
+            symbol_score.dynamic_false_precision_count,
+            symbol_score.dynamic_false_precision_sample_count,
+            "no dynamic-boundary symbol labels are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "symbols_emitted_in_comments",
+            symbol_score.symbols_emitted_in_comments,
+            symbol_score.comment_safety_region_count,
+            "no comment safety regions are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "symbols_emitted_in_pod",
+            symbol_score.symbols_emitted_in_pod,
+            symbol_score.pod_safety_region_count,
+            "no POD safety regions are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "symbols_emitted_in_strings",
+            symbol_score.symbols_emitted_in_strings,
+            symbol_score.string_safety_region_count,
+            "no string safety regions are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "symbols_emitted_in_unknown_regions",
+            symbol_score.symbols_emitted_in_unknown_regions,
+            symbol_score.unknown_safety_region_count,
+            "no unknown safety regions are available",
+            cadence,
+        ),
+    ]
+}
+
 #[derive(Debug, Clone, Copy)]
 enum SymbolMetricSource {
     Entity,
@@ -1495,6 +1754,19 @@ fn measured_count(metric: &str, value: u64, sample_count: u64, cadence: Cadence)
         confidence: Confidence::High,
         cadence,
     }
+}
+
+fn optional_measured_count(
+    metric: &str,
+    value: u64,
+    sample_count: u64,
+    insufficient_reason: &str,
+    cadence: Cadence,
+) -> MetricRow {
+    if sample_count == 0 {
+        return insufficient(metric, insufficient_reason);
+    }
+    measured_count(metric, value, sample_count, cadence)
 }
 
 fn measured_rate(metric: &str, numerator: u64, denominator: u64, cadence: Cadence) -> MetricRow {
@@ -1720,6 +1992,7 @@ mod tests {
                             confidence: "High".to_string(),
                         }],
                     },
+                    symbol_safety_regions: vec![],
                 },
                 FixtureMetadata {
                     id: "dynamic_require_boundary".to_string(),
@@ -1777,6 +2050,7 @@ mod tests {
                         },
                     ],
                     symbol_expectations: SymbolExpectations::default(),
+                    symbol_safety_regions: vec![],
                 },
             ],
         }
@@ -1971,6 +2245,7 @@ mod tests {
             }]
             .into_iter()
             .collect(),
+            safety_spans: BTreeSet::new(),
             edges: BTreeSet::new(),
         };
         let mut score = SymbolScore::default();
@@ -2018,6 +2293,126 @@ mod tests {
                 metric,
                 MetricRow::InsufficientData { metric, sample_count: 0, .. }
                     if metric == "symbol_decl_generated_accessor_f1"
+            )
+        }));
+    }
+
+    #[test]
+    fn dynamic_false_precision_counts_exact_resolution_for_dynamic_boundary() {
+        let expectations = SymbolExpectations {
+            entities: vec![],
+            occurrences: vec![SymbolOccurrenceExpectation {
+                id: "dynamic_require".to_string(),
+                kind: "FunctionCall".to_string(),
+                canonical_name: None,
+                span_text: "require $module".to_string(),
+                package: None,
+                scope: None,
+                provenance: "DynamicBoundary".to_string(),
+                confidence: "Low".to_string(),
+            }],
+            edges: vec![],
+        };
+        let predictions = SymbolPredictions {
+            entities: BTreeSet::new(),
+            occurrences: [SymbolOccurrenceKey {
+                kind: "FunctionCall".to_string(),
+                canonical_name: Some("Accuracy::Plugin".to_string()),
+                span_text: "require $module".to_string(),
+                package: Some("Accuracy".to_string()),
+                scope: None,
+                provenance: "ExactAst".to_string(),
+                confidence: "High".to_string(),
+            }]
+            .into_iter()
+            .collect(),
+            safety_spans: BTreeSet::new(),
+            edges: BTreeSet::new(),
+        };
+        let mut score = SymbolScore::default();
+
+        score_symbol_expectations(&expectations, &predictions, false, &mut score);
+
+        assert_eq!(score.dynamic_false_precision_sample_count, 1);
+        assert_eq!(score.dynamic_false_precision_count, 1);
+    }
+
+    #[test]
+    fn symbol_safety_regions_count_comment_pod_string_and_unknown_hits() {
+        let regions = vec![
+            SymbolSafetyRegion {
+                kind: SymbolSafetyRegionKind::Comment,
+                line: 2,
+                span_text: "commented_out".to_string(),
+            },
+            SymbolSafetyRegion {
+                kind: SymbolSafetyRegionKind::Pod,
+                line: 6,
+                span_text: "podded".to_string(),
+            },
+            SymbolSafetyRegion {
+                kind: SymbolSafetyRegionKind::String,
+                line: 3,
+                span_text: "stringy".to_string(),
+            },
+            SymbolSafetyRegion {
+                kind: SymbolSafetyRegionKind::Unknown,
+                line: 9,
+                span_text: "dynamic_name".to_string(),
+            },
+        ];
+        let predictions = SymbolPredictions {
+            entities: BTreeSet::new(),
+            occurrences: BTreeSet::new(),
+            safety_spans: [
+                SymbolSpanLocation { line: 2, span_text: "commented_out".to_string() },
+                SymbolSpanLocation { line: 3, span_text: "stringy".to_string() },
+            ]
+            .into_iter()
+            .collect(),
+            edges: BTreeSet::new(),
+        };
+        let mut score = SymbolScore::default();
+
+        score_symbol_safety_regions(&regions, &predictions, &mut score);
+
+        assert_eq!(score.symbols_emitted_in_comments, 1);
+        assert_eq!(score.symbols_emitted_in_strings, 1);
+        assert_eq!(score.symbols_emitted_in_pod, 0);
+        assert_eq!(score.symbols_emitted_in_unknown_regions, 0);
+    }
+
+    #[test]
+    fn safety_metrics_emit_dynamic_false_precision_floor_candidate() {
+        let line_score =
+            LineScore { line_count: 2, false_parse_error_count: 0, ..LineScore::default() };
+        let symbol_score = SymbolScore {
+            false_positive_sample_count: 3,
+            entity_false_positive_count: 1,
+            occurrence_false_positive_count: 1,
+            dynamic_false_precision_sample_count: 1,
+            dynamic_false_precision_count: 0,
+            comment_safety_region_count: 1,
+            symbols_emitted_in_comments: 0,
+            ..SymbolScore::default()
+        };
+
+        let metrics = safety_metrics(&line_score, &symbol_score, Cadence::Pr);
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "dynamic_false_precision_count"
+                        && (*value - 0.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 3, .. }
+                    if metric == "false_symbol_count"
+                        && (*value - 2.0).abs() < f64::EPSILON
             )
         }));
     }

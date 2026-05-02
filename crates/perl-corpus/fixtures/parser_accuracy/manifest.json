@@ -361,6 +361,44 @@
           }
         ]
       }
+    },
+    {
+      "id": "negative_symbol_regions",
+      "family": "negative_symbol_regions",
+      "label_mode": "negative",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/negative_symbol_regions.pl",
+      "scored_lines": 5,
+      "scored_symbols": 4,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 0,
+      "unknown_regions": 1,
+      "negative_regions": 3,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 1,
+      "real_project_file": false,
+      "generated": false,
+      "symbol_safety_regions": [
+        {
+          "kind": "comment",
+          "line": 3,
+          "span_text": "commented_out"
+        },
+        {
+          "kind": "string",
+          "line": 4,
+          "span_text": "stringy"
+        },
+        {
+          "kind": "pod",
+          "line": 7,
+          "span_text": "podded"
+        },
+        {
+          "kind": "unknown",
+          "line": 10,
+          "span_text": "dynamic_name"
+        }
+      ]
     }
   ]
 }
