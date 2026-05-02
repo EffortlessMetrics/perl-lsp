@@ -36,7 +36,11 @@ use crate::tasks::ci_scope::{self, ScopeOutput};
 use crate::utils::project_root;
 
 mod first_failure;
+mod planning_types;
+
 pub use first_failure::{is_cargo_test_command, parse_first_failure};
+
+use planning_types::{GatePlan, PackageTargetIndex, PlannedGate, SkippedGate};
 
 // =============================================================================
 // CLI Types
@@ -532,44 +536,6 @@ pub struct MetricChange {
 // =============================================================================
 // Gate Runner Implementation
 // =============================================================================
-
-#[derive(Debug, Clone)]
-struct GatePlan {
-    tier: GateTier,
-    base: String,
-    scope: Option<ScopeOutput>,
-    scope_ok: bool,
-    fallback_used: bool,
-    fallback_reason: Option<String>,
-    package_args: Vec<String>,
-    selected: Vec<PlannedGate>,
-    skipped: Vec<SkippedGate>,
-}
-
-#[derive(Debug, Clone)]
-struct PlannedGate {
-    gate: GateDefinition,
-    role: GatePlanningRole,
-    reason: String,
-}
-
-#[derive(Debug, Clone)]
-struct SkippedGate {
-    name: String,
-    role: Option<GatePlanningRole>,
-    reason: String,
-}
-
-#[derive(Debug, Clone, Default)]
-struct PackageTargetIndex {
-    lib_packages: HashSet<String>,
-}
-
-impl PackageTargetIndex {
-    fn has_lib(&self, package: &str) -> bool {
-        self.lib_packages.contains(package)
-    }
-}
 
 /// Configuration for the gate runner
 pub struct GateRunnerConfig {
