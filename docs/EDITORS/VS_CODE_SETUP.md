@@ -19,7 +19,7 @@ This guide helps you set up and configure the Perl Language Server in Visual Stu
 
 ### Required
 
-- **VS Code** version 1.88 or later
+- **VS Code** version 1.116 or later
 - **EffortlessMetrics.perl-lsp-rs** extension installed (see [Installation](#installation))
 
 The extension auto-downloads the matching `perllsp` server by default. Manual
@@ -60,8 +60,9 @@ cargo install perllsp --locked
 Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases):
 
 ```bash
-# Linux x86_64 (glibc)
-VERSION=0.12.4
+# Linux x86_64 (glibc). Check the latest release first, then set VERSION
+# to the tag without the leading v.
+VERSION="<latest-version-without-leading-v>"
 TARGET=x86_64-unknown-linux-gnu
 
 curl -LO "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v${VERSION}/perllsp-${VERSION}-${TARGET}.tar.gz"
@@ -196,16 +197,16 @@ settings.
 | `perl-lsp.enableTestIntegration` | boolean | `true` | Enable `Test::More` and `Test2` integration. |
 | `perl-lsp.autoPopulateNewFiles` | boolean | `true` | Auto-populate new `.pm` and `.t` files with boilerplate. |
 | `perl-lsp.perlcritic.enabled` | boolean | `false` | Enable external `perlcritic` diagnostics. |
-| `perl-lsp.perlcritic.severity` | string | `"warning"` | Severity level for `perlcritic` diagnostics. |
+| `perl-lsp.perlcritic.severity` | number | `3` | Perl::Critic minimum severity, from `1` to `5`. |
 | `perl-lsp.perlcritic.profile` | string | `""` | Path to `.perlcriticrc` profile file. |
 | `perl-lsp.featureProfile` | string | `"auto"` | Runtime capability profile. Keep `auto` unless you need a specific compatibility profile. |
 | `perl-lsp.disabledFeatures` | array | `[]` | Disable selected server features at client startup. |
-| `perl-lsp.autoUpdate` | boolean | `true` | Allow extension-managed server auto-updates. |
+| `perl-lsp.autoUpdate` | boolean | `false` | Automatically download and install a new `perllsp` binary when available. |
 | `perl-lsp.updateCheckInterval` | number | `24` | Hours between automatic update checks. |
 | `perl-lsp.trace.server` | string | `"off"` | LSP traffic logging: `off`, `messages`, `verbose`. |
 | `perl-lsp.channel` | string | `"latest"` | Release channel. Use `latest` for the current public-alpha line or `tag` for a pinned public-alpha release. |
 | `perl-lsp.versionTag` | string | `""` | Specific release tag when channel is `tag`. |
-| `perl-lsp.downloadBaseUrl` | string | `""` | Internal base URL for hosting perl-lsp archives (bypasses GitHub). |
+| `perl-lsp.downloadBaseUrl` | string | `""` | Internal base URL for hosting `perllsp` archives and SHA256SUMS. |
 
 ---
 
@@ -583,7 +584,7 @@ public-alpha release.
 
 ### Internal Deployment
 
-For teams hosting their own perl-lsp binaries:
+For teams hosting their own `perllsp` binaries:
 
 ```json
 {
@@ -596,7 +597,7 @@ Or with an internal download mirror:
 
 ```json
 {
-  "perl-lsp.downloadBaseUrl": "https://internal.example.com/perl-lsp/"
+  "perl-lsp.downloadBaseUrl": "https://internal.example.com/perllsp/"
 }
 ```
 
