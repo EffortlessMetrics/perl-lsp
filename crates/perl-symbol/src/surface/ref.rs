@@ -226,10 +226,19 @@ fn coderef_target_name(node: &Node) -> Option<&str> {
     match &node.kind {
         NodeKind::Variable { sigil, name } if sigil == "&" => Some(name),
         // The parser lowers source forms like `\&foo` and `goto &foo` into a
-        // zero-argument FunctionCall target after consuming the ampersand.
-        NodeKind::FunctionCall { name, args } if args.is_empty() => Some(name),
+        // zero-argument FunctionCall target whose span still covers the leading
+        // ampersand. Keep ordinary `\foo()` / `goto foo()` as call expressions.
+        NodeKind::FunctionCall { name, args }
+            if args.is_empty() && has_parser_ampersand_span(node, name) =>
+        {
+            Some(name)
+        }
         _ => None,
     }
+}
+
+fn has_parser_ampersand_span(node: &Node, name: &str) -> bool {
+    node.location.end.saturating_sub(node.location.start) == name.len() + 1
 }
 
 /// Split a potentially package-qualified name into `(qualifier, bare, full)`.
