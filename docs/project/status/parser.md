@@ -26,6 +26,15 @@
 | **Strict-clean subset** | insufficient_data | 10 pinned modules; run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |
 <!-- END: PARSER_STRICT_CLEAN_ROW -->
 
+## Parser Accuracy Observability
+
+| Layer | State | Notes | Source |
+| --- | --- | --- |
+<!-- BEGIN: PARSER_ACCURACY_SUMMARY -->
+| **Accuracy denominator** | insufficient_data | Generate with `cargo xtask metrics parser-accuracy --json`; missing artifact is not treated as zero | `target/metrics/parser_accuracy.json`; `.kiro/specs/parser-accuracy-observability` |
+| **Accuracy scorers** | insufficient_data | line/AST/symbol scoring rows wait for real denominators and validated artifact input | `.ci/schemas/parser-accuracy.schema.json` |
+<!-- END: PARSER_ACCURACY_SUMMARY -->
+
 ## Parser Performance Regimes
 
 | Regime | Value | Notes | Source |

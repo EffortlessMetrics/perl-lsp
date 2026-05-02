@@ -7,6 +7,7 @@ fn parser_status_template() -> &'static str {
          <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
          <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
          <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+         <!-- BEGIN: PARSER_ACCURACY_SUMMARY -->\nold\n<!-- END: PARSER_ACCURACY_SUMMARY -->\n\
          <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
          <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
          <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n\
@@ -88,6 +89,7 @@ fn test_parser_nodekind_row_renders() -> Result<()> {
         common_corpus_receipt: None,
         common_corpus_pinned: 10,
         performance_scorecard: None,
+        parser_accuracy: None,
         token_metrics: token::token_metrics_fixture(),
     };
     let template = parser_status_template();
@@ -113,6 +115,7 @@ fn test_parser_strict_clean_row_no_receipt() -> Result<()> {
         common_corpus_receipt: None,
         common_corpus_pinned: 10,
         performance_scorecard: None,
+        parser_accuracy: None,
         token_metrics: token::token_metrics_fixture(),
     };
     let template = parser_status_template();
@@ -142,6 +145,7 @@ fn test_parser_failure_worklist_no_receipt_reports_insufficient_data() -> Result
         common_corpus_receipt: None,
         common_corpus_pinned: 10,
         performance_scorecard: None,
+        parser_accuracy: None,
         token_metrics: token::token_metrics_fixture(),
     };
     let result = generate_parser_status(&metrics, parser_status_template())?;
@@ -153,6 +157,169 @@ fn test_parser_failure_worklist_no_receipt_reports_insufficient_data() -> Result
         result.contains("| insufficient_data |"),
         "failure worklist missing-receipt count must be insufficient_data"
     );
+    Ok(())
+}
+
+#[test]
+fn test_parser_accuracy_missing_artifact_reports_insufficient_data() -> Result<()> {
+    let metrics = ParserMetrics {
+        syntax_sections: 611,
+        system_receipt: None,
+        cpan_receipt: None,
+        project_corpus: None,
+        common_corpus_receipt: None,
+        common_corpus_pinned: 10,
+        performance_scorecard: None,
+        parser_accuracy: None,
+        token_metrics: token::token_metrics_fixture(),
+    };
+    let result = generate_parser_status(&metrics, parser_status_template())?;
+    assert!(
+        result.contains("| **Accuracy denominator** | insufficient_data |"),
+        "missing parser accuracy artifact must report insufficient_data"
+    );
+    assert!(
+        result.contains("cargo xtask metrics parser-accuracy --json"),
+        "missing parser accuracy artifact row should include the generation command"
+    );
+    assert!(
+        result.contains(".kiro/specs/parser-accuracy-observability"),
+        "parser accuracy status should link the authoritative spec"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_parser_accuracy_artifact_renders_denominator_and_insufficient_rows() -> Result<()> {
+    let metrics = ParserMetrics {
+        syntax_sections: 611,
+        system_receipt: None,
+        cpan_receipt: None,
+        project_corpus: None,
+        common_corpus_receipt: None,
+        common_corpus_pinned: 10,
+        performance_scorecard: None,
+        parser_accuracy: Some(ParserAccuracyArtifactSummary {
+            schema_version: 1,
+            subsystem: "parser_accuracy".to_string(),
+            generated_at: "2026-05-02T15:00:00Z".to_string(),
+            commit: "abc123".to_string(),
+            cadence: "pr".to_string(),
+            denominator: ParserAccuracyDenominator {
+                fixture_count: 2,
+                fixture_family_count: 2,
+                scored_line_count: 3,
+                scored_symbol_count: 2,
+                fully_labeled_region_count: 1,
+                partial_labeled_region_count: 1,
+                unknown_region_count: 1,
+                negative_region_count: 1,
+                dynamic_boundary_case_count: 1,
+                unsupported_construct_case_count: 0,
+                real_project_file_count: 0,
+                generated_fixture_count: 0,
+                hand_labeled_fixture_count: 2,
+            },
+            families: vec![
+                ParserAccuracyFamilySummary {
+                    family: "dynamic_require".to_string(),
+                    fixture_count: 1,
+                },
+                ParserAccuracyFamilySummary { family: "packages".to_string(), fixture_count: 1 },
+            ],
+            metrics: vec![
+                ParserAccuracyMetricSummary::Measured {
+                    metric: "denominator_fixture_count".to_string(),
+                    value: 2.0,
+                    sample_count: 2,
+                },
+                ParserAccuracyMetricSummary::InsufficientData {
+                    metric: "line_construct_f1".to_string(),
+                    reason: "line-level gold scorer is not wired yet".to_string(),
+                    sample_count: 0,
+                },
+            ],
+        }),
+        token_metrics: token::token_metrics_fixture(),
+    };
+    let result = generate_parser_status(&metrics, parser_status_template())?;
+    assert!(
+        result.contains("| **Accuracy denominator** | 2 fixtures / 2 families |"),
+        "parser accuracy denominator row should render fixture and family counts"
+    );
+    assert!(
+        result.contains("3 scored lines, 2 scored symbols"),
+        "parser accuracy denominator row should render labeled denominator counts"
+    );
+    assert!(
+        result.contains("dynamic_require (1), packages (1)"),
+        "parser accuracy family row should render family inventory"
+    );
+    assert!(
+        result.contains("line_construct_f1: insufficient_data"),
+        "unwired accuracy scorer rows must remain insufficient_data"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_read_parser_accuracy_artifact_loads_target_metrics() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let metrics_dir = tmp.path().join("target").join("metrics");
+    std::fs::create_dir_all(&metrics_dir)?;
+    std::fs::write(
+        metrics_dir.join("parser_accuracy.json"),
+        r#"{
+  "schema_version": 1,
+  "subsystem": "parser_accuracy",
+  "generated_at": "2026-05-02T15:00:00Z",
+  "commit": "abc123",
+  "cadence": "pr",
+  "denominator": {
+    "fixture_count": 2,
+    "fixture_family_count": 2,
+    "scored_line_count": 3,
+    "scored_symbol_count": 2,
+    "fully_labeled_region_count": 1,
+    "partial_labeled_region_count": 1,
+    "unknown_region_count": 1,
+    "negative_region_count": 1,
+    "dynamic_boundary_case_count": 1,
+    "unsupported_construct_case_count": 0,
+    "real_project_file_count": 0,
+    "generated_fixture_count": 0,
+    "hand_labeled_fixture_count": 2
+  },
+  "families": [
+    {
+      "family": "packages",
+      "fixture_count": 1,
+      "label_modes": ["full"],
+      "scored_line_count": 2,
+      "scored_symbol_count": 1,
+      "dynamic_boundary_case_count": 0,
+      "unsupported_construct_case_count": 0
+    }
+  ],
+  "metrics": [
+    {
+      "state": "insufficient_data",
+      "metric": "line_construct_f1",
+      "reason": "line-level gold scorer is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    }
+  ],
+  "failure_packets": [],
+  "gold_drift": {},
+  "metric_runtime": {}
+}"#,
+    )?;
+
+    let artifact = read_parser_accuracy_artifact(tmp.path())
+        .ok_or_else(|| color_eyre::eyre::eyre!("valid parser accuracy artifact should load"))?;
+    assert_eq!(artifact.denominator.fixture_count, 2);
+    assert_eq!(artifact.metrics.len(), 1);
     Ok(())
 }
 
@@ -192,6 +359,7 @@ fn test_parser_performance_table_renders_with_scorecard() -> Result<()> {
         common_corpus_receipt: None,
         common_corpus_pinned: 10,
         performance_scorecard: Some(scorecard),
+        parser_accuracy: None,
         token_metrics: token::token_metrics_fixture(),
     };
 
@@ -467,6 +635,7 @@ fn test_parser_strict_clean_row_with_receipt() -> Result<()> {
         common_corpus_receipt: Some(receipt),
         common_corpus_pinned: 10,
         performance_scorecard: None,
+        parser_accuracy: None,
         token_metrics: token::token_metrics_fixture(),
     };
     let template = parser_status_template();
@@ -493,6 +662,7 @@ fn token_health_table_renders_correctly_from_fixture() -> Result<()> {
         common_corpus_receipt: None,
         common_corpus_pinned: 0,
         performance_scorecard: None,
+        parser_accuracy: None,
         token_metrics: token::token_metrics_fixture(),
     };
     let template = parser_status_template();
