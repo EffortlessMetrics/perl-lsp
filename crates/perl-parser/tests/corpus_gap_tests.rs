@@ -230,6 +230,92 @@ mod corpus_gap_tests {
         Ok(())
     }
 
+    /// Gap coverage: postfix dereference chained with method invocation and hash
+    /// key access should stay parseable without recovery ERROR nodes.
+    #[test]
+    fn test_postderef_method_hash_chain() -> Result<(), Box<dyn std::error::Error>> {
+        let input = "my $name = $obj->records->@[0]->{meta}->{name} // 'unknown';";
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for postderef hash chain, got: {sexp}"
+        );
+        assert!(sexp.contains("unknown"), "expected fallback literal in AST, got: {sexp}");
+        Ok(())
+    }
+
+    /// Gap coverage: `do { ... }` assignment expressions should parse as expression
+    /// values without introducing recovery ERROR nodes.
+    #[test]
+    fn test_do_block_expression_assignment() -> Result<(), Box<dyn std::error::Error>> {
+        let input = r#"
+            my $value = do {
+                my $tmp = 40;
+                $tmp + 2;
+            };
+        "#;
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for do-block expression assignment, got: {sexp}"
+        );
+        assert!(sexp.contains("do"), "expected do-block in AST, got: {sexp}");
+        Ok(())
+    }
+
+    /// Gap coverage: signatures with invocant syntax and defaults were under-specified
+    /// in direct parser tests; ensure they parse as a single subroutine declaration.
+    #[test]
+    fn test_signature_with_invocant_defaults() -> Result<(), Box<dyn std::error::Error>> {
+        let input = r#"
+            use feature 'signatures';
+            no warnings 'experimental::signatures';
+            sub render ($self: $template = 'main', %opts) {
+                return $template;
+            }
+        "#;
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for invocant signature, got: {sexp}"
+        );
+        assert!(sexp.contains("render"), "expected subroutine name in AST, got: {sexp}");
+        Ok(())
+    }
+
+    /// Gap coverage: `given/when/default` with regex and smartmatch-like forms should
+    /// remain parseable without dropping the default arm.
+    #[test]
+    fn test_given_when_regex_and_default() -> Result<(), Box<dyn std::error::Error>> {
+        let input = r#"
+            use feature 'switch';
+            given ($line) {
+                when (/^\s*#/ ) { next; }
+                when ($_ ~~ [qw(INFO WARN ALERT)]) { say $_; }
+                default { say 'unknown'; }
+            }
+        "#;
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for given/when/default snippet, got: {sexp}"
+        );
+        assert!(sexp.contains("default"), "expected default branch in AST, got: {sexp}");
+        Ok(())
+    }
+
     // Property-based test for delimiters
     #[test]
     fn test_arbitrary_delimiters() {
