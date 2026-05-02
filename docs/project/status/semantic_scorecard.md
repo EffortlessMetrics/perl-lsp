@@ -20,8 +20,8 @@ Fixtures loaded: `12`
 | Row | Status | Value | Threshold | Evidence |
 |---|---|---:|---:|---|
 | completion_import_fixture_pass_rate | pass | 100% | 100% | import/export visibility fixtures |
-| definition_shadow_regressions | pass | 0 | 0 | semantic shadow compare receipts |
-| reference_shadow_regressions | pass | 0 | 0 | semantic shadow compare receipts |
+| definition_shadow_regressions | pass | 0 | 0 | semantic shadow compare release-readiness receipts |
+| reference_shadow_regressions | pass | 0 | 0 | semantic shadow compare release-readiness receipts |
 | rename_unsafe_edit_count | pass | 0 | 0 | rename blocker fixtures |
 | safe_delete_blocker_fixture_pass_rate | pass | 100% | 100% | safe-delete blocker fixtures |
 | semantic_fact_counts_nonzero | pass | 56 | > 0 | semantic fixture indexing |
@@ -51,4 +51,4 @@ Fixtures loaded: `12`
 - `same_bare_sub_two_packages`
 - `typeglob_alias`
 
-RC2 proof rail: scorecard rows are deterministic and fixture-backed; provider cutover remains conservative for unavailable rows.
+0.13.2 semantic proof rail: scorecard rows are deterministic and fixture-backed; semantic expansion remains conservative for unavailable rows.

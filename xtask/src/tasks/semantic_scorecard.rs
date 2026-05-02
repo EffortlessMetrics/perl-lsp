@@ -205,7 +205,7 @@ fn build_artifact(manifest_path: &Path, manifest: SemanticManifest) -> Result<Ar
         fact_rows,
         readiness_rows,
         unavailable_rows,
-        notes: "RC2 proof rail: scorecard rows are deterministic and fixture-backed; provider cutover remains conservative for unavailable rows.",
+        notes: "0.13.2 semantic proof rail: scorecard rows are deterministic and fixture-backed; semantic expansion remains conservative for unavailable rows.",
     })
 }
 
@@ -355,7 +355,7 @@ fn build_readiness_rows(
                 status: "pass",
                 value: "0".to_string(),
                 threshold: "0",
-                evidence: "semantic shadow compare receipts",
+                evidence: "semantic shadow compare release-readiness receipts",
             },
         ),
         (
@@ -364,7 +364,7 @@ fn build_readiness_rows(
                 status: "pass",
                 value: "0".to_string(),
                 threshold: "0",
-                evidence: "semantic shadow compare receipts",
+                evidence: "semantic shadow compare release-readiness receipts",
             },
         ),
         (
@@ -474,7 +474,7 @@ fn render_status_markdown(artifact: &Artifact) -> String {
         text.push_str(&format!("- `{id}`\n"));
     }
 
-    text.push_str("\n");
+    text.push('\n');
     text.push_str(artifact.notes);
     text.push('\n');
     text

@@ -1087,7 +1087,7 @@ enum Commands {
         ratchet_check: bool,
     },
 
-    /// Publish/check RC2 semantic scorecard artifacts from deterministic fixtures.
+    /// Publish/check 0.13.2 semantic scorecard artifacts from deterministic fixtures.
     SemanticScorecard {
         /// Optional path to semantic fixture manifest JSON.
         #[arg(long)]

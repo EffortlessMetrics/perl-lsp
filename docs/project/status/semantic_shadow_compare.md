@@ -14,14 +14,34 @@ Receipts: `5`
 | same | 1 |
 | unavailable | 1 |
 
+## Release-Readiness Verdict Counts
+
+| Verdict | Count |
+|---|---:|
+| ambiguous | 0 |
+| improved | 1 |
+| regression | 0 |
+| same | 1 |
+| unavailable | 0 |
+
+## Schema Fixture Verdict Counts
+
+| Verdict | Count |
+|---|---:|
+| ambiguous | 1 |
+| improved | 0 |
+| regression | 1 |
+| same | 0 |
+| unavailable | 1 |
+
 ## Receipts
 
-| Query | Symbol | Verdict | Old count | New count |
-|---|---|---|---:|---:|
-| FindDefinition | `Foo::bar` | same | 1 | 1 |
-| FindReferences | `Foo::bar` | improved | 1 | 2 |
-| CountUsages | `Foo::bar` | regression | 4 | 3 |
-| VisibleSymbols | `Foo::bar` | ambiguous | 2 | 2 |
-| Hover | `Foo::bar` | unavailable | 0 | 1 |
+| Scope | Query | Symbol | Verdict | Old count | New count |
+|---|---|---|---|---:|---:|
+| release-readiness | FindDefinition | `Foo::bar` | same | 1 | 1 |
+| release-readiness | FindReferences | `Foo::bar` | improved | 1 | 2 |
+| schema-fixture | CountUsages | `Foo::bar` | regression | 4 | 3 |
+| schema-fixture | VisibleSymbols | `Foo::bar` | ambiguous | 2 | 2 |
+| schema-fixture | Hover | `Foo::bar` | unavailable | 0 | 1 |
 
-Deterministic RC2 shadow-compare receipt shape for semantic provider cutover proof.
+0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes.

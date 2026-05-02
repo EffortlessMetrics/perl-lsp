@@ -1,6 +1,7 @@
-# RC2 Semantic Scorecard
+# 0.13.2 Semantic Scorecard
 
-The RC2 semantic proof rail is split into two deterministic xtask surfaces:
+The semantic spine landed as the baseline for the 0.13.2 expansion train. Its
+proof rail is split into two deterministic xtask surfaces:
 
 ```bash
 cargo xtask semantic-scorecard
@@ -14,16 +15,18 @@ cargo xtask semantic-shadow-compare --check
 - `docs/project/status/semantic_scorecard.json`
 - `docs/project/status/semantic_scorecard.md`
 
-`semantic-shadow-compare` writes deterministic old-path/new-path receipt shapes for provider cutover proof:
+`semantic-shadow-compare` writes deterministic old-path/new-path receipt shapes
+for semantic provider proof:
 
 - `docs/project/status/semantic_shadow_compare.json`
 - `docs/project/status/semantic_shadow_compare.md`
 
 `--check` recomputes the same payloads and fails when the committed artifacts are stale.
 
-## Blocking Rows
+## Release-Readiness Rows
 
-The scorecard tracks the RC2 release-readiness rows reviewers need for provider migration:
+The scorecard tracks release-readiness rows reviewers need for semantic UX and
+provider behavior:
 
 - `semantic_fact_counts_nonzero`
 - `visible_symbols_fixture_pass_rate`
@@ -35,6 +38,11 @@ The scorecard tracks the RC2 release-readiness rows reviewers need for provider 
 - `safe_delete_blocker_fixture_pass_rate`
 
 Provider cutover should stay conservative: dynamic, unavailable, or ambiguous cases must keep returning fallback, unavailable, warning, or blocker results rather than false precision.
+
+Shadow compare includes both release-readiness receipts and schema fixture
+receipts. Release-readiness rows count only provider-gating receipts; schema
+fixture receipts exist to keep `same`, `improved`, `regression`, `ambiguous`,
+and `unavailable` output shapes deterministic.
 
 ## Slow Analyzer Fuzz
 
