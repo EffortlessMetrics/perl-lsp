@@ -304,7 +304,6 @@ jobs:
           commit-message: "perllsp ${{ steps.release.outputs.version }}"
           add-paths: |
             Formula/perllsp.rb
-            Formula/perl-lsp.rb
           signoff: false
           delete-branch: true
 
