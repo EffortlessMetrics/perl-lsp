@@ -4,6 +4,7 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src/test'],
   testMatch: ['**/*.test.ts'],
+  testPathIgnorePatterns: ['<rootDir>/src/test/integration/'],
   moduleNameMapper: {
     '^vscode$': '<rootDir>/src/test/__mocks__/vscode.ts',
   },
@@ -21,6 +22,7 @@ module.exports = {
         moduleResolution: 'node',
         allowSyntheticDefaultImports: true,
         sourceMap: true,
+        types: ['jest', 'node'],
       },
     }],
   },

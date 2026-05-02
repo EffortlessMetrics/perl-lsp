@@ -1066,6 +1066,7 @@
     "lint": "eslint src --ext .ts",
     "test": "jest --verbose",
     "test:ci": "jest --ci --coverage",
+    "test:integration": "npm run compile && tsc -p ./tsconfig.integration.json && node ./out/test/integration/runTest.js",
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
     "package": "npx @vscode/vsce package",
     "publish": "npx @vscode/vsce publish",
@@ -1081,14 +1082,17 @@
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
     "@types/jest": "^30.0.0",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^25.x",
     "@types/tar": "^7.0.87",
     "@types/vscode": "^1.116.0",
     "@typescript-eslint/eslint-plugin": "^8.59.0",
     "@typescript-eslint/parser": "^8.58.0",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.1",
     "eslint": "^10.2.1",
     "jest": "^30.3.0",
+    "mocha": "^11.7.5",
     "ts-jest": "^29.4.9",
     "typescript": "^6.0.3"
   }

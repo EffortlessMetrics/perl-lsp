@@ -23,6 +23,20 @@ interface Release {
     assets: ReleaseAsset[];
 }
 
+function githubApiHeaders(url: string): Record<string, string> {
+    const headers: Record<string, string> = {
+        'User-Agent': 'vscode-perl-lsp',
+        'Accept': 'application/vnd.github+json',
+    };
+
+    const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+    if (token && url.startsWith('https://api.github.com/')) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+
+    return headers;
+}
+
 export function buildBinaryAssetCandidateNames(versionOrTag: string, target: string, ext: string): string[] {
     const normalizedVersion = versionOrTag.replace(/^v/, '');
     const tagVersion = `v${normalizedVersion}`;
@@ -90,13 +104,23 @@ export class BinaryDownloader {
     private static readonly REPO_OWNER = 'EffortlessMetrics';
     private static readonly REPO_NAME = 'perl-lsp';
     private static readonly BINARY_NAME = 'perllsp';
+    private lastErrorMessage: string | undefined;
     
     constructor(
         private readonly context: vscode.ExtensionContext,
         private readonly outputChannel: vscode.OutputChannel
     ) {}
+
+    getTargetTriple(): string {
+        return this.getPlatformTarget();
+    }
+
+    getLastErrorMessage(): string | undefined {
+        return this.lastErrorMessage;
+    }
     
     async ensureBinary(forceDownload = false): Promise<string | null> {
+        this.lastErrorMessage = undefined;
         const config = vscode.workspace.getConfiguration('perl-lsp');
         const channel = config.get<string>('channel', 'latest');
         const versionTag = config.get<string>('versionTag', '');
@@ -129,6 +153,7 @@ export class BinaryDownloader {
             return await this.downloadWithProgress();
         } catch (error: unknown) {
             const errorMsg = error instanceof Error ? error.message : String(error);
+            this.lastErrorMessage = errorMsg;
             this.outputChannel.appendLine(`Failed to download binary: ${errorMsg}`);
 
             const manualInstallUrl = 'https://github.com/EffortlessMetrics/perl-lsp#quick-start';
@@ -412,7 +437,7 @@ export class BinaryDownloader {
             const isHttps = url.startsWith('https:');
             const httpModule = isHttps ? https : http;
             
-            httpModule.get(url, { headers: { 'User-Agent': 'vscode-perl-lsp' } }, (res) => {
+            httpModule.get(url, { headers: githubApiHeaders(url) }, (res) => {
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
@@ -424,6 +449,8 @@ export class BinaryDownloader {
                                 reject(new Error('No releases found'));
                                 return;
                             }
+                            reject(new Error(`GitHub API error: ${msg.message}`));
+                            return;
                         }
                         if (Array.isArray(parsed)) {
                             // For stable channel, find first non-prerelease
