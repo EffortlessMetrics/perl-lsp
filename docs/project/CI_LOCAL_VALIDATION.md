@@ -276,7 +276,7 @@ just ci-parser-features-check
 
 ### MSRV Validation
 
-Validate against Minimum Supported Rust Version (1.92.0):
+Validate against Minimum Supported Rust Version (1.93.1):
 
 ```bash
 # Fast merge gate on MSRV
@@ -286,7 +286,7 @@ just ci-gate-msrv
 just ci-full-msrv
 
 # Or manually
-RUSTUP_TOOLCHAIN=1.92.0 just ci-gate
+RUSTUP_TOOLCHAIN=1.93.1 just ci-gate
 ```
 
 ### Cost Estimation
@@ -426,7 +426,7 @@ flake.nix
 ### Reproducibility Guarantees
 
 1. **Rust Version Pinning**
-   - MSRV 1.92.0 is specified in `flake.nix`
+   - MSRV 1.93.1 is specified in `flake.nix`
    - Also enforced via `rust-toolchain.toml`
    - CI workflows use the same version
 
@@ -533,7 +533,7 @@ nix --experimental-features 'nix-command flakes' develop
 # Wrong (uses system Rust):
 just ci-gate
 
-# Correct (uses Nix Rust 1.92.0):
+# Correct (uses Nix Rust 1.93.1):
 nix develop -c just ci-gate
 ```
 
