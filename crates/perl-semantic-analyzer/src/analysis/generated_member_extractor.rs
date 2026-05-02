@@ -1,4 +1,5 @@
-//! Generated member extraction from Moo/Moose `has` declarations.
+//! Generated member extraction from Moo/Moose `has` declarations and
+//! `Class::Accessor` declarations.
 //!
 //! Leverages the existing [`ClassModelBuilder`] to parse `has` declarations,
 //! then maps each [`Attribute`] to one or more [`GeneratedMember`] entries
@@ -20,110 +21,47 @@
 //! All emitted members carry `provenance = FrameworkSynthesis` and
 //! `confidence = Medium`.
 
-use crate::analysis::class_model::{AccessorType, ClassModelBuilder, Framework};
+use crate::analysis::class_model::{
+    AccessorType, ClassAccessorMode, ClassModel, ClassModelBuilder, Framework,
+};
 use crate::ast::Node;
 use perl_semantic_facts::{
     AnchorId, Confidence, EntityId, FileId, GeneratedMember, GeneratedMemberKind, Provenance,
 };
 
 /// Extractor that walks an AST to produce [`GeneratedMember`] entries for
-/// each Moo/Moose/Mouse `has` declaration found.
+/// each supported framework declaration found.
 pub struct GeneratedMemberExtractor;
 
 impl GeneratedMemberExtractor {
     /// Walk the entire AST and return [`GeneratedMember`] entries for each
     /// accessor, getter, setter, predicate, clearer, or builder generated
-    /// by Moo/Moose/Mouse `has` declarations.
+    /// by Moo/Moose/Mouse `has` declarations or Class::Accessor calls.
     ///
     /// The `package` parameter is used as a fallback when the class model
     /// does not provide a package name. Typically this is the file-level
     /// package or `"main"`.
     pub fn extract(ast: &Node, package: &str, _file_id: FileId) -> Vec<GeneratedMember> {
         let models = ClassModelBuilder::new().build(ast);
+        Self::extract_from_models(&models, package)
+    }
+
+    /// Convert already-built class models into generated member facts.
+    ///
+    /// This lets [`crate::analysis::semantic::SemanticAnalyzer`] reuse its
+    /// class-model pass rather than rebuilding framework metadata.
+    pub fn extract_from_models(models: &[ClassModel], package: &str) -> Vec<GeneratedMember> {
         let mut members = Vec::new();
 
-        for model in &models {
-            // Only process Moo/Moose/Mouse classes — plain OO and other
-            // frameworks do not generate accessors from `has`.
-            if !is_accessor_framework(model.framework) {
-                continue;
-            }
-
+        for model in models {
             let pkg = if model.name.is_empty() { package } else { &model.name };
 
-            for attr in &model.attributes {
-                let anchor_id = AnchorId(attr.location.start as u64);
+            if is_accessor_framework(model.framework) {
+                collect_has_members(model, pkg, &mut members);
+            }
 
-                // Primary accessor/getter/setter based on `is` option.
-                match attr.is {
-                    None => {
-                        // Bare `has 'x'` with no `is` — Moo/Moose generates
-                        // a combined accessor by default.
-                        members.push(make_member(
-                            &attr.accessor_name,
-                            GeneratedMemberKind::Accessor,
-                            anchor_id,
-                            pkg,
-                        ));
-                    }
-                    Some(AccessorType::Rw) => {
-                        // `is => 'rw'` — getter + setter (same method name).
-                        members.push(make_member(
-                            &attr.accessor_name,
-                            GeneratedMemberKind::Getter,
-                            anchor_id,
-                            pkg,
-                        ));
-                        members.push(make_member(
-                            &attr.accessor_name,
-                            GeneratedMemberKind::Setter,
-                            anchor_id,
-                            pkg,
-                        ));
-                    }
-                    Some(AccessorType::Ro | AccessorType::Lazy) => {
-                        // `is => 'ro'` or `is => 'lazy'` — getter only.
-                        members.push(make_member(
-                            &attr.accessor_name,
-                            GeneratedMemberKind::Getter,
-                            anchor_id,
-                            pkg,
-                        ));
-                    }
-                    Some(AccessorType::Bare) => {
-                        // `is => 'bare'` — no accessor generated.
-                    }
-                }
-
-                // Predicate method (e.g. `has_x`).
-                if let Some(pred_name) = &attr.predicate {
-                    members.push(make_member(
-                        pred_name,
-                        GeneratedMemberKind::Predicate,
-                        anchor_id,
-                        pkg,
-                    ));
-                }
-
-                // Clearer method (e.g. `clear_x`).
-                if let Some(clear_name) = &attr.clearer {
-                    members.push(make_member(
-                        clear_name,
-                        GeneratedMemberKind::Clearer,
-                        anchor_id,
-                        pkg,
-                    ));
-                }
-
-                // Builder method (e.g. `_build_x`).
-                if let Some(builder_name) = &attr.builder {
-                    members.push(make_member(
-                        builder_name,
-                        GeneratedMemberKind::Builder,
-                        anchor_id,
-                        pkg,
-                    ));
-                }
+            if model.framework == Framework::ClassAccessor {
+                collect_class_accessor_members(model, pkg, &mut members);
             }
         }
 
@@ -134,6 +72,108 @@ impl GeneratedMemberExtractor {
 /// Returns `true` for frameworks that generate accessors from `has` declarations.
 fn is_accessor_framework(framework: Framework) -> bool {
     matches!(framework, Framework::Moo | Framework::Moose | Framework::Mouse)
+}
+
+fn collect_has_members(model: &ClassModel, package: &str, members: &mut Vec<GeneratedMember>) {
+    for attr in &model.attributes {
+        let anchor_id = AnchorId(attr.location.start as u64);
+
+        // Primary accessor/getter/setter based on `is` option.
+        match attr.is {
+            None => {
+                // Bare `has 'x'` with no `is` — Moo/Moose generates a
+                // combined accessor by default.
+                members.push(make_member(
+                    &attr.accessor_name,
+                    GeneratedMemberKind::Accessor,
+                    anchor_id,
+                    package,
+                ));
+            }
+            Some(AccessorType::Rw) => {
+                // `is => 'rw'` — getter + setter (same method name).
+                members.push(make_member(
+                    &attr.accessor_name,
+                    GeneratedMemberKind::Getter,
+                    anchor_id,
+                    package,
+                ));
+                members.push(make_member(
+                    &attr.accessor_name,
+                    GeneratedMemberKind::Setter,
+                    anchor_id,
+                    package,
+                ));
+            }
+            Some(AccessorType::Ro | AccessorType::Lazy) => {
+                // `is => 'ro'` or `is => 'lazy'` — getter only.
+                members.push(make_member(
+                    &attr.accessor_name,
+                    GeneratedMemberKind::Getter,
+                    anchor_id,
+                    package,
+                ));
+            }
+            Some(AccessorType::Bare) => {
+                // `is => 'bare'` — no accessor generated.
+            }
+        }
+
+        // Predicate method (e.g. `has_x`).
+        if let Some(pred_name) = &attr.predicate {
+            members.push(make_member(
+                pred_name,
+                GeneratedMemberKind::Predicate,
+                anchor_id,
+                package,
+            ));
+        }
+
+        // Clearer method (e.g. `clear_x`).
+        if let Some(clear_name) = &attr.clearer {
+            members.push(make_member(clear_name, GeneratedMemberKind::Clearer, anchor_id, package));
+        }
+
+        // Builder method (e.g. `_build_x`).
+        if let Some(builder_name) = &attr.builder {
+            members.push(make_member(
+                builder_name,
+                GeneratedMemberKind::Builder,
+                anchor_id,
+                package,
+            ));
+        }
+    }
+}
+
+fn collect_class_accessor_members(
+    model: &ClassModel,
+    package: &str,
+    members: &mut Vec<GeneratedMember>,
+) {
+    for method in &model.methods {
+        let Some(accessor_mode) = method.accessor_mode else {
+            continue;
+        };
+        if !method.synthetic {
+            continue;
+        }
+
+        members.push(make_member(
+            &method.name,
+            class_accessor_kind(accessor_mode),
+            AnchorId(method.location.start as u64),
+            package,
+        ));
+    }
+}
+
+fn class_accessor_kind(mode: ClassAccessorMode) -> GeneratedMemberKind {
+    match mode {
+        ClassAccessorMode::Rw => GeneratedMemberKind::Accessor,
+        ClassAccessorMode::Ro => GeneratedMemberKind::Getter,
+        ClassAccessorMode::Wo => GeneratedMemberKind::Setter,
+    }
 }
 
 /// Build a [`GeneratedMember`] with deterministic entity ID derived from
@@ -357,6 +397,80 @@ has ['x', 'y'] => (is => 'ro');
         assert_eq!(y_members.len(), 1, "expected one member for 'y'");
         assert_eq!(x_members[0].kind, GeneratedMemberKind::Getter);
         assert_eq!(y_members[0].kind, GeneratedMemberKind::Getter);
+        Ok(())
+    }
+
+    #[test]
+    fn bare_identifier_has_generates_getter() -> Result<(), String> {
+        let code = "package MyApp::User;\nuse Moo;\nhas name => (is => 'ro');\n1;";
+        let members = parse_and_extract(code);
+        let matched = members_named(&members, "name");
+        assert_eq!(matched.len(), 1, "expected one generated member for bare identifier attr");
+        assert_eq!(matched[0].kind, GeneratedMemberKind::Getter);
+        assert_eq!(matched[0].provenance, Provenance::FrameworkSynthesis);
+        assert_eq!(matched[0].confidence, Confidence::Medium);
+        Ok(())
+    }
+
+    #[test]
+    fn augmented_attribute_strips_plus_prefix() -> Result<(), String> {
+        let code = r#"
+package MyApp::User;
+use Moo;
+has '+name' => (is => 'ro', builder => 1, predicate => 1, clearer => 1);
+1;
+"#;
+        let members = parse_and_extract(code);
+
+        let getter = members.iter().find(|m| m.name == "name");
+        assert!(getter.is_some(), "expected getter named `name`, got {members:?}");
+        assert!(
+            members.iter().any(|m| m.name == "_build_name"),
+            "expected builder `_build_name`, got {members:?}"
+        );
+        assert!(
+            members.iter().any(|m| m.name == "has_name"),
+            "expected predicate `has_name`, got {members:?}"
+        );
+        assert!(
+            members.iter().any(|m| m.name == "clear_name"),
+            "expected clearer `clear_name`, got {members:?}"
+        );
+        assert!(
+            members.iter().all(|m| !m.name.starts_with('+')),
+            "generated member names should not retain `+`: {members:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn class_accessor_methods_emit_generated_members() -> Result<(), String> {
+        let code = r#"
+package MyApp::Accessor;
+use parent 'Class::Accessor';
+__PACKAGE__->mk_accessors(qw(foo bar));
+__PACKAGE__->mk_ro_accessors(qw(read_only));
+__PACKAGE__->mk_wo_accessors(qw(write_only));
+1;
+"#;
+        let members = parse_and_extract(code);
+
+        let foo = members_named(&members, "foo");
+        let read_only = members_named(&members, "read_only");
+        let write_only = members_named(&members, "write_only");
+
+        assert_eq!(foo.len(), 1, "expected Class::Accessor `foo` member");
+        assert_eq!(foo[0].kind, GeneratedMemberKind::Accessor);
+        assert_eq!(read_only.len(), 1, "expected Class::Accessor ro member");
+        assert_eq!(read_only[0].kind, GeneratedMemberKind::Getter);
+        assert_eq!(write_only.len(), 1, "expected Class::Accessor wo member");
+        assert_eq!(write_only[0].kind, GeneratedMemberKind::Setter);
+
+        for member in &members {
+            assert_eq!(member.package, "MyApp::Accessor");
+            assert_eq!(member.provenance, Provenance::FrameworkSynthesis);
+            assert_eq!(member.confidence, Confidence::Medium);
+        }
         Ok(())
     }
 

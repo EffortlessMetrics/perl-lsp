@@ -41,10 +41,11 @@ pub use tokens::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
 use crate::SourceLocation;
 use crate::analysis::class_model::{ClassModel, ClassModelBuilder, MethodResolutionOrder};
+use crate::analysis::generated_member_extractor::GeneratedMemberExtractor;
 use crate::analysis::package_graph_extractor::PackageGraphExtractor;
 use crate::ast::Node;
 use crate::symbol::{Symbol, SymbolExtractor, SymbolTable, is_universal_method};
-use perl_semantic_facts::{FileId, PackageEdge};
+use perl_semantic_facts::{FileId, GeneratedMember, PackageEdge};
 use std::collections::{HashMap, HashSet};
 
 const MAX_MRO_TRAVERSAL_DEPTH: usize = 1024;
@@ -105,6 +106,8 @@ pub struct SemanticAnalyzer {
     pub export_metadata: FileExportMetadata,
     /// Package graph edges extracted from inheritance and role composition forms.
     package_edges: Vec<PackageEdge>,
+    /// Framework-generated members extracted from accessor declarations.
+    generated_members: Vec<GeneratedMember>,
 }
 
 impl SemanticAnalyzer {
@@ -151,6 +154,8 @@ impl SemanticAnalyzer {
         let class_models = ClassModelBuilder::new().build(ast);
         let export_metadata = exporter_metadata::ExportMetadataBuilder::new().build(ast);
         let package_edges = PackageGraphExtractor::extract(ast, FileId(0));
+        let generated_members =
+            GeneratedMemberExtractor::extract_from_models(&class_models, "main");
 
         let mut analyzer = SemanticAnalyzer {
             symbol_table,
@@ -160,6 +165,7 @@ impl SemanticAnalyzer {
             class_models,
             export_metadata,
             package_edges,
+            generated_members,
         };
 
         analyzer.analyze_node(ast, 0);
@@ -184,6 +190,11 @@ impl SemanticAnalyzer {
     /// Get package graph edges extracted from inheritance and role-composition patterns.
     pub fn package_edges(&self) -> &[PackageEdge] {
         &self.package_edges
+    }
+
+    /// Get framework-generated members extracted from accessor declarations.
+    pub fn generated_members(&self) -> &[GeneratedMember] {
+        &self.generated_members
     }
 
     /// Get hover information at a location for Navigate/Analyze stages.
@@ -631,7 +642,7 @@ mod tests {
     use crate::ast::{Node, NodeKind};
     use crate::parser::Parser;
     use crate::symbol::SymbolKind;
-    use perl_semantic_facts::PackageEdgeKind;
+    use perl_semantic_facts::{Confidence, GeneratedMemberKind, PackageEdgeKind, Provenance};
 
     #[test]
     fn test_semantic_tokens() -> Result<(), Box<dyn std::error::Error>> {
@@ -1007,6 +1018,55 @@ with 'Role';
                     && edge.kind == PackageEdgeKind::ComposesRole
             }),
             "SemanticModel should expose the role-composition package edge, got: {edges:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_semantic_model_generated_members() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+package GeneratedExample;
+use Moo;
+has 'name' => (is => 'ro');
+has '+status' => (is => 'rw', predicate => 1);
+1;
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let model = SemanticModel::build(&ast, code);
+        let members = model.generated_members();
+
+        let name = members
+            .iter()
+            .find(|member| member.name == "name")
+            .ok_or("expected generated getter for `name`")?;
+        assert_eq!(name.kind, GeneratedMemberKind::Getter);
+        assert_eq!(name.package, "GeneratedExample");
+        assert_eq!(name.provenance, Provenance::FrameworkSynthesis);
+        assert_eq!(name.confidence, Confidence::Medium);
+
+        assert!(
+            members.iter().any(|member| {
+                member.name == "status" && member.kind == GeneratedMemberKind::Getter
+            }),
+            "expected rw status getter in generated members, got: {members:?}"
+        );
+        assert!(
+            members.iter().any(|member| {
+                member.name == "status" && member.kind == GeneratedMemberKind::Setter
+            }),
+            "expected rw status setter in generated members, got: {members:?}"
+        );
+        assert!(
+            members.iter().any(|member| {
+                member.name == "has_status" && member.kind == GeneratedMemberKind::Predicate
+            }),
+            "expected predicate generated from `+status`, got: {members:?}"
+        );
+        assert!(
+            members.iter().all(|member| !member.name.starts_with('+')),
+            "generated member names should not retain inherited-attribute `+`: {members:?}"
         );
         Ok(())
     }
