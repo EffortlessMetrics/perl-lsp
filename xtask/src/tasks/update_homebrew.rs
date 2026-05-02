@@ -189,26 +189,6 @@ fn build_brew_formula(
     bin.install "#{{package_dir}}/perl-dap"
   end
 
-  def caveats
-    <<~EOS
-      To use perl-lsp with your editor:
-
-      VS Code:
-        Install the "Perl Language Server" extension from the marketplace
-
-      Neovim (with lspconfig):
-        require('lspconfig').perl_lsp.setup{{
-          cmd = {{'#{{opt_bin}}/perllsp', '--stdio'}}
-        }}
-
-      Emacs (with lsp-mode):
-        (lsp-register-client
-         (make-lsp-client :new-connection (lsp-stdio-connection '#{{opt_bin}}/perllsp' "--stdio")
-                          :activation-fn (lsp-activate-on "perl")
-                          :server-id 'perl-lsp))
-    EOS
-  end
-
   test do
     assert_match version.to_s, shell_output("#{{bin}}/perllsp --version")
     assert_match version.to_s, shell_output("#{{bin}}/perl-dap --version")
@@ -234,6 +214,7 @@ fn artifact_filename(prefix: &str, version: &str, artifact: &str) -> String {
 }
 
 fn write_formula(path: &std::path::Path, content: &str) -> Result<()> {
+    let content = content.trim_end_matches('\n');
     if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create directory for {}", path.display()))?;
@@ -283,6 +264,10 @@ mod tests {
         assert!(
             !formula.contains("unknown-linux-musl"),
             "Homebrew formula URLs must use GNU/glibc Linux assets"
+        );
+        assert!(
+            !formula.contains("def caveats"),
+            "Homebrew formula should stay focused on install/test behavior"
         );
     }
 
