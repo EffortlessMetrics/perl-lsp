@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "id": "package_basic",
+      "family": "packages",
+      "label_mode": "full",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/package_basic.pl",
+      "scored_lines": 2,
+      "scored_symbols": 1,
+      "fully_labeled_regions": 1,
+      "partial_labeled_regions": 0,
+      "unknown_regions": 0,
+      "negative_regions": 1,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false
+    },
+    {
+      "id": "dynamic_require_boundary",
+      "family": "dynamic_require",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/dynamic_require.pl",
+      "scored_lines": 1,
+      "scored_symbols": 1,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 1,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false
+    }
+  ]
+}
