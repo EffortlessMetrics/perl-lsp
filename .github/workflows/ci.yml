@@ -127,7 +127,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
         with:
-          toolchain: 1.92.0
+          toolchain: 1.93.1
           components: rustfmt, clippy
 
       - name: Install just
@@ -234,7 +234,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
         with:
-          toolchain: 1.92.0
+          toolchain: 1.93.1
           components: rustfmt, clippy
 
       - name: Install just
@@ -461,7 +461,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
         with:
-          toolchain: 1.92.0
+          toolchain: 1.93.1
 
       - name: Install just
         uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1  # v2.75.22
@@ -585,7 +585,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
         with:
-          toolchain: 1.92.0
+          toolchain: 1.93.1
 
       - name: Install just
         uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1  # v2.75.22
@@ -638,7 +638,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
         with:
-          toolchain: 1.92.0
+          toolchain: 1.93.1
 
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1

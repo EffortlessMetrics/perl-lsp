@@ -3,6 +3,9 @@
 //! This crate provides reusable [`proptest::Strategy`] implementations for
 //! generating Perl variables, module paths, code snippets, and Unicode
 //! strings suitable for fuzzing parsers and LSP components.
+
+// The crate-level doctest demonstrates `proptest!` syntax, which uses `#[test]`.
+#![allow(clippy::test_attr_in_doctest)]
 //!
 //! # Example
 //!
