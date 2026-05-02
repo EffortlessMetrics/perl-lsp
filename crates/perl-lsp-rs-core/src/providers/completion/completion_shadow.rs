@@ -1,6 +1,6 @@
 //! Completion shadow compare and cutover paths.
 //!
-//! Provides two entry points for completion visibility:
+//! Provides entry points for semantic completion validation:
 //!
 //! 1. **Shadow mode** ([`completion_visibility_shadow`]) — runs both legacy
 //!    completion symbol gathering and new `SemanticQueries::visible_symbols_at`
@@ -15,6 +15,10 @@
 //!    - *Dynamic / Unavailable*: dynamic-boundary or unavailable → show low
 //!      or omit.
 //!
+//! 3. **Method shadow mode** ([`method_completion_shadow`]) — compares method
+//!    completion labels against `SemanticQueries::method_candidates` for a
+//!    known receiver package and method labels/probes.
+//!
 //! # Requirements
 //!
 //! - **Req 9.3**: Completion calls `SemanticQueries::visible_symbols_at`.
@@ -27,7 +31,9 @@
 //! - **Req 22.5**: Exact → rank high; Ambiguous → rank lower;
 //!   Dynamic/Unavailable → show low or omit.
 
-use perl_semantic_facts::{Confidence, FileId, ScopeId, VisibleSymbol, VisibleSymbolSource};
+use perl_semantic_facts::{
+    Confidence, DefinitionCandidate, FileId, ScopeId, VisibleSymbol, VisibleSymbolSource,
+};
 use perl_workspace::semantic::queries::SemanticQueries;
 use perl_workspace::semantic_shadow_compare::{
     SemanticShadowCompareReceipt, ShadowQueryInput, ShadowQueryName, ShadowResultSummary,
@@ -44,6 +50,22 @@ pub struct CompletionShadowResult {
     /// provider. Callers should use this during the shadow phase.
     pub legacy_symbols: Vec<String>,
     /// Shadow-compare receipt comparing old and new paths.
+    pub receipt: SemanticShadowCompareReceipt,
+}
+
+/// Result of a shadow-compared method completion request.
+///
+/// Contains the legacy method labels and a `MethodCandidates` shadow receipt.
+/// Callers should continue returning legacy completion items while this runs in
+/// shadow mode.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct MethodCompletionShadowResult {
+    /// Legacy method labels returned by the existing completion provider.
+    pub legacy_methods: Vec<String>,
+    /// Method names probed through `SemanticQueries::method_candidates`.
+    pub probed_methods: Vec<String>,
+    /// Shadow-compare receipt comparing legacy labels and semantic candidates.
     pub receipt: SemanticShadowCompareReceipt,
 }
 
@@ -99,6 +121,57 @@ pub fn completion_visibility_shadow<Q: SemanticQueries>(
     );
 
     CompletionShadowResult { legacy_symbols, receipt }
+}
+
+/// Shadow method completion labels against semantic `method_candidates`.
+///
+/// `SemanticQueries::method_candidates` is an exact lookup, not a method-list
+/// enumerator. The caller therefore provides the current legacy labels plus
+/// any additional method names it wants to probe. Legacy labels are always
+/// included in the probe set so the receipt can detect semantic regressions
+/// for methods the existing provider already returns.
+pub fn method_completion_shadow<Q: SemanticQueries>(
+    legacy_methods: Vec<String>,
+    probe_methods: Vec<String>,
+    semantic_queries: &Q,
+    receiver_package: &str,
+    method_prefix: &str,
+) -> MethodCompletionShadowResult {
+    let old_summary = legacy_symbols_to_summary(&legacy_methods);
+    let probed_methods = method_probe_names(&legacy_methods, &probe_methods, method_prefix);
+
+    let mut semantic_candidates = Vec::new();
+    for method_name in &probed_methods {
+        semantic_candidates
+            .extend(semantic_queries.method_candidates(receiver_package, method_name));
+    }
+    let new_summary = method_candidates_to_summary(&semantic_candidates);
+
+    let input_label = if method_prefix.is_empty() {
+        format!("{receiver_package}->")
+    } else {
+        format!("{receiver_package}->{method_prefix}")
+    };
+
+    let receipt = SemanticShadowCompareReceipt::from_summaries(
+        ShadowQueryName::MethodCandidates,
+        ShadowQueryInput { symbol: input_label },
+        old_summary,
+        new_summary,
+        vec![format!("probed_methods={}", probed_methods.len())],
+    );
+
+    tracing::debug!(
+        receiver_package = %receiver_package,
+        method_prefix = %method_prefix,
+        probed_methods = probed_methods.len(),
+        verdict = ?receipt.verdict,
+        old_count = receipt.old_result.match_count,
+        new_count = receipt.new_result.match_count,
+        "method completion shadow compare"
+    );
+
+    MethodCompletionShadowResult { legacy_methods, probed_methods, receipt }
 }
 
 // ── Cutover types ──
@@ -337,15 +410,49 @@ fn semantic_visible_to_summary(symbols: &[VisibleSymbol]) -> ShadowResultSummary
     summarize_identities(Some(identities))
 }
 
+fn method_probe_names(
+    legacy_methods: &[String],
+    probe_methods: &[String],
+    method_prefix: &str,
+) -> Vec<String> {
+    let mut names: Vec<String> = legacy_methods
+        .iter()
+        .chain(probe_methods.iter())
+        .filter(|name| method_prefix.is_empty() || name.starts_with(method_prefix))
+        .cloned()
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+fn method_candidates_to_summary(candidates: &[DefinitionCandidate]) -> ShadowResultSummary {
+    let identities: Vec<String> = candidates.iter().map(method_candidate_identity).collect();
+    summarize_identities(Some(identities))
+}
+
+fn method_candidate_identity(candidate: &DefinitionCandidate) -> String {
+    if !candidate.display_name.is_empty() {
+        return candidate.display_name.clone();
+    }
+
+    match candidate.canonical_name.rsplit("::").next() {
+        Some(name) if !name.is_empty() => name.to_string(),
+        _ => candidate.canonical_name.clone(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use perl_semantic_facts::{
-        Confidence, DefinitionCandidate, EntityFact, EntityId, FileId, OccurrenceFact, RenamePlan,
+        AnchorId, Confidence, DefinitionCandidate, DefinitionRank, DefinitionRankReason,
+        EntityFact, EntityId, EntityKind, FileId, OccurrenceFact, Provenance, RenamePlan,
         SafeDeletePlan, ScopeId, VisibleSymbol, VisibleSymbolContext, VisibleSymbolSource,
     };
     use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
     use perl_workspace::semantic_shadow_compare::ShadowCompareVerdict;
+    use std::collections::BTreeMap;
 
     // ── Minimal SemanticQueries stub for testing ──
 
@@ -396,6 +503,68 @@ mod tests {
         }
     }
 
+    struct MethodCandidateStub {
+        candidates: BTreeMap<(String, String), Vec<DefinitionCandidate>>,
+    }
+
+    impl MethodCandidateStub {
+        fn new(candidates: Vec<(&str, &str, Vec<DefinitionCandidate>)>) -> Self {
+            let candidates = candidates
+                .into_iter()
+                .map(|(receiver, method, result)| {
+                    ((receiver.to_string(), method.to_string()), result)
+                })
+                .collect();
+            Self { candidates }
+        }
+    }
+
+    impl SemanticQueries for MethodCandidateStub {
+        fn symbol_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+        ) -> Option<(EntityFact, OccurrenceFact)> {
+            None
+        }
+
+        fn definitions(&self, _symbol: &str, _context: &QueryContext) -> Vec<DefinitionCandidate> {
+            Vec::new()
+        }
+
+        fn references(&self, _entity_id: EntityId) -> Vec<OccurrenceFact> {
+            Vec::new()
+        }
+
+        fn visible_symbols_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _scope_id: Option<ScopeId>,
+        ) -> Vec<VisibleSymbol> {
+            Vec::new()
+        }
+
+        fn method_candidates(
+            &self,
+            receiver_package: &str,
+            method_name: &str,
+        ) -> Vec<DefinitionCandidate> {
+            self.candidates
+                .get(&(receiver_package.to_string(), method_name.to_string()))
+                .cloned()
+                .unwrap_or_default()
+        }
+
+        fn rename_plan(&self, entity_id: EntityId, new_name: &str) -> RenamePlan {
+            RenamePlan::new(entity_id, String::new(), new_name.to_string(), vec![], vec![], vec![])
+        }
+
+        fn safe_delete_plan(&self, entity_id: EntityId) -> SafeDeletePlan {
+            SafeDeletePlan::new(entity_id, String::new(), vec![], vec![])
+        }
+    }
+
     fn make_visible(
         name: &str,
         source: VisibleSymbolSource,
@@ -423,6 +592,29 @@ mod tests {
             confidence,
             context: Some(VisibleSymbolContext::new(Some(module.to_string()), None, None)),
         }
+    }
+
+    fn make_method_candidate(
+        display_name: &str,
+        canonical_name: &str,
+        package: &str,
+        kind: EntityKind,
+        rank: DefinitionRank,
+        rank_reason: DefinitionRankReason,
+        entity_id: u64,
+    ) -> DefinitionCandidate {
+        DefinitionCandidate::new(
+            EntityId(entity_id),
+            AnchorId(entity_id + 100),
+            canonical_name.to_string(),
+            display_name.to_string(),
+            Some(package.to_string()),
+            kind,
+            Provenance::ExactAst,
+            Confidence::High,
+            rank,
+            rank_reason,
+        )
     }
 
     // ── Shadow mode tests ──
@@ -504,6 +696,111 @@ mod tests {
         Ok(())
     }
 
+    // ── Method shadow mode tests ──
+
+    #[test]
+    fn method_shadow_reports_same_when_semantic_matches_legacy()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = make_method_candidate(
+            "bark",
+            "Dog::bark",
+            "Dog",
+            EntityKind::Method,
+            DefinitionRank::SamePackage,
+            DefinitionRankReason::SamePackage,
+            10,
+        );
+        let queries = MethodCandidateStub::new(vec![("Dog", "bark", vec![candidate])]);
+
+        let result =
+            method_completion_shadow(vec!["bark".to_string()], vec![], &queries, "Dog", "ba");
+
+        assert_eq!(result.legacy_methods, vec!["bark".to_string()]);
+        assert_eq!(result.probed_methods, vec!["bark".to_string()]);
+        assert_eq!(result.receipt.query, ShadowQueryName::MethodCandidates);
+        assert_eq!(result.receipt.input.symbol, "Dog->ba");
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Same);
+        Ok(())
+    }
+
+    #[test]
+    fn method_shadow_reports_improved_for_inherited_probe() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let candidate = make_method_candidate(
+            "speak",
+            "Animal::speak",
+            "Animal",
+            EntityKind::Method,
+            DefinitionRank::WorkspaceCandidate,
+            DefinitionRankReason::WorkspaceSymbol,
+            11,
+        );
+        let queries = MethodCandidateStub::new(vec![("Dog", "speak", vec![candidate])]);
+
+        let result =
+            method_completion_shadow(vec![], vec!["speak".to_string()], &queries, "Dog", "sp");
+
+        assert_eq!(result.probed_methods, vec!["speak".to_string()]);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        Ok(())
+    }
+
+    #[test]
+    fn method_shadow_reports_regression_when_semantic_missing_legacy()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let queries = MethodCandidateStub::new(vec![]);
+
+        let result =
+            method_completion_shadow(vec!["name".to_string()], vec![], &queries, "Person", "");
+
+        assert_eq!(result.probed_methods, vec!["name".to_string()]);
+        assert_eq!(result.receipt.old_result.match_count, 1);
+        assert_eq!(result.receipt.new_result.match_count, 0);
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Regression);
+        Ok(())
+    }
+
+    #[test]
+    fn method_shadow_supports_generated_member_candidates() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let candidate = make_method_candidate(
+            "name",
+            "Person::name",
+            "Person",
+            EntityKind::GeneratedMember,
+            DefinitionRank::SamePackage,
+            DefinitionRankReason::SamePackage,
+            12,
+        );
+        let queries = MethodCandidateStub::new(vec![("Person", "name", vec![candidate])]);
+
+        let result =
+            method_completion_shadow(vec![], vec!["name".to_string()], &queries, "Person", "na");
+
+        assert_eq!(result.receipt.new_result.identities, vec!["name".to_string()]);
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        Ok(())
+    }
+
+    #[test]
+    fn method_shadow_probes_are_prefix_filtered_and_deduped()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let queries = MethodCandidateStub::new(vec![]);
+
+        let result = method_completion_shadow(
+            vec!["name".to_string(), "name".to_string(), "clear".to_string()],
+            vec!["notify".to_string(), "clear".to_string()],
+            &queries,
+            "Person",
+            "n",
+        );
+
+        assert_eq!(result.probed_methods, vec!["name".to_string(), "notify".to_string()]);
+        Ok(())
+    }
+
     // ── Summary helper tests ──
 
     #[test]
@@ -541,6 +838,25 @@ mod tests {
         assert!(summary.available);
         assert_eq!(summary.match_count, 2);
         assert_eq!(summary.identities.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn method_candidates_to_summary_uses_display_name() -> Result<(), Box<dyn std::error::Error>> {
+        let candidate = make_method_candidate(
+            "bark",
+            "Dog::bark",
+            "Dog",
+            EntityKind::Method,
+            DefinitionRank::SamePackage,
+            DefinitionRankReason::SamePackage,
+            13,
+        );
+
+        let summary = super::method_candidates_to_summary(&[candidate]);
+
+        assert_eq!(summary.identities, vec!["bark".to_string()]);
+        assert_eq!(summary.match_count, 1);
         Ok(())
     }
 
