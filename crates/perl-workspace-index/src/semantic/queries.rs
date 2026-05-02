@@ -573,28 +573,63 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
         // ── Check for remaining references (Req 17.2) ──
         // If the symbol has references in the workspace, block deletion.
         let ref_edges = self.reference_index.get_by_entity(entity_id);
-        if !ref_edges.is_empty() {
+        let dynamic_ref_count =
+            ref_edges.iter().filter(|edge| edge.kind == OccurrenceKind::DynamicBoundary).count();
+        let concrete_ref_count = ref_edges.len().saturating_sub(dynamic_ref_count);
+        if dynamic_ref_count > 0 {
+            blockers.push(PlanBlocker::new(
+                PlanBlockerReason::DynamicBoundary,
+                None,
+                format!(
+                    "Symbol '{}' crosses {} dynamic boundary reference(s).",
+                    bare, dynamic_ref_count
+                ),
+            ));
+        }
+        if concrete_ref_count > 0 {
             blockers.push(PlanBlocker::new(
                 PlanBlockerReason::ReferencesExist,
                 None,
                 format!(
                     "Symbol '{}' still has {} reference(s) in the workspace.",
-                    bare,
-                    ref_edges.len()
+                    bare, concrete_ref_count
                 ),
             ));
         }
 
         // Also check occurrences in fact shards for non-definition references
         // that may not be in the reference index.
+        let shard_dynamic_count: usize = self
+            .fact_shards
+            .values()
+            .flat_map(|s| s.occurrences.iter())
+            .filter(|occ| {
+                occ.entity_id == Some(entity_id) && occ.kind == OccurrenceKind::DynamicBoundary
+            })
+            .count();
         let shard_ref_count: usize = self
             .fact_shards
             .values()
             .flat_map(|s| s.occurrences.iter())
             .filter(|occ| {
-                occ.entity_id == Some(entity_id) && occ.kind != OccurrenceKind::Definition
+                occ.entity_id == Some(entity_id)
+                    && !matches!(
+                        occ.kind,
+                        OccurrenceKind::Definition | OccurrenceKind::DynamicBoundary
+                    )
             })
             .count();
+
+        if ref_edges.is_empty() && shard_dynamic_count > 0 {
+            blockers.push(PlanBlocker::new(
+                PlanBlockerReason::DynamicBoundary,
+                None,
+                format!(
+                    "Symbol '{}' crosses {} dynamic boundary occurrence(s) in fact shards.",
+                    bare, shard_dynamic_count
+                ),
+            ));
+        }
 
         if ref_edges.is_empty() && shard_ref_count > 0 {
             blockers.push(PlanBlocker::new(
@@ -2203,6 +2238,85 @@ mod tests {
             !ref_blockers.is_empty(),
             "should have ReferencesExist blocker from shard occurrences"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn safe_delete_plan_blocks_on_dynamic_boundary() -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(1);
+        let entity_id = EntityId(100);
+        let anchor_def = AnchorId(10);
+        let anchor_dyn = AnchorId(20);
+
+        let shard = make_shard(
+            "file:///lib/DynamicDelete.pm",
+            file_id,
+            vec![
+                AnchorFact {
+                    id: anchor_def,
+                    file_id,
+                    span_start_byte: 0,
+                    span_end_byte: 10,
+                    scope_id: None,
+                    provenance: Provenance::ExactAst,
+                    confidence: Confidence::High,
+                },
+                AnchorFact {
+                    id: anchor_dyn,
+                    file_id,
+                    span_start_byte: 20,
+                    span_end_byte: 30,
+                    scope_id: None,
+                    provenance: Provenance::DynamicBoundary,
+                    confidence: Confidence::Low,
+                },
+            ],
+            vec![EntityFact {
+                id: entity_id,
+                kind: EntityKind::Subroutine,
+                canonical_name: "DynamicDelete::dispatch".to_string(),
+                anchor_id: Some(anchor_def),
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![
+                OccurrenceFact {
+                    id: OccurrenceId(200),
+                    kind: OccurrenceKind::Definition,
+                    entity_id: Some(entity_id),
+                    anchor_id: anchor_def,
+                    scope_id: None,
+                    provenance: Provenance::ExactAst,
+                    confidence: Confidence::High,
+                },
+                OccurrenceFact {
+                    id: OccurrenceId(201),
+                    kind: OccurrenceKind::DynamicBoundary,
+                    entity_id: Some(entity_id),
+                    anchor_id: anchor_dyn,
+                    scope_id: None,
+                    provenance: Provenance::DynamicBoundary,
+                    confidence: Confidence::Low,
+                },
+            ],
+            vec![],
+        );
+
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        let plan = queries.safe_delete_plan(entity_id);
+        let dynamic_blockers: Vec<_> = plan
+            .blockers
+            .iter()
+            .filter(|b| b.reason == PlanBlockerReason::DynamicBoundary)
+            .collect();
+        assert!(!dynamic_blockers.is_empty(), "should have DynamicBoundary blocker");
         Ok(())
     }
 

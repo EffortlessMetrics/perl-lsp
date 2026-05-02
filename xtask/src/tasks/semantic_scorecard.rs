@@ -5,6 +5,7 @@ use perl_semantic_facts::{
     AnchorFact, AnchorId, Confidence, EdgeKind, EntityFact, EntityId, EntityKind, ExportSet,
     FileId, ImportKind, ImportSpec, ImportSymbols, OccurrenceFact, OccurrenceId, OccurrenceKind,
     PackageEdge, PackageEdgeKind, PlanBlockerReason, PlannedEditCategory, Provenance, RenamePlan,
+    SafeDeletePlan,
 };
 use perl_workspace::semantic::imports::ImportExportIndex;
 use perl_workspace::semantic::package_graph::PackageGraphIndex;
@@ -33,7 +34,7 @@ const AVAILABLE_ROWS: &[&str] = &[
     "role_composition_edges",
 ];
 
-const UNAVAILABLE_ROWS: &[&str] = &["safe_delete_plan"];
+const UNAVAILABLE_ROWS: &[&str] = &[];
 
 #[derive(Debug, Deserialize)]
 struct SemanticManifest {
@@ -120,6 +121,10 @@ struct FactMeasurement {
     rename_plan_planned_edits: usize,
     rename_plan_blockers: usize,
     rename_plan_unsafe_edits: usize,
+    safe_delete_plan_fixture_passes: usize,
+    safe_delete_plan_fixture_total: usize,
+    safe_delete_safe_candidates: usize,
+    safe_delete_plan_blockers: usize,
     exact_facts: usize,
     high_confidence_facts: usize,
     heuristic_facts: usize,
@@ -302,6 +307,12 @@ fn measure_fixtures(manifest_path: &Path, manifest: &SemanticManifest) -> Result
     measurement.rename_plan_planned_edits = rename_plan.planned_edits;
     measurement.rename_plan_blockers = rename_plan.blockers;
     measurement.rename_plan_unsafe_edits = rename_plan.unsafe_edits;
+
+    let safe_delete_plan = measure_safe_delete_plan_fixtures();
+    measurement.safe_delete_plan_fixture_passes = safe_delete_plan.passes;
+    measurement.safe_delete_plan_fixture_total = safe_delete_plan.total;
+    measurement.safe_delete_safe_candidates = safe_delete_plan.safe_candidates;
+    measurement.safe_delete_plan_blockers = safe_delete_plan.blockers;
 
     Ok(measurement)
 }
@@ -778,6 +789,266 @@ fn count_unsafe_rename_edits(plan: &RenamePlan) -> usize {
         .count()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SafeDeletePlanMeasurement {
+    passes: usize,
+    total: usize,
+    safe_candidates: usize,
+    blockers: usize,
+}
+
+fn measure_safe_delete_plan_fixtures() -> SafeDeletePlanMeasurement {
+    let fixtures = [
+        safe_delete_plan_unused_local_fixture(),
+        safe_delete_plan_referenced_local_fixture(),
+        safe_delete_plan_exported_symbol_fixture(),
+        safe_delete_plan_imported_symbol_fixture(),
+        safe_delete_plan_generated_member_fixture(),
+        safe_delete_plan_dynamic_boundary_fixture(),
+    ];
+    let total = fixtures.len();
+
+    let mut passes = 0;
+    let mut safe_candidates = 0;
+    let mut blockers = 0;
+    for (plan, passed) in fixtures {
+        if plan.blockers.is_empty() {
+            safe_candidates += 1;
+        }
+        blockers += plan.blockers.len();
+        if passed {
+            passes += 1;
+        }
+    }
+
+    SafeDeletePlanMeasurement { passes, total, safe_candidates, blockers }
+}
+
+fn safe_delete_plan_unused_local_fixture() -> (SafeDeletePlan, bool) {
+    let entity_id = EntityId(51_000);
+    let shard = rename_plan_fact_shard(
+        "file:///semantic/safe_delete_unused_local.pm",
+        FileId(51_001),
+        entity_id,
+        "Unused::local_only",
+        EntityKind::Subroutine,
+        &[RenameOccurrenceSpec {
+            anchor_id: AnchorId(51_100),
+            occurrence_id: OccurrenceId(51_200),
+            kind: OccurrenceKind::Definition,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        }],
+        Provenance::ExactAst,
+        Confidence::High,
+    );
+
+    let plan = run_safe_delete_plan_fixture(vec![shard], ImportExportIndex::new(), entity_id);
+    let passed = plan.blockers.is_empty() && !plan.warnings.is_empty();
+    (plan, passed)
+}
+
+fn safe_delete_plan_referenced_local_fixture() -> (SafeDeletePlan, bool) {
+    let entity_id = EntityId(52_000);
+    let shard = rename_plan_fact_shard(
+        "file:///semantic/safe_delete_referenced_local.pm",
+        FileId(52_001),
+        entity_id,
+        "Used::local_only",
+        EntityKind::Subroutine,
+        &[
+            RenameOccurrenceSpec {
+                anchor_id: AnchorId(52_100),
+                occurrence_id: OccurrenceId(52_200),
+                kind: OccurrenceKind::Definition,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            },
+            RenameOccurrenceSpec {
+                anchor_id: AnchorId(52_101),
+                occurrence_id: OccurrenceId(52_201),
+                kind: OccurrenceKind::Call,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            },
+        ],
+        Provenance::ExactAst,
+        Confidence::High,
+    );
+
+    let plan = run_safe_delete_plan_fixture(vec![shard], ImportExportIndex::new(), entity_id);
+    let passed = safe_delete_plan_has_blocker(&plan, PlanBlockerReason::ReferencesExist);
+    (plan, passed)
+}
+
+fn safe_delete_plan_exported_symbol_fixture() -> (SafeDeletePlan, bool) {
+    let entity_id = EntityId(53_000);
+    let shard = rename_plan_fact_shard(
+        "file:///semantic/safe_delete_exported_symbol.pm",
+        FileId(53_001),
+        entity_id,
+        "Exported::helper",
+        EntityKind::Subroutine,
+        &[RenameOccurrenceSpec {
+            anchor_id: AnchorId(53_100),
+            occurrence_id: OccurrenceId(53_200),
+            kind: OccurrenceKind::Definition,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        }],
+        Provenance::ExactAst,
+        Confidence::High,
+    );
+
+    let mut import_export_index = ImportExportIndex::new();
+    import_export_index.add_module_exports(
+        "file:///semantic/safe_delete_exported_symbol.pm",
+        "Exported",
+        ExportSet {
+            default_exports: vec!["helper".to_string()],
+            optional_exports: Vec::new(),
+            tags: Vec::new(),
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+            module_name: Some("Exported".to_string()),
+            anchor_id: None,
+        },
+    );
+
+    let plan = run_safe_delete_plan_fixture(vec![shard], import_export_index, entity_id);
+    let passed = safe_delete_plan_has_blocker(&plan, PlanBlockerReason::ExportedSymbol);
+    (plan, passed)
+}
+
+fn safe_delete_plan_imported_symbol_fixture() -> (SafeDeletePlan, bool) {
+    let provider_file = FileId(54_001);
+    let importer_file = FileId(54_002);
+    let entity_id = EntityId(54_000);
+    let shard = rename_plan_fact_shard(
+        "file:///semantic/safe_delete_provider.pm",
+        provider_file,
+        entity_id,
+        "Provider::util",
+        EntityKind::Subroutine,
+        &[RenameOccurrenceSpec {
+            anchor_id: AnchorId(54_100),
+            occurrence_id: OccurrenceId(54_200),
+            kind: OccurrenceKind::Definition,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        }],
+        Provenance::ExactAst,
+        Confidence::High,
+    );
+    let importer_shard =
+        empty_fact_shard("file:///semantic/safe_delete_consumer.pm", importer_file);
+
+    let mut import_export_index = ImportExportIndex::new();
+    import_export_index.add_module_exports(
+        "file:///semantic/safe_delete_provider.pm",
+        "Provider",
+        ExportSet {
+            default_exports: Vec::new(),
+            optional_exports: vec!["util".to_string()],
+            tags: Vec::new(),
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+            module_name: Some("Provider".to_string()),
+            anchor_id: None,
+        },
+    );
+    import_export_index.add_file_imports(
+        "file:///semantic/safe_delete_consumer.pm",
+        importer_file,
+        vec![ImportSpec {
+            module: "Provider".to_string(),
+            kind: ImportKind::UseExplicitList,
+            symbols: ImportSymbols::Explicit(vec!["util".to_string()]),
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+            file_id: Some(importer_file),
+            anchor_id: None,
+            scope_id: None,
+        }],
+    );
+
+    let plan =
+        run_safe_delete_plan_fixture(vec![shard, importer_shard], import_export_index, entity_id);
+    let passed = safe_delete_plan_has_blocker(&plan, PlanBlockerReason::ImportedSymbol);
+    (plan, passed)
+}
+
+fn safe_delete_plan_generated_member_fixture() -> (SafeDeletePlan, bool) {
+    let entity_id = EntityId(55_000);
+    let shard = rename_plan_fact_shard(
+        "file:///semantic/safe_delete_generated_member.pm",
+        FileId(55_001),
+        entity_id,
+        "Person::name",
+        EntityKind::GeneratedMember,
+        &[],
+        Provenance::FrameworkSynthesis,
+        Confidence::Medium,
+    );
+
+    let plan = run_safe_delete_plan_fixture(vec![shard], ImportExportIndex::new(), entity_id);
+    let passed = safe_delete_plan_has_blocker(&plan, PlanBlockerReason::GeneratedMember);
+    (plan, passed)
+}
+
+fn safe_delete_plan_dynamic_boundary_fixture() -> (SafeDeletePlan, bool) {
+    let entity_id = EntityId(56_000);
+    let shard = rename_plan_fact_shard(
+        "file:///semantic/safe_delete_dynamic_boundary.pm",
+        FileId(56_001),
+        entity_id,
+        "Dynamic::dispatch",
+        EntityKind::Subroutine,
+        &[
+            RenameOccurrenceSpec {
+                anchor_id: AnchorId(56_100),
+                occurrence_id: OccurrenceId(56_200),
+                kind: OccurrenceKind::Definition,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            },
+            RenameOccurrenceSpec {
+                anchor_id: AnchorId(56_101),
+                occurrence_id: OccurrenceId(56_201),
+                kind: OccurrenceKind::DynamicBoundary,
+                provenance: Provenance::DynamicBoundary,
+                confidence: Confidence::Low,
+            },
+        ],
+        Provenance::ExactAst,
+        Confidence::High,
+    );
+
+    let plan = run_safe_delete_plan_fixture(vec![shard], ImportExportIndex::new(), entity_id);
+    let passed = safe_delete_plan_has_blocker(&plan, PlanBlockerReason::DynamicBoundary);
+    (plan, passed)
+}
+
+fn run_safe_delete_plan_fixture(
+    shards: Vec<FileFactShard>,
+    import_export_index: ImportExportIndex,
+    entity_id: EntityId,
+) -> SafeDeletePlan {
+    let mut fact_shards = std::collections::HashMap::new();
+    for shard in shards {
+        fact_shards.insert(shard.source_uri.clone(), shard);
+    }
+
+    let reference_index = ReferenceIndex::new();
+    let queries =
+        WorkspaceSemanticQueries::new(&reference_index, &import_export_index, &fact_shards);
+    queries.safe_delete_plan(entity_id)
+}
+
+fn safe_delete_plan_has_blocker(plan: &SafeDeletePlan, reason: PlanBlockerReason) -> bool {
+    plan.blockers.iter().any(|blocker| blocker.reason == reason)
+}
+
 fn measure_package_graph_edges(
     source: &str,
     path: &Path,
@@ -885,6 +1156,15 @@ fn build_readiness_rows(
         format!(
             "{}%",
             measurement.rename_plan_fixture_passes * 100 / measurement.rename_plan_fixture_total
+        )
+    };
+    let safe_delete_plan_rate = if measurement.safe_delete_plan_fixture_total == 0 {
+        "0%".to_string()
+    } else {
+        format!(
+            "{}%",
+            measurement.safe_delete_plan_fixture_passes * 100
+                / measurement.safe_delete_plan_fixture_total
         )
     };
 
@@ -1000,10 +1280,36 @@ fn build_readiness_rows(
         (
             "safe_delete_blocker_fixture_pass_rate".to_string(),
             ReadinessRow {
-                status: "pass",
-                value: fixture_rate.to_string(),
+                status: if measurement.safe_delete_plan_fixture_passes
+                    == measurement.safe_delete_plan_fixture_total
+                    && measurement.safe_delete_plan_fixture_total > 0
+                    && measurement.safe_delete_plan_blockers > 0
+                {
+                    "pass"
+                } else {
+                    "fail"
+                },
+                value: safe_delete_plan_rate.clone(),
                 threshold: "100%",
-                evidence: "safe-delete blocker fixtures",
+                evidence: "safe-delete plan query fixtures",
+            },
+        ),
+        (
+            "safe_delete_plan".to_string(),
+            ReadinessRow {
+                status: if measurement.safe_delete_plan_fixture_passes
+                    == measurement.safe_delete_plan_fixture_total
+                    && measurement.safe_delete_plan_fixture_total > 0
+                    && measurement.safe_delete_safe_candidates > 0
+                    && measurement.safe_delete_plan_blockers > 0
+                {
+                    "pass"
+                } else {
+                    "fail"
+                },
+                value: safe_delete_plan_rate,
+                threshold: "100%",
+                evidence: "safe-delete plan query fixtures",
             },
         ),
     ])
@@ -1262,7 +1568,40 @@ sub local { 1 }
         assert_eq!(unsafe_edits.status, "pass");
         assert_eq!(unsafe_edits.value, "0");
         assert!(!artifact.unavailable_rows.contains_key("rename_plan"));
-        assert!(artifact.unavailable_rows.contains_key("safe_delete_plan"));
+        assert!(!artifact.unavailable_rows.contains_key("safe_delete_plan"));
+        Ok(())
+    }
+
+    #[test]
+    fn safe_delete_plan_rows_are_measured_from_queries() -> Result<()> {
+        let measurement = measure_safe_delete_plan_fixtures();
+        assert_eq!(measurement.total, 6);
+        assert_eq!(measurement.passes, 6);
+        assert_eq!(measurement.safe_candidates, 1);
+        assert!(measurement.blockers >= 5, "blocked safe-delete fixtures should produce blockers");
+
+        let tmp = tempfile::tempdir()?;
+        let manifest_path = write_fixture_set(
+            tmp.path(),
+            r#"{"fixture_family_version":1,"fixtures":[{"id":"safe_delete_fixture","family":"safe delete","path":"safe_delete.pl"}]}"#,
+            &[("safe_delete.pl", "package SafeDeleteFixture; sub unused_local { 1 }\n")],
+        )?;
+        let artifact = build_artifact(&manifest_path, load_manifest(&manifest_path)?)?;
+
+        let safe_delete_plan = artifact
+            .readiness_rows
+            .get("safe_delete_plan")
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing safe_delete_plan readiness row"))?;
+        assert_eq!(safe_delete_plan.status, "pass");
+        assert_eq!(safe_delete_plan.value, "100%");
+
+        let blocker_rate =
+            artifact.readiness_rows.get("safe_delete_blocker_fixture_pass_rate").ok_or_else(
+                || color_eyre::eyre::eyre!("missing safe_delete_blocker_fixture_pass_rate row"),
+            )?;
+        assert_eq!(blocker_rate.status, "pass");
+        assert_eq!(blocker_rate.value, "100%");
+        assert!(artifact.unavailable_rows.is_empty());
         Ok(())
     }
 
