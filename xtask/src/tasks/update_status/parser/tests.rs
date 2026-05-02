@@ -190,7 +190,7 @@ fn test_parser_accuracy_missing_artifact_reports_insufficient_data() -> Result<(
 }
 
 #[test]
-fn test_parser_accuracy_artifact_renders_denominator_and_insufficient_rows() -> Result<()> {
+fn test_parser_accuracy_artifact_renders_denominator_and_metric_rows() -> Result<()> {
     let metrics = ParserMetrics {
         syntax_sections: 611,
         system_receipt: None,
@@ -233,10 +233,10 @@ fn test_parser_accuracy_artifact_renders_denominator_and_insufficient_rows() -> 
                     value: 2.0,
                     sample_count: 2,
                 },
-                ParserAccuracyMetricSummary::InsufficientData {
+                ParserAccuracyMetricSummary::Measured {
                     metric: "line_construct_f1".to_string(),
-                    reason: "line-level gold scorer is not wired yet".to_string(),
-                    sample_count: 0,
+                    value: 1.0,
+                    sample_count: 6,
                 },
             ],
         }),
@@ -256,8 +256,8 @@ fn test_parser_accuracy_artifact_renders_denominator_and_insufficient_rows() -> 
         "parser accuracy family row should render family inventory"
     );
     assert!(
-        result.contains("line_construct_f1: insufficient_data"),
-        "unwired accuracy scorer rows must remain insufficient_data"
+        result.contains("line_construct_f1=1.0"),
+        "measured accuracy scorer rows should render their values"
     );
     Ok(())
 }

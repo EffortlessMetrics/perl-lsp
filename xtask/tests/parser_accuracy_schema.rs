@@ -145,7 +145,7 @@ fn validate_metric_rows(artifact: &Value) -> TestResult {
     assert!(!metrics.is_empty(), "example artifact should include metric rows");
 
     let mut saw_measured = false;
-    let mut saw_insufficient_line = false;
+    let mut saw_measured_line = false;
     let mut saw_insufficient_ast = false;
     let mut saw_insufficient_symbol = false;
 
@@ -162,11 +162,13 @@ fn validate_metric_rows(artifact: &Value) -> TestResult {
                 assert!(metric.get("value").and_then(Value::as_f64).is_some());
                 assert!(metric.get("direction").and_then(Value::as_str).is_some());
                 assert!(metric.get("confidence").and_then(Value::as_str).is_some());
+                if metric["metric"].as_str() == Some("line_construct_f1") {
+                    saw_measured_line = true;
+                }
             }
             "insufficient_data" => {
                 assert!(metric.get("reason").and_then(Value::as_str).is_some());
                 match metric["metric"].as_str() {
-                    Some("line_construct_f1") => saw_insufficient_line = true,
                     Some("ast_node_kind_f1") => saw_insufficient_ast = true,
                     Some("symbol_decl_f1") => saw_insufficient_symbol = true,
                     _ => {}
@@ -177,7 +179,7 @@ fn validate_metric_rows(artifact: &Value) -> TestResult {
     }
 
     assert!(saw_measured, "example should include at least one measured denominator row");
-    assert!(saw_insufficient_line, "example should include line insufficient-data row");
+    assert!(saw_measured_line, "example should include measured line F1 row");
     assert!(saw_insufficient_ast, "example should include AST insufficient-data row");
     assert!(saw_insufficient_symbol, "example should include symbol insufficient-data row");
     Ok(())
