@@ -45,8 +45,8 @@ pub struct SymbolRef {
     pub name: String,
     /// Package-qualified name when syntactically explicit, else bare `name`.
     pub qualified_name: String,
-    /// Variable sigil (`$`, `@`, `%`) for variable refs.  `&` and `*` sigils are
-    /// not emitted in phase-1 (see module-level exclusion list).
+    /// Variable sigil (`$`, `@`, `%`) for variable refs, or boundary sigils
+    /// (`&`, `*`) for coderef/typeglob refs.
     pub sigil: Option<String>,
     /// Explicit package qualifier from syntax (for example `Some("Pkg")` for
     /// `Pkg::func` or `$Pkg::var`).
@@ -85,6 +85,18 @@ fn walk(node: &Node, out: &mut Vec<SymbolRef>) {
         NodeKind::OptionalParameter { default_value, .. } => {
             // The default expression may reference other variables.
             walk(default_value, out);
+        }
+
+        NodeKind::Goto { target } => {
+            if !push_coderef_target(target, (node.location.start, node.location.end), out) {
+                walk(target, out);
+            }
+        }
+
+        NodeKind::Unary { op, operand } if op == "\\" => {
+            if !push_coderef_target(operand, (node.location.start, node.location.end), out) {
+                walk(operand, out);
+            }
         }
 
         NodeKind::Variable { sigil, name } => {
@@ -191,6 +203,33 @@ fn push_variable_like_ref(node: &Node, sigil: &str, name: &str, out: &mut Vec<Sy
         full_span: (node.location.start, node.location.end),
         anchor_span: Some((node.location.start, node.location.end)),
     });
+}
+
+fn push_coderef_target(node: &Node, full_span: (usize, usize), out: &mut Vec<SymbolRef>) -> bool {
+    let Some(name) = coderef_target_name(node) else {
+        return false;
+    };
+    let (package_qualifier, bare_name, qualified_name) = split_qualified_name(name);
+    out.push(SymbolRef {
+        kind: SymbolRefKind::CoderefReference,
+        name: bare_name,
+        qualified_name,
+        sigil: Some("&".to_string()),
+        package_qualifier,
+        full_span,
+        anchor_span: Some((node.location.start, node.location.end)),
+    });
+    true
+}
+
+fn coderef_target_name(node: &Node) -> Option<&str> {
+    match &node.kind {
+        NodeKind::Variable { sigil, name } if sigil == "&" => Some(name),
+        // The parser lowers source forms like `\&foo` and `goto &foo` into a
+        // zero-argument FunctionCall target after consuming the ampersand.
+        NodeKind::FunctionCall { name, args } if args.is_empty() => Some(name),
+        _ => None,
+    }
 }
 
 /// Split a potentially package-qualified name into `(qualifier, bare, full)`.
