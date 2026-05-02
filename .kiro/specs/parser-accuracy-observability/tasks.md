@@ -88,12 +88,12 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
   - [x] 10.2 Emit span rows
     - byte span exact, line span exact, UTF-16 range exact, span near, invalid/out-of-bounds/inverted/non-char-boundary counts, CRLF errors, Unicode errors, tab column mismatches
 
-- [ ] 11. Add confidence, unsupported construct, and provider-impact rows
-  - [ ] 11.1 Emit confidence calibration rows
+- [x] 11. Add confidence, unsupported construct, and provider-impact rows
+  - [x] 11.1 Emit confidence calibration rows
     - exact/high/medium/low/heuristic/dynamic precision and calibration error
-  - [ ] 11.2 Emit unsupported construct rows
+  - [x] 11.2 Emit unsupported construct rows
     - detected, missed, family count, false exact, and salvaged counts
-  - [ ] 11.3 Add provider-impact placeholders
+  - [x] 11.3 Add provider-impact placeholders
     - document symbols, goto definition, references, hover, completion, rename, safe delete, diagnostics
     - Use `insufficient_data` until provider gold fixtures are wired
 

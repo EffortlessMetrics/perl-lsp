@@ -512,6 +512,95 @@ struct SymbolScore {
     symbols_emitted_in_pod: u64,
     symbols_emitted_in_strings: u64,
     symbols_emitted_in_unknown_regions: u64,
+    proof_score: ProofScore,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct ProofScore {
+    true_positive_by_bucket: BTreeMap<ProofBucket, u64>,
+    predicted_by_bucket: BTreeMap<ProofBucket, u64>,
+    high_confidence_false_positive_count: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum ProofBucket {
+    Exact,
+    High,
+    Medium,
+    Low,
+    Heuristic,
+    Dynamic,
+}
+
+impl ProofBucket {
+    fn precision_metric(self) -> &'static str {
+        match self {
+            ProofBucket::Exact => "exact_fact_precision",
+            ProofBucket::High => "high_confidence_precision",
+            ProofBucket::Medium => "medium_confidence_precision",
+            ProofBucket::Low => "low_confidence_precision",
+            ProofBucket::Heuristic => "heuristic_fact_precision",
+            ProofBucket::Dynamic => "dynamic_boundary_precision",
+        }
+    }
+
+    fn insufficient_reason(self) -> &'static str {
+        match self {
+            ProofBucket::Exact => {
+                "no exact fact predictions are available in fully labeled fixtures"
+            }
+            ProofBucket::High => {
+                "no high-confidence fact predictions are available in fully labeled fixtures"
+            }
+            ProofBucket::Medium => {
+                "no medium-confidence fact predictions are available in fully labeled fixtures"
+            }
+            ProofBucket::Low => {
+                "no low-confidence fact predictions are available in fully labeled fixtures"
+            }
+            ProofBucket::Heuristic => {
+                "no heuristic fact predictions are available in fully labeled fixtures"
+            }
+            ProofBucket::Dynamic => {
+                "no dynamic-boundary fact predictions are available in fully labeled fixtures"
+            }
+        }
+    }
+}
+
+trait ProofShape {
+    fn provenance(&self) -> &str;
+    fn confidence(&self) -> &str;
+}
+
+impl ProofShape for SymbolEntityKey {
+    fn provenance(&self) -> &str {
+        &self.provenance
+    }
+
+    fn confidence(&self) -> &str {
+        &self.confidence
+    }
+}
+
+impl ProofShape for SymbolOccurrenceKey {
+    fn provenance(&self) -> &str {
+        &self.provenance
+    }
+
+    fn confidence(&self) -> &str {
+        &self.confidence
+    }
+}
+
+impl ProofShape for SymbolEdgeKey {
+    fn provenance(&self) -> &str {
+        &self.provenance
+    }
+
+    fn confidence(&self) -> &str {
+        &self.confidence
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -570,6 +659,17 @@ struct SpanScore {
     unicode_position_error_count: u64,
     tab_sample_count: u64,
     tab_column_mismatch_count: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct UnsupportedScore {
+    manifest_construct_count: u64,
+    family_count: u64,
+    line_labeled_construct_count: u64,
+    detected_count: u64,
+    salvaged_count: u64,
+    false_exact_count: u64,
+    false_exact_sample_count: u64,
 }
 
 /// Run `cargo xtask metrics parser-accuracy`.
@@ -646,6 +746,7 @@ fn build_artifact(
     let recovery_score = score_manifest_recovery(root, manifest)?;
     let incremental_score = score_manifest_incremental(root, manifest)?;
     let span_score = score_manifest_spans(root, manifest)?;
+    let unsupported_score = score_manifest_unsupported(root, manifest, &line_score)?;
     let mut metrics = vec![MetricRow::Measured {
         metric: "denominator_fixture_count".to_string(),
         value: fixture_count,
@@ -661,6 +762,9 @@ fn build_artifact(
     metrics.extend(recovery_metrics(&recovery_score, cadence));
     metrics.extend(incremental_metrics(&incremental_score, cadence));
     metrics.extend(span_metrics(&span_score, cadence));
+    metrics.extend(confidence_metrics(&symbol_score, cadence));
+    metrics.extend(unsupported_metrics(&unsupported_score, cadence));
+    metrics.extend(provider_impact_metrics());
 
     Ok(ParserAccuracyArtifact {
         schema_version: 1,
@@ -1364,6 +1468,122 @@ fn score_manifest_spans(root: &Path, manifest: &ParserAccuracyManifest) -> Resul
     Ok(score)
 }
 
+fn score_manifest_unsupported(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+    line_score: &LineScore,
+) -> Result<UnsupportedScore> {
+    let mut score = UnsupportedScore {
+        line_labeled_construct_count: line_score.expected_unsupported_construct_count,
+        detected_count: line_score.correct_unsupported_construct_count,
+        ..UnsupportedScore::default()
+    };
+    let mut families = BTreeSet::new();
+
+    for fixture in &manifest.fixtures {
+        if fixture.unsupported_constructs == 0 {
+            continue;
+        }
+        score.manifest_construct_count += fixture.unsupported_constructs;
+        families.insert(fixture.family.clone());
+
+        if fixture.symbol_expectations.entities.is_empty()
+            && fixture.symbol_expectations.occurrences.is_empty()
+            && fixture.symbol_expectations.edges.is_empty()
+        {
+            continue;
+        }
+
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy unsupported fixture source {}", source_path.display())
+        })?;
+        let predictions = extract_symbol_predictions(&source_path, &source)?;
+        score_unsupported_symbol_expectations(
+            &fixture.symbol_expectations,
+            &predictions,
+            &mut score,
+        );
+    }
+
+    score.family_count = families.len() as u64;
+    Ok(score)
+}
+
+fn score_unsupported_symbol_expectations(
+    expectations: &SymbolExpectations,
+    predictions: &SymbolPredictions,
+    score: &mut UnsupportedScore,
+) {
+    let expected_entities = expectations
+        .entities
+        .iter()
+        .map(entity_key_from_expectation)
+        .filter(is_conservative_symbol_entity)
+        .collect::<BTreeSet<_>>();
+    let expected_occurrences = expectations
+        .occurrences
+        .iter()
+        .map(occurrence_key_from_expectation)
+        .filter(is_conservative_symbol_occurrence)
+        .collect::<BTreeSet<_>>();
+    let expected_edges = expectations
+        .edges
+        .iter()
+        .map(edge_key_from_expectation)
+        .filter(is_conservative_symbol_edge)
+        .collect::<BTreeSet<_>>();
+
+    score.false_exact_sample_count +=
+        (expected_entities.len() + expected_occurrences.len() + expected_edges.len()) as u64;
+    score.salvaged_count += expected_entities.intersection(&predictions.entities).count() as u64;
+    score.salvaged_count +=
+        expected_occurrences.intersection(&predictions.occurrences).count() as u64;
+    score.salvaged_count += expected_edges.intersection(&predictions.edges).count() as u64;
+
+    for expected in &expected_entities {
+        if predictions.entities.iter().any(|prediction| {
+            prediction.span_text == expected.span_text
+                && prediction.provenance == "ExactAst"
+                && prediction.confidence == "High"
+        }) {
+            score.false_exact_count += 1;
+        }
+    }
+    for expected in &expected_occurrences {
+        if predictions.occurrences.iter().any(|prediction| {
+            prediction.span_text == expected.span_text
+                && prediction.canonical_name.is_some()
+                && prediction.provenance == "ExactAst"
+                && prediction.confidence == "High"
+        }) {
+            score.false_exact_count += 1;
+        }
+    }
+    for expected in &expected_edges {
+        if predictions.edges.iter().any(|prediction| {
+            prediction.from == expected.from
+                && prediction.to == expected.to
+                && prediction.provenance == "ExactAst"
+                && prediction.confidence == "High"
+        }) {
+            score.false_exact_count += 1;
+        }
+    }
+}
+
+fn is_conservative_symbol_entity(entity: &SymbolEntityKey) -> bool {
+    entity.provenance != "ExactAst" || entity.confidence != "High"
+}
+
+fn is_conservative_symbol_occurrence(occurrence: &SymbolOccurrenceKey) -> bool {
+    occurrence.provenance != "ExactAst" || occurrence.confidence != "High"
+}
+
+fn is_conservative_symbol_edge(edge: &SymbolEdgeKey) -> bool {
+    edge.provenance != "ExactAst" || edge.confidence != "High"
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ActualSpanCoordinates {
     byte_start: usize,
@@ -1818,6 +2038,12 @@ fn score_symbol_expectations(
         &mut score.entity_by_kind,
         |key| key.kind.as_str(),
     );
+    score_proof_sets(
+        &expected_entities,
+        &predictions.entities,
+        count_false_positives,
+        &mut score.proof_score,
+    );
 
     let expected_occurrences = expectations
         .occurrences
@@ -1862,6 +2088,12 @@ fn score_symbol_expectations(
         &mut score.occurrence_by_kind,
         |key| key.kind.as_str(),
     );
+    score_proof_sets(
+        &expected_occurrences,
+        &predictions.occurrences,
+        count_false_positives,
+        &mut score.proof_score,
+    );
 
     let expected_edges =
         expectations.edges.iter().map(edge_key_from_expectation).collect::<BTreeSet<_>>();
@@ -1880,6 +2112,12 @@ fn score_symbol_expectations(
             .filter(|false_positive| false_positive.confidence == "High")
             .count() as u64;
     }
+    score_proof_sets(
+        &expected_edges,
+        &predictions.edges,
+        count_false_positives,
+        &mut score.proof_score,
+    );
 }
 
 fn count_dynamic_false_precision(
@@ -2013,6 +2251,57 @@ fn score_kind_sets<T: Ord>(
         entry.false_positive_count += false_positive_count;
         entry.false_negative_count += false_negative_count;
     }
+}
+
+fn score_proof_sets<T: Ord + ProofShape>(
+    expected: &BTreeSet<T>,
+    predicted: &BTreeSet<T>,
+    count_false_positives: bool,
+    proof_score: &mut ProofScore,
+) {
+    if !count_false_positives {
+        return;
+    }
+
+    for prediction in predicted {
+        for bucket in proof_buckets(prediction.provenance(), prediction.confidence()) {
+            *proof_score.predicted_by_bucket.entry(bucket).or_default() += 1;
+        }
+    }
+
+    for true_positive in expected.intersection(predicted) {
+        for bucket in proof_buckets(true_positive.provenance(), true_positive.confidence()) {
+            *proof_score.true_positive_by_bucket.entry(bucket).or_default() += 1;
+        }
+    }
+
+    proof_score.high_confidence_false_positive_count += predicted
+        .difference(expected)
+        .filter(|false_positive| false_positive.confidence() == "High")
+        .count() as u64;
+}
+
+fn proof_buckets(provenance: &str, confidence: &str) -> Vec<ProofBucket> {
+    let mut buckets = Vec::new();
+    if provenance == "ExactAst" {
+        buckets.push(ProofBucket::Exact);
+    }
+    match confidence {
+        "High" => buckets.push(ProofBucket::High),
+        "Medium" => buckets.push(ProofBucket::Medium),
+        "Low" => buckets.push(ProofBucket::Low),
+        _ => {}
+    }
+    if provenance.contains("Heuristic")
+        || provenance.contains("Fallback")
+        || provenance == "FrameworkSynthesis"
+    {
+        buckets.push(ProofBucket::Heuristic);
+    }
+    if provenance == "DynamicBoundary" {
+        buckets.push(ProofBucket::Dynamic);
+    }
+    buckets
 }
 
 fn ast_metrics(score: &AstScore, cadence: Cadence) -> Vec<MetricRow> {
@@ -2554,6 +2843,102 @@ fn span_metrics(score: &SpanScore, cadence: Cadence) -> Vec<MetricRow> {
             cadence,
         ),
     ]
+}
+
+fn confidence_metrics(score: &SymbolScore, cadence: Cadence) -> Vec<MetricRow> {
+    let mut rows = Vec::new();
+    for bucket in [
+        ProofBucket::Exact,
+        ProofBucket::High,
+        ProofBucket::Medium,
+        ProofBucket::Low,
+        ProofBucket::Heuristic,
+        ProofBucket::Dynamic,
+    ] {
+        let true_positive_count =
+            *score.proof_score.true_positive_by_bucket.get(&bucket).unwrap_or(&0);
+        let predicted_count = *score.proof_score.predicted_by_bucket.get(&bucket).unwrap_or(&0);
+        rows.push(optional_measured_rate(
+            bucket.precision_metric(),
+            ratio(true_positive_count, predicted_count),
+            predicted_count,
+            bucket.insufficient_reason(),
+            cadence,
+        ));
+    }
+
+    let high_confidence_predictions =
+        *score.proof_score.predicted_by_bucket.get(&ProofBucket::High).unwrap_or(&0);
+    rows.push(optional_measured_rate(
+        "confidence_calibration_error",
+        ratio(score.proof_score.high_confidence_false_positive_count, high_confidence_predictions),
+        high_confidence_predictions,
+        "no high-confidence fact predictions are available in fully labeled fixtures",
+        cadence,
+    ));
+    rows
+}
+
+fn unsupported_metrics(score: &UnsupportedScore, cadence: Cadence) -> Vec<MetricRow> {
+    vec![
+        optional_measured_count(
+            "unsupported_construct_detected_count",
+            score.detected_count,
+            score.line_labeled_construct_count,
+            "no unsupported-construct line labels are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "unsupported_construct_missed_count",
+            score.line_labeled_construct_count.saturating_sub(score.detected_count),
+            score.line_labeled_construct_count,
+            "no unsupported-construct line labels are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "unsupported_construct_family_count",
+            score.family_count,
+            score.manifest_construct_count,
+            "no unsupported constructs are declared in the manifest",
+            cadence,
+        ),
+        optional_measured_count(
+            "unsupported_construct_false_exact_count",
+            score.false_exact_count,
+            score.false_exact_sample_count,
+            "no conservative unsupported symbol labels are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "unsupported_but_salvaged_count",
+            score.salvaged_count,
+            score.false_exact_sample_count,
+            "no conservative unsupported symbol labels are available",
+            cadence,
+        ),
+    ]
+}
+
+fn provider_impact_metrics() -> Vec<MetricRow> {
+    const PROVIDER_METRICS: &[&str] = &[
+        "provider_document_symbol_precision",
+        "provider_document_symbol_recall",
+        "provider_goto_definition_hit_rate",
+        "provider_references_precision",
+        "provider_references_recall",
+        "provider_hover_symbol_origin_accuracy",
+        "provider_completion_visible_symbol_relevance",
+        "provider_completion_import_visibility_accuracy",
+        "provider_rename_safe_edit_accuracy",
+        "provider_safe_delete_blocker_accuracy",
+        "provider_diagnostic_false_positive_rate",
+        "provider_diagnostic_false_negative_rate",
+    ];
+
+    PROVIDER_METRICS
+        .iter()
+        .map(|metric| insufficient(metric, "provider gold fixtures are not wired yet"))
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -3568,6 +3953,104 @@ mod tests {
                 MetricRow::Measured { metric, value, sample_count: 1, .. }
                     if metric == "unicode_position_error_count"
                         && (*value - 0.0).abs() < f64::EPSILON
+            )
+        }));
+    }
+
+    #[test]
+    fn confidence_metrics_emit_precision_and_calibration_rows() {
+        let mut proof_score = ProofScore::default();
+        proof_score.true_positive_by_bucket.insert(ProofBucket::Exact, 1);
+        proof_score.predicted_by_bucket.insert(ProofBucket::Exact, 2);
+        proof_score.true_positive_by_bucket.insert(ProofBucket::High, 1);
+        proof_score.predicted_by_bucket.insert(ProofBucket::High, 2);
+        proof_score.predicted_by_bucket.insert(ProofBucket::Medium, 1);
+        proof_score.high_confidence_false_positive_count = 1;
+        let score = SymbolScore { proof_score, ..SymbolScore::default() };
+
+        let metrics = confidence_metrics(&score, Cadence::Pr);
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "exact_fact_precision"
+                        && (*value - 0.5).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "confidence_calibration_error"
+                        && (*value - 0.5).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "low_confidence_precision"
+            )
+        }));
+    }
+
+    #[test]
+    fn unsupported_metrics_emit_construct_rows() {
+        let score = UnsupportedScore {
+            manifest_construct_count: 2,
+            family_count: 2,
+            line_labeled_construct_count: 1,
+            detected_count: 1,
+            salvaged_count: 1,
+            false_exact_count: 0,
+            false_exact_sample_count: 1,
+        };
+
+        let metrics = unsupported_metrics(&score, Cadence::Pr);
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "unsupported_construct_detected_count"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "unsupported_construct_family_count"
+                        && (*value - 2.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "unsupported_construct_false_exact_count"
+                        && (*value - 0.0).abs() < f64::EPSILON
+            )
+        }));
+    }
+
+    #[test]
+    fn provider_impact_metrics_remain_insufficient_until_gold_exists() {
+        let metrics = provider_impact_metrics();
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "provider_goto_definition_hit_rate"
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "provider_diagnostic_false_negative_rate"
             )
         }));
     }

@@ -908,6 +908,186 @@
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "exact_fact_precision",
+      "value": 1.0,
+      "sample_count": 3,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "high_confidence_precision",
+      "value": 1.0,
+      "sample_count": 3,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "medium_confidence_precision",
+      "reason": "no medium-confidence fact predictions are available in fully labeled fixtures",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "low_confidence_precision",
+      "reason": "no low-confidence fact predictions are available in fully labeled fixtures",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "heuristic_fact_precision",
+      "reason": "no heuristic fact predictions are available in fully labeled fixtures",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "dynamic_boundary_precision",
+      "reason": "no dynamic-boundary fact predictions are available in fully labeled fixtures",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "measured",
+      "metric": "confidence_calibration_error",
+      "value": 0.0,
+      "sample_count": 3,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "unsupported_construct_detected_count",
+      "reason": "no unsupported-construct line labels are available",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "unsupported_construct_missed_count",
+      "reason": "no unsupported-construct line labels are available",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "measured",
+      "metric": "unsupported_construct_family_count",
+      "value": 2.0,
+      "sample_count": 2,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "unsupported_construct_false_exact_count",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "unsupported_but_salvaged_count",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "provider_document_symbol_precision",
+      "reason": "provider gold fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "provider_document_symbol_recall",
+      "reason": "provider gold fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "provider_goto_definition_hit_rate",
+      "reason": "provider gold fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "provider_references_precision",
+      "reason": "provider gold fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "provider_references_recall",
+      "reason": "provider gold fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "provider_hover_symbol_origin_accuracy",
+      "reason": "provider gold fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "provider_completion_visible_symbol_relevance",
+      "reason": "provider gold fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "provider_completion_import_visibility_accuracy",
+      "reason": "provider gold fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "provider_rename_safe_edit_accuracy",
+      "reason": "provider gold fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "provider_safe_delete_blocker_accuracy",
+      "reason": "provider gold fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "provider_diagnostic_false_positive_rate",
+      "reason": "provider gold fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "provider_diagnostic_false_negative_rate",
+      "reason": "provider gold fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
     }
   ],
   "failure_packets": [],
@@ -923,10 +1103,10 @@
     "dynamic_expectation_change_count": 0
   },
   "metric_runtime": {
-    "runtime_ms": 30.720399999999998,
+    "runtime_ms": 30.796,
     "timeout_count": 0,
     "flake_count": 0,
-    "artifact_size_bytes": 22871,
+    "artifact_size_bytes": 28141,
     "ci_runner_failure_count": 0,
     "orphan_process_count": 0,
     "cache_hit_rate": null
