@@ -333,7 +333,13 @@
       "status": "pass",
       "value": "100%",
       "threshold": "100%",
-      "evidence": "safe-delete blocker fixtures"
+      "evidence": "safe-delete plan query fixtures"
+    },
+    "safe_delete_plan": {
+      "status": "pass",
+      "value": "100%",
+      "threshold": "100%",
+      "evidence": "safe-delete plan query fixtures"
     },
     "semantic_fact_counts_nonzero": {
       "status": "pass",
@@ -354,11 +360,6 @@
       "evidence": "workspace scorecard fixtures"
     }
   },
-  "unavailable_rows": {
-    "safe_delete_plan": {
-      "status": "unavailable",
-      "reason": "planned for future scorecard waves"
-    }
-  },
+  "unavailable_rows": {},
   "notes": "0.13.2 semantic proof rail: scorecard rows are deterministic and fixture-backed; semantic expansion remains conservative for unavailable rows."
 }
