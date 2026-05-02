@@ -354,23 +354,24 @@ fn variable_reads_and_writes_collapse_to_variable_refs() -> Result<()> {
 
 #[test]
 fn coderef_syntax_forms_are_classified_conservatively() -> Result<()> {
-    // Covers `&foo`, `\\&foo`, and `goto &foo` style sigil usage: all are represented
-    // as `Variable` nodes with sigil `&` and classify as coderef references.
+    // Covers direct `&foo` plus parser-shaped `\\&foo` and `goto &foo` targets.
+    // The parser consumes the ampersand in the latter forms and leaves a zero-arg
+    // FunctionCall target, which must still classify as a coderef reference.
     let amp = Node::new(
         NodeKind::Variable { sigil: "&".to_string(), name: "foo".to_string() },
         loc(0, 4),
     );
+    let backslash_amp_target =
+        Node::new(NodeKind::FunctionCall { name: "foo".to_string(), args: vec![] }, loc(7, 10));
     let backslash_amp = Node::new(
-        NodeKind::Variable { sigil: "&".to_string(), name: "foo".to_string() },
+        NodeKind::Unary { op: "\\".to_string(), operand: Box::new(backslash_amp_target) },
         loc(5, 10),
     );
-    let goto_amp = Node::new(
-        NodeKind::Variable { sigil: "&".to_string(), name: "foo".to_string() },
-        loc(11, 19),
-    );
-    let goto = Node::new(NodeKind::Goto { target: Box::new(goto_amp) }, loc(11, 19));
+    let goto_amp =
+        Node::new(NodeKind::FunctionCall { name: "foo".to_string(), args: vec![] }, loc(17, 20));
+    let goto = Node::new(NodeKind::Goto { target: Box::new(goto_amp) }, loc(11, 20));
     let program =
-        Node::new(NodeKind::Program { statements: vec![amp, backslash_amp, goto] }, loc(0, 19));
+        Node::new(NodeKind::Program { statements: vec![amp, backslash_amp, goto] }, loc(0, 20));
 
     let refs = extract_symbol_refs(&program);
     assert_eq!(refs.len(), 3);
@@ -395,10 +396,8 @@ fn typeglob_alias_boundary_is_classified() -> Result<()> {
 #[test]
 fn typeglob_assignment_keeps_rhs_coderef_reference() -> Result<()> {
     let lhs = Node::new(NodeKind::Typeglob { name: "alias".to_string() }, loc(0, 6));
-    let rhs_target = Node::new(
-        NodeKind::Variable { sigil: "&".to_string(), name: "target".to_string() },
-        loc(10, 17),
-    );
+    let rhs_target =
+        Node::new(NodeKind::FunctionCall { name: "target".to_string(), args: vec![] }, loc(11, 17));
     let rhs = Node::new(
         NodeKind::Unary { op: "\\".to_string(), operand: Box::new(rhs_target) },
         loc(9, 17),
