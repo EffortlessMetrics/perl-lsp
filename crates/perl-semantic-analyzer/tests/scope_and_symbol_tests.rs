@@ -4115,6 +4115,28 @@ print dynamic_func;
 }
 
 #[test]
+fn mismatched_dynamic_import_var_flags_bareword() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $loader = 'Dynamic::Loader';
+my $module = 'Other::Loader';
+require $loader;
+$module->import(qw(dynamic_func));
+print dynamic_func;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "dynamic_func"
+        }),
+        "dynamic variable imports must require the same variable before suppressing strict 'subs'"
+    );
+    Ok(())
+}
+
+#[test]
 fn multiple_imports_from_same_required_module() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use strict 'subs';
