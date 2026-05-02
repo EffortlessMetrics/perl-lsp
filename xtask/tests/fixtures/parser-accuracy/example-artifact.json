@@ -1088,6 +1088,449 @@
       "reason": "provider gold fixtures are not wired yet",
       "sample_count": 0,
       "confidence": "low"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_file_bytes",
+      "value": 961.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_line_count",
+      "value": 85.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_token_count",
+      "value": 153.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_ast_node_count",
+      "value": 104.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_symbol_count",
+      "value": 42.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_import_count",
+      "value": 2.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_export_count",
+      "value": 0.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_sub_count",
+      "value": 6.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_package_count",
+      "value": 9.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_max_nesting_depth",
+      "value": 5.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_max_brace_depth",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_max_regex_length",
+      "value": 0.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_max_heredoc_body_bytes",
+      "value": 10.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_quote_like_count",
+      "value": 0.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "scale_dynamic_boundary_count",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "lex_ms_p95",
+      "value": 0.014,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "parse_ms_p95",
+      "value": 0.011,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "ast_projection_ms_p95",
+      "value": 0.0012,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "recovery_ms_p95",
+      "reason": "recovery timing is not instrumented separately yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "measured",
+      "metric": "semantic_extraction_ms_p95",
+      "value": 0.038099999999999995,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "workspace_insert_ms_p95",
+      "reason": "workspace insert timing is not isolated yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "definition_query_ms_p95",
+      "reason": "provider query timing is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "reference_query_ms_p95",
+      "reason": "provider query timing is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "completion_query_ms_p95",
+      "reason": "provider query timing is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "peak_rss_mb",
+      "reason": "memory telemetry is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "allocated_bytes",
+      "reason": "allocation telemetry is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "allocation_count",
+      "reason": "allocation telemetry is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "lexer_checkpoint_reuse_rate",
+      "reason": "lexer checkpoint telemetry is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "measured",
+      "metric": "parser_checkpoint_reuse_rate",
+      "value": 1.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "semantic_fact_cache_hit_rate",
+      "reason": "semantic fact cache telemetry is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "workspace_shard_reuse_rate",
+      "reason": "workspace shard reuse telemetry is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "unchanged_file_skip_rate",
+      "reason": "unchanged-file skip telemetry is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "content_hash_hit_rate",
+      "reason": "content hash telemetry is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "measured",
+      "metric": "fast_path_attempt_count",
+      "value": 1.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "fast_path_success_count",
+      "value": 1.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "fast_path_fallback_count",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "fast_path_wrong_result_count",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "parse_hash_stability_rate",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "token_stream_hash_stability_rate",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "ast_hash_stability_rate",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "semantic_fact_hash_stability_rate",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "diagnostic_hash_stability_rate",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "repeated_parse_determinism_rate",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "whitespace_invariance_rate",
+      "reason": "metamorphic whitespace fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "comment_invariance_rate",
+      "reason": "metamorphic comment fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "newline_style_invariance_rate",
+      "reason": "metamorphic newline fixtures are not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "measured",
+      "metric": "metric_runtime_ms",
+      "value": 39.825199999999995,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "metric_timeout_count",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "metric_flake_count",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "metric_artifact_size_bytes",
+      "value": 37675.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "metric_ci_runner_failure_count",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "metric_orphan_process_count",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "metric_cache_hit_rate",
+      "reason": "metric cache telemetry is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
     }
   ],
   "failure_packets": [],
@@ -1103,10 +1546,10 @@
     "dynamic_expectation_change_count": 0
   },
   "metric_runtime": {
-    "runtime_ms": 30.796,
+    "runtime_ms": 39.825199999999995,
     "timeout_count": 0,
     "flake_count": 0,
-    "artifact_size_bytes": 28141,
+    "artifact_size_bytes": 37675,
     "ci_runner_failure_count": 0,
     "orphan_process_count": 0,
     "cache_hit_rate": null

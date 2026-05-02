@@ -97,16 +97,16 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
     - document symbols, goto definition, references, hover, completion, rename, safe delete, diagnostics
     - Use `insufficient_data` until provider gold fixtures are wired
 
-- [ ] 12. Add cost, scale, cache, determinism, and metric-runtime rows
-  - [ ] 12.1 Emit scale shape
+- [x] 12. Add cost, scale, cache, determinism, and metric-runtime rows
+  - [x] 12.1 Emit scale shape
     - bytes, lines, tokens, AST nodes, symbols, imports, exports, subs, packages, nesting, brace depth, regex length, heredoc bytes, quote-like count, dynamic boundary count
-  - [ ] 12.2 Emit cost rows
+  - [x] 12.2 Emit cost rows
     - lex/parse/AST projection/recovery/semantic/index/query timings and memory/allocation rows where available
-  - [ ] 12.3 Emit cache and reuse rows
+  - [x] 12.3 Emit cache and reuse rows
     - lexer/parser checkpoint reuse, semantic fact cache hit, workspace shard reuse, unchanged file skip, content hash hit, fast path attempts/success/fallback/wrong result
-  - [ ] 12.4 Emit determinism rows
+  - [x] 12.4 Emit determinism rows
     - parse/token/AST/fact/diagnostic hash stability and whitespace/comment/newline/incremental/repeated-parse invariants
-  - [ ] 12.5 Emit metric runtime rows
+  - [x] 12.5 Emit metric runtime rows
     - runtime ms, timeout count, flake count, artifact size, CI runner failures, orphan process count, cache hit rate
 
 - [ ] 13. Add gold drift audit
