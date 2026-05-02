@@ -754,6 +754,31 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn require_then_import_dynamic_symbols_do_not_invent_visibility()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(1);
+        let shard = empty_shard(file_id);
+        let mut index = ImportExportIndex::new();
+
+        let import = ImportSpec {
+            module: "Bar".to_string(),
+            kind: ImportKind::RequireThenImport,
+            symbols: ImportSymbols::Dynamic,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::Low,
+            file_id: Some(file_id),
+            anchor_id: Some(AnchorId(104)),
+            scope_id: None,
+        };
+        index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
+
+        let symbols = visible_symbols_at(file_id, 0, None, &shard, &index);
+
+        assert!(symbols.is_empty(), "dynamic import list should not invent exact symbols");
+        Ok(())
+    }
+
     // ── No imports, no exports ──
 
     #[test]
