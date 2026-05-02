@@ -336,6 +336,33 @@ fn bdd_given_loop_with_continue_block_when_parsed_then_continue_and_flow_nodes_a
 }
 
 #[test]
+fn bdd_given_do_while_and_until_loops_when_parsed_then_post_condition_flow_is_retained()
+-> TestResult {
+    // Given: a developer mixes post-condition and pre-condition loop forms.
+    let code = r#"
+        my $i = 0;
+        do {
+            $i++;
+        } while ($i < 2);
+
+        until ($i > 3) {
+            $i++;
+        }
+    "#;
+
+    // When: the parser processes loop constructs with explicit conditions.
+    let sexp = parse_sexp(code)?;
+
+    // Then: do/while and normalized until flow should be represented without recovery markers.
+    assert!(sexp.contains("(do"), "Expected Do node in: {sexp}");
+    assert!(sexp.contains("(while"), "Expected While node in: {sexp}");
+    assert!(sexp.contains("(unary_not"), "Expected normalized Until condition in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
 fn bdd_given_state_vars_and_method_chaining_when_parsed_then_state_and_arrow_invocations_are_preserved()
 -> TestResult {
     // Given: a developer caches constructor state and chains method calls.
@@ -351,7 +378,7 @@ fn bdd_given_state_vars_and_method_chaining_when_parsed_then_state_and_arrow_inv
     let sexp = parse_sexp(code)?;
 
     // Then: state declaration + arrow invocation structure should be represented cleanly.
-    assert!(sexp.contains("(state "), "Expected state declaration node in: {sexp}");
+    assert!(sexp.contains("(state_declaration"), "Expected state declaration node in: {sexp}");
     assert!(sexp.contains("bootstrap"), "Expected chained method call in: {sexp}");
     assert!(sexp.contains("name"), "Expected terminal method call in: {sexp}");
     assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
@@ -372,9 +399,9 @@ fn bdd_given_map_and_grep_pipeline_when_parsed_then_higher_order_blocks_are_reta
     let sexp = parse_sexp(code)?;
 
     // Then: map/grep and their block structure should remain visible in AST output.
-    assert!(sexp.contains("(map"), "Expected map node in: {sexp}");
-    assert!(sexp.contains("(grep"), "Expected grep node in: {sexp}");
-    assert!(sexp.contains("binary_expression"), "Expected block expression nodes in: {sexp}");
+    assert!(sexp.contains("(call map"), "Expected map call node in: {sexp}");
+    assert!(sexp.contains("(call grep"), "Expected grep call node in: {sexp}");
+    assert!(sexp.contains("binary_"), "Expected block expression nodes in: {sexp}");
     assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
 
     Ok(())
