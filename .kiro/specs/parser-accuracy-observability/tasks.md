@@ -109,12 +109,12 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
   - [x] 12.5 Emit metric runtime rows
     - runtime ms, timeout count, flake count, artifact size, CI runner failures, orphan process count, cache hit rate
 
-- [ ] 13. Add gold drift audit
-  - [ ] 13.1 Validate gold fixtures before scoring
+- [x] 13. Add gold drift audit
+  - [x] 13.1 Validate gold fixtures before scoring
     - schema errors, span errors, duplicate symbol IDs, missing resolves-to targets
-  - [ ] 13.2 Emit gold change counts
+  - [x] 13.2 Emit gold change counts
     - changed lines, changed symbols, removed expectations, added expectations, dynamic expectation changes
-  - [ ] 13.3 Require explanation for weakening changes
+  - [x] 13.3 Require explanation for weakening changes
     - Removing expected symbols, widening spans, lowering thresholds, changing dynamic expectations, or removing fixture families requires PR text
 
 - [ ] 14. Add ratchet candidates after stable measurements
