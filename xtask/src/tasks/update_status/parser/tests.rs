@@ -95,7 +95,10 @@ fn test_parser_nodekind_row_renders() -> Result<()> {
     assert!(result.contains("65/69"), "nodekind row missing 65/69");
     assert!(result.contains("94.2"), "nodekind row missing 94.2%");
     assert!(result.contains("4 never-seen"), "nodekind row missing never-seen count");
-    assert!(result.contains("unverified"), "strict-clean no-receipt row should say 'unverified'");
+    assert!(
+        result.contains("insufficient_data"),
+        "strict-clean no-receipt row should report insufficient_data"
+    );
     assert!(!result.contains("10/10"), "strict-clean no-receipt row must not show 10/10");
     Ok(())
 }
@@ -115,14 +118,47 @@ fn test_parser_strict_clean_row_no_receipt() -> Result<()> {
     let template = parser_status_template();
     let result = generate_parser_status(&metrics, template)?;
     assert!(
-        result.contains("10 modules (unverified)"),
-        "strict-clean no-receipt row must say '10 modules (unverified)'"
+        result.contains("insufficient_data"),
+        "strict-clean no-receipt row must report insufficient_data"
     );
     assert!(
         result.contains("common-corpus-check"),
         "strict-clean no-receipt row must mention the command"
     );
+    assert!(
+        result.contains("10 pinned modules"),
+        "strict-clean no-receipt row must keep the pinned module denominator visible"
+    );
     Ok(())
+}
+
+#[test]
+fn test_parser_failure_worklist_no_receipt_reports_insufficient_data() -> Result<()> {
+    let metrics = ParserMetrics {
+        syntax_sections: 611,
+        system_receipt: None,
+        cpan_receipt: None,
+        project_corpus: None,
+        common_corpus_receipt: None,
+        common_corpus_pinned: 10,
+        performance_scorecard: None,
+        token_metrics: token::token_metrics_fixture(),
+    };
+    let result = generate_parser_status(&metrics, parser_status_template())?;
+    assert!(
+        result.contains("insufficient_data (no receipt"),
+        "failure worklist must not render missing receipt as a zero-count row"
+    );
+    assert!(
+        result.contains("| insufficient_data |"),
+        "failure worklist missing-receipt count must be insufficient_data"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_parser_salvage_missing_reports_insufficient_data() {
+    assert_eq!(format_salvage_rate(None), "insufficient_data salvage");
 }
 
 /// Verify that `generate_parser_status` renders scorecard values correctly
