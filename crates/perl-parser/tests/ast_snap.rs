@@ -194,6 +194,20 @@ fn ast_lexical_filehandles_and_chomp_loop() {
     ));
 }
 
+#[test]
+fn ast_quote_like_operators() {
+    // Quote-like operators have delimiter-sensitive tokenization and are frequent in CPAN.
+    assert_snapshot!(parse_sexp(
+        "my $single = q{literal}; my $double = qq|hello $name|; my @words = qw(foo bar baz);",
+    ));
+}
+
+#[test]
+fn ast_transliteration_and_substitution() {
+    // Transliteration and substitution operators are parser edge cases with regex-like delimiters.
+    assert_snapshot!(parse_sexp("$_ =~ tr/a-z/A-Z/; $text =~ s{foo}{bar}g;"));
+}
+
 // ---------------------------------------------------------------------------
 // 2. Error recovery AST snapshots (malformed input)
 // ---------------------------------------------------------------------------
@@ -236,6 +250,11 @@ fn recovery_truncated_array() {
 #[test]
 fn recovery_partial_if() {
     assert_snapshot!(parse_sexp("if ($x > 0) {"));
+}
+
+#[test]
+fn recovery_unterminated_quote_like_operator() {
+    assert_snapshot!(parse_sexp("my @vals = qw(foo bar;\nmy $ok = 1;"));
 }
 
 #[test]
