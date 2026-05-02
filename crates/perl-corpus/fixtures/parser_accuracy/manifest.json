@@ -401,6 +401,33 @@
       ]
     },
     {
+      "id": "incremental_small_edit",
+      "family": "incremental",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/incremental_small_edit.pl",
+      "scored_lines": 0,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "incremental_expectations": [
+        {
+          "id": "small_value_edit_matches_full_parse",
+          "edits": [
+            {
+              "old_text": "my $value = 1;",
+              "new_text": "my $value = 2;"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "malformed_heredoc_recovery",
       "family": "recovery",
       "label_mode": "partial",

@@ -5,19 +5,19 @@
   "commit": "example",
   "cadence": "pr",
   "denominator": {
-    "fixture_count": 7,
-    "fixture_family_count": 7,
+    "fixture_count": 8,
+    "fixture_family_count": 8,
     "scored_line_count": 23,
     "scored_symbol_count": 17,
     "fully_labeled_region_count": 2,
-    "partial_labeled_region_count": 4,
+    "partial_labeled_region_count": 5,
     "unknown_region_count": 5,
     "negative_region_count": 5,
     "dynamic_boundary_case_count": 2,
     "unsupported_construct_case_count": 2,
     "real_project_file_count": 0,
     "generated_fixture_count": 0,
-    "hand_labeled_fixture_count": 7
+    "hand_labeled_fixture_count": 8
   },
   "families": [
     {
@@ -41,6 +41,17 @@
       "scored_symbol_count": 4,
       "dynamic_boundary_case_count": 0,
       "unsupported_construct_case_count": 1
+    },
+    {
+      "family": "incremental",
+      "fixture_count": 1,
+      "label_modes": [
+        "partial"
+      ],
+      "scored_line_count": 0,
+      "scored_symbol_count": 0,
+      "dynamic_boundary_case_count": 0,
+      "unsupported_construct_case_count": 0
     },
     {
       "family": "negative_symbol_regions",
@@ -102,8 +113,8 @@
     {
       "state": "measured",
       "metric": "denominator_fixture_count",
-      "value": 7.0,
-      "sample_count": 7,
+      "value": 8.0,
+      "sample_count": 8,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
@@ -681,6 +692,112 @@
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "incremental_full_parse_equivalence_rate",
+      "value": 1.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "incremental_edit_apply_equivalence_rate",
+      "value": 1.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "incremental_no_panic_rate",
+      "value": 1.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "incremental_no_progress_count",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "incremental_timeout_count",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "incremental_full_reparse_fallback_rate",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "incremental_checkpoint_hit_rate",
+      "value": 1.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "incremental_checkpoint_miss_rate",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "incremental_reparse_byte_ratio_p95",
+      "value": 0.574468085106383,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "incremental_reused_token_ratio",
+      "reason": "incremental reparse result does not report token reuse yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "measured",
+      "metric": "incremental_reused_node_ratio",
+      "value": 0.8571428571428571,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "incremental_changed_range_accuracy",
+      "value": 1.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
     }
   ],
   "failure_packets": [],
@@ -696,10 +813,10 @@
     "dynamic_expectation_change_count": 0
   },
   "metric_runtime": {
-    "runtime_ms": 29.534100000000002,
+    "runtime_ms": 170.6046,
     "timeout_count": 0,
     "flake_count": 0,
-    "artifact_size_bytes": 17409,
+    "artifact_size_bytes": 20312,
     "ci_runner_failure_count": 0,
     "orphan_process_count": 0,
     "cache_hit_rate": null
