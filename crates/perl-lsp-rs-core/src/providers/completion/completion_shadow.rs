@@ -137,8 +137,10 @@ pub fn method_completion_shadow<Q: SemanticQueries>(
     receiver_package: &str,
     method_prefix: &str,
 ) -> MethodCompletionShadowResult {
-    let old_summary = legacy_symbols_to_summary(&legacy_methods);
-    let probed_methods = method_probe_names(&legacy_methods, &probe_methods, method_prefix);
+    let legacy_methods_for_prefix = method_names_for_prefix(&legacy_methods, method_prefix);
+    let old_summary = legacy_symbols_to_summary(&legacy_methods_for_prefix);
+    let probed_methods =
+        method_probe_names(&legacy_methods_for_prefix, &probe_methods, method_prefix);
 
     let mut semantic_candidates = Vec::new();
     for method_name in &probed_methods {
@@ -418,6 +420,17 @@ fn method_probe_names(
     let mut names: Vec<String> = legacy_methods
         .iter()
         .chain(probe_methods.iter())
+        .filter(|name| method_prefix.is_empty() || name.starts_with(method_prefix))
+        .cloned()
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+fn method_names_for_prefix(methods: &[String], method_prefix: &str) -> Vec<String> {
+    let mut names: Vec<String> = methods
+        .iter()
         .filter(|name| method_prefix.is_empty() || name.starts_with(method_prefix))
         .cloned()
         .collect();
@@ -798,6 +811,8 @@ mod tests {
         );
 
         assert_eq!(result.probed_methods, vec!["name".to_string(), "notify".to_string()]);
+        assert_eq!(result.receipt.old_result.identities, vec!["name".to_string()]);
+        assert_eq!(result.receipt.old_result.match_count, 1);
         Ok(())
     }
 
