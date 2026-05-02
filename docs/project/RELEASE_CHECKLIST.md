@@ -16,6 +16,16 @@ Use `NEW_VERSION` as the target semver string for the release you are preparing.
 - [ ] `just version-check` passes.
 - [ ] `CHANGELOG.md` contains a dated `## [NEW_VERSION]` section and leaves `[Unreleased]` empty.
 - [ ] The crates listed in `[workspace.metadata.publish.allow]` report `NEW_VERSION`.
+- [ ] `cargo xtask install-surface-check` passes.
+- [ ] `cargo xtask release-notes --tag vNEW_VERSION --output /tmp/vNEW_VERSION-body.md` produces release notes with the Linux asset chooser:
+
+  ```bash
+  cargo xtask release-notes --tag vNEW_VERSION --output /tmp/vNEW_VERSION-body.md
+  grep -q 'Which file should I download?' /tmp/vNEW_VERSION-body.md
+  grep -q 'x86_64-unknown-linux-gnu' /tmp/vNEW_VERSION-body.md
+  grep -q 'x86_64-unknown-linux-musl' /tmp/vNEW_VERSION-body.md
+  ```
+
 - [ ] `gh run list --branch master --limit 5` shows the default branch is green.
 - [ ] No stale `.snap.new` files remain in the worktree.
 
@@ -47,6 +57,7 @@ for crate_name in allow:
 - [ ] If a downstream publish stage fails, re-run orchestration with the relevant `skip_*` flags instead of tagging manually.
 - [ ] Let `release.yml`, `publish-crates.yml`, `publish-extension.yml`, and `docker-publish.yml` finish.
 - [ ] Confirm the release-published triggers for `brew-bump.yml`, `scoop-bump.yml`, and `chocolatey-bump.yml` fired as expected.
+- [ ] After `brew-bump.yml` finishes, confirm the owned tap is updated or reported already current.
 
 ## Post-Release Verification
 
@@ -55,6 +66,7 @@ for crate_name in allow:
 - [ ] `cargo search perllsp --limit 1` resolves `perllsp = "NEW_VERSION"`.
 - [ ] The VS Code Marketplace and Open VSX listings show `NEW_VERSION`.
 - [ ] `docker pull effortlessmetrics/perl-lsp:NEW_VERSION` and `docker pull ghcr.io/effortlessmetrics/perl-lsp:NEW_VERSION` succeed.
+- [ ] `brew update`, `brew upgrade perllsp`, `perllsp --version`, and `perl-dap --version` show `NEW_VERSION`.
 - [ ] `cargo install perllsp` installs the new release and `perllsp --version` prints `NEW_VERSION`.
 - [ ] The smoke tests in [RELEASE.md](../../RELEASE.md) pass for the current release artifacts.
 - [ ] Any evidence-backed status docs are updated with `just status-update` and validated with `just status-check`.
