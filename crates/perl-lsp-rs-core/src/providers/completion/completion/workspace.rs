@@ -9,12 +9,27 @@ use super::{
     context::CompletionContext,
     items::{CompletionItem, CompletionItemKind},
 };
-use perl_semantic_analyzer::type_inference::{PerlType, TypeInferenceEngine};
+use perl_parser_core::SourceLocation;
+use perl_semantic_analyzer::{
+    semantic::SemanticModel,
+    type_inference::{PerlType, TypeInferenceEngine},
+};
+use perl_semantic_facts::{
+    Confidence, DefinitionCandidate, EntityKind, FileId, PackageEdge, Provenance,
+};
+use perl_workspace::semantic::{
+    imports::ImportExportIndex,
+    package_graph::PackageGraphIndex,
+    queries::{SemanticQueries, WorkspaceSemanticQueries},
+    references::ReferenceIndex,
+};
 use perl_workspace::workspace_index::{
     SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex, WorkspaceSymbol,
 };
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -601,29 +616,27 @@ pub fn add_workspace_method_completions(
 
     let method_prefix = context.prefix.rsplit("->").next().unwrap_or("");
 
-    // Collect all methods from the receiver package AND its ancestor chain (parents + roles).
-    // Child methods take priority: collect_all_package_members deduplicates by keeping the
-    // first occurrence (closest to the receiver in the BFS order).
+    // Collect all methods from the receiver package AND its ancestor chain
+    // (parents + roles). Child methods take priority.
     let members = collect_all_package_members(index, &package_name);
 
     // Build an auto-import edit once for all methods from this package.
     let auto_import_edit = auto_import::build_auto_import_edit(source, &package_name);
+    let method_symbols = workspace_method_symbols(&members, &existing_labels, method_prefix);
 
-    for symbol in members {
-        match symbol.kind {
-            WsSymbolKind::Subroutine | WsSymbolKind::Method => {}
-            _ => continue,
-        }
+    if add_semantic_method_completions(
+        completions,
+        context,
+        index,
+        &package_name,
+        method_prefix,
+        &method_symbols,
+        auto_import_edit.as_ref(),
+    ) {
+        return;
+    }
 
-        if !method_prefix.is_empty() && !symbol.name.starts_with(method_prefix) {
-            continue;
-        }
-
-        // Skip if already provided by local method completion
-        if existing_labels.contains(&symbol.name) {
-            continue;
-        }
-
+    for symbol in method_symbols {
         let additional_edits =
             auto_import_edit.as_ref().map(|e| vec![e.clone()]).unwrap_or_default();
 
@@ -656,6 +669,282 @@ pub fn add_workspace_method_completions(
             label_details: None,
         });
     }
+}
+
+fn workspace_method_symbols<'a>(
+    members: &'a [WorkspaceSymbol],
+    existing_labels: &HashSet<String>,
+    method_prefix: &str,
+) -> Vec<&'a WorkspaceSymbol> {
+    members
+        .iter()
+        .filter(|symbol| matches!(symbol.kind, WsSymbolKind::Subroutine | WsSymbolKind::Method))
+        .filter(|symbol| method_prefix.is_empty() || symbol.name.starts_with(method_prefix))
+        .filter(|symbol| !existing_labels.contains(&symbol.name))
+        .collect()
+}
+
+fn add_semantic_method_completions(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    index: &WorkspaceIndex,
+    package_name: &str,
+    method_prefix: &str,
+    method_symbols: &[&WorkspaceSymbol],
+    auto_import_edit: Option<&(SourceLocation, String)>,
+) -> bool {
+    let legacy_names = method_symbol_names(method_symbols);
+    if legacy_names.is_empty() {
+        return false;
+    }
+
+    let Some(candidates) = semantic_method_candidates_for_legacy_methods(
+        index,
+        package_name,
+        &legacy_names,
+        method_symbols,
+    ) else {
+        return false;
+    };
+
+    let mut candidate_names: HashSet<String> = HashSet::new();
+    for candidate in &candidates {
+        candidate_names.insert(candidate.display_name.clone());
+    }
+
+    // Cut over only when semantic candidates cover the current legacy workspace
+    // method set for this prefix. Otherwise the provider keeps the proven
+    // fallback path and avoids dropping completions.
+    if !legacy_names.iter().all(|name| candidate_names.contains(name)) {
+        return false;
+    }
+
+    let mut seen = HashSet::new();
+    for candidate in candidates {
+        if !method_prefix.is_empty() && !candidate.display_name.starts_with(method_prefix) {
+            continue;
+        }
+        if !seen.insert(candidate.display_name.clone()) {
+            continue;
+        }
+
+        let additional_edits = auto_import_edit.map(|e| vec![e.clone()]).unwrap_or_default();
+        completions.push(CompletionItem {
+            label: candidate.display_name.clone(),
+            kind: CompletionItemKind::Function,
+            detail: Some(semantic_method_detail(package_name, &candidate)),
+            documentation: Some(semantic_method_documentation(package_name, &candidate)),
+            insert_text: Some(format!("{}()", candidate.display_name)),
+            sort_text: Some(format!(
+                "{}_{}",
+                semantic_method_sort_tier(package_name, &candidate),
+                candidate.display_name
+            )),
+            filter_text: Some(candidate.display_name.clone()),
+            additional_edits,
+            text_edit_range: Some((context.prefix_start, context.position)),
+            commit_characters: None,
+            label_details: None,
+        });
+    }
+
+    true
+}
+
+fn method_symbol_names(method_symbols: &[&WorkspaceSymbol]) -> Vec<String> {
+    let mut names: Vec<String> = method_symbols.iter().map(|symbol| symbol.name.clone()).collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+fn semantic_method_candidates_for_legacy_methods(
+    index: &WorkspaceIndex,
+    package_name: &str,
+    method_names: &[String],
+    method_symbols: &[&WorkspaceSymbol],
+) -> Option<Vec<DefinitionCandidate>> {
+    let mut shards = HashMap::new();
+    let mut source_uris = HashSet::new();
+    let legacy_defining_packages = method_symbol_defining_packages(method_symbols, package_name);
+
+    if let Some(package_location) = index.find_definition(package_name) {
+        source_uris.insert(package_location.uri);
+    }
+
+    for symbol in method_symbols {
+        if let Some(shard) = index.file_fact_shard(&symbol.uri) {
+            source_uris.insert(symbol.uri.clone());
+            shards.entry(shard.source_uri.clone()).or_insert(shard);
+        }
+    }
+
+    if shards.is_empty() {
+        return None;
+    }
+
+    let package_graph = build_completion_package_graph(index, &source_uris);
+    let reference_index = ReferenceIndex::new();
+    let import_export_index = ImportExportIndex::new();
+    let queries = WorkspaceSemanticQueries::with_package_graph(
+        &reference_index,
+        &import_export_index,
+        &shards,
+        &package_graph,
+    );
+
+    let mut candidates = Vec::new();
+    for method_name in method_names {
+        let expected_package = legacy_defining_packages.get(method_name)?;
+        candidates.extend(
+            queries
+                .method_candidates(package_name, method_name)
+                .into_iter()
+                .filter(is_confident_method_candidate)
+                .filter(|candidate| {
+                    candidate.package.as_deref() == Some(expected_package.as_str())
+                }),
+        );
+    }
+
+    if candidates.is_empty() {
+        return None;
+    }
+
+    candidates.sort_by(|left, right| {
+        semantic_method_candidate_sort_key(package_name, left)
+            .cmp(&semantic_method_candidate_sort_key(package_name, right))
+    });
+    candidates.dedup_by(|left, right| {
+        left.display_name == right.display_name && left.package == right.package
+    });
+
+    Some(candidates)
+}
+
+fn method_symbol_defining_packages(
+    method_symbols: &[&WorkspaceSymbol],
+    receiver_package: &str,
+) -> HashMap<String, String> {
+    let mut packages = HashMap::new();
+    for symbol in method_symbols {
+        packages.entry(symbol.name.clone()).or_insert_with(|| {
+            symbol.container_name.clone().unwrap_or_else(|| receiver_package.to_string())
+        });
+    }
+    packages
+}
+
+fn is_confident_method_candidate(candidate: &DefinitionCandidate) -> bool {
+    matches!(candidate.confidence, Confidence::High | Confidence::Medium)
+        && matches!(
+            candidate.kind,
+            EntityKind::Method | EntityKind::Subroutine | EntityKind::GeneratedMember
+        )
+}
+
+fn semantic_method_candidate_sort_key(
+    receiver_package: &str,
+    candidate: &DefinitionCandidate,
+) -> (u8, String, String) {
+    (
+        semantic_method_sort_rank(receiver_package, candidate),
+        candidate.display_name.clone(),
+        candidate.package.clone().unwrap_or_default(),
+    )
+}
+
+fn semantic_method_sort_tier(
+    receiver_package: &str,
+    candidate: &DefinitionCandidate,
+) -> &'static str {
+    match semantic_method_sort_rank(receiver_package, candidate) {
+        0 => "2",
+        1 => "3",
+        _ => "4",
+    }
+}
+
+fn semantic_method_sort_rank(receiver_package: &str, candidate: &DefinitionCandidate) -> u8 {
+    if candidate.package.as_deref() == Some(receiver_package) {
+        match candidate.kind {
+            EntityKind::GeneratedMember => 1,
+            _ => 0,
+        }
+    } else {
+        2
+    }
+}
+
+fn semantic_method_detail(receiver_package: &str, candidate: &DefinitionCandidate) -> String {
+    let defining_pkg = candidate.package.as_deref().unwrap_or(receiver_package);
+    match candidate.kind {
+        EntityKind::GeneratedMember => format!("generated accessor from {defining_pkg}"),
+        _ if defining_pkg == receiver_package => format!("method from {receiver_package}"),
+        _ => format!("inherited method from {defining_pkg}"),
+    }
+}
+
+fn semantic_method_documentation(
+    receiver_package: &str,
+    candidate: &DefinitionCandidate,
+) -> String {
+    let defining_pkg = candidate.package.as_deref().unwrap_or(receiver_package);
+    match candidate.kind {
+        EntityKind::GeneratedMember => {
+            format!("Generated method `{}` from `{defining_pkg}`.", candidate.display_name)
+        }
+        _ => format!("Method `{}::{}`.", defining_pkg, candidate.display_name),
+    }
+}
+
+fn build_completion_package_graph(
+    index: &WorkspaceIndex,
+    source_uris: &HashSet<String>,
+) -> PackageGraphIndex {
+    let mut graph = PackageGraphIndex::new();
+
+    for uri in source_uris {
+        let Some(text) = workspace_text_for_uri(index, uri) else {
+            continue;
+        };
+        let Ok(ast) = parse_workspace_source(&text) else {
+            continue;
+        };
+        let model = SemanticModel::build(&ast, &text);
+        let edges: Vec<PackageEdge> = model
+            .package_edges()
+            .iter()
+            .filter(|edge| {
+                matches!(edge.confidence, Confidence::High | Confidence::Medium)
+                    && !matches!(edge.provenance, Provenance::DynamicBoundary)
+            })
+            .cloned()
+            .collect();
+        if !edges.is_empty() {
+            graph.add_edges(uri, semantic_file_id(uri), edges);
+        }
+    }
+
+    graph
+}
+
+fn parse_workspace_source(text: &str) -> Result<perl_parser_core::ast::Node, String> {
+    let mut parser = perl_semantic_analyzer::Parser::new(text);
+    parser.parse().map_err(|err| err.to_string())
+}
+
+fn workspace_text_for_uri(index: &WorkspaceIndex, uri: &str) -> Option<String> {
+    index.document_store().get_text(uri).or_else(|| {
+        perl_workspace::workspace_index::uri_to_fs_path(uri)
+            .and_then(|path| std::fs::read_to_string(path).ok())
+    })
+}
+
+fn semantic_file_id(uri: &str) -> FileId {
+    let mut hasher = DefaultHasher::new();
+    uri.hash(&mut hasher);
+    FileId(hasher.finish())
 }
 
 /// Collect all method symbols accessible from a package, following parent/role chains.

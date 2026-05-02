@@ -1176,6 +1176,103 @@ $this->"#;
 }
 
 #[test]
+fn test_method_completion_semantic_inheritance_detail() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Parent.pm")?,
+        r#"package Parent;
+sub inherited_method { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/Child.pm")?,
+        r#"package Child;
+use parent 'Parent';
+sub own_method { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"package Child;
+sub run {
+my $self = shift;
+$self->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let own = must_some(completions.iter().find(|item| item.label == "own_method"));
+    assert_eq!(
+        own.detail.as_deref(),
+        Some("method from Child"),
+        "workspace own method should use semantic method candidate detail"
+    );
+
+    let inherited = must_some(completions.iter().find(|item| item.label == "inherited_method"));
+    assert_eq!(
+        inherited.detail.as_deref(),
+        Some("inherited method from Parent"),
+        "inherited method should use semantic method candidate detail"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_method_completion_prefers_nearest_ancestor() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Base.pm")?,
+        r#"package Base;
+sub shadowed_method { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/Parent.pm")?,
+        r#"package Parent;
+use parent 'Base';
+sub shadowed_method { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/Child.pm")?,
+        r#"package Child;
+use parent 'Parent';
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"package Child;
+sub run {
+my $self = shift;
+$self->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+    let method = must_some(completions.iter().find(|item| item.label == "shadowed_method"));
+
+    assert_eq!(
+        method.detail.as_deref(),
+        Some("inherited method from Parent"),
+        "nearest ancestor should shadow a farther ancestor with the same method name"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_self_arrow_in_main_package_does_not_resolve() -> Result<(), Box<dyn std::error::Error>> {
     // Edge case: $self-> in the main package should NOT resolve to any package methods.
     // The guard condition `context.current_package != "main"` prevents incorrect
