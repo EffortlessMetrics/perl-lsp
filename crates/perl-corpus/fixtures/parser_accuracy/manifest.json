@@ -51,7 +51,42 @@
           "operator": null,
           "parent_operator": null
         }
-      ]
+      ],
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "package_basic_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::Basic",
+            "span_text": "Accuracy::Basic",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "package_basic_answer_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::Basic::answer",
+            "span_text": "answer",
+            "package": "Accuracy::Basic",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "occurrences": [],
+        "edges": [
+          {
+            "id": "package_basic_defines_answer",
+            "kind": "Defines",
+            "from": "Accuracy::Basic",
+            "to": "Accuracy::Basic::answer",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ]
+      }
     },
     {
       "id": "dynamic_require_boundary",
@@ -193,6 +228,139 @@
           "parent_operator": "+"
         }
       ]
+    },
+    {
+      "id": "typeglob_alias",
+      "family": "typeglob_alias",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/typeglob_alias.pl",
+      "scored_lines": 4,
+      "scored_symbols": 4,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 1,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "typeglob_alias_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::TypeglobAlias",
+            "span_text": "Accuracy::TypeglobAlias",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "typeglob_alias_original_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::TypeglobAlias::original",
+            "span_text": "original",
+            "package": "Accuracy::TypeglobAlias",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "occurrences": [
+          {
+            "id": "typeglob_alias_lhs_typeglob",
+            "kind": "TypeglobReference",
+            "canonical_name": null,
+            "span_text": "*alias",
+            "package": null,
+            "scope": null,
+            "provenance": "DynamicBoundary",
+            "confidence": "Low"
+          },
+          {
+            "id": "typeglob_alias_rhs_coderef",
+            "kind": "CoderefReference",
+            "canonical_name": null,
+            "span_text": "&original",
+            "package": null,
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "edges": [
+          {
+            "id": "typeglob_alias_defines_original",
+            "kind": "Defines",
+            "from": "Accuracy::TypeglobAlias",
+            "to": "Accuracy::TypeglobAlias::original",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ]
+      }
+    },
+    {
+      "id": "generated_accessor",
+      "family": "generated_accessor",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/generated_accessor.pl",
+      "scored_lines": 4,
+      "scored_symbols": 4,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 1,
+      "real_project_file": false,
+      "generated": false,
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "generated_accessor_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::GeneratedAccessor",
+            "span_text": "Accuracy::GeneratedAccessor",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "generated_accessor_name_entity",
+            "kind": "GeneratedMember",
+            "canonical_name": "Accuracy::GeneratedAccessor::name",
+            "span_text": "name",
+            "package": "Accuracy::GeneratedAccessor",
+            "scope": null,
+            "provenance": "FrameworkSynthesis",
+            "confidence": "Medium"
+          },
+          {
+            "id": "generated_accessor_existing_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::GeneratedAccessor::existing",
+            "span_text": "existing",
+            "package": "Accuracy::GeneratedAccessor",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "occurrences": [],
+        "edges": [
+          {
+            "id": "generated_accessor_defines_existing",
+            "kind": "Defines",
+            "from": "Accuracy::GeneratedAccessor",
+            "to": "Accuracy::GeneratedAccessor::existing",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ]
+      }
     }
   ]
 }

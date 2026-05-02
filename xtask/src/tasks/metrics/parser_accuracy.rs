@@ -12,6 +12,8 @@ use std::time::Instant;
 use chrono::Utc;
 use color_eyre::eyre::{Context, Result, bail, eyre};
 use perl_parser::{Node, NodeKind, Parser};
+use perl_semantic_facts::{AnchorId, EntityId};
+use perl_workspace::workspace::workspace_index::{FileFactShard, WorkspaceIndex};
 use serde::{Deserialize, Serialize};
 
 use crate::utils::project_root;
@@ -45,6 +47,8 @@ struct FixtureMetadata {
     line_expectations: Vec<LineExpectation>,
     #[serde(default)]
     ast_expectations: Vec<AstExpectation>,
+    #[serde(default)]
+    symbol_expectations: SymbolExpectations,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -83,6 +87,88 @@ struct AstPrediction {
     depth: u64,
     operator: Option<String>,
     parent_operator: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+struct SymbolExpectations {
+    #[serde(default)]
+    entities: Vec<SymbolEntityExpectation>,
+    #[serde(default)]
+    occurrences: Vec<SymbolOccurrenceExpectation>,
+    #[serde(default)]
+    edges: Vec<SymbolEdgeExpectation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct SymbolEntityExpectation {
+    id: String,
+    kind: String,
+    canonical_name: String,
+    span_text: String,
+    package: Option<String>,
+    scope: Option<String>,
+    provenance: String,
+    confidence: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct SymbolOccurrenceExpectation {
+    id: String,
+    kind: String,
+    canonical_name: Option<String>,
+    span_text: String,
+    package: Option<String>,
+    scope: Option<String>,
+    provenance: String,
+    confidence: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct SymbolEdgeExpectation {
+    id: String,
+    kind: String,
+    from: String,
+    to: String,
+    provenance: String,
+    confidence: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct SymbolEntityKey {
+    kind: String,
+    canonical_name: String,
+    span_text: String,
+    package: Option<String>,
+    scope: Option<String>,
+    provenance: String,
+    confidence: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct SymbolOccurrenceKey {
+    kind: String,
+    canonical_name: Option<String>,
+    span_text: String,
+    package: Option<String>,
+    scope: Option<String>,
+    provenance: String,
+    confidence: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct SymbolEdgeKey {
+    kind: String,
+    from: String,
+    to: String,
+    provenance: String,
+    confidence: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct SymbolPredictions {
+    entities: BTreeSet<SymbolEntityKey>,
+    occurrences: BTreeSet<SymbolOccurrenceKey>,
+    edges: BTreeSet<SymbolEdgeKey>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -301,6 +387,36 @@ struct AstScore {
     missing_expected_node_count: u64,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct SymbolScore {
+    entity_expected_count: u64,
+    entity_predicted_count: u64,
+    entity_true_positive_count: u64,
+    entity_false_positive_count: u64,
+    entity_false_negative_count: u64,
+    occurrence_expected_count: u64,
+    occurrence_predicted_count: u64,
+    occurrence_true_positive_count: u64,
+    occurrence_false_positive_count: u64,
+    occurrence_false_negative_count: u64,
+    edge_expected_count: u64,
+    edge_predicted_count: u64,
+    edge_true_positive_count: u64,
+    edge_false_positive_count: u64,
+    edge_false_negative_count: u64,
+    entity_by_kind: BTreeMap<String, KindScore>,
+    occurrence_by_kind: BTreeMap<String, KindScore>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct KindScore {
+    expected_count: u64,
+    predicted_count: u64,
+    true_positive_count: u64,
+    false_positive_count: u64,
+    false_negative_count: u64,
+}
+
 /// Run `cargo xtask metrics parser-accuracy`.
 pub fn run(
     json: bool,
@@ -371,6 +487,7 @@ fn build_artifact(
     let fixture_count = denominator.fixture_count as f64;
     let line_score = score_manifest_line_tags(root, manifest)?;
     let ast_score = score_manifest_ast(root, manifest)?;
+    let symbol_score = score_manifest_symbols(root, manifest)?;
     let mut metrics = vec![MetricRow::Measured {
         metric: "denominator_fixture_count".to_string(),
         value: fixture_count,
@@ -381,7 +498,7 @@ fn build_artifact(
     }];
     metrics.extend(line_metrics(&line_score, cadence));
     metrics.extend(ast_metrics(&ast_score, cadence));
-    metrics.extend([insufficient("symbol_decl_f1", "symbol gold scorer is not wired yet")]);
+    metrics.extend(symbol_metrics(&symbol_score, cadence));
 
     Ok(ParserAccuracyArtifact {
         schema_version: 1,
@@ -865,6 +982,249 @@ fn score_ast_expectations(
         .count() as u64;
 }
 
+fn score_manifest_symbols(root: &Path, manifest: &ParserAccuracyManifest) -> Result<SymbolScore> {
+    let mut score = SymbolScore::default();
+    for fixture in &manifest.fixtures {
+        if fixture.symbol_expectations.entities.is_empty()
+            && fixture.symbol_expectations.occurrences.is_empty()
+            && fixture.symbol_expectations.edges.is_empty()
+        {
+            continue;
+        }
+
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy fixture source {}", source_path.display())
+        })?;
+        let predictions = extract_symbol_predictions(&source_path, &source)?;
+        score_symbol_expectations(
+            &fixture.symbol_expectations,
+            &predictions,
+            fixture.label_mode == LabelMode::Full,
+            &mut score,
+        );
+    }
+    Ok(score)
+}
+
+fn extract_symbol_predictions(source_path: &Path, source: &str) -> Result<SymbolPredictions> {
+    let index = WorkspaceIndex::new();
+    let source_path_text = source_path.to_string_lossy();
+    index.index_file_str(&source_path_text, source).map_err(|err| {
+        eyre!("indexing parser accuracy fixture {}: {err}", source_path.display())
+    })?;
+    let shard = index.file_fact_shard(&source_path_text).ok_or_else(|| {
+        eyre!("missing canonical fact shard for parser accuracy fixture {}", source_path.display())
+    })?;
+    Ok(symbol_predictions_from_shard(source, &shard))
+}
+
+fn symbol_predictions_from_shard(source: &str, shard: &FileFactShard) -> SymbolPredictions {
+    let anchors_by_id =
+        shard.anchors.iter().map(|anchor| (anchor.id, anchor)).collect::<BTreeMap<AnchorId, _>>();
+    let entities_by_id =
+        shard.entities.iter().map(|entity| (entity.id, entity)).collect::<BTreeMap<EntityId, _>>();
+
+    let entities = shard
+        .entities
+        .iter()
+        .map(|entity| {
+            let anchor = entity.anchor_id.and_then(|anchor_id| anchors_by_id.get(&anchor_id));
+            SymbolEntityKey {
+                kind: format!("{:?}", entity.kind),
+                canonical_name: entity.canonical_name.clone(),
+                span_text: anchor.map(|anchor| anchor_text(source, anchor)).unwrap_or_default(),
+                package: package_from_name(&entity.canonical_name),
+                scope: entity.scope_id.map(|scope| scope.0.to_string()),
+                provenance: format!("{:?}", entity.provenance),
+                confidence: format!("{:?}", entity.confidence),
+            }
+        })
+        .collect();
+
+    let occurrences = shard
+        .occurrences
+        .iter()
+        .map(|occurrence| {
+            let anchor = anchors_by_id.get(&occurrence.anchor_id);
+            let canonical_name = occurrence
+                .entity_id
+                .and_then(|entity_id| entities_by_id.get(&entity_id))
+                .map(|entity| entity.canonical_name.clone());
+            SymbolOccurrenceKey {
+                kind: format!("{:?}", occurrence.kind),
+                package: canonical_name.as_deref().and_then(package_from_name),
+                canonical_name,
+                span_text: anchor.map(|anchor| anchor_text(source, anchor)).unwrap_or_default(),
+                scope: occurrence.scope_id.map(|scope| scope.0.to_string()),
+                provenance: format!("{:?}", occurrence.provenance),
+                confidence: format!("{:?}", occurrence.confidence),
+            }
+        })
+        .collect();
+
+    let edges = shard
+        .edges
+        .iter()
+        .map(|edge| SymbolEdgeKey {
+            kind: format!("{:?}", edge.kind),
+            from: entities_by_id
+                .get(&edge.from_entity_id)
+                .map(|entity| entity.canonical_name.clone())
+                .unwrap_or_else(|| format!("<unknown:{}>", edge.from_entity_id.0)),
+            to: entities_by_id
+                .get(&edge.to_entity_id)
+                .map(|entity| entity.canonical_name.clone())
+                .unwrap_or_else(|| format!("<unknown:{}>", edge.to_entity_id.0)),
+            provenance: format!("{:?}", edge.provenance),
+            confidence: format!("{:?}", edge.confidence),
+        })
+        .collect();
+
+    SymbolPredictions { entities, occurrences, edges }
+}
+
+fn anchor_text(source: &str, anchor: &perl_semantic_facts::AnchorFact) -> String {
+    source
+        .get(anchor.span_start_byte as usize..anchor.span_end_byte as usize)
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn package_from_name(name: &str) -> Option<String> {
+    name.rsplit_once("::").map(|(package, _)| package.to_string())
+}
+
+fn score_symbol_expectations(
+    expectations: &SymbolExpectations,
+    predictions: &SymbolPredictions,
+    count_false_positives: bool,
+    score: &mut SymbolScore,
+) {
+    let expected_entities =
+        expectations.entities.iter().map(entity_key_from_expectation).collect::<BTreeSet<_>>();
+    score.entity_expected_count += expected_entities.len() as u64;
+    score.entity_predicted_count += predictions.entities.len() as u64;
+    let (entity_tp, entity_fp, entity_fn) =
+        score_key_sets(&expected_entities, &predictions.entities, count_false_positives);
+    score.entity_true_positive_count += entity_tp;
+    score.entity_false_positive_count += entity_fp;
+    score.entity_false_negative_count += entity_fn;
+    score_kind_sets(
+        &expected_entities,
+        &predictions.entities,
+        count_false_positives,
+        &mut score.entity_by_kind,
+        |key| key.kind.as_str(),
+    );
+
+    let expected_occurrences = expectations
+        .occurrences
+        .iter()
+        .map(occurrence_key_from_expectation)
+        .collect::<BTreeSet<_>>();
+    score.occurrence_expected_count += expected_occurrences.len() as u64;
+    score.occurrence_predicted_count += predictions.occurrences.len() as u64;
+    let (occurrence_tp, occurrence_fp, occurrence_fn) =
+        score_key_sets(&expected_occurrences, &predictions.occurrences, count_false_positives);
+    score.occurrence_true_positive_count += occurrence_tp;
+    score.occurrence_false_positive_count += occurrence_fp;
+    score.occurrence_false_negative_count += occurrence_fn;
+    score_kind_sets(
+        &expected_occurrences,
+        &predictions.occurrences,
+        count_false_positives,
+        &mut score.occurrence_by_kind,
+        |key| key.kind.as_str(),
+    );
+
+    let expected_edges =
+        expectations.edges.iter().map(edge_key_from_expectation).collect::<BTreeSet<_>>();
+    score.edge_expected_count += expected_edges.len() as u64;
+    score.edge_predicted_count += predictions.edges.len() as u64;
+    let (edge_tp, edge_fp, edge_fn) =
+        score_key_sets(&expected_edges, &predictions.edges, count_false_positives);
+    score.edge_true_positive_count += edge_tp;
+    score.edge_false_positive_count += edge_fp;
+    score.edge_false_negative_count += edge_fn;
+}
+
+fn entity_key_from_expectation(expectation: &SymbolEntityExpectation) -> SymbolEntityKey {
+    SymbolEntityKey {
+        kind: expectation.kind.clone(),
+        canonical_name: expectation.canonical_name.clone(),
+        span_text: expectation.span_text.clone(),
+        package: expectation.package.clone(),
+        scope: expectation.scope.clone(),
+        provenance: expectation.provenance.clone(),
+        confidence: expectation.confidence.clone(),
+    }
+}
+
+fn occurrence_key_from_expectation(
+    expectation: &SymbolOccurrenceExpectation,
+) -> SymbolOccurrenceKey {
+    SymbolOccurrenceKey {
+        kind: expectation.kind.clone(),
+        canonical_name: expectation.canonical_name.clone(),
+        span_text: expectation.span_text.clone(),
+        package: expectation.package.clone(),
+        scope: expectation.scope.clone(),
+        provenance: expectation.provenance.clone(),
+        confidence: expectation.confidence.clone(),
+    }
+}
+
+fn edge_key_from_expectation(expectation: &SymbolEdgeExpectation) -> SymbolEdgeKey {
+    SymbolEdgeKey {
+        kind: expectation.kind.clone(),
+        from: expectation.from.clone(),
+        to: expectation.to.clone(),
+        provenance: expectation.provenance.clone(),
+        confidence: expectation.confidence.clone(),
+    }
+}
+
+fn score_key_sets<T: Ord>(
+    expected: &BTreeSet<T>,
+    predicted: &BTreeSet<T>,
+    count_false_positives: bool,
+) -> (u64, u64, u64) {
+    let true_positives = expected.intersection(predicted).count() as u64;
+    let false_positives =
+        if count_false_positives { predicted.difference(expected).count() as u64 } else { 0 };
+    let false_negatives = expected.difference(predicted).count() as u64;
+    (true_positives, false_positives, false_negatives)
+}
+
+fn score_kind_sets<T: Ord>(
+    expected: &BTreeSet<T>,
+    predicted: &BTreeSet<T>,
+    count_false_positives: bool,
+    by_kind: &mut BTreeMap<String, KindScore>,
+    kind: impl Fn(&T) -> &str,
+) {
+    let kinds = expected
+        .iter()
+        .chain(predicted.iter())
+        .map(|key| kind(key).to_string())
+        .collect::<BTreeSet<_>>();
+    for current_kind in kinds {
+        let expected_for_kind =
+            expected.iter().filter(|key| kind(key) == current_kind).collect::<BTreeSet<_>>();
+        let predicted_for_kind =
+            predicted.iter().filter(|key| kind(key) == current_kind).collect::<BTreeSet<_>>();
+        let (true_positive_count, false_positive_count, false_negative_count) =
+            score_key_sets(&expected_for_kind, &predicted_for_kind, count_false_positives);
+        let entry = by_kind.entry(current_kind).or_default();
+        entry.expected_count += expected_for_kind.len() as u64;
+        entry.predicted_count += predicted_for_kind.len() as u64;
+        entry.true_positive_count += true_positive_count;
+        entry.false_positive_count += false_positive_count;
+        entry.false_negative_count += false_negative_count;
+    }
+}
+
 fn ast_metrics(score: &AstScore, cadence: Cadence) -> Vec<MetricRow> {
     if score.expected_node_count == 0 {
         return vec![insufficient("ast_node_kind_f1", "AST gold labels are not available")];
@@ -961,6 +1321,169 @@ fn ast_metrics(score: &AstScore, cadence: Cadence) -> Vec<MetricRow> {
             cadence,
         ),
     ]
+}
+
+fn symbol_metrics(score: &SymbolScore, cadence: Cadence) -> Vec<MetricRow> {
+    if score.entity_expected_count == 0
+        && score.occurrence_expected_count == 0
+        && score.edge_expected_count == 0
+    {
+        return vec![insufficient("symbol_decl_f1", "symbol gold labels are not available")];
+    }
+
+    let mut rows = vec![
+        symbol_precision_metric(
+            "symbol_decl_precision",
+            score.entity_true_positive_count,
+            score.entity_false_positive_count,
+            cadence,
+        ),
+        symbol_recall_metric(
+            "symbol_decl_recall",
+            score.entity_true_positive_count,
+            score.entity_false_negative_count,
+            cadence,
+        ),
+        symbol_f1_metric(
+            "symbol_decl_f1",
+            score.entity_true_positive_count,
+            score.entity_false_positive_count,
+            score.entity_false_negative_count,
+            score.entity_expected_count,
+            cadence,
+        ),
+        symbol_precision_metric(
+            "symbol_ref_precision",
+            score.occurrence_true_positive_count,
+            score.occurrence_false_positive_count,
+            cadence,
+        ),
+        symbol_recall_metric(
+            "symbol_ref_recall",
+            score.occurrence_true_positive_count,
+            score.occurrence_false_negative_count,
+            cadence,
+        ),
+        symbol_f1_metric(
+            "symbol_ref_f1",
+            score.occurrence_true_positive_count,
+            score.occurrence_false_positive_count,
+            score.occurrence_false_negative_count,
+            score.occurrence_expected_count,
+            cadence,
+        ),
+        symbol_precision_metric(
+            "symbol_edge_precision",
+            score.edge_true_positive_count,
+            score.edge_false_positive_count,
+            cadence,
+        ),
+        symbol_recall_metric(
+            "symbol_edge_recall",
+            score.edge_true_positive_count,
+            score.edge_false_negative_count,
+            cadence,
+        ),
+        symbol_f1_metric(
+            "symbol_edge_f1",
+            score.edge_true_positive_count,
+            score.edge_false_positive_count,
+            score.edge_false_negative_count,
+            score.edge_expected_count,
+            cadence,
+        ),
+    ];
+
+    for &(metric, source, kind) in SYMBOL_KIND_F1_ROWS {
+        let kind_score = match source {
+            SymbolMetricSource::Entity => score.entity_by_kind.get(kind),
+            SymbolMetricSource::Occurrence => score.occurrence_by_kind.get(kind),
+        };
+        rows.push(match kind_score {
+            Some(kind_score) if kind_score.expected_count > 0 => symbol_f1_metric(
+                metric,
+                kind_score.true_positive_count,
+                kind_score.false_positive_count,
+                kind_score.false_negative_count,
+                kind_score.expected_count,
+                cadence,
+            ),
+            _ => insufficient(metric, "no symbol gold labels are available for this kind"),
+        });
+    }
+
+    rows
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SymbolMetricSource {
+    Entity,
+    Occurrence,
+}
+
+const SYMBOL_KIND_F1_ROWS: &[(&str, SymbolMetricSource, &str)] = &[
+    ("symbol_decl_package_f1", SymbolMetricSource::Entity, "Package"),
+    ("symbol_decl_subroutine_f1", SymbolMetricSource::Entity, "Subroutine"),
+    ("symbol_decl_method_f1", SymbolMetricSource::Entity, "Method"),
+    ("symbol_decl_lexical_variable_f1", SymbolMetricSource::Entity, "LexicalVariable"),
+    ("symbol_decl_global_variable_f1", SymbolMetricSource::Entity, "GlobalVariable"),
+    ("symbol_ref_import_f1", SymbolMetricSource::Occurrence, "Import"),
+    ("symbol_ref_export_f1", SymbolMetricSource::Occurrence, "Export"),
+    ("symbol_ref_typeglob_alias_f1", SymbolMetricSource::Occurrence, "TypeglobReference"),
+    ("symbol_decl_generated_accessor_f1", SymbolMetricSource::Entity, "GeneratedMember"),
+    ("symbol_decl_role_method_f1", SymbolMetricSource::Entity, "RoleMethod"),
+    ("symbol_decl_inherited_method_f1", SymbolMetricSource::Entity, "InheritedMethod"),
+    ("symbol_ref_dynamic_boundary_f1", SymbolMetricSource::Occurrence, "DynamicBoundary"),
+];
+
+fn symbol_precision_metric(
+    metric: &str,
+    true_positive_count: u64,
+    false_positive_count: u64,
+    cadence: Cadence,
+) -> MetricRow {
+    let denominator = true_positive_count + false_positive_count;
+    optional_measured_rate(
+        metric,
+        ratio(true_positive_count, denominator),
+        denominator,
+        "no symbol predictions are available",
+        cadence,
+    )
+}
+
+fn symbol_recall_metric(
+    metric: &str,
+    true_positive_count: u64,
+    false_negative_count: u64,
+    cadence: Cadence,
+) -> MetricRow {
+    let denominator = true_positive_count + false_negative_count;
+    optional_measured_rate(
+        metric,
+        ratio(true_positive_count, denominator),
+        denominator,
+        "no symbol gold labels are available",
+        cadence,
+    )
+}
+
+fn symbol_f1_metric(
+    metric: &str,
+    true_positive_count: u64,
+    false_positive_count: u64,
+    false_negative_count: u64,
+    sample_count: u64,
+    cadence: Cadence,
+) -> MetricRow {
+    let denominator = (2 * true_positive_count) + false_positive_count + false_negative_count;
+    optional_measured_rate(
+        metric,
+        ratio(2 * true_positive_count, denominator),
+        sample_count,
+        "symbol F1 denominator is unavailable",
+        cadence,
+    )
 }
 
 fn measured_count(metric: &str, value: u64, sample_count: u64, cadence: Cadence) -> MetricRow {
@@ -1164,6 +1687,39 @@ mod tests {
                             parent_operator: None,
                         },
                     ],
+                    symbol_expectations: SymbolExpectations {
+                        entities: vec![
+                            SymbolEntityExpectation {
+                                id: "package_basic_package_entity".to_string(),
+                                kind: "Package".to_string(),
+                                canonical_name: "Accuracy::Basic".to_string(),
+                                span_text: "Accuracy::Basic".to_string(),
+                                package: Some("Accuracy".to_string()),
+                                scope: None,
+                                provenance: "ExactAst".to_string(),
+                                confidence: "High".to_string(),
+                            },
+                            SymbolEntityExpectation {
+                                id: "package_basic_answer_entity".to_string(),
+                                kind: "Subroutine".to_string(),
+                                canonical_name: "Accuracy::Basic::answer".to_string(),
+                                span_text: "answer".to_string(),
+                                package: Some("Accuracy::Basic".to_string()),
+                                scope: None,
+                                provenance: "ExactAst".to_string(),
+                                confidence: "High".to_string(),
+                            },
+                        ],
+                        occurrences: vec![],
+                        edges: vec![SymbolEdgeExpectation {
+                            id: "package_basic_defines_answer".to_string(),
+                            kind: "Defines".to_string(),
+                            from: "Accuracy::Basic".to_string(),
+                            to: "Accuracy::Basic::answer".to_string(),
+                            provenance: "ExactAst".to_string(),
+                            confidence: "High".to_string(),
+                        }],
+                    },
                 },
                 FixtureMetadata {
                     id: "dynamic_require_boundary".to_string(),
@@ -1220,6 +1776,7 @@ mod tests {
                             parent_operator: None,
                         },
                     ],
+                    symbol_expectations: SymbolExpectations::default(),
                 },
             ],
         }
@@ -1377,7 +1934,96 @@ mod tests {
     }
 
     #[test]
-    fn artifact_uses_measured_line_and_ast_scores_with_symbol_insufficient_data() -> Result<()> {
+    fn symbol_scorer_counts_typeglob_hit_and_generated_accessor_gap() -> Result<()> {
+        let expectations = SymbolExpectations {
+            entities: vec![SymbolEntityExpectation {
+                id: "generated_name".to_string(),
+                kind: "GeneratedMember".to_string(),
+                canonical_name: "Accuracy::GeneratedAccessor::name".to_string(),
+                span_text: "name".to_string(),
+                package: Some("Accuracy::GeneratedAccessor".to_string()),
+                scope: None,
+                provenance: "FrameworkSynthesis".to_string(),
+                confidence: "Medium".to_string(),
+            }],
+            occurrences: vec![SymbolOccurrenceExpectation {
+                id: "typeglob_alias".to_string(),
+                kind: "TypeglobReference".to_string(),
+                canonical_name: None,
+                span_text: "*alias".to_string(),
+                package: None,
+                scope: None,
+                provenance: "DynamicBoundary".to_string(),
+                confidence: "Low".to_string(),
+            }],
+            edges: vec![],
+        };
+        let predictions = SymbolPredictions {
+            entities: BTreeSet::new(),
+            occurrences: [SymbolOccurrenceKey {
+                kind: "TypeglobReference".to_string(),
+                canonical_name: None,
+                span_text: "*alias".to_string(),
+                package: None,
+                scope: None,
+                provenance: "DynamicBoundary".to_string(),
+                confidence: "Low".to_string(),
+            }]
+            .into_iter()
+            .collect(),
+            edges: BTreeSet::new(),
+        };
+        let mut score = SymbolScore::default();
+
+        score_symbol_expectations(&expectations, &predictions, false, &mut score);
+
+        assert_eq!(score.occurrence_true_positive_count, 1);
+        assert_eq!(score.entity_false_negative_count, 1);
+        let generated = score
+            .entity_by_kind
+            .get("GeneratedMember")
+            .ok_or_else(|| eyre!("generated member score should be present"))?;
+        assert_eq!(generated.false_negative_count, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn symbol_metrics_emit_measured_kind_rows() {
+        let mut score = SymbolScore::default();
+        score.entity_expected_count = 1;
+        score.entity_true_positive_count = 1;
+        score.entity_by_kind.insert(
+            "Package".to_string(),
+            KindScore {
+                expected_count: 1,
+                predicted_count: 1,
+                true_positive_count: 1,
+                false_positive_count: 0,
+                false_negative_count: 0,
+            },
+        );
+
+        let metrics = symbol_metrics(&score, Cadence::Pr);
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "symbol_decl_package_f1"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "symbol_decl_generated_accessor_f1"
+            )
+        }));
+    }
+
+    #[test]
+    fn artifact_uses_measured_line_ast_and_symbol_scores() -> Result<()> {
         let tmp = tempfile::tempdir()?;
         write_fixture_sources(tmp.path())?;
         let artifact = build_artifact(tmp.path(), &fixture_manifest(), Cadence::Pr)?;
@@ -1401,8 +2047,9 @@ mod tests {
         assert!(artifact.metrics.iter().any(|metric| {
             matches!(
                 metric,
-                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                MetricRow::Measured { metric, sample_count, .. }
                     if metric == "symbol_decl_f1"
+                        && *sample_count > 0
             )
         }));
         Ok(())

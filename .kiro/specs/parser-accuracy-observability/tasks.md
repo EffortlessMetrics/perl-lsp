@@ -50,12 +50,12 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
     - Emit node-kind precision/recall/F1, span exact/near rates, parent-child edge accuracy, tree depth accuracy, operator precedence accuracy, delimiter pairing accuracy, unexpected error node count, and missing expected node count
     - _Verify: fixture with correct line tag but wrong parent-child edge fails AST score_
 
-- [ ] 6. Add symbol and edge scoring
-  - [ ] 6.1 Define symbol expectation shape
+- [x] 6. Add symbol and edge scoring
+  - [x] 6.1 Define symbol expectation shape
     - Track declarations, references, imports, exports, scopes, packages, spans, definition edges, reference edges, provenance, and confidence
-  - [ ] 6.2 Consume canonical fact shards where available
+  - [x] 6.2 Consume canonical fact shards where available
     - Use anchors, entities, occurrences, edges, real byte spans, provenance, confidence, and hashes
-  - [ ] 6.3 Emit symbol precision/recall/F1 rows by kind
+  - [x] 6.3 Emit symbol precision/recall/F1 rows by kind
     - Include package, subroutine, method, lexical variable, global variable, import, export, typeglob alias, generated accessor, role method, inherited method, and dynamic boundary
     - _Verify: at least one fixture each for generated accessor and typeglob alias_
 

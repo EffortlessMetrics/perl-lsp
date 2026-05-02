@@ -5,19 +5,19 @@
   "commit": "example",
   "cadence": "pr",
   "denominator": {
-    "fixture_count": 3,
-    "fixture_family_count": 3,
-    "scored_line_count": 7,
-    "scored_symbol_count": 4,
+    "fixture_count": 5,
+    "fixture_family_count": 5,
+    "scored_line_count": 15,
+    "scored_symbol_count": 12,
     "fully_labeled_region_count": 2,
-    "partial_labeled_region_count": 1,
-    "unknown_region_count": 1,
+    "partial_labeled_region_count": 3,
+    "unknown_region_count": 3,
     "negative_region_count": 2,
-    "dynamic_boundary_case_count": 1,
-    "unsupported_construct_case_count": 0,
+    "dynamic_boundary_case_count": 2,
+    "unsupported_construct_case_count": 1,
     "real_project_file_count": 0,
     "generated_fixture_count": 0,
-    "hand_labeled_fixture_count": 3
+    "hand_labeled_fixture_count": 5
   },
   "families": [
     {
@@ -30,6 +30,17 @@
       "scored_symbol_count": 1,
       "dynamic_boundary_case_count": 1,
       "unsupported_construct_case_count": 0
+    },
+    {
+      "family": "generated_accessor",
+      "fixture_count": 1,
+      "label_modes": [
+        "partial"
+      ],
+      "scored_line_count": 4,
+      "scored_symbol_count": 4,
+      "dynamic_boundary_case_count": 0,
+      "unsupported_construct_case_count": 1
     },
     {
       "family": "operators",
@@ -52,14 +63,25 @@
       "scored_symbol_count": 1,
       "dynamic_boundary_case_count": 0,
       "unsupported_construct_case_count": 0
+    },
+    {
+      "family": "typeglob_alias",
+      "fixture_count": 1,
+      "label_modes": [
+        "partial"
+      ],
+      "scored_line_count": 4,
+      "scored_symbol_count": 4,
+      "dynamic_boundary_case_count": 1,
+      "unsupported_construct_case_count": 0
     }
   ],
   "metrics": [
     {
       "state": "measured",
       "metric": "denominator_fixture_count",
-      "value": 3.0,
-      "sample_count": 3,
+      "value": 5.0,
+      "sample_count": 5,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
@@ -257,9 +279,175 @@
       "cadence": "pr"
     },
     {
-      "state": "insufficient_data",
+      "state": "measured",
+      "metric": "symbol_decl_precision",
+      "value": 1.0,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "symbol_decl_recall",
+      "value": 0.8571428571428571,
+      "sample_count": 7,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
       "metric": "symbol_decl_f1",
-      "reason": "symbol gold scorer is not wired yet",
+      "value": 0.9230769230769231,
+      "sample_count": 7,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "symbol_ref_precision",
+      "value": 1.0,
+      "sample_count": 2,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "symbol_ref_recall",
+      "value": 1.0,
+      "sample_count": 2,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "symbol_ref_f1",
+      "value": 1.0,
+      "sample_count": 2,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "symbol_edge_precision",
+      "value": 1.0,
+      "sample_count": 3,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "symbol_edge_recall",
+      "value": 1.0,
+      "sample_count": 3,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "symbol_edge_f1",
+      "value": 1.0,
+      "sample_count": 3,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "symbol_decl_package_f1",
+      "value": 1.0,
+      "sample_count": 3,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "symbol_decl_subroutine_f1",
+      "value": 1.0,
+      "sample_count": 3,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "symbol_decl_method_f1",
+      "reason": "no symbol gold labels are available for this kind",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "symbol_decl_lexical_variable_f1",
+      "reason": "no symbol gold labels are available for this kind",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "symbol_decl_global_variable_f1",
+      "reason": "no symbol gold labels are available for this kind",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "symbol_ref_import_f1",
+      "reason": "no symbol gold labels are available for this kind",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "symbol_ref_export_f1",
+      "reason": "no symbol gold labels are available for this kind",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "measured",
+      "metric": "symbol_ref_typeglob_alias_f1",
+      "value": 1.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "symbol_decl_generated_accessor_f1",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "symbol_decl_role_method_f1",
+      "reason": "no symbol gold labels are available for this kind",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "symbol_decl_inherited_method_f1",
+      "reason": "no symbol gold labels are available for this kind",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "symbol_ref_dynamic_boundary_f1",
+      "reason": "no symbol gold labels are available for this kind",
       "sample_count": 0,
       "confidence": "low"
     }
@@ -277,10 +465,10 @@
     "dynamic_expectation_change_count": 0
   },
   "metric_runtime": {
-    "runtime_ms": 1,
+    "runtime_ms": 29.980900000000002,
     "timeout_count": 0,
     "flake_count": 0,
-    "artifact_size_bytes": 4096,
+    "artifact_size_bytes": 11935,
     "ci_runner_failure_count": 0,
     "orphan_process_count": 0,
     "cache_hit_rate": null

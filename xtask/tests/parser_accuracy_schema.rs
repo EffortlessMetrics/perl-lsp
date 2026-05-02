@@ -147,7 +147,7 @@ fn validate_metric_rows(artifact: &Value) -> TestResult {
     let mut saw_measured = false;
     let mut saw_measured_line = false;
     let mut saw_measured_ast = false;
-    let mut saw_insufficient_symbol = false;
+    let mut saw_measured_symbol = false;
 
     for metric in metrics {
         let state =
@@ -168,13 +168,12 @@ fn validate_metric_rows(artifact: &Value) -> TestResult {
                 if metric["metric"].as_str() == Some("ast_node_kind_f1") {
                     saw_measured_ast = true;
                 }
+                if metric["metric"].as_str() == Some("symbol_decl_f1") {
+                    saw_measured_symbol = true;
+                }
             }
             "insufficient_data" => {
                 assert!(metric.get("reason").and_then(Value::as_str).is_some());
-                match metric["metric"].as_str() {
-                    Some("symbol_decl_f1") => saw_insufficient_symbol = true,
-                    _ => {}
-                }
             }
             other => return Err(eyre!("unexpected metric state {other}")),
         }
@@ -183,7 +182,7 @@ fn validate_metric_rows(artifact: &Value) -> TestResult {
     assert!(saw_measured, "example should include at least one measured denominator row");
     assert!(saw_measured_line, "example should include measured line F1 row");
     assert!(saw_measured_ast, "example should include measured AST F1 row");
-    assert!(saw_insufficient_symbol, "example should include symbol insufficient-data row");
+    assert!(saw_measured_symbol, "example should include measured symbol F1 row");
     Ok(())
 }
 
