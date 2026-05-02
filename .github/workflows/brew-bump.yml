@@ -218,7 +218,15 @@ jobs:
               exit 1
             fi
 
-            checksum="$(awk -v file="${asset}" '$2 == file { print $1 }' "${ASSET_DIR}/SHA256SUMS")"
+            checksum="$(
+              awk -v file="${asset}" '{
+                name = $2
+                sub(/\r$/, "", name)
+                if (name == file) {
+                  print $1
+                }
+              }' "${ASSET_DIR}/SHA256SUMS"
+            )"
             if [[ -z "${checksum}" ]]; then
               echo "::error::SHA256SUMS is missing checksum for ${asset}"
               exit 1
