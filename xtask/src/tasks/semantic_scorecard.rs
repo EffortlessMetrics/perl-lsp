@@ -1,6 +1,7 @@
 use crate::utils::project_root;
 use color_eyre::eyre::{Context, Result, bail};
-use perl_semantic_facts::{Confidence, EdgeKind, OccurrenceKind, Provenance};
+use perl_semantic_analyzer::{Parser, semantic::SemanticModel};
+use perl_semantic_facts::{Confidence, EdgeKind, OccurrenceKind, PackageEdgeKind, Provenance};
 use perl_workspace::workspace::workspace_index::WorkspaceIndex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -19,9 +20,12 @@ const AVAILABLE_ROWS: &[&str] = &[
     "export_facts",
     "definition_candidates",
     "reference_edges",
+    "package_graph_edges",
+    "inheritance_edges",
+    "role_composition_edges",
 ];
 
-const UNAVAILABLE_ROWS: &[&str] = &["package_graph", "rename_plan", "safe_delete_plan"];
+const UNAVAILABLE_ROWS: &[&str] = &["rename_plan", "safe_delete_plan"];
 
 #[derive(Debug, Deserialize)]
 struct SemanticManifest {
@@ -97,6 +101,9 @@ struct FactMeasurement {
     export_facts: usize,
     definition_candidates: usize,
     reference_edges: usize,
+    package_graph_edges: usize,
+    inheritance_edges: usize,
+    role_composition_edges: usize,
     exact_facts: usize,
     high_confidence_facts: usize,
     heuristic_facts: usize,
@@ -217,6 +224,9 @@ fn row_total(measurement: &FactMeasurement, row: &str) -> usize {
         "export_facts" => measurement.export_facts,
         "definition_candidates" => measurement.definition_candidates,
         "reference_edges" => measurement.reference_edges,
+        "package_graph_edges" => measurement.package_graph_edges,
+        "inheritance_edges" => measurement.inheritance_edges,
+        "role_composition_edges" => measurement.role_composition_edges,
         _ => 0,
     }
 }
@@ -244,6 +254,7 @@ fn measure_fixtures(manifest_path: &Path, manifest: &SemanticManifest) -> Result
             shard.edges.iter().filter(|edge| edge.kind == EdgeKind::References).count();
         measurement.import_specs += count_import_like_sites(&source);
         measurement.export_facts += count_export_like_sites(&source);
+        measure_package_graph_edges(&source, &path, &mut measurement)?;
 
         for anchor in &shard.anchors {
             record_proof_shape(anchor.provenance, anchor.confidence, None, &mut measurement);
@@ -265,6 +276,35 @@ fn measure_fixtures(manifest_path: &Path, manifest: &SemanticManifest) -> Result
     }
 
     Ok(measurement)
+}
+
+fn measure_package_graph_edges(
+    source: &str,
+    path: &Path,
+    measurement: &mut FactMeasurement,
+) -> Result<()> {
+    let mut parser = Parser::new(source);
+    let ast = parser.parse().map_err(|err| {
+        color_eyre::eyre::eyre!(
+            "parsing package graph scorecard fixture {}: {}",
+            path.display(),
+            err
+        )
+    })?;
+    let model = SemanticModel::build(&ast, source);
+
+    for edge in model.package_edges() {
+        measurement.package_graph_edges += 1;
+        match edge.kind {
+            PackageEdgeKind::Inherits => measurement.inheritance_edges += 1,
+            PackageEdgeKind::ComposesRole => measurement.role_composition_edges += 1,
+            PackageEdgeKind::DependsOn => {}
+            _ => {}
+        }
+        record_proof_shape(edge.provenance, edge.confidence, None, measurement);
+    }
+
+    Ok(())
 }
 
 fn fixture_source_path(manifest_path: &Path, fixture: &FixtureCase) -> Result<PathBuf> {
@@ -327,10 +367,20 @@ fn build_readiness_rows(
         + measurement.occurrence_facts
         + measurement.import_specs
         + measurement.export_facts
-        + measurement.reference_edges;
+        + measurement.reference_edges
+        + measurement.package_graph_edges;
     let fixture_rate = if fixture_count == 0 { "0%" } else { "100%" };
 
     BTreeMap::from([
+        (
+            "package_graph".to_string(),
+            ReadinessRow {
+                status: if measurement.package_graph_edges > 0 { "pass" } else { "fail" },
+                value: measurement.package_graph_edges.to_string(),
+                threshold: "> 0",
+                evidence: "package graph fixture edges",
+            },
+        ),
         (
             "semantic_fact_counts_nonzero".to_string(),
             ReadinessRow {
@@ -566,6 +616,57 @@ mod tests {
         assert!(value.get("readiness_rows").is_some(), "readiness_rows should exist");
         assert!(value.get("unavailable_rows").is_some(), "unavailable_rows should exist");
         assert!(value.get("fixture_families").is_some(), "fixture_families should exist");
+        Ok(())
+    }
+
+    #[test]
+    fn package_graph_rows_are_measured_from_semantic_model() -> Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let manifest_path = write_fixture_set(
+            tmp.path(),
+            r#"{"fixture_family_version":1,"fixtures":[{"id":"graph_fixture","family":"package graph","path":"graph.pl"}]}"#,
+            &[(
+                "graph.pl",
+                r#"
+package Parent;
+sub inherited { 1 }
+
+package Role;
+sub role_method { 1 }
+
+package Child;
+use parent 'Parent';
+with 'Role';
+sub local { 1 }
+"#,
+            )],
+        )?;
+
+        let artifact = build_artifact(&manifest_path, load_manifest(&manifest_path)?)?;
+        let package_graph_edges = artifact
+            .fact_rows
+            .get("package_graph_edges")
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing package_graph_edges row"))?;
+        let inheritance_edges = artifact
+            .fact_rows
+            .get("inheritance_edges")
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing inheritance_edges row"))?;
+        let role_edges = artifact
+            .fact_rows
+            .get("role_composition_edges")
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing role_composition_edges row"))?;
+
+        assert_eq!(package_graph_edges.total_facts, 2);
+        assert_eq!(inheritance_edges.total_facts, 1);
+        assert_eq!(role_edges.total_facts, 1);
+
+        let package_graph = artifact
+            .readiness_rows
+            .get("package_graph")
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing package graph readiness row"))?;
+        assert_eq!(package_graph.status, "pass");
+        assert_eq!(package_graph.value, "2");
+        assert!(!artifact.unavailable_rows.contains_key("package_graph"));
         Ok(())
     }
 

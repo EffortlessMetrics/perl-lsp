@@ -3881,6 +3881,7 @@ dependencies = [
  "perl-lsp-ux-tests",
  "perl-parser",
  "perl-parser-pest",
+ "perl-semantic-analyzer",
  "perl-semantic-facts",
  "perl-tdd-support",
  "perl-workspace",

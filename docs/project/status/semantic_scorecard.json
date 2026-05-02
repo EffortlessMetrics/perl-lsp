@@ -55,8 +55,8 @@
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 109,
-        "high_confidence_facts": 109,
+        "exact_facts": 111,
+        "high_confidence_facts": 111,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 0
       }
@@ -83,8 +83,8 @@
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 109,
-        "high_confidence_facts": 109,
+        "exact_facts": 111,
+        "high_confidence_facts": 111,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 0
       }
@@ -111,8 +111,8 @@
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 109,
-        "high_confidence_facts": 109,
+        "exact_facts": 111,
+        "high_confidence_facts": 111,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 0
       }
@@ -139,8 +139,36 @@
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 109,
-        "high_confidence_facts": 109,
+        "exact_facts": 111,
+        "high_confidence_facts": 111,
+        "heuristic_facts": 1,
+        "dynamic_boundary_facts": 0
+      }
+    },
+    "inheritance_edges": {
+      "status": "available",
+      "total_facts": 1,
+      "fixture_coverage": {
+        "covered_fixture_count": 12,
+        "total_fixture_count": 12,
+        "covered_fixture_families": [
+          "AUTOLOAD dynamic boundary",
+          "dynamic require boundary",
+          "empty import suppression",
+          "eval STRING dynamic boundary",
+          "export tag expansion",
+          "generated accessor",
+          "imported function visibility",
+          "inherited method",
+          "qualified vs bare references",
+          "role method",
+          "same bare sub in two packages",
+          "typeglob alias"
+        ]
+      },
+      "confidence_breakdown": {
+        "exact_facts": 111,
+        "high_confidence_facts": 111,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 0
       }
@@ -167,8 +195,36 @@
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 109,
-        "high_confidence_facts": 109,
+        "exact_facts": 111,
+        "high_confidence_facts": 111,
+        "heuristic_facts": 1,
+        "dynamic_boundary_facts": 0
+      }
+    },
+    "package_graph_edges": {
+      "status": "available",
+      "total_facts": 2,
+      "fixture_coverage": {
+        "covered_fixture_count": 12,
+        "total_fixture_count": 12,
+        "covered_fixture_families": [
+          "AUTOLOAD dynamic boundary",
+          "dynamic require boundary",
+          "empty import suppression",
+          "eval STRING dynamic boundary",
+          "export tag expansion",
+          "generated accessor",
+          "imported function visibility",
+          "inherited method",
+          "qualified vs bare references",
+          "role method",
+          "same bare sub in two packages",
+          "typeglob alias"
+        ]
+      },
+      "confidence_breakdown": {
+        "exact_facts": 111,
+        "high_confidence_facts": 111,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 0
       }
@@ -195,8 +251,36 @@
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 109,
-        "high_confidence_facts": 109,
+        "exact_facts": 111,
+        "high_confidence_facts": 111,
+        "heuristic_facts": 1,
+        "dynamic_boundary_facts": 0
+      }
+    },
+    "role_composition_edges": {
+      "status": "available",
+      "total_facts": 1,
+      "fixture_coverage": {
+        "covered_fixture_count": 12,
+        "total_fixture_count": 12,
+        "covered_fixture_families": [
+          "AUTOLOAD dynamic boundary",
+          "dynamic require boundary",
+          "empty import suppression",
+          "eval STRING dynamic boundary",
+          "export tag expansion",
+          "generated accessor",
+          "imported function visibility",
+          "inherited method",
+          "qualified vs bare references",
+          "role method",
+          "same bare sub in two packages",
+          "typeglob alias"
+        ]
+      },
+      "confidence_breakdown": {
+        "exact_facts": 111,
+        "high_confidence_facts": 111,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 0
       }
@@ -214,6 +298,12 @@
       "value": "0",
       "threshold": "0",
       "evidence": "semantic shadow compare release-readiness receipts"
+    },
+    "package_graph": {
+      "status": "pass",
+      "value": "2",
+      "threshold": "> 0",
+      "evidence": "package graph fixture edges"
     },
     "reference_shadow_regressions": {
       "status": "pass",
@@ -235,7 +325,7 @@
     },
     "semantic_fact_counts_nonzero": {
       "status": "pass",
-      "value": "56",
+      "value": "58",
       "threshold": "> 0",
       "evidence": "semantic fixture indexing"
     },
@@ -253,10 +343,6 @@
     }
   },
   "unavailable_rows": {
-    "package_graph": {
-      "status": "unavailable",
-      "reason": "planned for future scorecard waves"
-    },
     "rename_plan": {
       "status": "unavailable",
       "reason": "planned for future scorecard waves"
