@@ -4,7 +4,10 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src/test'],
   testMatch: ['**/*.test.ts'],
-  testPathIgnorePatterns: ['<rootDir>/src/test/integration/'],
+  testPathIgnorePatterns: [
+    '<rootDir>/src/test/integration/',
+    '<rootDir>/src/test/published/',
+  ],
   moduleNameMapper: {
     '^vscode$': '<rootDir>/src/test/__mocks__/vscode.ts',
   },

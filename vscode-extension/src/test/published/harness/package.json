@@ -1,0 +1,12 @@
+{
+  "name": "perl-lsp-published-smoke-harness",
+  "displayName": "Perl LSP Published Smoke Harness",
+  "version": "0.0.0",
+  "publisher": "EffortlessMetrics",
+  "private": true,
+  "engines": {
+    "vscode": "^1.116.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": []
+}

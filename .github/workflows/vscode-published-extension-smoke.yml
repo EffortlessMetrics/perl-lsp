@@ -1,0 +1,67 @@
+name: VS Code Published Extension Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Published extension version to smoke, for example 0.13.2. Empty installs latest.'
+        required: false
+        type: string
+      source:
+        description: 'Published package source.'
+        required: false
+        default: marketplace
+        type: choice
+        options:
+          - marketplace
+          - open-vsx
+  schedule:
+    - cron: '0 14 * * 1'
+
+concurrency:
+  group: vscode-published-extension-smoke-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.source || 'marketplace' }}-${{ github.event_name == 'workflow_dispatch' && inputs.version || 'latest' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  published-extension-smoke:
+    name: Published extension smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    defaults:
+      run:
+        working-directory: vscode-extension
+
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      PERL_LSP_PUBLISHED_EXTENSION_SOURCE: ${{ github.event_name == 'workflow_dispatch' && inputs.source || 'marketplace' }}
+      PERL_LSP_PUBLISHED_EXTENSION_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run published extension smoke
+        if: runner.os != 'Linux'
+        run: npm run test:published
+
+      - name: Run published extension smoke under Xvfb
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:published
