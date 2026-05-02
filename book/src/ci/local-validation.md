@@ -46,7 +46,7 @@ curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix 
 nix develop
 
 # You now have:
-# - Rust 1.92.0 (MSRV) with wasm32-unknown-unknown target
+# - Rust 1.93.1 (MSRV) with wasm32-unknown-unknown target
 # - cargo, rustfmt, clippy
 # - just (command runner)
 # - cargo-nextest (fast test runner)
@@ -68,9 +68,9 @@ cargo install just
 # Install cargo-nextest (optional but recommended)
 cargo install cargo-nextest
 
-# Ensure MSRV compliance (Rust 1.92)
-rustup install 1.92.0
-rustup override set 1.92.0
+# Ensure MSRV compliance (Rust 1.93
+rustup install 1.93.1
+rustup override set 1.93.1
 ```
 
 ---
@@ -81,7 +81,7 @@ rustup override set 1.92.0
 
 Nix provides **reproducible builds** - the exact same tools and versions on every machine:
 
-1. **Pinned toolchain**: Rust 1.92.0 (MSRV) is locked via `flake.lock`
+1. **Pinned toolchain**: Rust 1.93.1 (MSRV) is locked via `flake.lock`
 2. **All CI tools included**: just, cargo-nextest, cargo-audit, gh, etc.
 3. **Cross-platform**: Works on Linux, macOS, and WSL
 4. **No system pollution**: Tools don't affect your global environment
@@ -555,7 +555,7 @@ just ci-parser-features-check
 
 ### MSRV Validation
 
-Validate against Minimum Supported Rust Version (1.92.0):
+Validate against Minimum Supported Rust Version (1.93.1):
 
 ```bash
 # Fast merge gate on MSRV
@@ -565,7 +565,7 @@ just ci-gate-msrv
 just ci-full-msrv
 
 # Or manually
-RUSTUP_TOOLCHAIN=1.92.0 just ci-gate
+RUSTUP_TOOLCHAIN=1.93.1 just ci-gate
 ```
 
 ### Cost Estimation
@@ -740,7 +740,7 @@ flake.nix
 ### Reproducibility Guarantees
 
 1. **Rust Version Pinning**
-   - MSRV 1.92.0 is specified in `flake.nix`
+   - MSRV 1.93.1 is specified in `flake.nix`
    - Also enforced via `rust-toolchain.toml`
    - CI workflows use the same version
 
@@ -927,7 +927,7 @@ nix --experimental-features 'nix-command flakes' develop
 # Wrong (uses system Rust):
 just ci-gate
 
-# Correct (uses Nix Rust 1.92.0):
+# Correct (uses Nix Rust 1.93.1):
 nix develop -c just ci-gate
 ```
 
