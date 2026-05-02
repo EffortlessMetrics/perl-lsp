@@ -1,0 +1,270 @@
+{
+  "schema_version": 2,
+  "measured_at": "deterministic-fixture-baseline",
+  "subsystem": "semantic",
+  "fixture_family_version": 1,
+  "fixture_count": 12,
+  "fixture_ids": [
+    "autoload_dynamic_boundary",
+    "dynamic_require_boundary",
+    "empty_import_suppression",
+    "eval_string_dynamic_boundary",
+    "export_tag_expansion",
+    "generated_accessor",
+    "imported_function_visibility",
+    "inherited_method",
+    "qualified_vs_bare_references",
+    "role_method",
+    "same_bare_sub_two_packages",
+    "typeglob_alias"
+  ],
+  "fixture_families": [
+    "AUTOLOAD dynamic boundary",
+    "dynamic require boundary",
+    "empty import suppression",
+    "eval STRING dynamic boundary",
+    "export tag expansion",
+    "generated accessor",
+    "imported function visibility",
+    "inherited method",
+    "qualified vs bare references",
+    "role method",
+    "same bare sub in two packages",
+    "typeglob alias"
+  ],
+  "fact_rows": {
+    "declaration_facts": {
+      "status": "available",
+      "total_facts": 31,
+      "fixture_coverage": {
+        "covered_fixture_count": 12,
+        "total_fixture_count": 12,
+        "covered_fixture_families": [
+          "AUTOLOAD dynamic boundary",
+          "dynamic require boundary",
+          "empty import suppression",
+          "eval STRING dynamic boundary",
+          "export tag expansion",
+          "generated accessor",
+          "imported function visibility",
+          "inherited method",
+          "qualified vs bare references",
+          "role method",
+          "same bare sub in two packages",
+          "typeglob alias"
+        ]
+      },
+      "confidence_breakdown": {
+        "exact_facts": 109,
+        "high_confidence_facts": 109,
+        "heuristic_facts": 1,
+        "dynamic_boundary_facts": 0
+      }
+    },
+    "definition_candidates": {
+      "status": "available",
+      "total_facts": 31,
+      "fixture_coverage": {
+        "covered_fixture_count": 12,
+        "total_fixture_count": 12,
+        "covered_fixture_families": [
+          "AUTOLOAD dynamic boundary",
+          "dynamic require boundary",
+          "empty import suppression",
+          "eval STRING dynamic boundary",
+          "export tag expansion",
+          "generated accessor",
+          "imported function visibility",
+          "inherited method",
+          "qualified vs bare references",
+          "role method",
+          "same bare sub in two packages",
+          "typeglob alias"
+        ]
+      },
+      "confidence_breakdown": {
+        "exact_facts": 109,
+        "high_confidence_facts": 109,
+        "heuristic_facts": 1,
+        "dynamic_boundary_facts": 0
+      }
+    },
+    "export_facts": {
+      "status": "available",
+      "total_facts": 3,
+      "fixture_coverage": {
+        "covered_fixture_count": 12,
+        "total_fixture_count": 12,
+        "covered_fixture_families": [
+          "AUTOLOAD dynamic boundary",
+          "dynamic require boundary",
+          "empty import suppression",
+          "eval STRING dynamic boundary",
+          "export tag expansion",
+          "generated accessor",
+          "imported function visibility",
+          "inherited method",
+          "qualified vs bare references",
+          "role method",
+          "same bare sub in two packages",
+          "typeglob alias"
+        ]
+      },
+      "confidence_breakdown": {
+        "exact_facts": 109,
+        "high_confidence_facts": 109,
+        "heuristic_facts": 1,
+        "dynamic_boundary_facts": 0
+      }
+    },
+    "import_specs": {
+      "status": "available",
+      "total_facts": 7,
+      "fixture_coverage": {
+        "covered_fixture_count": 12,
+        "total_fixture_count": 12,
+        "covered_fixture_families": [
+          "AUTOLOAD dynamic boundary",
+          "dynamic require boundary",
+          "empty import suppression",
+          "eval STRING dynamic boundary",
+          "export tag expansion",
+          "generated accessor",
+          "imported function visibility",
+          "inherited method",
+          "qualified vs bare references",
+          "role method",
+          "same bare sub in two packages",
+          "typeglob alias"
+        ]
+      },
+      "confidence_breakdown": {
+        "exact_facts": 109,
+        "high_confidence_facts": 109,
+        "heuristic_facts": 1,
+        "dynamic_boundary_facts": 0
+      }
+    },
+    "occurrence_facts": {
+      "status": "available",
+      "total_facts": 14,
+      "fixture_coverage": {
+        "covered_fixture_count": 12,
+        "total_fixture_count": 12,
+        "covered_fixture_families": [
+          "AUTOLOAD dynamic boundary",
+          "dynamic require boundary",
+          "empty import suppression",
+          "eval STRING dynamic boundary",
+          "export tag expansion",
+          "generated accessor",
+          "imported function visibility",
+          "inherited method",
+          "qualified vs bare references",
+          "role method",
+          "same bare sub in two packages",
+          "typeglob alias"
+        ]
+      },
+      "confidence_breakdown": {
+        "exact_facts": 109,
+        "high_confidence_facts": 109,
+        "heuristic_facts": 1,
+        "dynamic_boundary_facts": 0
+      }
+    },
+    "reference_edges": {
+      "status": "available",
+      "total_facts": 1,
+      "fixture_coverage": {
+        "covered_fixture_count": 12,
+        "total_fixture_count": 12,
+        "covered_fixture_families": [
+          "AUTOLOAD dynamic boundary",
+          "dynamic require boundary",
+          "empty import suppression",
+          "eval STRING dynamic boundary",
+          "export tag expansion",
+          "generated accessor",
+          "imported function visibility",
+          "inherited method",
+          "qualified vs bare references",
+          "role method",
+          "same bare sub in two packages",
+          "typeglob alias"
+        ]
+      },
+      "confidence_breakdown": {
+        "exact_facts": 109,
+        "high_confidence_facts": 109,
+        "heuristic_facts": 1,
+        "dynamic_boundary_facts": 0
+      }
+    }
+  },
+  "readiness_rows": {
+    "completion_import_fixture_pass_rate": {
+      "status": "pass",
+      "value": "100%",
+      "threshold": "100%",
+      "evidence": "import/export visibility fixtures"
+    },
+    "definition_shadow_regressions": {
+      "status": "pass",
+      "value": "0",
+      "threshold": "0",
+      "evidence": "semantic shadow compare receipts"
+    },
+    "reference_shadow_regressions": {
+      "status": "pass",
+      "value": "0",
+      "threshold": "0",
+      "evidence": "semantic shadow compare receipts"
+    },
+    "rename_unsafe_edit_count": {
+      "status": "pass",
+      "value": "0",
+      "threshold": "0",
+      "evidence": "rename blocker fixtures"
+    },
+    "safe_delete_blocker_fixture_pass_rate": {
+      "status": "pass",
+      "value": "100%",
+      "threshold": "100%",
+      "evidence": "safe-delete blocker fixtures"
+    },
+    "semantic_fact_counts_nonzero": {
+      "status": "pass",
+      "value": "56",
+      "threshold": "> 0",
+      "evidence": "semantic fixture indexing"
+    },
+    "undefined_symbol_false_positive_fixture_rate": {
+      "status": "pass",
+      "value": "0%",
+      "threshold": "0%",
+      "evidence": "diagnostics fixture receipts"
+    },
+    "visible_symbols_fixture_pass_rate": {
+      "status": "pass",
+      "value": "100%",
+      "threshold": "100%",
+      "evidence": "workspace scorecard fixtures"
+    }
+  },
+  "unavailable_rows": {
+    "package_graph": {
+      "status": "unavailable",
+      "reason": "planned for future scorecard waves"
+    },
+    "rename_plan": {
+      "status": "unavailable",
+      "reason": "planned for future scorecard waves"
+    },
+    "safe_delete_plan": {
+      "status": "unavailable",
+      "reason": "planned for future scorecard waves"
+    }
+  },
+  "notes": "RC2 proof rail: scorecard rows are deterministic and fixture-backed; provider cutover remains conservative for unavailable rows."
+}

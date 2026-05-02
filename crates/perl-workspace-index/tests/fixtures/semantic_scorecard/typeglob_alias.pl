@@ -1,1 +1,8 @@
-# placeholder fixture: typeglob_alias
+package TypeglobAlias;
+
+sub original {
+    return 1;
+}
+
+*alias = \&original;
+alias();

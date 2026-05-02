@@ -1084,6 +1084,35 @@ enum Commands {
         ratchet_check: bool,
     },
 
+    /// Publish/check RC2 semantic scorecard artifacts from deterministic fixtures.
+    SemanticScorecard {
+        /// Optional path to semantic fixture manifest JSON.
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// Optional path to emitted scorecard JSON artifact.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Optional path to generated status markdown.
+        #[arg(long)]
+        status_md: Option<PathBuf>,
+        /// Verify committed artifacts are current.
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Publish/check deterministic semantic shadow-compare proof artifacts.
+    SemanticShadowCompare {
+        /// Optional path to emitted shadow-compare JSON artifact.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Optional path to generated status markdown.
+        #[arg(long)]
+        status_md: Option<PathBuf>,
+        /// Verify committed artifacts are current.
+        #[arg(long)]
+        check: bool,
+    },
+
     /// Emit structured UX regression receipt from test output
     UxRegressionReceipt {
         /// Path to test output file (e.g., /tmp/ux-test-output.txt)
@@ -2161,6 +2190,12 @@ fn main() -> Result<()> {
                 UxScorecardOutputFormat::Json => UxScorecardFormat::Json,
             };
             ux_scorecard::run(format, input, output, status_md, ratchet_check)
+        }
+        Commands::SemanticScorecard { manifest, output, status_md, check } => {
+            semantic_scorecard::run(manifest, output, status_md, check)
+        }
+        Commands::SemanticShadowCompare { output, status_md, check } => {
+            semantic_shadow_compare::run(output, status_md, check)
         }
         Commands::UxRegressionReceipt { input, receipt, sha } => {
             ux_regression_receipt::run(ux_regression_receipt::UxRegressionReceiptConfig {

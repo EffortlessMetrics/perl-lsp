@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "measured_at": "deterministic-fixture-baseline",
+  "subsystem": "semantic_shadow_compare",
+  "receipts": [
+    {
+      "schema_version": 1,
+      "query": "find_definition",
+      "input": {
+        "symbol": "Foo::bar"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "lib/Foo.pm:10:5"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "lib/Foo.pm:10:5"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "definition exact match fixture"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "query": "find_references",
+      "input": {
+        "symbol": "Foo::bar"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "lib/Foo.pm:10:5"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 2,
+        "identities": [
+          "lib/Foo.pm:10:5",
+          "t/foo.t:4:1"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "reference improved count fixture"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "query": "count_usages",
+      "input": {
+        "symbol": "Foo::bar"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 4,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 3,
+        "identities": []
+      },
+      "verdict": "regression",
+      "notes": [
+        "count regression sentinel fixture"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "query": "visible_symbols",
+      "input": {
+        "symbol": "Foo::bar"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 2,
+        "identities": [
+          "alpha",
+          "beta"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 2,
+        "identities": [
+          "alpha",
+          "gamma"
+        ]
+      },
+      "verdict": "ambiguous",
+      "notes": [
+        "visible symbol ambiguity fixture"
+      ]
+    },
+    {
+      "schema_version": 1,
+      "query": "hover",
+      "input": {
+        "symbol": "Foo::bar"
+      },
+      "old_result": {
+        "available": false,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "hover:Foo::bar"
+        ]
+      },
+      "verdict": "unavailable",
+      "notes": [
+        "unavailable fact-backed hover fixture"
+      ]
+    }
+  ],
+  "verdict_counts": {
+    "ambiguous": 1,
+    "improved": 1,
+    "regression": 1,
+    "same": 1,
+    "unavailable": 1
+  },
+  "notes": "Deterministic RC2 shadow-compare receipt shape for semantic provider cutover proof."
+}

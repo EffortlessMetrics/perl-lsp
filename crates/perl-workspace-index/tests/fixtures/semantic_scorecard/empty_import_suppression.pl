@@ -1,1 +1,7 @@
-# placeholder fixture: empty_import_suppression
+package EmptyImportSuppression;
+
+use Foo ();
+
+sub local_only {
+    return 1;
+}

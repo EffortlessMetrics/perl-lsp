@@ -1,1 +1,3 @@
-# placeholder fixture: eval_string_dynamic_boundary
+package EvalStringDynamicBoundary;
+
+eval "sub generated_from_string { 1 }";

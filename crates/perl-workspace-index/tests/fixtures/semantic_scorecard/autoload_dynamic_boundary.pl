@@ -1,1 +1,9 @@
-# placeholder fixture: autoload_dynamic_boundary
+package AutoloadDynamicBoundary;
+
+our $AUTOLOAD;
+
+sub AUTOLOAD {
+    return $AUTOLOAD;
+}
+
+missing_method();

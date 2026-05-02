@@ -1,1 +1,8 @@
-# placeholder fixture: qualified_vs_bare_references
+package QualifiedVsBareReferences;
+
+sub target {
+    return 1;
+}
+
+target();
+QualifiedVsBareReferences::target();
