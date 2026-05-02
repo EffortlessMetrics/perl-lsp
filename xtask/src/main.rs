@@ -1630,6 +1630,24 @@ enum MetricsCommand {
         #[arg(long)]
         json: bool,
     },
+    /// Parser accuracy scorecard — denominator inventory and placeholder scoring rows.
+    ParserAccuracy {
+        /// Write output to target/metrics/parser_accuracy.json.
+        #[arg(long)]
+        json: bool,
+        /// Validate the generated artifact contract without writing target output.
+        #[arg(long)]
+        check: bool,
+        /// Fixture manifest path.
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// Output path for --json.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Metric cadence: pr, merge_gate, nightly, or release.
+        #[arg(long, default_value = "pr")]
+        cadence: String,
+    },
     /// LSP editor-intelligence scorecard — fixture inventory and pass rates.
     LspStats {
         /// Write output to .ci/metrics/editor_intelligence.json
@@ -2169,6 +2187,9 @@ fn main() -> Result<()> {
         Commands::CheckTestWiring => check_test_wiring::run(),
         Commands::Metrics { command } => match command {
             MetricsCommand::ParserStats { input, json } => metrics::parser_stats::run(input, json),
+            MetricsCommand::ParserAccuracy { json, check, manifest, output, cadence } => {
+                metrics::parser_accuracy::run(json, check, manifest, output, &cadence)
+            }
             MetricsCommand::LspStats { json, receipt_dir } => {
                 metrics::lsp_stats::run_with_receipt_dir(json, receipt_dir.as_deref())
             }

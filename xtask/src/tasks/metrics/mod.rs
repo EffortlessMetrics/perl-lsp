@@ -5,6 +5,7 @@
 pub mod diagnostics_stats;
 pub mod lsp_stats;
 pub mod memory;
+pub mod parser_accuracy;
 pub mod parser_stats;
 pub mod ratchet;
 pub mod release_health;

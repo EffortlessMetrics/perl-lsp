@@ -17,11 +17,11 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
     - Include denominator rows and `insufficient_data` line/AST/symbol rows
     - _Verify: JSON parses and validates_
 
-- [ ] 2. Add denominator inventory
-  - [ ] 2.1 Define fixture metadata shape
+- [x] 2. Add denominator inventory
+  - [x] 2.1 Define fixture metadata shape
     - Track fixture ID, family, label mode, source path, scored lines, scored symbols, dynamic boundaries, unsupported constructs, negative regions, and generated-vs-hand-labeled source
     - Keep unlabeled regions distinct from negative regions
-  - [ ] 2.2 Emit denominator-only scorecard
+  - [x] 2.2 Emit denominator-only scorecard
     - Add an xtask command that writes `target/metrics/parser_accuracy.json`
     - Report fixture_count, fixture_family_count, scored_line_count, scored_symbol_count, fully_labeled_region_count, partial_labeled_region_count, unknown_region_count, negative_region_count, dynamic_boundary_case_count, unsupported_construct_case_count, real_project_file_count, generated_fixture_count, and hand_labeled_fixture_count
     - _Verify: targeted xtask tests and schema validation_
