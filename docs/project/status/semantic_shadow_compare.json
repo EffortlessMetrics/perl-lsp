@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "measured_at": "deterministic-fixture-baseline",
   "subsystem": "semantic_shadow_compare",
   "receipts": [
@@ -133,5 +133,19 @@
     "same": 1,
     "unavailable": 1
   },
-  "notes": "Deterministic RC2 shadow-compare receipt shape for semantic provider cutover proof."
+  "release_readiness_verdict_counts": {
+    "ambiguous": 0,
+    "improved": 1,
+    "regression": 0,
+    "same": 1,
+    "unavailable": 0
+  },
+  "schema_fixture_verdict_counts": {
+    "ambiguous": 1,
+    "improved": 0,
+    "regression": 1,
+    "same": 0,
+    "unavailable": 1
+  },
+  "notes": "0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes."
 }

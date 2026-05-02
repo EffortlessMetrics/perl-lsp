@@ -213,13 +213,13 @@
       "status": "pass",
       "value": "0",
       "threshold": "0",
-      "evidence": "semantic shadow compare receipts"
+      "evidence": "semantic shadow compare release-readiness receipts"
     },
     "reference_shadow_regressions": {
       "status": "pass",
       "value": "0",
       "threshold": "0",
-      "evidence": "semantic shadow compare receipts"
+      "evidence": "semantic shadow compare release-readiness receipts"
     },
     "rename_unsafe_edit_count": {
       "status": "pass",
@@ -266,5 +266,5 @@
       "reason": "planned for future scorecard waves"
     }
   },
-  "notes": "RC2 proof rail: scorecard rows are deterministic and fixture-backed; provider cutover remains conservative for unavailable rows."
+  "notes": "0.13.2 semantic proof rail: scorecard rows are deterministic and fixture-backed; semantic expansion remains conservative for unavailable rows."
 }

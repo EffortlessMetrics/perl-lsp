@@ -19,6 +19,8 @@ struct Artifact {
     subsystem: &'static str,
     receipts: Vec<SemanticShadowCompareReceipt>,
     verdict_counts: BTreeMap<String, usize>,
+    release_readiness_verdict_counts: BTreeMap<String, usize>,
+    schema_fixture_verdict_counts: BTreeMap<String, usize>,
     notes: &'static str,
 }
 
@@ -83,26 +85,51 @@ fn build_artifact() -> Artifact {
         ),
     ];
 
-    let mut verdict_counts = BTreeMap::from([
+    let verdict_counts = count_verdicts(&receipts);
+    let release_readiness_verdict_counts =
+        count_verdicts(receipts.iter().filter(|receipt| is_release_readiness_receipt(receipt)));
+    let schema_fixture_verdict_counts =
+        count_verdicts(receipts.iter().filter(|receipt| !is_release_readiness_receipt(receipt)));
+
+    Artifact {
+        schema_version: 2,
+        measured_at: "deterministic-fixture-baseline",
+        subsystem: "semantic_shadow_compare",
+        receipts,
+        verdict_counts,
+        release_readiness_verdict_counts,
+        schema_fixture_verdict_counts,
+        notes: "0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes.",
+    }
+}
+
+fn count_verdicts<'a>(
+    receipts: impl IntoIterator<Item = &'a SemanticShadowCompareReceipt>,
+) -> BTreeMap<String, usize> {
+    let mut verdict_counts = empty_verdict_counts();
+    for receipt in receipts {
+        let key = verdict_key(receipt.verdict).to_string();
+        *verdict_counts.entry(key).or_default() += 1;
+    }
+    verdict_counts
+}
+
+fn empty_verdict_counts() -> BTreeMap<String, usize> {
+    BTreeMap::from([
         ("same".to_string(), 0),
         ("improved".to_string(), 0),
         ("regression".to_string(), 0),
         ("ambiguous".to_string(), 0),
         ("unavailable".to_string(), 0),
-    ]);
-    for receipt in &receipts {
-        let key = verdict_key(receipt.verdict).to_string();
-        *verdict_counts.entry(key).or_default() += 1;
-    }
+    ])
+}
 
-    Artifact {
-        schema_version: 1,
-        measured_at: "deterministic-fixture-baseline",
-        subsystem: "semantic_shadow_compare",
-        receipts,
-        verdict_counts,
-        notes: "Deterministic RC2 shadow-compare receipt shape for semantic provider cutover proof.",
-    }
+fn is_release_readiness_receipt(receipt: &SemanticShadowCompareReceipt) -> bool {
+    matches!(receipt.query, ShadowQueryName::FindDefinition | ShadowQueryName::FindReferences)
+}
+
+fn receipt_scope(receipt: &SemanticShadowCompareReceipt) -> &'static str {
+    if is_release_readiness_receipt(receipt) { "release-readiness" } else { "schema-fixture" }
 }
 
 fn receipt_from_identities(
@@ -184,12 +211,25 @@ fn render_status_markdown(artifact: &Artifact) -> String {
         text.push_str(&format!("| {verdict} | {count} |\n"));
     }
 
+    text.push_str("\n## Release-Readiness Verdict Counts\n\n");
+    text.push_str("| Verdict | Count |\n|---|---:|\n");
+    for (verdict, count) in &artifact.release_readiness_verdict_counts {
+        text.push_str(&format!("| {verdict} | {count} |\n"));
+    }
+
+    text.push_str("\n## Schema Fixture Verdict Counts\n\n");
+    text.push_str("| Verdict | Count |\n|---|---:|\n");
+    for (verdict, count) in &artifact.schema_fixture_verdict_counts {
+        text.push_str(&format!("| {verdict} | {count} |\n"));
+    }
+
     text.push_str("\n## Receipts\n\n");
-    text.push_str("| Query | Symbol | Verdict | Old count | New count |\n");
-    text.push_str("|---|---|---|---:|---:|\n");
+    text.push_str("| Scope | Query | Symbol | Verdict | Old count | New count |\n");
+    text.push_str("|---|---|---|---|---:|---:|\n");
     for receipt in &artifact.receipts {
         text.push_str(&format!(
-            "| {:?} | `{}` | {} | {} | {} |\n",
+            "| {} | {:?} | `{}` | {} | {} | {} |\n",
+            receipt_scope(receipt),
             receipt.query,
             receipt.input.symbol,
             verdict_key(receipt.verdict),
@@ -198,7 +238,7 @@ fn render_status_markdown(artifact: &Artifact) -> String {
         ));
     }
 
-    text.push_str("\n");
+    text.push('\n');
     text.push_str(artifact.notes);
     text.push('\n');
     text
@@ -211,11 +251,19 @@ mod tests {
     #[test]
     fn artifact_includes_required_verdict_rows() {
         let artifact = build_artifact();
+        assert_eq!(artifact.schema_version, 2);
         assert_eq!(artifact.verdict_counts.get("same"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("improved"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("unavailable"), Some(&1));
+        assert_eq!(artifact.release_readiness_verdict_counts.get("same"), Some(&1));
+        assert_eq!(artifact.release_readiness_verdict_counts.get("improved"), Some(&1));
+        assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
+        assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("regression"), Some(&1));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&1));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("unavailable"), Some(&1));
     }
 
     #[test]
@@ -224,6 +272,15 @@ mod tests {
         let second = serialize_json(&build_artifact())?;
         assert_eq!(first, second);
         Ok(())
+    }
+
+    #[test]
+    fn status_markdown_separates_release_readiness_from_schema_fixtures() {
+        let markdown = render_status_markdown(&build_artifact());
+        assert!(markdown.contains("## Release-Readiness Verdict Counts"));
+        assert!(markdown.contains("## Schema Fixture Verdict Counts"));
+        assert!(markdown.contains("| release-readiness | FindDefinition"));
+        assert!(markdown.contains("| schema-fixture | CountUsages"));
     }
 
     #[test]
