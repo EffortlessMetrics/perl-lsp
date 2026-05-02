@@ -307,7 +307,6 @@ jobs:
           add-paths: |
             Formula/perllsp.rb
             Formula/perl-lsp.rb
-          labels: automated-pr
           signoff: false
           delete-branch: true
 
