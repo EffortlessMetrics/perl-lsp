@@ -142,9 +142,16 @@ suite('Published extension managed binary smoke', function () {
       await config.update('linuxLibc', 'gnu', vscode.ConfigurationTarget.Global);
     }
 
-    await withTimeout('published extension activation', extension.activate(), 45_000);
+    let activationFailure: unknown;
+    void Promise.resolve(extension.activate()).catch((error: unknown) => {
+      activationFailure = error;
+    });
+
     await waitForCommand('perl-lsp.reinstall', 15_000);
     await waitForCommand('perl-lsp.runHealthCheck', 15_000);
+    if (activationFailure) {
+      throw activationFailure;
+    }
 
     await config.update('autoDownload', true, vscode.ConfigurationTarget.Global);
 
