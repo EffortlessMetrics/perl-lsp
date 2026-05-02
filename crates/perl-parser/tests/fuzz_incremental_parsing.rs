@@ -258,6 +258,50 @@ proptest! {
             );
         }
     }
+
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(32))]
+
+    #[test]
+    fn fuzz_incremental_unicode_edit_sequences_preserve_no_panic(
+        base in r"[\p{L}\p{N}_ \n\t]{1,80}",
+        edits in proptest::collection::vec((0usize..80, r"[\p{L}\p{N}\p{S} \n\t]{0,16}"), 1..10),
+    ) {
+        let mut script = base;
+
+        for (index_hint, payload) in edits {
+            let insertion_at = script
+                .char_indices()
+                .nth(index_hint.min(script.chars().count()))
+                .map_or(script.len(), |(idx, _)| idx);
+            script.insert_str(insertion_at, &payload);
+
+            if !script.is_empty() {
+                let mut starts = script.char_indices().map(|(idx, _)| idx).collect::<Vec<_>>();
+                starts.push(script.len());
+
+                let start_pos = (index_hint / 2).min(starts.len().saturating_sub(1));
+                let end_pos = (start_pos + payload.chars().count() / 2).min(starts.len() - 1);
+                let delete_start = starts[start_pos];
+                let delete_end = starts[end_pos];
+
+                if delete_start < delete_end {
+                    script.replace_range(delete_start..delete_end, "");
+                }
+            }
+
+            let mut parser = Parser::new(&script);
+            let parse_result = std::panic::catch_unwind(AssertUnwindSafe(|| parser.parse()));
+
+            prop_assert!(
+                parse_result.is_ok(),
+                "unicode incremental edit sequence caused parser panic for script: {:?}",
+                script
+            );
+        }
+    }
 }
 
 /// Test memory and performance characteristics under stress
