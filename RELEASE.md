@@ -22,7 +22,9 @@ Use this section to confirm the release inputs are ready before dispatching the 
 
 ### Required Secrets
 
-All five secrets must be configured in the repository under **Settings > Secrets and variables > Actions** before triggering a release. Missing secrets cause silent workflow skips or hard failures.
+All release-channel secrets must be configured in the repository under
+**Settings > Secrets and variables > Actions** before triggering a release.
+Missing secrets cause channel skips or hard failures.
 
 | Secret | Purpose | Where to get it |
 |--------|---------|-----------------|
@@ -31,6 +33,7 @@ All five secrets must be configured in the repository under **Settings > Secrets
 | `OVSX_PAT` | Publish to Open VSX Registry | https://open-vsx.org under account settings |
 | `DOCKER_USERNAME` | Push to Docker Hub | Your Docker Hub username |
 | `DOCKER_PASSWORD` | Push to Docker Hub | A Docker Hub access token (not your account password) |
+| `HOMEBREW_TAP_TOKEN` | Open bump PRs in `EffortlessMetrics/homebrew-tap` | Fine-grained PAT with contents read/write, pull requests read/write, metadata read |
 
 `GITHUB_TOKEN` is provided automatically — no action needed.
 
@@ -69,6 +72,13 @@ gh run list --branch master --limit 5
 ## Pre-release Verification Steps
 
 Run these locally before triggering the release workflow. The validate job in the orchestration workflow checks most of these, but catching failures locally avoids a partial-start release.
+
+Set the intended version once and reuse it in the commands below:
+
+```bash
+export VERSION=X.Y.Z
+export TAG="v${VERSION}"
+```
 
 ### 1. Tests passing
 
@@ -110,7 +120,7 @@ git status | grep '\.snap\.new'
 
 ```bash
 # The release version section must exist and contain content
-grep -A 5 '## \[0\.12\.0\]' CHANGELOG.md
+grep -F -A 5 "## [$VERSION]" CHANGELOG.md
 ```
 
 The `## [Unreleased]` section must be empty or contain only the section header — no uncommitted changes should appear there.
@@ -119,30 +129,52 @@ The `## [Unreleased]` section must be empty or contain only the section header �
 
 ```bash
 git fetch --tags
-git tag | grep 'v0\.12\.0'
-# Should return nothing
+! git tag | grep -q "^${TAG}$"
+# Should exit successfully
 ```
 
 ### 6. Workspace Cargo.toml version matches intended release
 
 ```bash
 grep '^version' Cargo.toml | head -1
-# Expected output: version = "0.12.1"
+# Expected output: version = "X.Y.Z"
 ```
 
 ### 7. All publishable crate versions match
 
 ```bash
 cargo metadata --format-version=1 --no-deps | python3 -c '
-import json, sys
+import json, os, sys
+target = os.environ["VERSION"]
 meta = json.load(sys.stdin)
 ws = set(meta["workspace_members"])
 for pkg in meta["packages"]:
     if pkg["id"] in ws:
-        if pkg["version"] != "0.12.1":
+        if pkg["version"] != target:
             print(f"MISMATCH: {pkg[\"name\"]}@{pkg[\"version\"]}")
 '
 # Should print nothing
+```
+
+### 8. Install surface and release-note checks
+
+These checks guard the user-facing install paths and GitHub Release asset
+chooser that downstream users see first.
+
+```bash
+cargo xtask install-surface-check
+bash scripts/check_release_history.sh
+
+cargo xtask release-notes --tag "$TAG" --output "/tmp/${TAG}-body.md"
+grep -q 'Which file should I download?' "/tmp/${TAG}-body.md"
+grep -q 'x86_64-unknown-linux-gnu' "/tmp/${TAG}-body.md"
+grep -q 'x86_64-unknown-linux-musl' "/tmp/${TAG}-body.md"
+```
+
+If Docker is available, also run the installer target-selection self-test:
+
+```bash
+bash scripts/tests/test-install-target-selection.sh
 ```
 
 ---
@@ -155,7 +187,7 @@ The release is triggered via a single manual workflow dispatch. The orchestratio
 
 ```bash
 gh workflow run release-orchestration.yml \
-  --field version=0.12.1 \
+  --field version="$VERSION" \
   --field prerelease=false \
   --field skip_crates=false \
   --field skip_extension=false \
@@ -168,7 +200,7 @@ gh workflow run release-orchestration.yml \
 2. Select **Release Orchestration** from the left sidebar.
 3. Click **Run workflow**.
 4. Fill in the fields:
-   - **Release version**: `0.12.1` (no `v` prefix)
+   - **Release version**: `X.Y.Z` (no `v` prefix)
    - **Mark as prerelease**: check only when GitHub should display the release as a prerelease
    - **Skip crates.io publishing**: leave unchecked
    - **Skip VSCode extension publishing**: leave unchecked
@@ -179,7 +211,7 @@ gh workflow run release-orchestration.yml \
 
 | Input | Description | Default |
 |-------|-------------|---------|
-| `version` | Release version without `v` prefix, e.g. `0.12.1` | required |
+| `version` | Release version without `v` prefix, e.g. `X.Y.Z` | required |
 | `prerelease` | Mark the GitHub release as a prerelease | `false` |
 | `skip_crates` | Skip crates.io publish (for re-runs after partial failure) | `false` |
 | `skip_extension` | Skip VS Code Marketplace publish | `false` |
@@ -192,7 +224,7 @@ If the release orchestration fails mid-way (e.g., crates.io succeeds but Docker 
 ```bash
 # Re-run only Docker (crates and extension already published)
 gh workflow run release-orchestration.yml \
-  --field version=0.12.1 \
+  --field version="$VERSION" \
   --field skip_crates=true \
   --field skip_extension=true \
   --field skip_docker=false
@@ -207,9 +239,9 @@ gh workflow run release-orchestration.yml \
 | `release-orchestration.yml` (validate + tag) | Manual dispatch | ~5–15 min | Version/CI validation, creates annotated git tag, dispatches downstream workflows |
 | `release.yml` (build + GitHub release) | Orchestration dispatch | ~25–40 min | Builds binaries for 7 platforms (4 Linux, 2 macOS, 1 Windows), creates GitHub release with SHA256SUMS and SBOM |
 | `publish-crates.yml` | Orchestration dispatch | ~60–90 min | Publishes all crates to crates.io in topological dependency order with 3-attempt retry and index wait per crate |
-| `publish-extension.yml` | Orchestration dispatch | ~5–10 min | Builds VSIX, publishes to VS Code Marketplace and Open VSX Registry |
+| `publish-extension.yml` | Orchestration dispatch | ~10–30 min | Builds VSIX, publishes to VS Code Marketplace and Open VSX Registry, then runs published-package smokes |
 | `docker-publish.yml` | Orchestration dispatch | ~20–30 min | Builds multi-arch images (amd64, arm64) for GHCR and Docker Hub |
-| `brew-bump.yml` | GitHub release published event | ~5–10 min | Updates Homebrew formula with new version and checksums |
+| `brew-bump.yml` | GitHub release published event | ~5–10 min | Updates `EffortlessMetrics/homebrew-tap` formula with new version and checksums |
 | `scoop-bump.yml` | GitHub release published event | ~3–5 min | Updates Scoop manifest |
 | `chocolatey-bump.yml` | GitHub release published event | ~3–5 min | Updates Chocolatey package |
 | `winget-bump.yml` | GitHub release published event | ~3–5 min | Refreshes the repo-local winget manifest |
@@ -227,55 +259,75 @@ After all workflows complete, verify that each distribution channel received the
 ### 1. GitHub Release
 
 ```bash
-gh release view v0.12.1
+gh release view "$TAG"
 # Should show assets including:
-# - perllsp-0.12.1-x86_64-unknown-linux-gnu.tar.gz
-# - perllsp-0.12.1-aarch64-unknown-linux-gnu.tar.gz
-# - perllsp-0.12.1-x86_64-unknown-linux-musl.tar.gz
-# - perllsp-0.12.1-aarch64-unknown-linux-musl.tar.gz
-# - perllsp-0.12.1-x86_64-apple-darwin.tar.gz
-# - perllsp-0.12.1-aarch64-apple-darwin.tar.gz
-# - perllsp-0.12.1-x86_64-pc-windows-msvc.zip
+# - perllsp-X.Y.Z-x86_64-unknown-linux-gnu.tar.gz
+# - perllsp-X.Y.Z-aarch64-unknown-linux-gnu.tar.gz
+# - perllsp-X.Y.Z-x86_64-unknown-linux-musl.tar.gz
+# - perllsp-X.Y.Z-aarch64-unknown-linux-musl.tar.gz
+# - perllsp-X.Y.Z-x86_64-apple-darwin.tar.gz
+# - perllsp-X.Y.Z-aarch64-apple-darwin.tar.gz
+# - perllsp-X.Y.Z-x86_64-pc-windows-msvc.zip
 # - SHA256SUMS
 # - sbom-spdx.json
-# - perl-lsp-rs-0.12.1.vsix
+# - perl-lsp-rs-X.Y.Z.vsix
 ```
 
 ### 2. crates.io
 
 ```bash
 cargo search perllsp --limit 1
-# Expected: perllsp = "0.12.1"
+# Expected: perllsp = "X.Y.Z"
 
 cargo search perl-lsp-rs --limit 1
-# Expected: perl-lsp-rs = "0.12.1"
+# Expected: perl-lsp-rs = "X.Y.Z"
 ```
 
 ### 3. VS Code Marketplace
 
 Visit: https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs
 
-Check that the version shown is `0.12.1`.
+Check that the version shown is `X.Y.Z`.
+
+Then run the published Marketplace package smoke:
+
+```bash
+gh workflow run vscode-published-extension-smoke.yml \
+  --repo EffortlessMetrics/perl-lsp \
+  --field version="$VERSION" \
+  --field source=marketplace
+```
 
 ### 4. Open VSX Registry
 
 Visit: https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs
 
+Check that the version shown is `X.Y.Z`.
+
+Then run the published Open VSX package smoke:
+
+```bash
+gh workflow run vscode-published-extension-smoke.yml \
+  --repo EffortlessMetrics/perl-lsp \
+  --field version="$VERSION" \
+  --field source=open-vsx
+```
+
 ### 5. Docker images
 
 ```bash
-docker pull effortlessmetrics/perl-lsp:0.12.1
-docker run --rm effortlessmetrics/perl-lsp:0.12.1 perllsp --version
-# Expected: perllsp 0.12.1
+docker pull "effortlessmetrics/perl-lsp:${VERSION}"
+docker run --rm "effortlessmetrics/perl-lsp:${VERSION}" perllsp --version
+# Expected: perllsp X.Y.Z
 ```
 
 ```bash
-docker pull ghcr.io/effortlessmetrics/perl-lsp:0.12.1
+docker pull "ghcr.io/effortlessmetrics/perl-lsp:${VERSION}"
 ```
 
 ### 6. Homebrew auto-bump
 
-The `brew-bump.yml` workflow triggers automatically on `release.published`. It downloads all four platform archives (`perllsp-${VERSION}-{x86_64,aarch64}-{apple-darwin,unknown-linux-gnu}.tar.gz`), validates them against `SHA256SUMS`, updates `Formula/perllsp.rb` in `EffortlessMetrics/homebrew-tap`, and creates a bump PR.
+The `brew-bump.yml` workflow triggers automatically on `release.published`. It downloads all four Homebrew platform archives (`perllsp-${VERSION}-{x86_64,aarch64}-{apple-darwin,unknown-linux-gnu}.tar.gz`), validates them against `SHA256SUMS`, generates `Formula/perllsp.rb` through `cargo xtask update-homebrew`, and creates a bump PR in `EffortlessMetrics/homebrew-tap`.
 
 To verify the workflow ran:
 
@@ -284,31 +336,61 @@ To verify the workflow ran:
 gh run list --workflow brew-bump.yml --limit 5
 
 # Check the bump PR was created
-gh pr list --search "perllsp" --state open
+gh pr list --repo EffortlessMetrics/homebrew-tap --search "perllsp" --state open
 ```
 
 If the workflow did not trigger automatically, run it manually:
 
 ```bash
-gh workflow run brew-bump.yml --field tag=v0.12.1
+gh workflow run brew-bump.yml \
+  --repo EffortlessMetrics/perl-lsp \
+  --field tag="$TAG" \
+  --field include_prerelease=true
 ```
 
-To test that the formula works locally (requires macOS or Linuxbrew):
+After the tap PR merges, test the public user command (requires macOS or Linuxbrew):
 
 ```bash
-brew install --build-from-source Formula/perllsp.rb
+brew update
+brew install effortlessmetrics/tap/perllsp || brew upgrade perllsp
+perllsp --version
 perllsp --health
+perl-dap --version
+brew test effortlessmetrics/tap/perllsp
 ```
 
 ### 7. Verify binary checksum
 
 ```bash
 # Download the Linux binary and verify its SHA256 matches the release
-gh release download v0.12.1 --pattern 'perllsp-0.12.1-x86_64-unknown-linux-gnu.tar.gz' --pattern SHA256SUMS
+gh release download "$TAG" --pattern "perllsp-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" --pattern SHA256SUMS
 sha256sum --check SHA256SUMS --ignore-missing
 ```
 
-### 8. Post-merge metrics update
+### 8. Release install-surface receipt
+
+Capture one short receipt after the channel checks pass. This gives the release
+an auditable install-surface summary without requiring future reviewers to
+reconstruct the result from individual workflow runs.
+
+```bash
+mkdir -p target/receipts
+cat > "target/receipts/release-install-surface-${TAG}.md" <<EOF
+# Release install surface ${TAG}
+
+- Release notes chooser: pass
+- GitHub release asset layout: pass
+- Homebrew bump: pass
+- Public tap smoke: pass
+- VS Code source smoke: pass
+- VS Code Marketplace published smoke: pass
+- Open VSX published smoke: pass
+- Installer target-selection: pass
+- Install-surface check: pass
+EOF
+```
+
+### 9. Post-merge metrics update
 
 After the release merges, the corpus metrics auto-regenerate. No manual step is required.
 
@@ -320,11 +402,11 @@ After the release merges, the corpus metrics auto-regenerate. No manual step is 
 
 ```bash
 # Delete the release (keeps the tag)
-gh release delete v0.12.1 --yes
+gh release delete "$TAG" --yes
 
 # Delete the tag if needed
-git push origin :refs/tags/v0.12.1
-git tag -d v0.12.1
+git push origin ":refs/tags/${TAG}"
+git tag -d "$TAG"
 ```
 
 ### crates.io (irreversible — yank, do not delete)
@@ -333,13 +415,13 @@ Once published to crates.io, a crate version cannot be deleted. Use `cargo yank`
 
 ```bash
 # Yank a specific crate version
-cargo yank --version 0.12.1 <crate-name>
+cargo yank --version "$VERSION" <crate-name>
 
 # Example: yank the public facade crate
-cargo yank --version 0.12.1 perllsp
+cargo yank --version "$VERSION" perllsp
 
 # Example: yank the implementation crate
-cargo yank --version 0.12.1 perl-lsp-rs
+cargo yank --version "$VERSION" perl-lsp-rs
 ```
 
 The crates are published in topological order. If the workflow fails mid-way, earlier crates in the publish order are already live. Yank each published crate individually. The publish order is computed by `publish-crates.yml` from `cargo metadata`; run this to see the order:
@@ -356,8 +438,8 @@ print("\n".join(allow))
 To yank all at once after a botched release:
 
 ```bash
-# Replace 0.12.1 with the bad version
-VERSION=0.12.1
+# Replace X.Y.Z with the bad version
+VERSION=X.Y.Z
 cargo metadata --format-version=1 --no-deps | python3 -c '
 import json, sys
 meta = json.load(sys.stdin)
@@ -370,7 +452,7 @@ done
 
 ### VS Code Marketplace
 
-Versions cannot be deleted from the VS Code Marketplace. Publish a corrected patch release (`0.12.1`) to supersede the bad version. Contact the Marketplace support team only for critical security issues.
+Versions cannot be deleted from the VS Code Marketplace. Publish a corrected patch release to supersede the bad version. Contact the Marketplace support team only for critical security issues.
 
 ### Open VSX Registry
 
@@ -381,7 +463,7 @@ Same as VS Code Marketplace — publish a patch release to supersede.
 ```bash
 # Delete a specific tag via Docker Hub API (requires login)
 curl -X DELETE \
-  "https://hub.docker.com/v2/repositories/effortlessmetrics/perl-lsp/tags/0.12.1/" \
+  "https://hub.docker.com/v2/repositories/effortlessmetrics/perl-lsp/tags/${VERSION}/" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -400,7 +482,7 @@ If `release-orchestration.yml` fails after the tag is created but before all dow
 3. If the tag was pushed but the GitHub release was not created, run `release.yml` directly:
    ```bash
    gh workflow run release.yml \
-     --field tag=v0.12.1 \
+     --field tag="$TAG" \
      --field prerelease=false
    ```
 
@@ -464,7 +546,7 @@ Every public release **must** update three surfaces. See [RELEASE_HISTORY.md](RE
   - Actual asset list
 - [ ] Update `RELEASE_HISTORY.md` row with:
   - Asset count and summary
-  - Channel outcomes (crates.io, VS Code Marketplace, Open VSX, Docker)
+  - Channel outcomes (crates.io, VS Code Marketplace, Open VSX, Docker, Homebrew tap)
 
 ### Release PR template
 
@@ -483,13 +565,19 @@ grep 'X.Y.Z' RELEASE_HISTORY.md
 # 3. CHANGELOG section exists
 grep '\[X.Y.Z\]' CHANGELOG.md
 
-# 4. Curated body parses cleanly (frontmatter strips, body non-empty)
-cargo xtask release-notes --tag vX.Y.Z > /tmp/body.md && test -s /tmp/body.md
+# 4. Curated body parses cleanly and includes install chooser guidance
+cargo xtask release-notes --tag vX.Y.Z --output /tmp/body.md && test -s /tmp/body.md
+grep -q 'Which file should I download?' /tmp/body.md
+grep -q 'x86_64-unknown-linux-gnu' /tmp/body.md
+grep -q 'x86_64-unknown-linux-musl' /tmp/body.md
 
-# 5. GitHub Release matches
+# 5. Install surface guard passes
+cargo xtask install-surface-check
+
+# 6. GitHub Release matches
 gh release view vX.Y.Z --json tagName,assets --jq '{tag: .tagName, assets: [.assets[].name]}'
 
-# 6. GitHub Release body starts with the curated content (not a PR dump)
+# 7. GitHub Release body starts with the curated content (not a PR dump)
 gh release view vX.Y.Z --json body --jq '.body' | head -1   # should be "# vX.Y.Z"
 ```
 
