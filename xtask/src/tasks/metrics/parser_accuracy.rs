@@ -5,6 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -18,6 +19,7 @@ use perl_parser::incremental_v2::IncrementalParserV2;
 use perl_parser::position::Position;
 use perl_parser::{
     Edit as TextEdit, IncrementalState, Node, NodeKind, ParseError, Parser, PositionMapper,
+    TokenKind, TokenStream,
 };
 use perl_semantic_facts::{AnchorId, EntityId};
 use perl_workspace::workspace::workspace_index::{FileFactShard, WorkspaceIndex};
@@ -672,6 +674,41 @@ struct UnsupportedScore {
     false_exact_sample_count: u64,
 }
 
+#[derive(Debug, Clone, Default, PartialEq)]
+struct ScaleCostScore {
+    fixture_count: u64,
+    file_bytes: u64,
+    source_lines: u64,
+    token_count: u64,
+    ast_node_count: u64,
+    symbol_count: u64,
+    import_count: u64,
+    export_count: u64,
+    sub_count: u64,
+    package_count: u64,
+    max_nesting_depth: u64,
+    max_brace_depth: u64,
+    max_regex_length: u64,
+    max_heredoc_body_bytes: u64,
+    quote_like_count: u64,
+    dynamic_boundary_count: u64,
+    lex_ms: Vec<f64>,
+    parse_ms: Vec<f64>,
+    ast_projection_ms: Vec<f64>,
+    semantic_extraction_ms: Vec<f64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct DeterminismScore {
+    fixture_count: u64,
+    token_stream_stable_count: u64,
+    parse_hash_stable_count: u64,
+    ast_hash_stable_count: u64,
+    semantic_fact_hash_stable_count: u64,
+    diagnostic_hash_stable_count: u64,
+    repeated_parse_stable_count: u64,
+}
+
 /// Run `cargo xtask metrics parser-accuracy`.
 pub fn run(
     json: bool,
@@ -690,6 +727,7 @@ pub fn run(
     let mut artifact = build_artifact(&root, &manifest, cadence)?;
     artifact.metric_runtime.runtime_ms = start.elapsed().as_secs_f64() * 1000.0;
     settle_artifact_size(&mut artifact)?;
+    sync_runtime_metric_rows(&mut artifact, cadence);
 
     if check {
         validate_artifact_contract(&artifact)?;
@@ -747,6 +785,8 @@ fn build_artifact(
     let incremental_score = score_manifest_incremental(root, manifest)?;
     let span_score = score_manifest_spans(root, manifest)?;
     let unsupported_score = score_manifest_unsupported(root, manifest, &line_score)?;
+    let scale_cost_score = score_manifest_scale_cost(root, manifest)?;
+    let determinism_score = score_manifest_determinism(root, manifest)?;
     let mut metrics = vec![MetricRow::Measured {
         metric: "denominator_fixture_count".to_string(),
         value: fixture_count,
@@ -765,6 +805,10 @@ fn build_artifact(
     metrics.extend(confidence_metrics(&symbol_score, cadence));
     metrics.extend(unsupported_metrics(&unsupported_score, cadence));
     metrics.extend(provider_impact_metrics());
+    metrics.extend(scale_metrics(&scale_cost_score, cadence));
+    metrics.extend(cost_metrics(&scale_cost_score, cadence));
+    metrics.extend(cache_reuse_metrics(&incremental_score, cadence));
+    metrics.extend(determinism_metrics(&determinism_score, cadence));
 
     Ok(ParserAccuracyArtifact {
         schema_version: 1,
@@ -1582,6 +1626,198 @@ fn is_conservative_symbol_occurrence(occurrence: &SymbolOccurrenceKey) -> bool {
 
 fn is_conservative_symbol_edge(edge: &SymbolEdgeKey) -> bool {
     edge.provenance != "ExactAst" || edge.confidence != "High"
+}
+
+fn score_manifest_scale_cost(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+) -> Result<ScaleCostScore> {
+    let mut score = ScaleCostScore::default();
+    for fixture in &manifest.fixtures {
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy scale fixture source {}", source_path.display())
+        })?;
+        score.fixture_count += 1;
+        score.file_bytes += source.len() as u64;
+        score.source_lines += line_starts(&source).len() as u64;
+        score.max_brace_depth = score.max_brace_depth.max(max_brace_depth(&source));
+        score.export_count += source.matches("@EXPORT").count() as u64;
+        score.export_count += source.matches("%EXPORT_TAGS").count() as u64;
+
+        let lex_start = Instant::now();
+        let tokens = collect_parser_tokens(&source)?;
+        score.lex_ms.push(lex_start.elapsed().as_secs_f64() * 1000.0);
+        score.token_count += tokens.len() as u64;
+
+        let parse_start = Instant::now();
+        let mut parser = Parser::new(&source);
+        let output = parser.parse_with_recovery();
+        score.parse_ms.push(parse_start.elapsed().as_secs_f64() * 1000.0);
+
+        let ast_start = Instant::now();
+        collect_scale_from_node(&output.ast, &source, 0, &mut score);
+        score.ast_projection_ms.push(ast_start.elapsed().as_secs_f64() * 1000.0);
+
+        let semantic_start = Instant::now();
+        let predictions = extract_symbol_predictions(&source_path, &source)?;
+        score.semantic_extraction_ms.push(semantic_start.elapsed().as_secs_f64() * 1000.0);
+        score.symbol_count += (predictions.entities.len()
+            + predictions.occurrences.len()
+            + predictions.edges.len()) as u64;
+
+        let actual_by_line = extract_line_tags(&source);
+        score.dynamic_boundary_count +=
+            actual_by_line.values().filter(|tags| tags.contains(&LineTag::DynamicBoundary)).count()
+                as u64;
+    }
+    Ok(score)
+}
+
+fn collect_parser_tokens(source: &str) -> Result<Vec<String>> {
+    let mut stream = TokenStream::new(source);
+    let mut tokens = Vec::new();
+    loop {
+        let token =
+            stream.next().map_err(|err| eyre!("tokenizing parser accuracy fixture: {err}"))?;
+        if token.kind == TokenKind::Eof {
+            break;
+        }
+        tokens.push(format!("{:?}:{}", token.kind, token.text));
+    }
+    Ok(tokens)
+}
+
+fn collect_scale_from_node(node: &Node, source: &str, depth: u64, score: &mut ScaleCostScore) {
+    score.ast_node_count += 1;
+    score.max_nesting_depth = score.max_nesting_depth.max(depth);
+    match &node.kind {
+        NodeKind::Package { .. } => score.package_count += 1,
+        NodeKind::Subroutine { .. } | NodeKind::Method { .. } => score.sub_count += 1,
+        NodeKind::Use { .. } => score.import_count += 1,
+        NodeKind::FunctionCall { name, .. } if name == "require" => score.import_count += 1,
+        NodeKind::Regex { .. }
+        | NodeKind::Match { .. }
+        | NodeKind::Substitution { .. }
+        | NodeKind::Transliteration { .. } => {
+            score.quote_like_count += 1;
+            score.max_regex_length = score.max_regex_length.max(node_span_len(source, node));
+        }
+        NodeKind::Heredoc { .. } => {
+            score.max_heredoc_body_bytes =
+                score.max_heredoc_body_bytes.max(node_span_len(source, node));
+        }
+        _ => {}
+    }
+    node.for_each_child(|child| collect_scale_from_node(child, source, depth + 1, score));
+}
+
+fn node_span_len(source: &str, node: &Node) -> u64 {
+    if node.location.end <= source.len()
+        && node.location.start <= node.location.end
+        && source.is_char_boundary(node.location.start)
+        && source.is_char_boundary(node.location.end)
+    {
+        (node.location.end - node.location.start) as u64
+    } else {
+        0
+    }
+}
+
+fn max_brace_depth(source: &str) -> u64 {
+    let mut current = 0_u64;
+    let mut max_depth = 0_u64;
+    for ch in source.chars() {
+        match ch {
+            '{' => {
+                current += 1;
+                max_depth = max_depth.max(current);
+            }
+            '}' => current = current.saturating_sub(1),
+            _ => {}
+        }
+    }
+    max_depth
+}
+
+fn score_manifest_determinism(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+) -> Result<DeterminismScore> {
+    let mut score = DeterminismScore::default();
+    for fixture in &manifest.fixtures {
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy determinism fixture source {}", source_path.display())
+        })?;
+        score.fixture_count += 1;
+
+        let first_tokens = collect_parser_tokens(&source)?;
+        let second_tokens = collect_parser_tokens(&source)?;
+        if stable_hash(&first_tokens) == stable_hash(&second_tokens) {
+            score.token_stream_stable_count += 1;
+        }
+
+        let first_parse = parse_determinism_hashes(&source);
+        let second_parse = parse_determinism_hashes(&source);
+        if first_parse.parse_hash == second_parse.parse_hash {
+            score.parse_hash_stable_count += 1;
+            score.repeated_parse_stable_count += 1;
+        }
+        if first_parse.ast_hash == second_parse.ast_hash {
+            score.ast_hash_stable_count += 1;
+        }
+        if first_parse.diagnostic_hash == second_parse.diagnostic_hash {
+            score.diagnostic_hash_stable_count += 1;
+        }
+
+        let first_fact_hash = semantic_fact_hash(&source_path, &source)?;
+        let second_fact_hash = semantic_fact_hash(&source_path, &source)?;
+        if first_fact_hash == second_fact_hash {
+            score.semantic_fact_hash_stable_count += 1;
+        }
+    }
+    Ok(score)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ParseDeterminismHashes {
+    parse_hash: u64,
+    ast_hash: u64,
+    diagnostic_hash: u64,
+}
+
+fn parse_determinism_hashes(source: &str) -> ParseDeterminismHashes {
+    let mut parser = Parser::new(source);
+    let output = parser.parse_with_recovery();
+    let ast_debug = format!("{:?}", output.ast);
+    let diagnostics_debug = format!("{:?}", output.diagnostics);
+    ParseDeterminismHashes {
+        parse_hash: stable_hash(&(ast_debug.as_str(), diagnostics_debug.as_str())),
+        ast_hash: stable_hash(&ast_debug),
+        diagnostic_hash: stable_hash(&diagnostics_debug),
+    }
+}
+
+fn semantic_fact_hash(source_path: &Path, source: &str) -> Result<u64> {
+    let index = WorkspaceIndex::new();
+    let source_path_text = source_path.to_string_lossy();
+    index.index_file_str(&source_path_text, source).map_err(|err| {
+        eyre!("indexing parser accuracy determinism fixture {}: {err}", source_path.display())
+    })?;
+    let shard = index.file_fact_shard(&source_path_text).ok_or_else(|| {
+        eyre!(
+            "missing canonical fact shard for parser accuracy determinism fixture {}",
+            source_path.display()
+        )
+    })?;
+    Ok(stable_hash(&format!("{:?}", shard)))
+}
+
+fn stable_hash<T: Hash>(value: &T) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    value.hash(&mut hasher);
+    hasher.finish()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2941,6 +3177,244 @@ fn provider_impact_metrics() -> Vec<MetricRow> {
         .collect()
 }
 
+fn scale_metrics(score: &ScaleCostScore, cadence: Cadence) -> Vec<MetricRow> {
+    if score.fixture_count == 0 {
+        return vec![insufficient(
+            "scale_file_bytes",
+            "parser accuracy fixtures are not available",
+        )];
+    }
+
+    vec![
+        measured_count("scale_file_bytes", score.file_bytes, score.fixture_count, cadence),
+        measured_count("scale_line_count", score.source_lines, score.fixture_count, cadence),
+        measured_count("scale_token_count", score.token_count, score.fixture_count, cadence),
+        measured_count("scale_ast_node_count", score.ast_node_count, score.fixture_count, cadence),
+        measured_count("scale_symbol_count", score.symbol_count, score.fixture_count, cadence),
+        measured_count("scale_import_count", score.import_count, score.fixture_count, cadence),
+        measured_count("scale_export_count", score.export_count, score.fixture_count, cadence),
+        measured_count("scale_sub_count", score.sub_count, score.fixture_count, cadence),
+        measured_count("scale_package_count", score.package_count, score.fixture_count, cadence),
+        measured_count(
+            "scale_max_nesting_depth",
+            score.max_nesting_depth,
+            score.fixture_count,
+            cadence,
+        ),
+        measured_count(
+            "scale_max_brace_depth",
+            score.max_brace_depth,
+            score.fixture_count,
+            cadence,
+        ),
+        measured_count(
+            "scale_max_regex_length",
+            score.max_regex_length,
+            score.fixture_count,
+            cadence,
+        ),
+        measured_count(
+            "scale_max_heredoc_body_bytes",
+            score.max_heredoc_body_bytes,
+            score.fixture_count,
+            cadence,
+        ),
+        measured_count(
+            "scale_quote_like_count",
+            score.quote_like_count,
+            score.fixture_count,
+            cadence,
+        ),
+        measured_count(
+            "scale_dynamic_boundary_count",
+            score.dynamic_boundary_count,
+            score.fixture_count,
+            cadence,
+        ),
+    ]
+}
+
+fn cost_metrics(score: &ScaleCostScore, cadence: Cadence) -> Vec<MetricRow> {
+    vec![
+        optional_measured_value(
+            "lex_ms_p95",
+            p95_f64(&score.lex_ms),
+            score.fixture_count,
+            "lexer timing samples are not available",
+            cadence,
+        ),
+        optional_measured_value(
+            "parse_ms_p95",
+            p95_f64(&score.parse_ms),
+            score.fixture_count,
+            "parser timing samples are not available",
+            cadence,
+        ),
+        optional_measured_value(
+            "ast_projection_ms_p95",
+            p95_f64(&score.ast_projection_ms),
+            score.fixture_count,
+            "AST projection timing samples are not available",
+            cadence,
+        ),
+        insufficient("recovery_ms_p95", "recovery timing is not instrumented separately yet"),
+        optional_measured_value(
+            "semantic_extraction_ms_p95",
+            p95_f64(&score.semantic_extraction_ms),
+            score.fixture_count,
+            "semantic extraction timing samples are not available",
+            cadence,
+        ),
+        insufficient("workspace_insert_ms_p95", "workspace insert timing is not isolated yet"),
+        insufficient("definition_query_ms_p95", "provider query timing is not wired yet"),
+        insufficient("reference_query_ms_p95", "provider query timing is not wired yet"),
+        insufficient("completion_query_ms_p95", "provider query timing is not wired yet"),
+        insufficient("peak_rss_mb", "memory telemetry is not wired yet"),
+        insufficient("allocated_bytes", "allocation telemetry is not wired yet"),
+        insufficient("allocation_count", "allocation telemetry is not wired yet"),
+    ]
+}
+
+fn cache_reuse_metrics(score: &IncrementalScore, cadence: Cadence) -> Vec<MetricRow> {
+    let checkpoint_total = score.checkpoint_hit_count + score.checkpoint_miss_count;
+    vec![
+        insufficient("lexer_checkpoint_reuse_rate", "lexer checkpoint telemetry is not wired yet"),
+        optional_measured_rate(
+            "parser_checkpoint_reuse_rate",
+            ratio(score.checkpoint_hit_count, checkpoint_total),
+            checkpoint_total,
+            "parser checkpoint telemetry is not available",
+            cadence,
+        ),
+        insufficient(
+            "semantic_fact_cache_hit_rate",
+            "semantic fact cache telemetry is not wired yet",
+        ),
+        insufficient(
+            "workspace_shard_reuse_rate",
+            "workspace shard reuse telemetry is not wired yet",
+        ),
+        insufficient("unchanged_file_skip_rate", "unchanged-file skip telemetry is not wired yet"),
+        insufficient("content_hash_hit_rate", "content hash telemetry is not wired yet"),
+        optional_measured_count(
+            "fast_path_attempt_count",
+            score.expectation_count,
+            score.expectation_count,
+            "incremental fast-path fixtures are not available",
+            cadence,
+        ),
+        optional_measured_count(
+            "fast_path_success_count",
+            score.full_parse_equivalent_count,
+            score.expectation_count,
+            "incremental fast-path fixtures are not available",
+            cadence,
+        ),
+        optional_measured_count(
+            "fast_path_fallback_count",
+            score.fallback_count,
+            score.expectation_count,
+            "incremental fast-path fixtures are not available",
+            cadence,
+        ),
+        optional_measured_count(
+            "fast_path_wrong_result_count",
+            score.expectation_count.saturating_sub(score.full_parse_equivalent_count),
+            score.expectation_count,
+            "incremental fast-path fixtures are not available",
+            cadence,
+        ),
+    ]
+}
+
+fn determinism_metrics(score: &DeterminismScore, cadence: Cadence) -> Vec<MetricRow> {
+    if score.fixture_count == 0 {
+        return vec![insufficient(
+            "parse_hash_stability_rate",
+            "determinism fixtures are not available",
+        )];
+    }
+
+    vec![
+        measured_rate(
+            "parse_hash_stability_rate",
+            score.parse_hash_stable_count,
+            score.fixture_count,
+            cadence,
+        ),
+        measured_rate(
+            "token_stream_hash_stability_rate",
+            score.token_stream_stable_count,
+            score.fixture_count,
+            cadence,
+        ),
+        measured_rate(
+            "ast_hash_stability_rate",
+            score.ast_hash_stable_count,
+            score.fixture_count,
+            cadence,
+        ),
+        measured_rate(
+            "semantic_fact_hash_stability_rate",
+            score.semantic_fact_hash_stable_count,
+            score.fixture_count,
+            cadence,
+        ),
+        measured_rate(
+            "diagnostic_hash_stability_rate",
+            score.diagnostic_hash_stable_count,
+            score.fixture_count,
+            cadence,
+        ),
+        measured_rate(
+            "repeated_parse_determinism_rate",
+            score.repeated_parse_stable_count,
+            score.fixture_count,
+            cadence,
+        ),
+        insufficient(
+            "whitespace_invariance_rate",
+            "metamorphic whitespace fixtures are not wired yet",
+        ),
+        insufficient("comment_invariance_rate", "metamorphic comment fixtures are not wired yet"),
+        insufficient(
+            "newline_style_invariance_rate",
+            "metamorphic newline fixtures are not wired yet",
+        ),
+    ]
+}
+
+fn sync_runtime_metric_rows(artifact: &mut ParserAccuracyArtifact, cadence: Cadence) {
+    let runtime = &artifact.metric_runtime;
+    artifact.metrics.extend([
+        MetricRow::Measured {
+            metric: "metric_runtime_ms".to_string(),
+            value: runtime.runtime_ms,
+            sample_count: 1,
+            direction: Direction::Neutral,
+            confidence: Confidence::High,
+            cadence,
+        },
+        measured_count("metric_timeout_count", runtime.timeout_count, 1, cadence),
+        measured_count("metric_flake_count", runtime.flake_count, 1, cadence),
+        measured_count("metric_artifact_size_bytes", runtime.artifact_size_bytes, 1, cadence),
+        measured_count(
+            "metric_ci_runner_failure_count",
+            runtime.ci_runner_failure_count,
+            1,
+            cadence,
+        ),
+        measured_count("metric_orphan_process_count", runtime.orphan_process_count, 1, cadence),
+        optional_measured_value(
+            "metric_cache_hit_rate",
+            runtime.cache_hit_rate,
+            u64::from(runtime.cache_hit_rate.is_some()),
+            "metric cache telemetry is not wired yet",
+            cadence,
+        ),
+    ]);
+}
+
 #[derive(Debug, Clone, Copy)]
 enum SymbolMetricSource {
     Entity,
@@ -4051,6 +4525,161 @@ mod tests {
                 metric,
                 MetricRow::InsufficientData { metric, sample_count: 0, .. }
                     if metric == "provider_diagnostic_false_negative_rate"
+            )
+        }));
+    }
+
+    #[test]
+    fn scale_and_cost_metrics_emit_shape_rows_and_timing_rows() {
+        let score = ScaleCostScore {
+            fixture_count: 2,
+            file_bytes: 120,
+            source_lines: 10,
+            token_count: 30,
+            ast_node_count: 20,
+            symbol_count: 6,
+            import_count: 2,
+            export_count: 1,
+            sub_count: 3,
+            package_count: 2,
+            max_nesting_depth: 4,
+            max_brace_depth: 3,
+            max_regex_length: 12,
+            max_heredoc_body_bytes: 40,
+            quote_like_count: 2,
+            dynamic_boundary_count: 1,
+            lex_ms: vec![0.1, 0.2],
+            parse_ms: vec![0.3, 0.4],
+            ast_projection_ms: vec![0.01, 0.02],
+            semantic_extraction_ms: vec![0.5, 0.7],
+        };
+
+        let mut metrics = scale_metrics(&score, Cadence::Pr);
+        metrics.extend(cost_metrics(&score, Cadence::Pr));
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "scale_token_count"
+                        && (*value - 30.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "parse_ms_p95"
+                        && (*value - 0.4).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "peak_rss_mb"
+            )
+        }));
+    }
+
+    #[test]
+    fn cache_reuse_metrics_emit_fast_path_rows() {
+        let score = IncrementalScore {
+            expectation_count: 2,
+            full_parse_equivalent_count: 1,
+            fallback_count: 1,
+            checkpoint_hit_count: 3,
+            checkpoint_miss_count: 1,
+            ..IncrementalScore::default()
+        };
+
+        let metrics = cache_reuse_metrics(&score, Cadence::Pr);
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "parser_checkpoint_reuse_rate"
+                        && (*value - 0.75).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "fast_path_wrong_result_count"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+    }
+
+    #[test]
+    fn determinism_metrics_emit_hash_stability_rows() {
+        let score = DeterminismScore {
+            fixture_count: 2,
+            token_stream_stable_count: 2,
+            parse_hash_stable_count: 2,
+            ast_hash_stable_count: 1,
+            semantic_fact_hash_stable_count: 2,
+            diagnostic_hash_stable_count: 2,
+            repeated_parse_stable_count: 2,
+        };
+
+        let metrics = determinism_metrics(&score, Cadence::Pr);
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "ast_hash_stability_rate"
+                        && (*value - 0.5).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "whitespace_invariance_rate"
+            )
+        }));
+    }
+
+    #[test]
+    fn runtime_metric_rows_are_synced_after_artifact_size_settles() {
+        let mut artifact = ParserAccuracyArtifact {
+            schema_version: 1,
+            subsystem: "parser_accuracy",
+            generated_at: "2026-05-02T00:00:00Z".to_string(),
+            commit: "test".to_string(),
+            cadence: Cadence::Pr,
+            denominator: Denominator::default(),
+            families: Vec::new(),
+            metrics: Vec::new(),
+            failure_packets: Vec::new(),
+            gold_drift: GoldDrift::default(),
+            metric_runtime: MetricRuntime {
+                runtime_ms: 12.5,
+                artifact_size_bytes: 900,
+                ..MetricRuntime::default()
+            },
+        };
+
+        sync_runtime_metric_rows(&mut artifact, Cadence::Pr);
+
+        assert!(artifact.metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "metric_runtime_ms"
+                        && (*value - 12.5).abs() < f64::EPSILON
+            )
+        }));
+        assert!(artifact.metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "metric_artifact_size_bytes"
+                        && (*value - 900.0).abs() < f64::EPSILON
             )
         }));
     }
