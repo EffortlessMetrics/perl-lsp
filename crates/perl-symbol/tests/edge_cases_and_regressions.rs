@@ -81,7 +81,7 @@ fn api_regression_every_documented_name_is_reachable_at_crate_root() -> Result<(
 /// `facade_api_completeness.rs` — a deliberate act, not an accident.
 #[test]
 fn api_regression_crate_root_exposes_exactly_eleven_reexported_items() -> Result<()> {
-    // The eleven names re-exported at the crate root (from `api.rs`):
+    // The names re-exported at the crate root (from `api.rs`):
     //   SymbolKind, VarKind                          — types
     //   CursorSymbolKind, byte_offset_utf16,
     //   extract_symbol_from_source,
@@ -89,7 +89,9 @@ fn api_regression_crate_root_exposes_exactly_eleven_reexported_items() -> Result
     //   is_modchar, is_word_boundary,
     //   token_under_cursor                           — cursor
     //   SymbolIndex                                  — index
-    //   SymbolDecl, extract_symbol_decls, SymbolRef, SymbolRefKind, extract_symbol_refs
+    //   SymbolDecl, extract_symbol_decls, SymbolRef, SymbolRefKind, extract_symbol_refs,
+    //   SymbolDeclSemanticFacts, SymbolRefSemanticFacts, UnsupportedDeclFact,
+    //   symbol_decls_to_semantic_facts, symbol_refs_to_semantic_facts
     //                                                — surface
     //
     // Bind each name to assert it resolves; if `api.rs` is narrowed, the
@@ -107,6 +109,9 @@ fn api_regression_crate_root_exposes_exactly_eleven_reexported_items() -> Result
     let _ = std::any::type_name::<perl_symbol::SymbolIndex>();
     let _ = std::any::type_name::<perl_symbol::SymbolDecl>();
     let _ = std::any::type_name::<perl_symbol::SymbolRef>();
+    let _ = std::any::type_name::<perl_symbol::SymbolDeclSemanticFacts>();
+    let _ = std::any::type_name::<perl_symbol::SymbolRefSemanticFacts>();
+    let _ = std::any::type_name::<perl_symbol::UnsupportedDeclFact>();
     let _byte: fn(&str, usize) -> usize = perl_symbol::byte_offset_utf16;
     let _esfs: fn(usize, &str) -> Option<(String, perl_symbol::CursorSymbolKind)> =
         perl_symbol::extract_symbol_from_source;
@@ -117,6 +122,15 @@ fn api_regression_crate_root_exposes_exactly_eleven_reexported_items() -> Result
     let _im: fn(u8) -> bool = perl_symbol::is_modchar;
     let _iwb: fn(&[u8], usize, usize) -> bool = perl_symbol::is_word_boundary;
     let _tuc: fn(&str, usize, usize) -> Option<String> = perl_symbol::token_under_cursor;
+    let _sdtsf: fn(
+        &[perl_symbol::SymbolDecl],
+        perl_semantic_facts::FileId,
+    ) -> perl_symbol::SymbolDeclSemanticFacts = perl_symbol::symbol_decls_to_semantic_facts;
+    let _srtsf: fn(
+        &[perl_symbol::SymbolRef],
+        perl_semantic_facts::FileId,
+        &std::collections::BTreeMap<String, perl_semantic_facts::EntityId>,
+    ) -> perl_symbol::SymbolRefSemanticFacts = perl_symbol::symbol_refs_to_semantic_facts;
     Ok(())
 }
 

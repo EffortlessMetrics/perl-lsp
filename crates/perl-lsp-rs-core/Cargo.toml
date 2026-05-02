@@ -12,13 +12,7 @@ documentation = "https://docs.rs/perl-lsp-rs-core"
 readme = "README.md"
 keywords = ["perl", "lsp", "features", "contracts", "capabilities"]
 categories = ["development-tools", "development-tools::testing"]
-include = [
-  "src/**",
-  "build.rs",
-  "features_sot.toml",
-  "Cargo.toml",
-  "README.md"
-]
+include = ["src/**", "build.rs", "features_sot.toml", "Cargo.toml", "README.md"]
 
 [lib]
 doctest = false
@@ -33,6 +27,7 @@ perl-parser-core.workspace = true
 perl-module.workspace = true
 perl-position-tracking.workspace = true
 perl-semantic-analyzer.workspace = true
+perl-semantic-facts.workspace = true
 perl-lexer.workspace = true
 perl-ast.workspace = true
 walkdir.workspace = true

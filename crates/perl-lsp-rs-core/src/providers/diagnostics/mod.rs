@@ -27,6 +27,11 @@ mod dedup;
 /// Core diagnostics provider
 #[allow(clippy::module_inception)]
 mod diagnostics;
+/// Diagnostics shadow compare and cutover paths for undefined-symbol diagnostics.
+pub mod diagnostics_shadow;
+/// Dynamic boundary acceptance test fixtures (Req 23.1–23.8).
+#[cfg(test)]
+mod dynamic_boundary_acceptance;
 /// ERROR node classification and reporting
 mod error_nodes;
 /// Heredoc anti-pattern detection

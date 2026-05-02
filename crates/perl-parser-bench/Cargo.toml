@@ -13,6 +13,7 @@ readme = "README.md"
 keywords = ["perl", "parser", "benchmark"]
 categories = ["development-tools::profiling", "command-line-utilities"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+publish = false
 
 [dependencies]
 perl-parser = { workspace = true }

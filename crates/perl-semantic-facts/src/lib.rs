@@ -169,6 +169,10 @@ pub struct ExportSet {
     pub provenance: Provenance,
     /// Confidence for the inferred export set.
     pub confidence: Confidence,
+    /// Exporting module or package name, when known.
+    pub module_name: Option<String>,
+    /// Source anchor of the export declaration, when available.
+    pub anchor_id: Option<AnchorId>,
 }
 
 /// Named `%EXPORT_TAGS` entry and its members.
@@ -193,6 +197,12 @@ pub struct ImportSpec {
     pub provenance: Provenance,
     /// Confidence for inferred import semantics.
     pub confidence: Confidence,
+    /// File containing this import site, when known.
+    pub file_id: Option<FileId>,
+    /// Source anchor for this import site, when available.
+    pub anchor_id: Option<AnchorId>,
+    /// Scope enclosing this import site, when known.
+    pub scope_id: Option<ScopeId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -228,6 +238,38 @@ pub struct VisibleSymbol {
     pub source: VisibleSymbolSource,
     /// Visibility confidence.
     pub confidence: Confidence,
+    /// Optional origin metadata for hover explanations and rename safety.
+    pub context: Option<VisibleSymbolContext>,
+}
+
+/// Origin metadata for a [`VisibleSymbol`], enabling hover explanations
+/// and rename safety analysis.
+///
+/// Tracks the source module and the import/export anchor IDs that made
+/// the symbol visible at the query point.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VisibleSymbolContext {
+    /// Module that originally defined or exported the symbol.
+    pub source_module: Option<String>,
+    /// Anchor of the `use`/`require` statement that imported the symbol.
+    pub source_import_anchor_id: Option<AnchorId>,
+    /// Anchor of the `@EXPORT`/`@EXPORT_OK` declaration that exported the symbol.
+    pub source_export_anchor_id: Option<AnchorId>,
+}
+
+impl VisibleSymbolContext {
+    /// Create a new `VisibleSymbolContext`.
+    ///
+    /// Required because `#[non_exhaustive]` prevents struct-literal
+    /// construction outside this crate.
+    pub fn new(
+        source_module: Option<String>,
+        source_import_anchor_id: Option<AnchorId>,
+        source_export_anchor_id: Option<AnchorId>,
+    ) -> Self {
+        Self { source_module, source_import_anchor_id, source_export_anchor_id }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -241,6 +283,542 @@ pub enum VisibleSymbolSource {
     Generated,
     External,
     DynamicUnknown,
+}
+
+// ── Definition Ranking ──
+
+/// Coarse ranking tier for a definition candidate.
+///
+/// Variants are ordered from most specific (best) to least specific (worst).
+/// The `Ord` derive reflects this ordering so that sorting a candidate list
+/// places `ExactQualified` first and `Heuristic` last.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum DefinitionRank {
+    ExactQualified,
+    SamePackage,
+    ExplicitImport,
+    DefaultExport,
+    WorkspaceCandidate,
+    Heuristic,
+}
+
+/// Structured reason explaining why a [`DefinitionCandidate`] received its rank.
+///
+/// Variants that carry a `module` field identify the specific module that
+/// contributed the import or export relationship.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DefinitionRankReason {
+    ExactQualifiedName,
+    SamePackage,
+    ExplicitImport { module: String },
+    DefaultExport { module: String },
+    WorkspaceSymbol,
+    HeuristicNameMatch,
+}
+
+/// A ranked entry in a definition candidate list.
+///
+/// Produced by the workspace definition index and consumed by
+/// `SemanticQueries::definitions` to present ordered results to providers.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DefinitionCandidate {
+    /// The entity this candidate refers to.
+    pub entity_id: EntityId,
+    /// Source anchor for the definition site.
+    pub anchor_id: AnchorId,
+    /// Fully qualified canonical name of the entity.
+    pub canonical_name: String,
+    /// Human-readable display name.
+    pub display_name: String,
+    /// Owning package, if known.
+    pub package: Option<String>,
+    /// Entity kind (Subroutine, Method, Variable, etc.).
+    pub kind: EntityKind,
+    /// How this candidate was discovered.
+    pub provenance: Provenance,
+    /// Confidence in the candidate.
+    pub confidence: Confidence,
+    /// Coarse ranking tier.
+    pub rank: DefinitionRank,
+    /// Structured reason for the assigned rank.
+    pub rank_reason: DefinitionRankReason,
+}
+
+impl DefinitionCandidate {
+    /// Construct a new `DefinitionCandidate`.
+    ///
+    /// Required because the struct is `#[non_exhaustive]` and cannot be
+    /// constructed with struct-literal syntax outside this crate.
+    #[allow(clippy::too_many_arguments)] // mirrors the struct fields 1-to-1
+    pub fn new(
+        entity_id: EntityId,
+        anchor_id: AnchorId,
+        canonical_name: String,
+        display_name: String,
+        package: Option<String>,
+        kind: EntityKind,
+        provenance: Provenance,
+        confidence: Confidence,
+        rank: DefinitionRank,
+        rank_reason: DefinitionRankReason,
+    ) -> Self {
+        Self {
+            entity_id,
+            anchor_id,
+            canonical_name,
+            display_name,
+            package,
+            kind,
+            provenance,
+            confidence,
+            rank,
+            rank_reason,
+        }
+    }
+}
+
+/// Occurrence-based reference edge linking a reference site to zero, one, or many
+/// target entity candidates.
+///
+/// Unlike [`EdgeFact`] which connects two known entities, a `ReferenceEdge` is
+/// anchored on an [`OccurrenceFact`] and carries a candidate list that may be empty
+/// (unresolved), singular (exact), or plural (ambiguous).
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReferenceEdge {
+    /// The occurrence that produced this reference.
+    pub occurrence_id: OccurrenceId,
+    /// Source anchor for the reference site.
+    pub anchor_id: AnchorId,
+    /// File containing the reference.
+    pub file_id: FileId,
+    /// Bare or qualified symbol key used at the reference site.
+    pub symbol_key: String,
+    /// Zero, one, or many candidate target entities.
+    pub target_candidates: Vec<EntityId>,
+    /// Occurrence classification (Read, Call, MethodCall, etc.).
+    pub kind: OccurrenceKind,
+    /// How this reference was inferred.
+    pub provenance: Provenance,
+    /// Confidence in the resolution.
+    pub confidence: Confidence,
+}
+
+// ── Package Graph ──
+
+/// A node in the package/class/role graph.
+///
+/// Represents a known package, class, or role in the workspace.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PackageNode {
+    /// Entity backing this package node.
+    pub entity_id: EntityId,
+    /// Fully qualified package name.
+    pub name: String,
+    /// Classification of this package node.
+    pub kind: PackageKind,
+    /// Source anchor for the package declaration, when available.
+    pub anchor_id: Option<AnchorId>,
+    /// File containing this package declaration, when known.
+    pub file_id: Option<FileId>,
+}
+
+impl PackageNode {
+    /// Construct a new `PackageNode`.
+    ///
+    /// Required because the struct is `#[non_exhaustive]` and cannot be
+    /// constructed with struct-literal syntax outside this crate.
+    pub fn new(
+        entity_id: EntityId,
+        name: String,
+        kind: PackageKind,
+        anchor_id: Option<AnchorId>,
+        file_id: Option<FileId>,
+    ) -> Self {
+        Self { entity_id, name, kind, anchor_id, file_id }
+    }
+}
+
+/// Classification of a package graph node.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PackageKind {
+    /// A plain Perl package.
+    Package,
+    /// A class (Moo/Moose/native).
+    Class,
+    /// A role (Moo::Role/Moose::Role/Role::Tiny).
+    Role,
+    /// An external package not found in the workspace.
+    External,
+}
+
+/// A directed edge in the package graph.
+///
+/// Connects a source package to a target package with a relationship kind
+/// (inheritance, role composition, or dependency).
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PackageEdge {
+    /// Source package name (the inheriting/consuming package).
+    pub from_package: String,
+    /// Target package name (the inherited/composed package).
+    pub to_package: String,
+    /// Relationship kind.
+    pub kind: PackageEdgeKind,
+    /// Source anchor for the statement that established this edge.
+    pub anchor_id: Option<AnchorId>,
+    /// How this edge was inferred.
+    pub provenance: Provenance,
+    /// Confidence in this edge.
+    pub confidence: Confidence,
+}
+
+impl PackageEdge {
+    /// Construct a new `PackageEdge`.
+    ///
+    /// Required because the struct is `#[non_exhaustive]` and cannot be
+    /// constructed with struct-literal syntax outside this crate.
+    pub fn new(
+        from_package: String,
+        to_package: String,
+        kind: PackageEdgeKind,
+        anchor_id: Option<AnchorId>,
+        provenance: Provenance,
+        confidence: Confidence,
+    ) -> Self {
+        Self { from_package, to_package, kind, anchor_id, provenance, confidence }
+    }
+}
+
+/// Kind of relationship in the package graph.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PackageEdgeKind {
+    /// Inheritance: `use parent`, `use base`, `@ISA`, `extends`.
+    Inherits,
+    /// Role composition: `with 'Role'`.
+    ComposesRole,
+    /// General dependency (e.g. `use Module`).
+    DependsOn,
+}
+
+// ── Generated Members ──────────────────────────────────────────────────
+
+/// A framework-synthesized member (e.g. Moo/Moose accessor from `has`).
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedMember {
+    /// Deterministic entity ID for this generated member.
+    pub entity_id: EntityId,
+    /// Name of the generated method (e.g. `x` for `has 'x'`).
+    pub name: String,
+    /// What kind of generated member this is.
+    pub kind: GeneratedMemberKind,
+    /// Anchor of the `has` declaration that generated this member.
+    pub source_anchor_id: AnchorId,
+    /// Package that owns this generated member.
+    pub package: String,
+    /// Always `FrameworkSynthesis` for generated members.
+    pub provenance: Provenance,
+    /// Always `Medium` for generated members.
+    pub confidence: Confidence,
+}
+
+impl GeneratedMember {
+    /// Construct a new `GeneratedMember`.
+    ///
+    /// Required because the struct is `#[non_exhaustive]` and cannot be
+    /// constructed with struct-literal syntax outside this crate.
+    #[allow(clippy::too_many_arguments)] // mirrors the struct fields 1-to-1
+    pub fn new(
+        entity_id: EntityId,
+        name: String,
+        kind: GeneratedMemberKind,
+        source_anchor_id: AnchorId,
+        package: String,
+        provenance: Provenance,
+        confidence: Confidence,
+    ) -> Self {
+        Self { entity_id, name, kind, source_anchor_id, package, provenance, confidence }
+    }
+}
+
+/// Classification of a framework-generated member.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GeneratedMemberKind {
+    /// Read-only accessor (getter).
+    Getter,
+    /// Read-write accessor (setter).
+    Setter,
+    /// Combined read-write accessor (single method for both get and set).
+    Accessor,
+    /// Predicate method (`has_<attr>`).
+    Predicate,
+    /// Clearer method (`clear_<attr>`).
+    Clearer,
+    /// Builder method (`_build_<attr>`).
+    Builder,
+    /// Constant value.
+    Constant,
+}
+
+// ── Value Shape ─────────────────────────────────────────────────────
+
+/// Lightweight type approximation for a variable or expression.
+///
+/// Used for method candidate filtering — not a full type system.
+/// `bless` is not a separate top-level shape; it produces
+/// [`ValueShape::Object`] with low confidence.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ValueShape {
+    /// Shape could not be determined.
+    Unknown,
+    /// Plain scalar value.
+    Scalar,
+    /// Array reference (`[...]` or `\@arr`).
+    ArrayRef,
+    /// Hash reference (`{...}` or `\%hash`).
+    HashRef,
+    /// Code reference (`sub { ... }` or `\&sub`).
+    CodeRef,
+    /// A package name used as a class (e.g. `Foo` in `Foo->method`).
+    PackageName {
+        /// Fully qualified package name.
+        package: String,
+    },
+    /// An object instance (blessed reference).
+    Object {
+        /// Package the object was blessed into.
+        package: String,
+        /// Confidence in the inferred package.
+        confidence: Confidence,
+    },
+}
+
+// ── Rename and Safe Delete Plans ────────────────────────────────────
+
+/// A conservative rename plan enumerating affected occurrences and blockers.
+///
+/// Produced by `SemanticQueries::rename_plan` and consumed by the rename
+/// provider to decide whether the rename is safe to apply.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenamePlan {
+    /// The entity being renamed.
+    pub entity_id: EntityId,
+    /// Current name of the entity.
+    pub old_name: String,
+    /// Proposed new name.
+    pub new_name: String,
+    /// Planned text edits for the rename.
+    pub edits: Vec<PlannedEdit>,
+    /// Conditions that block the rename.
+    pub blockers: Vec<PlanBlocker>,
+    /// Non-blocking warnings for the rename.
+    pub warnings: Vec<PlanWarning>,
+}
+
+impl RenamePlan {
+    /// Construct a new `RenamePlan`.
+    ///
+    /// Required because the struct is `#[non_exhaustive]` and cannot be
+    /// constructed with struct-literal syntax outside this crate.
+    pub fn new(
+        entity_id: EntityId,
+        old_name: String,
+        new_name: String,
+        edits: Vec<PlannedEdit>,
+        blockers: Vec<PlanBlocker>,
+        warnings: Vec<PlanWarning>,
+    ) -> Self {
+        Self { entity_id, old_name, new_name, edits, blockers, warnings }
+    }
+}
+
+/// A conservative safe-delete plan enumerating blockers that prevent deletion.
+///
+/// Produced by `SemanticQueries::safe_delete_plan` and consumed by the
+/// safe-delete provider to decide whether deletion is safe.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SafeDeletePlan {
+    /// The entity being considered for deletion.
+    pub entity_id: EntityId,
+    /// Name of the entity being considered for deletion.
+    pub name: String,
+    /// Conditions that block the deletion.
+    pub blockers: Vec<PlanBlocker>,
+    /// Non-blocking warnings for the deletion.
+    pub warnings: Vec<PlanWarning>,
+}
+
+impl SafeDeletePlan {
+    /// Construct a new `SafeDeletePlan`.
+    ///
+    /// Required because the struct is `#[non_exhaustive]` and cannot be
+    /// constructed with struct-literal syntax outside this crate.
+    pub fn new(
+        entity_id: EntityId,
+        name: String,
+        blockers: Vec<PlanBlocker>,
+        warnings: Vec<PlanWarning>,
+    ) -> Self {
+        Self { entity_id, name, blockers, warnings }
+    }
+}
+
+/// A condition that blocks a rename or safe-delete operation.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlanBlocker {
+    /// Why the operation is blocked.
+    pub reason: PlanBlockerReason,
+    /// Source anchor for the blocking reference, when available.
+    pub anchor_id: Option<AnchorId>,
+    /// Human-readable description of the blocker.
+    pub description: String,
+}
+
+impl PlanBlocker {
+    /// Construct a new `PlanBlocker`.
+    ///
+    /// Required because the struct is `#[non_exhaustive]` and cannot be
+    /// constructed with struct-literal syntax outside this crate.
+    pub fn new(
+        reason: PlanBlockerReason,
+        anchor_id: Option<AnchorId>,
+        description: String,
+    ) -> Self {
+        Self { reason, anchor_id, description }
+    }
+}
+
+/// Reason a rename or safe-delete operation is blocked.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlanBlockerReason {
+    /// Reference crosses a dynamic boundary (string eval, symbolic deref, AUTOLOAD).
+    DynamicBoundary,
+    /// Reference is ambiguous (multiple candidate targets).
+    AmbiguousReference,
+    /// Symbol is exported and referenced from other modules.
+    CrossModuleExport,
+    /// Symbol is imported by another file.
+    ImportedSymbol,
+    /// Symbol is listed in an ExportSet.
+    ExportedSymbol,
+    /// Symbol has remaining references in the workspace.
+    ReferencesExist,
+    /// Symbol is a generated member without a generator-specific edit plan.
+    GeneratedMember,
+    /// Occurrence could not be classified into a known category.
+    UnclassifiedOccurrence,
+}
+
+/// A non-blocking warning attached to a rename or safe-delete plan.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlanWarning {
+    /// Human-readable warning message.
+    pub message: String,
+    /// Source anchor for the warning site, when available.
+    pub anchor_id: Option<AnchorId>,
+}
+
+impl PlanWarning {
+    /// Construct a new `PlanWarning`.
+    ///
+    /// Required because the struct is `#[non_exhaustive]` and cannot be
+    /// constructed with struct-literal syntax outside this crate.
+    pub fn new(message: String, anchor_id: Option<AnchorId>) -> Self {
+        Self { message, anchor_id }
+    }
+}
+
+/// A planned text edit within a rename operation.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlannedEdit {
+    /// Source anchor for the edit site.
+    pub anchor_id: AnchorId,
+    /// File containing the edit site.
+    pub file_id: FileId,
+    /// Classification of this edit (definition, reference, import, export).
+    pub category: PlannedEditCategory,
+    /// Text being replaced.
+    pub old_text: String,
+    /// Replacement text.
+    pub new_text: String,
+}
+
+impl PlannedEdit {
+    /// Construct a new `PlannedEdit`.
+    ///
+    /// Required because the struct is `#[non_exhaustive]` and cannot be
+    /// constructed with struct-literal syntax outside this crate.
+    pub fn new(
+        anchor_id: AnchorId,
+        file_id: FileId,
+        category: PlannedEditCategory,
+        old_text: String,
+        new_text: String,
+    ) -> Self {
+        Self { anchor_id, file_id, category, old_text, new_text }
+    }
+}
+
+/// Classification of a planned edit within a rename operation.
+///
+/// Distinguishes definition edits from reference edits, import list edits,
+/// and export list edits so that the rename provider can handle each
+/// category appropriately.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlannedEditCategory {
+    /// Edit to the symbol's definition site.
+    Definition,
+    /// Edit to a reference (call site, read, write).
+    Reference,
+    /// Edit to an import list (`use Foo qw(...)` argument).
+    ImportList,
+    /// Edit to an export list (`@EXPORT`, `@EXPORT_OK`, `%EXPORT_TAGS` entry).
+    ExportList,
+}
+
+impl ReferenceEdge {
+    /// Construct a new `ReferenceEdge`.
+    ///
+    /// Required because the struct is `#[non_exhaustive]` and cannot be
+    /// constructed with struct-literal syntax outside this crate.
+    #[allow(clippy::too_many_arguments)] // mirrors the struct fields 1-to-1
+    pub fn new(
+        occurrence_id: OccurrenceId,
+        anchor_id: AnchorId,
+        file_id: FileId,
+        symbol_key: String,
+        target_candidates: Vec<EntityId>,
+        kind: OccurrenceKind,
+        provenance: Provenance,
+        confidence: Confidence,
+    ) -> Self {
+        Self {
+            occurrence_id,
+            anchor_id,
+            file_id,
+            symbol_key,
+            target_candidates,
+            kind,
+            provenance,
+            confidence,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -350,6 +928,9 @@ mod tests {
             },
             provenance: Provenance::ImportExportInference,
             confidence: Confidence::Medium,
+            file_id: None,
+            anchor_id: None,
+            scope_id: None,
         };
 
         let serialized = serde_json::to_string(&spec)?;
@@ -377,13 +958,662 @@ mod tests {
             entity_id: Some(EntityId(17)),
             source: VisibleSymbolSource::ExplicitImport,
             confidence: Confidence::High,
+            context: None,
         };
 
         let json = serde_json::to_string_pretty(&visible)?;
         assert_eq!(
             json,
-            "{\n  \"name\": \"slurp\",\n  \"entity_id\": 17,\n  \"source\": \"ExplicitImport\",\n  \"confidence\": \"High\"\n}"
+            "{\n  \"name\": \"slurp\",\n  \"entity_id\": 17,\n  \"source\": \"ExplicitImport\",\n  \"confidence\": \"High\",\n  \"context\": null\n}"
         );
+        Ok(())
+    }
+
+    /// ReferenceEdge with multiple target candidates round-trips through JSON.
+    #[test]
+    fn reference_edge_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let edge = ReferenceEdge {
+            occurrence_id: OccurrenceId(50),
+            anchor_id: AnchorId(20),
+            file_id: FileId(3),
+            symbol_key: "Foo::bar".to_string(),
+            target_candidates: vec![EntityId(100), EntityId(200)],
+            kind: OccurrenceKind::Call,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        };
+
+        let serialized = serde_json::to_string(&edge)?;
+        let decoded: ReferenceEdge = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, edge);
+        Ok(())
+    }
+
+    /// ReferenceEdge with empty target_candidates (unresolved) round-trips correctly.
+    #[test]
+    fn reference_edge_empty_candidates_roundtrips() -> Result<(), serde_json::Error> {
+        let edge = ReferenceEdge {
+            occurrence_id: OccurrenceId(51),
+            anchor_id: AnchorId(21),
+            file_id: FileId(4),
+            symbol_key: "unknown_sub".to_string(),
+            target_candidates: vec![],
+            kind: OccurrenceKind::Reference,
+            provenance: Provenance::NameHeuristic,
+            confidence: Confidence::Low,
+        };
+
+        let serialized = serde_json::to_string(&edge)?;
+        let decoded: ReferenceEdge = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, edge);
+        // Empty candidates must serialize as an empty array, not null.
+        assert!(
+            serialized.contains("\"target_candidates\":[]"),
+            "empty target_candidates must be an empty JSON array"
+        );
+        Ok(())
+    }
+
+    /// DefinitionRank round-trips through JSON for every variant.
+    #[test]
+    fn definition_rank_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let variants = [
+            DefinitionRank::ExactQualified,
+            DefinitionRank::SamePackage,
+            DefinitionRank::ExplicitImport,
+            DefinitionRank::DefaultExport,
+            DefinitionRank::WorkspaceCandidate,
+            DefinitionRank::Heuristic,
+        ];
+        for variant in &variants {
+            let serialized = serde_json::to_string(variant)?;
+            let decoded: DefinitionRank = serde_json::from_str(&serialized)?;
+            assert_eq!(&decoded, variant);
+        }
+        Ok(())
+    }
+
+    /// DefinitionRank ordering: ExactQualified < SamePackage < … < Heuristic.
+    #[test]
+    fn definition_rank_ordering_matches_design() {
+        assert!(DefinitionRank::ExactQualified < DefinitionRank::SamePackage);
+        assert!(DefinitionRank::SamePackage < DefinitionRank::ExplicitImport);
+        assert!(DefinitionRank::ExplicitImport < DefinitionRank::DefaultExport);
+        assert!(DefinitionRank::DefaultExport < DefinitionRank::WorkspaceCandidate);
+        assert!(DefinitionRank::WorkspaceCandidate < DefinitionRank::Heuristic);
+    }
+
+    /// DefinitionRankReason round-trips through JSON for all variants,
+    /// including those carrying a module field.
+    #[test]
+    fn definition_rank_reason_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let reasons = [
+            DefinitionRankReason::ExactQualifiedName,
+            DefinitionRankReason::SamePackage,
+            DefinitionRankReason::ExplicitImport { module: "Foo::Bar".to_string() },
+            DefinitionRankReason::DefaultExport { module: "Baz::Qux".to_string() },
+            DefinitionRankReason::WorkspaceSymbol,
+            DefinitionRankReason::HeuristicNameMatch,
+        ];
+        for reason in &reasons {
+            let serialized = serde_json::to_string(reason)?;
+            let decoded: DefinitionRankReason = serde_json::from_str(&serialized)?;
+            assert_eq!(&decoded, reason);
+        }
+        Ok(())
+    }
+
+    /// DefinitionCandidate with all fields populated round-trips through JSON.
+    #[test]
+    fn definition_candidate_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let candidate = DefinitionCandidate {
+            entity_id: EntityId(300),
+            anchor_id: AnchorId(40),
+            canonical_name: "Foo::Bar::baz".to_string(),
+            display_name: "baz".to_string(),
+            package: Some("Foo::Bar".to_string()),
+            kind: EntityKind::Subroutine,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+            rank: DefinitionRank::ExactQualified,
+            rank_reason: DefinitionRankReason::ExactQualifiedName,
+        };
+
+        let serialized = serde_json::to_string(&candidate)?;
+        let decoded: DefinitionCandidate = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, candidate);
+        Ok(())
+    }
+
+    /// DefinitionCandidate with None package round-trips correctly.
+    #[test]
+    fn definition_candidate_none_package_roundtrips() -> Result<(), serde_json::Error> {
+        let candidate = DefinitionCandidate {
+            entity_id: EntityId(301),
+            anchor_id: AnchorId(41),
+            canonical_name: "main::helper".to_string(),
+            display_name: "helper".to_string(),
+            package: None,
+            kind: EntityKind::Subroutine,
+            provenance: Provenance::NameHeuristic,
+            confidence: Confidence::Low,
+            rank: DefinitionRank::Heuristic,
+            rank_reason: DefinitionRankReason::HeuristicNameMatch,
+        };
+
+        let serialized = serde_json::to_string(&candidate)?;
+        let decoded: DefinitionCandidate = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, candidate);
+        // package: None must serialize as JSON null, not be omitted.
+        assert!(serialized.contains("\"package\":null"), "package null must be explicit in JSON");
+        Ok(())
+    }
+
+    /// DefinitionCandidate with import-based rank reason round-trips the module field.
+    #[test]
+    fn definition_candidate_import_reason_roundtrips() -> Result<(), serde_json::Error> {
+        let candidate = DefinitionCandidate {
+            entity_id: EntityId(302),
+            anchor_id: AnchorId(42),
+            canonical_name: "List::Util::first".to_string(),
+            display_name: "first".to_string(),
+            package: Some("List::Util".to_string()),
+            kind: EntityKind::Subroutine,
+            provenance: Provenance::ImportExportInference,
+            confidence: Confidence::Medium,
+            rank: DefinitionRank::ExplicitImport,
+            rank_reason: DefinitionRankReason::ExplicitImport { module: "List::Util".to_string() },
+        };
+
+        let serialized = serde_json::to_string(&candidate)?;
+        let decoded: DefinitionCandidate = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, candidate);
+        Ok(())
+    }
+
+    // ── Package Graph round-trip tests ──
+
+    /// PackageEdge round-trips through JSON.
+    #[test]
+    fn package_edge_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let edge = PackageEdge {
+            from_package: "Child".to_string(),
+            to_package: "Parent".to_string(),
+            kind: PackageEdgeKind::Inherits,
+            anchor_id: Some(AnchorId(99)),
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        };
+
+        let serialized = serde_json::to_string(&edge)?;
+        let decoded: PackageEdge = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, edge);
+        Ok(())
+    }
+
+    /// PackageEdgeKind round-trips through JSON for every variant.
+    #[test]
+    fn package_edge_kind_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let variants =
+            [PackageEdgeKind::Inherits, PackageEdgeKind::ComposesRole, PackageEdgeKind::DependsOn];
+        for variant in &variants {
+            let serialized = serde_json::to_string(variant)?;
+            let decoded: PackageEdgeKind = serde_json::from_str(&serialized)?;
+            assert_eq!(&decoded, variant);
+        }
+        Ok(())
+    }
+
+    /// PackageNode round-trips through JSON.
+    #[test]
+    fn package_node_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let node = PackageNode {
+            entity_id: EntityId(500),
+            name: "My::Package".to_string(),
+            kind: PackageKind::Class,
+            anchor_id: Some(AnchorId(10)),
+            file_id: Some(FileId(2)),
+        };
+
+        let serialized = serde_json::to_string(&node)?;
+        let decoded: PackageNode = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, node);
+        Ok(())
+    }
+
+    /// PackageKind round-trips through JSON for every variant.
+    #[test]
+    fn package_kind_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let variants =
+            [PackageKind::Package, PackageKind::Class, PackageKind::Role, PackageKind::External];
+        for variant in &variants {
+            let serialized = serde_json::to_string(variant)?;
+            let decoded: PackageKind = serde_json::from_str(&serialized)?;
+            assert_eq!(&decoded, variant);
+        }
+        Ok(())
+    }
+
+    /// PackageEdge with None anchor_id round-trips correctly.
+    #[test]
+    fn package_edge_none_anchor_roundtrips() -> Result<(), serde_json::Error> {
+        let edge = PackageEdge {
+            from_package: "App::Worker".to_string(),
+            to_package: "Unknown::External".to_string(),
+            kind: PackageEdgeKind::DependsOn,
+            anchor_id: None,
+            provenance: Provenance::NameHeuristic,
+            confidence: Confidence::Low,
+        };
+
+        let serialized = serde_json::to_string(&edge)?;
+        let decoded: PackageEdge = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, edge);
+        assert!(
+            serialized.contains("\"anchor_id\":null"),
+            "anchor_id null must be explicit in JSON"
+        );
+        Ok(())
+    }
+
+    // ── GeneratedMember tests ───────────────────────────────────────────
+
+    /// GeneratedMember round-trips through JSON.
+    #[test]
+    fn generated_member_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let member = GeneratedMember {
+            entity_id: EntityId(600),
+            name: "username".to_string(),
+            kind: GeneratedMemberKind::Getter,
+            source_anchor_id: AnchorId(50),
+            package: "MyApp::User".to_string(),
+            provenance: Provenance::FrameworkSynthesis,
+            confidence: Confidence::Medium,
+        };
+
+        let serialized = serde_json::to_string(&member)?;
+        let decoded: GeneratedMember = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, member);
+        Ok(())
+    }
+
+    /// GeneratedMemberKind round-trips through JSON for every variant.
+    #[test]
+    fn generated_member_kind_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let variants = [
+            GeneratedMemberKind::Getter,
+            GeneratedMemberKind::Setter,
+            GeneratedMemberKind::Accessor,
+            GeneratedMemberKind::Predicate,
+            GeneratedMemberKind::Clearer,
+            GeneratedMemberKind::Builder,
+            GeneratedMemberKind::Constant,
+        ];
+        for variant in &variants {
+            let serialized = serde_json::to_string(variant)?;
+            let decoded: GeneratedMemberKind = serde_json::from_str(&serialized)?;
+            assert_eq!(&decoded, variant);
+        }
+        Ok(())
+    }
+
+    /// GeneratedMember constructed via `new()` matches struct literal.
+    #[test]
+    fn generated_member_new_constructor() -> Result<(), serde_json::Error> {
+        let via_new = GeneratedMember::new(
+            EntityId(700),
+            "email".to_string(),
+            GeneratedMemberKind::Accessor,
+            AnchorId(60),
+            "MyApp::User".to_string(),
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+        );
+        let via_literal = GeneratedMember {
+            entity_id: EntityId(700),
+            name: "email".to_string(),
+            kind: GeneratedMemberKind::Accessor,
+            source_anchor_id: AnchorId(60),
+            package: "MyApp::User".to_string(),
+            provenance: Provenance::FrameworkSynthesis,
+            confidence: Confidence::Medium,
+        };
+        assert_eq!(via_new, via_literal);
+        Ok(())
+    }
+
+    // ── ValueShape tests ───────────────────────────────────────────────
+
+    /// ValueShape::Unknown round-trips through JSON.
+    #[test]
+    fn value_shape_unknown_roundtrips() -> Result<(), serde_json::Error> {
+        let shape = ValueShape::Unknown;
+        let serialized = serde_json::to_string(&shape)?;
+        let decoded: ValueShape = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, shape);
+        Ok(())
+    }
+
+    /// ValueShape::Object round-trips through JSON preserving package and confidence.
+    #[test]
+    fn value_shape_object_roundtrips() -> Result<(), serde_json::Error> {
+        let shape =
+            ValueShape::Object { package: "My::Class".to_string(), confidence: Confidence::High };
+        let serialized = serde_json::to_string(&shape)?;
+        let decoded: ValueShape = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, shape);
+        Ok(())
+    }
+
+    /// ValueShape::PackageName round-trips through JSON.
+    #[test]
+    fn value_shape_package_name_roundtrips() -> Result<(), serde_json::Error> {
+        let shape = ValueShape::PackageName { package: "Foo::Bar".to_string() };
+        let serialized = serde_json::to_string(&shape)?;
+        let decoded: ValueShape = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, shape);
+        Ok(())
+    }
+
+    /// All ValueShape variants round-trip through JSON.
+    #[test]
+    fn value_shape_all_variants_roundtrip() -> Result<(), serde_json::Error> {
+        let variants: Vec<ValueShape> = vec![
+            ValueShape::Unknown,
+            ValueShape::Scalar,
+            ValueShape::ArrayRef,
+            ValueShape::HashRef,
+            ValueShape::CodeRef,
+            ValueShape::PackageName { package: "Foo".to_string() },
+            ValueShape::Object { package: "Bar::Baz".to_string(), confidence: Confidence::Low },
+        ];
+        for shape in &variants {
+            let serialized = serde_json::to_string(shape)?;
+            let decoded: ValueShape = serde_json::from_str(&serialized)?;
+            assert_eq!(&decoded, shape);
+        }
+        Ok(())
+    }
+
+    // ── RenamePlan / SafeDeletePlan round-trip tests ─────────────────
+
+    /// RenamePlan with edits, blockers, and warnings round-trips through JSON.
+    #[test]
+    fn rename_plan_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let plan = RenamePlan {
+            entity_id: EntityId(400),
+            old_name: "foo".to_string(),
+            new_name: "bar".to_string(),
+            edits: vec![
+                PlannedEdit {
+                    anchor_id: AnchorId(80),
+                    file_id: FileId(1),
+                    category: PlannedEditCategory::Definition,
+                    old_text: "foo".to_string(),
+                    new_text: "bar".to_string(),
+                },
+                PlannedEdit {
+                    anchor_id: AnchorId(81),
+                    file_id: FileId(2),
+                    category: PlannedEditCategory::Reference,
+                    old_text: "foo".to_string(),
+                    new_text: "bar".to_string(),
+                },
+            ],
+            blockers: vec![PlanBlocker {
+                reason: PlanBlockerReason::DynamicBoundary,
+                anchor_id: Some(AnchorId(90)),
+                description: "reference crosses eval boundary".to_string(),
+            }],
+            warnings: vec![PlanWarning {
+                message: "symbol also appears in comments".to_string(),
+                anchor_id: None,
+            }],
+        };
+
+        let serialized = serde_json::to_string(&plan)?;
+        let decoded: RenamePlan = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, plan);
+        Ok(())
+    }
+
+    /// RenamePlan with empty edits, blockers, and warnings round-trips correctly.
+    #[test]
+    fn rename_plan_empty_collections_roundtrip() -> Result<(), serde_json::Error> {
+        let plan = RenamePlan {
+            entity_id: EntityId(401),
+            old_name: "x".to_string(),
+            new_name: "y".to_string(),
+            edits: vec![],
+            blockers: vec![],
+            warnings: vec![],
+        };
+
+        let serialized = serde_json::to_string(&plan)?;
+        let decoded: RenamePlan = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, plan);
+        assert!(serialized.contains("\"edits\":[]"), "empty edits must be an empty JSON array");
+        assert!(
+            serialized.contains("\"blockers\":[]"),
+            "empty blockers must be an empty JSON array"
+        );
+        assert!(
+            serialized.contains("\"warnings\":[]"),
+            "empty warnings must be an empty JSON array"
+        );
+        Ok(())
+    }
+
+    /// RenamePlan constructed via `new()` matches struct literal.
+    #[test]
+    fn rename_plan_new_constructor() {
+        let via_new = RenamePlan::new(
+            EntityId(402),
+            "old".to_string(),
+            "new".to_string(),
+            vec![],
+            vec![],
+            vec![],
+        );
+        let via_literal = RenamePlan {
+            entity_id: EntityId(402),
+            old_name: "old".to_string(),
+            new_name: "new".to_string(),
+            edits: vec![],
+            blockers: vec![],
+            warnings: vec![],
+        };
+        assert_eq!(via_new, via_literal);
+    }
+
+    /// SafeDeletePlan with blockers and warnings round-trips through JSON.
+    #[test]
+    fn safe_delete_plan_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let plan = SafeDeletePlan {
+            entity_id: EntityId(500),
+            name: "unused_sub".to_string(),
+            blockers: vec![
+                PlanBlocker {
+                    reason: PlanBlockerReason::ReferencesExist,
+                    anchor_id: Some(AnchorId(70)),
+                    description: "3 references remain".to_string(),
+                },
+                PlanBlocker {
+                    reason: PlanBlockerReason::ExportedSymbol,
+                    anchor_id: Some(AnchorId(71)),
+                    description: "symbol in @EXPORT_OK".to_string(),
+                },
+            ],
+            warnings: vec![],
+        };
+
+        let serialized = serde_json::to_string(&plan)?;
+        let decoded: SafeDeletePlan = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, plan);
+        Ok(())
+    }
+
+    /// SafeDeletePlan with no blockers round-trips correctly.
+    #[test]
+    fn safe_delete_plan_no_blockers_roundtrips() -> Result<(), serde_json::Error> {
+        let plan = SafeDeletePlan {
+            entity_id: EntityId(501),
+            name: "dead_code".to_string(),
+            blockers: vec![],
+            warnings: vec![PlanWarning {
+                message: "symbol appears in pod documentation".to_string(),
+                anchor_id: Some(AnchorId(72)),
+            }],
+        };
+
+        let serialized = serde_json::to_string(&plan)?;
+        let decoded: SafeDeletePlan = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, plan);
+        Ok(())
+    }
+
+    /// SafeDeletePlan constructed via `new()` matches struct literal.
+    #[test]
+    fn safe_delete_plan_new_constructor() {
+        let via_new = SafeDeletePlan::new(EntityId(502), "helper".to_string(), vec![], vec![]);
+        let via_literal = SafeDeletePlan {
+            entity_id: EntityId(502),
+            name: "helper".to_string(),
+            blockers: vec![],
+            warnings: vec![],
+        };
+        assert_eq!(via_new, via_literal);
+    }
+
+    /// PlanBlockerReason round-trips through JSON for every variant.
+    #[test]
+    fn plan_blocker_reason_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let variants = [
+            PlanBlockerReason::DynamicBoundary,
+            PlanBlockerReason::AmbiguousReference,
+            PlanBlockerReason::CrossModuleExport,
+            PlanBlockerReason::ImportedSymbol,
+            PlanBlockerReason::ExportedSymbol,
+            PlanBlockerReason::ReferencesExist,
+            PlanBlockerReason::GeneratedMember,
+            PlanBlockerReason::UnclassifiedOccurrence,
+        ];
+        for variant in &variants {
+            let serialized = serde_json::to_string(variant)?;
+            let decoded: PlanBlockerReason = serde_json::from_str(&serialized)?;
+            assert_eq!(&decoded, variant);
+        }
+        Ok(())
+    }
+
+    /// PlanBlocker with None anchor_id round-trips correctly.
+    #[test]
+    fn plan_blocker_none_anchor_roundtrips() -> Result<(), serde_json::Error> {
+        let blocker = PlanBlocker {
+            reason: PlanBlockerReason::GeneratedMember,
+            anchor_id: None,
+            description: "generated accessor without edit plan".to_string(),
+        };
+
+        let serialized = serde_json::to_string(&blocker)?;
+        let decoded: PlanBlocker = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, blocker);
+        assert!(
+            serialized.contains("\"anchor_id\":null"),
+            "anchor_id null must be explicit in JSON"
+        );
+        Ok(())
+    }
+
+    /// PlanBlocker constructed via `new()` matches struct literal.
+    #[test]
+    fn plan_blocker_new_constructor() {
+        let via_new = PlanBlocker::new(
+            PlanBlockerReason::ImportedSymbol,
+            Some(AnchorId(99)),
+            "imported by other file".to_string(),
+        );
+        let via_literal = PlanBlocker {
+            reason: PlanBlockerReason::ImportedSymbol,
+            anchor_id: Some(AnchorId(99)),
+            description: "imported by other file".to_string(),
+        };
+        assert_eq!(via_new, via_literal);
+    }
+
+    /// PlanWarning round-trips through JSON.
+    #[test]
+    fn plan_warning_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let warning = PlanWarning {
+            message: "symbol also used in string interpolation".to_string(),
+            anchor_id: Some(AnchorId(85)),
+        };
+
+        let serialized = serde_json::to_string(&warning)?;
+        let decoded: PlanWarning = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, warning);
+        Ok(())
+    }
+
+    /// PlanWarning constructed via `new()` matches struct literal.
+    #[test]
+    fn plan_warning_new_constructor() {
+        let via_new = PlanWarning::new("check pod docs".to_string(), None);
+        let via_literal = PlanWarning { message: "check pod docs".to_string(), anchor_id: None };
+        assert_eq!(via_new, via_literal);
+    }
+
+    /// PlannedEdit round-trips through JSON.
+    #[test]
+    fn planned_edit_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let edit = PlannedEdit {
+            anchor_id: AnchorId(60),
+            file_id: FileId(5),
+            category: PlannedEditCategory::ImportList,
+            old_text: "foo".to_string(),
+            new_text: "bar".to_string(),
+        };
+
+        let serialized = serde_json::to_string(&edit)?;
+        let decoded: PlannedEdit = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, edit);
+        Ok(())
+    }
+
+    /// PlannedEdit constructed via `new()` matches struct literal.
+    #[test]
+    fn planned_edit_new_constructor() {
+        let via_new = PlannedEdit::new(
+            AnchorId(61),
+            FileId(6),
+            PlannedEditCategory::ExportList,
+            "old_sym".to_string(),
+            "new_sym".to_string(),
+        );
+        let via_literal = PlannedEdit {
+            anchor_id: AnchorId(61),
+            file_id: FileId(6),
+            category: PlannedEditCategory::ExportList,
+            old_text: "old_sym".to_string(),
+            new_text: "new_sym".to_string(),
+        };
+        assert_eq!(via_new, via_literal);
+    }
+
+    /// PlannedEditCategory round-trips through JSON for every variant.
+    #[test]
+    fn planned_edit_category_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let variants = [
+            PlannedEditCategory::Definition,
+            PlannedEditCategory::Reference,
+            PlannedEditCategory::ImportList,
+            PlannedEditCategory::ExportList,
+        ];
+        for variant in &variants {
+            let serialized = serde_json::to_string(variant)?;
+            let decoded: PlannedEditCategory = serde_json::from_str(&serialized)?;
+            assert_eq!(&decoded, variant);
+        }
         Ok(())
     }
 }

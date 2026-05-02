@@ -1684,6 +1684,7 @@ dependencies = [
  "perl-position-tracking",
  "perl-pragma",
  "perl-semantic-analyzer",
+ "perl-semantic-facts",
  "perl-subprocess-runtime",
  "perl-symbol",
  "perl-tdd-support",
@@ -1869,6 +1870,7 @@ dependencies = [
 name = "perl-semantic-facts"
 version = "0.13.1"
 dependencies = [
+ "proptest",
  "serde",
  "serde_json",
 ]

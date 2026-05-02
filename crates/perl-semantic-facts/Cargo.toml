@@ -13,13 +13,7 @@ readme = "README.md"
 keywords = ["perl", "semantic", "facts", "lsp", "analysis"]
 categories = ["data-structures", "development-tools", "text-editors"]
 publish = true
-include = [
-  "src/**",
-  "Cargo.toml",
-  "README.md",
-  "LICENSE*",
-  "CLAUDE.md",
-]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*", "CLAUDE.md"]
 
 [lib]
 doctest = false
@@ -28,6 +22,7 @@ doctest = false
 serde = { workspace = true }
 
 [dev-dependencies]
+proptest = { workspace = true }
 serde_json = { workspace = true }
 
 [package.metadata.docs.rs]

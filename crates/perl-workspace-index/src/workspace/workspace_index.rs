@@ -81,12 +81,18 @@ use std::sync::Arc;
 use std::time::Instant;
 use url::Url;
 
+use crate::semantic::imports::ImportExportIndex;
+pub use crate::semantic::invalidation::ShardReplaceResult;
+use crate::semantic::invalidation::{ShardCategoryHashes, plan_shard_replacement};
+use crate::semantic::references::ReferenceIndex;
 pub use crate::workspace::monitoring::{
     DegradationReason, EarlyExitReason, EarlyExitRecord, IndexInstrumentationSnapshot,
     IndexMetrics, IndexPerformanceCaps, IndexPhase, IndexPhaseTransition, IndexResourceLimits,
     IndexStateKind, IndexStateTransition, ResourceKind,
 };
 use perl_symbol::surface::decl::extract_symbol_decls;
+use perl_symbol::surface::facts::{symbol_decls_to_semantic_facts, symbol_refs_to_semantic_facts};
+use perl_symbol::surface::r#ref::extract_symbol_refs;
 
 // Re-export URI utilities for backward compatibility
 #[cfg(not(target_arch = "wasm32"))]
@@ -1129,7 +1135,7 @@ pub struct FileIndex {
 }
 
 /// Write-through semantic fact storage for one indexed file.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FileFactShard {
     /// Canonical file URI for this shard.
     pub source_uri: String,
@@ -1168,6 +1174,10 @@ pub struct WorkspaceIndex {
     global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
     /// Write-through semantic fact shards keyed by normalized URI.
     fact_shards: Arc<RwLock<HashMap<String, FileFactShard>>>,
+    /// Semantic cross-file reference index (typed occurrences by name and entity).
+    semantic_reference_index: Arc<RwLock<ReferenceIndex>>,
+    /// Semantic cross-file import/export index.
+    semantic_import_export_index: Arc<RwLock<ImportExportIndex>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
     /// Workspace folder URIs for multi-root workspace support
@@ -1510,6 +1520,8 @@ impl WorkspaceIndex {
             symbols: Arc::new(RwLock::new(HashMap::new())),
             global_references: Arc::new(RwLock::new(HashMap::new())),
             fact_shards: Arc::new(RwLock::new(HashMap::new())),
+            semantic_reference_index: Arc::new(RwLock::new(ReferenceIndex::new())),
+            semantic_import_export_index: Arc::new(RwLock::new(ImportExportIndex::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1549,6 +1561,8 @@ impl WorkspaceIndex {
             symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
             fact_shards: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
+            semantic_reference_index: Arc::new(RwLock::new(ReferenceIndex::new())),
+            semantic_import_export_index: Arc::new(RwLock::new(ImportExportIndex::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1693,7 +1707,17 @@ impl WorkspaceIndex {
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
         visitor.visit(&ast, &mut file_index);
 
-        let fact_shard = Self::build_fact_shard(&uri_str, content_hash, &file_index);
+        let canonical_shard =
+            Self::build_canonical_fact_shard_for_ast(&uri_str, content_hash, &ast);
+        let fact_shard = if canonical_shard.anchors.is_empty()
+            && canonical_shard.entities.is_empty()
+            && canonical_shard.occurrences.is_empty()
+            && canonical_shard.edges.is_empty()
+        {
+            Self::build_fact_shard(&uri_str, content_hash, &file_index)
+        } else {
+            canonical_shard
+        };
 
         // Update the index, refresh the global symbol cache, and replace this file's
         // contribution in the global reference index.
@@ -1727,7 +1751,7 @@ impl WorkspaceIndex {
                     }
                 }
             }
-            self.fact_shards.write().insert(key, fact_shard);
+            self.replace_fact_shard_incremental(&key, fact_shard);
         }
 
         Ok(())
@@ -1762,6 +1786,15 @@ impl WorkspaceIndex {
         let mut files = self.files.write();
         if let Some(file_index) = files.remove(&key) {
             self.fact_shards.write().remove(&key);
+
+            // Clean up semantic cross-file indexes for this file.
+            self.semantic_reference_index.write().remove_file(&uri_str);
+            {
+                let mut ie_idx = self.semantic_import_export_index.write();
+                ie_idx.remove_file_imports(&uri_str);
+                ie_idx.remove_module_exports(&uri_str);
+            }
+
             // Incrementally remove symbols and re-insert any shadowed names.
             let mut symbols = self.symbols.write();
             Self::incremental_remove_symbols(&files, &mut symbols, &file_index);
@@ -2334,6 +2367,8 @@ impl WorkspaceIndex {
         self.symbols.write().clear();
         self.global_references.write().clear();
         self.fact_shards.write().clear();
+        *self.semantic_reference_index.write() = ReferenceIndex::new();
+        *self.semantic_import_export_index.write() = ImportExportIndex::new();
     }
 
     fn hash_uri_to_file_id(uri: &str) -> FileId {
@@ -2406,6 +2441,111 @@ impl WorkspaceIndex {
             entities,
             occurrences: Vec::new(),
             edges: Vec::new(),
+        }
+    }
+
+    /// Build a canonical [`FileFactShard`] from the AST using the semantic
+    /// fact adapters in `perl-symbol`.
+    ///
+    /// This is the canonical population path that produces facts with real
+    /// byte spans, `ExactAst` provenance, and per-category hashes. It runs
+    /// alongside the legacy `build_fact_shard` path during the migration
+    /// period.
+    fn build_canonical_fact_shard_for_ast(
+        uri: &str,
+        content_hash: u64,
+        ast: &Node,
+    ) -> FileFactShard {
+        let file_id = Self::hash_uri_to_file_id(uri);
+
+        // Extract declarations and references from the AST.
+        let decls = extract_symbol_decls(ast, None);
+        let refs = extract_symbol_refs(ast);
+
+        // Run the canonical adapters.
+        let decl_facts = symbol_decls_to_semantic_facts(&decls, file_id);
+
+        // Build an entity lookup map for reference resolution.
+        let entity_ids_by_name: std::collections::BTreeMap<String, EntityId> =
+            decl_facts.entities.iter().map(|e| (e.canonical_name.clone(), e.id)).collect();
+        let ref_facts = symbol_refs_to_semantic_facts(&refs, file_id, &entity_ids_by_name);
+
+        // No imports or dynamic boundaries available at this layer yet —
+        // those will be supplied by perl-semantic-analyzer in later phases.
+        crate::semantic::facts::build_canonical_fact_shard(
+            uri,
+            content_hash,
+            &decl_facts,
+            &ref_facts,
+            &[],
+            &[],
+        )
+    }
+
+    /// Replace a [`FileFactShard`] with per-category incremental invalidation.
+    ///
+    /// Compares the whole-file `content_hash` first; when unchanged the
+    /// replacement is skipped entirely.  Otherwise each per-category hash
+    /// (`anchors_hash`, `entities_hash`, `occurrences_hash`, `edges_hash`)
+    /// is compared individually.  Only categories whose hash changed trigger
+    /// removal of old entries and insertion of new ones in the cross-file
+    /// semantic indexes.
+    ///
+    /// **Validates: Requirements 18.1, 18.2, 18.3, 18.4, 18.5**
+    pub fn replace_fact_shard_incremental(
+        &self,
+        key: &str,
+        new_shard: FileFactShard,
+    ) -> ShardReplaceResult {
+        let mut shards = self.fact_shards.write();
+        let old_shard = shards.get(key);
+
+        let replacement = plan_shard_replacement(
+            old_shard.map(Self::shard_category_hashes),
+            Self::shard_category_hashes(&new_shard),
+        );
+
+        if replacement.content_unchanged {
+            return replacement;
+        }
+
+        let source_uri = new_shard.source_uri.clone();
+
+        // ── Update cross-file semantic indexes per category ──
+        // Occurrences and edges are both managed by the ReferenceIndex.
+        // When either changes we must remove+re-add the file in that index.
+        if replacement.occurrences_updated || replacement.edges_updated {
+            let mut ref_idx = self.semantic_reference_index.write();
+            if old_shard.is_some() {
+                ref_idx.remove_file(&source_uri);
+            }
+            ref_idx.add_file(&new_shard);
+        }
+
+        // Entities feed into the import/export index (export sets are keyed
+        // by module name derived from entity canonical names).  When entities
+        // change we refresh the import/export index for this file.
+        if replacement.entities_updated {
+            let mut ie_idx = self.semantic_import_export_index.write();
+            ie_idx.remove_file_imports(&source_uri);
+            ie_idx.remove_module_exports(&source_uri);
+            // Re-add is handled by the caller or future wiring; for now we
+            // ensure stale entries are purged.
+        }
+
+        // Store the new shard (always, since content_hash differs).
+        shards.insert(key.to_string(), new_shard);
+
+        replacement
+    }
+
+    fn shard_category_hashes(shard: &FileFactShard) -> ShardCategoryHashes {
+        ShardCategoryHashes {
+            content_hash: shard.content_hash,
+            anchors_hash: shard.anchors_hash,
+            entities_hash: shard.entities_hash,
+            occurrences_hash: shard.occurrences_hash,
+            edges_hash: shard.edges_hash,
         }
     }
 
@@ -6326,5 +6466,446 @@ MixedMod->import(qw(qw_one qw_two));
             assert!(!refs.is_empty(), "all import forms should index symbols: {}", symbol);
         }
         Ok(())
+    }
+
+    // -------------------------------------------------------------------------
+    // Per-category incremental invalidation (Req 18.1–18.5)
+    // -------------------------------------------------------------------------
+
+    /// Helper: build a minimal `FileFactShard` with configurable hashes.
+    fn make_shard(
+        uri: &str,
+        content_hash: u64,
+        anchors_hash: Option<u64>,
+        entities_hash: Option<u64>,
+        occurrences_hash: Option<u64>,
+        edges_hash: Option<u64>,
+    ) -> FileFactShard {
+        let file_id = {
+            let mut h = DefaultHasher::new();
+            uri.hash(&mut h);
+            FileId(h.finish())
+        };
+        FileFactShard {
+            source_uri: uri.to_string(),
+            file_id,
+            content_hash,
+            anchors_hash,
+            entities_hash,
+            occurrences_hash,
+            edges_hash,
+            anchors: Vec::new(),
+            entities: Vec::new(),
+            occurrences: Vec::new(),
+            edges: Vec::new(),
+        }
+    }
+
+    /// Req 18.5: When content_hash is unchanged, skip all per-category
+    /// comparisons — no index modifications happen.
+    #[test]
+    fn incremental_replace_skips_when_content_hash_unchanged()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/Same.pm";
+        let key = DocumentStore::uri_key(uri);
+
+        let shard_v1 = make_shard(uri, 42, Some(1), Some(2), Some(3), Some(4));
+        // First insert — no old shard, so all categories are "changed".
+        let r1 = index.replace_fact_shard_incremental(&key, shard_v1);
+        assert!(!r1.content_unchanged);
+
+        // Second insert with same content_hash → skip entirely.
+        let shard_v2 = make_shard(uri, 42, Some(100), Some(200), Some(300), Some(400));
+        let r2 = index.replace_fact_shard_incremental(&key, shard_v2);
+        assert!(r2.content_unchanged);
+        assert!(!r2.anchors_updated);
+        assert!(!r2.entities_updated);
+        assert!(!r2.occurrences_updated);
+        assert!(!r2.edges_updated);
+
+        // The stored shard should still be v1 (unchanged).
+        let stored = must_some(index.file_fact_shard(uri));
+        assert_eq!(stored.anchors_hash, Some(1));
+        Ok(())
+    }
+
+    /// Req 18.3: When a category hash is unchanged, skip re-indexing that
+    /// category's cross-file indexes.
+    #[test]
+    fn incremental_replace_skips_unchanged_categories() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/Partial.pm";
+        let key = DocumentStore::uri_key(uri);
+
+        let shard_v1 = make_shard(uri, 1, Some(10), Some(20), Some(30), Some(40));
+        index.replace_fact_shard_incremental(&key, shard_v1);
+
+        // Change content_hash but keep anchors and entities the same.
+        // Only occurrences and edges change.
+        let shard_v2 = make_shard(uri, 2, Some(10), Some(20), Some(99), Some(88));
+        let result = index.replace_fact_shard_incremental(&key, shard_v2);
+
+        assert!(!result.content_unchanged);
+        assert!(!result.anchors_updated, "anchors hash unchanged → skip");
+        assert!(!result.entities_updated, "entities hash unchanged → skip");
+        assert!(result.occurrences_updated, "occurrences hash changed → update");
+        assert!(result.edges_updated, "edges hash changed → update");
+        Ok(())
+    }
+
+    /// Req 18.4: When a category hash has changed, remove old entries and
+    /// insert new ones for that category.
+    #[test]
+    fn incremental_replace_updates_changed_categories() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/Changed.pm";
+        let key = DocumentStore::uri_key(uri);
+
+        let shard_v1 = make_shard(uri, 1, Some(10), Some(20), Some(30), Some(40));
+        index.replace_fact_shard_incremental(&key, shard_v1);
+
+        // Change all category hashes.
+        let shard_v2 = make_shard(uri, 2, Some(11), Some(21), Some(31), Some(41));
+        let result = index.replace_fact_shard_incremental(&key, shard_v2);
+
+        assert!(!result.content_unchanged);
+        assert!(result.anchors_updated);
+        assert!(result.entities_updated);
+        assert!(result.occurrences_updated);
+        assert!(result.edges_updated);
+
+        // The stored shard should be v2.
+        let stored = must_some(index.file_fact_shard(uri));
+        assert_eq!(stored.content_hash, 2);
+        assert_eq!(stored.anchors_hash, Some(11));
+        Ok(())
+    }
+
+    /// When there is no old shard (first index), all categories are treated
+    /// as changed.
+    #[test]
+    fn incremental_replace_first_insert_updates_all() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/New.pm";
+        let key = DocumentStore::uri_key(uri);
+
+        let shard = make_shard(uri, 1, Some(10), Some(20), Some(30), Some(40));
+        let result = index.replace_fact_shard_incremental(&key, shard);
+
+        assert!(!result.content_unchanged);
+        assert!(result.anchors_updated);
+        assert!(result.entities_updated);
+        assert!(result.occurrences_updated);
+        assert!(result.edges_updated);
+        Ok(())
+    }
+
+    /// When per-category hashes are `None` (legacy shard), the category is
+    /// conservatively treated as changed.
+    #[test]
+    fn incremental_replace_none_hashes_treated_as_changed() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/Legacy.pm";
+        let key = DocumentStore::uri_key(uri);
+
+        // Old shard has hashes, new shard has None for some.
+        let shard_v1 = make_shard(uri, 1, Some(10), Some(20), Some(30), Some(40));
+        index.replace_fact_shard_incremental(&key, shard_v1);
+
+        let shard_v2 = make_shard(uri, 2, None, Some(20), None, Some(40));
+        let result = index.replace_fact_shard_incremental(&key, shard_v2);
+
+        assert!(!result.content_unchanged);
+        assert!(result.anchors_updated, "None new hash → changed");
+        assert!(!result.entities_updated, "same hash → skip");
+        assert!(result.occurrences_updated, "None new hash → changed");
+        assert!(!result.edges_updated, "same hash → skip");
+        Ok(())
+    }
+
+    /// Verify that the semantic reference index is updated only when
+    /// occurrences or edges change.
+    #[test]
+    fn incremental_replace_updates_reference_index_on_occurrence_change()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use perl_semantic_facts::{AnchorId, Confidence, OccurrenceId, OccurrenceKind, Provenance};
+
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/RefIdx.pm";
+        let key = DocumentStore::uri_key(uri);
+        let file_id = {
+            let mut h = DefaultHasher::new();
+            uri.hash(&mut h);
+            FileId(h.finish())
+        };
+
+        // v1: shard with one reference occurrence.
+        let mut shard_v1 = make_shard(uri, 1, Some(10), Some(20), Some(30), Some(40));
+        let anchor_id = AnchorId(1);
+        shard_v1.anchors.push(perl_semantic_facts::AnchorFact {
+            id: anchor_id,
+            file_id,
+            span_start_byte: 0,
+            span_end_byte: 5,
+            scope_id: None,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+        shard_v1.occurrences.push(perl_semantic_facts::OccurrenceFact {
+            id: OccurrenceId(1),
+            kind: OccurrenceKind::Call,
+            entity_id: Some(EntityId(100)),
+            anchor_id,
+            scope_id: None,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+        shard_v1.entities.push(perl_semantic_facts::EntityFact {
+            id: EntityId(100),
+            kind: EntityKind::Subroutine,
+            canonical_name: "RefIdx::foo".to_string(),
+            anchor_id: Some(anchor_id),
+            scope_id: None,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+        index.replace_fact_shard_incremental(&key, shard_v1);
+
+        // Reference index should have entries.
+        assert!(
+            index.semantic_reference_index.read().name_count() > 0
+                || index.semantic_reference_index.read().entity_count() > 0,
+            "reference index should be populated after first insert"
+        );
+
+        // v2: same content_hash → skip entirely, reference index untouched.
+        let shard_v2_same = make_shard(uri, 1, Some(10), Some(20), Some(99), Some(99));
+        let r = index.replace_fact_shard_incremental(&key, shard_v2_same);
+        assert!(r.content_unchanged);
+
+        // v3: different content_hash, same occurrence/edge hashes → skip ref index.
+        let mut shard_v3 = make_shard(uri, 3, Some(11), Some(21), Some(30), Some(40));
+        shard_v3.anchors.push(perl_semantic_facts::AnchorFact {
+            id: anchor_id,
+            file_id,
+            span_start_byte: 0,
+            span_end_byte: 5,
+            scope_id: None,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+        shard_v3.occurrences.push(perl_semantic_facts::OccurrenceFact {
+            id: OccurrenceId(1),
+            kind: OccurrenceKind::Call,
+            entity_id: Some(EntityId(100)),
+            anchor_id,
+            scope_id: None,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+        shard_v3.entities.push(perl_semantic_facts::EntityFact {
+            id: EntityId(100),
+            kind: EntityKind::Subroutine,
+            canonical_name: "RefIdx::foo".to_string(),
+            anchor_id: Some(anchor_id),
+            scope_id: None,
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+        });
+        let r3 = index.replace_fact_shard_incremental(&key, shard_v3);
+        assert!(!r3.occurrences_updated, "occurrence hash unchanged → skip");
+        assert!(!r3.edges_updated, "edge hash unchanged → skip");
+
+        Ok(())
+    }
+
+    /// Verify that `index_file` uses incremental replacement (the fact shard
+    /// is stored and updated correctly through the full indexing path).
+    #[test]
+    fn index_file_stores_fact_shard_incrementally() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/Incr.pm";
+        let code = "package Incr;\nsub foo { 1 }\n1;\n";
+
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+        let shard1 = must_some(index.file_fact_shard(uri));
+        assert!(shard1.anchors_hash.is_some());
+        assert!(
+            shard1.anchors.iter().any(|anchor| anchor.provenance == Provenance::ExactAst),
+            "index_file should store the canonical semantic shard when adapters produce facts"
+        );
+        assert!(
+            shard1.entities.iter().any(|entity| entity.provenance == Provenance::ExactAst),
+            "index_file should store canonical entities rather than legacy fallback entities"
+        );
+
+        // Re-index with same content → shard should be unchanged.
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+        // The early-exit in index_file checks content_hash at the FileIndex
+        // level, so the fact shard replacement is never reached for identical
+        // content. Verify the shard is still present.
+        let shard2 = must_some(index.file_fact_shard(uri));
+        assert_eq!(shard1.content_hash, shard2.content_hash);
+
+        // Re-index with different content → shard should be replaced.
+        let code2 = "package Incr;\nsub bar { 2 }\n1;\n";
+        must(index.index_file(must(url::Url::parse(uri)), code2.to_string()));
+        let shard3 = must_some(index.file_fact_shard(uri));
+        assert_ne!(shard1.content_hash, shard3.content_hash);
+
+        Ok(())
+    }
+
+    // ── Property-based tests for incremental invalidation ──
+
+    mod prop_incremental_invalidation {
+        use super::*;
+        use proptest::prelude::*;
+        use proptest::test_runner::Config as ProptestConfig;
+
+        /// Strategy for an optional per-category hash.
+        ///
+        /// ~10% of the time produces `None` (simulating legacy shards
+        /// without per-category hashes); otherwise a random `u64`.
+        fn arb_category_hash() -> impl Strategy<Value = Option<u64>> {
+            prop_oneof![
+                1 => Just(None),
+                9 => any::<u64>().prop_map(Some),
+            ]
+        }
+
+        /// Strategy for a `FileFactShard` with the given URI and
+        /// randomly-chosen hashes.
+        fn arb_shard(uri: &'static str) -> impl Strategy<Value = FileFactShard> {
+            (
+                any::<u64>(),        // content_hash
+                arb_category_hash(), // anchors_hash
+                arb_category_hash(), // entities_hash
+                arb_category_hash(), // occurrences_hash
+                arb_category_hash(), // edges_hash
+            )
+                .prop_map(move |(content_hash, ah, eh, oh, edh)| {
+                    make_shard(uri, content_hash, ah, eh, oh, edh)
+                })
+        }
+
+        // Property 15: Incremental Invalidation Correctness
+        //
+        // **Validates: Requirements 18.3, 18.4, 18.5**
+        //
+        // For any file re-indexing where the whole-file content_hash is
+        // unchanged, the workspace store shall not modify any cross-file
+        // indexes.  For any file re-indexing where a per-category hash is
+        // unchanged, the workspace store shall skip re-indexing that
+        // category.  For any file re-indexing where a per-category hash
+        // has changed, the workspace store shall remove old entries and
+        // insert new ones for that category.
+        proptest! {
+            #![proptest_config(ProptestConfig {
+                failure_persistence: None,
+                ..ProptestConfig::default()
+            })]
+
+            #[test]
+            fn prop_incremental_invalidation_correctness(
+                old_shard in arb_shard("file:///lib/Prop.pm"),
+                new_shard in arb_shard("file:///lib/Prop.pm"),
+            ) {
+                let index = WorkspaceIndex::new();
+                let key = DocumentStore::uri_key("file:///lib/Prop.pm");
+
+                // Seed the index with the old shard.
+                index.replace_fact_shard_incremental(&key, old_shard.clone());
+
+                // Replace with the new shard and capture the result.
+                let result = index.replace_fact_shard_incremental(&key, new_shard.clone());
+
+                // ── Req 18.5: content_hash unchanged → skip entirely ──
+                if old_shard.content_hash == new_shard.content_hash {
+                    prop_assert!(
+                        result.content_unchanged,
+                        "content_unchanged must be true when content_hash is the same"
+                    );
+                    prop_assert!(
+                        !result.anchors_updated,
+                        "anchors_updated must be false when content_hash unchanged"
+                    );
+                    prop_assert!(
+                        !result.entities_updated,
+                        "entities_updated must be false when content_hash unchanged"
+                    );
+                    prop_assert!(
+                        !result.occurrences_updated,
+                        "occurrences_updated must be false when content_hash unchanged"
+                    );
+                    prop_assert!(
+                        !result.edges_updated,
+                        "edges_updated must be false when content_hash unchanged"
+                    );
+                } else {
+                    prop_assert!(
+                        !result.content_unchanged,
+                        "content_unchanged must be false when content_hash differs"
+                    );
+
+                    // ── Req 18.3 / 18.4: per-category hash comparison ──
+                    // A category is "unchanged" when both old and new have
+                    // Some(h) and the values are equal.  Otherwise the
+                    // category is conservatively treated as changed.
+
+                    let anchors_should_update = crate::semantic::invalidation::category_hash_changed(
+                        old_shard.anchors_hash,
+                        new_shard.anchors_hash,
+                    );
+                    prop_assert_eq!(
+                        result.anchors_updated,
+                        anchors_should_update,
+                        "anchors_updated mismatch: old={:?} new={:?}",
+                        old_shard.anchors_hash,
+                        new_shard.anchors_hash,
+                    );
+
+                    let entities_should_update =
+                        crate::semantic::invalidation::category_hash_changed(
+                            old_shard.entities_hash,
+                            new_shard.entities_hash,
+                        );
+                    prop_assert_eq!(
+                        result.entities_updated,
+                        entities_should_update,
+                        "entities_updated mismatch: old={:?} new={:?}",
+                        old_shard.entities_hash,
+                        new_shard.entities_hash,
+                    );
+
+                    let occurrences_should_update =
+                        crate::semantic::invalidation::category_hash_changed(
+                            old_shard.occurrences_hash,
+                            new_shard.occurrences_hash,
+                        );
+                    prop_assert_eq!(
+                        result.occurrences_updated,
+                        occurrences_should_update,
+                        "occurrences_updated mismatch: old={:?} new={:?}",
+                        old_shard.occurrences_hash,
+                        new_shard.occurrences_hash,
+                    );
+
+                    let edges_should_update = crate::semantic::invalidation::category_hash_changed(
+                        old_shard.edges_hash,
+                        new_shard.edges_hash,
+                    );
+                    prop_assert_eq!(
+                        result.edges_updated,
+                        edges_should_update,
+                        "edges_updated mismatch: old={:?} new={:?}",
+                        old_shard.edges_hash,
+                        new_shard.edges_hash,
+                    );
+                }
+            }
+        }
     }
 }

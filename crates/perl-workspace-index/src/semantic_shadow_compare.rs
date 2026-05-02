@@ -26,6 +26,22 @@ pub enum ShadowQueryName {
     FindReferences,
     /// `count_usages` query.
     CountUsages,
+    /// `visible_symbols_at` query (SemanticQueries facade).
+    VisibleSymbols,
+    /// `method_candidates` query (SemanticQueries facade).
+    MethodCandidates,
+    /// `symbol_at` query (SemanticQueries facade).
+    SymbolAt,
+    /// `rename_plan` query (SemanticQueries facade).
+    RenamePlan,
+    /// `safe_delete_plan` query (SemanticQueries facade).
+    SafeDeletePlan,
+    /// Completion provider visibility query (SemanticQueries facade).
+    CompletionVisibility,
+    /// Diagnostics provider check query (SemanticQueries facade).
+    DiagnosticsCheck,
+    /// Hover provider query (SemanticQueries facade).
+    Hover,
 }
 
 /// Canonical query input payload.
@@ -123,6 +139,8 @@ pub fn summarize_identities(identities: Option<Vec<String>>) -> ShadowResultSumm
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+    use proptest::test_runner::Config as ProptestConfig;
 
     #[test]
     fn receipt_json_shape_is_stable() -> Result<(), Box<dyn std::error::Error>> {
@@ -263,11 +281,251 @@ mod tests {
             "a.pm:1:1".to_string(),
             "b.pm:2:2".to_string(),
         ]));
-        assert_eq!(summary.available, true);
+        assert!(summary.available);
         assert_eq!(summary.match_count, 3);
         assert_eq!(
             summary.identities,
             vec!["a.pm:1:1".to_string(), "b.pm:2:2".to_string(), "c.pm:3:1".to_string()]
         );
+    }
+
+    /// All `ShadowQueryName` variants round-trip through JSON with stable
+    /// snake_case keys.
+    #[test]
+    fn shadow_query_name_json_round_trip() -> Result<(), Box<dyn std::error::Error>> {
+        let variants = [
+            (ShadowQueryName::FindDefinition, "\"find_definition\""),
+            (ShadowQueryName::FindReferences, "\"find_references\""),
+            (ShadowQueryName::CountUsages, "\"count_usages\""),
+            (ShadowQueryName::VisibleSymbols, "\"visible_symbols\""),
+            (ShadowQueryName::MethodCandidates, "\"method_candidates\""),
+            (ShadowQueryName::SymbolAt, "\"symbol_at\""),
+            (ShadowQueryName::RenamePlan, "\"rename_plan\""),
+            (ShadowQueryName::SafeDeletePlan, "\"safe_delete_plan\""),
+            (ShadowQueryName::CompletionVisibility, "\"completion_visibility\""),
+            (ShadowQueryName::DiagnosticsCheck, "\"diagnostics_check\""),
+        ];
+        for (variant, expected_json) in variants {
+            let json = serde_json::to_string(&variant)?;
+            assert_eq!(json, expected_json, "serialization mismatch for {variant:?}");
+            let deserialized: ShadowQueryName = serde_json::from_str(&json)?;
+            assert_eq!(deserialized, variant, "round-trip mismatch for {variant:?}");
+        }
+        Ok(())
+    }
+
+    /// Receipt JSON shape is stable for new semantic query variants.
+    #[test]
+    fn receipt_json_shape_stable_for_visible_symbols() -> Result<(), Box<dyn std::error::Error>> {
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::VisibleSymbols,
+            ShadowQueryInput { symbol: "my_func".to_string() },
+            summarize_identities(Some(vec!["a.pm:1:1".to_string()])),
+            summarize_identities(Some(vec!["a.pm:1:1".to_string(), "b.pm:2:2".to_string()])),
+            vec![],
+        );
+
+        let got: serde_json::Value = serde_json::to_value(&receipt)?;
+        let expected = serde_json::json!({
+            "schema_version": 1,
+            "query": "visible_symbols",
+            "input": {"symbol": "my_func"},
+            "old_result": {
+                "available": true,
+                "match_count": 1,
+                "identities": ["a.pm:1:1"]
+            },
+            "new_result": {
+                "available": true,
+                "match_count": 2,
+                "identities": ["a.pm:1:1", "b.pm:2:2"]
+            },
+            "verdict": "improved",
+            "notes": []
+        });
+        assert_eq!(got, expected);
+        Ok(())
+    }
+
+    /// Receipt JSON shape is stable for method_candidates query.
+    #[test]
+    fn receipt_json_shape_stable_for_method_candidates() -> Result<(), Box<dyn std::error::Error>> {
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::MethodCandidates,
+            ShadowQueryInput { symbol: "new".to_string() },
+            summarize_identities(Some(vec!["Foo.pm:10:5".to_string()])),
+            summarize_identities(Some(vec!["Foo.pm:10:5".to_string()])),
+            vec![],
+        );
+
+        let got: serde_json::Value = serde_json::to_value(&receipt)?;
+        assert_eq!(got["query"], "method_candidates");
+        assert_eq!(receipt.verdict, ShadowCompareVerdict::Same);
+        Ok(())
+    }
+
+    /// Receipt JSON shape is stable for symbol_at query.
+    #[test]
+    fn receipt_json_shape_stable_for_symbol_at() -> Result<(), Box<dyn std::error::Error>> {
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::SymbolAt,
+            ShadowQueryInput { symbol: "$var".to_string() },
+            summarize_identities(None),
+            summarize_identities(Some(vec!["main.pm:5:3".to_string()])),
+            vec!["legacy path unavailable".to_string()],
+        );
+
+        let got: serde_json::Value = serde_json::to_value(&receipt)?;
+        assert_eq!(got["query"], "symbol_at");
+        assert_eq!(receipt.verdict, ShadowCompareVerdict::Unavailable);
+        Ok(())
+    }
+
+    /// Receipt JSON shape is stable for rename_plan query.
+    #[test]
+    fn receipt_json_shape_stable_for_rename_plan() -> Result<(), Box<dyn std::error::Error>> {
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::RenamePlan,
+            ShadowQueryInput { symbol: "old_name".to_string() },
+            summarize_identities(Some(vec!["a.pm:1:1".to_string()])),
+            summarize_identities(Some(vec!["a.pm:1:1".to_string()])),
+            vec![],
+        );
+
+        let got: serde_json::Value = serde_json::to_value(&receipt)?;
+        assert_eq!(got["query"], "rename_plan");
+        assert_eq!(receipt.verdict, ShadowCompareVerdict::Same);
+        Ok(())
+    }
+
+    /// Receipt JSON shape is stable for safe_delete_plan query.
+    #[test]
+    fn receipt_json_shape_stable_for_safe_delete_plan() -> Result<(), Box<dyn std::error::Error>> {
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::SafeDeletePlan,
+            ShadowQueryInput { symbol: "unused_sub".to_string() },
+            summarize_identities(Some(vec![])),
+            summarize_identities(Some(vec![])),
+            vec![],
+        );
+
+        let got: serde_json::Value = serde_json::to_value(&receipt)?;
+        assert_eq!(got["query"], "safe_delete_plan");
+        assert_eq!(receipt.verdict, ShadowCompareVerdict::Same);
+        Ok(())
+    }
+
+    /// Receipt JSON shape is stable for completion_visibility query.
+    #[test]
+    fn receipt_json_shape_stable_for_completion_visibility()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::CompletionVisibility,
+            ShadowQueryInput { symbol: "use Foo".to_string() },
+            summarize_identities(Some(vec!["bar".to_string(), "baz".to_string()])),
+            summarize_identities(Some(vec![
+                "bar".to_string(),
+                "baz".to_string(),
+                "qux".to_string(),
+            ])),
+            vec![],
+        );
+
+        let got: serde_json::Value = serde_json::to_value(&receipt)?;
+        assert_eq!(got["query"], "completion_visibility");
+        assert_eq!(receipt.verdict, ShadowCompareVerdict::Improved);
+        Ok(())
+    }
+
+    /// Receipt JSON shape is stable for diagnostics_check query.
+    #[test]
+    fn receipt_json_shape_stable_for_diagnostics_check() -> Result<(), Box<dyn std::error::Error>> {
+        let receipt = SemanticShadowCompareReceipt::from_summaries(
+            ShadowQueryName::DiagnosticsCheck,
+            ShadowQueryInput { symbol: "undef_sym".to_string() },
+            summarize_identities(Some(vec!["warn:a.pm:3:1".to_string()])),
+            summarize_identities(Some(vec![])),
+            vec!["false positive suppressed".to_string()],
+        );
+
+        let got: serde_json::Value = serde_json::to_value(&receipt)?;
+        assert_eq!(got["query"], "diagnostics_check");
+        assert_eq!(receipt.verdict, ShadowCompareVerdict::Regression);
+        Ok(())
+    }
+
+    /// Strategy to generate an arbitrary `ShadowResultSummary`.
+    fn arb_shadow_result_summary() -> impl Strategy<Value = ShadowResultSummary> {
+        (any::<bool>(), 0u64..256, prop::collection::vec("[a-z0-9_.:/]{1,20}", 0..16)).prop_map(
+            |(available, match_count, mut identities)| {
+                identities.sort();
+                identities.dedup();
+                ShadowResultSummary { available, match_count, identities }
+            },
+        )
+    }
+
+    // **Validates: Requirements 10.2**
+    //
+    // Property 17: Shadow Compare Verdict Determinism — For any pair of
+    // old-path and new-path summaries, `classify_verdict` produces the same
+    // verdict when called with the same inputs. The verdict is `Unavailable`
+    // when either path is unavailable, `Same` when summaries are equal,
+    // `Improved` when the new path has more matches, and `Regression` when
+    // the new path has fewer matches.
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            failure_persistence: None,
+            ..ProptestConfig::default()
+        })]
+
+        #[test]
+        fn prop_shadow_compare_verdict_determinism(
+            old_summary in arb_shadow_result_summary(),
+            new_summary in arb_shadow_result_summary(),
+        ) {
+            // Determinism: calling classify_verdict twice with the same inputs
+            // must produce the same verdict.
+            let verdict_a = classify_verdict(&old_summary, &new_summary);
+            let verdict_b = classify_verdict(&old_summary, &new_summary);
+            prop_assert_eq!(
+                verdict_a, verdict_b,
+                "classify_verdict must be deterministic for the same inputs"
+            );
+
+            // Verify verdict classification rules.
+            if !old_summary.available || !new_summary.available {
+                prop_assert_eq!(
+                    verdict_a,
+                    ShadowCompareVerdict::Unavailable,
+                    "verdict must be Unavailable when either path is unavailable"
+                );
+            } else if old_summary == new_summary {
+                prop_assert_eq!(
+                    verdict_a,
+                    ShadowCompareVerdict::Same,
+                    "verdict must be Same when summaries are equal"
+                );
+            } else if new_summary.match_count > old_summary.match_count {
+                prop_assert_eq!(
+                    verdict_a,
+                    ShadowCompareVerdict::Improved,
+                    "verdict must be Improved when new path has more matches"
+                );
+            } else if new_summary.match_count < old_summary.match_count {
+                prop_assert_eq!(
+                    verdict_a,
+                    ShadowCompareVerdict::Regression,
+                    "verdict must be Regression when new path has fewer matches"
+                );
+            } else {
+                // Equal counts but different content → Ambiguous
+                prop_assert_eq!(
+                    verdict_a,
+                    ShadowCompareVerdict::Ambiguous,
+                    "verdict must be Ambiguous when counts are equal but content differs"
+                );
+            }
+        }
     }
 }

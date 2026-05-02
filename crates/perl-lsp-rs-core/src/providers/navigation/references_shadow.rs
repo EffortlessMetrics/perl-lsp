@@ -1,0 +1,710 @@
+//! Find-references shadow compare and cutover paths.
+//!
+//! Provides two entry points for find-references:
+//!
+//! 1. **Shadow mode** ([`find_references_shadow`]) — runs both legacy and
+//!    semantic paths side-by-side, always returning the legacy result.
+//!    Emits a [`SemanticShadowCompareReceipt`] for scorecard aggregation.
+//!
+//! 2. **Cutover mode** ([`find_references_cutover`]) — uses the semantic
+//!    path as the primary source of truth with fallback to legacy:
+//!    - *Exact*: typed occurrence references → return them.
+//!    - *Ambiguous*: multiple grouped candidates → include grouped candidates.
+//!    - *Dynamic / Unavailable*: no usable results → fall back to legacy.
+//!
+//! # Requirements
+//!
+//! - **Req 9.2**: Find-references calls `SemanticQueries::references`.
+//! - **Req 10.1**: Maintain existing query path as fallback during validation.
+//! - **Req 10.2**: Shadow-compare runs both old and new paths, producing
+//!   deterministic receipts.
+//! - **Req 10.7**: Scorecard gate: legacy count parity or better, definition
+//!   exclusion correct.
+//! - **Req 22.1**: Find-references shadow mode emits receipts before cutover.
+//! - **Req 22.4**: Exact → return typed refs; Ambiguous → include grouped
+//!   candidates; Dynamic/Unavailable → fall back to legacy.
+
+use perl_semantic_facts::{Confidence, EntityId, OccurrenceFact, Provenance};
+use perl_workspace::semantic::queries::SemanticQueries;
+use perl_workspace::semantic_shadow_compare::{
+    SemanticShadowCompareReceipt, ShadowQueryInput, ShadowQueryName, ShadowResultSummary,
+    summarize_identities,
+};
+use perl_workspace::workspace_index::{Location, WorkspaceIndex};
+
+/// Result of a shadow-compared find-references request.
+///
+/// Contains the legacy result (which callers should use during the shadow
+/// phase) and the shadow-compare receipt for scorecard aggregation.
+#[derive(Debug)]
+pub struct ReferencesShadowResult {
+    /// Legacy result — the locations returned by `WorkspaceIndex::find_references`.
+    /// Callers should use this during the shadow phase.
+    pub legacy_result: Vec<Location>,
+    /// Shadow-compare receipt comparing old and new paths.
+    pub receipt: SemanticShadowCompareReceipt,
+}
+
+/// Run find-references through both legacy and semantic paths, producing a
+/// shadow-compare receipt.
+///
+/// # Arguments
+///
+/// * `workspace_index` — the legacy workspace index for `find_references`.
+/// * `semantic_queries` — the new semantic query facade.
+/// * `symbol` — the symbol name to look up (used for legacy path and receipt input).
+/// * `entity_id` — the entity ID to look up (used for semantic path).
+///
+/// # Returns
+///
+/// A [`ReferencesShadowResult`] containing the legacy result and a receipt.
+/// The caller should return the legacy result to the LSP client during the
+/// shadow phase.
+pub fn find_references_shadow<Q: SemanticQueries>(
+    workspace_index: &WorkspaceIndex,
+    semantic_queries: &Q,
+    symbol: &str,
+    entity_id: EntityId,
+) -> ReferencesShadowResult {
+    // ── Legacy path ──
+    let legacy_locations = workspace_index.find_references(symbol);
+    let old_summary = legacy_locations_to_summary(&legacy_locations);
+
+    // ── New semantic path ──
+    let new_occurrences = semantic_queries.references(entity_id);
+    let new_summary = semantic_occurrences_to_summary(&new_occurrences);
+
+    // ── Build receipt ──
+    let receipt = SemanticShadowCompareReceipt::from_summaries(
+        ShadowQueryName::FindReferences,
+        ShadowQueryInput { symbol: symbol.to_string() },
+        old_summary,
+        new_summary,
+        Vec::new(),
+    );
+
+    tracing::debug!(
+        symbol = %symbol,
+        entity_id = ?entity_id,
+        verdict = ?receipt.verdict,
+        old_count = receipt.old_result.match_count,
+        new_count = receipt.new_result.match_count,
+        "find-references shadow compare"
+    );
+
+    ReferencesShadowResult { legacy_result: legacy_locations, receipt }
+}
+
+// ── Cutover types ──
+
+/// Classification of the semantic references result for cutover decisions.
+///
+/// Follows the fallback policy table (Req 22.4):
+/// - Exact → return typed references
+/// - Ambiguous → include grouped candidates
+/// - LegacyFallback → semantic path unavailable or dynamic; use legacy result
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReferencesCutoverResult {
+    /// Typed occurrence references from the semantic path.
+    Exact(Vec<OccurrenceFact>),
+    /// Multiple grouped candidates — present grouped results to the user.
+    Ambiguous(Vec<OccurrenceFact>),
+    /// Semantic path produced no usable result — fall back to legacy.
+    LegacyFallback(Vec<Location>),
+}
+
+/// Outcome of a cutover find-references request.
+///
+/// Contains the classified result and a shadow-compare receipt for
+/// scorecard tracking.
+#[derive(Debug)]
+pub struct ReferencesCutoverOutcome {
+    /// The classified cutover result.
+    pub result: ReferencesCutoverResult,
+    /// Shadow-compare receipt for scorecard aggregation.
+    pub receipt: SemanticShadowCompareReceipt,
+}
+
+// ── Cutover entry point ──
+
+/// Run find-references with the semantic path as primary, falling back to
+/// legacy when the semantic result is unavailable or dynamic.
+///
+/// # Decision logic
+///
+/// 1. Call `SemanticQueries::references` for the entity.
+/// 2. Filter out occurrences that are purely dynamic-boundary
+///    (`Provenance::DynamicBoundary`) or have `Confidence::Low`.
+/// 3. Classify the filtered result:
+///    - **Exact**: all usable occurrences have high/medium confidence →
+///      `ReferencesCutoverResult::Exact`.
+///    - **Ambiguous**: some occurrences have mixed provenance →
+///      `ReferencesCutoverResult::Ambiguous`.
+///    - **Unavailable**: zero usable occurrences → fall back to legacy
+///      `WorkspaceIndex::find_references`.
+/// 4. Emit a shadow-compare receipt regardless of outcome.
+///
+/// # Arguments
+///
+/// * `workspace_index` — legacy workspace index for fallback.
+/// * `semantic_queries` — the semantic query facade (primary path).
+/// * `symbol` — the symbol name for legacy path and receipt input.
+/// * `entity_id` — the entity ID for the semantic path.
+///
+/// # Returns
+///
+/// A [`ReferencesCutoverOutcome`] with the classified result and receipt.
+pub fn find_references_cutover<Q: SemanticQueries>(
+    workspace_index: &WorkspaceIndex,
+    semantic_queries: &Q,
+    symbol: &str,
+    entity_id: EntityId,
+) -> ReferencesCutoverOutcome {
+    // ── Semantic path (primary) ──
+    let all_occurrences = semantic_queries.references(entity_id);
+    let new_summary = semantic_occurrences_to_summary(&all_occurrences);
+
+    // Filter to usable occurrences: exclude dynamic-boundary provenance and
+    // low-confidence results.
+    let usable: Vec<OccurrenceFact> = all_occurrences
+        .into_iter()
+        .filter(|o| o.provenance != Provenance::DynamicBoundary && o.confidence != Confidence::Low)
+        .collect();
+
+    // ── Legacy path (for fallback and receipt) ──
+    let legacy_locations = workspace_index.find_references(symbol);
+    let old_summary = legacy_locations_to_summary(&legacy_locations);
+
+    // ── Build receipt ──
+    let receipt = SemanticShadowCompareReceipt::from_summaries(
+        ShadowQueryName::FindReferences,
+        ShadowQueryInput { symbol: symbol.to_string() },
+        old_summary,
+        new_summary,
+        Vec::new(),
+    );
+
+    // ── Classify result ──
+    let result = classify_cutover_result(usable, legacy_locations);
+
+    tracing::debug!(
+        symbol = %symbol,
+        entity_id = ?entity_id,
+        verdict = ?receipt.verdict,
+        classification = match &result {
+            ReferencesCutoverResult::Exact(_) => "exact",
+            ReferencesCutoverResult::Ambiguous(_) => "ambiguous",
+            ReferencesCutoverResult::LegacyFallback(_) => "legacy_fallback",
+        },
+        "find-references cutover"
+    );
+
+    ReferencesCutoverOutcome { result, receipt }
+}
+
+/// Classify filtered occurrences into the cutover result category.
+fn classify_cutover_result(
+    usable: Vec<OccurrenceFact>,
+    legacy_locations: Vec<Location>,
+) -> ReferencesCutoverResult {
+    if usable.is_empty() {
+        return ReferencesCutoverResult::LegacyFallback(legacy_locations);
+    }
+
+    // Check if any usable occurrence has ambiguous provenance (heuristic/search fallback).
+    let has_ambiguous = usable
+        .iter()
+        .any(|o| matches!(o.provenance, Provenance::NameHeuristic | Provenance::SearchFallback));
+
+    if has_ambiguous {
+        ReferencesCutoverResult::Ambiguous(usable)
+    } else {
+        ReferencesCutoverResult::Exact(usable)
+    }
+}
+
+/// Convert legacy `Location` results into a [`ShadowResultSummary`].
+fn legacy_locations_to_summary(locations: &[Location]) -> ShadowResultSummary {
+    if locations.is_empty() {
+        // Legacy returned results but found nothing — available with 0 matches.
+        // Note: unlike definition where None means unavailable, find_references
+        // always returns a Vec (possibly empty), so it's always "available".
+        return summarize_identities(Some(Vec::new()));
+    }
+
+    let identities: Vec<String> = locations
+        .iter()
+        .map(|loc| format!("{}:{}:{}", loc.uri, loc.range.start.line, loc.range.start.column,))
+        .collect();
+
+    summarize_identities(Some(identities))
+}
+
+/// Convert semantic `OccurrenceFact` results into a [`ShadowResultSummary`].
+fn semantic_occurrences_to_summary(occurrences: &[OccurrenceFact]) -> ShadowResultSummary {
+    if occurrences.is_empty() {
+        return summarize_identities(Some(Vec::new()));
+    }
+
+    let identities: Vec<String> = occurrences
+        .iter()
+        .map(|o| {
+            // Use occurrence_id + anchor_id as a stable identity since we
+            // don't have the resolved URI/line from the semantic path yet.
+            format!("occ:{}:anchor:{}", o.id.0, o.anchor_id.0)
+        })
+        .collect();
+
+    summarize_identities(Some(identities))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_semantic_facts::{
+        AnchorId, Confidence, DefinitionCandidate, EntityFact, EntityId, FileId, OccurrenceFact,
+        OccurrenceId, OccurrenceKind, Provenance, RenamePlan, SafeDeletePlan, ScopeId,
+        VisibleSymbol,
+    };
+    use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
+    use perl_workspace::semantic_shadow_compare::ShadowCompareVerdict;
+
+    // ── Minimal SemanticQueries stub for testing ──
+
+    struct StubSemanticQueries {
+        references_result: Vec<OccurrenceFact>,
+    }
+
+    impl SemanticQueries for StubSemanticQueries {
+        fn symbol_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+        ) -> Option<(EntityFact, OccurrenceFact)> {
+            None
+        }
+
+        fn definitions(&self, _symbol: &str, _context: &QueryContext) -> Vec<DefinitionCandidate> {
+            Vec::new()
+        }
+
+        fn references(&self, _entity_id: EntityId) -> Vec<OccurrenceFact> {
+            self.references_result.clone()
+        }
+
+        fn visible_symbols_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _scope_id: Option<ScopeId>,
+        ) -> Vec<VisibleSymbol> {
+            Vec::new()
+        }
+
+        fn method_candidates(
+            &self,
+            _receiver_package: &str,
+            _method_name: &str,
+        ) -> Vec<DefinitionCandidate> {
+            Vec::new()
+        }
+
+        fn rename_plan(&self, entity_id: EntityId, new_name: &str) -> RenamePlan {
+            RenamePlan::new(entity_id, String::new(), new_name.to_string(), vec![], vec![], vec![])
+        }
+
+        fn safe_delete_plan(&self, entity_id: EntityId) -> SafeDeletePlan {
+            SafeDeletePlan::new(entity_id, String::new(), vec![], vec![])
+        }
+    }
+
+    fn make_occurrence(
+        occ_id: u64,
+        anchor_id: u64,
+        entity_id: u64,
+        kind: OccurrenceKind,
+        provenance: Provenance,
+        confidence: Confidence,
+    ) -> OccurrenceFact {
+        OccurrenceFact {
+            id: OccurrenceId(occ_id),
+            kind,
+            entity_id: Some(EntityId(entity_id)),
+            anchor_id: AnchorId(anchor_id),
+            scope_id: None,
+            provenance,
+            confidence,
+        }
+    }
+
+    fn make_ref_occurrence(occ_id: u64, anchor_id: u64, entity_id: u64) -> OccurrenceFact {
+        make_occurrence(
+            occ_id,
+            anchor_id,
+            entity_id,
+            OccurrenceKind::Reference,
+            Provenance::ExactAst,
+            Confidence::High,
+        )
+    }
+
+    // ── Shadow mode tests ──
+
+    #[test]
+    fn shadow_both_empty_yields_same() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let queries = StubSemanticQueries { references_result: vec![] };
+
+        let result = find_references_shadow(&index, &queries, "No::Such::Symbol", EntityId(999));
+
+        assert!(result.legacy_result.is_empty());
+        assert_eq!(result.receipt.query, ShadowQueryName::FindReferences);
+        // Both paths available with 0 matches → Same.
+        assert_eq!(result.receipt.old_result.available, true);
+        assert_eq!(result.receipt.new_result.available, true);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 0);
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Same);
+        Ok(())
+    }
+
+    #[test]
+    fn shadow_new_path_has_occurrences_old_empty() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let occ = make_ref_occurrence(1, 10, 20);
+        let queries = StubSemanticQueries { references_result: vec![occ] };
+
+        let result = find_references_shadow(&index, &queries, "Foo::bar", EntityId(20));
+
+        assert!(result.legacy_result.is_empty());
+        assert_eq!(result.receipt.old_result.available, true);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.available, true);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        // New has more matches → Improved.
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        Ok(())
+    }
+
+    #[test]
+    fn shadow_returns_legacy_result() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let queries = StubSemanticQueries { references_result: vec![] };
+
+        let result = find_references_shadow(&index, &queries, "test_symbol", EntityId(1));
+
+        // Legacy result is always returned during shadow phase.
+        // With an empty workspace index, legacy returns empty.
+        assert!(result.legacy_result.is_empty());
+        assert_eq!(result.receipt.query, ShadowQueryName::FindReferences);
+        assert_eq!(result.receipt.input.symbol, "test_symbol");
+        Ok(())
+    }
+
+    #[test]
+    fn shadow_receipt_uses_find_references_query_name() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let queries = StubSemanticQueries { references_result: vec![] };
+
+        let result = find_references_shadow(&index, &queries, "test", EntityId(1));
+
+        assert_eq!(result.receipt.query, ShadowQueryName::FindReferences);
+        assert_eq!(result.receipt.input.symbol, "test");
+        assert_eq!(result.receipt.schema_version, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn shadow_multiple_new_occurrences() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let occ1 = make_ref_occurrence(1, 10, 20);
+        let occ2 = make_ref_occurrence(2, 30, 20);
+        let occ3 = make_ref_occurrence(3, 50, 20);
+        let queries = StubSemanticQueries { references_result: vec![occ1, occ2, occ3] };
+
+        let result = find_references_shadow(&index, &queries, "Foo::bar", EntityId(20));
+
+        assert_eq!(result.receipt.new_result.match_count, 3);
+        assert_eq!(result.receipt.new_result.available, true);
+        Ok(())
+    }
+
+    // ── Summary helper tests ──
+
+    #[test]
+    fn legacy_locations_to_summary_empty() -> Result<(), Box<dyn std::error::Error>> {
+        let summary = super::legacy_locations_to_summary(&[]);
+        assert!(summary.available);
+        assert_eq!(summary.match_count, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_locations_to_summary_multiple() -> Result<(), Box<dyn std::error::Error>> {
+        use perl_parser_core::position::{Position, Range};
+
+        let locations = vec![
+            Location {
+                uri: "file:///a.pm".to_string(),
+                range: Range { start: Position::new(0, 1, 5), end: Position::new(0, 1, 10) },
+            },
+            Location {
+                uri: "file:///b.pm".to_string(),
+                range: Range { start: Position::new(0, 3, 2), end: Position::new(0, 3, 8) },
+            },
+        ];
+        let summary = super::legacy_locations_to_summary(&locations);
+        assert!(summary.available);
+        assert_eq!(summary.match_count, 2);
+        assert_eq!(summary.identities.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_occurrences_to_summary_empty() -> Result<(), Box<dyn std::error::Error>> {
+        let summary = super::semantic_occurrences_to_summary(&[]);
+        assert!(summary.available);
+        assert_eq!(summary.match_count, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_occurrences_to_summary_multiple() -> Result<(), Box<dyn std::error::Error>> {
+        let occurrences = vec![make_ref_occurrence(1, 10, 20), make_ref_occurrence(2, 30, 20)];
+        let summary = super::semantic_occurrences_to_summary(&occurrences);
+        assert!(summary.available);
+        assert_eq!(summary.match_count, 2);
+        assert_eq!(summary.identities.len(), 2);
+        Ok(())
+    }
+
+    // ── Cutover tests ──
+
+    #[test]
+    fn cutover_exact_typed_references() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let occ = make_ref_occurrence(1, 10, 20);
+        let queries = StubSemanticQueries { references_result: vec![occ.clone()] };
+
+        let outcome = find_references_cutover(&index, &queries, "Foo::bar", EntityId(20));
+
+        match &outcome.result {
+            ReferencesCutoverResult::Exact(refs) => {
+                assert_eq!(refs.len(), 1);
+                assert_eq!(refs[0], occ);
+            }
+            other => return Err(format!("expected Exact, got {:?}", other).into()),
+        }
+        assert_eq!(outcome.receipt.query, ShadowQueryName::FindReferences);
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_fallback_when_no_occurrences() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let queries = StubSemanticQueries { references_result: vec![] };
+
+        let outcome = find_references_cutover(&index, &queries, "No::Such", EntityId(999));
+
+        match &outcome.result {
+            ReferencesCutoverResult::LegacyFallback(locs) => {
+                // Legacy also finds nothing for an empty index.
+                assert!(locs.is_empty());
+            }
+            other => return Err(format!("expected LegacyFallback, got {:?}", other).into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_fallback_when_all_dynamic_boundary() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let dynamic_occ = make_occurrence(
+            1,
+            10,
+            20,
+            OccurrenceKind::Reference,
+            Provenance::DynamicBoundary,
+            Confidence::Low,
+        );
+        let queries = StubSemanticQueries { references_result: vec![dynamic_occ] };
+
+        let outcome = find_references_cutover(&index, &queries, "Foo::bar", EntityId(20));
+
+        match &outcome.result {
+            ReferencesCutoverResult::LegacyFallback(_) => {}
+            other => return Err(format!("expected LegacyFallback, got {:?}", other).into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_fallback_when_all_low_confidence() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let low_occ = make_occurrence(
+            1,
+            10,
+            20,
+            OccurrenceKind::Reference,
+            Provenance::NameHeuristic,
+            Confidence::Low,
+        );
+        let queries = StubSemanticQueries { references_result: vec![low_occ] };
+
+        let outcome = find_references_cutover(&index, &queries, "Foo::bar", EntityId(20));
+
+        match &outcome.result {
+            ReferencesCutoverResult::LegacyFallback(_) => {}
+            other => return Err(format!("expected LegacyFallback, got {:?}", other).into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_filters_dynamic_keeps_exact() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let good = make_ref_occurrence(1, 10, 20);
+        let dynamic = make_occurrence(
+            2,
+            30,
+            20,
+            OccurrenceKind::Reference,
+            Provenance::DynamicBoundary,
+            Confidence::Low,
+        );
+        let queries = StubSemanticQueries { references_result: vec![good.clone(), dynamic] };
+
+        let outcome = find_references_cutover(&index, &queries, "Foo::bar", EntityId(20));
+
+        // Dynamic occurrence filtered out, leaving one usable → Exact.
+        match &outcome.result {
+            ReferencesCutoverResult::Exact(refs) => {
+                assert_eq!(refs.len(), 1);
+                assert_eq!(refs[0], good);
+            }
+            other => return Err(format!("expected Exact, got {:?}", other).into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_ambiguous_when_heuristic_provenance() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let exact = make_ref_occurrence(1, 10, 20);
+        let heuristic = make_occurrence(
+            2,
+            30,
+            20,
+            OccurrenceKind::Reference,
+            Provenance::NameHeuristic,
+            Confidence::Medium,
+        );
+        let queries = StubSemanticQueries { references_result: vec![exact, heuristic] };
+
+        let outcome = find_references_cutover(&index, &queries, "Foo::bar", EntityId(20));
+
+        match &outcome.result {
+            ReferencesCutoverResult::Ambiguous(refs) => {
+                assert_eq!(refs.len(), 2);
+            }
+            other => return Err(format!("expected Ambiguous, got {:?}", other).into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_receipt_tracks_all_occurrences() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let occ1 = make_ref_occurrence(1, 10, 20);
+        let occ2 = make_occurrence(
+            2,
+            30,
+            20,
+            OccurrenceKind::Reference,
+            Provenance::DynamicBoundary,
+            Confidence::Low,
+        );
+        let queries = StubSemanticQueries { references_result: vec![occ1, occ2] };
+
+        let outcome = find_references_cutover(&index, &queries, "Foo::bar", EntityId(20));
+
+        // Receipt should reflect ALL occurrences (before filtering).
+        assert_eq!(outcome.receipt.new_result.match_count, 2);
+        assert_eq!(outcome.receipt.query, ShadowQueryName::FindReferences);
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_medium_confidence_is_usable() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let medium = make_occurrence(
+            1,
+            10,
+            20,
+            OccurrenceKind::Call,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+        );
+        let queries = StubSemanticQueries { references_result: vec![medium.clone()] };
+
+        let outcome = find_references_cutover(&index, &queries, "Foo::bar", EntityId(20));
+
+        // Medium confidence is usable — should produce Exact, not fallback.
+        match &outcome.result {
+            ReferencesCutoverResult::Exact(refs) => {
+                assert_eq!(refs.len(), 1);
+                assert_eq!(refs[0], medium);
+            }
+            other => return Err(format!("expected Exact, got {:?}", other).into()),
+        }
+        Ok(())
+    }
+
+    // ── classify_cutover_result tests ──
+
+    #[test]
+    fn classify_cutover_result_empty_is_fallback() -> Result<(), Box<dyn std::error::Error>> {
+        let result = super::classify_cutover_result(vec![], vec![]);
+        match result {
+            ReferencesCutoverResult::LegacyFallback(locs) => {
+                assert!(locs.is_empty());
+            }
+            other => return Err(format!("expected LegacyFallback, got {:?}", other).into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn classify_cutover_result_exact_refs() -> Result<(), Box<dyn std::error::Error>> {
+        let occ = make_ref_occurrence(1, 10, 20);
+        let result = super::classify_cutover_result(vec![occ], vec![]);
+        match result {
+            ReferencesCutoverResult::Exact(refs) => {
+                assert_eq!(refs.len(), 1);
+            }
+            other => return Err(format!("expected Exact, got {:?}", other).into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn classify_cutover_result_ambiguous_with_search_fallback()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let occ = make_occurrence(
+            1,
+            10,
+            20,
+            OccurrenceKind::Reference,
+            Provenance::SearchFallback,
+            Confidence::Medium,
+        );
+        let result = super::classify_cutover_result(vec![occ], vec![]);
+        match result {
+            ReferencesCutoverResult::Ambiguous(refs) => {
+                assert_eq!(refs.len(), 1);
+            }
+            other => return Err(format!("expected Ambiguous, got {:?}", other).into()),
+        }
+        Ok(())
+    }
+}
