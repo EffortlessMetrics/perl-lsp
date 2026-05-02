@@ -3,7 +3,7 @@
 use crate::SourceLocation;
 use crate::ast::Node;
 use crate::symbol::{Symbol, SymbolTable};
-use perl_semantic_facts::PackageEdge;
+use perl_semantic_facts::{GeneratedMember, PackageEdge};
 
 use super::hover::HoverInfo;
 use super::tokens::SemanticToken;
@@ -90,6 +90,11 @@ impl SemanticModel {
     /// Access package graph edges extracted from inheritance and role composition forms.
     pub fn package_edges(&self) -> &[PackageEdge] {
         self.analyzer.package_edges()
+    }
+
+    /// Access framework-generated members extracted from accessor declarations.
+    pub fn generated_members(&self) -> &[GeneratedMember] {
+        self.analyzer.generated_members()
     }
 
     /// Get hover information for a symbol at a specific location during Navigate/Analyze.
