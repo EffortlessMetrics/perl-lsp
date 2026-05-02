@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "subsystem": "parser_accuracy",
+  "generated_at": "2026-05-02T00:00:00Z",
+  "commit": "example",
+  "cadence": "pr",
+  "denominator": {
+    "fixture_count": 2,
+    "fixture_family_count": 2,
+    "scored_line_count": 3,
+    "scored_symbol_count": 2,
+    "fully_labeled_region_count": 1,
+    "partial_labeled_region_count": 1,
+    "unknown_region_count": 1,
+    "negative_region_count": 1,
+    "dynamic_boundary_case_count": 1,
+    "unsupported_construct_case_count": 0,
+    "real_project_file_count": 0,
+    "generated_fixture_count": 0,
+    "hand_labeled_fixture_count": 2
+  },
+  "families": [
+    {
+      "family": "packages",
+      "fixture_count": 1,
+      "label_modes": [
+        "full"
+      ],
+      "scored_line_count": 2,
+      "scored_symbol_count": 1,
+      "dynamic_boundary_case_count": 0,
+      "unsupported_construct_case_count": 0
+    },
+    {
+      "family": "dynamic_require",
+      "fixture_count": 1,
+      "label_modes": [
+        "partial"
+      ],
+      "scored_line_count": 1,
+      "scored_symbol_count": 1,
+      "dynamic_boundary_case_count": 1,
+      "unsupported_construct_case_count": 0
+    }
+  ],
+  "metrics": [
+    {
+      "metric": "denominator_fixture_count",
+      "state": "measured",
+      "value": 2,
+      "sample_count": 2,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "metric": "line_construct_f1",
+      "state": "insufficient_data",
+      "reason": "line-level gold scorer is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "metric": "ast_node_kind_f1",
+      "state": "insufficient_data",
+      "reason": "AST structural gold scorer is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "metric": "symbol_decl_f1",
+      "state": "insufficient_data",
+      "reason": "symbol gold scorer is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    }
+  ],
+  "failure_packets": [],
+  "gold_drift": {
+    "schema_error_count": 0,
+    "span_error_count": 0,
+    "duplicate_symbol_id_count": 0,
+    "missing_resolves_to_target_count": 0,
+    "changed_line_count": 0,
+    "changed_symbol_count": 0,
+    "removed_expectation_count": 0,
+    "added_expectation_count": 0,
+    "dynamic_expectation_change_count": 0
+  },
+  "metric_runtime": {
+    "runtime_ms": 1,
+    "timeout_count": 0,
+    "flake_count": 0,
+    "artifact_size_bytes": 2048,
+    "ci_runner_failure_count": 0,
+    "orphan_process_count": 0,
+    "cache_hit_rate": null
+  }
+}

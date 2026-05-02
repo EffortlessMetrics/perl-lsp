@@ -1,0 +1,448 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/schemas/parser-accuracy.schema.json",
+  "title": "perl-lsp parser accuracy scorecard",
+  "description": "Layered parser accuracy scorecard covering denominator visibility, measured accuracy rows, insufficient-data rows, and metric runtime trust signals.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "subsystem",
+    "generated_at",
+    "commit",
+    "cadence",
+    "denominator",
+    "families",
+    "metrics",
+    "failure_packets",
+    "gold_drift",
+    "metric_runtime"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "subsystem": {
+      "type": "string",
+      "const": "parser_accuracy"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "commit": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cadence": {
+      "type": "string",
+      "enum": [
+        "pr",
+        "merge_gate",
+        "nightly",
+        "release"
+      ]
+    },
+    "denominator": {
+      "$ref": "#/$defs/denominator"
+    },
+    "families": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/family"
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/metricRow"
+      }
+    },
+    "failure_packets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/failurePacket"
+      }
+    },
+    "gold_drift": {
+      "$ref": "#/$defs/goldDrift"
+    },
+    "metric_runtime": {
+      "$ref": "#/$defs/metricRuntime"
+    }
+  },
+  "$defs": {
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nonNegativeNumber": {
+      "type": "number",
+      "minimum": 0
+    },
+    "denominator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixture_count",
+        "fixture_family_count",
+        "scored_line_count",
+        "scored_symbol_count",
+        "fully_labeled_region_count",
+        "partial_labeled_region_count",
+        "unknown_region_count",
+        "negative_region_count",
+        "dynamic_boundary_case_count",
+        "unsupported_construct_case_count",
+        "real_project_file_count",
+        "generated_fixture_count",
+        "hand_labeled_fixture_count"
+      ],
+      "properties": {
+        "fixture_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "fixture_family_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "scored_line_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "scored_symbol_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "fully_labeled_region_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "partial_labeled_region_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "unknown_region_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "negative_region_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "dynamic_boundary_case_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "unsupported_construct_case_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "real_project_file_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "generated_fixture_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "hand_labeled_fixture_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "family": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "fixture_count",
+        "label_modes",
+        "scored_line_count",
+        "scored_symbol_count",
+        "dynamic_boundary_case_count",
+        "unsupported_construct_case_count"
+      ],
+      "properties": {
+        "family": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fixture_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "label_modes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "full",
+              "partial",
+              "unknown",
+              "negative"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "scored_line_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "scored_symbol_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "dynamic_boundary_case_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "unsupported_construct_case_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "metricRow": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/measuredMetric"
+        },
+        {
+          "$ref": "#/$defs/insufficientDataMetric"
+        }
+      ]
+    },
+    "measuredMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric",
+        "state",
+        "value",
+        "sample_count",
+        "direction",
+        "confidence"
+      ],
+      "properties": {
+        "metric": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "const": "measured"
+        },
+        "value": {
+          "type": "number"
+        },
+        "previous": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "floor": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "threshold": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "up",
+            "down",
+            "flat",
+            "neutral"
+          ]
+        },
+        "sample_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        },
+        "cadence": {
+          "type": "string",
+          "enum": [
+            "pr",
+            "merge_gate",
+            "nightly",
+            "release"
+          ]
+        },
+        "macro_value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "micro_value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "insufficientDataMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric",
+        "state",
+        "reason",
+        "sample_count"
+      ],
+      "properties": {
+        "metric": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "const": "insufficient_data"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sample_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "confidence": {
+          "$ref": "#/$defs/confidence"
+        }
+      }
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "failurePacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "failure_kind",
+        "likely_layer",
+        "fixture_id"
+      ],
+      "properties": {
+        "failure_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "likely_layer": {
+          "type": "string",
+          "enum": [
+            "lexer",
+            "parser",
+            "recovery",
+            "ast_projection",
+            "semantic_fact_extraction",
+            "workspace_index",
+            "provider_query",
+            "gold_schema",
+            "metric_infrastructure",
+            "unknown"
+          ]
+        },
+        "fixture_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "details": {
+          "type": "string"
+        }
+      }
+    },
+    "goldDrift": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_error_count",
+        "span_error_count",
+        "duplicate_symbol_id_count",
+        "missing_resolves_to_target_count",
+        "changed_line_count",
+        "changed_symbol_count",
+        "removed_expectation_count",
+        "added_expectation_count",
+        "dynamic_expectation_change_count"
+      ],
+      "properties": {
+        "schema_error_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "span_error_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "duplicate_symbol_id_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "missing_resolves_to_target_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "changed_line_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "changed_symbol_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "removed_expectation_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "added_expectation_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "dynamic_expectation_change_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "metricRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime_ms",
+        "timeout_count",
+        "flake_count",
+        "artifact_size_bytes"
+      ],
+      "properties": {
+        "runtime_ms": {
+          "$ref": "#/$defs/nonNegativeNumber"
+        },
+        "timeout_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "flake_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "artifact_size_bytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "ci_runner_failure_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "orphan_process_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "cache_hit_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  }
+}
