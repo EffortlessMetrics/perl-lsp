@@ -1,3 +1,4 @@
+use perl_semantic_facts::Provenance;
 use perl_workspace::workspace::workspace_index::WorkspaceIndex;
 use url::Url;
 
@@ -13,7 +14,15 @@ fn index_file_populates_fact_shard() -> Result<(), Box<dyn std::error::Error>> {
     assert!(!shard.anchors.is_empty());
     assert!(!shard.entities.is_empty());
     assert!(shard.occurrences.is_empty());
-    assert!(shard.edges.is_empty());
+    assert!(
+        shard.anchors.iter().any(|anchor| anchor.provenance == Provenance::ExactAst),
+        "stored shard should use canonical adapter anchors when available"
+    );
+    assert!(
+        shard.entities.iter().any(|entity| entity.provenance == Provenance::ExactAst),
+        "stored shard should use canonical adapter entities when available"
+    );
+    assert!(!shard.edges.is_empty(), "canonical declaration facts should include edges");
     assert_eq!(index.fact_shard_count(), 1);
     Ok(())
 }

@@ -22,7 +22,20 @@
 //! ```
 
 // Declare modules
+/// Goto-definition shadow compare path (semantic migration).
+pub mod definition_shadow;
+/// Hover shadow compare path (semantic migration).
+pub mod hover_shadow;
 mod references;
+/// Find-references shadow compare path (semantic migration).
+pub mod references_shadow;
+/// Rename shadow compare and cutover path (semantic migration).
+pub mod rename_shadow;
+/// Safe-delete shadow compare and cutover path (semantic migration).
+pub mod safe_delete_shadow;
+/// Per-provider scorecard gate fixture suites (test-only).
+#[cfg(test)]
+mod scorecard_gate_fixtures;
 mod type_definition;
 
 // Re-export key types and functions

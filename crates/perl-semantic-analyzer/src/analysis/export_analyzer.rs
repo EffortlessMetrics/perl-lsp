@@ -27,7 +27,7 @@
 //! forms are extracted.
 
 use crate::ast::{Node, NodeKind};
-use perl_semantic_facts::{Confidence, ExportSet, ExportTag, Provenance};
+use perl_semantic_facts::{AnchorId, Confidence, ExportSet, ExportTag, Provenance};
 use std::collections::{HashMap, HashSet};
 
 /// Information extracted from an Exporter-based module.
@@ -39,6 +39,10 @@ pub struct ExportInfo {
     pub optional_export: HashSet<String>,
     /// Tag-based exports via `%EXPORT_TAGS` (tag name -> symbols)
     pub export_tags: HashMap<String, Vec<String>>,
+    /// Package name extracted from the AST's `package` declaration.
+    pub module_name: Option<String>,
+    /// Anchor ID derived from the first export declaration's byte span.
+    pub anchor_id: Option<AnchorId>,
 }
 
 impl ExportInfo {
@@ -69,6 +73,8 @@ impl ExportInfo {
             tags,
             provenance: Provenance::ImportExportInference,
             confidence: Confidence::High,
+            module_name: self.module_name.clone(),
+            anchor_id: self.anchor_id,
         }
     }
 }
@@ -102,7 +108,13 @@ impl ExportSymbolExtractor {
     pub fn extract(ast: &Node) -> Option<ExportInfo> {
         let detector = Self::detect_exporter_inheritance(ast)?;
 
-        let mut info = ExportInfo::default();
+        let mut info = ExportInfo {
+            // Extract the package name from the AST.
+            module_name: Self::find_package_name(ast),
+            // Derive anchor_id from the first export declaration's byte span.
+            anchor_id: Self::find_first_export_anchor(ast),
+            ..Default::default()
+        };
 
         // Walk the AST to find export array assignments
         Self::walk_and_extract_exports(ast, &detector, &mut info);
@@ -119,6 +131,62 @@ impl ExportSymbolExtractor {
     /// 4. `our @ISA = qw(Exporter ...);` or bare `@ISA = qw(Exporter ...);`
     fn detect_exporter_inheritance(ast: &Node) -> Option<ExporterDetector> {
         Self::walk_for_exporter_detection(ast)
+    }
+
+    /// Walk the AST to find the first `package` declaration and return its name.
+    fn find_package_name(ast: &Node) -> Option<String> {
+        match &ast.kind {
+            NodeKind::Package { name, .. } => Some(name.clone()),
+            _ => {
+                for child in ast.children() {
+                    if let Some(name) = Self::find_package_name(child) {
+                        return Some(name);
+                    }
+                }
+                None
+            }
+        }
+    }
+
+    /// Walk the AST to find the first `@EXPORT`, `@EXPORT_OK`, or `%EXPORT_TAGS`
+    /// declaration and derive an [`AnchorId`] from its byte-offset span.
+    fn find_first_export_anchor(ast: &Node) -> Option<AnchorId> {
+        Self::walk_for_first_export_anchor(ast)
+    }
+
+    /// Recursive helper for [`Self::find_first_export_anchor`].
+    fn walk_for_first_export_anchor(node: &Node) -> Option<AnchorId> {
+        match &node.kind {
+            // `our @EXPORT = ...` or `our @EXPORT_OK = ...` or `our %EXPORT_TAGS = ...`
+            NodeKind::VariableDeclaration { variable, initializer: Some(_), .. } => {
+                if let NodeKind::Variable { sigil, name } = &variable.kind {
+                    let is_export_var = (sigil == "@" && (name == "EXPORT" || name == "EXPORT_OK"))
+                        || (sigil == "%" && name == "EXPORT_TAGS");
+                    if is_export_var {
+                        return Some(AnchorId(node.location.start as u64));
+                    }
+                }
+            }
+            // `@EXPORT = ...` or `@EXPORT_OK = ...` or `%EXPORT_TAGS = ...` (bare)
+            NodeKind::Assignment { lhs, .. } => {
+                if let NodeKind::Variable { sigil, name } = &lhs.kind {
+                    let is_export_var = (sigil == "@" && (name == "EXPORT" || name == "EXPORT_OK"))
+                        || (sigil == "%" && name == "EXPORT_TAGS");
+                    if is_export_var {
+                        return Some(AnchorId(node.location.start as u64));
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        for child in node.children() {
+            if let Some(anchor) = Self::walk_for_first_export_anchor(child) {
+                return Some(anchor);
+            }
+        }
+
+        None
     }
 
     /// Walk AST looking for Exporter inheritance patterns.
@@ -734,5 +802,136 @@ our %EXPORT_TAGS = (all => [qw(foo bar baz)]);
             info.export_tags.get("all").unwrap(),
             &vec!["foo".to_string(), "bar".to_string(), "baz".to_string()]
         );
+    }
+
+    #[test]
+    fn test_module_name_populated_from_package_declaration() -> Result<(), String> {
+        let code = r#"
+package My::Utils;
+use Exporter 'import';
+our @EXPORT = qw(helper);
+1;
+"#;
+        let info = parse_and_extract(code).ok_or("Expected Some(ExportInfo)")?;
+        assert_eq!(
+            info.module_name.as_deref(),
+            Some("My::Utils"),
+            "module_name should be extracted from the package declaration"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_module_name_propagated_to_export_set() -> Result<(), String> {
+        let code = r#"
+package Data::Formatter;
+use parent 'Exporter';
+our @EXPORT_OK = qw(format_csv);
+1;
+"#;
+        let info = parse_and_extract(code).ok_or("Expected Some(ExportInfo)")?;
+        let export_set = info.to_export_set();
+        assert_eq!(
+            export_set.module_name.as_deref(),
+            Some("Data::Formatter"),
+            "ExportSet.module_name should carry the package name"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_anchor_id_populated_from_first_export_declaration() -> Result<(), String> {
+        let code = r#"
+package MyLib;
+use Exporter 'import';
+our @EXPORT = qw(foo);
+1;
+"#;
+        let info = parse_and_extract(code).ok_or("Expected Some(ExportInfo)")?;
+        assert!(
+            info.anchor_id.is_some(),
+            "anchor_id should be populated from the first export declaration"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_anchor_id_propagated_to_export_set() -> Result<(), String> {
+        let code = r#"
+package MyLib;
+use Exporter 'import';
+our @EXPORT_OK = qw(bar baz);
+1;
+"#;
+        let info = parse_and_extract(code).ok_or("Expected Some(ExportInfo)")?;
+        let export_set = info.to_export_set();
+        assert!(
+            export_set.anchor_id.is_some(),
+            "ExportSet.anchor_id should carry the first export declaration anchor"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_anchor_id_none_when_no_export_arrays() -> Result<(), String> {
+        // Module uses Exporter but declares no export arrays — anchor_id should be None.
+        let code = r#"
+package EmptyExporter;
+use Exporter 'import';
+1;
+"#;
+        let info = parse_and_extract(code).ok_or("Expected Some(ExportInfo)")?;
+        assert!(
+            info.anchor_id.is_none(),
+            "anchor_id should be None when no export arrays are declared"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_module_name_and_anchor_id_with_bare_assignment() -> Result<(), String> {
+        let code = r#"
+package OldStyle::Lib;
+@ISA = qw(Exporter);
+@EXPORT = qw(old_func);
+1;
+"#;
+        let info = parse_and_extract(code).ok_or("Expected Some(ExportInfo)")?;
+        assert_eq!(
+            info.module_name.as_deref(),
+            Some("OldStyle::Lib"),
+            "module_name should work with bare assignment style"
+        );
+        assert!(
+            info.anchor_id.is_some(),
+            "anchor_id should be populated from bare @EXPORT assignment"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_export_set_completeness_with_module_and_anchor() -> Result<(), String> {
+        let code = r#"
+package Full::Module;
+use base 'Exporter';
+our @EXPORT = qw(alpha beta);
+our @EXPORT_OK = qw(gamma);
+our %EXPORT_TAGS = (all => [qw(alpha beta gamma)]);
+1;
+"#;
+        let info = parse_and_extract(code).ok_or("Expected Some(ExportInfo)")?;
+        let export_set = info.to_export_set();
+
+        // Verify module_name and anchor_id are present
+        assert_eq!(export_set.module_name.as_deref(), Some("Full::Module"));
+        assert!(export_set.anchor_id.is_some());
+
+        // Verify export contents are still correct
+        assert_eq!(export_set.default_exports, vec!["alpha", "beta"]);
+        assert_eq!(export_set.optional_exports, vec!["gamma"]);
+        assert_eq!(export_set.tags.len(), 1);
+        assert_eq!(export_set.tags[0].name, "all");
+        assert_eq!(export_set.tags[0].members, vec!["alpha", "beta", "gamma"]);
+        Ok(())
     }
 }

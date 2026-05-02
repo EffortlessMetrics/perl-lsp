@@ -49,12 +49,13 @@ fn incremental_parser_given_reversed_change_range_when_marked_then_reparse_is_de
 }
 
 #[test]
-fn incremental_parser_given_zero_width_change_when_marked_then_no_nodes_require_reparse() {
+fn incremental_parser_given_zero_width_change_when_marked_then_overlapping_nodes_require_reparse() {
     let mut parser = IncrementalParser::new();
 
     parser.mark_changed(10, 10);
 
-    assert!(!parser.needs_reparse(0, 100));
+    assert!(parser.needs_reparse(0, 100));
+    assert!(!parser.needs_reparse(11, 100));
 }
 
 #[test]

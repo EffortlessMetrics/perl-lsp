@@ -6,12 +6,14 @@
 //! every microcrate-collapse facade.
 
 use perl_symbol::{
-    SymbolDecl, SymbolIndex, SymbolKind, SymbolRef, SymbolRefKind, VarKind,
+    SymbolDecl, SymbolDeclSemanticFacts, SymbolIndex, SymbolKind, SymbolRef, SymbolRefKind,
+    SymbolRefSemanticFacts, VarKind,
     cursor::{
         CursorSymbolKind, byte_offset_utf16, extract_symbol_from_source,
         get_symbol_range_at_position, is_modchar, is_word_boundary, token_under_cursor,
     },
-    extract_symbol_decls, extract_symbol_refs,
+    extract_symbol_decls, extract_symbol_refs, symbol_decls_to_semantic_facts,
+    symbol_refs_to_semantic_facts,
 };
 
 #[test]
@@ -85,4 +87,53 @@ fn surface_decl_accessible() {
 fn surface_ref_accessible() {
     let _kind = SymbolRefKind::SubroutineCall;
     let _fn: fn(&perl_ast::Node) -> Vec<SymbolRef> = extract_symbol_refs;
+}
+
+/// Canonical adapter path assertion (Requirement 21).
+///
+/// `symbol_refs_to_semantic_facts` in `surface::facts` is the single canonical
+/// SymbolRef→OccurrenceFact adapter. `symbol_decls_to_semantic_facts` is the
+/// single canonical SymbolDecl→EntityFact adapter. This test binds both adapter
+/// functions and their return types at the crate-root path AND the module path,
+/// asserting type identity. If a second adapter path is introduced, it must use
+/// a different return type — and this test will catch any attempt to shadow or
+/// duplicate the canonical types.
+#[test]
+fn canonical_adapter_path_is_unique() {
+    use perl_semantic_facts::{EntityId, FileId};
+    use std::collections::BTreeMap;
+
+    // ── SymbolRef adapter: crate-root path ──
+    let _ref_adapter: fn(
+        &[SymbolRef],
+        FileId,
+        &BTreeMap<String, EntityId>,
+    ) -> SymbolRefSemanticFacts = symbol_refs_to_semantic_facts;
+
+    // ── SymbolRef adapter: module path (must be the same function) ──
+    let _ref_adapter_mod: fn(
+        &[SymbolRef],
+        FileId,
+        &BTreeMap<String, EntityId>,
+    ) -> perl_symbol::surface::SymbolRefSemanticFacts =
+        perl_symbol::surface::symbol_refs_to_semantic_facts;
+
+    // Type identity: crate-root and module-path types are the same nominal type.
+    let _: fn(SymbolRefSemanticFacts) -> perl_symbol::surface::SymbolRefSemanticFacts =
+        std::convert::identity;
+
+    // ── SymbolDecl adapter: crate-root path ──
+    let _decl_adapter: fn(&[SymbolDecl], FileId) -> SymbolDeclSemanticFacts =
+        symbol_decls_to_semantic_facts;
+
+    // ── SymbolDecl adapter: module path (must be the same function) ──
+    let _decl_adapter_mod: fn(
+        &[perl_symbol::surface::SymbolDecl],
+        FileId,
+    ) -> perl_symbol::surface::SymbolDeclSemanticFacts =
+        perl_symbol::surface::symbol_decls_to_semantic_facts;
+
+    // Type identity: crate-root and module-path types are the same nominal type.
+    let _: fn(SymbolDeclSemanticFacts) -> perl_symbol::surface::SymbolDeclSemanticFacts =
+        std::convert::identity;
 }

@@ -19,6 +19,8 @@
 
 #[allow(clippy::module_inception)]
 mod completion;
+/// Completion visibility shadow compare path (semantic migration).
+pub mod completion_shadow;
 
 pub use completion::{
     CompletionContext, CompletionItem, CompletionItemKind, CompletionProvider,

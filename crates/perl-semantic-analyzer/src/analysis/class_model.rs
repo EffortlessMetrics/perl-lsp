@@ -742,6 +742,12 @@ impl ClassModelBuilder {
                         return Some(1);
                     }
                 }
+            } else {
+                let names: Vec<String> = args.iter().flat_map(collect_symbol_names).collect();
+                if !names.is_empty() {
+                    self.extract_has_with_names(&names, &[], first.location);
+                    return Some(1);
+                }
             }
         }
 

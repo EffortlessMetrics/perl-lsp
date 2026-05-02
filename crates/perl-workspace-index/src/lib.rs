@@ -75,6 +75,9 @@ pub mod slo;
 /// Index lifecycle state machine.
 pub mod state_machine;
 
+/// Canonical semantic substrate: fact population, indexes, and query facade.
+pub mod semantic;
+
 /// Workspace indexing and refactoring orchestration.
 pub mod workspace;
 

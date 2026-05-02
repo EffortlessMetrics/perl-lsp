@@ -15,7 +15,7 @@
 // Test-only: .expect() is acceptable in test code for known-good invariants.
 #![allow(clippy::expect_used, clippy::panic)]
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 // ============================================================================
 // SECTION 1: API Signature Regression Locks (6 Fixed Shapes)
@@ -238,50 +238,93 @@ fn test_lsp_compat_code_lens_accessible() -> Result<(), Box<dyn std::error::Erro
 // SECTION 4: Consumer Import Sweep (perl-lsp crate cleanup)
 // ============================================================================
 
+const OLD_G1B_RUST_CRATES: &[&str] = &[
+    "perl_lsp_inline_completion",
+    "perl_lsp_code_actions",
+    "perl_lsp_completion",
+    "perl_lsp_navigation",
+    "perl_lsp_rename",
+    "perl_lsp_diagnostics",
+    "perl_lsp_semantic_tokens",
+    "perl_lsp_formatting",
+    "perl_lsp_ai_provider",
+    "perl_lsp_providers",
+];
+
+fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir
+        .parent()
+        .and_then(Path::parent)
+        .ok_or("CARGO_MANIFEST_DIR should be under crates/perl-lsp-rs-core")?;
+    Ok(root.to_path_buf())
+}
+
+fn collect_rust_files(
+    dir: &Path,
+    files: &mut Vec<PathBuf>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !dir.exists() {
+        return Ok(());
+    }
+
+    for entry in std::fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read directory {}: {}", dir.display(), e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_rust_files(&path, files)?;
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            files.push(path);
+        }
+    }
+
+    Ok(())
+}
+
+fn old_g1b_imports_under(dir: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut files = Vec::new();
+    collect_rust_files(dir, &mut files)?;
+
+    let mut old_imports = Vec::new();
+    for path in files {
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read Rust file {}: {}", path.display(), e))?;
+
+        for (line_idx, line) in content.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("//") || trimmed.starts_with("//!") {
+                continue;
+            }
+
+            let has_old_import = OLD_G1B_RUST_CRATES.iter().any(|crate_name| {
+                trimmed.starts_with(&format!("use {crate_name}"))
+                    || trimmed.starts_with(&format!("pub use {crate_name}"))
+                    || trimmed.starts_with(&format!("extern crate {crate_name}"))
+            });
+
+            if has_old_import {
+                old_imports.push(format!("{}:{}: {}", path.display(), line_idx + 1, trimmed));
+            }
+        }
+    }
+
+    Ok(old_imports)
+}
+
 /// Verify perl-lsp/src has NO imports of old G1b crate names.
 /// Regression: If any file still imports from perl_lsp_<old-name>, this catches it.
 #[test]
 fn test_no_old_g1b_crate_imports_in_perl_lsp_src() -> Result<(), Box<dyn std::error::Error>> {
-    use std::process::Command;
-
-    // Grep for old imports in perl-lsp/src.
-    let output = Command::new("grep")
-        .args([
-            "-r",
-            "use perl_lsp_rename\\|use perl_lsp_diagnostics\\|use perl_lsp_semantic_tokens\\|use perl_lsp_formatting\\|use perl_lsp_ai_provider\\|use perl_lsp_completion\\|use perl_lsp_navigation\\|use perl_lsp_code_actions\\|use perl_lsp_inline_completion\\|use perl_lsp_providers[^_rs_core]",
-            "crates/perl-lsp-rs/src/",
-        ])
-        .output()
-        .map_err(|e| format!("Failed to run grep: {}", e))?;
-
-    let grep_output = String::from_utf8_lossy(&output.stdout);
-
-    // Filter out legitimate imports (pub use perl_lsp_rs_core::providers::*).
-    let old_imports: Vec<&str> = grep_output
-        .lines()
-        .filter(|line| {
-            // Exclude legitimate re-exports from perl-lsp-rs-core.
-            !line.contains("perl_lsp_rs_core") &&
-            // Exclude comments.
-            !line.trim().starts_with("//") &&
-            // Exclude perl_lsp_tooling (different namespace, OK to import).
-            !line.contains("perl_lsp_tooling") &&
-            // Exclude perl_lsp crate itself.
-            !line.contains("crates/perl-lsp-rs/src/")
-        })
-        .collect();
+    let src_path = workspace_root()?.join("crates").join("perl-lsp-rs").join("src");
+    let old_imports = old_g1b_imports_under(&src_path)?;
 
     assert!(
         old_imports.is_empty(),
-        "perl-lsp/src must not import old G1b crate names (found {} old imports)",
-        old_imports.len()
+        "perl-lsp-rs/src must not import old G1b crate names:\n{}",
+        old_imports.join("\n")
     );
-
-    if !old_imports.is_empty() {
-        for import in &old_imports {
-            eprintln!("Old import found: {}", import);
-        }
-    }
 
     Ok(())
 }
@@ -293,51 +336,14 @@ fn test_no_old_g1b_crate_imports_in_perl_lsp_tests() -> Result<(), Box<dyn std::
     // Check for old crate imports in test files.
     // These specific crates were absorbed into perl-lsp-rs-core::providers in G1b.
 
-    let test_files_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("parent")
-        .parent()
-        .expect("workspace")
-        .join("crates")
-        .join("perl-lsp")
-        .join("tests");
+    let test_files_path = workspace_root()?.join("crates").join("perl-lsp-rs").join("tests");
 
-    let dangerous_patterns = vec![
-        "perl_lsp_inline_completion",
-        "perl_lsp_code_actions",
-        "perl_lsp_completion",
-        "perl_lsp_navigation",
-        "perl_lsp_rename",
-        "perl_lsp_diagnostics",
-        "perl_lsp_semantic_tokens",
-        "perl_lsp_formatting",
-        "perl_lsp_ai_provider",
-    ];
-
-    // Walk through test files and check for dangerous patterns.
-    if test_files_path.exists() {
-        for entry in std::fs::read_dir(&test_files_path)
-            .map_err(|e| format!("Failed to read test directory: {}", e))?
-        {
-            let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|ext| ext == "rs") {
-                let content = std::fs::read_to_string(&path)
-                    .map_err(|e| format!("Failed to read test file {}: {}", path.display(), e))?;
-
-                for pattern in &dangerous_patterns {
-                    if content.contains(&format!("use {}", pattern)) {
-                        panic!(
-                            "Test file {} still imports old G1b crate '{}'. Must use perl_lsp_rs_core::providers instead.",
-                            path.display(),
-                            pattern
-                        );
-                    }
-                }
-            }
-        }
-    }
+    let old_imports = old_g1b_imports_under(&test_files_path)?;
+    assert!(
+        old_imports.is_empty(),
+        "perl-lsp-rs/tests must not import old G1b crate names:\n{}",
+        old_imports.join("\n")
+    );
 
     Ok(())
 }
@@ -565,27 +571,20 @@ fn test_diag_snap_regression_guard() -> Result<(), Box<dyn std::error::Error>> {
 // SECTION 11: Cargo.toml Dependency Cleanup Verification
 // ============================================================================
 
-/// Verify that perl-lsp/Cargo.toml no longer directly imports G1b crates.
+/// Verify that perl-lsp-rs/Cargo.toml no longer directly imports G1b crates.
 /// Per O4: 10 dead imports should be removed.
 #[test]
 fn test_perl_lsp_cargo_toml_removed_g1b_imports() -> Result<(), Box<dyn std::error::Error>> {
-    // Navigate from perl-lsp-rs-core to workspace root to find perl-lsp/Cargo.toml.
-    let cargo_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("parent dir exists")
-        .parent()
-        .expect("workspace root exists")
-        .join("crates")
-        .join("perl-lsp")
-        .join("Cargo.toml");
+    // Navigate from perl-lsp-rs-core to workspace root to find perl-lsp-rs/Cargo.toml.
+    let cargo_path = workspace_root()?.join("crates").join("perl-lsp-rs").join("Cargo.toml");
 
     let content = std::fs::read_to_string(&cargo_path).map_err(|e| {
-        format!("Failed to read perl-lsp/Cargo.toml at {}: {}", cargo_path.display(), e)
+        format!("Failed to read perl-lsp-rs/Cargo.toml at {}: {}", cargo_path.display(), e)
     })?;
 
     // These 10 old imports MUST be removed from perl-lsp/Cargo.toml.
     // Check that they're gone (or commented as removed).
-    let old_crates = vec![
+    let old_crates = [
         "perl-lsp-rename",
         "perl-lsp-diagnostics",
         "perl-lsp-semantic-tokens",

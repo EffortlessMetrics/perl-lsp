@@ -267,6 +267,9 @@ impl SymbolTable {
 
     /// Add a symbol definition
     fn add_symbol(&mut self, symbol: Symbol) {
+        if symbol.name.is_empty() {
+            return;
+        }
         let name = symbol.name.clone();
         if let Some(scope) = self.scopes.get_mut(&symbol.scope_id) {
             scope.symbols.insert(name.clone());
@@ -276,6 +279,9 @@ impl SymbolTable {
 
     /// Add a symbol reference
     fn add_reference(&mut self, reference: SymbolReference) {
+        if reference.name.is_empty() {
+            return;
+        }
         let name = reference.name.clone();
         self.references.entry(name).or_default().push(reference);
     }
