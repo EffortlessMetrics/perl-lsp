@@ -123,12 +123,13 @@ impl ImportExtractor {
                 //
                 // Use the require statement's anchor for the spec.
                 let anchor_id = Self::anchor_from_node(require_node);
+                let confidence = Self::confidence_for_symbols(&symbols);
                 out.push(ImportSpec {
                     module: module_name,
                     kind: ImportKind::RequireThenImport,
                     symbols,
                     provenance: Provenance::ExactAst,
-                    confidence: Confidence::High,
+                    confidence,
                     file_id: Some(file_id),
                     anchor_id: Some(anchor_id),
                     scope_id: None,
@@ -250,9 +251,14 @@ impl ImportExtractor {
 
         let mut names: Vec<String> = Vec::new();
         let mut tags: Vec<String> = Vec::new();
+        let mut has_dynamic_arg = false;
 
         for arg in args {
-            Self::collect_import_arg_symbols(arg, &mut names, &mut tags);
+            has_dynamic_arg |= Self::collect_import_arg_symbols(arg, &mut names, &mut tags);
+        }
+
+        if has_dynamic_arg {
+            return ImportSymbols::Dynamic;
         }
 
         if names.is_empty() && tags.is_empty() {
@@ -272,7 +278,14 @@ impl ImportExtractor {
 
     /// Collect symbol names and tags from a single argument node of an
     /// `import(...)` call.
-    fn collect_import_arg_symbols(arg: &Node, names: &mut Vec<String>, tags: &mut Vec<String>) {
+    ///
+    /// Returns `true` when the argument is dynamic or unsupported and should
+    /// prevent the import site from claiming exact symbol names.
+    fn collect_import_arg_symbols(
+        arg: &Node,
+        names: &mut Vec<String>,
+        tags: &mut Vec<String>,
+    ) -> bool {
         match &arg.kind {
             NodeKind::String { value, .. } => {
                 let bare = value.trim_matches('\'').trim_matches('"');
@@ -281,6 +294,7 @@ impl ImportExtractor {
                 } else if !bare.is_empty() {
                     names.push(bare.to_string());
                 }
+                false
             }
             NodeKind::Identifier { name } => {
                 // Handle qw(...) stored as raw identifier string.
@@ -297,15 +311,27 @@ impl ImportExtractor {
                 } else if !name.is_empty() {
                     names.push(name.clone());
                 }
+                false
+            }
+            NodeKind::Variable { .. } => {
+                // `Foo->import(@names)` / `Foo->import($name)` is dynamic:
+                // do not guess exact imported symbols.
+                true
             }
             NodeKind::ArrayLiteral { elements } => {
                 // qw(...) in expression context → ArrayLiteral of String nodes
+                let mut has_dynamic_arg = false;
                 for el in elements {
-                    Self::collect_import_arg_symbols(el, names, tags);
+                    has_dynamic_arg |= Self::collect_import_arg_symbols(el, names, tags);
                 }
+                has_dynamic_arg
             }
-            _ => {}
+            _ => true,
         }
+    }
+
+    fn confidence_for_symbols(symbols: &ImportSymbols) -> Confidence {
+        if matches!(symbols, ImportSymbols::Dynamic) { Confidence::Low } else { Confidence::High }
     }
 
     // ── Classification ──────────────────────────────────────────────────
@@ -934,6 +960,47 @@ Some::Module->import();
 
         assert_eq!(spec.kind, ImportKind::RequireThenImport);
         assert_eq!(spec.symbols, ImportSymbols::Default);
+        Ok(())
+    }
+
+    #[test]
+    fn test_require_then_import_quoted_strings() -> Result<(), String> {
+        let code = r#"
+require Foo::Bar;
+Foo::Bar->import('alpha', 'beta');
+"#;
+        let specs = parse_and_extract(code);
+        let spec = specs
+            .iter()
+            .find(|s| s.module == "Foo::Bar")
+            .ok_or("expected ImportSpec for Foo::Bar")?;
+
+        assert_eq!(spec.kind, ImportKind::RequireThenImport);
+        if let ImportSymbols::Explicit(names) = &spec.symbols {
+            assert!(names.contains(&"alpha".to_string()), "missing 'alpha' in {names:?}");
+            assert!(names.contains(&"beta".to_string()), "missing 'beta' in {names:?}");
+        } else {
+            return Err(format!("expected Explicit, got {:?}", spec.symbols));
+        }
+        assert_eq!(spec.confidence, Confidence::High);
+        Ok(())
+    }
+
+    #[test]
+    fn test_require_then_import_dynamic_symbol_list() -> Result<(), String> {
+        let code = r#"
+require Foo::Bar;
+Foo::Bar->import(@names);
+"#;
+        let specs = parse_and_extract(code);
+        let spec = specs
+            .iter()
+            .find(|s| s.module == "Foo::Bar")
+            .ok_or("expected ImportSpec for Foo::Bar")?;
+
+        assert_eq!(spec.kind, ImportKind::RequireThenImport);
+        assert_eq!(spec.symbols, ImportSymbols::Dynamic);
+        assert_eq!(spec.confidence, Confidence::Low);
         Ok(())
     }
 
