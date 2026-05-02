@@ -27,7 +27,8 @@ Fixtures loaded: `12`
 | method_candidates_fixture_pass_rate | pass | 100% | 100% | method candidate query fixtures |
 | package_graph | pass | 2 | > 0 | package graph fixture edges |
 | reference_shadow_regressions | pass | 0 | 0 | semantic shadow compare release-readiness receipts |
-| rename_unsafe_edit_count | pass | 0 | 0 | rename blocker fixtures |
+| rename_plan | pass | 100% | 100% | rename plan query fixtures |
+| rename_unsafe_edit_count | pass | 0 | 0 | rename plan query fixtures |
 | safe_delete_blocker_fixture_pass_rate | pass | 100% | 100% | safe-delete blocker fixtures |
 | semantic_fact_counts_nonzero | pass | 58 | > 0 | semantic fixture indexing |
 | undefined_symbol_false_positive_fixture_rate | pass | 0% | 0% | diagnostics fixture receipts |
@@ -37,7 +38,6 @@ Fixtures loaded: `12`
 
 | Row | Status | Reason |
 |---|---|---|
-| rename_plan | unavailable | planned for future scorecard waves |
 | safe_delete_plan | unavailable | planned for future scorecard waves |
 
 ## Fixture IDs
