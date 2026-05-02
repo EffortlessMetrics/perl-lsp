@@ -82,10 +82,10 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
     - equivalence rate, edit apply equivalence, no panic, no-progress count, timeout count, fallback rate, checkpoint hit/miss, reparse byte ratio, reused token/node ratios, changed range accuracy
     - _Verify: `cargo test -p perl-parser --features incremental --locked incremental`_
 
-- [ ] 10. Add span and coordinate scoring
-  - [ ] 10.1 Add span fixture families
+- [x] 10. Add span and coordinate scoring
+  - [x] 10.1 Add span fixture families
     - UTF-8 multibyte, emoji/surrogate-style code points, CRLF, mixed newline styles, tabs, BOM, empty spans, and cross-line spans
-  - [ ] 10.2 Emit span rows
+  - [x] 10.2 Emit span rows
     - byte span exact, line span exact, UTF-16 range exact, span near, invalid/out-of-bounds/inverted/non-char-boundary counts, CRLF errors, Unicode errors, tab column mismatches
 
 - [ ] 11. Add confidence, unsupported construct, and provider-impact rows

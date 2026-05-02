@@ -401,6 +401,120 @@
       ]
     },
     {
+      "id": "span_coordinates",
+      "family": "span_coordinates",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/span_coordinates.pl",
+      "scored_lines": 6,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "span_expectations": [
+        {
+          "id": "package_name_after_bom",
+          "span_text": "Accuracy::SpanCoordinates",
+          "byte_start": 11,
+          "byte_end": 36,
+          "line_start": 1,
+          "line_end": 1,
+          "utf16_start": {
+            "line": 0,
+            "character": 9
+          },
+          "utf16_end": {
+            "line": 0,
+            "character": 34
+          }
+        },
+        {
+          "id": "emoji_string_surrogate_pair",
+          "span_text": "\"😀\"",
+          "byte_start": 51,
+          "byte_end": 57,
+          "line_start": 2,
+          "line_end": 2,
+          "utf16_start": {
+            "line": 1,
+            "character": 12
+          },
+          "utf16_end": {
+            "line": 1,
+            "character": 16
+          }
+        },
+        {
+          "id": "accented_variable_utf8",
+          "span_text": "$café",
+          "byte_start": 63,
+          "byte_end": 69,
+          "line_start": 3,
+          "line_end": 3,
+          "utf16_start": {
+            "line": 2,
+            "character": 4
+          },
+          "utf16_end": {
+            "line": 2,
+            "character": 9
+          }
+        },
+        {
+          "id": "tabbed_return_column",
+          "span_text": "\treturn \"done\";",
+          "byte_start": 99,
+          "byte_end": 114,
+          "line_start": 5,
+          "line_end": 5,
+          "utf16_start": {
+            "line": 4,
+            "character": 0
+          },
+          "utf16_end": {
+            "line": 4,
+            "character": 15
+          }
+        },
+        {
+          "id": "cross_line_sub_span",
+          "span_text": "sub multi_line {\n\treturn \"done\";\r\n}",
+          "byte_start": 82,
+          "byte_end": 117,
+          "line_start": 4,
+          "line_end": 6,
+          "utf16_start": {
+            "line": 3,
+            "character": 0
+          },
+          "utf16_end": {
+            "line": 5,
+            "character": 1
+          }
+        },
+        {
+          "id": "empty_span_at_eof",
+          "span_text": "",
+          "byte_start": 118,
+          "byte_end": 118,
+          "line_start": 7,
+          "line_end": 7,
+          "utf16_start": {
+            "line": 6,
+            "character": 0
+          },
+          "utf16_end": {
+            "line": 6,
+            "character": 0
+          }
+        }
+      ]
+    },
+    {
       "id": "incremental_small_edit",
       "family": "incremental",
       "label_mode": "partial",

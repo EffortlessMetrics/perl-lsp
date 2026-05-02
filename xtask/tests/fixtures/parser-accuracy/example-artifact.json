@@ -5,19 +5,19 @@
   "commit": "example",
   "cadence": "pr",
   "denominator": {
-    "fixture_count": 8,
-    "fixture_family_count": 8,
-    "scored_line_count": 23,
+    "fixture_count": 9,
+    "fixture_family_count": 9,
+    "scored_line_count": 29,
     "scored_symbol_count": 17,
     "fully_labeled_region_count": 2,
-    "partial_labeled_region_count": 5,
+    "partial_labeled_region_count": 6,
     "unknown_region_count": 5,
     "negative_region_count": 5,
     "dynamic_boundary_case_count": 2,
     "unsupported_construct_case_count": 2,
     "real_project_file_count": 0,
     "generated_fixture_count": 0,
-    "hand_labeled_fixture_count": 8
+    "hand_labeled_fixture_count": 9
   },
   "families": [
     {
@@ -98,6 +98,17 @@
       "unsupported_construct_case_count": 0
     },
     {
+      "family": "span_coordinates",
+      "fixture_count": 1,
+      "label_modes": [
+        "partial"
+      ],
+      "scored_line_count": 6,
+      "scored_symbol_count": 0,
+      "dynamic_boundary_case_count": 0,
+      "unsupported_construct_case_count": 0
+    },
+    {
       "family": "typeglob_alias",
       "fixture_count": 1,
       "label_modes": [
@@ -113,8 +124,8 @@
     {
       "state": "measured",
       "metric": "denominator_fixture_count",
-      "value": 8.0,
-      "sample_count": 8,
+      "value": 9.0,
+      "sample_count": 9,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
@@ -633,7 +644,7 @@
     {
       "state": "measured",
       "metric": "recovery_spillover_mean_lines",
-      "value": 6.0,
+      "value": 7.0,
       "sample_count": 1,
       "direction": "neutral",
       "confidence": "high",
@@ -642,7 +653,7 @@
     {
       "state": "measured",
       "metric": "recovery_spillover_p95_lines",
-      "value": 6.0,
+      "value": 7.0,
       "sample_count": 1,
       "direction": "neutral",
       "confidence": "high",
@@ -651,7 +662,7 @@
     {
       "state": "measured",
       "metric": "recovery_spillover_max_lines",
-      "value": 6.0,
+      "value": 7.0,
       "sample_count": 1,
       "direction": "neutral",
       "confidence": "high",
@@ -798,6 +809,105 @@
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "byte_span_exact_rate",
+      "value": 1.0,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "line_span_exact_rate",
+      "value": 1.0,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "utf16_range_exact_rate",
+      "value": 1.0,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "span_near_rate",
+      "value": 1.0,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "span_invalid_count",
+      "value": 0.0,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "span_out_of_bounds_count",
+      "value": 0.0,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "span_inverted_count",
+      "value": 0.0,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "span_non_char_boundary_count",
+      "value": 0.0,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "crlf_position_error_count",
+      "value": 0.0,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "unicode_position_error_count",
+      "value": 0.0,
+      "sample_count": 2,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "tab_column_mismatch_count",
+      "value": 0.0,
+      "sample_count": 2,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
     }
   ],
   "failure_packets": [],
@@ -813,10 +923,10 @@
     "dynamic_expectation_change_count": 0
   },
   "metric_runtime": {
-    "runtime_ms": 170.6046,
+    "runtime_ms": 30.720399999999998,
     "timeout_count": 0,
     "flake_count": 0,
-    "artifact_size_bytes": 20312,
+    "artifact_size_bytes": 22871,
     "ci_runner_failure_count": 0,
     "orphan_process_count": 0,
     "cache_hit_rate": null
