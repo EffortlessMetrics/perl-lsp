@@ -21,7 +21,7 @@ mod failure;
 use failure::build_failure_worklist;
 
 #[cfg(test)]
-const PARSER_STATUS_MARKER_NAMES: [&str; 8] = [
+const PARSER_STATUS_MARKER_NAMES: [&str; 9] = [
     "PARSER_TRACKING_TABLE",
     "PARSER_PERFORMANCE_TABLE",
     "PARSER_METRICS_BULLETS",
@@ -29,6 +29,7 @@ const PARSER_STATUS_MARKER_NAMES: [&str; 8] = [
     "PARSER_NODEKIND_ROW",
     "PARSER_RELIABILITY_ROW",
     "PARSER_STRICT_CLEAN_ROW",
+    "PARSER_ACCURACY_SUMMARY",
     "PARSER_FAILURE_WORKLIST",
 ];
 
@@ -55,6 +56,7 @@ pub(super) struct ParserMetrics {
     /// Number of pinned modules in `.ci/common-corpus-manifest.txt`.
     pub common_corpus_pinned: usize,
     pub performance_scorecard: Option<ParserPerformanceScorecard>,
+    pub parser_accuracy: Option<ParserAccuracyArtifactSummary>,
     pub token_metrics: TokenHealthMetrics,
 }
 
@@ -70,6 +72,48 @@ struct ParserPerfMetric {
     median_ns: u128,
     p95_ns: u128,
     mean_ns: u128,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(super) struct ParserAccuracyArtifactSummary {
+    schema_version: u32,
+    subsystem: String,
+    generated_at: String,
+    commit: String,
+    cadence: String,
+    denominator: ParserAccuracyDenominator,
+    families: Vec<ParserAccuracyFamilySummary>,
+    metrics: Vec<ParserAccuracyMetricSummary>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ParserAccuracyDenominator {
+    fixture_count: u64,
+    fixture_family_count: u64,
+    scored_line_count: u64,
+    scored_symbol_count: u64,
+    fully_labeled_region_count: u64,
+    partial_labeled_region_count: u64,
+    unknown_region_count: u64,
+    negative_region_count: u64,
+    dynamic_boundary_case_count: u64,
+    unsupported_construct_case_count: u64,
+    real_project_file_count: u64,
+    generated_fixture_count: u64,
+    hand_labeled_fixture_count: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ParserAccuracyFamilySummary {
+    family: String,
+    fixture_count: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+enum ParserAccuracyMetricSummary {
+    Measured { metric: String, value: f64, sample_count: u64 },
+    InsufficientData { metric: String, reason: String, sample_count: u64 },
 }
 
 pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
@@ -88,6 +132,7 @@ pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
         common_corpus_receipt,
         common_corpus_pinned,
         performance_scorecard: read_parser_performance_scorecard(root),
+        parser_accuracy: read_parser_accuracy_artifact(root),
         token_metrics: super::token::collect_token_health_metrics(root),
     }
 }
@@ -112,6 +157,16 @@ fn read_parser_performance_scorecard(root: &Path) -> Option<ParserPerformanceSco
     let path = root.join("docs/project/status/parser_performance_scorecard.json");
     let raw = fs::read_to_string(path).ok()?;
     serde_json::from_str(&raw).ok()
+}
+
+fn read_parser_accuracy_artifact(root: &Path) -> Option<ParserAccuracyArtifactSummary> {
+    let path = root.join("target/metrics/parser_accuracy.json");
+    let raw = fs::read_to_string(path).ok()?;
+    let artifact: ParserAccuracyArtifactSummary = serde_json::from_str(&raw).ok()?;
+    if artifact.schema_version != 1 || artifact.subsystem != "parser_accuracy" {
+        return None;
+    }
+    Some(artifact)
 }
 
 pub(super) fn count_corpus_sections(root: &Path) -> usize {
@@ -167,6 +222,91 @@ fn format_perf_metric_row(name: &str, metric: Option<&ParserPerfMetric>) -> Stri
             )
         },
     )
+}
+
+fn parser_accuracy_rows(artifact: Option<&ParserAccuracyArtifactSummary>) -> String {
+    const ARTIFACT_PATH: &str = "`target/metrics/parser_accuracy.json`";
+    const SPEC_PATH: &str = "`.kiro/specs/parser-accuracy-observability`";
+    const SCHEMA_PATH: &str = "`.ci/schemas/parser-accuracy.schema.json`";
+
+    let Some(artifact) = artifact else {
+        return format!(
+            "| **Accuracy denominator** | insufficient_data | Generate with `cargo xtask metrics parser-accuracy --json`; missing artifact is not treated as zero | {ARTIFACT_PATH}; {SPEC_PATH} |\n\
+             | **Accuracy scorers** | insufficient_data | line/AST/symbol scoring rows wait for real denominators and validated artifact input | {SCHEMA_PATH} |"
+        );
+    };
+
+    let d = &artifact.denominator;
+    let family_summary = parser_accuracy_family_summary(&artifact.families);
+    let metric_summary = parser_accuracy_metric_summary(&artifact.metrics);
+    format!(
+        "| **Accuracy denominator** | {} fixtures / {} families | {} scored lines, {} scored symbols, {} fully labeled, {} partial, {} unknown, {} negative, {} dynamic boundaries, {} unsupported, {} real-project, {} generated, {} hand-labeled; cadence `{}`, commit `{}`, generated `{}` | {ARTIFACT_PATH}; {SPEC_PATH} |\n\
+         | **Accuracy families** | {} | fixture family inventory from parser accuracy manifest | {ARTIFACT_PATH} |\n\
+         | **Accuracy scorers** | {} | missing accuracy rows stay `insufficient_data`; they are not rendered as zero or pass | {SCHEMA_PATH} |",
+        d.fixture_count,
+        d.fixture_family_count,
+        d.scored_line_count,
+        d.scored_symbol_count,
+        d.fully_labeled_region_count,
+        d.partial_labeled_region_count,
+        d.unknown_region_count,
+        d.negative_region_count,
+        d.dynamic_boundary_case_count,
+        d.unsupported_construct_case_count,
+        d.real_project_file_count,
+        d.generated_fixture_count,
+        d.hand_labeled_fixture_count,
+        artifact.cadence,
+        artifact.commit,
+        artifact.generated_at,
+        family_summary,
+        metric_summary,
+    )
+}
+
+fn parser_accuracy_family_summary(families: &[ParserAccuracyFamilySummary]) -> String {
+    if families.is_empty() {
+        return "insufficient_data".to_string();
+    }
+
+    let rendered = families
+        .iter()
+        .take(6)
+        .map(|family| format!("{} ({})", family.family, family.fixture_count))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let hidden = families.len().saturating_sub(6);
+    if hidden == 0 { rendered } else { format!("{rendered}, +{hidden} more") }
+}
+
+fn parser_accuracy_metric_summary(metrics: &[ParserAccuracyMetricSummary]) -> String {
+    let mut measured = Vec::new();
+    let mut insufficient = Vec::new();
+
+    for metric in metrics {
+        match metric {
+            ParserAccuracyMetricSummary::Measured { metric, value, sample_count } => {
+                measured.push(format!("{metric}={value:.1} (n={sample_count})"));
+            }
+            ParserAccuracyMetricSummary::InsufficientData { metric, reason, sample_count } => {
+                insufficient
+                    .push(format!("{metric}: insufficient_data ({reason}; n={sample_count})"));
+            }
+        }
+    }
+
+    if measured.is_empty() && insufficient.is_empty() {
+        return "insufficient_data".to_string();
+    }
+
+    let mut parts = Vec::new();
+    if !measured.is_empty() {
+        parts.push(format!("measured {}", measured.join(", ")));
+    }
+    if !insufficient.is_empty() {
+        parts.push(insufficient.join(", "));
+    }
+    parts.join("; ")
 }
 
 // ---------------------------------------------------------------------------
@@ -323,6 +463,8 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         |scorecard| format!("epoch {} (UTC seconds)", scorecard.generated_at_epoch_s),
     );
 
+    let parser_accuracy_summary = parser_accuracy_rows(metrics.parser_accuracy.as_ref());
+
     let token = &metrics.token_metrics;
     let token_table = format!(
         "| **TokenKind variants** | {} | enum size in `perl-token` | `crates/perl-token/src/lib.rs` |\n\
@@ -373,6 +515,7 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
     text = replace_parser_status_block(&text, "PARSER_NODEKIND_ROW", &nodekind_row)?;
     text = replace_parser_status_block(&text, "PARSER_RELIABILITY_ROW", &reliability_row)?;
     text = replace_parser_status_block(&text, "PARSER_STRICT_CLEAN_ROW", &strict_clean_row)?;
+    text = replace_parser_status_block(&text, "PARSER_ACCURACY_SUMMARY", &parser_accuracy_summary)?;
     text = replace_parser_status_block(&text, "PARSER_FAILURE_WORKLIST", &failure_worklist)?;
     Ok(text)
 }

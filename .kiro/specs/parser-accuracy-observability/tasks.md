@@ -26,12 +26,12 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
     - Report fixture_count, fixture_family_count, scored_line_count, scored_symbol_count, fully_labeled_region_count, partial_labeled_region_count, unknown_region_count, negative_region_count, dynamic_boundary_case_count, unsupported_construct_case_count, real_project_file_count, generated_fixture_count, and hand_labeled_fixture_count
     - _Verify: targeted xtask tests and schema validation_
 
-- [ ] 3. Wire parser status visibility
-  - [ ] 3.1 Extend parser status rendering with accuracy artifact summary
+- [x] 3. Wire parser status visibility
+  - [x] 3.1 Extend parser status rendering with accuracy artifact summary
     - Show denominator rows and `insufficient_data` rows without pretending they are zero
     - Link to parser accuracy artifact location and spec
     - _Verify: `cargo test -p xtask update_status::parser --profile agent --locked`_
-  - [ ] 3.2 Preserve existing clean-parse status rows
+  - [x] 3.2 Preserve existing clean-parse status rows
     - Do not remove current clean parse, recovery, token health, or failure worklist rows
     - _Verify: existing parser status marker tests_
 
