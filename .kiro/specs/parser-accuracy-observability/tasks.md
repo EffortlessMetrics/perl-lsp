@@ -35,10 +35,10 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
     - Do not remove current clean parse, recovery, token health, or failure worklist rows
     - _Verify: existing parser status marker tests_
 
-- [ ] 4. Add line-level construct scoring
-  - [ ] 4.1 Define line tag vocabulary
+- [x] 4. Add line-level construct scoring
+  - [x] 4.1 Define line tag vocabulary
     - Include package_decl, sub_decl, method_decl, variable_decl, import, export, function_call, method_call, regex, quote_like, heredoc_opener, heredoc_body, heredoc_terminator, pod, format_decl, given_when, do_while, until_loop, dynamic_boundary, parse_error, recovery_region, unsupported_construct
-  - [ ] 4.2 Implement line tag scorer
+  - [x] 4.2 Implement line tag scorer
     - Compare expected and actual tag sets
     - Emit TP/FP/FN, exact match rate, precision, recall, F1, error false positive rate, error false negative rate, dynamic boundary correct rate, and unsupported detection rate
     - _Verify: unit tests with at least one false positive and one false negative_

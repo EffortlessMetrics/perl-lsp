@@ -1,8 +1,7 @@
 //! Parser accuracy scorecard contract and denominator inventory.
 //!
-//! The first implementation slice deliberately emits denominator rows and
-//! insufficient-data metric rows only. Accuracy scoring layers are added in
-//! later slices once their gold fixtures and extractors exist.
+//! The implementation starts with denominator rows and then adds accuracy
+//! scoring layers in small, schema-valid slices.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -12,6 +11,7 @@ use std::time::Instant;
 
 use chrono::Utc;
 use color_eyre::eyre::{Context, Result, bail, eyre};
+use perl_parser::{Node, NodeKind, Parser};
 use serde::{Deserialize, Serialize};
 
 use crate::utils::project_root;
@@ -41,6 +41,8 @@ struct FixtureMetadata {
     unsupported_constructs: u64,
     real_project_file: bool,
     generated: bool,
+    #[serde(default)]
+    line_expectations: Vec<LineExpectation>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -51,6 +53,64 @@ enum LabelMode {
     Unknown,
     Negative,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct LineExpectation {
+    line: u64,
+    expected_tags: BTreeSet<LineTag>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum LineTag {
+    PackageDecl,
+    SubDecl,
+    MethodDecl,
+    VariableDecl,
+    Import,
+    Export,
+    FunctionCall,
+    MethodCall,
+    Regex,
+    QuoteLike,
+    HeredocOpener,
+    HeredocBody,
+    HeredocTerminator,
+    Pod,
+    FormatDecl,
+    GivenWhen,
+    DoWhile,
+    UntilLoop,
+    DynamicBoundary,
+    ParseError,
+    RecoveryRegion,
+    UnsupportedConstruct,
+}
+
+const LINE_TAG_VOCABULARY: &[LineTag] = &[
+    LineTag::PackageDecl,
+    LineTag::SubDecl,
+    LineTag::MethodDecl,
+    LineTag::VariableDecl,
+    LineTag::Import,
+    LineTag::Export,
+    LineTag::FunctionCall,
+    LineTag::MethodCall,
+    LineTag::Regex,
+    LineTag::QuoteLike,
+    LineTag::HeredocOpener,
+    LineTag::HeredocBody,
+    LineTag::HeredocTerminator,
+    LineTag::Pod,
+    LineTag::FormatDecl,
+    LineTag::GivenWhen,
+    LineTag::DoWhile,
+    LineTag::UntilLoop,
+    LineTag::DynamicBoundary,
+    LineTag::ParseError,
+    LineTag::RecoveryRegion,
+    LineTag::UnsupportedConstruct,
+];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ParserAccuracyArtifact {
@@ -179,6 +239,22 @@ struct MetricRuntime {
     cache_hit_rate: Option<f64>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct LineScore {
+    line_count: u64,
+    true_positive_count: u64,
+    false_positive_count: u64,
+    false_negative_count: u64,
+    exact_match_count: u64,
+    expected_parse_error_count: u64,
+    false_parse_error_count: u64,
+    missed_parse_error_count: u64,
+    expected_dynamic_boundary_count: u64,
+    correct_dynamic_boundary_count: u64,
+    expected_unsupported_construct_count: u64,
+    correct_unsupported_construct_count: u64,
+}
+
 /// Run `cargo xtask metrics parser-accuracy`.
 pub fn run(
     json: bool,
@@ -247,19 +323,20 @@ fn build_artifact(
     let denominator = compute_denominator(manifest);
     let families = summarize_families(manifest);
     let fixture_count = denominator.fixture_count as f64;
-    let metrics = vec![
-        MetricRow::Measured {
-            metric: "denominator_fixture_count".to_string(),
-            value: fixture_count,
-            sample_count: denominator.fixture_count,
-            direction: Direction::Neutral,
-            confidence: Confidence::High,
-            cadence,
-        },
-        insufficient("line_construct_f1", "line-level gold scorer is not wired yet"),
+    let line_score = score_manifest_line_tags(root, manifest)?;
+    let mut metrics = vec![MetricRow::Measured {
+        metric: "denominator_fixture_count".to_string(),
+        value: fixture_count,
+        sample_count: denominator.fixture_count,
+        direction: Direction::Neutral,
+        confidence: Confidence::High,
+        cadence,
+    }];
+    metrics.extend(line_metrics(&line_score, cadence));
+    metrics.extend([
         insufficient("ast_node_kind_f1", "AST structural gold scorer is not wired yet"),
         insufficient("symbol_decl_f1", "symbol gold scorer is not wired yet"),
-    ];
+    ]);
 
     Ok(ParserAccuracyArtifact {
         schema_version: 1,
@@ -341,6 +418,287 @@ fn summarize_families(manifest: &ParserAccuracyManifest) -> Vec<FamilySummary> {
         .collect()
 }
 
+fn score_manifest_line_tags(root: &Path, manifest: &ParserAccuracyManifest) -> Result<LineScore> {
+    let mut score = LineScore::default();
+    for fixture in &manifest.fixtures {
+        if fixture.line_expectations.is_empty() {
+            continue;
+        }
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy fixture source {}", source_path.display())
+        })?;
+        let actual_by_line = extract_line_tags(&source);
+        for expectation in &fixture.line_expectations {
+            let actual = actual_by_line.get(&expectation.line).cloned().unwrap_or_default();
+            score_line_tags(&expectation.expected_tags, &actual, &mut score);
+        }
+    }
+    Ok(score)
+}
+
+fn extract_line_tags(source: &str) -> BTreeMap<u64, BTreeSet<LineTag>> {
+    let mut parser = Parser::new(source);
+    let output = parser.parse_with_recovery();
+    let line_starts = line_starts(source);
+    let mut by_line = BTreeMap::new();
+    collect_node_line_tags(&output.ast, &line_starts, &mut by_line);
+    by_line
+}
+
+fn line_starts(source: &str) -> Vec<usize> {
+    let mut starts = vec![0];
+    for (index, byte) in source.bytes().enumerate() {
+        if byte == b'\n' && index + 1 < source.len() {
+            starts.push(index + 1);
+        }
+    }
+    starts
+}
+
+fn line_for_offset(line_starts: &[usize], offset: usize) -> u64 {
+    match line_starts.binary_search(&offset) {
+        Ok(index) => (index + 1) as u64,
+        Err(0) => 1,
+        Err(index) => index as u64,
+    }
+}
+
+fn collect_node_line_tags(
+    node: &Node,
+    line_starts: &[usize],
+    by_line: &mut BTreeMap<u64, BTreeSet<LineTag>>,
+) {
+    if let Some(tag) = line_tag_for_node(node) {
+        let line = line_for_offset(line_starts, node.location.start);
+        by_line.entry(line).or_default().insert(tag);
+    }
+    if let NodeKind::FunctionCall { name, args } = &node.kind
+        && name == "require"
+        && args.first().is_some_and(|arg| matches!(arg.kind, NodeKind::Variable { .. }))
+    {
+        let line = line_for_offset(line_starts, node.location.start);
+        by_line.entry(line).or_default().insert(LineTag::DynamicBoundary);
+    }
+    node.for_each_child(|child| collect_node_line_tags(child, line_starts, by_line));
+}
+
+fn line_tag_for_node(node: &Node) -> Option<LineTag> {
+    match &node.kind {
+        NodeKind::Package { .. } => Some(LineTag::PackageDecl),
+        NodeKind::Subroutine { .. } => Some(LineTag::SubDecl),
+        NodeKind::Method { .. } => Some(LineTag::MethodDecl),
+        NodeKind::VariableDeclaration { .. } | NodeKind::VariableListDeclaration { .. } => {
+            Some(LineTag::VariableDecl)
+        }
+        NodeKind::Use { .. } => Some(LineTag::Import),
+        NodeKind::FunctionCall { name, .. } if name == "require" => Some(LineTag::Import),
+        NodeKind::FunctionCall { .. } => Some(LineTag::FunctionCall),
+        NodeKind::MethodCall { .. } => Some(LineTag::MethodCall),
+        NodeKind::Regex { .. }
+        | NodeKind::Match { .. }
+        | NodeKind::Substitution { .. }
+        | NodeKind::Transliteration { .. } => Some(LineTag::Regex),
+        NodeKind::Heredoc { .. } => Some(LineTag::HeredocOpener),
+        NodeKind::Format { .. } => Some(LineTag::FormatDecl),
+        NodeKind::Given { .. } | NodeKind::When { .. } | NodeKind::Default { .. } => {
+            Some(LineTag::GivenWhen)
+        }
+        NodeKind::Do { .. } => Some(LineTag::DoWhile),
+        NodeKind::Error { .. } => Some(LineTag::ParseError),
+        NodeKind::UnknownRest => Some(LineTag::UnsupportedConstruct),
+        _ => None,
+    }
+}
+
+fn score_line_tags(
+    expected: &BTreeSet<LineTag>,
+    actual: &BTreeSet<LineTag>,
+    score: &mut LineScore,
+) {
+    score.line_count += 1;
+    let true_positives = expected.intersection(actual).count() as u64;
+    let false_positives = actual.difference(expected).count() as u64;
+    let false_negatives = expected.difference(actual).count() as u64;
+    score.true_positive_count += true_positives;
+    score.false_positive_count += false_positives;
+    score.false_negative_count += false_negatives;
+    if expected == actual {
+        score.exact_match_count += 1;
+    }
+
+    let expected_parse_error = expected.contains(&LineTag::ParseError);
+    let actual_parse_error = actual.contains(&LineTag::ParseError);
+    if expected_parse_error {
+        score.expected_parse_error_count += 1;
+    }
+    if actual_parse_error && !expected_parse_error {
+        score.false_parse_error_count += 1;
+    }
+    if expected_parse_error && !actual_parse_error {
+        score.missed_parse_error_count += 1;
+    }
+
+    if expected.contains(&LineTag::DynamicBoundary) {
+        score.expected_dynamic_boundary_count += 1;
+        if actual.contains(&LineTag::DynamicBoundary) {
+            score.correct_dynamic_boundary_count += 1;
+        }
+    }
+
+    if expected.contains(&LineTag::UnsupportedConstruct) {
+        score.expected_unsupported_construct_count += 1;
+        if actual.contains(&LineTag::UnsupportedConstruct) {
+            score.correct_unsupported_construct_count += 1;
+        }
+    }
+}
+
+fn line_metrics(score: &LineScore, cadence: Cadence) -> Vec<MetricRow> {
+    if score.line_count == 0 {
+        return vec![insufficient("line_construct_f1", "line-level gold labels are not available")];
+    }
+
+    let precision_denominator = score.true_positive_count + score.false_positive_count;
+    let recall_denominator = score.true_positive_count + score.false_negative_count;
+    let precision = ratio(score.true_positive_count, precision_denominator);
+    let recall = ratio(score.true_positive_count, recall_denominator);
+    let f1 = match (precision, recall) {
+        (Some(precision), Some(recall)) if precision + recall > 0.0 => {
+            Some(2.0 * precision * recall / (precision + recall))
+        }
+        _ => None,
+    };
+
+    let mut rows = vec![
+        measured_count(
+            "line_construct_true_positive_count",
+            score.true_positive_count,
+            score.line_count,
+            cadence,
+        ),
+        measured_count(
+            "line_construct_false_positive_count",
+            score.false_positive_count,
+            score.line_count,
+            cadence,
+        ),
+        measured_count(
+            "line_construct_false_negative_count",
+            score.false_negative_count,
+            score.line_count,
+            cadence,
+        ),
+        measured_rate(
+            "line_construct_exact_match_rate",
+            score.exact_match_count,
+            score.line_count,
+            cadence,
+        ),
+    ];
+
+    rows.push(optional_measured_rate(
+        "line_construct_precision",
+        precision,
+        precision_denominator,
+        "no predicted line tags were available",
+        cadence,
+    ));
+    rows.push(optional_measured_rate(
+        "line_construct_recall",
+        recall,
+        recall_denominator,
+        "no expected line tags were available",
+        cadence,
+    ));
+    rows.push(optional_measured_rate(
+        "line_construct_f1",
+        f1,
+        recall_denominator,
+        "line precision or recall denominator is unavailable",
+        cadence,
+    ));
+    rows.push(measured_rate(
+        "line_error_false_positive_rate",
+        score.false_parse_error_count,
+        score.line_count,
+        cadence,
+    ));
+    rows.push(optional_measured_rate(
+        "line_error_false_negative_rate",
+        ratio(score.missed_parse_error_count, score.expected_parse_error_count),
+        score.expected_parse_error_count,
+        "no expected parse-error line labels are available",
+        cadence,
+    ));
+    rows.push(optional_measured_rate(
+        "line_dynamic_boundary_correct_rate",
+        ratio(score.correct_dynamic_boundary_count, score.expected_dynamic_boundary_count),
+        score.expected_dynamic_boundary_count,
+        "no expected dynamic-boundary line labels are available",
+        cadence,
+    ));
+    rows.push(optional_measured_rate(
+        "line_unsupported_detection_rate",
+        ratio(
+            score.correct_unsupported_construct_count,
+            score.expected_unsupported_construct_count,
+        ),
+        score.expected_unsupported_construct_count,
+        "no expected unsupported-construct line labels are available",
+        cadence,
+    ));
+
+    rows
+}
+
+fn measured_count(metric: &str, value: u64, sample_count: u64, cadence: Cadence) -> MetricRow {
+    MetricRow::Measured {
+        metric: metric.to_string(),
+        value: value as f64,
+        sample_count,
+        direction: Direction::Neutral,
+        confidence: Confidence::High,
+        cadence,
+    }
+}
+
+fn measured_rate(metric: &str, numerator: u64, denominator: u64, cadence: Cadence) -> MetricRow {
+    let value = ratio(numerator, denominator).unwrap_or(0.0);
+    MetricRow::Measured {
+        metric: metric.to_string(),
+        value,
+        sample_count: denominator,
+        direction: Direction::Neutral,
+        confidence: Confidence::High,
+        cadence,
+    }
+}
+
+fn optional_measured_rate(
+    metric: &str,
+    value: Option<f64>,
+    sample_count: u64,
+    insufficient_reason: &str,
+    cadence: Cadence,
+) -> MetricRow {
+    match value {
+        Some(value) if sample_count > 0 => MetricRow::Measured {
+            metric: metric.to_string(),
+            value,
+            sample_count,
+            direction: Direction::Neutral,
+            confidence: Confidence::High,
+            cadence,
+        },
+        _ => insufficient(metric, insufficient_reason),
+    }
+}
+
+fn ratio(numerator: u64, denominator: u64) -> Option<f64> {
+    if denominator == 0 { None } else { Some(numerator as f64 / denominator as f64) }
+}
+
 fn insufficient(metric: &str, reason: &str) -> MetricRow {
     MetricRow::InsufficientData {
         metric: metric.to_string(),
@@ -351,6 +709,9 @@ fn insufficient(metric: &str, reason: &str) -> MetricRow {
 }
 
 fn validate_artifact_contract(artifact: &ParserAccuracyArtifact) -> Result<()> {
+    if LINE_TAG_VOCABULARY.is_empty() {
+        bail!("parser accuracy line tag vocabulary must not be empty");
+    }
     if artifact.schema_version != 1 {
         bail!("parser accuracy artifact schema_version must be 1");
     }
@@ -431,6 +792,22 @@ fn git_commit(root: &Path) -> String {
 mod tests {
     use super::*;
 
+    fn tags(values: &[LineTag]) -> BTreeSet<LineTag> {
+        values.iter().copied().collect()
+    }
+
+    fn write_fixture_sources(root: &Path) -> Result<()> {
+        fs::write(
+            root.join("package_basic.pl"),
+            "package Accuracy::Basic;\n\nsub answer { 42 }\n",
+        )?;
+        fs::write(
+            root.join("dynamic_require.pl"),
+            "package Accuracy::DynamicRequire;\n\nmy $module = \"Accuracy::Plugin\";\nrequire $module;\n",
+        )?;
+        Ok(())
+    }
+
     fn fixture_manifest() -> ParserAccuracyManifest {
         ParserAccuracyManifest {
             schema_version: 1,
@@ -450,13 +827,17 @@ mod tests {
                     unsupported_constructs: 0,
                     real_project_file: false,
                     generated: false,
+                    line_expectations: vec![
+                        LineExpectation { line: 1, expected_tags: tags(&[LineTag::PackageDecl]) },
+                        LineExpectation { line: 3, expected_tags: tags(&[LineTag::SubDecl]) },
+                    ],
                 },
                 FixtureMetadata {
                     id: "dynamic_require_boundary".to_string(),
                     family: "dynamic_require".to_string(),
                     label_mode: LabelMode::Partial,
                     source_path: "dynamic_require.pl".to_string(),
-                    scored_lines: 1,
+                    scored_lines: 3,
                     scored_symbols: 1,
                     fully_labeled_regions: 0,
                     partial_labeled_regions: 1,
@@ -466,6 +847,14 @@ mod tests {
                     unsupported_constructs: 0,
                     real_project_file: false,
                     generated: false,
+                    line_expectations: vec![
+                        LineExpectation { line: 1, expected_tags: tags(&[LineTag::PackageDecl]) },
+                        LineExpectation { line: 3, expected_tags: tags(&[LineTag::VariableDecl]) },
+                        LineExpectation {
+                            line: 4,
+                            expected_tags: tags(&[LineTag::Import, LineTag::DynamicBoundary]),
+                        },
+                    ],
                 },
             ],
         }
@@ -476,7 +865,7 @@ mod tests {
         let denominator = compute_denominator(&fixture_manifest());
         assert_eq!(denominator.fixture_count, 2);
         assert_eq!(denominator.fixture_family_count, 2);
-        assert_eq!(denominator.scored_line_count, 3);
+        assert_eq!(denominator.scored_line_count, 5);
         assert_eq!(denominator.scored_symbol_count, 2);
         assert_eq!(denominator.unknown_region_count, 1);
         assert_eq!(denominator.negative_region_count, 1);
@@ -499,15 +888,74 @@ mod tests {
     }
 
     #[test]
-    fn artifact_uses_insufficient_data_for_unwired_scorers() -> Result<()> {
-        let root = Path::new(".");
-        let artifact = build_artifact(root, &fixture_manifest(), Cadence::Pr)?;
+    fn line_tag_vocabulary_includes_required_contract() {
+        assert_eq!(LINE_TAG_VOCABULARY.len(), 22);
+        assert!(LINE_TAG_VOCABULARY.contains(&LineTag::PackageDecl));
+        assert!(LINE_TAG_VOCABULARY.contains(&LineTag::DynamicBoundary));
+        assert!(LINE_TAG_VOCABULARY.contains(&LineTag::UnsupportedConstruct));
+    }
+
+    #[test]
+    fn line_scorer_counts_false_positive_and_false_negative() {
+        let expected = tags(&[LineTag::PackageDecl, LineTag::SubDecl]);
+        let actual = tags(&[LineTag::PackageDecl, LineTag::MethodCall]);
+        let mut score = LineScore::default();
+
+        score_line_tags(&expected, &actual, &mut score);
+
+        assert_eq!(score.true_positive_count, 1);
+        assert_eq!(score.false_positive_count, 1);
+        assert_eq!(score.false_negative_count, 1);
+        assert_eq!(score.exact_match_count, 0);
+    }
+
+    #[test]
+    fn line_metrics_emit_measured_scores_and_insufficient_missing_denominators() {
+        let mut score = LineScore::default();
+        score_line_tags(
+            &tags(&[LineTag::Import, LineTag::DynamicBoundary]),
+            &tags(&[LineTag::Import, LineTag::DynamicBoundary]),
+            &mut score,
+        );
+
+        let metrics = line_metrics(&score, Cadence::Pr);
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "line_construct_f1" && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "line_unsupported_detection_rate"
+            )
+        }));
+    }
+
+    #[test]
+    fn artifact_uses_measured_line_scores_and_insufficient_data_for_unwired_scorers() -> Result<()>
+    {
+        let tmp = tempfile::tempdir()?;
+        write_fixture_sources(tmp.path())?;
+        let artifact = build_artifact(tmp.path(), &fixture_manifest(), Cadence::Pr)?;
         validate_artifact_contract(&artifact)?;
         assert!(artifact.metrics.iter().any(|metric| {
             matches!(
                 metric,
-                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                MetricRow::Measured { metric, sample_count, .. }
                     if metric == "line_construct_f1"
+                        && *sample_count > 0
+            )
+        }));
+        assert!(artifact.metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "ast_node_kind_f1"
             )
         }));
         Ok(())

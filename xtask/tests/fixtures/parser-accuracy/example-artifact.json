@@ -7,7 +7,7 @@
   "denominator": {
     "fixture_count": 2,
     "fixture_family_count": 2,
-    "scored_line_count": 3,
+    "scored_line_count": 5,
     "scored_symbol_count": 2,
     "fully_labeled_region_count": 1,
     "partial_labeled_region_count": 1,
@@ -37,7 +37,7 @@
       "label_modes": [
         "partial"
       ],
-      "scored_line_count": 1,
+      "scored_line_count": 3,
       "scored_symbol_count": 1,
       "dynamic_boundary_case_count": 1,
       "unsupported_construct_case_count": 0
@@ -55,8 +55,96 @@
     },
     {
       "metric": "line_construct_f1",
+      "state": "measured",
+      "value": 1,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "metric": "line_construct_true_positive_count",
+      "state": "measured",
+      "value": 6,
+      "sample_count": 5,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "metric": "line_construct_false_positive_count",
+      "state": "measured",
+      "value": 0,
+      "sample_count": 5,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "metric": "line_construct_false_negative_count",
+      "state": "measured",
+      "value": 0,
+      "sample_count": 5,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "metric": "line_construct_exact_match_rate",
+      "state": "measured",
+      "value": 1,
+      "sample_count": 5,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "metric": "line_construct_precision",
+      "state": "measured",
+      "value": 1,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "metric": "line_construct_recall",
+      "state": "measured",
+      "value": 1,
+      "sample_count": 6,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "metric": "line_error_false_positive_rate",
+      "state": "measured",
+      "value": 0,
+      "sample_count": 5,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "metric": "line_error_false_negative_rate",
       "state": "insufficient_data",
-      "reason": "line-level gold scorer is not wired yet",
+      "reason": "no expected parse-error line labels are available",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "metric": "line_dynamic_boundary_correct_rate",
+      "state": "measured",
+      "value": 1,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "metric": "line_unsupported_detection_rate",
+      "state": "insufficient_data",
+      "reason": "no expected unsupported-construct line labels are available",
       "sample_count": 0,
       "confidence": "low"
     },
