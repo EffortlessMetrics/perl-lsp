@@ -996,6 +996,10 @@ gates tier='merge-gate' *args='':
 ci-release-history:
     bash scripts/check_release_history.sh
 
+# Validate installer Linux libc target selection without downloading artifacts.
+ci-install-target-selection:
+    bash scripts/tests/test-install-target-selection.sh
+
 # Run gates with JSON output (for CI)
 gates-json tier='merge-gate':
     @cargo xtask gates --tier {{tier}} --format json --receipt
