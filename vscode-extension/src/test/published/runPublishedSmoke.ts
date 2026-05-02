@@ -82,6 +82,27 @@ function downloadFile(url: string, destination: string, redirects = 0): Promise<
   });
 }
 
+async function downloadFileWithRetry(url: string, destination: string): Promise<void> {
+  let lastFailure = '';
+
+  for (let attempt = 1; attempt <= 12; attempt += 1) {
+    try {
+      await downloadFile(url, destination);
+      return;
+    } catch (error: unknown) {
+      lastFailure = error instanceof Error ? error.message : String(error);
+      if (fs.existsSync(destination)) {
+        fs.rmSync(destination, { force: true });
+      }
+      if (attempt < 12) {
+        await sleep(20_000);
+      }
+    }
+  }
+
+  throw new Error(`Failed to download published extension from ${url}\n${lastFailure}`);
+}
+
 async function resolveInstallTarget(source: ExtensionSource, tempDir: string): Promise<string> {
   const version = envValue('PERL_LSP_PUBLISHED_EXTENSION_VERSION');
   const extensionId = envValue('PERL_LSP_PUBLISHED_EXTENSION_ID') || EXTENSION_ID;
@@ -112,7 +133,7 @@ async function resolveInstallTarget(source: ExtensionSource, tempDir: string): P
   const fileName = `${namespace}.${extensionName}-${version}.vsix`;
   const url = `https://open-vsx.org/api/${namespace}/${extensionName}/${version}/file/${fileName}`;
   const destination = path.join(tempDir, fileName);
-  await downloadFile(url, destination);
+  await downloadFileWithRetry(url, destination);
   return destination;
 }
 

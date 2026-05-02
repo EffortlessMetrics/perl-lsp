@@ -237,8 +237,8 @@ jobs:
           echo "::error::Release ${RELEASE_TAG} was not available in time for VSIX attachment."
           exit 1
 
-  published-extension-smoke:
-    name: Published Extension Smoke
+  published-marketplace-smoke:
+    name: Published Marketplace Smoke
     needs:
       - prepare-vsix
       - publish-vscode-marketplace
@@ -274,6 +274,43 @@ jobs:
       - name: Smoke published Marketplace extension
         run: xvfb-run -a npm run test:published
 
+  published-open-vsx-smoke:
+    name: Published Open VSX Smoke
+    needs:
+      - prepare-vsix
+      - publish-open-vsx
+    if: ${{ needs.publish-open-vsx.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: vscode-extension
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      PERL_LSP_PUBLISHED_EXTENSION_SOURCE: open-vsx
+      PERL_LSP_PUBLISHED_EXTENSION_VERSION: ${{ needs.prepare-vsix.outputs.version }}
+      PERL_LSP_PUBLISHED_BINARY_VERSION: ${{ needs.prepare-vsix.outputs.version }}
+      PERL_LSP_REQUIRE_STRUCTURED_COMMANDS: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Smoke published Open VSX extension
+        run: xvfb-run -a npm run test:published
+
   publish-summary:
     name: Publish Extension Summary
     needs:
@@ -281,7 +318,8 @@ jobs:
       - publish-vscode-marketplace
       - publish-open-vsx
       - github-release-asset
-      - published-extension-smoke
+      - published-marketplace-smoke
+      - published-open-vsx-smoke
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -297,7 +335,8 @@ jobs:
             echo "- VS Code Marketplace job: ${{ needs.publish-vscode-marketplace.result }}"
             echo "- Open VSX job: ${{ needs.publish-open-vsx.result }}"
             echo "- GitHub release asset job: ${{ needs.github-release-asset.result }}"
-            echo "- Published extension smoke job: ${{ needs.published-extension-smoke.result }}"
+            echo "- Published Marketplace smoke job: ${{ needs.published-marketplace-smoke.result }}"
+            echo "- Published Open VSX smoke job: ${{ needs.published-open-vsx-smoke.result }}"
             if [ "${{ needs.prepare-vsix.outputs.is_prerelease }}" = "true" ]; then
               echo "- Marketplace prerelease policy: skipped; publish Marketplace only for non-prerelease SemVer versions."
             fi
