@@ -10,7 +10,7 @@
 //! | `has` declaration                        | Generated members                |
 //! |------------------------------------------|----------------------------------|
 //! | `has 'x'` (no `is`)                     | Accessor (`x`)                   |
-//! | `has 'x' => (is => 'rw')`               | Getter (`x`) + Setter (`x`)     |
+//! | `has 'x' => (is => 'rw')`               | Accessor (`x`)                  |
 //! | `has 'x' => (is => 'ro')`               | Getter (`x`)                     |
 //! | `has 'x' => (is => 'lazy')`             | Getter (`x`)                     |
 //! | `has 'x' => (is => 'bare')`             | *(none)*                         |
@@ -91,16 +91,10 @@ fn collect_has_members(model: &ClassModel, package: &str, members: &mut Vec<Gene
                 ));
             }
             Some(AccessorType::Rw) => {
-                // `is => 'rw'` — getter + setter (same method name).
+                // `is => 'rw'` — combined getter/setter method.
                 members.push(make_member(
                     &attr.accessor_name,
-                    GeneratedMemberKind::Getter,
-                    anchor_id,
-                    package,
-                ));
-                members.push(make_member(
-                    &attr.accessor_name,
-                    GeneratedMemberKind::Setter,
+                    GeneratedMemberKind::Accessor,
                     anchor_id,
                     package,
                 ));
@@ -261,23 +255,17 @@ mod tests {
         Ok(())
     }
 
-    // ── has 'x' => (is => 'rw') → Getter + Setter ──────────────────────
+    // ── has 'x' => (is => 'rw') → Accessor ─────────────────────────────
 
     #[test]
-    fn rw_has_generates_getter_and_setter() -> Result<(), String> {
+    fn rw_has_generates_accessor() -> Result<(), String> {
         let code = "package MyApp::User;\nuse Moose;\nhas 'email' => (is => 'rw');\n1;";
         let members = parse_and_extract(code);
         let matched = members_named(&members, "email");
-        assert_eq!(matched.len(), 2, "expected getter + setter, got {}", matched.len());
-
-        let kinds: Vec<_> = matched.iter().map(|m| m.kind).collect();
-        assert!(kinds.contains(&GeneratedMemberKind::Getter), "missing Getter");
-        assert!(kinds.contains(&GeneratedMemberKind::Setter), "missing Setter");
-
-        for m in &matched {
-            assert_eq!(m.provenance, Provenance::FrameworkSynthesis);
-            assert_eq!(m.confidence, Confidence::Medium);
-        }
+        assert_eq!(matched.len(), 1, "expected one accessor, got {}", matched.len());
+        assert_eq!(matched[0].kind, GeneratedMemberKind::Accessor);
+        assert_eq!(matched[0].provenance, Provenance::FrameworkSynthesis);
+        assert_eq!(matched[0].confidence, Confidence::Medium);
         Ok(())
     }
 
@@ -449,6 +437,7 @@ has '+name' => (is => 'ro', builder => 1, predicate => 1, clearer => 1);
 package MyApp::Accessor;
 use parent 'Class::Accessor';
 __PACKAGE__->mk_accessors(qw(foo bar));
+__PACKAGE__->mk_rw_accessors(qw(read_write));
 __PACKAGE__->mk_ro_accessors(qw(read_only));
 __PACKAGE__->mk_wo_accessors(qw(write_only));
 1;
@@ -456,11 +445,14 @@ __PACKAGE__->mk_wo_accessors(qw(write_only));
         let members = parse_and_extract(code);
 
         let foo = members_named(&members, "foo");
+        let read_write = members_named(&members, "read_write");
         let read_only = members_named(&members, "read_only");
         let write_only = members_named(&members, "write_only");
 
         assert_eq!(foo.len(), 1, "expected Class::Accessor `foo` member");
         assert_eq!(foo[0].kind, GeneratedMemberKind::Accessor);
+        assert_eq!(read_write.len(), 1, "expected Class::Accessor rw member");
+        assert_eq!(read_write[0].kind, GeneratedMemberKind::Accessor);
         assert_eq!(read_only.len(), 1, "expected Class::Accessor ro member");
         assert_eq!(read_only[0].kind, GeneratedMemberKind::Getter);
         assert_eq!(write_only.len(), 1, "expected Class::Accessor wo member");
@@ -498,7 +490,8 @@ __PACKAGE__->mk_wo_accessors(qw(write_only));
         let code = "package MyApp::Tiny;\nuse Mouse;\nhas 'value' => (is => 'rw');\n1;";
         let members = parse_and_extract(code);
         let matched = members_named(&members, "value");
-        assert_eq!(matched.len(), 2, "expected getter + setter for Mouse class");
+        assert_eq!(matched.len(), 1, "expected accessor for Mouse class");
+        assert_eq!(matched[0].kind, GeneratedMemberKind::Accessor);
         Ok(())
     }
 

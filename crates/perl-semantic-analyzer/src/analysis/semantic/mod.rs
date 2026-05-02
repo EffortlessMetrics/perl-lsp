@@ -1048,15 +1048,9 @@ has '+status' => (is => 'rw', predicate => 1);
 
         assert!(
             members.iter().any(|member| {
-                member.name == "status" && member.kind == GeneratedMemberKind::Getter
+                member.name == "status" && member.kind == GeneratedMemberKind::Accessor
             }),
-            "expected rw status getter in generated members, got: {members:?}"
-        );
-        assert!(
-            members.iter().any(|member| {
-                member.name == "status" && member.kind == GeneratedMemberKind::Setter
-            }),
-            "expected rw status setter in generated members, got: {members:?}"
+            "expected rw status accessor in generated members, got: {members:?}"
         );
         assert!(
             members.iter().any(|member| {
