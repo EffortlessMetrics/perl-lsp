@@ -63,6 +63,8 @@ fn api_regression_every_documented_name_is_reachable_at_crate_root() -> Result<(
     let _sr_size = std::mem::size_of::<SymbolRef>();
     let _f8: fn(&Node) -> Vec<SymbolRef> = extract_symbol_refs;
     let _rk = SymbolRefKind::SubroutineCall;
+    let _method = SymbolRefKind::MethodCall;
+    let _static_method = SymbolRefKind::StaticMethodCall;
 
     Ok(())
 }

@@ -111,6 +111,8 @@ fn arb_symbol_ref_kind() -> impl Strategy<Value = SymbolRefKind> {
     prop_oneof![
         arb_var_kind().prop_map(SymbolRefKind::Variable),
         Just(SymbolRefKind::SubroutineCall),
+        Just(SymbolRefKind::MethodCall),
+        Just(SymbolRefKind::StaticMethodCall),
     ]
 }
 

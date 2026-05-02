@@ -60,6 +60,12 @@ pub fn symbol_refs_to_semantic_facts(
         let occurrence_kind = match symbol_ref.kind {
             SymbolRefKind::Variable(_) => OccurrenceKind::Read,
             SymbolRefKind::SubroutineCall => OccurrenceKind::Call,
+            SymbolRefKind::MethodCall => OccurrenceKind::MethodCall,
+            SymbolRefKind::StaticMethodCall => OccurrenceKind::StaticMethodCall,
+        };
+        let confidence = match symbol_ref.kind {
+            SymbolRefKind::MethodCall => Confidence::Medium,
+            _ => Confidence::High,
         };
         let entity_id = entity_ids_by_qualified_name.get(&symbol_ref.qualified_name).copied();
         let occurrence_id = OccurrenceId(stable_id(
@@ -75,7 +81,7 @@ pub fn symbol_refs_to_semantic_facts(
             anchor_id,
             scope_id: None,
             provenance: Provenance::ExactAst,
-            confidence: Confidence::High,
+            confidence,
         });
 
         if let Some(to_entity_id) = entity_id {
@@ -513,17 +519,42 @@ mod tests {
                 full_span: (21, 23),
                 anchor_span: None,
             },
+            SymbolRef {
+                kind: SymbolRefKind::StaticMethodCall,
+                name: "new".to_string(),
+                qualified_name: "Foo::new".to_string(),
+                sigil: None,
+                package_qualifier: Some("Foo".to_string()),
+                full_span: (24, 32),
+                anchor_span: None,
+            },
+            SymbolRef {
+                kind: SymbolRefKind::MethodCall,
+                name: "save".to_string(),
+                qualified_name: "save".to_string(),
+                sigil: None,
+                package_qualifier: None,
+                full_span: (33, 45),
+                anchor_span: None,
+            },
         ];
         let mut entity_map = BTreeMap::new();
         entity_map.insert("Foo::run".to_string(), EntityId(42));
+        entity_map.insert("Foo::new".to_string(), EntityId(43));
 
         let facts = symbol_refs_to_semantic_facts(&refs, FileId(7), &entity_map);
-        assert_eq!(facts.anchors.len(), 2);
-        assert_eq!(facts.occurrences.len(), 2);
-        assert_eq!(facts.reference_edges.len(), 1);
+        assert_eq!(facts.anchors.len(), 4);
+        assert_eq!(facts.occurrences.len(), 4);
+        assert_eq!(facts.reference_edges.len(), 2);
         assert_eq!(facts.occurrences[0].kind, OccurrenceKind::Call);
         assert_eq!(facts.occurrences[1].kind, OccurrenceKind::Read);
+        assert_eq!(facts.occurrences[2].kind, OccurrenceKind::StaticMethodCall);
+        assert_eq!(facts.occurrences[3].kind, OccurrenceKind::MethodCall);
         assert_eq!(facts.occurrences[0].entity_id, Some(EntityId(42)));
         assert_eq!(facts.occurrences[1].entity_id, None);
+        assert_eq!(facts.occurrences[2].entity_id, Some(EntityId(43)));
+        assert_eq!(facts.occurrences[3].entity_id, None);
+        assert_eq!(facts.occurrences[2].confidence, Confidence::High);
+        assert_eq!(facts.occurrences[3].confidence, Confidence::Medium);
     }
 }
