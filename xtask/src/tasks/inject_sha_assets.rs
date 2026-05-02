@@ -262,6 +262,10 @@ mod tests {
             !formula.contains("unknown-linux-musl"),
             "Homebrew formula URLs must use GNU/glibc Linux assets"
         );
+        assert!(
+            !formula.contains("def caveats"),
+            "Homebrew formula should stay focused on install/test behavior"
+        );
     }
 
     #[test]

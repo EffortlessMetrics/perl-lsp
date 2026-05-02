@@ -185,9 +185,8 @@ jobs:
             sleep 30
           done
 
-      - name: Download Homebrew assets and checksums
+      - name: Verify Homebrew assets and checksums
         if: steps.release.outputs.should_bump == 'true'
-        id: checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.release.outputs.tag }}
@@ -233,7 +232,6 @@ jobs:
             fi
 
             printf '%s  %s\n' "${checksum}" "${asset_path}" | sha256sum --check --status
-            echo "${OUTPUT_NAMES[${target}]}=${checksum}" >> "${GITHUB_OUTPUT}"
             echo "${asset}: ${checksum}"
           done
 
@@ -257,31 +255,31 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-tap
 
+      - name: Install Rust toolchain
+        if: steps.release.outputs.should_bump == 'true'
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
+
       - name: Update tap formula
         if: steps.release.outputs.should_bump == 'true'
+        working-directory: source
         env:
-          VERSION: ${{ steps.release.outputs.version }}
-          SHA_MACOS_AARCH64: ${{ steps.checksums.outputs.macos_aarch64 }}
-          SHA_MACOS_X86_64: ${{ steps.checksums.outputs.macos_x86_64 }}
-          SHA_LINUX_AARCH64: ${{ steps.checksums.outputs.linux_aarch64 }}
-          SHA_LINUX_X86_64: ${{ steps.checksums.outputs.linux_x86_64 }}
+          TAG: ${{ steps.release.outputs.tag }}
+          FORMULA_OUTPUT: ${{ github.workspace }}/homebrew-tap/Formula/perllsp.rb
         run: |
           set -euo pipefail
 
-          mkdir -p homebrew-tap/Formula
-          cp source/Formula/perllsp.rb homebrew-tap/Formula/perllsp.rb
+          cargo xtask update-homebrew \
+            --version "${TAG}" \
+            --owner EffortlessMetrics \
+            --repo perl-lsp \
+            --prefix perllsp \
+            --output "${FORMULA_OUTPUT}"
 
-          sed -i \
-            -e "s/__RELEASE_VERSION__/${VERSION}/g" \
-            -e "s/__SHA256_MACOS_AARCH64__/${SHA_MACOS_AARCH64}/g" \
-            -e "s/__SHA256_MACOS_X86_64__/${SHA_MACOS_X86_64}/g" \
-            -e "s/__SHA256_LINUX_AARCH64__/${SHA_LINUX_AARCH64}/g" \
-            -e "s/__SHA256_LINUX_X86_64__/${SHA_LINUX_X86_64}/g" \
-            homebrew-tap/Formula/perllsp.rb
+          rm -f "${GITHUB_WORKSPACE}/homebrew-tap/Formula/perl-lsp.rb"
 
-          rm -f homebrew-tap/Formula/perl-lsp.rb
-
-          if grep -q "__RELEASE_VERSION__\|__SHA256_" homebrew-tap/Formula/perllsp.rb; then
+          if grep -q "__RELEASE_VERSION__\|__SHA256_" "${FORMULA_OUTPUT}"; then
             echo "::error::Formula still contains unreplaced placeholders after update."
             exit 1
           fi
@@ -301,7 +299,7 @@ jobs:
           title: "perllsp ${{ steps.release.outputs.version }}"
           body: |
             Problem: the owned Homebrew tap needs a perllsp formula bump for ${{ steps.release.outputs.tag }}.
-            Fix: update Formula/perllsp.rb with release.yml-aligned release assets and SHA256 checksums.
+            Fix: update Formula/perllsp.rb with the canonical xtask Homebrew formula generator.
             Verification: release assets were downloaded and checked against SHA256SUMS in the bump workflow.
           commit-message: "perllsp ${{ steps.release.outputs.version }}"
           add-paths: |
