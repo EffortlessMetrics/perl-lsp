@@ -8,13 +8,13 @@
 
 ## Current Framing
 
-- Workspace version line: `v0.13.1`
-- Current release train: `v0.13.1` public-alpha patch, dispatched 2026-05-01 for channel publication and verification
-- Published crate surface target: 32 crates from `[workspace.metadata.publish.allow]`
-- Active work: monitor the `v0.13.1` downstream publish workflows, close package-manager receipts, and keep release language public-alpha rather than stable/GA
+- Workspace version line: `v0.13.2`
+- Current release train: `v0.13.2` public-alpha patch prep, with release dispatch intentionally pending
+- Published crate surface target: 31 crates from `[workspace.metadata.publish.allow]`
+- Active work: finish release-prep verification, keep install-surface receipts wired into the runbook, and keep release language public-alpha rather than stable/GA
 - Canonical local receipt: `nix develop -c just ci-gate`
 
-Publication discipline: `v0.13.1` uses a normal SemVer package version for release channels while the human-facing product posture remains public alpha. See [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md) for the cross-channel ledger, and do not mark the release complete until every intended channel is green or explicitly deferred.
+Publication discipline: `v0.13.2` uses a normal SemVer package version for release channels while the human-facing product posture remains public alpha. See [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md) for the cross-channel ledger, and do not dispatch the release until the prep checks pass.
 
 ## How To Read This File
 
@@ -90,7 +90,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - End-to-end LSP feature development guide (#3027, PR #3115)
 - GIF recording guide and asset structure (#2336, PR #3130)
 
-## Active: Public-Alpha Channel Verification (v0.13.1)
+## Active: Public-Alpha Release Prep (v0.13.2)
 
 - GitHub Release, crates.io, Docker, VS Code Marketplace, Open VSX, and Homebrew tap receipts are tracked separately
 - The owned Homebrew path is `brew install effortlessmetrics/tap/perllsp`
@@ -99,7 +99,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 
 ## Now / Next / Later
 
-### Now (v0.13.1 public-alpha patch)
+### Now (v0.13.2 public-alpha patch prep)
 
 - CI/control-plane Wave 2 substrate already landed and should not be re-implemented in parallel follow-up PRs:
   - Per-gate timeout regression coverage in gate receipts (#7525)
@@ -116,7 +116,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
   6. Merge-train planner/receipt protocol with stop conditions
   7. Tokmd advisory stabilization (explicitly non-required while calibrating signal)
 - Wave guardrails: no bulk stale-closure automation, no full merge bot scope, no global pre-push hooks, no broad CI architecture rewrite in this pass.
-- `v0.13.1` has been dispatched as the public-alpha patch release; verify each downstream publish channel before declaring the train complete
+- `v0.13.2` is staged as the next public-alpha patch release; run the release-prep checks before dispatching the train
 - Pre-announcement license badge fix (PR #3193): canonical SPDX text in all 126 LICENSE files
 - Pre-announcement Docker arm64 timeout fix (#3188 → PR #3191, merged)
 - Per-release dependency triage: 7 dependabot PRs merged 2026-04-07 (#3178–#3184)
@@ -129,7 +129,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Semantic substrate migration status now tracks Wave 2 reality (facts vocabulary, SymbolDecl adapter, FileFactShard write-through, and DefinitionCandidate multimap landed; SymbolRef adapter and typed-reference global index still staged; ExportInfo -> ExportSet landed) in [SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md](SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md); provider cutover remains explicitly deferred until Wave 3 foundations (`ImportSpec` + `visible_symbols_at`) are proven
 - CI/control-plane next-wave execution sequencing is tracked in [CI_WAVE_EXECUTION_PLAN.md](CI_WAVE_EXECUTION_PLAN.md), with #7404 (`update-status --write` streaming) as the top urgency lane.
 
-### Next (post v0.13.1)
+### Next (post v0.13.2)
 
 - The 0.12.x line has built confidence across parser, diagnostics, refactoring, and distribution
 - Resume parser, corpus, semantic, and DAP hardening after the release-channel receipts close

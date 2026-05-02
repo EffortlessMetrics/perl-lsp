@@ -1227,28 +1227,24 @@ ci-lsp-bdd:
         cargo test -p perl-lsp-rs --locked --test lsp_bdd_workflows -- --test-threads=1
     @echo "✅ LSP BDD workflow tests passed"
 
-# LSP microcrate compatibility coverage (feature microcrates + provider re-export contract)
+# LSP compatibility coverage for absorbed provider and feature governance surfaces.
 ci-lsp-microcrates:
-    @echo "🧩 Running LSP microcrate compatibility tests..."
+    @echo "🧩 Running LSP compatibility tests..."
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-        cargo test -p perl-lsp-providers --locked --test microcrate_reexports_compatibility -- --test-threads=1
+        cargo test -p perl-lsp-rs-core --locked --test providers_module_shape -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-rs-core --locked --test providers_g1b_module_shape -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-rs-core --locked --test g3_feature_flag_routing -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-rs-core --locked --test governance_module_shape -- --test-threads=1
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp-rs --locked --test lsp_color_tests -- --test-threads=1
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp-rs --locked --test lsp_code_lens_tests -- --test-threads=1
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp-rs --locked --test lsp_inline_completion_tests -- --test-threads=1
-    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-        cargo test --locked -p perl-feature-catalog \
-                   -p perl-lsp-feature-ids \
-                   -p perl-lsp-feature-profile \
-                   -p perl-lsp-feature-policy \
-                   -p perl-lsp-feature-flags \
-                   -p perl-lsp-feature-contracts \
-                   -p perl-lsp-feature-grid \
-                   -p perl-lsp-feature-governance \
-                   -p perl-lsp-launcher
-    @echo "✅ LSP microcrate compatibility tests passed"
+    @echo "✅ LSP compatibility tests passed"
 
 # Framework semantic depth receipts (Moo/Moose/Class::Accessor)
 ci-semantic-frameworks:

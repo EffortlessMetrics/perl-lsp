@@ -47,40 +47,26 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::LazyLock;
 
-static USE_STATEMENT_RE: LazyLock<Regex> =
-    LazyLock::new(|| match Regex::new(r"^\s*use\s+([A-Za-z0-9_:]+)(?:\s+qw\(([^)]*)\))?\s*;") {
-        Ok(re) => re,
-        Err(_) => unreachable!("USE_STATEMENT_RE failed to compile"),
-    });
-
-static DUMPER_SYMBOL_RE: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"\bDumper\b") {
-    Ok(re) => re,
-    Err(_) => unreachable!("DUMPER_SYMBOL_RE failed to compile"),
+static USE_STATEMENT_RE: LazyLock<Result<Regex, String>> = LazyLock::new(|| {
+    Regex::new(r"^\s*use\s+([A-Za-z0-9_:]+)(?:\s+qw\(([^)]*)\))?\s*;")
+        .map_err(|err| err.to_string())
 });
 
-static STRING_LITERAL_RE: LazyLock<Regex> =
-    LazyLock::new(|| match Regex::new("'[^']*'|\"[^\"]*\"") {
-        Ok(re) => re,
-        Err(_) => unreachable!("STRING_LITERAL_RE failed to compile"),
-    });
+static DUMPER_SYMBOL_RE: LazyLock<Result<Regex, String>> =
+    LazyLock::new(|| Regex::new(r"\bDumper\b").map_err(|err| err.to_string()));
 
-static REGEX_LITERAL_RE: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"qr/[^/]*/") {
-    Ok(re) => re,
-    Err(_) => unreachable!("REGEX_LITERAL_RE failed to compile"),
-});
+static STRING_LITERAL_RE: LazyLock<Result<Regex, String>> =
+    LazyLock::new(|| Regex::new("'[^']*'|\"[^\"]*\"").map_err(|err| err.to_string()));
 
-static COMMENT_RE: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"(?m)#.*$") {
-    Ok(re) => re,
-    Err(_) => unreachable!("COMMENT_RE failed to compile"),
-});
+static REGEX_LITERAL_RE: LazyLock<Result<Regex, String>> =
+    LazyLock::new(|| Regex::new(r"qr/[^/]*/").map_err(|err| err.to_string()));
 
-static MODULE_USAGE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(
-        r"\b([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)::([A-Za-z_][A-Za-z0-9_]*)",
-    ) {
-        Ok(re) => re,
-        Err(_) => unreachable!("MODULE_USAGE_RE failed to compile"),
-    }
+static COMMENT_RE: LazyLock<Result<Regex, String>> =
+    LazyLock::new(|| Regex::new(r"(?m)#.*$").map_err(|err| err.to_string()));
+
+static MODULE_USAGE_RE: LazyLock<Result<Regex, String>> = LazyLock::new(|| {
+    Regex::new(r"\b([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)::([A-Za-z_][A-Za-z0-9_]*)")
+        .map_err(|err| err.to_string())
 });
 
 /// TextEdit for import optimization (local type for byte-offset ranges)
@@ -298,9 +284,16 @@ impl ImportOptimizer {
     /// # Ok::<(), String>(())
     /// ```
     pub fn analyze_content(&self, content: &str) -> Result<ImportAnalysis, String> {
+        let use_statement_re = USE_STATEMENT_RE.as_ref().map_err(|err| err.clone())?;
+        let dumper_symbol_re = DUMPER_SYMBOL_RE.as_ref().map_err(|err| err.clone())?;
+        let string_literal_re = STRING_LITERAL_RE.as_ref().map_err(|err| err.clone())?;
+        let regex_literal_re = REGEX_LITERAL_RE.as_ref().map_err(|err| err.clone())?;
+        let comment_re = COMMENT_RE.as_ref().map_err(|err| err.clone())?;
+        let module_usage_re = MODULE_USAGE_RE.as_ref().map_err(|err| err.clone())?;
+
         let mut imports = Vec::new();
         for (idx, line) in content.lines().enumerate() {
-            if let Some(caps) = USE_STATEMENT_RE.captures(line) {
+            if let Some(caps) = use_statement_re.captures(line) {
                 let module = caps[1].to_string();
                 let symbols_str = caps.get(2).map(|m| m.as_str()).unwrap_or("");
                 let symbols = if symbols_str.is_empty() {
@@ -406,7 +399,7 @@ impl ImportOptimizer {
 
                     // Special handling for Data::Dumper - check for Dumper function usage
                     if !is_used && imp.module == "Data::Dumper" {
-                        if DUMPER_SYMBOL_RE.is_match(&non_use_content) {
+                        if dumper_symbol_re.is_match(&non_use_content) {
                             is_used = true;
                         }
                     }
@@ -449,11 +442,11 @@ impl ImportOptimizer {
             imports.iter().map(|imp| imp.module.clone()).collect();
 
         // Strip strings and comments before scanning for Module::symbol patterns
-        let stripped = STRING_LITERAL_RE.replace_all(content, " ").to_string();
-        let stripped = REGEX_LITERAL_RE.replace_all(&stripped, " ").to_string();
-        let stripped = COMMENT_RE.replace_all(&stripped, " ").to_string();
+        let stripped = string_literal_re.replace_all(content, " ").to_string();
+        let stripped = regex_literal_re.replace_all(&stripped, " ").to_string();
+        let stripped = comment_re.replace_all(&stripped, " ").to_string();
         let mut usage_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        for caps in MODULE_USAGE_RE.captures_iter(&stripped) {
+        for caps in module_usage_re.captures_iter(&stripped) {
             // Only process if both capture groups matched
             if let (Some(module_match), Some(symbol_match)) = (caps.get(1), caps.get(2)) {
                 let module = module_match.as_str().to_string();

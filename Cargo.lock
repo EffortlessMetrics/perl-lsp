@@ -1481,7 +1481,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "perl-ast"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-ast-v2",
  "perl-position-tracking",
@@ -1490,14 +1490,14 @@ dependencies = [
 
 [[package]]
 name = "perl-ast-v2"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-position-tracking",
 ]
 
 [[package]]
 name = "perl-ci-hygiene"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "chrono",
  "clap",
@@ -1510,7 +1510,7 @@ dependencies = [
 
 [[package]]
 name = "perl-corpus"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1529,7 +1529,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -1557,7 +1557,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dead-code"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-workspace",
  "serde",
@@ -1566,7 +1566,7 @@ dependencies = [
 
 [[package]]
 name = "perl-diagnostics"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-test-must",
  "serde",
@@ -1575,7 +1575,7 @@ dependencies = [
 
 [[package]]
 name = "perl-incremental-parsing"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "criterion",
  "lsp-types",
@@ -1588,7 +1588,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lexer"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "criterion",
  "memchr",
@@ -1607,11 +1607,11 @@ dependencies = [
 
 [[package]]
 name = "perl-line-index"
-version = "0.13.1"
+version = "0.13.2"
 
 [[package]]
 name = "perl-lsp-perltidy"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-subprocess-runtime",
  "perl-tdd-support",
@@ -1621,7 +1621,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-rs"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1665,7 +1665,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-rs-core"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -1707,7 +1707,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-ux-tests"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "anyhow",
  "serde",
@@ -1720,7 +1720,7 @@ dependencies = [
 
 [[package]]
 name = "perl-module"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-parser-core",
  "perl-tdd-support",
@@ -1732,7 +1732,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "anyhow",
  "criterion",
@@ -1764,7 +1764,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser-bench"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-parser",
  "walkdir",
@@ -1772,7 +1772,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser-core"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-ast",
  "perl-ast-v2",
@@ -1790,7 +1790,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser-pest"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-tdd-support",
  "pest",
@@ -1803,11 +1803,11 @@ dependencies = [
 
 [[package]]
 name = "perl-pod"
-version = "0.13.1"
+version = "0.13.2"
 
 [[package]]
 name = "perl-position-tracking"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "lsp-types",
  "perl-tdd-support",
@@ -1820,7 +1820,7 @@ dependencies = [
 
 [[package]]
 name = "perl-pragma"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "criterion",
  "perl-ast",
@@ -1828,7 +1828,7 @@ dependencies = [
 
 [[package]]
 name = "perl-refactoring"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-module",
  "perl-parser-core",
@@ -1843,7 +1843,7 @@ dependencies = [
 
 [[package]]
 name = "perl-regex"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "proptest",
  "thiserror",
@@ -1851,7 +1851,7 @@ dependencies = [
 
 [[package]]
 name = "perl-semantic-analyzer"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-module",
  "perl-parser-core",
@@ -1868,7 +1868,7 @@ dependencies = [
 
 [[package]]
 name = "perl-semantic-facts"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "proptest",
  "serde",
@@ -1877,14 +1877,14 @@ dependencies = [
 
 [[package]]
 name = "perl-subprocess-runtime"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-tdd-support",
 ]
 
 [[package]]
 name = "perl-symbol"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "anyhow",
  "criterion",
@@ -1899,7 +1899,7 @@ dependencies = [
 
 [[package]]
 name = "perl-tdd-support"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "lsp-types",
  "perl-parser-core",
@@ -1911,18 +1911,18 @@ dependencies = [
 
 [[package]]
 name = "perl-test-generators"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "perl-test-must"
-version = "0.13.1"
+version = "0.13.2"
 
 [[package]]
 name = "perl-token"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "criterion",
  "perl-lexer",
@@ -1933,7 +1933,7 @@ dependencies = [
 
 [[package]]
 name = "perl-uri"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "percent-encoding",
  "perl-tdd-support",
@@ -1943,7 +1943,7 @@ dependencies = [
 
 [[package]]
 name = "perl-workspace"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "anyhow",
  "criterion",
@@ -1966,7 +1966,7 @@ dependencies = [
 
 [[package]]
 name = "perllsp"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "perl-lsp-rs",
 ]
@@ -3173,7 +3173,7 @@ checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "tree-sitter-perl-c"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "cc",
  "tree-sitter",
@@ -3182,7 +3182,7 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter-perl-rs"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "insta",
  "perl-ast",
@@ -3860,7 +3860,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "anyhow",
  "assert_cmd",

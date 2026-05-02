@@ -693,6 +693,14 @@ enum Commands {
         fresh: bool,
     },
 
+    /// Parse one corpus file in an isolated child process for corpus-audit timeout guards.
+    #[command(hide = true)]
+    CorpusAuditParseOne {
+        /// Path to the corpus file to parse.
+        #[arg(long)]
+        path: PathBuf,
+    },
+
     /// Generate parser feature matrix from a parser-audit report.
     ParserMatrix {
         /// Path to parser audit report JSON.
@@ -1993,6 +2001,7 @@ fn main() -> Result<()> {
                 check,
             })
         }
+        Commands::CorpusAuditParseOne { path } => corpus_audit::run_parse_one(path),
         Commands::ParserMatrix { report, output } => parser_matrix::run_with_paths(report, output),
         #[cfg(feature = "parser-tasks")]
         Commands::CompareThree { verbose, format } => {

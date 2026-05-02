@@ -5,16 +5,23 @@
 
 ## Current Release Call
 
-**Current release train**: `v0.13.1` public-alpha patch (dispatched 2026-05-01)
-**Workspace version line**: `v0.13.1`
-**Published crate surface**: 32 crates
+**Current release train**: `v0.13.2` public-alpha patch prep
+**Workspace version line**: `v0.13.2`
+**Published crate surface**: 31 crates
 **Release target**: channel verification across GitHub Releases, crates.io, Docker, VS Code Marketplace, Open VSX, and the owned Homebrew tap
-**Ship readiness**: release orchestration validated the default-branch tip, created `v0.13.1`, and dispatched downstream publish workflows. Do not declare all channels complete until post-publish verification is done.
+**Ship readiness**: release dispatch is intentionally pending. Run the release-prep checks, then use release orchestration only after the prep PR is merged.
 
 ## Active Blockers
 
-- No known code release blocker after `#7676`, `#7781`, `#7782`, and `#7791`
-- Remaining work is operational: monitor downstream channel workflows, run post-publish verification, and record final channel receipts
+- No known install-surface blocker after the Homebrew, GNU/musl, installer, and VS Code managed-binary guards landed
+- Remaining work is operational: finish `v0.13.2` prep verification, then publish and record final channel receipts
+
+## 0.13.2 Prep Receipts (2026-05-02)
+
+- Release notes file: `docs/releases/v0.13.2.md`
+- Changelog entry: `CHANGELOG.md` `[0.13.2]`
+- Version surfaces: workspace crates, feature catalog metadata, and VS Code extension package staged at `0.13.2`
+- Required pre-dispatch checks: install-surface check, release-history check, installer target-selection self-test, release-note chooser extraction, and version sync
 
 ## 0.13.1 Release Receipts (2026-05-01)
 
@@ -27,7 +34,11 @@
 - GitHub Release run `25209810124` published `v0.13.1` binaries, `SHA256SUMS`, and SBOM; the VSIX was attached after the release object existed
 - VS Code Marketplace and Open VSX publish jobs completed independently; the failed attach job exposed a missing `GH_REPO` environment setting and is patched in the follow-up release-hygiene PR
 - Homebrew manual bump run `25210359468` reached the owned-tap path but exposed the same missing `GH_REPO` setting for release asset downloads outside the source checkout; the follow-up release-hygiene PR patches that before rerunning the tap bump
-- Homebrew patched-branch run `25210881000` validated the `v0.13.1` release asset layout and checksums, then stopped because `HOMEBREW_TAP_TOKEN` is not configured; `EffortlessMetrics/homebrew-tap` was bootstrapped and `EffortlessMetrics/homebrew-tap#1` merged the `perllsp 0.13.1` formula
+- The first patched Homebrew run validated the `v0.13.1` release asset layout
+  and checksums, then stopped because `HOMEBREW_TAP_TOKEN` was not configured;
+  subsequent tap hardening configured the token, routed formula generation
+  through `cargo xtask update-homebrew`, and added public tap smoke coverage for
+  the owned `effortlessmetrics/tap/perllsp` path
 
 ## Historical 0.12.3 Ship Receipts (2026-04-09)
 

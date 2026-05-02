@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-05-02
+
+Release notes: [v0.13.2](docs/releases/v0.13.2.md)
+
+### Changed
+
+- Prepared the `v0.13.2` public-alpha patch train with workspace, crate,
+  feature catalog, and VS Code extension version surfaces aligned.
+- Made release closeout focus on the real user install surfaces: Homebrew tap,
+  GitHub release assets, VS Code Marketplace, and Open VSX.
+- Aligned parser scorecard truth semantics for clean-ingestion, salvage, and
+  insufficient-data rows.
+
+### Fixed
+
+- Locked Homebrew tap, GNU/musl binary selection, installer target selection,
+  and VS Code managed-binary startup paths behind release hygiene checks.
+- Added release-note chooser and install-surface checks to keep future
+  public-alpha release notes from drifting back to stale install guidance.
+
 ## [0.13.1] - 2026-05-01
 
 Release notes: [v0.13.1](docs/releases/v0.13.1.md)
@@ -1255,6 +1275,7 @@ During the alpha phase (pre-v0.15.0):
 For the full cross-channel release history, see [RELEASE_HISTORY.md](RELEASE_HISTORY.md).
 
 <!-- Compare ranges -->
+[0.13.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.0...v0.13.1
 [0.12.4]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.3...v0.12.4
 [0.12.3]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.2...v0.12.3
@@ -1267,4 +1288,4 @@ For the full cross-channel release history, see [RELEASE_HISTORY.md](RELEASE_HIS
 [0.9.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.9.0
 [0.8.8]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.8.8
 [0.13.0-rc1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.4...v0.13.0-rc1
-[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.1...HEAD
+[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.2...HEAD
