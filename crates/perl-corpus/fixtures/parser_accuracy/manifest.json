@@ -399,6 +399,64 @@
           "span_text": "dynamic_name"
         }
       ]
+    },
+    {
+      "id": "malformed_heredoc_recovery",
+      "family": "recovery",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/malformed_heredoc_recovery.pl",
+      "scored_lines": 3,
+      "scored_symbols": 1,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "parse_error"
+          ]
+        },
+        {
+          "line": 6,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        }
+      ],
+      "recovery_expectations": [
+        {
+          "id": "malformed_heredoc_distinguishes_eof_spillover",
+          "first_error_line": 3,
+          "error_region": {
+            "start": 3,
+            "end": 4
+          },
+          "recovery_line": 6,
+          "post_error_line_expectations": [
+            {
+              "line": 6,
+              "expected_tags": [
+                "sub_decl"
+              ]
+            }
+          ],
+          "post_error_symbol_spans": [
+            "after_recovery"
+          ]
+        }
+      ]
     }
   ]
 }

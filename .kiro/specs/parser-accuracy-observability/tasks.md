@@ -67,10 +67,10 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
     - Prepare floor contract for `dynamic_false_precision_count == 0`
     - _Verify: dynamic fixture returns fallback/unavailable rather than false exact result_
 
-- [ ] 8. Add recovery quality scoring
-  - [ ] 8.1 Define malformed fixture labels
+- [x] 8. Add recovery quality scoring
+  - [x] 8.1 Define malformed fixture labels
     - Track first error line, expected error region, recovery boundary, and post-error symbols
-  - [ ] 8.2 Emit recovery containment rows
+  - [x] 8.2 Emit recovery containment rows
     - first_error_line_accuracy, error_region_precision/recall, spillover mean/p95/max, salvaged lines, salvaged symbols, post_error_symbol_recall, post_error_line_f1
     - _Verify: malformed heredoc fixture distinguishes local recovery from EOF spillover_
 

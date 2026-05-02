@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use chrono::Utc;
 use color_eyre::eyre::{Context, Result, bail, eyre};
-use perl_parser::{Node, NodeKind, Parser};
+use perl_parser::{Node, NodeKind, ParseError, Parser};
 use perl_semantic_facts::{AnchorId, EntityId};
 use perl_workspace::workspace::workspace_index::{FileFactShard, WorkspaceIndex};
 use serde::{Deserialize, Serialize};
@@ -51,6 +51,8 @@ struct FixtureMetadata {
     symbol_expectations: SymbolExpectations,
     #[serde(default)]
     symbol_safety_regions: Vec<SymbolSafetyRegion>,
+    #[serde(default)]
+    recovery_expectations: Vec<RecoveryExpectation>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -149,6 +151,24 @@ enum SymbolSafetyRegionKind {
     Pod,
     String,
     Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct RecoveryExpectation {
+    id: String,
+    first_error_line: u64,
+    error_region: LineRange,
+    recovery_line: u64,
+    #[serde(default)]
+    post_error_line_expectations: Vec<LineExpectation>,
+    #[serde(default)]
+    post_error_symbol_spans: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+struct LineRange {
+    start: u64,
+    end: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -457,6 +477,19 @@ struct KindScore {
     false_negative_count: u64,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct RecoveryScore {
+    expectation_count: u64,
+    first_error_line_correct_count: u64,
+    error_region_true_positive_count: u64,
+    error_region_false_positive_count: u64,
+    error_region_false_negative_count: u64,
+    spillover_lines: Vec<u64>,
+    post_error_line_score: LineScore,
+    post_error_symbol_expected_count: u64,
+    post_error_symbol_found_count: u64,
+}
+
 /// Run `cargo xtask metrics parser-accuracy`.
 pub fn run(
     json: bool,
@@ -528,6 +561,7 @@ fn build_artifact(
     let line_score = score_manifest_line_tags(root, manifest)?;
     let ast_score = score_manifest_ast(root, manifest)?;
     let symbol_score = score_manifest_symbols(root, manifest)?;
+    let recovery_score = score_manifest_recovery(root, manifest)?;
     let mut metrics = vec![MetricRow::Measured {
         metric: "denominator_fixture_count".to_string(),
         value: fixture_count,
@@ -540,6 +574,7 @@ fn build_artifact(
     metrics.extend(ast_metrics(&ast_score, cadence));
     metrics.extend(symbol_metrics(&symbol_score, cadence));
     metrics.extend(safety_metrics(&line_score, &symbol_score, cadence));
+    metrics.extend(recovery_metrics(&recovery_score, cadence));
 
     Ok(ParserAccuracyArtifact {
         schema_version: 1,
@@ -853,6 +888,128 @@ fn line_metrics(score: &LineScore, cadence: Cadence) -> Vec<MetricRow> {
     ));
 
     rows
+}
+
+fn score_manifest_recovery(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+) -> Result<RecoveryScore> {
+    let mut score = RecoveryScore::default();
+    for fixture in &manifest.fixtures {
+        if fixture.recovery_expectations.is_empty() {
+            continue;
+        }
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy recovery fixture source {}", source_path.display())
+        })?;
+        let prediction = extract_recovery_prediction(&source_path, &source);
+        for expectation in &fixture.recovery_expectations {
+            score_recovery_expectation(expectation, &prediction, &mut score);
+        }
+    }
+    Ok(score)
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct RecoveryPrediction {
+    first_error_line: Option<u64>,
+    error_region_lines: BTreeSet<u64>,
+    actual_by_line: BTreeMap<u64, BTreeSet<LineTag>>,
+    symbol_spans: BTreeSet<SymbolSpanLocation>,
+}
+
+fn extract_recovery_prediction(source_path: &Path, source: &str) -> RecoveryPrediction {
+    let mut parser = Parser::new(source);
+    let output = parser.parse_with_recovery();
+    let line_starts = line_starts(source);
+    let mut error_lines = BTreeSet::new();
+    for diagnostic in &output.diagnostics {
+        if let Some(location) = parse_error_location(diagnostic) {
+            error_lines.insert(line_for_offset(&line_starts, location));
+        }
+    }
+    collect_error_node_lines(&output.ast, &line_starts, &mut error_lines);
+
+    let mut actual_by_line = BTreeMap::new();
+    collect_node_line_tags(&output.ast, &line_starts, &mut actual_by_line);
+    let symbol_spans = extract_symbol_predictions(source_path, source)
+        .map(|predictions| predictions.safety_spans)
+        .unwrap_or_default();
+
+    RecoveryPrediction {
+        first_error_line: error_lines.first().copied(),
+        error_region_lines: error_lines,
+        actual_by_line,
+        symbol_spans,
+    }
+}
+
+fn parse_error_location(error: &ParseError) -> Option<usize> {
+    match error {
+        ParseError::UnexpectedToken { location, .. }
+        | ParseError::SyntaxError { location, .. }
+        | ParseError::Recovered { location, .. } => Some(*location),
+        _ => None,
+    }
+}
+
+fn collect_error_node_lines(node: &Node, line_starts: &[usize], lines: &mut BTreeSet<u64>) {
+    if matches!(node.kind, NodeKind::Error { .. }) {
+        lines.insert(line_for_offset(line_starts, node.location.start));
+    }
+    node.for_each_child(|child| collect_error_node_lines(child, line_starts, lines));
+}
+
+fn score_recovery_expectation(
+    expectation: &RecoveryExpectation,
+    prediction: &RecoveryPrediction,
+    score: &mut RecoveryScore,
+) {
+    score.expectation_count += 1;
+    if prediction.first_error_line == Some(expectation.first_error_line) {
+        score.first_error_line_correct_count += 1;
+    }
+
+    let expected_region = line_range_set(expectation.error_region);
+    score.error_region_true_positive_count +=
+        expected_region.intersection(&prediction.error_region_lines).count() as u64;
+    score.error_region_false_positive_count +=
+        prediction.error_region_lines.difference(&expected_region).count() as u64;
+    score.error_region_false_negative_count +=
+        expected_region.difference(&prediction.error_region_lines).count() as u64;
+
+    let actual_end = prediction
+        .error_region_lines
+        .iter()
+        .next_back()
+        .copied()
+        .unwrap_or(expectation.error_region.end);
+    score.spillover_lines.push(actual_end.saturating_sub(expectation.error_region.end));
+
+    for line_expectation in &expectation.post_error_line_expectations {
+        let actual =
+            prediction.actual_by_line.get(&line_expectation.line).cloned().unwrap_or_default();
+        score_line_tags(&line_expectation.expected_tags, &actual, &mut score.post_error_line_score);
+    }
+
+    for span in &expectation.post_error_symbol_spans {
+        score.post_error_symbol_expected_count += 1;
+        if prediction
+            .symbol_spans
+            .iter()
+            .any(|actual| actual.line >= expectation.recovery_line && actual.span_text == *span)
+        {
+            score.post_error_symbol_found_count += 1;
+        }
+    }
+}
+
+fn line_range_set(range: LineRange) -> BTreeSet<u64> {
+    if range.end < range.start {
+        return BTreeSet::new();
+    }
+    (range.start..=range.end).collect()
 }
 
 fn score_manifest_ast(root: &Path, manifest: &ParserAccuracyManifest) -> Result<AstScore> {
@@ -1674,6 +1831,100 @@ fn safety_metrics(
     ]
 }
 
+fn recovery_metrics(score: &RecoveryScore, cadence: Cadence) -> Vec<MetricRow> {
+    if score.expectation_count == 0 {
+        return vec![insufficient(
+            "recovery_first_error_line_accuracy",
+            "recovery gold labels are not available",
+        )];
+    }
+
+    let region_precision_denominator =
+        score.error_region_true_positive_count + score.error_region_false_positive_count;
+    let region_recall_denominator =
+        score.error_region_true_positive_count + score.error_region_false_negative_count;
+    let post_line_precision_denominator = score.post_error_line_score.true_positive_count
+        + score.post_error_line_score.false_positive_count;
+    let post_line_recall_denominator = score.post_error_line_score.true_positive_count
+        + score.post_error_line_score.false_negative_count;
+
+    vec![
+        measured_rate(
+            "recovery_first_error_line_accuracy",
+            score.first_error_line_correct_count,
+            score.expectation_count,
+            cadence,
+        ),
+        optional_measured_rate(
+            "recovery_error_region_precision",
+            ratio(score.error_region_true_positive_count, region_precision_denominator),
+            region_precision_denominator,
+            "no predicted recovery error-region lines are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "recovery_error_region_recall",
+            ratio(score.error_region_true_positive_count, region_recall_denominator),
+            region_recall_denominator,
+            "no expected recovery error-region lines are available",
+            cadence,
+        ),
+        optional_measured_value(
+            "recovery_spillover_mean_lines",
+            mean_u64(&score.spillover_lines),
+            score.spillover_lines.len() as u64,
+            "no recovery spillover samples are available",
+            cadence,
+        ),
+        optional_measured_value(
+            "recovery_spillover_p95_lines",
+            p95_u64(&score.spillover_lines),
+            score.spillover_lines.len() as u64,
+            "no recovery spillover samples are available",
+            cadence,
+        ),
+        optional_measured_value(
+            "recovery_spillover_max_lines",
+            score.spillover_lines.iter().copied().max().map(|value| value as f64),
+            score.spillover_lines.len() as u64,
+            "no recovery spillover samples are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "recovery_salvaged_lines_after_error",
+            score.post_error_line_score.exact_match_count,
+            score.post_error_line_score.line_count,
+            "no post-error line labels are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "recovery_salvaged_symbols_after_error",
+            score.post_error_symbol_found_count,
+            score.post_error_symbol_expected_count,
+            "no post-error symbol labels are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "recovery_post_error_symbol_recall",
+            ratio(score.post_error_symbol_found_count, score.post_error_symbol_expected_count),
+            score.post_error_symbol_expected_count,
+            "no post-error symbol labels are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "recovery_post_error_line_f1",
+            f1_from_counts(
+                score.post_error_line_score.true_positive_count,
+                score.post_error_line_score.false_positive_count,
+                score.post_error_line_score.false_negative_count,
+            ),
+            post_line_recall_denominator.max(post_line_precision_denominator),
+            "post-error line precision or recall denominator is unavailable",
+            cadence,
+        ),
+    ]
+}
+
 #[derive(Debug, Clone, Copy)]
 enum SymbolMetricSource {
     Entity,
@@ -1769,6 +2020,26 @@ fn optional_measured_count(
     measured_count(metric, value, sample_count, cadence)
 }
 
+fn optional_measured_value(
+    metric: &str,
+    value: Option<f64>,
+    sample_count: u64,
+    insufficient_reason: &str,
+    cadence: Cadence,
+) -> MetricRow {
+    match value {
+        Some(value) if sample_count > 0 => MetricRow::Measured {
+            metric: metric.to_string(),
+            value,
+            sample_count,
+            direction: Direction::Neutral,
+            confidence: Confidence::High,
+            cadence,
+        },
+        _ => insufficient(metric, insufficient_reason),
+    }
+}
+
 fn measured_rate(metric: &str, numerator: u64, denominator: u64, cadence: Cadence) -> MetricRow {
     let value = ratio(numerator, denominator).unwrap_or(0.0);
     MetricRow::Measured {
@@ -1803,6 +2074,29 @@ fn optional_measured_rate(
 
 fn ratio(numerator: u64, denominator: u64) -> Option<f64> {
     if denominator == 0 { None } else { Some(numerator as f64 / denominator as f64) }
+}
+
+fn f1_from_counts(true_positive: u64, false_positive: u64, false_negative: u64) -> Option<f64> {
+    let denominator = (2 * true_positive) + false_positive + false_negative;
+    ratio(2 * true_positive, denominator)
+}
+
+fn mean_u64(values: &[u64]) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    Some(values.iter().sum::<u64>() as f64 / values.len() as f64)
+}
+
+fn p95_u64(values: &[u64]) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_unstable();
+    let rank = ((sorted.len() as f64) * 0.95).ceil() as usize;
+    let index = rank.saturating_sub(1).min(sorted.len() - 1);
+    Some(sorted[index] as f64)
 }
 
 fn insufficient(metric: &str, reason: &str) -> MetricRow {
@@ -1993,6 +2287,7 @@ mod tests {
                         }],
                     },
                     symbol_safety_regions: vec![],
+                    recovery_expectations: vec![],
                 },
                 FixtureMetadata {
                     id: "dynamic_require_boundary".to_string(),
@@ -2051,6 +2346,7 @@ mod tests {
                     ],
                     symbol_expectations: SymbolExpectations::default(),
                     symbol_safety_regions: vec![],
+                    recovery_expectations: vec![],
                 },
             ],
         }
@@ -2413,6 +2709,76 @@ mod tests {
                 MetricRow::Measured { metric, value, sample_count: 3, .. }
                     if metric == "false_symbol_count"
                         && (*value - 2.0).abs() < f64::EPSILON
+            )
+        }));
+    }
+
+    #[test]
+    fn recovery_scorer_counts_local_spillover_and_salvaged_symbols() {
+        let expectation = RecoveryExpectation {
+            id: "recover_before_sub".to_string(),
+            first_error_line: 3,
+            error_region: LineRange { start: 3, end: 3 },
+            recovery_line: 5,
+            post_error_line_expectations: vec![LineExpectation {
+                line: 5,
+                expected_tags: tags(&[LineTag::SubDecl]),
+            }],
+            post_error_symbol_spans: vec!["after_recovery".to_string()],
+        };
+        let prediction = RecoveryPrediction {
+            first_error_line: Some(3),
+            error_region_lines: [3].into_iter().collect(),
+            actual_by_line: [(5, tags(&[LineTag::SubDecl]))].into_iter().collect(),
+            symbol_spans: [SymbolSpanLocation { line: 5, span_text: "after_recovery".to_string() }]
+                .into_iter()
+                .collect(),
+        };
+        let mut score = RecoveryScore::default();
+
+        score_recovery_expectation(&expectation, &prediction, &mut score);
+
+        assert_eq!(score.first_error_line_correct_count, 1);
+        assert_eq!(score.error_region_true_positive_count, 1);
+        assert_eq!(score.spillover_lines, vec![0]);
+        assert_eq!(score.post_error_line_score.exact_match_count, 1);
+        assert_eq!(score.post_error_symbol_found_count, 1);
+    }
+
+    #[test]
+    fn recovery_metrics_emit_measured_containment_rows() {
+        let score = RecoveryScore {
+            expectation_count: 1,
+            first_error_line_correct_count: 1,
+            error_region_true_positive_count: 1,
+            spillover_lines: vec![0, 2],
+            post_error_line_score: LineScore {
+                line_count: 1,
+                true_positive_count: 1,
+                exact_match_count: 1,
+                ..LineScore::default()
+            },
+            post_error_symbol_expected_count: 1,
+            post_error_symbol_found_count: 1,
+            ..RecoveryScore::default()
+        };
+
+        let metrics = recovery_metrics(&score, Cadence::Pr);
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "recovery_spillover_p95_lines"
+                        && (*value - 2.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "recovery_post_error_symbol_recall"
+                        && (*value - 1.0).abs() < f64::EPSILON
             )
         }));
     }

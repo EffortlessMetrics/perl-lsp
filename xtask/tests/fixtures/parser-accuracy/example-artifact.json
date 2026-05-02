@@ -5,19 +5,19 @@
   "commit": "example",
   "cadence": "pr",
   "denominator": {
-    "fixture_count": 6,
-    "fixture_family_count": 6,
-    "scored_line_count": 20,
-    "scored_symbol_count": 16,
+    "fixture_count": 7,
+    "fixture_family_count": 7,
+    "scored_line_count": 23,
+    "scored_symbol_count": 17,
     "fully_labeled_region_count": 2,
-    "partial_labeled_region_count": 3,
-    "unknown_region_count": 4,
+    "partial_labeled_region_count": 4,
+    "unknown_region_count": 5,
     "negative_region_count": 5,
     "dynamic_boundary_case_count": 2,
     "unsupported_construct_case_count": 2,
     "real_project_file_count": 0,
     "generated_fixture_count": 0,
-    "hand_labeled_fixture_count": 6
+    "hand_labeled_fixture_count": 7
   },
   "families": [
     {
@@ -76,6 +76,17 @@
       "unsupported_construct_case_count": 0
     },
     {
+      "family": "recovery",
+      "fixture_count": 1,
+      "label_modes": [
+        "partial"
+      ],
+      "scored_line_count": 3,
+      "scored_symbol_count": 1,
+      "dynamic_boundary_case_count": 0,
+      "unsupported_construct_case_count": 0
+    },
+    {
       "family": "typeglob_alias",
       "fixture_count": 1,
       "label_modes": [
@@ -91,8 +102,8 @@
     {
       "state": "measured",
       "metric": "denominator_fixture_count",
-      "value": 6.0,
-      "sample_count": 6,
+      "value": 7.0,
+      "sample_count": 7,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
@@ -100,8 +111,8 @@
     {
       "state": "measured",
       "metric": "line_construct_true_positive_count",
-      "value": 8.0,
-      "sample_count": 7,
+      "value": 9.0,
+      "sample_count": 10,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
@@ -109,8 +120,8 @@
     {
       "state": "measured",
       "metric": "line_construct_false_positive_count",
-      "value": 0.0,
-      "sample_count": 7,
+      "value": 2.0,
+      "sample_count": 10,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
@@ -118,8 +129,8 @@
     {
       "state": "measured",
       "metric": "line_construct_false_negative_count",
-      "value": 0.0,
-      "sample_count": 7,
+      "value": 2.0,
+      "sample_count": 10,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
@@ -127,8 +138,8 @@
     {
       "state": "measured",
       "metric": "line_construct_exact_match_rate",
-      "value": 1.0,
-      "sample_count": 7,
+      "value": 0.8,
+      "sample_count": 10,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
@@ -136,8 +147,8 @@
     {
       "state": "measured",
       "metric": "line_construct_precision",
-      "value": 1.0,
-      "sample_count": 8,
+      "value": 0.8181818181818182,
+      "sample_count": 11,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
@@ -145,8 +156,8 @@
     {
       "state": "measured",
       "metric": "line_construct_recall",
-      "value": 1.0,
-      "sample_count": 8,
+      "value": 0.8181818181818182,
+      "sample_count": 11,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
@@ -154,8 +165,8 @@
     {
       "state": "measured",
       "metric": "line_construct_f1",
-      "value": 1.0,
-      "sample_count": 8,
+      "value": 0.8181818181818182,
+      "sample_count": 11,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
@@ -164,17 +175,19 @@
       "state": "measured",
       "metric": "line_error_false_positive_rate",
       "value": 0.0,
-      "sample_count": 7,
+      "sample_count": 10,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
     },
     {
-      "state": "insufficient_data",
+      "state": "measured",
       "metric": "line_error_false_negative_rate",
-      "reason": "no expected parse-error line labels are available",
-      "sample_count": 0,
-      "confidence": "low"
+      "value": 1.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
     },
     {
       "state": "measured",
@@ -511,7 +524,7 @@
       "state": "measured",
       "metric": "false_parse_error_count",
       "value": 0.0,
-      "sample_count": 7,
+      "sample_count": 10,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
@@ -578,6 +591,96 @@
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "recovery_first_error_line_accuracy",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "recovery_error_region_precision",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "recovery_error_region_recall",
+      "value": 0.0,
+      "sample_count": 2,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "recovery_spillover_mean_lines",
+      "value": 6.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "recovery_spillover_p95_lines",
+      "value": 6.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "recovery_spillover_max_lines",
+      "value": 6.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "recovery_salvaged_lines_after_error",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "recovery_salvaged_symbols_after_error",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "recovery_post_error_symbol_recall",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "recovery_post_error_line_f1",
+      "value": 0.0,
+      "sample_count": 1,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
     }
   ],
   "failure_packets": [],
@@ -593,10 +696,10 @@
     "dynamic_expectation_change_count": 0
   },
   "metric_runtime": {
-    "runtime_ms": 33.2847,
+    "runtime_ms": 29.534100000000002,
     "timeout_count": 0,
     "flake_count": 0,
-    "artifact_size_bytes": 14925,
+    "artifact_size_bytes": 17409,
     "ci_runner_failure_count": 0,
     "orphan_process_count": 0,
     "cache_hit_rate": null
