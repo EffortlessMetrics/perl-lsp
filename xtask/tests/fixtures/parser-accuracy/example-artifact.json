@@ -5,32 +5,21 @@
   "commit": "example",
   "cadence": "pr",
   "denominator": {
-    "fixture_count": 2,
-    "fixture_family_count": 2,
-    "scored_line_count": 5,
-    "scored_symbol_count": 2,
-    "fully_labeled_region_count": 1,
+    "fixture_count": 3,
+    "fixture_family_count": 3,
+    "scored_line_count": 7,
+    "scored_symbol_count": 4,
+    "fully_labeled_region_count": 2,
     "partial_labeled_region_count": 1,
     "unknown_region_count": 1,
-    "negative_region_count": 1,
+    "negative_region_count": 2,
     "dynamic_boundary_case_count": 1,
     "unsupported_construct_case_count": 0,
     "real_project_file_count": 0,
     "generated_fixture_count": 0,
-    "hand_labeled_fixture_count": 2
+    "hand_labeled_fixture_count": 3
   },
   "families": [
-    {
-      "family": "packages",
-      "fixture_count": 1,
-      "label_modes": [
-        "full"
-      ],
-      "scored_line_count": 2,
-      "scored_symbol_count": 1,
-      "dynamic_boundary_case_count": 0,
-      "unsupported_construct_case_count": 0
-    },
     {
       "family": "dynamic_require",
       "fixture_count": 1,
@@ -41,123 +30,235 @@
       "scored_symbol_count": 1,
       "dynamic_boundary_case_count": 1,
       "unsupported_construct_case_count": 0
+    },
+    {
+      "family": "operators",
+      "fixture_count": 1,
+      "label_modes": [
+        "full"
+      ],
+      "scored_line_count": 2,
+      "scored_symbol_count": 2,
+      "dynamic_boundary_case_count": 0,
+      "unsupported_construct_case_count": 0
+    },
+    {
+      "family": "packages",
+      "fixture_count": 1,
+      "label_modes": [
+        "full"
+      ],
+      "scored_line_count": 2,
+      "scored_symbol_count": 1,
+      "dynamic_boundary_case_count": 0,
+      "unsupported_construct_case_count": 0
     }
   ],
   "metrics": [
     {
+      "state": "measured",
       "metric": "denominator_fixture_count",
-      "state": "measured",
-      "value": 2,
-      "sample_count": 2,
+      "value": 3.0,
+      "sample_count": 3,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
     },
     {
-      "metric": "line_construct_f1",
       "state": "measured",
-      "value": 1,
-      "sample_count": 6,
-      "direction": "neutral",
-      "confidence": "high",
-      "cadence": "pr"
-    },
-    {
       "metric": "line_construct_true_positive_count",
-      "state": "measured",
-      "value": 6,
-      "sample_count": 5,
+      "value": 8.0,
+      "sample_count": 7,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
     },
     {
+      "state": "measured",
       "metric": "line_construct_false_positive_count",
-      "state": "measured",
-      "value": 0,
-      "sample_count": 5,
+      "value": 0.0,
+      "sample_count": 7,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
     },
     {
+      "state": "measured",
       "metric": "line_construct_false_negative_count",
-      "state": "measured",
-      "value": 0,
-      "sample_count": 5,
+      "value": 0.0,
+      "sample_count": 7,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
     },
     {
+      "state": "measured",
       "metric": "line_construct_exact_match_rate",
-      "state": "measured",
-      "value": 1,
-      "sample_count": 5,
+      "value": 1.0,
+      "sample_count": 7,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
     },
     {
+      "state": "measured",
       "metric": "line_construct_precision",
-      "state": "measured",
-      "value": 1,
-      "sample_count": 6,
+      "value": 1.0,
+      "sample_count": 8,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
     },
     {
+      "state": "measured",
       "metric": "line_construct_recall",
-      "state": "measured",
-      "value": 1,
-      "sample_count": 6,
+      "value": 1.0,
+      "sample_count": 8,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
     },
     {
+      "state": "measured",
+      "metric": "line_construct_f1",
+      "value": 1.0,
+      "sample_count": 8,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
       "metric": "line_error_false_positive_rate",
-      "state": "measured",
-      "value": 0,
-      "sample_count": 5,
+      "value": 0.0,
+      "sample_count": 7,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
     },
     {
-      "metric": "line_error_false_negative_rate",
       "state": "insufficient_data",
+      "metric": "line_error_false_negative_rate",
       "reason": "no expected parse-error line labels are available",
       "sample_count": 0,
       "confidence": "low"
     },
     {
-      "metric": "line_dynamic_boundary_correct_rate",
       "state": "measured",
-      "value": 1,
+      "metric": "line_dynamic_boundary_correct_rate",
+      "value": 1.0,
       "sample_count": 1,
       "direction": "neutral",
       "confidence": "high",
       "cadence": "pr"
     },
     {
-      "metric": "line_unsupported_detection_rate",
       "state": "insufficient_data",
+      "metric": "line_unsupported_detection_rate",
       "reason": "no expected unsupported-construct line labels are available",
       "sample_count": 0,
       "confidence": "low"
     },
     {
+      "state": "measured",
+      "metric": "ast_node_kind_precision",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "ast_node_kind_recall",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
       "metric": "ast_node_kind_f1",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "ast_node_span_exact_rate",
+      "value": 0.4444444444444444,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "ast_node_span_near_rate",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "ast_parent_child_edge_accuracy",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "ast_tree_depth_accuracy",
+      "value": 1.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "ast_operator_precedence_accuracy",
+      "value": 1.0,
+      "sample_count": 2,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
       "state": "insufficient_data",
-      "reason": "AST structural gold scorer is not wired yet",
+      "metric": "ast_delimiter_pairing_accuracy",
+      "reason": "no expected AST delimiter-pairing labels are available",
       "sample_count": 0,
       "confidence": "low"
     },
     {
-      "metric": "symbol_decl_f1",
+      "state": "measured",
+      "metric": "ast_unexpected_error_node_count",
+      "value": 0.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "ast_missing_expected_node_count",
+      "value": 0.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
       "state": "insufficient_data",
+      "metric": "symbol_decl_f1",
       "reason": "symbol gold scorer is not wired yet",
       "sample_count": 0,
       "confidence": "low"
@@ -179,7 +280,7 @@
     "runtime_ms": 1,
     "timeout_count": 0,
     "flake_count": 0,
-    "artifact_size_bytes": 2048,
+    "artifact_size_bytes": 4096,
     "ci_runner_failure_count": 0,
     "orphan_process_count": 0,
     "cache_hit_rate": null

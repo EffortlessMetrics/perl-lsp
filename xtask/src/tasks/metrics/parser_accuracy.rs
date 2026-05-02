@@ -43,6 +43,8 @@ struct FixtureMetadata {
     generated: bool,
     #[serde(default)]
     line_expectations: Vec<LineExpectation>,
+    #[serde(default)]
+    ast_expectations: Vec<AstExpectation>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -58,6 +60,29 @@ enum LabelMode {
 struct LineExpectation {
     line: u64,
     expected_tags: BTreeSet<LineTag>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct AstExpectation {
+    id: String,
+    kind: String,
+    line: u64,
+    span_text: String,
+    parent_kind: Option<String>,
+    depth: Option<u64>,
+    operator: Option<String>,
+    parent_operator: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AstPrediction {
+    kind: String,
+    line: u64,
+    span_text: String,
+    parent_kind: Option<String>,
+    depth: u64,
+    operator: Option<String>,
+    parent_operator: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -255,6 +280,27 @@ struct LineScore {
     correct_unsupported_construct_count: u64,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct AstScore {
+    expected_node_count: u64,
+    predicted_node_count: u64,
+    node_kind_true_positive_count: u64,
+    node_kind_false_positive_count: u64,
+    node_kind_false_negative_count: u64,
+    span_exact_count: u64,
+    span_near_count: u64,
+    parent_child_expected_count: u64,
+    parent_child_correct_count: u64,
+    tree_depth_expected_count: u64,
+    tree_depth_correct_count: u64,
+    operator_precedence_expected_count: u64,
+    operator_precedence_correct_count: u64,
+    delimiter_pairing_expected_count: u64,
+    delimiter_pairing_correct_count: u64,
+    unexpected_error_node_count: u64,
+    missing_expected_node_count: u64,
+}
+
 /// Run `cargo xtask metrics parser-accuracy`.
 pub fn run(
     json: bool,
@@ -324,6 +370,7 @@ fn build_artifact(
     let families = summarize_families(manifest);
     let fixture_count = denominator.fixture_count as f64;
     let line_score = score_manifest_line_tags(root, manifest)?;
+    let ast_score = score_manifest_ast(root, manifest)?;
     let mut metrics = vec![MetricRow::Measured {
         metric: "denominator_fixture_count".to_string(),
         value: fixture_count,
@@ -333,10 +380,8 @@ fn build_artifact(
         cadence,
     }];
     metrics.extend(line_metrics(&line_score, cadence));
-    metrics.extend([
-        insufficient("ast_node_kind_f1", "AST structural gold scorer is not wired yet"),
-        insufficient("symbol_decl_f1", "symbol gold scorer is not wired yet"),
-    ]);
+    metrics.extend(ast_metrics(&ast_score, cadence));
+    metrics.extend([insufficient("symbol_decl_f1", "symbol gold scorer is not wired yet")]);
 
     Ok(ParserAccuracyArtifact {
         schema_version: 1,
@@ -652,6 +697,272 @@ fn line_metrics(score: &LineScore, cadence: Cadence) -> Vec<MetricRow> {
     rows
 }
 
+fn score_manifest_ast(root: &Path, manifest: &ParserAccuracyManifest) -> Result<AstScore> {
+    let mut score = AstScore::default();
+    for fixture in &manifest.fixtures {
+        if fixture.ast_expectations.is_empty() {
+            continue;
+        }
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy fixture source {}", source_path.display())
+        })?;
+        let expected_lines = fixture
+            .ast_expectations
+            .iter()
+            .map(|expectation| expectation.line)
+            .collect::<BTreeSet<_>>();
+        let predictions = extract_ast_predictions(&source)
+            .into_iter()
+            .filter(|prediction| expected_lines.contains(&prediction.line))
+            .collect::<Vec<_>>();
+        score_ast_expectations(&fixture.ast_expectations, &predictions, &mut score);
+    }
+    Ok(score)
+}
+
+fn extract_ast_predictions(source: &str) -> Vec<AstPrediction> {
+    let mut parser = Parser::new(source);
+    let output = parser.parse_with_recovery();
+    let line_starts = line_starts(source);
+    let mut predictions = Vec::new();
+    collect_ast_predictions(&output.ast, source, &line_starts, None, None, 0, &mut predictions);
+    predictions
+}
+
+fn collect_ast_predictions(
+    node: &Node,
+    source: &str,
+    line_starts: &[usize],
+    parent_kind: Option<&str>,
+    parent_operator: Option<&str>,
+    depth: u64,
+    predictions: &mut Vec<AstPrediction>,
+) {
+    let operator = node_operator(node);
+    if is_ast_scored_node(node) {
+        predictions.push(AstPrediction {
+            kind: node.kind.kind_name().to_string(),
+            line: line_for_offset(line_starts, node.location.start),
+            span_text: source
+                .get(node.location.start..node.location.end)
+                .unwrap_or_default()
+                .to_string(),
+            parent_kind: parent_kind.map(ToString::to_string),
+            depth,
+            operator: operator.map(ToString::to_string),
+            parent_operator: parent_operator.map(ToString::to_string),
+        });
+    }
+
+    let kind = node.kind.kind_name();
+    node.for_each_child(|child| {
+        collect_ast_predictions(
+            child,
+            source,
+            line_starts,
+            Some(kind),
+            operator,
+            depth + 1,
+            predictions,
+        );
+    });
+}
+
+fn is_ast_scored_node(node: &Node) -> bool {
+    matches!(
+        node.kind,
+        NodeKind::Package { .. }
+            | NodeKind::Subroutine { .. }
+            | NodeKind::Method { .. }
+            | NodeKind::VariableDeclaration { .. }
+            | NodeKind::VariableListDeclaration { .. }
+            | NodeKind::FunctionCall { .. }
+            | NodeKind::MethodCall { .. }
+            | NodeKind::Regex { .. }
+            | NodeKind::Match { .. }
+            | NodeKind::Substitution { .. }
+            | NodeKind::Transliteration { .. }
+            | NodeKind::Heredoc { .. }
+            | NodeKind::Format { .. }
+            | NodeKind::Binary { .. }
+            | NodeKind::Error { .. }
+            | NodeKind::UnknownRest
+    )
+}
+
+fn node_operator(node: &Node) -> Option<&str> {
+    match &node.kind {
+        NodeKind::Binary { op, .. } => Some(op.as_str()),
+        _ => None,
+    }
+}
+
+fn score_ast_expectations(
+    expectations: &[AstExpectation],
+    predictions: &[AstPrediction],
+    score: &mut AstScore,
+) {
+    score.expected_node_count += expectations.len() as u64;
+    score.predicted_node_count += predictions.len() as u64;
+    score.unexpected_error_node_count +=
+        predictions.iter().filter(|prediction| prediction.kind == "Error").count() as u64;
+
+    let mut matched = BTreeSet::new();
+    for expectation in expectations {
+        let prediction_index = predictions.iter().enumerate().find_map(|(index, prediction)| {
+            if matched.contains(&index) {
+                return None;
+            }
+            if prediction.kind == expectation.kind && prediction.line == expectation.line {
+                Some(index)
+            } else {
+                None
+            }
+        });
+
+        let Some(prediction_index) = prediction_index else {
+            score.node_kind_false_negative_count += 1;
+            score.missing_expected_node_count += 1;
+            continue;
+        };
+
+        matched.insert(prediction_index);
+        let prediction = &predictions[prediction_index];
+        score.node_kind_true_positive_count += 1;
+        if prediction.span_text == expectation.span_text {
+            score.span_exact_count += 1;
+        }
+        if prediction.line == expectation.line {
+            score.span_near_count += 1;
+        }
+        if let Some(parent_kind) = &expectation.parent_kind {
+            score.parent_child_expected_count += 1;
+            if prediction.parent_kind.as_ref() == Some(parent_kind) {
+                score.parent_child_correct_count += 1;
+            }
+        }
+        if let Some(depth) = expectation.depth {
+            score.tree_depth_expected_count += 1;
+            if prediction.depth == depth {
+                score.tree_depth_correct_count += 1;
+            }
+        }
+        if let Some(operator) = &expectation.operator {
+            score.operator_precedence_expected_count += 1;
+            if prediction.operator.as_ref() == Some(operator)
+                && prediction.parent_operator.as_ref() == expectation.parent_operator.as_ref()
+            {
+                score.operator_precedence_correct_count += 1;
+            }
+        }
+    }
+
+    score.node_kind_false_positive_count += predictions
+        .iter()
+        .enumerate()
+        .filter(|(index, prediction)| !matched.contains(index) && prediction.kind != "Error")
+        .count() as u64;
+}
+
+fn ast_metrics(score: &AstScore, cadence: Cadence) -> Vec<MetricRow> {
+    if score.expected_node_count == 0 {
+        return vec![insufficient("ast_node_kind_f1", "AST gold labels are not available")];
+    }
+
+    let precision_denominator =
+        score.node_kind_true_positive_count + score.node_kind_false_positive_count;
+    let recall_denominator =
+        score.node_kind_true_positive_count + score.node_kind_false_negative_count;
+    let precision = ratio(score.node_kind_true_positive_count, precision_denominator);
+    let recall = ratio(score.node_kind_true_positive_count, recall_denominator);
+    let f1 = match (precision, recall) {
+        (Some(precision), Some(recall)) if precision + recall > 0.0 => {
+            Some(2.0 * precision * recall / (precision + recall))
+        }
+        _ => None,
+    };
+
+    vec![
+        optional_measured_rate(
+            "ast_node_kind_precision",
+            precision,
+            precision_denominator,
+            "no predicted AST nodes were available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "ast_node_kind_recall",
+            recall,
+            recall_denominator,
+            "no expected AST nodes were available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "ast_node_kind_f1",
+            f1,
+            recall_denominator,
+            "AST precision or recall denominator is unavailable",
+            cadence,
+        ),
+        measured_rate(
+            "ast_node_span_exact_rate",
+            score.span_exact_count,
+            score.expected_node_count,
+            cadence,
+        ),
+        measured_rate(
+            "ast_node_span_near_rate",
+            score.span_near_count,
+            score.expected_node_count,
+            cadence,
+        ),
+        optional_measured_rate(
+            "ast_parent_child_edge_accuracy",
+            ratio(score.parent_child_correct_count, score.parent_child_expected_count),
+            score.parent_child_expected_count,
+            "no expected AST parent-child edges are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "ast_tree_depth_accuracy",
+            ratio(score.tree_depth_correct_count, score.tree_depth_expected_count),
+            score.tree_depth_expected_count,
+            "no expected AST tree-depth labels are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "ast_operator_precedence_accuracy",
+            ratio(
+                score.operator_precedence_correct_count,
+                score.operator_precedence_expected_count,
+            ),
+            score.operator_precedence_expected_count,
+            "no expected AST operator-precedence labels are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "ast_delimiter_pairing_accuracy",
+            ratio(score.delimiter_pairing_correct_count, score.delimiter_pairing_expected_count),
+            score.delimiter_pairing_expected_count,
+            "no expected AST delimiter-pairing labels are available",
+            cadence,
+        ),
+        measured_count(
+            "ast_unexpected_error_node_count",
+            score.unexpected_error_node_count,
+            score.expected_node_count,
+            cadence,
+        ),
+        measured_count(
+            "ast_missing_expected_node_count",
+            score.missing_expected_node_count,
+            score.expected_node_count,
+            cadence,
+        ),
+    ]
+}
+
 fn measured_count(metric: &str, value: u64, sample_count: u64, cadence: Cadence) -> MetricRow {
     MetricRow::Measured {
         metric: metric.to_string(),
@@ -831,6 +1142,28 @@ mod tests {
                         LineExpectation { line: 1, expected_tags: tags(&[LineTag::PackageDecl]) },
                         LineExpectation { line: 3, expected_tags: tags(&[LineTag::SubDecl]) },
                     ],
+                    ast_expectations: vec![
+                        AstExpectation {
+                            id: "package_basic_package".to_string(),
+                            kind: "Package".to_string(),
+                            line: 1,
+                            span_text: "package Accuracy::Basic;".to_string(),
+                            parent_kind: Some("Program".to_string()),
+                            depth: Some(1),
+                            operator: None,
+                            parent_operator: None,
+                        },
+                        AstExpectation {
+                            id: "package_basic_subroutine".to_string(),
+                            kind: "Subroutine".to_string(),
+                            line: 3,
+                            span_text: "sub answer { 42 }".to_string(),
+                            parent_kind: Some("Program".to_string()),
+                            depth: Some(1),
+                            operator: None,
+                            parent_operator: None,
+                        },
+                    ],
                 },
                 FixtureMetadata {
                     id: "dynamic_require_boundary".to_string(),
@@ -853,6 +1186,38 @@ mod tests {
                         LineExpectation {
                             line: 4,
                             expected_tags: tags(&[LineTag::Import, LineTag::DynamicBoundary]),
+                        },
+                    ],
+                    ast_expectations: vec![
+                        AstExpectation {
+                            id: "dynamic_require_package".to_string(),
+                            kind: "Package".to_string(),
+                            line: 1,
+                            span_text: "package Accuracy::DynamicRequire;".to_string(),
+                            parent_kind: Some("Program".to_string()),
+                            depth: Some(1),
+                            operator: None,
+                            parent_operator: None,
+                        },
+                        AstExpectation {
+                            id: "dynamic_require_variable".to_string(),
+                            kind: "VariableDeclaration".to_string(),
+                            line: 3,
+                            span_text: "my $module = \"Accuracy::Plugin\"".to_string(),
+                            parent_kind: Some("Program".to_string()),
+                            depth: Some(1),
+                            operator: None,
+                            parent_operator: None,
+                        },
+                        AstExpectation {
+                            id: "dynamic_require_call".to_string(),
+                            kind: "FunctionCall".to_string(),
+                            line: 4,
+                            span_text: "require $module".to_string(),
+                            parent_kind: Some("ExpressionStatement".to_string()),
+                            depth: Some(2),
+                            operator: None,
+                            parent_operator: None,
                         },
                     ],
                 },
@@ -937,8 +1302,82 @@ mod tests {
     }
 
     #[test]
-    fn artifact_uses_measured_line_scores_and_insufficient_data_for_unwired_scorers() -> Result<()>
-    {
+    fn ast_scorer_counts_wrong_parent_child_edge() {
+        let expectations = vec![AstExpectation {
+            id: "sub_wrong_parent".to_string(),
+            kind: "Subroutine".to_string(),
+            line: 1,
+            span_text: "sub answer { 42 }".to_string(),
+            parent_kind: Some("Block".to_string()),
+            depth: Some(1),
+            operator: None,
+            parent_operator: None,
+        }];
+        let predictions = vec![AstPrediction {
+            kind: "Subroutine".to_string(),
+            line: 1,
+            span_text: "sub answer { 42 }".to_string(),
+            parent_kind: Some("Program".to_string()),
+            depth: 1,
+            operator: None,
+            parent_operator: None,
+        }];
+        let mut score = AstScore::default();
+
+        score_ast_expectations(&expectations, &predictions, &mut score);
+
+        assert_eq!(score.node_kind_true_positive_count, 1);
+        assert_eq!(score.parent_child_expected_count, 1);
+        assert_eq!(score.parent_child_correct_count, 0);
+    }
+
+    #[test]
+    fn ast_metrics_emit_measured_scores_and_insufficient_missing_denominators() {
+        let mut score = AstScore::default();
+        score_ast_expectations(
+            &[AstExpectation {
+                id: "binary_precedence".to_string(),
+                kind: "Binary".to_string(),
+                line: 1,
+                span_text: "2 * 3".to_string(),
+                parent_kind: Some("Binary".to_string()),
+                depth: Some(3),
+                operator: Some("*".to_string()),
+                parent_operator: Some("+".to_string()),
+            }],
+            &[AstPrediction {
+                kind: "Binary".to_string(),
+                line: 1,
+                span_text: "2 * 3".to_string(),
+                parent_kind: Some("Binary".to_string()),
+                depth: 3,
+                operator: Some("*".to_string()),
+                parent_operator: Some("+".to_string()),
+            }],
+            &mut score,
+        );
+
+        let metrics = ast_metrics(&score, Cadence::Pr);
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "ast_operator_precedence_accuracy"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "ast_delimiter_pairing_accuracy"
+            )
+        }));
+    }
+
+    #[test]
+    fn artifact_uses_measured_line_and_ast_scores_with_symbol_insufficient_data() -> Result<()> {
         let tmp = tempfile::tempdir()?;
         write_fixture_sources(tmp.path())?;
         let artifact = build_artifact(tmp.path(), &fixture_manifest(), Cadence::Pr)?;
@@ -954,8 +1393,16 @@ mod tests {
         assert!(artifact.metrics.iter().any(|metric| {
             matches!(
                 metric,
-                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                MetricRow::Measured { metric, sample_count, .. }
                     if metric == "ast_node_kind_f1"
+                        && *sample_count > 0
+            )
+        }));
+        assert!(artifact.metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "symbol_decl_f1"
             )
         }));
         Ok(())

@@ -43,10 +43,10 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
     - Emit TP/FP/FN, exact match rate, precision, recall, F1, error false positive rate, error false negative rate, dynamic boundary correct rate, and unsupported detection rate
     - _Verify: unit tests with at least one false positive and one false negative_
 
-- [ ] 5. Add AST structural scoring
-  - [ ] 5.1 Define AST gold fixture expectations
+- [x] 5. Add AST structural scoring
+  - [x] 5.1 Define AST gold fixture expectations
     - Track node kind, span, parent-child edge, and operator-precedence expectations
-  - [ ] 5.2 Implement AST scorer
+  - [x] 5.2 Implement AST scorer
     - Emit node-kind precision/recall/F1, span exact/near rates, parent-child edge accuracy, tree depth accuracy, operator precedence accuracy, delimiter pairing accuracy, unexpected error node count, and missing expected node count
     - _Verify: fixture with correct line tag but wrong parent-child edge fails AST score_
 

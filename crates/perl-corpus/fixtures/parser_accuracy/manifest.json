@@ -29,6 +29,28 @@
             "sub_decl"
           ]
         }
+      ],
+      "ast_expectations": [
+        {
+          "id": "package_basic_package",
+          "kind": "Package",
+          "line": 1,
+          "span_text": "package Accuracy::Basic;",
+          "parent_kind": "Program",
+          "depth": 1,
+          "operator": null,
+          "parent_operator": null
+        },
+        {
+          "id": "package_basic_subroutine",
+          "kind": "Subroutine",
+          "line": 3,
+          "span_text": "sub answer { 42 }",
+          "parent_kind": "Program",
+          "depth": 1,
+          "operator": null,
+          "parent_operator": null
+        }
       ]
     },
     {
@@ -65,6 +87,110 @@
             "import",
             "dynamic_boundary"
           ]
+        }
+      ],
+      "ast_expectations": [
+        {
+          "id": "dynamic_require_package",
+          "kind": "Package",
+          "line": 1,
+          "span_text": "package Accuracy::DynamicRequire;",
+          "parent_kind": "Program",
+          "depth": 1,
+          "operator": null,
+          "parent_operator": null
+        },
+        {
+          "id": "dynamic_require_variable",
+          "kind": "VariableDeclaration",
+          "line": 3,
+          "span_text": "my $module = \"Accuracy::Plugin\"",
+          "parent_kind": "Program",
+          "depth": 1,
+          "operator": null,
+          "parent_operator": null
+        },
+        {
+          "id": "dynamic_require_call",
+          "kind": "FunctionCall",
+          "line": 4,
+          "span_text": "require $module",
+          "parent_kind": "ExpressionStatement",
+          "depth": 2,
+          "operator": null,
+          "parent_operator": null
+        }
+      ]
+    },
+    {
+      "id": "operator_precedence",
+      "family": "operators",
+      "label_mode": "full",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/operator_precedence.pl",
+      "scored_lines": 2,
+      "scored_symbols": 2,
+      "fully_labeled_regions": 1,
+      "partial_labeled_regions": 0,
+      "unknown_regions": 0,
+      "negative_regions": 1,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "variable_decl"
+          ]
+        }
+      ],
+      "ast_expectations": [
+        {
+          "id": "operator_package",
+          "kind": "Package",
+          "line": 1,
+          "span_text": "package Accuracy::Operators;",
+          "parent_kind": "Program",
+          "depth": 1,
+          "operator": null,
+          "parent_operator": null
+        },
+        {
+          "id": "operator_variable",
+          "kind": "VariableDeclaration",
+          "line": 3,
+          "span_text": "my $value = 1 + 2 * 3",
+          "parent_kind": "Program",
+          "depth": 1,
+          "operator": null,
+          "parent_operator": null
+        },
+        {
+          "id": "operator_addition",
+          "kind": "Binary",
+          "line": 3,
+          "span_text": "1 + 2 * 3",
+          "parent_kind": "VariableDeclaration",
+          "depth": 2,
+          "operator": "+",
+          "parent_operator": null
+        },
+        {
+          "id": "operator_multiplication",
+          "kind": "Binary",
+          "line": 3,
+          "span_text": "2 * 3",
+          "parent_kind": "Binary",
+          "depth": 3,
+          "operator": "*",
+          "parent_operator": "+"
         }
       ]
     }
