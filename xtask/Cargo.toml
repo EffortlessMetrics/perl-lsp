@@ -31,6 +31,7 @@ perl-parser = { workspace = true }
 perl-corpus = { workspace = true }
 perl-lsp-ux-tests = { workspace = true }
 perl-parser-pest = { workspace = true, optional = true }
+perl-ci-hygiene = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-perl-c = { path = "../crates/tree-sitter-perl-c", optional = true }
 regex.workspace = true

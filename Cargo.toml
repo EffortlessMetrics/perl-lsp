@@ -247,6 +247,7 @@ perl-uri = { path = "crates/perl-uri", version = "0.13.1" }
 # Wave D absorbed: perl-path-normalize → perl-parser-core::path_normalize
 # Wave D absorbed: perl-path-security → perl-parser-core::path_security
 perl-lsp-rs-core = { path = "crates/perl-lsp-rs-core", version = "0.13.1" }
+perl-ci-hygiene = { path = "crates/perl-ci-hygiene", version = "0.13.1" }
 perl-pod = { path = "crates/perl-pod", version = "0.13.1" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.13.1" }
 perl-dap = { path = "crates/perl-dap", version = "0.13.1" }
