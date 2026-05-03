@@ -737,7 +737,12 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
             }
 
             // Find the anchor that owns this occurrence.
-            let anchor = shard.anchors.iter().find(|a| a.id == occurrence.anchor_id)?;
+            // Use `continue` rather than `?` so a missing anchor for one
+            // occurrence does not short-circuit the search for others.
+            let anchor = match shard.anchors.iter().find(|a| a.id == occurrence.anchor_id) {
+                Some(a) => a,
+                None => continue,
+            };
 
             // Check whether the anchor's span covers the query byte offset.
             if anchor.span_start_byte > byte_offset || byte_offset >= anchor.span_end_byte {
