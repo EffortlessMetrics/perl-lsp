@@ -1642,6 +1642,7 @@ dependencies = [
  "perl-parser-core",
  "perl-pod",
  "perl-position-tracking",
+ "perl-semantic-facts",
  "perl-subprocess-runtime",
  "perl-symbol",
  "perl-tdd-support",

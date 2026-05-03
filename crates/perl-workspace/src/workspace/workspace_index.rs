@@ -1719,6 +1719,18 @@ impl WorkspaceIndex {
             canonical_shard
         };
 
+        // Extract import specs from the AST — populates ImportExportIndex so
+        // that `Foo->import(@names)` dynamic-import suppression is live in
+        // production.  This runs outside the write lock to avoid holding it
+        // longer than necessary.
+        //
+        // Lock ordering note: `semantic_import_export_index` is acquired write
+        // separately from (and after) `files`/`symbols`/`global_references` to
+        // match the consistent lock-order used throughout this file.
+        let file_id = Self::hash_uri_to_file_id(&uri_str);
+        let import_specs =
+            crate::semantic::workspace_import_extractor::extract_import_specs(&ast, file_id);
+
         // Update the index, refresh the global symbol cache, and replace this file's
         // contribution in the global reference index.
         {
@@ -1752,6 +1764,16 @@ impl WorkspaceIndex {
                 }
             }
             self.replace_fact_shard_incremental(&key, fact_shard);
+        }
+
+        // Update the import/export index with the freshly extracted import specs.
+        // Stale entries for this URI are removed first (incremental re-indexing).
+        // This is done after the main write lock block to follow the established
+        // lock ordering (shards → reference_index → import_export_index).
+        {
+            let mut ie_idx = self.semantic_import_export_index.write();
+            ie_idx.remove_file_imports(&uri_str);
+            ie_idx.add_file_imports(&uri_str, file_id, import_specs);
         }
 
         Ok(())

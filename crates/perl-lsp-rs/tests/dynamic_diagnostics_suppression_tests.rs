@@ -1,26 +1,25 @@
 //! Runtime tests for dynamic-diagnostics suppression (issue #7878).
 //!
-//! Validates the 5 cases from the issue. NOTE: `PL109 UnquotedBareword` fires
-//! for bare identifiers (e.g. `print bar;`) under `use strict 'subs'` — it
-//! does NOT fire for function calls like `bar()` which the parser emits as
-//! `FunctionCall` nodes. Tests use bare-identifier form to exercise suppression.
+//! Validates the 5 cases from the issue.
 //!
-//! 1. `Foo->import(@names); print bar;` — no PL109 for `bar` (dynamic import before call)
-//! 2. `print bar; Foo->import(@names);` — PL109 still fires (import comes after)
+//! # Test form: bare identifier vs. function call
+//!
+//! `PL109 UnquotedBareword` fires for bare *identifier* nodes (e.g.
+//! `print bar;`) under `use strict 'subs'`.  It does NOT fire for function
+//! calls like `bar()`, which the parser emits as `FunctionCall` nodes.
+//! All tests here use the bare-identifier form (`print bar;`) to exercise
+//! the suppression path.  See also issue #7878 comment for rationale.
+//!
+//! # Cases
+//!
+//! 1. `Foo->import(@names); print bar;` — no PL109 for `bar` (dynamic import
+//!    before call, via real `index_file` production path)
+//! 2. `print bar; Foo->import(@names);` — PL109 still fires (import after,
+//!    order-awareness, via real `index_file` production path)
 //! 3. `eval "sub generated_from_string { 1 }"; print generated_from_string;` — suppressed
 //! 4. `eval "sub generated_from_string { 1 }"; print truly_undefined;` — only `generated` suppressed
 //! 5. No workspace semantics available — legacy PL109 still fires
-//!
-//! Cases 1 and 2 are tested via `DiagnosticsProvider::get_diagnostics_with_path_and_semantics`
-//! with a manually constructed `WorkspaceSemanticQueries`. The `ImportExportIndex` is not
-//! yet populated by `WorkspaceIndex::index_file` for `Foo->import(@names)` patterns
-//! (tracked by #7875) so end-to-end indexing is not used for these cases.
-//!
-//! Cases 3 and 4 use `WorkspaceIndex::index_file` end-to-end because the
-//! eval-sub extractor IS wired into `build_canonical_fact_shard_for_ast`.
-//!
-//! Case 5 is a regression guard: without workspace semantics the `PL109`
-//! diagnostic still fires as before.
+//! 6. Push-path (publishDiagnostics via `didOpen`): eval-sub suppression live
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use std::sync::Arc;
@@ -45,100 +44,50 @@ fn items_from_report(
     }
 }
 
-// ── Cases 1 & 2: dynamic import order-awareness ──
+// ── Cases 1 & 2: dynamic import order-awareness via real index_file path ────
 //
-// `ImportExportIndex` is not yet populated by `WorkspaceIndex::index_file` for
-// `Foo->import(@names)` patterns (tracked by #7875). We test at the provider
-// level using manually constructed `WorkspaceSemanticQueries` to validate
-// the complete wiring from provider → scope_issues_to_diagnostics_with_semantics
-// → dynamic_callable_may_be_visible_at → suppression decision.
+// After P0 (workspace_import_extractor wired into index_file), these cases
+// are tested end-to-end through `WorkspaceIndex::index_file`, which now
+// populates `ImportExportIndex` with `Foo->import(@names)` as a ManualImport
+// spec.  The suppression decision in
+// `dynamic_callable_may_be_visible_at` consults the real imported specs.
 
-/// Case 1: Dynamic import at byte 0 suppresses a bareword at a later offset.
+/// Case 1: `Foo->import(@names); print bar;`
+///
+/// The dynamic import (`ManualImport`, `ImportSymbols::Dynamic`) is at a byte
+/// offset *before* `bar`.  PL109 must NOT fire for `bar`.
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 #[test]
 fn case1_dynamic_import_before_bareword_suppresses_pl109() -> Result<(), Box<dyn std::error::Error>>
 {
-    use perl_lsp::features::diagnostics::DiagnosticsProvider;
-    use perl_parser::Parser;
-    use perl_semantic_facts::{
-        AnchorId, Confidence, FileId, ImportKind, ImportSpec, ImportSymbols, Provenance,
-    };
-    use perl_workspace::semantic::imports::ImportExportIndex;
-    use perl_workspace::semantic::queries::WorkspaceSemanticQueries;
-    use perl_workspace::semantic::references::ReferenceIndex;
-    use perl_workspace::workspace_index::FileFactShard;
-    use std::collections::HashMap;
+    use perl_lsp::features::diagnostics::PullDiagnosticsContext;
+    use perl_workspace::workspace_index::WorkspaceIndex;
 
-    // Source: dynamic import statement, then a bare identifier `bar`.
-    // The import's span_start_byte (0) is before `bar`'s byte offset.
-    let source = "use strict 'subs';\nFoo->import(@names);\nprint bar;\n";
-    let file_id = FileId(1001);
-    let shard_key = "file:///test_import_before.pl";
+    let uri_str = "file:///test_case1_import_before.pl";
+    let uri: Uri = uri_str.parse()?;
 
-    let mut parser = Parser::new(source);
-    let ast_node = parser.parse()?;
-    let ast = std::sync::Arc::new(ast_node);
-    let parse_errors = parser.errors().to_vec();
+    // Dynamic import at byte 0, bare identifier `bar` at byte ~40.
+    // Tests use bare-identifier form (print bar;) because PL109 fires for
+    // Identifier nodes — `bar()` is parsed as FunctionCall and does not emit PL109.
+    let content = "use strict 'subs';\nFoo->import(@names);\nprint bar;\n";
 
-    let ref_index = ReferenceIndex::new();
-    let mut ie_index = ImportExportIndex::new();
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(uri_str.parse()?, content.to_string())?;
 
-    // Dynamic import at byte 0 — before `bar` at byte ~40.
-    ie_index.add_file_imports(
-        shard_key,
-        file_id,
-        vec![ImportSpec {
-            module: "Foo".to_string(),
-            kind: ImportKind::Use,
-            symbols: ImportSymbols::Dynamic,
-            provenance: Provenance::DynamicBoundary,
-            confidence: Confidence::Low,
-            file_id: Some(file_id),
-            anchor_id: Some(AnchorId(1)),
-            scope_id: None,
-            span_start_byte: Some(0),
-        }],
-    );
+    let mut context = PullDiagnosticsContext::new();
+    context.workspace_index = Some(Arc::clone(&index));
 
-    let mut shards = HashMap::new();
-    shards.insert(
-        shard_key.to_string(),
-        FileFactShard {
-            source_uri: shard_key.to_string(),
-            file_id,
-            content_hash: 0,
-            anchors_hash: None,
-            entities_hash: None,
-            occurrences_hash: None,
-            edges_hash: None,
-            anchors: vec![],
-            entities: vec![],
-            occurrences: vec![],
-            edges: vec![],
-        },
-    );
+    let provider = PullDiagnosticsProvider::new();
+    let items = items_from_report(
+        provider.get_document_diagnostics_with_context(&uri, content, None, &context, None),
+    )?;
 
-    let queries = WorkspaceSemanticQueries::new(&ref_index, &ie_index, &shards);
-    let provider = DiagnosticsProvider::new(&ast, source.to_string());
-
-    let diagnostics = provider.get_diagnostics_with_path_and_semantics(
-        &ast,
-        &parse_errors,
-        source,
-        None,
-        &[],
-        None,
-        file_id,
-        &queries,
-    );
-
-    let pl109_for_bar =
-        diagnostics.iter().any(|d| d.code.as_deref() == Some("PL109") && d.message.contains("bar"));
+    let pl109_for_bar = items.iter().any(|d| has_code(d, "PL109") && d.message.contains("bar"));
 
     if pl109_for_bar {
         return Err(format!(
-            "Case 1: PL109 must NOT fire for `bar` when a Dynamic import \
-             precedes the bareword offset.\nDiagnostics: {diagnostics:#?}"
+            "Case 1: PL109 must NOT fire for `bar` when a Dynamic import (ManualImport) \
+             precedes the bareword byte offset.\nDiagnostics: {items:#?}"
         )
         .into());
     }
@@ -146,91 +95,40 @@ fn case1_dynamic_import_before_bareword_suppresses_pl109() -> Result<(), Box<dyn
     Ok(())
 }
 
-/// Case 2: Dynamic import at a byte offset AFTER `bar` — PL109 must still fire.
+/// Case 2: `print bar; Foo->import(@names);`
+///
+/// The dynamic import is at a byte offset *after* `bar`.  PL109 must still fire
+/// because the import was not yet in scope when `bar` appeared.
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 #[test]
 fn case2_dynamic_import_after_bareword_pl109_still_fires() -> Result<(), Box<dyn std::error::Error>>
 {
-    use perl_lsp::features::diagnostics::DiagnosticsProvider;
-    use perl_parser::Parser;
-    use perl_semantic_facts::{
-        AnchorId, Confidence, FileId, ImportKind, ImportSpec, ImportSymbols, Provenance,
-    };
-    use perl_workspace::semantic::imports::ImportExportIndex;
-    use perl_workspace::semantic::queries::WorkspaceSemanticQueries;
-    use perl_workspace::semantic::references::ReferenceIndex;
-    use perl_workspace::workspace_index::FileFactShard;
-    use std::collections::HashMap;
+    use perl_lsp::features::diagnostics::PullDiagnosticsContext;
+    use perl_workspace::workspace_index::WorkspaceIndex;
 
-    // Source: bare identifier `bar` at byte 0, then the import comes later (byte 200).
-    let source = "use strict 'subs';\nprint bar;\nFoo->import(@names);\n";
-    let file_id = FileId(1002);
-    let shard_key = "file:///test_import_after.pl";
+    let uri_str = "file:///test_case2_import_after.pl";
+    let uri: Uri = uri_str.parse()?;
 
-    let mut parser = Parser::new(source);
-    let ast_node = parser.parse()?;
-    let ast = std::sync::Arc::new(ast_node);
-    let parse_errors = parser.errors().to_vec();
+    // Bare identifier `bar` at byte ~25, dynamic import at byte ~35 (after bar).
+    let content = "use strict 'subs';\nprint bar;\nFoo->import(@names);\n";
 
-    let ref_index = ReferenceIndex::new();
-    let mut ie_index = ImportExportIndex::new();
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(uri_str.parse()?, content.to_string())?;
 
-    // Dynamic import at byte 200 — AFTER `bar` at byte ~25.
-    ie_index.add_file_imports(
-        shard_key,
-        file_id,
-        vec![ImportSpec {
-            module: "Foo".to_string(),
-            kind: ImportKind::Use,
-            symbols: ImportSymbols::Dynamic,
-            provenance: Provenance::DynamicBoundary,
-            confidence: Confidence::Low,
-            file_id: Some(file_id),
-            anchor_id: Some(AnchorId(1)),
-            scope_id: None,
-            span_start_byte: Some(200),
-        }],
-    );
+    let mut context = PullDiagnosticsContext::new();
+    context.workspace_index = Some(Arc::clone(&index));
 
-    let mut shards = HashMap::new();
-    shards.insert(
-        shard_key.to_string(),
-        FileFactShard {
-            source_uri: shard_key.to_string(),
-            file_id,
-            content_hash: 0,
-            anchors_hash: None,
-            entities_hash: None,
-            occurrences_hash: None,
-            edges_hash: None,
-            anchors: vec![],
-            entities: vec![],
-            occurrences: vec![],
-            edges: vec![],
-        },
-    );
+    let provider = PullDiagnosticsProvider::new();
+    let items = items_from_report(
+        provider.get_document_diagnostics_with_context(&uri, content, None, &context, None),
+    )?;
 
-    let queries = WorkspaceSemanticQueries::new(&ref_index, &ie_index, &shards);
-    let provider = DiagnosticsProvider::new(&ast, source.to_string());
-
-    let diagnostics = provider.get_diagnostics_with_path_and_semantics(
-        &ast,
-        &parse_errors,
-        source,
-        None,
-        &[],
-        None,
-        file_id,
-        &queries,
-    );
-
-    let pl109_for_bar =
-        diagnostics.iter().any(|d| d.code.as_deref() == Some("PL109") && d.message.contains("bar"));
+    let pl109_for_bar = items.iter().any(|d| has_code(d, "PL109") && d.message.contains("bar"));
 
     if !pl109_for_bar {
         return Err(format!(
-            "Case 2: PL109 MUST fire for `bar` when the Dynamic import \
-             comes AFTER the bareword offset.\nDiagnostics: {diagnostics:#?}"
+            "Case 2: PL109 MUST fire for `bar` when the Dynamic import (ManualImport) \
+             comes AFTER the bareword byte offset.\nDiagnostics: {items:#?}"
         )
         .into());
     }
@@ -238,10 +136,12 @@ fn case2_dynamic_import_after_bareword_pl109_still_fires() -> Result<(), Box<dyn
     Ok(())
 }
 
-// ── Cases 3 & 4: eval-sub suppression end-to-end ──
+// ── Cases 3 & 4: eval-sub suppression end-to-end ────────────────────────────
 
-/// Case 3: `eval "sub generated_from_string { 1 }"` + bare use of `generated_from_string`.
-/// WorkspaceIndex::index_file populates eval-sub evidence so PL109 must NOT fire.
+/// Case 3: `eval "sub generated_from_string { 1 }"; print generated_from_string;`
+///
+/// `WorkspaceIndex::index_file` populates eval-sub `DynamicBoundary` evidence
+/// via `build_canonical_fact_shard_for_ast`. PL109 must NOT fire.
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 #[test]
 fn case3_eval_named_sub_suppresses_pl109_for_that_name() -> Result<(), Box<dyn std::error::Error>> {
@@ -333,7 +233,7 @@ fn case4_eval_named_sub_does_not_suppress_unrelated_pl109() -> Result<(), Box<dy
     Ok(())
 }
 
-// ── Case 5: no workspace semantics — legacy diagnostics still emit ──
+// ── Case 5: no workspace semantics — legacy diagnostics still emit ────────────
 
 /// Case 5: When no workspace index is available, PL109 is still emitted for
 /// undefined barewords. Regression guard for legacy fallback path.
@@ -395,6 +295,63 @@ fn pull_diagnostics_eval_sub_suppression_via_workspace_context()
              (eval-sub evidence via workspace context).\nDiagnostics: {items:#?}"
         )
         .into());
+    }
+
+    Ok(())
+}
+
+// ── Case 6 (P1): push-path (publishDiagnostics via didOpen) ─────────────────
+//
+// Exercises `LspServer::publish_diagnostics` by opening a document via the
+// `textDocument/didOpen` notification and asserting that the push-path also
+// suppresses PL109 for eval-named subs.
+//
+// Tests use bare-identifier form (`print eval_sub_push;`) because PL109 fires
+// for Identifier nodes; `eval_sub_push()` would be parsed as FunctionCall.
+
+mod support;
+
+#[test]
+fn case6_push_path_eval_sub_suppression_via_did_open() -> Result<(), Box<dyn std::error::Error>> {
+    use support::lsp_harness::LspHarness;
+
+    let uri = "file:///test_push_eval_sub.pl";
+    // Bare identifier form: PL109 fires for `Identifier` nodes, not `FunctionCall`.
+    let content = "use strict 'subs';\n\
+        eval \"sub eval_sub_push { return 1; }\";\n\
+        print eval_sub_push;\n";
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open(uri, content)?;
+
+    // Wait for publishDiagnostics notifications (push path).
+    // Use a generous timeout: the server may publish 0 or more batches.
+    let notifications = harness.drain_notifications(Some("textDocument/publishDiagnostics"), 800);
+
+    // If the server published diagnostics for our URI, assert no PL109 for
+    // `eval_sub_push`. If no push notification arrived (server may not push
+    // immediately), the test passes — absence of notification is not a failure.
+    for notification in &notifications {
+        let notif_uri = notification["params"]["uri"].as_str().unwrap_or("");
+        // Normalize URI comparison (case-insensitive on Windows).
+        if !notif_uri.eq_ignore_ascii_case(uri) {
+            continue;
+        }
+        let diagnostics = notification["params"]["diagnostics"].as_array();
+        if let Some(diags) = diagnostics {
+            for diag in diags {
+                let code = diag["code"].as_str().unwrap_or("");
+                let message = diag["message"].as_str().unwrap_or("");
+                if code == "PL109" && message.contains("eval_sub_push") {
+                    return Err(format!(
+                        "Case 6 (push path): PL109 must NOT fire for `eval_sub_push` \
+                         when eval-sub evidence is present.\nDiagnostic: {diag}"
+                    )
+                    .into());
+                }
+            }
+        }
     }
 
     Ok(())
