@@ -13,7 +13,7 @@ members = [
     "crates/perl-parser-pest",
     "crates/perl-semantic-analyzer",
     "crates/perl-semantic-facts",
-    "crates/perl-workspace-index",
+    "crates/perl-workspace",
     "crates/perl-refactoring",
     "crates/perl-incremental-parsing",
     "crates/perl-tdd-support",
@@ -288,7 +288,7 @@ perl-test-must = { path = "crates/perl-test-must", version = "0.13.2" }
 # (perl-lsp-selection-range absorbed into perl-lsp-rs-core::providers — Wave G1a)
 perl-diagnostics = { path = "crates/perl-diagnostics", version = "0.13.2" }
 # Tier 3: Two-level dependencies
-perl-workspace = { path = "crates/perl-workspace-index", version = "0.13.2" }
+perl-workspace = { path = "crates/perl-workspace", version = "0.13.2" }
 perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.13.2" }
 perl-refactoring = { path = "crates/perl-refactoring", version = "0.13.2" }
 

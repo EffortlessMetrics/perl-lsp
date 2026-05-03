@@ -27,7 +27,7 @@ cargo bench -p perl-parser               # Parser benchmarks
 | `perl-parser-core` | `engine`, `tokens`, `builtins`, `util`, `line_index` |
 | `perl-lexer` | direct (tokenization) |
 | `perl-semantic-analyzer` | `analysis` (scope, type inference, symbols, dead code) |
-| `perl-workspace-index` | `workspace` (cross-file indexing, document store, rename) |
+| `perl-workspace` | `workspace` (cross-file indexing, document store, rename) |
 | `perl-refactoring` | `refactor` (import optimizer, modernize, refactoring engine, workspace refactor) |
 | `perl-tdd-support` | `tdd` (test generator, test runner, TDD workflow) |
 | `perl-incremental-parsing` | `incremental` (feature-gated behind `incremental`) |
@@ -53,7 +53,7 @@ src/
   engine.rs       # Re-export from perl-parser-core::engine
   tokens.rs       # Re-export from perl-parser-core::tokens
   analysis.rs     # Re-export from perl-semantic-analyzer
-  workspace.rs    # Re-export from perl-workspace-index + perl-refactoring
+  workspace.rs    # Re-export from perl-workspace + perl-refactoring
   refactor.rs     # Re-export from perl-refactoring
   tdd.rs          # Re-export from perl-tdd-support
   builtins.rs     # Re-export from perl-parser-core::builtins
@@ -66,7 +66,7 @@ src/
 
 | Feature | Effect |
 |---------|--------|
-| `workspace` (default) | Enables cross-file indexing via `perl-workspace-index` |
+| `workspace` (default) | Enables cross-file indexing via `perl-workspace` |
 | `lsp-compat` (default) | Pulls in `lsp-types` and LSP compatibility shims |
 | `cli` | Builds the `perl-parse` binary |
 | `incremental` | Enables incremental parsing module |

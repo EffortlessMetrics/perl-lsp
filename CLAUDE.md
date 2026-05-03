@@ -246,7 +246,7 @@ cargo test --workspace --lib          # Run all tests
 | **perl-dap** | `crates/perl-dap/` | Debug Adapter Protocol |
 | **perl-lexer** | `crates/perl-lexer/` | Context-aware tokenizer |
 | **perl-parser-core** | `crates/perl-parser-core/` | Core parsing infrastructure |
-| **perl-workspace-index** | `crates/perl-workspace-index/` | Workspace symbol indexing |
+| **perl-workspace** | `crates/perl-workspace/` | Workspace symbol indexing |
 | **perl-semantic-analyzer** | `crates/perl-semantic-analyzer/` | Semantic analysis |
 
 Families: `perl-module-*` (module resolution), `perl-lsp-*` (LSP providers), `perl-lsp-feature-*` (feature governance), `perl-dap-*` (DAP), `perl-ts-*` (tree-sitter), `perl-workspace-*` (workspace discovery), core leaf crates (token, AST, quote, regex, heredoc, error).
@@ -373,7 +373,7 @@ Invoke `/coding-standards` for full detail.
   - Use `?`, `.ok_or_else()`, pattern matching, `Result`/`Option` instead
   - `std::process::exit()` only in `bin/` and `lifecycle.rs`
   - Exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp-rs/src/util/uri.rs`
-  - Exception: `bin/` targets may use `#[allow(clippy::expect_used)]` for profiling / CLI entry points, including `crates/perl-workspace-index/src/bin/workspace_memory_profile.rs`
+  - Exception: `bin/` targets may use `#[allow(clippy::expect_used)]` for profiling / CLI entry points, including `crates/perl-workspace/src/bin/workspace_memory_profile.rs`
   - Exception: static `LazyLock<Regex>` initializers may use `unreachable!()`/`expect()` for known-good patterns, including `crates/perl-heredoc-anti-patterns/src/lib.rs`
   - Tests: `Result<()>` returns or `perl_tdd_support::must`/`must_some`
 - **Prefer**: `.first()` over `.get(0)`, `.push(char)` over `.push_str("x")`, `or_default()` over `or_insert_with(Vec::new)`

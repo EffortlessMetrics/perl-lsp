@@ -270,11 +270,11 @@ mod tests {
             (target/debug/deps/perl_parser_core-abc123)\n\
             lexer_edge_case: test\nparser_smoke: test\n\
             Running unittests src/lib.rs \
-            (target\\debug\\deps\\perl_workspace_index-123def.exe)\n\
+            (target\\debug\\deps\\perl_workspace-123def.exe)\n\
             index_builds: test\n";
         let counts = parse_per_crate_test_counts(output);
         assert_eq!(counts.get("perl-parser-core"), Some(&2));
-        assert_eq!(counts.get("perl-workspace-index"), Some(&1));
+        assert_eq!(counts.get("perl-workspace"), Some(&1));
     }
 
     #[test]

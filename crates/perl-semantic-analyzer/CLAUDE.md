@@ -25,7 +25,7 @@ cargo doc -p perl-semantic-analyzer --open   # View documentation
 | Crate | Role |
 |-------|------|
 | `perl-parser-core` | AST nodes (`Node`, `NodeKind`), `Parser`, source locations |
-| `perl-workspace-index` | Cross-file workspace index, `SymKind`, `SymbolKey` |
+| `perl-workspace` | Cross-file workspace index, `SymKind`, `SymbolKey` |
 | `perl-symbol` | Shared `SymbolKind`, `VarKind` enums |
 | `regex` | Pattern matching in semantic classification |
 | `rustc-hash` | `FxHashMap` for fast scope/parent-map lookups |
@@ -45,7 +45,7 @@ cargo doc -p perl-semantic-analyzer --open   # View documentation
 
 ### Re-exports from `lib.rs`
 
-The crate re-exports core types from `perl-parser-core` (`Node`, `NodeKind`, `SourceLocation`, `Parser`, `ast`, `error`, etc.) and `perl-workspace-index::workspace_index`, so downstream crates can use a single import.
+The crate re-exports core types from `perl-parser-core` (`Node`, `NodeKind`, `SourceLocation`, `Parser`, `ast`, `error`, etc.) and `perl-workspace::workspace_index`, so downstream crates can use a single import.
 
 ## Usage Examples
 

@@ -8,7 +8,7 @@ declaration lookup, or dead-code signals before you get to editor features.
 ## Where it fits
 
 `perl-semantic-analyzer` sits above `perl-parser-core` and next to
-`perl-workspace-index`. It turns parsed trees into analysis artifacts that the
+`perl-workspace`. It turns parsed trees into analysis artifacts that the
 workspace, refactoring, and LSP layers can consume.
 
 ## Key entry points
@@ -35,4 +35,4 @@ let _symbols = SymbolExtractor::new().extract(&ast);
 
 Use `perl-semantic-analyzer` when you are building hover, declaration, type,
 or diagnostics features from parsed Perl source. If you need cross-file lookup
-or document caching, pair it with `perl-workspace-index`.
+or document caching, pair it with `perl-workspace`.

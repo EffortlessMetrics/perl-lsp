@@ -22,7 +22,7 @@ cargo doc -p perl-refactoring --open     # View documentation
 ### Dependencies
 
 - `perl-parser-core` -- AST types, parser, `Node`, `NodeKind`, `SourceLocation`, `LineIndex`
-- `perl-workspace-index` -- `WorkspaceIndex`, `SymKind`, `SymbolKey`, URI/path helpers
+- `perl-workspace` -- `WorkspaceIndex`, `SymKind`, `SymbolKey`, URI/path helpers
 
 ### Features
 
@@ -45,7 +45,7 @@ cargo doc -p perl-refactoring --open     # View documentation
 
 ### Re-exports from lib.rs
 
-The crate re-exports core types from `perl-parser-core` (`Node`, `NodeKind`, `Parser`, `ParseError`, etc.) and `perl-workspace-index` (`document_store`, `workspace_index`). Workspace modules (`workspace_refactor`, `workspace_rename`) are gated on `#[cfg(not(target_arch = "wasm32"))]`.
+The crate re-exports core types from `perl-parser-core` (`Node`, `NodeKind`, `Parser`, `ParseError`, etc.) and `perl-workspace` (`document_store`, `workspace_index`). Workspace modules (`workspace_refactor`, `workspace_rename`) are gated on `#[cfg(not(target_arch = "wasm32"))]`.
 
 ## Usage
 
