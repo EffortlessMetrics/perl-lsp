@@ -1,6 +1,23 @@
+use super::super::token;
+use super::accuracy::{
+    ParserAccuracyArtifactSummary, ParserAccuracyDenominator, ParserAccuracyFamilySummary,
+    ParserAccuracyMetricSummary,
+};
 use super::failure::{FailureCluster, build_failure_worklist, classify_failure_bucket};
 use super::*;
 use color_eyre::eyre::Result;
+
+const PARSER_STATUS_MARKER_NAMES: [&str; 9] = [
+    "PARSER_TRACKING_TABLE",
+    "PARSER_PERFORMANCE_TABLE",
+    "PARSER_METRICS_BULLETS",
+    "TOKEN_HEALTH_TABLE",
+    "PARSER_NODEKIND_ROW",
+    "PARSER_RELIABILITY_ROW",
+    "PARSER_STRICT_CLEAN_ROW",
+    "PARSER_ACCURACY_SUMMARY",
+    "PARSER_FAILURE_WORKLIST",
+];
 
 fn parser_status_template() -> &'static str {
     "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
