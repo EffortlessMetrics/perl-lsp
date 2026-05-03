@@ -5,9 +5,13 @@
 //!
 //! | Perl pattern                             | Inferred shape                                |
 //! |------------------------------------------|-----------------------------------------------|
-//! | `Foo->new(...)`                          | `Object { "Foo", High }`                      |
+//! | `Foo->new(...)`                          | `Object { "Foo", Medium }`                    |
 //! | `bless $ref, 'Pkg'`                      | `Object { "Pkg", Low }`                       |
 //! | `$self` in method body                   | `Object { <enclosing package>, Medium }`       |
+//! | `sub method($self, ...)`                 | `Object { <enclosing package>, High }`         |
+//! | `my ($self) = @_`                        | `Object { <enclosing package>, Medium }`       |
+//! | `DBI->connect(...)`                      | `Object { "DBI::db", Medium }`                |
+//! | `$dbh->prepare(...)` after DBI connect    | `Object { "DBI::st", Medium }`                |
 //! | unknown                                  | `Unknown`                                     |
 //!
 //! The inferrer does **not** perform full type inference — it recognises
@@ -15,6 +19,7 @@
 
 use crate::ast::{Node, NodeKind};
 use perl_semantic_facts::{Confidence, EntityId, FileId, ValueShape};
+use std::collections::HashMap;
 
 /// Inferrer that walks an AST to produce `(EntityId, ValueShape)` pairs.
 ///
@@ -28,6 +33,7 @@ impl ValueShapeInferrer {
         let mut state = InferrerState {
             current_package: "main".to_string(),
             in_method: false,
+            variable_shapes: HashMap::new(),
             results: Vec::new(),
         };
         state.walk(ast);
@@ -41,6 +47,8 @@ struct InferrerState {
     current_package: String,
     /// Whether we are currently inside a subroutine/method body.
     in_method: bool,
+    /// Current lexical receiver-shape environment, keyed by scalar variable name.
+    variable_shapes: HashMap<String, ValueShape>,
     /// Accumulated (EntityId, ValueShape) pairs.
     results: Vec<(EntityId, ValueShape)>,
 }
@@ -72,13 +80,19 @@ impl InferrerState {
                 return;
             }
 
-            // Subroutine / method body — track that we are inside a method
-            // so `$self` references can be inferred.
-            NodeKind::Subroutine { body, .. } | NodeKind::Method { body, .. } => {
+            // Subroutine / method body — track method-like scope, record
+            // signature receivers, and keep receiver shapes local to the body.
+            NodeKind::Subroutine { signature, body, .. }
+            | NodeKind::Method { signature, body, .. } => {
                 let prev_in_method = self.in_method;
+                let prev_shapes = std::mem::take(&mut self.variable_shapes);
                 self.in_method = true;
+                if let Some(signature) = signature {
+                    self.record_signature_receiver(signature);
+                }
                 self.walk(body);
                 self.in_method = prev_in_method;
+                self.variable_shapes = prev_shapes;
                 return;
             }
 
@@ -86,30 +100,31 @@ impl InferrerState {
             // `my $obj = Foo->new(...)` or `my $obj = bless ...`
             NodeKind::VariableDeclaration { variable, initializer: Some(init), .. } => {
                 if let Some(shape) = self.infer_from_rhs(init) {
-                    let entity_id = entity_id_from_variable(variable);
-                    self.results.push((entity_id, shape));
+                    self.record_variable_shape(variable, shape);
+                }
+            }
+
+            // List unpacking convention for invocants:
+            // `my ($self) = @_`.
+            NodeKind::VariableListDeclaration { variables, initializer: Some(init), .. }
+                if self.in_method && is_argument_array(init) =>
+            {
+                if let Some(first) = variables.first() {
+                    self.record_self_like_variable(first, Confidence::Medium);
                 }
             }
 
             // Assignment: `$obj = Foo->new(...)` or `$obj = bless ...`
             NodeKind::Assignment { lhs, rhs, .. } => {
                 if let Some(shape) = self.infer_from_rhs(rhs) {
-                    let entity_id = entity_id_from_variable(lhs);
-                    self.results.push((entity_id, shape));
+                    self.record_variable_shape(lhs, shape);
                 }
             }
 
             // `$self` reference inside a method body.
-            NodeKind::Variable { sigil, name } if sigil == "$" && name == "self" => {
+            NodeKind::Variable { sigil, name } if sigil == "$" && is_self_like_name(name) => {
                 if self.in_method {
-                    let entity_id = entity_id_from_node(node);
-                    self.results.push((
-                        entity_id,
-                        ValueShape::Object {
-                            package: self.current_package.clone(),
-                            confidence: Confidence::Medium,
-                        },
-                    ));
+                    self.record_self_like_variable(node, Confidence::Medium);
                 }
             }
 
@@ -129,7 +144,32 @@ impl InferrerState {
             // `Foo->new(...)` — constructor call.
             NodeKind::MethodCall { object, method, .. } if method == "new" => {
                 if let Some(pkg) = package_name_from_node(object) {
-                    return Some(ValueShape::Object { package: pkg, confidence: Confidence::High });
+                    return Some(ValueShape::Object {
+                        package: pkg,
+                        confidence: Confidence::Medium,
+                    });
+                }
+                None
+            }
+
+            // `DBI->connect(...)` — common DBI database handle constructor.
+            NodeKind::MethodCall { object, method, .. } if method == "connect" => {
+                if package_name_from_node(object).as_deref() == Some("DBI") {
+                    return Some(ValueShape::Object {
+                        package: "DBI::db".to_string(),
+                        confidence: Confidence::Medium,
+                    });
+                }
+                None
+            }
+
+            // `$dbh->prepare(...)` — common DBI statement handle constructor.
+            NodeKind::MethodCall { object, method, .. } if method == "prepare" => {
+                if self.receiver_is_dbi_database_handle(object) {
+                    return Some(ValueShape::Object {
+                        package: "DBI::st".to_string(),
+                        confidence: Confidence::Medium,
+                    });
                 }
                 None
             }
@@ -158,6 +198,51 @@ impl InferrerState {
             _ => None,
         }
     }
+
+    fn record_signature_receiver(&mut self, signature: &Node) {
+        let NodeKind::Signature { parameters } = &signature.kind else {
+            return;
+        };
+        let Some(first) = parameters.first() else {
+            return;
+        };
+        let Some(variable) = parameter_variable(first) else {
+            return;
+        };
+        self.record_self_like_variable(variable, Confidence::High);
+    }
+
+    fn record_self_like_variable(&mut self, variable: &Node, confidence: Confidence) {
+        let Some(name) = scalar_variable_name(variable) else {
+            return;
+        };
+        if !is_self_like_name(name) {
+            return;
+        }
+
+        self.record_variable_shape(
+            variable,
+            ValueShape::Object { package: self.current_package.clone(), confidence },
+        );
+    }
+
+    fn record_variable_shape(&mut self, variable: &Node, shape: ValueShape) {
+        if let Some(name) = scalar_variable_name(variable) {
+            self.variable_shapes.insert(name.to_string(), shape.clone());
+        }
+        let entity_id = entity_id_from_variable(variable);
+        self.results.push((entity_id, shape));
+    }
+
+    fn receiver_is_dbi_database_handle(&self, receiver: &Node) -> bool {
+        let Some(name) = scalar_variable_name(receiver) else {
+            return false;
+        };
+
+        self.variable_shapes.get(name).is_some_and(
+            |shape| matches!(shape, ValueShape::Object { package, .. } if package == "DBI::db"),
+        )
+    }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -179,6 +264,32 @@ fn string_value(node: &Node) -> Option<String> {
         NodeKind::Identifier { name } => Some(name.clone()),
         _ => None,
     }
+}
+
+fn scalar_variable_name(node: &Node) -> Option<&str> {
+    match &node.kind {
+        NodeKind::Variable { sigil, name } if sigil == "$" => Some(name.as_str()),
+        NodeKind::VariableWithAttributes { variable, .. } => scalar_variable_name(variable),
+        _ => None,
+    }
+}
+
+fn parameter_variable(node: &Node) -> Option<&Node> {
+    match &node.kind {
+        NodeKind::MandatoryParameter { variable }
+        | NodeKind::OptionalParameter { variable, .. }
+        | NodeKind::SlurpyParameter { variable }
+        | NodeKind::NamedParameter { variable } => Some(variable),
+        _ => None,
+    }
+}
+
+fn is_self_like_name(name: &str) -> bool {
+    matches!(name, "self" | "this" | "class")
+}
+
+fn is_argument_array(node: &Node) -> bool {
+    matches!(&node.kind, NodeKind::Variable { sigil, name } if sigil == "@" && name == "_")
 }
 
 fn normalize_package_string(value: &str) -> Option<String> {
@@ -236,14 +347,28 @@ mod tests {
         None
     }
 
+    fn object_for_package(
+        results: &[(EntityId, ValueShape)],
+        expected_package: &str,
+    ) -> Option<Confidence> {
+        results.iter().find_map(|(_, shape)| {
+            if let ValueShape::Object { package, confidence } = shape {
+                if package == expected_package {
+                    return Some(*confidence);
+                }
+            }
+            None
+        })
+    }
+
     // ── Constructor call: Foo->new(...) ─────────────────────────────────
 
     #[test]
-    fn constructor_call_infers_object_high() -> Result<(), String> {
+    fn constructor_call_infers_object_medium() -> Result<(), String> {
         let results = parse_and_infer("my $obj = Foo->new();\n");
         let (pkg, conf) = first_object(&results).ok_or("expected Object shape from Foo->new()")?;
         assert_eq!(pkg, "Foo");
-        assert_eq!(conf, Confidence::High);
+        assert_eq!(conf, Confidence::Medium);
         Ok(())
     }
 
@@ -253,7 +378,7 @@ mod tests {
         let (pkg, conf) =
             first_object(&results).ok_or("expected Object shape from My::App->new()")?;
         assert_eq!(pkg, "My::App");
-        assert_eq!(conf, Confidence::High);
+        assert_eq!(conf, Confidence::Medium);
         Ok(())
     }
 
@@ -284,6 +409,68 @@ mod tests {
         assert!(
             has_bar_medium,
             "expected $self to infer Object {{ Bar, Medium }}, got {results:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn signature_self_infers_enclosing_package_high() -> Result<(), String> {
+        let code = "package Widget;\nsub render($self, $name) { return $name; }\n";
+        let results = parse_and_infer(code);
+        let confidence =
+            object_for_package(&results, "Widget").ok_or("expected signature self shape")?;
+        assert_eq!(confidence, Confidence::High);
+        Ok(())
+    }
+
+    #[test]
+    fn argument_unpack_self_infers_enclosing_package() -> Result<(), String> {
+        let code = "package Widget;\nsub render { my ($self, $name) = @_; return $name; }\n";
+        let results = parse_and_infer(code);
+        let confidence =
+            object_for_package(&results, "Widget").ok_or("expected @_ self unpack shape")?;
+        assert_eq!(confidence, Confidence::Medium);
+        Ok(())
+    }
+
+    // ── DBI receiver-shape idioms ───────────────────────────────────────
+
+    #[test]
+    fn dbi_connect_infers_database_handle() -> Result<(), String> {
+        let results = parse_and_infer("my $dbh = DBI->connect('dbi:SQLite:dbname=:memory:');\n");
+        let confidence =
+            object_for_package(&results, "DBI::db").ok_or("expected DBI::db handle shape")?;
+        assert_eq!(confidence, Confidence::Medium);
+        Ok(())
+    }
+
+    #[test]
+    fn dbh_prepare_infers_statement_handle_after_connect() -> Result<(), String> {
+        let code = "my $dbh = DBI->connect('dbi:SQLite:dbname=:memory:');\nmy $sth = $dbh->prepare('select 1');\n";
+        let results = parse_and_infer(code);
+        let confidence =
+            object_for_package(&results, "DBI::st").ok_or("expected DBI::st statement shape")?;
+        assert_eq!(confidence, Confidence::Medium);
+        Ok(())
+    }
+
+    #[test]
+    fn prepare_on_unknown_receiver_does_not_infer_statement_handle() -> Result<(), String> {
+        let results = parse_and_infer("my $sth = $thing->prepare('select 1');\n");
+        assert!(
+            object_for_package(&results, "DBI::st").is_none(),
+            "unknown prepare receiver should not infer DBI::st: {results:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn prepare_on_dbh_name_without_known_connect_does_not_infer_statement_handle()
+    -> Result<(), String> {
+        let results = parse_and_infer("my $sth = $dbh->prepare('select 1');\n");
+        assert!(
+            object_for_package(&results, "DBI::st").is_none(),
+            "$dbh naming alone should not infer DBI::st: {results:?}"
         );
         Ok(())
     }
