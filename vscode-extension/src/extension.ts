@@ -2009,6 +2009,27 @@ async function reinstallServerBinary(context: vscode.ExtensionContext): Promise<
     const downloader = new BinaryDownloader(context, outputChannel);
     const target = downloader.getTargetTriple();
     const source = getManagedBinarySource();
+
+    // Lifecycle snapshot: stop a running language client before install so
+    // Windows releases its handle on the existing perllsp.exe. On failure
+    // we restart with the previous binary so the user is never left worse
+    // off than before they invoked Reinstall.
+    const wasRunning = client !== undefined;
+    const previousServerPath = currentServerPath;
+
+    if (wasRunning) {
+        outputChannel.appendLine('[reinstall] stopping language client to release the running binary');
+        try {
+            await disposeLanguageClient();
+        } catch (stopErr: unknown) {
+            const msg = stopErr instanceof Error ? stopErr.message : String(stopErr);
+            outputChannel.appendLine(`[reinstall] language client stop reported: ${msg}`);
+        }
+        // Brief grace period: Windows can lag a few ms releasing the
+        // executable file handle after the LSP child process exits.
+        await new Promise(resolve => setTimeout(resolve, 250));
+    }
+
     const downloadedPath = await downloader.ensureBinary(true);
 
     if (!downloadedPath) {
@@ -2021,16 +2042,24 @@ async function reinstallServerBinary(context: vscode.ExtensionContext): Promise<
                 void vscode.commands.executeCommand('workbench.action.openSettings', 'http.proxy');
             }
         });
+        if (wasRunning && previousServerPath) {
+            outputChannel.appendLine('[reinstall] restoring previous binary after failed download');
+            currentServerPath = previousServerPath;
+            try {
+                await restartServer(context);
+            } catch {
+                // restartServer surfaces its own dialog/log; nothing to add here.
+            }
+        }
         return {
             ok: false,
-            serverPath: '',
+            serverPath: previousServerPath ?? '',
             target,
             source,
             error: downloader.getLastErrorMessage() ?? 'download failed',
         };
     }
 
-    currentServerPath = downloadedPath;
     const healthOk = await runHealthCheck(downloadedPath);
     const version = await readInstalledServerVersion(downloadedPath);
     if (!healthOk) {
@@ -2043,6 +2072,15 @@ async function reinstallServerBinary(context: vscode.ExtensionContext): Promise<
                 void vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp/issues'));
             }
         });
+        if (wasRunning && previousServerPath) {
+            outputChannel.appendLine('[reinstall] restoring previous binary after failed health check');
+            currentServerPath = previousServerPath;
+            try {
+                await restartServer(context);
+            } catch {
+                // restartServer surfaces its own dialog/log.
+            }
+        }
         return {
             ok: false,
             serverPath: downloadedPath,
@@ -2054,14 +2092,18 @@ async function reinstallServerBinary(context: vscode.ExtensionContext): Promise<
         };
     }
 
-    vscode.window.showInformationMessage(
-        'perl-lsp was reinstalled successfully.',
-        client ? 'Restart Server' : 'OK'
-    ).then(selection => {
-        if (selection === 'Restart Server' && client) {
-            void restartServer(context);
+    currentServerPath = downloadedPath;
+
+    if (wasRunning) {
+        outputChannel.appendLine('[reinstall] restarting language client with the freshly installed binary');
+        try {
+            await restartServer(context);
+        } catch {
+            // restartServer surfaces its own dialog/log.
         }
-    });
+    } else {
+        vscode.window.showInformationMessage('perl-lsp was reinstalled successfully.', 'OK');
+    }
 
     return {
         ok: true,
