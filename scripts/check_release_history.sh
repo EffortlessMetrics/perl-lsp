@@ -174,13 +174,34 @@ done
 # ── Check 5: Active install surfaces stay aligned with current package names ─
 
 run_install_surface_check() {
-    if [[ -x target/debug/xtask ]]; then
+    xtask_binary_is_fresh() {
+        local bin="$1"
+        [[ -x "$bin" ]] || return 1
+        ! find Cargo.toml Cargo.lock xtask/Cargo.toml xtask/src -type f -newer "$bin" -print -quit | grep -q .
+    }
+
+    if xtask_binary_is_fresh target/debug/xtask; then
         target/debug/xtask install-surface-check
+        return
+    fi
+
+    if xtask_binary_is_fresh target/debug/xtask.exe; then
+        target/debug/xtask.exe install-surface-check
+        return
+    fi
+
+    if cargo metadata --no-deps --format-version 1 >/dev/null 2>&1; then
+        cargo xtask install-surface-check
         return
     fi
 
     if [[ -x target/debug/xtask.exe ]]; then
         target/debug/xtask.exe install-surface-check
+        return
+    fi
+
+    if [[ -x target/debug/xtask ]]; then
+        target/debug/xtask install-surface-check
         return
     fi
 
