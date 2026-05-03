@@ -44,6 +44,7 @@ scripts/__pycache__/
 /.claude/worktrees/
 # Codex worktree metadata — ephemeral agent artifacts, never committed.
 /.codex-worktrees/
+/.claude/settings.local.json
 
 # Swarm ops — ignore the entire directory (contains repo mirror artifacts),
 # but force-track the specific knowledge files we need.
