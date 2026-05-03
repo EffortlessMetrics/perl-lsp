@@ -126,13 +126,16 @@ impl ImportExtractor {
         let anchor_id = Self::anchor_from_node(node);
         Some(ImportSpec {
             module: class_name.to_string(),
-            kind: ImportKind::Use,
+            // ManualImport distinguishes this from a `use Foo` statement —
+            // it is a `Class->import(...)` method call, not a `use` declaration.
+            kind: ImportKind::ManualImport,
             symbols,
             provenance: Provenance::DynamicBoundary,
             confidence: Confidence::Low,
             file_id: Some(file_id),
             anchor_id: Some(anchor_id),
             scope_id: None,
+            span_start_byte: Some(node.location.start as u32),
         })
     }
 
@@ -200,6 +203,7 @@ impl ImportExtractor {
                     file_id: Some(file_id),
                     anchor_id: Some(anchor_id),
                     scope_id: None,
+                    span_start_byte: Some(require_node.location.start as u32),
                 });
                 consumed.insert(i);
                 consumed.insert(i + 1);
@@ -218,6 +222,7 @@ impl ImportExtractor {
                     file_id: Some(file_id),
                     anchor_id: Some(anchor_id),
                     scope_id: None,
+                    span_start_byte: Some(require_node.location.start as u32),
                 });
                 consumed.insert(i);
             }
@@ -281,6 +286,7 @@ impl ImportExtractor {
             file_id: Some(file_id),
             anchor_id: Some(anchor_id),
             scope_id: None,
+            span_start_byte: Some(node.location.start as u32),
         }
     }
 
@@ -443,6 +449,7 @@ impl ImportExtractor {
             file_id: Some(file_id),
             anchor_id: Some(anchor_id),
             scope_id: None,
+            span_start_byte: Some(node.location.start as u32),
         })
     }
 
@@ -555,6 +562,7 @@ impl ImportExtractor {
                 file_id: Some(file_id),
                 anchor_id: Some(anchor_id),
                 scope_id: None,
+                span_start_byte: None, // position not needed for UseConstant
             };
         }
 
@@ -611,6 +619,7 @@ impl ImportExtractor {
             file_id: Some(file_id),
             anchor_id: Some(anchor_id),
             scope_id: None,
+            span_start_byte: None, // position not needed for UseConstant
         }
     }
 
@@ -1161,7 +1170,8 @@ require $dynamic;
     #[test]
     fn standalone_class_dynamic_import_produces_dynamic_spec() -> Result<(), String> {
         // `Foo->import(@names)` — static class, dynamic arg list.
-        // Should produce one ImportSpec with ImportSymbols::Dynamic.
+        // Should produce one ImportSpec with ImportSymbols::Dynamic and
+        // ImportKind::ManualImport (not Use — it's a method call, not a `use` statement).
         let specs = parse_and_extract(r#"Foo->import(@names);"#);
         let spec = specs
             .iter()
@@ -1170,6 +1180,11 @@ require $dynamic;
 
         assert_eq!(spec.provenance, Provenance::DynamicBoundary);
         assert_eq!(spec.confidence, Confidence::Low);
+        assert_eq!(
+            spec.kind,
+            ImportKind::ManualImport,
+            "Class->import(@names) must use ManualImport, not Use"
+        );
         Ok(())
     }
 

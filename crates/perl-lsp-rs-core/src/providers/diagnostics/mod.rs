@@ -43,7 +43,7 @@ mod lints;
 /// Parse error to diagnostic conversion
 mod parse_errors;
 /// Scope analysis integration
-mod scope;
+pub mod scope;
 /// AST walker utilities
 mod walker;
 
