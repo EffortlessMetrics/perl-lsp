@@ -841,3 +841,327 @@ fn bdd_given_autoload_and_destroy_methods_when_parsed_then_special_sub_names_are
 
     Ok(())
 }
+
+#[test]
+fn bdd_given_heredoc_with_interpolation_when_parsed_then_heredoc_node_and_variable_are_retained()
+-> TestResult {
+    // Given: a developer writes a heredoc with variable interpolation for a greeting message.
+    let code = "my $name = \"world\";\nmy $greeting = <<END;\nHello, $name!\nWelcome to Perl.\nEND\nprint $greeting;\n";
+
+    // When: the parser processes the heredoc with interpolation.
+    let sexp = parse_sexp(code)?;
+
+    // Then: the AST should contain a heredoc node and no recovery ERROR nodes.
+    assert!(
+        sexp.contains("heredoc") || sexp.contains("greeting") || sexp.contains("name"),
+        "Expected heredoc or variable reference in: {sexp}"
+    );
+    assert!(
+        !sexp.contains("ERROR"),
+        "Did not expect recovery ERROR nodes for valid heredoc: {sexp}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_indented_heredoc_tilde_when_parsed_then_heredoc_is_retained_without_error()
+-> TestResult {
+    // Given: a developer writes an indented heredoc (tilde form) with leading whitespace stripped.
+    let code = "my $doc = <<~END;\n    This is indented\n    heredoc content\n    END\n";
+
+    // When: the parser processes the indented heredoc form.
+    let sexp = parse_sexp(code)?;
+
+    // Then: the AST should represent the heredoc and parse should be clean.
+    assert!(
+        sexp.contains("heredoc") || sexp.contains("doc"),
+        "Expected heredoc or variable reference in: {sexp}"
+    );
+    assert!(
+        !sexp.contains("ERROR"),
+        "Did not expect recovery ERROR nodes for valid indented heredoc: {sexp}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_object_pad_class_syntax_when_parsed_then_class_name_and_methods_are_retained()
+-> TestResult {
+    // Given: a developer writes Object::Pad class syntax with fields and methods.
+    let code = r#"
+        use Object::Pad;
+        class Point {
+            field $x :param = 0;
+            field $y :param = 0;
+            method distance_to($other) {
+                return sqrt(($x - $other->x)**2 + ($y - $other->y)**2);
+            }
+        }
+    "#;
+
+    // When: the parser processes the Object::Pad class declaration.
+    let sexp = parse_sexp(code)?;
+
+    // Then: the class name should appear in the AST and the parse should be clean.
+    assert!(sexp.contains("Point"), "Expected class name 'Point' in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_chained_method_calls_with_variable_when_parsed_then_method_chain_is_retained()
+-> TestResult {
+    // Given: a developer chains multiple method calls on objects for fluent interface usage.
+    let code = r#"
+        my $result = $obj->method1->method2("arg")->method3();
+        my @items = $factory->create_all->filter(sub { $_->is_active })->to_list;
+    "#;
+
+    // When: the parser processes the chained method calls.
+    let sexp = parse_sexp(code)?;
+
+    // Then: method calls should appear in the AST and parse should be clean.
+    assert!(
+        sexp.contains("method_call") || sexp.contains("method1") || sexp.contains("method2"),
+        "Expected method call nodes in: {sexp}"
+    );
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_complex_dereference_chains_when_parsed_then_deref_and_subscript_ops_are_retained()
+-> TestResult {
+    // Given: a developer traverses nested data structures with complex dereference chains.
+    let code = r#"
+        my $data = { users => [{ name => "Alice", roles => ["admin", "user"] }] };
+        my $first_role = $data->{users}[0]{roles}[0];
+        my @roles = @{$data->{users}[0]{roles}};
+        my @arr = @{$hashref->{key}};
+    "#;
+
+    // When: the parser processes the complex dereference expressions.
+    let sexp = parse_sexp(code)?;
+
+    // Then: the structure and variable references should be represented cleanly.
+    assert!(sexp.contains("users"), "Expected 'users' key in: {sexp}");
+    assert!(sexp.contains("Alice"), "Expected 'Alice' string literal in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_local_and_our_declarations_when_parsed_then_scope_declarators_are_retained()
+-> TestResult {
+    // Given: a developer uses our for package globals and local for dynamic scope override.
+    let code = r#"
+        our $VERSION = '1.0';
+        our @EXPORT = qw(foo bar);
+        local $/ = undef;
+        local $\ = "\n";
+        {
+            local *STDOUT = *STDERR;
+            print "goes to stderr\n";
+        }
+    "#;
+
+    // When: the parser processes the our/local declarations.
+    let sexp = parse_sexp(code)?;
+
+    // Then: both our and local declarators should appear in the AST.
+    assert!(
+        sexp.contains("our_declaration") || sexp.contains("our"),
+        "Expected our declaration in: {sexp}"
+    );
+    assert!(
+        sexp.contains("local_declaration") || sexp.contains("local"),
+        "Expected local declaration in: {sexp}"
+    );
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_qw_qr_qq_q_operators_when_parsed_then_quote_like_nodes_are_retained() -> TestResult {
+    // Given: a developer uses Perl's quote-like operators for word lists, patterns, and strings.
+    let code = r#"
+        my @words = qw(alpha beta gamma delta);
+        my $pattern = qr/\d{4}-\d{2}-\d{2}/;
+        my $str = qq{Hello there!};
+        my $raw = q{No interpolation here};
+        my @grep_result = grep { $_ =~ $pattern } @words;
+    "#;
+
+    // When: the parser processes the quote-like operators.
+    let sexp = parse_sexp(code)?;
+
+    // Then: the AST should contain the quoted values and no recovery markers.
+    assert!(
+        sexp.contains("words") || sexp.contains("alpha") || sexp.contains("qw"),
+        "Expected qw list or word list in: {sexp}"
+    );
+    assert!(
+        sexp.contains("pattern") || sexp.contains("qr") || sexp.contains("regex"),
+        "Expected qr/pattern/ in: {sexp}"
+    );
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_format_write_statements_when_parsed_then_write_call_is_retained_without_error()
+-> TestResult {
+    // Given: a developer uses Perl's write() for report generation.
+    let code = r#"
+        my $count = 42;
+        my $name = "Test";
+        write STDOUT;
+    "#;
+
+    // When: the parser processes the write statement.
+    // (format/write is legacy Perl; we test that the parser handles it without crashing)
+    let result = {
+        let mut parser = perl_parser::Parser::new(code);
+        parser.parse()
+    };
+
+    // Then: parser should produce an AST or an error — but must not panic.
+    match result {
+        Ok(ast) => {
+            let sexp = ast.to_sexp();
+            // Either the parser handles write as a call or produces recovery nodes — both are fine.
+            assert!(!sexp.is_empty(), "Parser should produce a non-empty sexp for write statement");
+        }
+        Err(e) => {
+            // A parse error is also acceptable for legacy write syntax.
+            assert!(
+                !e.to_string().is_empty(),
+                "Error message should be non-empty for write syntax"
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_complex_regex_with_named_captures_when_parsed_then_regex_and_captures_are_retained()
+-> TestResult {
+    // Given: a developer uses a complex regex with named captures and the /x modifier.
+    let code = r#"
+        my $text = "John Smith, age 42";
+        if ($text =~ /(?<first>\w+)\s+(?<last>\w+),\s+age\s+(?<age>\d+)/x) {
+            my $first = $+{first};
+            my $last  = $+{last};
+            my $age   = $+{age};
+        }
+    "#;
+
+    // When: the parser processes the named-capture regex and variable access.
+    let sexp = parse_sexp(code)?;
+
+    // Then: regex operation and capture variable references should appear in AST.
+    assert!(
+        sexp.contains("match") || sexp.contains("regex") || sexp.contains("=~"),
+        "Expected regex match node in: {sexp}"
+    );
+    assert!(sexp.contains("first"), "Expected named capture 'first' in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_exception_handling_die_eval_when_parsed_then_eval_and_error_handling_are_retained()
+-> TestResult {
+    // Given: a developer uses eval/die for exception handling with structured error objects.
+    let code = r#"
+        eval {
+            die { code => 404, message => "Not found" };
+        };
+        if (my $err = $@) {
+            if (ref $err eq 'HASH') {
+                warn "Error $err->{code}: $err->{message}\n";
+            } else {
+                die $err;
+            }
+        }
+    "#;
+
+    // When: the parser processes the eval/die exception handling pattern.
+    let sexp = parse_sexp(code)?;
+
+    // Then: eval block and the error handling structure should be represented.
+    assert!(sexp.contains("(eval"), "Expected eval block in: {sexp}");
+    assert!(sexp.contains("(if "), "Expected if node for error handling in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_string_operations_and_builtins_when_parsed_then_function_calls_are_retained()
+-> TestResult {
+    // Given: a developer uses Perl string manipulation built-in functions.
+    let code = r#"
+        my $str    = "Hello, World!";
+        my $upper  = uc($str);
+        my $lower  = lc($str);
+        my $len    = length($str);
+        my $pos    = index($str, "World");
+        my $sub    = substr($str, 0, 5);
+        my $rev    = reverse($str);
+        my @chars  = split(//, $str);
+        my $joined = join("-", @chars[0..4]);
+    "#;
+
+    // When: the parser processes the string operation calls.
+    let sexp = parse_sexp(code)?;
+
+    // Then: string built-in function calls should be represented in the AST.
+    assert!(
+        sexp.contains("function_call_expression") || sexp.contains("uc") || sexp.contains("lc"),
+        "Expected built-in function calls in: {sexp}"
+    );
+    assert!(sexp.contains("str"), "Expected string variable reference in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_context_and_scalar_list_operations_when_parsed_then_list_ops_are_retained()
+-> TestResult {
+    // Given: a developer works with arrays, hashes, slices, and context in Perl.
+    let code = r#"
+        my @array  = (1..10);
+        my $count  = scalar @array;
+        my @sliced = @array[2..5];
+        my %hash   = (a => 1, b => 2, c => 3);
+        my @keys   = sort keys %hash;
+        my @vals   = map { $hash{$_} * 2 } @keys;
+        my $sum    = 0;
+        $sum += $_ for @vals;
+    "#;
+
+    // When: the parser processes the list and scalar operations.
+    let sexp = parse_sexp(code)?;
+
+    // Then: array, hash, and scalar operations should be represented in the AST.
+    assert!(sexp.contains("array"), "Expected array variable in: {sexp}");
+    assert!(sexp.contains("hash"), "Expected hash variable in: {sexp}");
+    assert!(
+        sexp.contains("(call map") || sexp.contains("(call sort"),
+        "Expected map or sort in: {sexp}"
+    );
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}

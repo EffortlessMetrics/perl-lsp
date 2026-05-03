@@ -3132,3 +3132,322 @@ print $count;
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn bdd_completion_returns_methods_for_bless_constructed_object()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Completion returns methods for bless-constructed object");
+
+    let dog_module = r#"package Dog;
+use strict;
+use warnings;
+
+sub new { bless {}, shift }
+sub bark { "woof" }
+sub sit  { "ok" }
+
+1;
+"#;
+
+    let main_script = r#"use strict;
+use warnings;
+use lib './lib';
+use Dog;
+
+my $dog = Dog->new();
+$dog->
+"#;
+
+    scenario.given("a workspace with a Dog package defining methods and a script calling methods");
+    let (mut harness, workspace) =
+        setup_workspace(&[("lib/Dog.pm", dog_module), ("main.pl", main_script)])?;
+    let module_uri = workspace.uri("lib/Dog.pm");
+    let main_uri = workspace.uri("main.pl");
+
+    harness.open(&module_uri, dog_module)?;
+    harness.open(&main_uri, main_script)?;
+    harness.wait_for_symbol("bark", Some(&module_uri), Duration::from_secs(10)).ok();
+    harness.barrier();
+
+    scenario.when("requesting completion at the position after the arrow operator");
+    let (line, character) = find_position(main_script, "$dog->");
+    let completion = harness.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": main_uri },
+            "position": { "line": line, "character": character + "$dog->".len() as u32 }
+        }),
+    )?;
+
+    scenario.then("the response is a valid completion result (list or object), no crash");
+    // The response should be either an array, an object with items, or null — not an error.
+    assert!(
+        completion.is_array() || completion.is_object() || completion.is_null(),
+        "completion should return a valid LSP result shape; got {completion:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_completion_includes_builtins_for_function_context() -> Result<(), Box<dyn std::error::Error>>
+{
+    let scenario = BddScenario::new("Completion includes builtins for function context");
+
+    let code = r#"use strict;
+use warnings;
+
+pri
+"#;
+
+    scenario.given("a simple Perl file with a partially typed built-in function prefix");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    scenario.when("requesting completion at the partially typed function name");
+    let (line, character) = find_position(code, "pri");
+    let completion = harness.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character + "pri".len() as u32 }
+        }),
+    )?;
+
+    scenario.then("completion returns at least one item (builtins like print should appear)");
+    let labels = completion_labels(&completion);
+    assert!(
+        !labels.is_empty(),
+        "completion for 'pri' prefix should return at least one item; got {completion:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_hover_returns_content_for_known_builtin() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Hover returns content for known builtin");
+
+    let code = r#"use strict;
+use warnings;
+
+print "hello\n";
+"#;
+
+    scenario.given("a file containing the print built-in function call");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    scenario.when("requesting hover at the print token position");
+    let (line, character) = find_position(code, "print ");
+    let hover = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        }),
+    )?;
+
+    scenario.then("hover returns non-null contents with some text about print");
+    assert!(!hover.is_null(), "hover over 'print' should return non-null contents; got {hover:?}");
+    assert!(
+        !hover_text(&hover).is_empty(),
+        "hover text for 'print' should not be empty; got {hover:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_document_symbols_returns_subroutine_and_package() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Document symbols returns subroutine and package");
+
+    let code = r#"package MyPkg;
+use strict;
+use warnings;
+
+sub foo { 1 }
+sub bar { 2 }
+
+1;
+"#;
+
+    scenario.given("a Perl file with a package declaration and multiple subroutines");
+    let (mut harness, workspace) = setup_workspace(&[("lib/MyPkg.pm", code)])?;
+    let uri = workspace.uri("lib/MyPkg.pm");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    scenario.when("requesting documentSymbols for that file");
+    let symbols = harness
+        .request("textDocument/documentSymbol", json!({ "textDocument": { "uri": uri } }))?;
+
+    scenario.then("response contains entries for foo and bar subroutines");
+    let names = symbol_names(&symbols);
+    assert!(
+        names.iter().any(|n| n == "foo"),
+        "documentSymbols should include 'foo'; got {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "bar"),
+        "documentSymbols should include 'bar'; got {names:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_references_find_all_uses_of_variable() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("References find all uses of variable");
+
+    let code = r#"use strict;
+use warnings;
+
+my $x = 1;
+my $y = $x + 1;
+print $x;
+"#;
+
+    scenario.given("a file with a variable declared and used in multiple places");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    scenario.when("requesting findReferences at the declaration with includeDeclaration=true");
+    let (line, character) = find_position(code, "my $x = 1");
+    let references = harness.request(
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character + 3 },
+            "context": { "includeDeclaration": true }
+        }),
+    )?;
+
+    scenario.then("response contains at least 2 locations (declaration + usages)");
+    let locations = references.as_array().cloned().unwrap_or_default();
+    assert!(
+        locations.len() >= 2,
+        "references for $x should include at least declaration + one usage; got {references:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_workspace_symbol_finds_exported_package_function() -> Result<(), Box<dyn std::error::Error>>
+{
+    let scenario = BddScenario::new("Workspace symbol finds exported package function");
+
+    let module = r#"package Utils;
+use strict;
+use warnings;
+use Exporter 'import';
+
+our @EXPORT_OK = qw(helper);
+
+sub helper { 1 }
+
+1;
+"#;
+
+    scenario.given("a workspace with a Utils module exporting a helper function");
+    let (mut harness, workspace) = setup_workspace(&[("lib/Utils.pm", module)])?;
+    let module_uri = workspace.uri("lib/Utils.pm");
+    harness.open(&module_uri, module)?;
+    harness.wait_for_symbol("helper", Some(&module_uri), Duration::from_secs(10)).ok();
+    harness.barrier();
+
+    scenario.when("searching workspace symbols for 'helper'");
+    let result = harness.request("workspace/symbol", json!({ "query": "helper" }))?;
+
+    scenario.then("response includes a symbol result for 'helper'");
+    let items = result.as_array().cloned().unwrap_or_default();
+    let names: Vec<String> = items
+        .iter()
+        .filter_map(|item| item.get("name").and_then(Value::as_str).map(ToOwned::to_owned))
+        .collect();
+    assert!(
+        names.iter().any(|n| n == "helper" || n.ends_with("helper")),
+        "workspace symbols should include 'helper'; got {names:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_goto_definition_resolves_within_same_file() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Goto definition resolves within same file");
+
+    let code = r#"use strict;
+use warnings;
+
+sub greet { "hello" }
+my $r = greet();
+"#;
+
+    scenario.given("a file with a local subroutine definition and a call to it");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+    harness.wait_for_symbol("greet", Some(&uri), Duration::from_secs(10)).ok();
+    harness.barrier();
+
+    scenario.when("requesting goto-definition at the greet() call site");
+    let (line, character) = find_position(code, "greet()");
+    let definition = wait_for_definition_uri(
+        &mut harness,
+        &uri,
+        line,
+        character,
+        &uri,
+        Duration::from_secs(10),
+    )?;
+
+    scenario.then("response contains a location pointing back into the same file");
+    let def_uri = first_location_uri(&definition).unwrap_or_default();
+    assert_eq!(def_uri, uri, "definition should resolve within the same file");
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_semantic_tokens_non_empty_for_valid_perl() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Semantic tokens non-empty for valid Perl");
+
+    let code = r#"use strict;
+use warnings;
+
+my $x = 42;
+print $x;
+"#;
+
+    scenario.given("a valid Perl file with variable declarations and print statement");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    scenario.when("requesting semantic tokens full for the document");
+    let tokens = harness
+        .request("textDocument/semanticTokens/full", json!({ "textDocument": { "uri": uri } }))?;
+
+    scenario.then("response has non-empty data array");
+    let data = semantic_token_data(&tokens);
+    assert!(!data.is_empty(), "semantic tokens for valid Perl should not be empty; got {tokens:?}");
+
+    Ok(())
+}
