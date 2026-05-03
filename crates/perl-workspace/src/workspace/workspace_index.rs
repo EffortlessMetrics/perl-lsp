@@ -2494,6 +2494,13 @@ impl WorkspaceIndex {
         // The `build_canonical_fact_shard` function only accepts OccurrenceFact
         // slices for dynamic_boundaries; entities and anchors must be merged
         // manually so that the query can resolve entity names from occurrence IDs.
+        //
+        // NOTE: This post-build merge means `entities_hash` and `anchors_hash`
+        // do not reflect the eval-sub additions. Incremental replacement
+        // (`replace_fact_shard_incremental`) may miss a change if only the eval
+        // string changes — the `content_hash` (whole-file) will still catch it.
+        // A future refactor should extend `build_canonical_fact_shard`'s API to
+        // accept extra entity/anchor slices alongside `dynamic_boundaries`.
         for (entity, anchor, _) in eval_sub_triples {
             shard.entities.push(entity);
             shard.anchors.push(anchor);

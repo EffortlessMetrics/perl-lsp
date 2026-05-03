@@ -18,7 +18,6 @@
 //!   same file.
 
 use crate::ast::{Node, NodeKind};
-use crate::workspace::workspace_index::FileFactShard;
 use perl_semantic_facts::{
     AnchorFact, AnchorId, Confidence, EntityFact, EntityId, EntityKind, FileId, OccurrenceFact,
     OccurrenceId, OccurrenceKind, Provenance,
@@ -222,24 +221,6 @@ fn stable_id(file_id: u64, node_start: u64, name: &str) -> u64 {
     // Use a high-base offset (0xE_0000_0000) to avoid collisions with symbol
     // adapter IDs which start from lower values.
     0xE_0000_0000_u64.wrapping_add(hash.wrapping_shl(3))
-}
-
-/// Merge eval-sub boundary triples into a [`FileFactShard`].
-///
-/// Appends the new entities, anchors, and occurrences from
-/// [`extract_eval_sub_boundaries`] into the shard's respective vectors.
-/// Callers must re-hash the shard after merging if they rely on the
-/// per-category hashes (the hash recomputation is done in
-/// `build_canonical_fact_shard_for_ast`).
-pub fn merge_eval_sub_boundaries_into_shard(
-    shard: &mut FileFactShard,
-    triples: Vec<(EntityFact, AnchorFact, OccurrenceFact)>,
-) {
-    for (entity, anchor, occurrence) in triples {
-        shard.entities.push(entity);
-        shard.anchors.push(anchor);
-        shard.occurrences.push(occurrence);
-    }
 }
 
 #[cfg(test)]
