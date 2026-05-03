@@ -124,6 +124,45 @@ pub trait SemanticQueries {
     /// remaining references, is exported, is imported by another file,
     /// or is a generated member without a generator-specific delete plan.
     fn safe_delete_plan(&self, entity_id: EntityId) -> SafeDeletePlan;
+
+    /// Return the covering dynamic-boundary occurrence at a given position.
+    ///
+    /// # Contract (Q1 — issue-local, not file-global)
+    ///
+    /// Returns `Some(OccurrenceFact)` **only** when ALL of the following hold:
+    ///
+    /// 1. The file at `file_id` has at least one occurrence with
+    ///    `kind = OccurrenceKind::DynamicBoundary` whose enclosing anchor's
+    ///    span contains `byte_offset`.
+    /// 2. If `symbol` is `Some`, the occurrence either has no associated
+    ///    entity (fully dynamic — any symbol is plausible) OR the entity's
+    ///    canonical/bare name matches `symbol`.
+    ///
+    /// # Why issue-local
+    ///
+    /// A file-global check `scope_is_dynamic(file, offset) -> bool` would
+    /// suppress *all* undefined-symbol diagnostics in a file that has *any*
+    /// dynamic construct, even for symbols that are statically provably missing.
+    /// This method is deliberately narrow: it returns evidence only when the
+    /// *specific position* is covered by dynamic-boundary evidence, and only
+    /// for the *specific symbol* being checked.
+    ///
+    /// # Returns
+    ///
+    /// `None` when the position is not covered by any dynamic-boundary
+    /// occurrence, or when the semantic data for `file_id` is unavailable.
+    /// Callers should fall back to the legacy diagnostic path when `None`.
+    ///
+    /// # Requirement
+    ///
+    /// - **Req 7.4**: Suppress undefined-symbol diagnostics for references
+    ///   within dynamic boundary scopes.
+    fn dynamic_boundary_at(
+        &self,
+        file_id: FileId,
+        byte_offset: u32,
+        symbol: Option<&str>,
+    ) -> Option<OccurrenceFact>;
 }
 
 // ── WorkspaceSemanticQueries ──
@@ -680,6 +719,57 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
         }
 
         SafeDeletePlan::new(entity_id, name, blockers, warnings)
+    }
+
+    fn dynamic_boundary_at(
+        &self,
+        file_id: FileId,
+        byte_offset: u32,
+        symbol: Option<&str>,
+    ) -> Option<OccurrenceFact> {
+        let shard = self.shard_for_file(file_id)?;
+
+        // Walk occurrences in the shard looking for DynamicBoundary occurrences
+        // whose enclosing anchor covers the query position.
+        for occurrence in &shard.occurrences {
+            if occurrence.kind != OccurrenceKind::DynamicBoundary {
+                continue;
+            }
+
+            // Find the anchor that owns this occurrence.
+            // Use `continue` rather than `?` so a missing anchor for one
+            // occurrence does not short-circuit the search for others.
+            let anchor = match shard.anchors.iter().find(|a| a.id == occurrence.anchor_id) {
+                Some(a) => a,
+                None => continue,
+            };
+
+            // Check whether the anchor's span covers the query byte offset.
+            if anchor.span_start_byte > byte_offset || byte_offset >= anchor.span_end_byte {
+                continue;
+            }
+
+            // Symbol filter: if a symbol name is requested, it must match the
+            // entity associated with this occurrence (when known). When the
+            // entity_id is None the boundary is fully dynamic (any symbol).
+            if let Some(sym) = symbol {
+                if let Some(entity_id) = occurrence.entity_id {
+                    // Resolve the entity to check name match.
+                    let entity_matches = shard.entities.iter().any(|e| {
+                        e.id == entity_id
+                            && (e.canonical_name == sym || bare_name(&e.canonical_name) == sym)
+                    });
+                    if !entity_matches {
+                        continue;
+                    }
+                }
+                // entity_id is None → fully dynamic, any symbol is plausible.
+            }
+
+            return Some(occurrence.clone());
+        }
+
+        None
     }
 }
 
@@ -3432,6 +3522,191 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ── dynamic_boundary_at tests ──
+
+    /// Build a shard that contains a DynamicBoundary occurrence at a given span.
+    fn dynamic_boundary_shard(
+        file_id: FileId,
+        span_start: u32,
+        span_end: u32,
+        entity_id: Option<EntityId>,
+        entity_name: Option<&str>,
+    ) -> FileFactShard {
+        let anchor_id = AnchorId(5000);
+        let occurrence_id = OccurrenceId(5001);
+
+        let mut anchors = vec![AnchorFact {
+            id: anchor_id,
+            file_id,
+            span_start_byte: span_start,
+            span_end_byte: span_end,
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        }];
+
+        let mut entities = Vec::new();
+        if let (Some(eid), Some(name)) = (entity_id, entity_name) {
+            // Add a static anchor for the entity
+            let entity_anchor = AnchorId(5010);
+            anchors.push(AnchorFact {
+                id: entity_anchor,
+                file_id,
+                span_start_byte: 0,
+                span_end_byte: 5,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            });
+            entities.push(EntityFact {
+                id: eid,
+                kind: EntityKind::Subroutine,
+                canonical_name: name.to_string(),
+                anchor_id: Some(entity_anchor),
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            });
+        }
+
+        let occurrence = OccurrenceFact {
+            id: occurrence_id,
+            kind: OccurrenceKind::DynamicBoundary,
+            entity_id,
+            anchor_id,
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        };
+
+        make_shard("file:///test/dyn.pl", file_id, anchors, entities, vec![occurrence], vec![])
+    }
+
+    #[test]
+    fn dynamic_boundary_at_returns_some_when_covered() -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(50);
+        let shard = dynamic_boundary_shard(file_id, 10, 30, None, None);
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        // Offset 20 falls within the dynamic boundary span (10..30).
+        let result = queries.dynamic_boundary_at(file_id, 20, None);
+        assert!(result.is_some(), "should find dynamic boundary at offset 20");
+        let occ = result.ok_or("expected occurrence")?;
+        assert_eq!(occ.kind, OccurrenceKind::DynamicBoundary);
+        assert_eq!(occ.provenance, Provenance::DynamicBoundary);
+        assert_eq!(occ.confidence, Confidence::Low);
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_boundary_at_returns_none_when_not_covered() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let file_id = FileId(51);
+        let shard = dynamic_boundary_shard(file_id, 10, 30, None, None);
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        // Offset 5 is before the span start (10).
+        let result = queries.dynamic_boundary_at(file_id, 5, None);
+        assert!(result.is_none(), "should NOT find dynamic boundary at offset 5");
+
+        // Offset 35 is after the span end (30).
+        let result2 = queries.dynamic_boundary_at(file_id, 35, None);
+        assert!(result2.is_none(), "should NOT find dynamic boundary at offset 35");
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_boundary_at_returns_none_for_unknown_file() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let file_id = FileId(52);
+        let shard = dynamic_boundary_shard(file_id, 10, 30, None, None);
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        // FileId(999) is not in the shards.
+        let result = queries.dynamic_boundary_at(FileId(999), 20, None);
+        assert!(result.is_none(), "should return None for unknown file");
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_boundary_at_symbol_filter_passes_when_entity_matches()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(53);
+        let entity_id = EntityId(9000);
+        let shard = dynamic_boundary_shard(file_id, 10, 30, Some(entity_id), Some("Foo::bar"));
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        // "bar" is the bare name of "Foo::bar" — should match.
+        let result = queries.dynamic_boundary_at(file_id, 20, Some("bar"));
+        assert!(result.is_some(), "should find dynamic boundary for symbol 'bar'");
+
+        // "Foo::bar" qualified name — should also match.
+        let result2 = queries.dynamic_boundary_at(file_id, 20, Some("Foo::bar"));
+        assert!(result2.is_some(), "should find dynamic boundary for qualified symbol 'Foo::bar'");
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_boundary_at_symbol_filter_blocks_when_entity_mismatches()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(54);
+        let entity_id = EntityId(9001);
+        let shard = dynamic_boundary_shard(file_id, 10, 30, Some(entity_id), Some("Foo::bar"));
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        // "baz" does not match "bar" or "Foo::bar" — should NOT find.
+        let result = queries.dynamic_boundary_at(file_id, 20, Some("baz"));
+        assert!(result.is_none(), "should NOT find dynamic boundary for unrelated symbol 'baz'");
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_boundary_at_no_entity_id_accepts_any_symbol()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(55);
+        // No entity_id — fully dynamic, any symbol should match.
+        let shard = dynamic_boundary_shard(file_id, 10, 30, None, None);
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        // Any symbol name should match when entity_id is None.
+        let result = queries.dynamic_boundary_at(file_id, 20, Some("any_symbol"));
+        assert!(result.is_some(), "fully-dynamic boundary should accept any symbol");
+
+        let result2 = queries.dynamic_boundary_at(file_id, 20, Some("foo"));
+        assert!(result2.is_some(), "fully-dynamic boundary should accept 'foo'");
+        Ok(())
     }
 }
 

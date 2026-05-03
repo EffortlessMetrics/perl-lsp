@@ -3,9 +3,10 @@
   "measured_at": "deterministic-fixture-baseline",
   "subsystem": "semantic",
   "fixture_family_version": 1,
-  "fixture_count": 12,
+  "fixture_count": 16,
   "fixture_ids": [
     "autoload_dynamic_boundary",
+    "dynamic_import_via_variable",
     "dynamic_require_boundary",
     "empty_import_suppression",
     "eval_string_dynamic_boundary",
@@ -13,13 +14,17 @@
     "generated_accessor",
     "imported_function_visibility",
     "inherited_method",
+    "normal_static_missing_symbol",
     "qualified_vs_bare_references",
     "role_method",
     "same_bare_sub_two_packages",
+    "static_class_dynamic_import",
+    "symbolic_deref_assign",
     "typeglob_alias"
   ],
   "fixture_families": [
     "AUTOLOAD dynamic boundary",
+    "dynamic import via variable",
     "dynamic require boundary",
     "empty import suppression",
     "eval STRING dynamic boundary",
@@ -27,20 +32,24 @@
     "generated accessor",
     "imported function visibility",
     "inherited method",
+    "normal static missing symbol",
     "qualified vs bare references",
     "role method",
     "same bare sub in two packages",
+    "static class dynamic import",
+    "symbolic dereference assign",
     "typeglob alias"
   ],
   "fact_rows": {
     "declaration_facts": {
       "status": "available",
-      "total_facts": 31,
+      "total_facts": 40,
       "fixture_coverage": {
-        "covered_fixture_count": 12,
-        "total_fixture_count": 12,
+        "covered_fixture_count": 16,
+        "total_fixture_count": 16,
         "covered_fixture_families": [
           "AUTOLOAD dynamic boundary",
+          "dynamic import via variable",
           "dynamic require boundary",
           "empty import suppression",
           "eval STRING dynamic boundary",
@@ -48,27 +57,31 @@
           "generated accessor",
           "imported function visibility",
           "inherited method",
+          "normal static missing symbol",
           "qualified vs bare references",
           "role method",
           "same bare sub in two packages",
+          "static class dynamic import",
+          "symbolic dereference assign",
           "typeglob alias"
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 111,
-        "high_confidence_facts": 111,
+        "exact_facts": 154,
+        "high_confidence_facts": 152,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 2
       }
     },
     "definition_candidates": {
       "status": "available",
-      "total_facts": 31,
+      "total_facts": 40,
       "fixture_coverage": {
-        "covered_fixture_count": 12,
-        "total_fixture_count": 12,
+        "covered_fixture_count": 16,
+        "total_fixture_count": 16,
         "covered_fixture_families": [
           "AUTOLOAD dynamic boundary",
+          "dynamic import via variable",
           "dynamic require boundary",
           "empty import suppression",
           "eval STRING dynamic boundary",
@@ -76,15 +89,18 @@
           "generated accessor",
           "imported function visibility",
           "inherited method",
+          "normal static missing symbol",
           "qualified vs bare references",
           "role method",
           "same bare sub in two packages",
+          "static class dynamic import",
+          "symbolic dereference assign",
           "typeglob alias"
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 111,
-        "high_confidence_facts": 111,
+        "exact_facts": 154,
+        "high_confidence_facts": 152,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 2
       }
@@ -93,10 +109,11 @@
       "status": "available",
       "total_facts": 3,
       "fixture_coverage": {
-        "covered_fixture_count": 12,
-        "total_fixture_count": 12,
+        "covered_fixture_count": 16,
+        "total_fixture_count": 16,
         "covered_fixture_families": [
           "AUTOLOAD dynamic boundary",
+          "dynamic import via variable",
           "dynamic require boundary",
           "empty import suppression",
           "eval STRING dynamic boundary",
@@ -104,27 +121,31 @@
           "generated accessor",
           "imported function visibility",
           "inherited method",
+          "normal static missing symbol",
           "qualified vs bare references",
           "role method",
           "same bare sub in two packages",
+          "static class dynamic import",
+          "symbolic dereference assign",
           "typeglob alias"
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 111,
-        "high_confidence_facts": 111,
+        "exact_facts": 154,
+        "high_confidence_facts": 152,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 2
       }
     },
     "import_specs": {
       "status": "available",
-      "total_facts": 7,
+      "total_facts": 11,
       "fixture_coverage": {
-        "covered_fixture_count": 12,
-        "total_fixture_count": 12,
+        "covered_fixture_count": 16,
+        "total_fixture_count": 16,
         "covered_fixture_families": [
           "AUTOLOAD dynamic boundary",
+          "dynamic import via variable",
           "dynamic require boundary",
           "empty import suppression",
           "eval STRING dynamic boundary",
@@ -132,15 +153,18 @@
           "generated accessor",
           "imported function visibility",
           "inherited method",
+          "normal static missing symbol",
           "qualified vs bare references",
           "role method",
           "same bare sub in two packages",
+          "static class dynamic import",
+          "symbolic dereference assign",
           "typeglob alias"
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 111,
-        "high_confidence_facts": 111,
+        "exact_facts": 154,
+        "high_confidence_facts": 152,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 2
       }
@@ -149,10 +173,11 @@
       "status": "available",
       "total_facts": 1,
       "fixture_coverage": {
-        "covered_fixture_count": 12,
-        "total_fixture_count": 12,
+        "covered_fixture_count": 16,
+        "total_fixture_count": 16,
         "covered_fixture_families": [
           "AUTOLOAD dynamic boundary",
+          "dynamic import via variable",
           "dynamic require boundary",
           "empty import suppression",
           "eval STRING dynamic boundary",
@@ -160,27 +185,31 @@
           "generated accessor",
           "imported function visibility",
           "inherited method",
+          "normal static missing symbol",
           "qualified vs bare references",
           "role method",
           "same bare sub in two packages",
+          "static class dynamic import",
+          "symbolic dereference assign",
           "typeglob alias"
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 111,
-        "high_confidence_facts": 111,
+        "exact_facts": 154,
+        "high_confidence_facts": 152,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 2
       }
     },
     "occurrence_facts": {
       "status": "available",
-      "total_facts": 15,
+      "total_facts": 25,
       "fixture_coverage": {
-        "covered_fixture_count": 12,
-        "total_fixture_count": 12,
+        "covered_fixture_count": 16,
+        "total_fixture_count": 16,
         "covered_fixture_families": [
           "AUTOLOAD dynamic boundary",
+          "dynamic import via variable",
           "dynamic require boundary",
           "empty import suppression",
           "eval STRING dynamic boundary",
@@ -188,15 +217,18 @@
           "generated accessor",
           "imported function visibility",
           "inherited method",
+          "normal static missing symbol",
           "qualified vs bare references",
           "role method",
           "same bare sub in two packages",
+          "static class dynamic import",
+          "symbolic dereference assign",
           "typeglob alias"
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 111,
-        "high_confidence_facts": 111,
+        "exact_facts": 154,
+        "high_confidence_facts": 152,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 2
       }
@@ -205,10 +237,11 @@
       "status": "available",
       "total_facts": 2,
       "fixture_coverage": {
-        "covered_fixture_count": 12,
-        "total_fixture_count": 12,
+        "covered_fixture_count": 16,
+        "total_fixture_count": 16,
         "covered_fixture_families": [
           "AUTOLOAD dynamic boundary",
+          "dynamic import via variable",
           "dynamic require boundary",
           "empty import suppression",
           "eval STRING dynamic boundary",
@@ -216,15 +249,18 @@
           "generated accessor",
           "imported function visibility",
           "inherited method",
+          "normal static missing symbol",
           "qualified vs bare references",
           "role method",
           "same bare sub in two packages",
+          "static class dynamic import",
+          "symbolic dereference assign",
           "typeglob alias"
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 111,
-        "high_confidence_facts": 111,
+        "exact_facts": 154,
+        "high_confidence_facts": 152,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 2
       }
@@ -233,10 +269,11 @@
       "status": "available",
       "total_facts": 1,
       "fixture_coverage": {
-        "covered_fixture_count": 12,
-        "total_fixture_count": 12,
+        "covered_fixture_count": 16,
+        "total_fixture_count": 16,
         "covered_fixture_families": [
           "AUTOLOAD dynamic boundary",
+          "dynamic import via variable",
           "dynamic require boundary",
           "empty import suppression",
           "eval STRING dynamic boundary",
@@ -244,15 +281,18 @@
           "generated accessor",
           "imported function visibility",
           "inherited method",
+          "normal static missing symbol",
           "qualified vs bare references",
           "role method",
           "same bare sub in two packages",
+          "static class dynamic import",
+          "symbolic dereference assign",
           "typeglob alias"
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 111,
-        "high_confidence_facts": 111,
+        "exact_facts": 154,
+        "high_confidence_facts": 152,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 2
       }
@@ -261,10 +301,11 @@
       "status": "available",
       "total_facts": 1,
       "fixture_coverage": {
-        "covered_fixture_count": 12,
-        "total_fixture_count": 12,
+        "covered_fixture_count": 16,
+        "total_fixture_count": 16,
         "covered_fixture_families": [
           "AUTOLOAD dynamic boundary",
+          "dynamic import via variable",
           "dynamic require boundary",
           "empty import suppression",
           "eval STRING dynamic boundary",
@@ -272,15 +313,18 @@
           "generated accessor",
           "imported function visibility",
           "inherited method",
+          "normal static missing symbol",
           "qualified vs bare references",
           "role method",
           "same bare sub in two packages",
+          "static class dynamic import",
+          "symbolic dereference assign",
           "typeglob alias"
         ]
       },
       "confidence_breakdown": {
-        "exact_facts": 111,
-        "high_confidence_facts": 111,
+        "exact_facts": 154,
+        "high_confidence_facts": 152,
         "heuristic_facts": 1,
         "dynamic_boundary_facts": 2
       }
@@ -343,7 +387,7 @@
     },
     "semantic_fact_counts_nonzero": {
       "status": "pass",
-      "value": "59",
+      "value": "82",
       "threshold": "> 0",
       "evidence": "semantic fixture indexing"
     },

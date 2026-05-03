@@ -2,21 +2,21 @@
 
 Measured: `deterministic-fixture-baseline`  
 Fixture family version: `1`  
-Fixtures loaded: `12`
+Fixtures loaded: `16`
 
 ## Fact Coverage
 
 | Row | Status | Facts | Coverage | Exact | High | Heuristic | Dynamic boundary |
 |---|---|---:|---:|---:|---:|---:|---:|
-| declaration_facts | available | 31 | 12/12 | 111 | 111 | 1 | 2 |
-| definition_candidates | available | 31 | 12/12 | 111 | 111 | 1 | 2 |
-| export_facts | available | 3 | 12/12 | 111 | 111 | 1 | 2 |
-| import_specs | available | 7 | 12/12 | 111 | 111 | 1 | 2 |
-| inheritance_edges | available | 1 | 12/12 | 111 | 111 | 1 | 2 |
-| occurrence_facts | available | 15 | 12/12 | 111 | 111 | 1 | 2 |
-| package_graph_edges | available | 2 | 12/12 | 111 | 111 | 1 | 2 |
-| reference_edges | available | 1 | 12/12 | 111 | 111 | 1 | 2 |
-| role_composition_edges | available | 1 | 12/12 | 111 | 111 | 1 | 2 |
+| declaration_facts | available | 40 | 16/16 | 154 | 152 | 1 | 2 |
+| definition_candidates | available | 40 | 16/16 | 154 | 152 | 1 | 2 |
+| export_facts | available | 3 | 16/16 | 154 | 152 | 1 | 2 |
+| import_specs | available | 11 | 16/16 | 154 | 152 | 1 | 2 |
+| inheritance_edges | available | 1 | 16/16 | 154 | 152 | 1 | 2 |
+| occurrence_facts | available | 25 | 16/16 | 154 | 152 | 1 | 2 |
+| package_graph_edges | available | 2 | 16/16 | 154 | 152 | 1 | 2 |
+| reference_edges | available | 1 | 16/16 | 154 | 152 | 1 | 2 |
+| role_composition_edges | available | 1 | 16/16 | 154 | 152 | 1 | 2 |
 
 ## Readiness Rows
 
@@ -31,7 +31,7 @@ Fixtures loaded: `12`
 | rename_unsafe_edit_count | pass | 0 | 0 | rename plan query fixtures |
 | safe_delete_blocker_fixture_pass_rate | pass | 100% | 100% | safe-delete plan query fixtures |
 | safe_delete_plan | pass | 100% | 100% | safe-delete plan query fixtures |
-| semantic_fact_counts_nonzero | pass | 59 | > 0 | semantic fixture indexing |
+| semantic_fact_counts_nonzero | pass | 82 | > 0 | semantic fixture indexing |
 | undefined_symbol_false_positive_fixture_rate | pass | 0% | 0% | diagnostics fixture receipts |
 | visible_symbols_fixture_pass_rate | pass | 100% | 100% | workspace scorecard fixtures |
 
@@ -43,6 +43,7 @@ Fixtures loaded: `12`
 ## Fixture IDs
 
 - `autoload_dynamic_boundary`
+- `dynamic_import_via_variable`
 - `dynamic_require_boundary`
 - `empty_import_suppression`
 - `eval_string_dynamic_boundary`
@@ -50,9 +51,12 @@ Fixtures loaded: `12`
 - `generated_accessor`
 - `imported_function_visibility`
 - `inherited_method`
+- `normal_static_missing_symbol`
 - `qualified_vs_bare_references`
 - `role_method`
 - `same_bare_sub_two_packages`
+- `static_class_dynamic_import`
+- `symbolic_deref_assign`
 - `typeglob_alias`
 
 0.13.2 semantic proof rail: scorecard rows are deterministic and fixture-backed; semantic expansion remains conservative for unavailable rows.

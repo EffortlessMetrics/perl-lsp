@@ -628,6 +628,15 @@ mod tests {
         fn safe_delete_plan(&self, entity_id: EntityId) -> SafeDeletePlan {
             SafeDeletePlan::new(entity_id, String::new(), vec![], vec![])
         }
+
+        fn dynamic_boundary_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _symbol: Option<&str>,
+        ) -> Option<OccurrenceFact> {
+            None
+        }
     }
 
     struct RankedDefinitionStub {
@@ -676,6 +685,15 @@ mod tests {
 
         fn safe_delete_plan(&self, entity_id: EntityId) -> SafeDeletePlan {
             SafeDeletePlan::new(entity_id, String::new(), vec![], vec![])
+        }
+
+        fn dynamic_boundary_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _symbol: Option<&str>,
+        ) -> Option<OccurrenceFact> {
+            None
         }
     }
 

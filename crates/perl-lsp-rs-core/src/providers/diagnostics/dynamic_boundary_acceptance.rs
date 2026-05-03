@@ -139,6 +139,29 @@ mod tests {
             };
             SafeDeletePlan::new(entity_id, String::new(), blockers, vec![])
         }
+
+        fn dynamic_boundary_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _symbol: Option<&str>,
+        ) -> Option<OccurrenceFact> {
+            // Stub: stubs that report rename/safe-delete blocked as DynamicBoundary
+            // also report dynamic boundary coverage at any position.
+            if self.rename_blocked || self.safe_delete_blocked {
+                Some(OccurrenceFact {
+                    id: perl_semantic_facts::OccurrenceId(9999),
+                    kind: perl_semantic_facts::OccurrenceKind::DynamicBoundary,
+                    entity_id: None,
+                    anchor_id: AnchorId(9999),
+                    scope_id: None,
+                    provenance: perl_semantic_facts::Provenance::DynamicBoundary,
+                    confidence: perl_semantic_facts::Confidence::Low,
+                })
+            } else {
+                None
+            }
+        }
     }
 
     // ── Helpers ──
@@ -474,6 +497,147 @@ mod tests {
             diagnostics_undefined_symbol_cutover(true, &stub, "test_sym", FileId(1), None, 0, true);
 
         assert_eq!(outcome.receipt.schema_version, 1, "receipt schema version should be 1");
+        Ok(())
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // Fixture suite 5: new missing-case patterns (Q5 provenance upgrade)
+    // ════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn dynamic_import_via_variable_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+        // Pattern: `require $module; $module->import(qw(foo))`
+        // 'foo' is plausibly imported — suppress the undefined-symbol diagnostic.
+        let stub = DynamicBoundaryStub::empty_in_dynamic_scope();
+        let outcome = assert_dynamic_scope_suppresses(&stub, "foo")?;
+        assert_receipt_explains_dynamic(&outcome)?;
+        Ok(())
+    }
+
+    #[test]
+    fn static_class_dynamic_args_import_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+        // Pattern: `Foo->import(@names)` — static class, dynamic arg list.
+        // The imported symbols are not statically known — suppress.
+        let stub = DynamicBoundaryStub::empty_in_dynamic_scope();
+        let outcome = assert_dynamic_scope_suppresses(&stub, "bar")?;
+        assert_receipt_explains_dynamic(&outcome)?;
+        Ok(())
+    }
+
+    #[test]
+    fn symbolic_deref_variable_suppressed() -> Result<(), Box<dyn std::error::Error>> {
+        // Pattern: `${$name} = 1`
+        // Variable created via symbolic dereference — suppress the diagnostic.
+        let stub = DynamicBoundaryStub::empty_in_dynamic_scope();
+        let outcome = assert_dynamic_scope_suppresses(&stub, "dynamic_var")?;
+        assert_receipt_explains_dynamic(&outcome)?;
+        Ok(())
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // Control fixture: normal static missing symbol MUST still fire
+    // ════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn normal_static_missing_symbol_still_fires() -> Result<(), Box<dyn std::error::Error>> {
+        // Control fixture: no dynamic boundary, no semantic candidates.
+        // A genuinely missing symbol MUST produce Warn, not Suppress.
+        // The stub has no candidates and is NOT in a dynamic scope.
+        struct StaticNoDynamicStub;
+
+        impl SemanticQueries for StaticNoDynamicStub {
+            fn symbol_at(&self, _: FileId, _: u32) -> Option<(EntityFact, OccurrenceFact)> {
+                None
+            }
+            fn definitions(&self, _: &str, _: &QueryContext) -> Vec<DefinitionCandidate> {
+                Vec::new() // no candidates → symbol is undefined
+            }
+            fn references(&self, _: EntityId) -> Vec<OccurrenceFact> {
+                Vec::new()
+            }
+            fn visible_symbols_at(
+                &self,
+                _: FileId,
+                _: u32,
+                _: Option<ScopeId>,
+            ) -> Vec<VisibleSymbol> {
+                Vec::new()
+            }
+            fn method_candidates(&self, _: &str, _: &str) -> Vec<DefinitionCandidate> {
+                Vec::new()
+            }
+            fn rename_plan(&self, id: EntityId, n: &str) -> RenamePlan {
+                RenamePlan::new(id, String::new(), n.to_string(), vec![], vec![], vec![])
+            }
+            fn safe_delete_plan(&self, id: EntityId) -> SafeDeletePlan {
+                SafeDeletePlan::new(id, String::new(), vec![], vec![])
+            }
+            fn dynamic_boundary_at(
+                &self,
+                _: FileId,
+                _: u32,
+                _: Option<&str>,
+            ) -> Option<OccurrenceFact> {
+                None // no dynamic boundary anywhere
+            }
+        }
+
+        let stub = StaticNoDynamicStub;
+        let outcome = diagnostics_undefined_symbol_cutover(
+            true,
+            &stub,
+            "truly_undefined_sub",
+            FileId(1),
+            None,
+            0,
+            false, // NOT in dynamic scope
+        );
+
+        assert_eq!(
+            outcome.action,
+            DiagnosticAction::Warn,
+            "static missing symbol with no candidates must produce Warn (control fixture: normal_static_missing_symbol.pl)"
+        );
+        assert_eq!(
+            outcome.classification,
+            DiagnosticClassification::Exact,
+            "no candidates → Exact classification → Warn"
+        );
+        Ok(())
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // dynamic_boundary_at integration: the stub reports coverage
+    // ════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn dynamic_boundary_stub_returns_coverage_when_blocked()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // When the stub is in dynamic scope (rename/safe-delete blocked),
+        // dynamic_boundary_at returns Some — confirming the stub contract.
+        let stub = DynamicBoundaryStub::dynamic_scope();
+        let result = stub.dynamic_boundary_at(FileId(1), 0, Some("any_sym"));
+        assert!(result.is_some(), "dynamic_scope stub should report coverage at any position");
+        let occ = result.ok_or("expected OccurrenceFact")?;
+        assert_eq!(occ.kind, perl_semantic_facts::OccurrenceKind::DynamicBoundary);
+        assert_eq!(occ.provenance, perl_semantic_facts::Provenance::DynamicBoundary);
+        assert_eq!(occ.confidence, perl_semantic_facts::Confidence::Low);
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_boundary_stub_returns_none_when_not_blocked()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // When the stub has no dynamic scope, dynamic_boundary_at returns None.
+        let stub = DynamicBoundaryStub {
+            definitions_result: vec![],
+            rename_blocked: false,
+            rename_block_reason: None,
+            safe_delete_blocked: false,
+            safe_delete_block_reason: None,
+        };
+        let result = stub.dynamic_boundary_at(FileId(1), 0, Some("any_sym"));
+        assert!(result.is_none(), "non-dynamic stub should return None from dynamic_boundary_at");
         Ok(())
     }
 }

@@ -197,13 +197,19 @@ impl ImportExtractor {
     }
 
     /// Build an [`ImportSpec`] for `require $var` (dynamic require).
+    ///
+    /// Uses `Provenance::DynamicBoundary + Confidence::Low` because the module
+    /// identity is not statically known — only the pattern is known. This
+    /// provenance marks the import site for the diagnostics suppressor so that
+    /// symbols "plausibly imported" via dynamic require are not flagged as
+    /// undefined.
     fn make_dynamic_require(file_id: FileId, node: &Node) -> ImportSpec {
         let anchor_id = Self::anchor_from_node(node);
         ImportSpec {
             module: String::new(),
             kind: ImportKind::DynamicRequire,
             symbols: ImportSymbols::Dynamic,
-            provenance: Provenance::ExactAst,
+            provenance: Provenance::DynamicBoundary,
             confidence: Confidence::Low,
             file_id: Some(file_id),
             anchor_id: Some(anchor_id),
@@ -1016,7 +1022,9 @@ Foo::Bar->import(@names);
 
         assert_eq!(spec.module, "");
         assert_eq!(spec.symbols, ImportSymbols::Dynamic);
-        assert_eq!(spec.provenance, Provenance::ExactAst);
+        // DynamicRequire must use DynamicBoundary provenance (Q5 architectural decision):
+        // the module identity is not statically known, so we cannot claim ExactAst.
+        assert_eq!(spec.provenance, Provenance::DynamicBoundary);
         assert_eq!(spec.confidence, Confidence::Low);
         assert_eq!(spec.file_id, Some(FileId(1)));
         assert!(spec.anchor_id.is_some(), "anchor_id should be populated");
