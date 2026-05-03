@@ -687,10 +687,28 @@ impl<'a> Parser<'a> {
                             } else {
                                 Box::new(self.parse_assignment()?)
                             };
-                            self.expect(TokenKind::Comma)?;
+                            // Accept comma or fat arrow between variable and
+                            // package — Perl treats `=>` as a synonym for `,`.
+                            match self.peek_kind() {
+                                Some(TokenKind::Comma | TokenKind::FatArrow) => {
+                                    self.consume_token()?;
+                                }
+                                _ => {
+                                    return Err(ParseError::unexpected(
+                                        TokenKind::Comma.display_name(),
+                                        self.peek_kind()
+                                            .map(|k| k.display_name())
+                                            .unwrap_or("end of input"),
+                                        self.current_position(),
+                                    ));
+                                }
+                            }
                             let package = Box::new(self.parse_assignment()?);
                             let mut args = vec![];
-                            while self.peek_kind() == Some(TokenKind::Comma) {
+                            while matches!(
+                                self.peek_kind(),
+                                Some(TokenKind::Comma | TokenKind::FatArrow)
+                            ) {
                                 self.consume_token()?;
                                 args.push(self.parse_assignment()?);
                             }
