@@ -231,8 +231,7 @@ pub fn bump(repo_root: &Path, new_version: &str) -> Result<BumpReport> {
     // master cannot be left in drift after a release-prep PR merges.
     if append_release_history_row(repo_root, new_version)? {
         report.files_updated += 1;
-        report.touched_files
-            .push(PathBuf::from("RELEASE_HISTORY.md"));
+        report.touched_files.push(PathBuf::from("RELEASE_HISTORY.md"));
     }
 
     Ok(report)
@@ -255,8 +254,8 @@ fn append_release_history_row(repo_root: &Path, new_version: &str) -> Result<boo
     if !path.exists() {
         return Ok(false);
     }
-    let content = fs::read_to_string(&path)
-        .map_err(|e| eyre!("reading {}: {e}", path.display()))?;
+    let content =
+        fs::read_to_string(&path).map_err(|e| eyre!("reading {}: {e}", path.display()))?;
 
     // Idempotency: the ledger row begins with "| [<version>]". If we find
     // that prefix already, this version has been added — don't duplicate.
@@ -391,10 +390,7 @@ fn find_topmost_ledger_version(content: &str) -> Option<String> {
 /// can backfill the actual publish date if needed.
 fn today_iso_date() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
     // Ymd from unix epoch: standard civil-from-days conversion (Howard Hinnant).
     let z = now.div_euclid(86_400) + 719_468;
     let era = z.div_euclid(146_097);
@@ -1133,19 +1129,16 @@ perl-token = { path = "../perl-token", version = "0.42.0" }
 
         let content = fs::read_to_string(&path)?;
         // New row is now topmost data row.
-        let row_idx = content
-            .find("| [0.13.4]")
-            .expect("row for 0.13.4 should be inserted");
+        let row_idx = content.find("| [0.13.4]").expect("row for 0.13.4 should be inserted");
         let prev_row_idx = content.find("| [0.13.3]").unwrap();
         assert!(row_idx < prev_row_idx, "0.13.4 row should appear above 0.13.3");
 
         // Link refs all present in their respective sections.
         assert!(content.contains("[n-0.13.4]: docs/releases/v0.13.4.md"));
         assert!(content.contains("[0.13.4]: docs/releases/v0.13.4.md"));
-        assert!(
-            content
-                .contains("[gh-0.13.4]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.4")
-        );
+        assert!(content.contains(
+            "[gh-0.13.4]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.4"
+        ));
         assert!(content.contains(
             "[v0.13.3...v0.13.4]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.3...v0.13.4"
         ));
@@ -1220,10 +1213,7 @@ perl-token = { path = "../perl-token", version = "0.42.0" }
     #[test]
     fn find_topmost_ledger_version_handles_pre_release() {
         let content = "## Release ledger\n\n| [0.14.0-rc1] | `v0.14.0-rc1` | ... |\n";
-        assert_eq!(
-            find_topmost_ledger_version(content).as_deref(),
-            Some("0.14.0-rc1")
-        );
+        assert_eq!(find_topmost_ledger_version(content).as_deref(), Some("0.14.0-rc1"));
     }
 
     #[test]
