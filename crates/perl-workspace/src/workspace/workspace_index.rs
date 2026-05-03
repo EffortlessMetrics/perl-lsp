@@ -2470,16 +2470,36 @@ impl WorkspaceIndex {
             decl_facts.entities.iter().map(|e| (e.canonical_name.clone(), e.id)).collect();
         let ref_facts = symbol_refs_to_semantic_facts(&refs, file_id, &entity_ids_by_name);
 
-        // No imports or dynamic boundaries available at this layer yet —
-        // those will be supplied by perl-semantic-analyzer in later phases.
-        crate::semantic::facts::build_canonical_fact_shard(
+        // Extract dynamic boundary evidence for `eval "sub NAME { ... }"` patterns.
+        // Non-literal evals (e.g. `eval $code`) are intentionally skipped — the
+        // sub name is not statically known and no evidence is emitted.
+        let eval_sub_triples =
+            crate::semantic::eval_sub_extractor::extract_eval_sub_boundaries(ast, file_id);
+        let dynamic_boundaries: Vec<perl_semantic_facts::OccurrenceFact> =
+            eval_sub_triples.iter().map(|(_, _, occ)| occ.clone()).collect();
+
+        // Build the canonical fact shard.
+        // Import specs (for `use`, `require`, `ClassName->import()`) are
+        // populated separately via ImportExportIndex — not passed here.
+        let mut shard = crate::semantic::facts::build_canonical_fact_shard(
             uri,
             content_hash,
             &decl_facts,
             &ref_facts,
             &[],
-            &[],
-        )
+            &dynamic_boundaries,
+        );
+
+        // Merge entity and anchor facts from eval-sub extraction into the shard.
+        // The `build_canonical_fact_shard` function only accepts OccurrenceFact
+        // slices for dynamic_boundaries; entities and anchors must be merged
+        // manually so that the query can resolve entity names from occurrence IDs.
+        for (entity, anchor, _) in eval_sub_triples {
+            shard.entities.push(entity);
+            shard.anchors.push(anchor);
+        }
+
+        shard
     }
 
     /// Replace a [`FileFactShard`] with per-category incremental invalidation.

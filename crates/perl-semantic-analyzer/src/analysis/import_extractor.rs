@@ -49,6 +49,20 @@ impl ImportExtractor {
             }
         }
 
+        // Detect standalone `ClassName->import(...)` method calls where
+        // `ClassName` is a static identifier (not a variable).
+        //
+        // These are NOT preceded by a `require` statement. The exported
+        // symbol list is often dynamic (e.g. `Foo->import(@names)`), so
+        // we emit `ImportSymbols::Dynamic` conservatively.
+        //
+        // This covers Case 3 in the PR-B spec: a static class name with
+        // dynamic arguments signals that some set of symbols is imported
+        // from `Foo`, but the exact names are not statically known.
+        if let Some(spec) = Self::try_classify_standalone_class_import(node, file_id) {
+            out.push(spec);
+        }
+
         // For statement-list containers (Program, Block, Package), scan
         // consecutive statements to detect `require Module; Module->import(...)`
         // pairs and standalone `require` statements.
@@ -67,6 +81,62 @@ impl ImportExtractor {
         for child in node.children() {
             Self::walk(child, file_id, out);
         }
+    }
+
+    /// Detect a standalone `ClassName->import(...)` call where `ClassName`
+    /// is a static identifier (not a variable).
+    ///
+    /// Returns `None` when:
+    /// - The node is not a `MethodCall`.
+    /// - The method name is not `"import"`.
+    /// - The object is a variable (those are covered by `walk_statements`).
+    /// - The argument list is entirely static (fully explicit symbols) — those
+    ///   are already captured by `walk_statements` when preceded by `require`.
+    ///
+    /// Returns an `ImportSpec` with `ImportSymbols::Dynamic` when the
+    /// argument list contains any dynamic argument (e.g. `@names`, `$names`).
+    /// Returns `None` when all arguments are static strings or `qw(...)` lists
+    /// (those produce `Explicit` specs through `walk_statements`).
+    fn try_classify_standalone_class_import(
+        node: &Node,
+        file_id: FileId,
+    ) -> Option<ImportSpec> {
+        let (object, method, args) = match &node.kind {
+            NodeKind::MethodCall { object, method, args } => (object, method, args),
+            _ => return None,
+        };
+
+        if method != "import" {
+            return None;
+        }
+
+        // Only static class names (Identifier nodes), not variables.
+        let class_name = match &object.kind {
+            NodeKind::Identifier { name } => name.as_str(),
+            _ => return None,
+        };
+
+        // Classify the argument list.
+        let symbols = Self::extract_import_call_symbols(args);
+
+        // Only emit evidence when the arguments are Dynamic (unknown at
+        // compile time). Explicit/tag lists are precise and do not need
+        // the conservative "any bareword might be imported" treatment.
+        if !matches!(symbols, ImportSymbols::Dynamic) {
+            return None;
+        }
+
+        let anchor_id = Self::anchor_from_node(node);
+        Some(ImportSpec {
+            module: class_name.to_string(),
+            kind: ImportKind::Use,
+            symbols,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+            file_id: Some(file_id),
+            anchor_id: Some(anchor_id),
+            scope_id: None,
+        })
     }
 
     /// Scan a list of sibling statements for `require` patterns.
@@ -1086,6 +1156,61 @@ require $dynamic;
 
         assert_eq!(spec.kind, ImportKind::Require);
         assert_eq!(spec.symbols, ImportSymbols::Default);
+        Ok(())
+    }
+
+    // ── standalone ClassName->import(@names) — Case 3 (PR-B) ────────────
+
+    #[test]
+    fn standalone_class_dynamic_import_produces_dynamic_spec() -> Result<(), String> {
+        // `Foo->import(@names)` — static class, dynamic arg list.
+        // Should produce one ImportSpec with ImportSymbols::Dynamic.
+        let specs = parse_and_extract(r#"Foo->import(@names);"#);
+        let spec = specs
+            .iter()
+            .find(|s| s.module == "Foo" && matches!(s.symbols, ImportSymbols::Dynamic))
+            .ok_or("expected Dynamic ImportSpec for Foo")?;
+
+        assert_eq!(spec.provenance, Provenance::DynamicBoundary);
+        assert_eq!(spec.confidence, Confidence::Low);
+        Ok(())
+    }
+
+    #[test]
+    fn standalone_class_explicit_import_produces_no_dynamic_spec() -> Result<(), String> {
+        // `Foo->import('bar')` — static class, static arg list.
+        // Should NOT produce a Dynamic ImportSpec (explicit symbols only).
+        let specs = parse_and_extract(r#"Foo->import('bar');"#);
+        let dynamic_specs: Vec<_> = specs
+            .iter()
+            .filter(|s| matches!(s.symbols, ImportSymbols::Dynamic))
+            .collect();
+
+        assert!(
+            dynamic_specs.is_empty(),
+            "explicit import args must not produce a Dynamic spec"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn variable_class_import_does_not_produce_standalone_spec() -> Result<(), String> {
+        // `$var->import(@names)` — variable object, not a static class name.
+        // The standalone extractor should not match variable-object calls.
+        let specs = parse_and_extract(r#"$var->import(@names);"#);
+        // Variable-object calls are handled by require+import pair logic, not
+        // the standalone path. Without a require, this should produce no spec.
+        let standalone_dynamic: Vec<_> = specs
+            .iter()
+            .filter(|s| matches!(s.symbols, ImportSymbols::Dynamic) && s.module.is_empty())
+            .collect();
+
+        // The standalone extractor only handles Identifier objects, so this
+        // should produce nothing via the standalone path.
+        assert!(
+            standalone_dynamic.is_empty(),
+            "variable-class import without require must not produce standalone Dynamic spec"
+        );
         Ok(())
     }
 }
