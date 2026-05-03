@@ -27,7 +27,6 @@ Perl has decades of real production code, but editor tooling still struggles wit
 
 These are behavioral and corpus-backed signals, not feature-inventory counts. Protocol coverage and full capability catalogs live in the generated status docs.
 
-<!-- BEGIN: README_STATUS -->
 | Area | Current signal |
 |---|---:|
 | Release track | `v0.13.3` public-alpha patch |
@@ -42,7 +41,6 @@ These are behavioral and corpus-backed signals, not feature-inventory counts. Pr
 | Issue-regression UX workflows | 13 workflows tracked |
 | Workspace stale-index defects | 0 / 7 tested scenarios |
 | Multi-root workspace tests | 8 / 8 |
-<!-- END: README_STATUS -->
 
 See [project status](docs/project/status/index.md), [parser status](docs/project/status/parser.md), [workspace status](docs/project/status/workspace.md), and [quality metrics](docs/project/status/quality.md) for generated details.
 
