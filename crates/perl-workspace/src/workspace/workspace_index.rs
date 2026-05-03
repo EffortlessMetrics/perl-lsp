@@ -2587,6 +2587,50 @@ impl WorkspaceIndex {
         self.fact_shards.read().get(&key).cloned()
     }
 
+    /// Compute the [`FileId`] for a URI using the same hash used during indexing.
+    ///
+    /// Returns `None` if the URI has not been indexed (no fact shard is present).
+    pub fn file_id_for_uri(&self, uri: &str) -> Option<FileId> {
+        let key = DocumentStore::uri_key(&Self::normalize_uri(uri));
+        self.fact_shards.read().get(&key).map(|shard| shard.file_id)
+    }
+
+    /// Invoke a scoped callback with [`WorkspaceSemanticQueries`] built from
+    /// the current semantic indexes for the given URI.
+    ///
+    /// The callback receives the resolved [`FileId`] and a
+    /// [`WorkspaceSemanticQueries`] facade that borrows from read-locked
+    /// semantic indexes. Locks are released when `f` returns.
+    ///
+    /// Returns `Some(result)` if the URI is indexed and semantic data is
+    /// available, `None` if the URI has not been indexed or its fact shard is
+    /// absent (the caller should fall back to legacy diagnostics).
+    pub fn with_semantic_queries_for_uri<R>(
+        &self,
+        uri: &str,
+        f: impl FnOnce(FileId, crate::semantic::queries::WorkspaceSemanticQueries<'_>) -> R,
+    ) -> Option<R> {
+        let key = DocumentStore::uri_key(&Self::normalize_uri(uri));
+
+        // Acquire all three read guards simultaneously. The lock order must be
+        // consistent with every other site that acquires multiple locks to avoid
+        // deadlock: shards → reference_index → import_export_index.
+        let shards_guard = self.fact_shards.read();
+        let ref_guard = self.semantic_reference_index.read();
+        let ie_guard = self.semantic_import_export_index.read();
+
+        // Verify the URI is indexed before entering the callback.
+        let file_id = shards_guard.get(&key)?.file_id;
+
+        let queries = crate::semantic::queries::WorkspaceSemanticQueries::new(
+            &*ref_guard,
+            &*ie_guard,
+            &*shards_guard,
+        );
+
+        Some(f(file_id, queries))
+    }
+
     /// Return the number of indexed files in the workspace
     pub fn file_count(&self) -> usize {
         let files = self.files.read();
@@ -6934,5 +6978,70 @@ MixedMod->import(qw(qw_one qw_two));
                 }
             }
         }
+    }
+}
+
+// ── with_semantic_queries_for_uri tests ──
+
+#[cfg(test)]
+mod semantic_query_callback_tests {
+    use super::*;
+    use perl_tdd_support::{must, must_some};
+
+    #[test]
+    fn with_semantic_queries_for_uri_indexed_uri_invokes_callback(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/Foo.pm";
+        must(index.index_file(must(url::Url::parse(uri)), "sub foo { 1 }".to_string()));
+
+        let result = index.with_semantic_queries_for_uri(uri, |file_id, _queries| {
+            // Verify the file_id is consistent with the URI (non-zero hash).
+            assert_ne!(file_id.0, 0, "file_id should be non-zero");
+            42u32 // sentinel return value
+        });
+
+        assert_eq!(result, Some(42u32), "callback must run when URI is indexed");
+        Ok(())
+    }
+
+    #[test]
+    fn with_semantic_queries_for_uri_unknown_uri_returns_none(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        // Do NOT index anything.
+        let result = index.with_semantic_queries_for_uri("file:///not/indexed.pl", |_, _| 99u32);
+        assert!(result.is_none(), "unindexed URI must return None without invoking callback");
+        Ok(())
+    }
+
+    #[test]
+    fn with_semantic_queries_for_uri_file_id_matches_file_id_for_uri(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/Bar.pm";
+        must(index.index_file(must(url::Url::parse(uri)), "sub bar { 1 }".to_string()));
+
+        let direct_id = must_some(index.file_id_for_uri(uri));
+        let callback_id =
+            must_some(index.with_semantic_queries_for_uri(uri, |file_id, _q| file_id));
+
+        assert_eq!(
+            direct_id, callback_id,
+            "file_id_for_uri and with_semantic_queries_for_uri must agree"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn with_semantic_queries_for_uri_callback_not_called_when_not_indexed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let mut called = false;
+        let _ = index.with_semantic_queries_for_uri("file:///ghost.pl", |_, _| {
+            called = true;
+        });
+        assert!(!called, "callback must not be invoked for unindexed URI");
+        Ok(())
     }
 }
