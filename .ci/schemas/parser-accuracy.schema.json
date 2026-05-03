@@ -354,11 +354,47 @@
           "type": "string",
           "minLength": 1
         },
+        "family": {
+          "type": "string",
+          "minLength": 1
+        },
+        "metric": {
+          "type": "string",
+          "minLength": 1
+        },
         "line": {
           "$ref": "#/$defs/nonNegativeInteger"
         },
+        "expected": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "actual": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "nearest_predictions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source_excerpt": {
+          "type": "string"
+        },
         "details": {
           "type": "string"
+        },
+        "suggested_next_fix": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },
