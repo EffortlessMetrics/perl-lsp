@@ -4,7 +4,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-- **Crate**: `perl-workspace-index`
+- **Crate**: `perl-workspace`
 - **Version**: workspace (currently 0.12.3)
 - **Tier**: 3 (two-level internal dependencies)
 - **Purpose**: Central workspace indexing engine providing cross-file symbol lookup, document management, lifecycle state machine, bounded caching, and SLO monitoring for the Perl LSP server.
@@ -12,11 +12,11 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## Commands
 
 ```bash
-cargo build -p perl-workspace-index              # Build
-cargo test -p perl-workspace-index               # Run tests
-cargo clippy -p perl-workspace-index             # Lint
-cargo doc -p perl-workspace-index --open         # View docs
-cargo bench -p perl-workspace-index --features workspace  # Benchmarks
+cargo build -p perl-workspace              # Build
+cargo test -p perl-workspace               # Run tests
+cargo clippy -p perl-workspace             # Lint
+cargo doc -p perl-workspace --open         # View docs
+cargo bench -p perl-workspace --features workspace  # Benchmarks
 ```
 
 ## Architecture
@@ -72,7 +72,7 @@ cargo bench -p perl-workspace-index --features workspace  # Benchmarks
 ## Usage
 
 ```rust
-use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace::workspace_index::WorkspaceIndex;
 use url::Url;
 
 let index = WorkspaceIndex::new();
@@ -88,7 +88,7 @@ let syms = index.find_symbols("helper");
 ### Document Store
 
 ```rust
-use perl_workspace_index::workspace::document_store::DocumentStore;
+use perl_workspace::workspace::document_store::DocumentStore;
 
 let store = DocumentStore::new();
 store.open("file:///lib/Foo.pm".into(), 1, source.into());
@@ -100,7 +100,7 @@ store.close("file:///lib/Foo.pm");
 ### Production Coordinator
 
 ```rust
-use perl_workspace_index::workspace::production_coordinator::ProductionIndexCoordinator;
+use perl_workspace::workspace::production_coordinator::ProductionIndexCoordinator;
 
 let coordinator = ProductionIndexCoordinator::new();
 coordinator.initialize()?;
