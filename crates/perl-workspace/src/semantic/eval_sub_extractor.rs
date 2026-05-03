@@ -17,8 +17,8 @@
 //!   `UnquotedBareword` diagnostic for `NAME` at later call sites in the
 //!   same file.
 
-use crate::workspace::workspace_index::FileFactShard;
 use crate::ast::{Node, NodeKind};
+use crate::workspace::workspace_index::FileFactShard;
 use perl_semantic_facts::{
     AnchorFact, AnchorId, Confidence, EntityFact, EntityId, EntityKind, FileId, OccurrenceFact,
     OccurrenceId, OccurrenceKind, Provenance,
@@ -87,21 +87,18 @@ fn extract_from_eval_string(
 
     // Scan for `sub IDENTIFIER` patterns in the string content.
     let mut search = content;
-    let mut byte_pos = 0usize;
     while !search.is_empty() {
         // Find the next `sub ` keyword.
         let Some(sub_pos) = find_sub_keyword(search) else {
             break;
         };
 
-        byte_pos += sub_pos;
         let after_sub = &search[sub_pos + 3..]; // skip "sub"
-        byte_pos += 3;
 
         // Skip whitespace between `sub` and the name.
-        let ws_len = after_sub.len() - after_sub.trim_start_matches(|c: char| c.is_ascii_whitespace()).len();
+        let ws_len =
+            after_sub.len() - after_sub.trim_start_matches(|c: char| c.is_ascii_whitespace()).len();
         let after_ws = &after_sub[ws_len..];
-        byte_pos += ws_len;
 
         // Extract the identifier name.
         let name_len = after_ws
@@ -122,7 +119,6 @@ fn extract_from_eval_string(
             break;
         }
         search = &search[advance..];
-        byte_pos = byte_pos.saturating_sub(advance - advance); // reset relative tracking
     }
 }
 
@@ -131,9 +127,7 @@ fn extract_from_eval_string(
 fn find_sub_keyword(text: &str) -> Option<usize> {
     let mut start = 0;
     while start < text.len() {
-        let Some(pos) = text[start..].find("sub") else {
-            return None;
-        };
+        let pos = text[start..].find("sub")?;
         let abs_pos = start + pos;
 
         // Check left boundary: must be at start or preceded by non-word char.
@@ -283,7 +277,10 @@ mod tests {
 
     // ── Unit tests for extract_eval_sub_boundaries ──
 
-    fn parse_and_extract(code: &str, file_id: FileId) -> Vec<(EntityFact, AnchorFact, OccurrenceFact)> {
+    fn parse_and_extract(
+        code: &str,
+        file_id: FileId,
+    ) -> Vec<(EntityFact, AnchorFact, OccurrenceFact)> {
         let mut parser = crate::Parser::new(code);
         let ast = match parser.parse() {
             Ok(a) => a,
@@ -295,8 +292,7 @@ mod tests {
     #[test]
     fn extracts_single_sub_from_eval_string() -> Result<(), Box<dyn std::error::Error>> {
         let file_id = FileId(1);
-        let triples =
-            parse_and_extract(r#"eval "sub generated_from_string { 1 }";"#, file_id);
+        let triples = parse_and_extract(r#"eval "sub generated_from_string { 1 }";"#, file_id);
 
         assert_eq!(triples.len(), 1, "should extract exactly one sub");
         let (entity, _anchor, occurrence) = &triples[0];
@@ -312,10 +308,7 @@ mod tests {
     #[test]
     fn extracts_multiple_subs_from_eval_string() -> Result<(), Box<dyn std::error::Error>> {
         let file_id = FileId(2);
-        let triples = parse_and_extract(
-            r#"eval "sub foo { 1 } sub bar { 2 }";"#,
-            file_id,
-        );
+        let triples = parse_and_extract(r#"eval "sub foo { 1 } sub bar { 2 }";"#, file_id);
 
         assert_eq!(triples.len(), 2, "should extract two subs");
         let names: Vec<&str> = triples.iter().map(|(e, _, _)| e.canonical_name.as_str()).collect();
@@ -348,10 +341,7 @@ mod tests {
         // `eval "sub { 1 }"` — anonymous sub, no name to extract.
         let file_id = FileId(5);
         let triples = parse_and_extract(r#"eval "sub { 1 }";"#, file_id);
-        assert!(
-            triples.is_empty(),
-            "anonymous sub in eval must not produce named evidence"
-        );
+        assert!(triples.is_empty(), "anonymous sub in eval must not produce named evidence");
         Ok(())
     }
 

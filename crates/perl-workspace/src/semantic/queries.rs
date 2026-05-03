@@ -841,10 +841,11 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
         // `ImportSymbols::Dynamic` means the imported symbol list is not
         // statically known (e.g. `Foo->import(@names)` or `require $var`).
         // Any bareword in the file could plausibly come from this import.
-        let has_dynamic_import =
-            self.import_export_index.get_imports_for_file(file_id).iter().any(|spec| {
-                matches!(spec.symbols, perl_semantic_facts::ImportSymbols::Dynamic)
-            });
+        let has_dynamic_import = self
+            .import_export_index
+            .get_imports_for_file(file_id)
+            .iter()
+            .any(|spec| matches!(spec.symbols, perl_semantic_facts::ImportSymbols::Dynamic));
 
         if has_dynamic_import {
             // Return a synthetic DynamicBoundary occurrence as evidence.
@@ -864,10 +865,7 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
         //
         // This covers `eval "sub NAME { ... }"` patterns where the extractor
         // has emitted an OccurrenceFact with entity name == NAME.
-        let shard = match self.shard_for_file(file_id) {
-            Some(s) => s,
-            None => return None,
-        };
+        let shard = self.shard_for_file(file_id)?;
 
         for occurrence in &shard.occurrences {
             if occurrence.kind != OccurrenceKind::DynamicBoundary {
@@ -3842,7 +3840,8 @@ mod tests {
         use perl_semantic_facts::{ImportKind, ImportSpec, ImportSymbols};
 
         let file_id = FileId(100);
-        let shard = make_shard("file:///test/dyn_import.pl", file_id, vec![], vec![], vec![], vec![]);
+        let shard =
+            make_shard("file:///test/dyn_import.pl", file_id, vec![], vec![], vec![], vec![]);
         let mut shards = HashMap::new();
         shards.insert(shard.source_uri.clone(), shard);
 
@@ -3986,8 +3985,7 @@ mod tests {
         use perl_semantic_facts::{ImportKind, ImportSpec, ImportSymbols};
 
         let file_id = FileId(103);
-        let shard =
-            make_shard("file:///test/sigil.pl", file_id, vec![], vec![], vec![], vec![]);
+        let shard = make_shard("file:///test/sigil.pl", file_id, vec![], vec![], vec![], vec![]);
         let mut shards = HashMap::new();
         shards.insert(shard.source_uri.clone(), shard);
 

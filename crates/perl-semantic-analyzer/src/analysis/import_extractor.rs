@@ -97,10 +97,7 @@ impl ImportExtractor {
     /// argument list contains any dynamic argument (e.g. `@names`, `$names`).
     /// Returns `None` when all arguments are static strings or `qw(...)` lists
     /// (those produce `Explicit` specs through `walk_statements`).
-    fn try_classify_standalone_class_import(
-        node: &Node,
-        file_id: FileId,
-    ) -> Option<ImportSpec> {
+    fn try_classify_standalone_class_import(node: &Node, file_id: FileId) -> Option<ImportSpec> {
         let (object, method, args) = match &node.kind {
             NodeKind::MethodCall { object, method, args } => (object, method, args),
             _ => return None,
@@ -1181,15 +1178,10 @@ require $dynamic;
         // `Foo->import('bar')` — static class, static arg list.
         // Should NOT produce a Dynamic ImportSpec (explicit symbols only).
         let specs = parse_and_extract(r#"Foo->import('bar');"#);
-        let dynamic_specs: Vec<_> = specs
-            .iter()
-            .filter(|s| matches!(s.symbols, ImportSymbols::Dynamic))
-            .collect();
+        let dynamic_specs: Vec<_> =
+            specs.iter().filter(|s| matches!(s.symbols, ImportSymbols::Dynamic)).collect();
 
-        assert!(
-            dynamic_specs.is_empty(),
-            "explicit import args must not produce a Dynamic spec"
-        );
+        assert!(dynamic_specs.is_empty(), "explicit import args must not produce a Dynamic spec");
         Ok(())
     }
 
