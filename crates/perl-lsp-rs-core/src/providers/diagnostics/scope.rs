@@ -19,9 +19,10 @@ use perl_diagnostics::codes::DiagnosticSeverity;
 ///
 /// # Backward compatibility
 ///
-/// Preserved for callers that do not have semantic query data. Internally,
-/// [`scope_issues_to_diagnostics_with_semantics`] is used with
-/// `NullSemanticQueries`, which is functionally equivalent to this function.
+/// Preserved for callers that do not have semantic query data. This path
+/// preserves the original conversion logic directly — no semantic suppression
+/// is applied. Callers with workspace semantic data should call
+/// [`scope_issues_to_diagnostics_with_semantics`] instead.
 #[allow(dead_code)] // Preserved for API backward compatibility
 pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();

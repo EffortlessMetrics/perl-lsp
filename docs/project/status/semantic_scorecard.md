@@ -8,15 +8,15 @@ Fixtures loaded: `16`
 
 | Row | Status | Facts | Coverage | Exact | High | Heuristic | Dynamic boundary |
 |---|---|---:|---:|---:|---:|---:|---:|
-| declaration_facts | available | 40 | 16/16 | 152 | 150 | 1 | 2 |
-| definition_candidates | available | 40 | 16/16 | 152 | 150 | 1 | 2 |
-| export_facts | available | 3 | 16/16 | 152 | 150 | 1 | 2 |
-| import_specs | available | 11 | 16/16 | 152 | 150 | 1 | 2 |
-| inheritance_edges | available | 1 | 16/16 | 152 | 150 | 1 | 2 |
-| occurrence_facts | available | 24 | 16/16 | 152 | 150 | 1 | 2 |
-| package_graph_edges | available | 2 | 16/16 | 152 | 150 | 1 | 2 |
-| reference_edges | available | 1 | 16/16 | 152 | 150 | 1 | 2 |
-| role_composition_edges | available | 1 | 16/16 | 152 | 150 | 1 | 2 |
+| declaration_facts | available | 40 | 16/16 | 154 | 152 | 1 | 2 |
+| definition_candidates | available | 40 | 16/16 | 154 | 152 | 1 | 2 |
+| export_facts | available | 3 | 16/16 | 154 | 152 | 1 | 2 |
+| import_specs | available | 11 | 16/16 | 154 | 152 | 1 | 2 |
+| inheritance_edges | available | 1 | 16/16 | 154 | 152 | 1 | 2 |
+| occurrence_facts | available | 25 | 16/16 | 154 | 152 | 1 | 2 |
+| package_graph_edges | available | 2 | 16/16 | 154 | 152 | 1 | 2 |
+| reference_edges | available | 1 | 16/16 | 154 | 152 | 1 | 2 |
+| role_composition_edges | available | 1 | 16/16 | 154 | 152 | 1 | 2 |
 
 ## Readiness Rows
 
@@ -31,7 +31,7 @@ Fixtures loaded: `16`
 | rename_unsafe_edit_count | pass | 0 | 0 | rename plan query fixtures |
 | safe_delete_blocker_fixture_pass_rate | pass | 100% | 100% | safe-delete plan query fixtures |
 | safe_delete_plan | pass | 100% | 100% | safe-delete plan query fixtures |
-| semantic_fact_counts_nonzero | pass | 81 | > 0 | semantic fixture indexing |
+| semantic_fact_counts_nonzero | pass | 82 | > 0 | semantic fixture indexing |
 | undefined_symbol_false_positive_fixture_rate | pass | 0% | 0% | diagnostics fixture receipts |
 | visible_symbols_fixture_pass_rate | pass | 100% | 100% | workspace scorecard fixtures |
 

@@ -201,14 +201,17 @@ impl DiagnosticsProvider {
         }
 
         // Run scope analysis to detect undeclared/unused/shadowing issues.
-        // Uses the semantics-aware variant with NullSemanticQueries as the
-        // default (no suppression). Callers with workspace semantic data should
-        // use get_diagnostics_with_path_and_semantics instead.
+        //
+        // This default path passes `NullSemanticQueries`, which always returns
+        // `None`, so dynamic-boundary suppression does not trigger here — legacy
+        // behavior is preserved exactly. A follow-up PR (PR-B) will thread the
+        // real `WorkspaceSemanticQueries` from `LanguageServerCore` through to
+        // this call site, at which point suppression becomes live.
         let pragma_map = PragmaTracker::build(ast);
         let scope_analyzer = ScopeAnalyzer::new();
         let scope_issues = scope_analyzer.analyze(ast, source, &pragma_map);
-        // FileId(0) is the null file ID — NullSemanticQueries returns None for
-        // all queries regardless, so the file_id value does not matter here.
+        // FileId(0) is a placeholder — NullSemanticQueries returns None for all
+        // queries regardless, so the file_id value does not matter here.
         diagnostics.extend(scope_issues_to_diagnostics_with_semantics(
             scope_issues,
             FileId(0),
