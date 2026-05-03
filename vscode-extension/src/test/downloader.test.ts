@@ -18,6 +18,7 @@ import {
   findReleaseAssetName,
   isTransientManagedInstallError,
   parseLocalVersion,
+  __resetManagedInstallSingleflightForTesting,
 } from '../downloader';
 
 // ---------------------------------------------------------------------------
@@ -233,6 +234,384 @@ describe('BinaryDownloader managed file install', () => {
 
     expect(copyFile).toHaveBeenCalledTimes(1);
     expect(logs).toEqual([]);
+  });
+
+  test('long-tail retry budget allows up to 8 transient failures before succeeding', async () => {
+    // Locks the post-0.13.3 retry budget (covers Defender first-time signature
+    // scans on freshly extracted release artifacts). The default budget has 8
+    // delay slots; 9 attempts total (initial + 8 retries).
+    const logs: string[] = [];
+    let attempts = 0;
+    const transient = Object.assign(new Error('locked'), { code: 'EBUSY' });
+    const copyFile = jest.fn(() => {
+      attempts += 1;
+      if (attempts <= 8) {
+        throw transient;
+      }
+    });
+
+    await copyManagedFileWithRetry(
+      'src',
+      'dst',
+      'perllsp',
+      message => logs.push(message),
+      [0, 0, 0, 0, 0, 0, 0, 0],
+      copyFile,
+    );
+
+    expect(attempts).toBe(9);
+    expect(copyFile).toHaveBeenCalledTimes(9);
+    expect(logs.length).toBe(8);
+  });
+
+  test('budget exhaustion eventually surfaces the transient error', async () => {
+    const logs: string[] = [];
+    const transient = Object.assign(new Error('locked'), { code: 'EBUSY' });
+    const copyFile = jest.fn(() => {
+      throw transient;
+    });
+
+    await expect(
+      copyManagedFileWithRetry(
+        'src',
+        'dst',
+        'perllsp',
+        message => logs.push(message),
+        [0, 0, 0],
+        copyFile,
+      ),
+    ).rejects.toMatchObject({ code: 'EBUSY' });
+
+    expect(copyFile).toHaveBeenCalledTimes(4);
+  });
+
+  test('all four transient codes are retried (EBUSY/EPERM/EACCES/ETXTBSY)', async () => {
+    const codes = ['EBUSY', 'EPERM', 'EACCES', 'ETXTBSY'];
+    for (const code of codes) {
+      let attempts = 0;
+      const transient = Object.assign(new Error(`locked:${code}`), { code });
+      const copyFile = jest.fn(() => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw transient;
+        }
+      });
+
+      await copyManagedFileWithRetry(
+        'src',
+        'dst',
+        'perllsp',
+        () => { /* drop */ },
+        [0],
+        copyFile,
+      );
+
+      expect(attempts).toBe(2);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Versioned managed install layout
+// ---------------------------------------------------------------------------
+describe('Versioned managed install layout', () => {
+  let storageRoot: string;
+  let baseDir: string;
+  let downloader: any;
+
+  const lspBinaryName = process.platform === 'win32' ? 'perllsp.exe' : 'perllsp';
+  const dapBinaryName = process.platform === 'win32' ? 'perl-dap.exe' : 'perl-dap';
+
+  beforeEach(() => {
+    storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'managed-install-test-'));
+    const ctx = makeContext(storageRoot);
+    downloader = new BinaryDownloader(ctx, makeOutputChannel());
+    baseDir = path.join(storageRoot, 'bin', `${process.platform}-${process.arch}`);
+    fs.mkdirSync(baseDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (storageRoot && fs.existsSync(storageRoot)) {
+      fs.rmSync(storageRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('getLocalBinaryPath falls back to flat layout when no pointer exists (legacy users)', () => {
+    const flat = path.join(baseDir, lspBinaryName);
+    fs.writeFileSync(flat, 'fake binary');
+
+    expect(downloader.getLocalBinaryPath()).toBe(flat);
+  });
+
+  test('getLocalBinaryPath returns versioned path when pointer points at existing dir', () => {
+    const versionedName = 'v0.13.3-2026-05-03T00-00-00-000Z';
+    const versionedDir = path.join(baseDir, versionedName);
+    fs.mkdirSync(versionedDir);
+    fs.writeFileSync(path.join(baseDir, 'current'), versionedName + '\n');
+
+    expect(downloader.getLocalBinaryPath()).toBe(path.join(versionedDir, lspBinaryName));
+  });
+
+  test('pointer with .. is rejected and falls back to flat layout', () => {
+    fs.writeFileSync(path.join(baseDir, 'current'), '..\n');
+
+    expect(downloader.getLocalBinaryPath()).toBe(path.join(baseDir, lspBinaryName));
+  });
+
+  test('pointer with path separator is rejected', () => {
+    fs.writeFileSync(path.join(baseDir, 'current'), 'evil/sub\n');
+
+    expect(downloader.getLocalBinaryPath()).toBe(path.join(baseDir, lspBinaryName));
+  });
+
+  test('pointer to nonexistent dir is rejected', () => {
+    fs.writeFileSync(path.join(baseDir, 'current'), 'absent-dir\n');
+
+    expect(downloader.getLocalBinaryPath()).toBe(path.join(baseDir, lspBinaryName));
+  });
+
+  test('empty pointer falls back to flat layout', () => {
+    fs.writeFileSync(path.join(baseDir, 'current'), '\n');
+
+    expect(downloader.getLocalBinaryPath()).toBe(path.join(baseDir, lspBinaryName));
+  });
+
+  test('static getLocalDapPath honors the pointer when present', () => {
+    const versionedName = 'v0.13.3-stamp';
+    fs.mkdirSync(path.join(baseDir, versionedName));
+    fs.writeFileSync(path.join(baseDir, 'current'), versionedName);
+
+    const ctx = makeContext(storageRoot);
+    expect(BinaryDownloader.getLocalDapPath(ctx)).toBe(
+      path.join(baseDir, versionedName, dapBinaryName),
+    );
+  });
+
+  test('static getLocalDapPath falls back to flat layout when pointer absent', () => {
+    const ctx = makeContext(storageRoot);
+    expect(BinaryDownloader.getLocalDapPath(ctx)).toBe(path.join(baseDir, dapBinaryName));
+  });
+
+  test('buildVersionedInstallDirName produces a unique name per call (force-reinstall safety)', () => {
+    const a = downloader.buildVersionedInstallDirName('v0.13.3');
+    // Spin until the OS clock advances at least 1ms so the ISO stamp differs.
+    const start = Date.now();
+    while (Date.now() === start) { /* spin */ }
+    const b = downloader.buildVersionedInstallDirName('v0.13.3');
+
+    expect(a).not.toBe(b);
+    expect(a.startsWith('v0.13.3-')).toBe(true);
+    expect(b.startsWith('v0.13.3-')).toBe(true);
+  });
+
+  test('buildVersionedInstallDirName sanitizes unsafe tag characters', () => {
+    const name = downloader.buildVersionedInstallDirName('weird/tag with spaces');
+    expect(name).toMatch(/^[A-Za-z0-9._-]+$/);
+    expect(name.includes('/')).toBe(false);
+    expect(name.includes(' ')).toBe(false);
+  });
+
+  test('commitVersionedInstall writes pointer atomically and cleans up tmp', () => {
+    const installDirName = 'v0.13.3-stamp';
+    fs.mkdirSync(path.join(baseDir, installDirName));
+
+    downloader.commitVersionedInstall(installDirName);
+
+    const pointer = path.join(baseDir, 'current');
+    expect(fs.existsSync(pointer)).toBe(true);
+    expect(fs.readFileSync(pointer, 'utf8').trim()).toBe(installDirName);
+    expect(fs.existsSync(`${pointer}.tmp`)).toBe(false);
+  });
+
+  test('commitVersionedInstall overwrites a stale pointer', () => {
+    fs.writeFileSync(path.join(baseDir, 'current'), 'stale-name\n');
+    fs.mkdirSync(path.join(baseDir, 'v0.13.4-stamp'));
+
+    downloader.commitVersionedInstall('v0.13.4-stamp');
+
+    expect(fs.readFileSync(path.join(baseDir, 'current'), 'utf8').trim()).toBe('v0.13.4-stamp');
+  });
+
+  test('pruneOldVersionedInstalls keeps current plus exactly one prior install', () => {
+    const names = ['v0.13.0-a', 'v0.13.1-b', 'v0.13.2-c', 'v0.13.3-d'];
+    names.forEach((name, idx) => {
+      const dir = path.join(baseDir, name);
+      fs.mkdirSync(dir);
+      // Older index → older mtime
+      const t = Date.now() / 1000 - (names.length - idx) * 60;
+      fs.utimesSync(dir, t, t);
+    });
+
+    downloader.pruneOldVersionedInstalls(baseDir, 'v0.13.3-d');
+
+    expect(fs.existsSync(path.join(baseDir, 'v0.13.3-d'))).toBe(true);  // current
+    expect(fs.existsSync(path.join(baseDir, 'v0.13.2-c'))).toBe(true);  // most recent prior
+    expect(fs.existsSync(path.join(baseDir, 'v0.13.1-b'))).toBe(false); // pruned
+    expect(fs.existsSync(path.join(baseDir, 'v0.13.0-a'))).toBe(false); // pruned
+  });
+
+  test('pruneOldVersionedInstalls preserves current when it is the only versioned dir', () => {
+    fs.mkdirSync(path.join(baseDir, 'v0.13.3-d'));
+
+    downloader.pruneOldVersionedInstalls(baseDir, 'v0.13.3-d');
+
+    expect(fs.existsSync(path.join(baseDir, 'v0.13.3-d'))).toBe(true);
+  });
+
+  test('pruneOldVersionedInstalls ignores files at base dir (legacy flat binaries survive)', () => {
+    const flatBin = path.join(baseDir, lspBinaryName);
+    fs.writeFileSync(flatBin, 'legacy');
+    fs.mkdirSync(path.join(baseDir, 'v0.13.3-d'));
+
+    downloader.pruneOldVersionedInstalls(baseDir, 'v0.13.3-d');
+
+    expect(fs.existsSync(flatBin)).toBe(true);
+  });
+
+  test('legacy migration: install side-by-side with flat layout, pointer activates versioned', () => {
+    // Seed a legacy 0.13.2-style flat binary that a long-running user would have.
+    const flatBin = path.join(baseDir, lspBinaryName);
+    fs.writeFileSync(flatBin, 'legacy 0.13.2 bytes');
+
+    // Pre-migration, getLocalBinaryPath returns the flat path.
+    expect(downloader.getLocalBinaryPath()).toBe(flatBin);
+
+    // Simulate a successful 0.13.3 reinstall that lands in a versioned dir
+    // and atomically promotes the pointer.
+    const versionedName = 'v0.13.3-stamp';
+    fs.mkdirSync(path.join(baseDir, versionedName));
+    fs.writeFileSync(path.join(baseDir, versionedName, lspBinaryName), 'fresh 0.13.3 bytes');
+    downloader.commitVersionedInstall(versionedName);
+
+    // Post-migration, getLocalBinaryPath returns the versioned path.
+    expect(downloader.getLocalBinaryPath()).toBe(
+      path.join(baseDir, versionedName, lspBinaryName),
+    );
+
+    // Legacy flat binary is preserved on disk (does not get auto-cleaned).
+    expect(fs.existsSync(flatBin)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Singleflight managed install
+// ---------------------------------------------------------------------------
+describe('Singleflight managed install', () => {
+  beforeEach(() => {
+    __resetManagedInstallSingleflightForTesting();
+  });
+
+  afterEach(() => {
+    __resetManagedInstallSingleflightForTesting();
+    jest.restoreAllMocks();
+  });
+
+  function makeDeferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
+    let resolve!: (v: T) => void;
+    const promise = new Promise<T>(r => { resolve = r; });
+    return { promise, resolve };
+  }
+
+  test('two concurrent ensure calls share one runEnsureBinary invocation', async () => {
+    const downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
+    const deferred = makeDeferred<string | null>();
+    const runSpy = jest.spyOn(downloader as any, 'runEnsureBinary')
+      .mockReturnValue(deferred.promise);
+
+    const p1 = downloader.ensureBinary(false);
+    const p2 = downloader.ensureBinary(false);
+
+    // Yield once so the second call observes the active install set by the first.
+    await new Promise<void>(r => setImmediate(r));
+
+    deferred.resolve('/path/from/first');
+    const [r1, r2] = await Promise.all([p1, p2]);
+
+    expect(runSpy).toHaveBeenCalledTimes(1);
+    expect(r1).toBe('/path/from/first');
+    expect(r2).toBe('/path/from/first');
+  });
+
+  test('two concurrent force calls share one runEnsureBinary invocation', async () => {
+    const downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
+    const deferred = makeDeferred<string | null>();
+    const runSpy = jest.spyOn(downloader as any, 'runEnsureBinary')
+      .mockReturnValue(deferred.promise);
+
+    const p1 = downloader.ensureBinary(true);
+    const p2 = downloader.ensureBinary(true);
+
+    await new Promise<void>(r => setImmediate(r));
+
+    deferred.resolve('/path/from/force');
+    const [r1, r2] = await Promise.all([p1, p2]);
+
+    expect(runSpy).toHaveBeenCalledTimes(1);
+    expect(r1).toBe('/path/from/force');
+    expect(r2).toBe('/path/from/force');
+  });
+
+  test('force during ensure waits for ensure to finish then runs its own install', async () => {
+    const downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
+    const ensureDeferred = makeDeferred<string | null>();
+    const forceDeferred = makeDeferred<string | null>();
+    const runSpy = jest.spyOn(downloader as any, 'runEnsureBinary')
+      .mockReturnValueOnce(ensureDeferred.promise)
+      .mockReturnValueOnce(forceDeferred.promise);
+
+    const ensureCall = downloader.ensureBinary(false);
+    await new Promise<void>(r => setImmediate(r));
+    const forceCall = downloader.ensureBinary(true);
+
+    // Force has not yet started a new install — it is waiting on the active ensure.
+    await new Promise<void>(r => setImmediate(r));
+    expect(runSpy).toHaveBeenCalledTimes(1);
+
+    ensureDeferred.resolve('/path/from/ensure');
+    expect(await ensureCall).toBe('/path/from/ensure');
+
+    // Now the force call runs its own install.
+    await new Promise<void>(r => setImmediate(r));
+    expect(runSpy).toHaveBeenCalledTimes(2);
+
+    forceDeferred.resolve('/path/from/force');
+    expect(await forceCall).toBe('/path/from/force');
+  });
+
+  test('singleflight state is cleared after each install settles', async () => {
+    const downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
+    const runSpy = jest.spyOn(downloader as any, 'runEnsureBinary')
+      .mockResolvedValueOnce('/path/first')
+      .mockResolvedValueOnce('/path/second');
+
+    expect(await downloader.ensureBinary(false)).toBe('/path/first');
+    expect(await downloader.ensureBinary(false)).toBe('/path/second');
+
+    expect(runSpy).toHaveBeenCalledTimes(2);
+  });
+
+  test('failure of an in-flight install does not poison subsequent calls', async () => {
+    const downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
+    const runSpy = jest.spyOn(downloader as any, 'runEnsureBinary')
+      .mockRejectedValueOnce(new Error('install boom'))
+      .mockResolvedValueOnce('/path/recovered');
+
+    await expect(downloader.ensureBinary(false)).rejects.toThrow('install boom');
+    expect(await downloader.ensureBinary(false)).toBe('/path/recovered');
+
+    expect(runSpy).toHaveBeenCalledTimes(2);
+  });
+
+  test('force after force settles cleanly with two separate installs', async () => {
+    const downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
+    const runSpy = jest.spyOn(downloader as any, 'runEnsureBinary')
+      .mockResolvedValueOnce('/path/force-1')
+      .mockResolvedValueOnce('/path/force-2');
+
+    expect(await downloader.ensureBinary(true)).toBe('/path/force-1');
+    expect(await downloader.ensureBinary(true)).toBe('/path/force-2');
+
+    expect(runSpy).toHaveBeenCalledTimes(2);
   });
 });
 
