@@ -162,6 +162,29 @@ mod tests {
                 None
             }
         }
+
+        fn dynamic_callable_may_be_visible_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _symbol: &str,
+        ) -> Option<OccurrenceFact> {
+            // When the stub is in a dynamic scope, dynamic callables may also
+            // be visible (same condition as dynamic_boundary_at).
+            if self.rename_blocked || self.safe_delete_blocked {
+                Some(OccurrenceFact {
+                    id: perl_semantic_facts::OccurrenceId(9998),
+                    kind: perl_semantic_facts::OccurrenceKind::DynamicBoundary,
+                    entity_id: None,
+                    anchor_id: AnchorId(9998),
+                    scope_id: None,
+                    provenance: perl_semantic_facts::Provenance::DynamicBoundary,
+                    confidence: perl_semantic_facts::Confidence::Low,
+                })
+            } else {
+                None
+            }
+        }
     }
 
     // ── Helpers ──
@@ -579,6 +602,14 @@ mod tests {
                 _: Option<&str>,
             ) -> Option<OccurrenceFact> {
                 None // no dynamic boundary anywhere
+            }
+            fn dynamic_callable_may_be_visible_at(
+                &self,
+                _: FileId,
+                _: u32,
+                _: &str,
+            ) -> Option<OccurrenceFact> {
+                None // no dynamic callables either
             }
         }
 

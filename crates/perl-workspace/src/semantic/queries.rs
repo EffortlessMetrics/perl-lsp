@@ -163,6 +163,59 @@ pub trait SemanticQueries {
         byte_offset: u32,
         symbol: Option<&str>,
     ) -> Option<OccurrenceFact>;
+
+    /// Return evidence that a dynamic callable named `symbol` may be visible at
+    /// a given position in `file_id`.
+    ///
+    /// # Contract (file-wide import coverage + named DynamicBoundary)
+    ///
+    /// Returns `Some(OccurrenceFact)` when **either** of the following holds:
+    ///
+    /// 1. The file at `file_id` has at least one `ImportSpec` with
+    ///    `ImportSymbols::Dynamic` — the imported symbols are not statically
+    ///    known, so *any* bareword call in the file might have come from that
+    ///    import.  This covers `Foo->import(@names)` (static class, dynamic
+    ///    arg list) and `require $var` (dynamic module, unknown exports).
+    /// 2. The file has at least one occurrence with
+    ///    `kind = OccurrenceKind::DynamicBoundary` whose associated entity's
+    ///    canonical name matches `symbol`.  This covers `eval "sub NAME { ... }"`
+    ///    patterns where the sub name is literally present in the string.
+    ///
+    /// # Differences from `dynamic_boundary_at`
+    ///
+    /// - `dynamic_boundary_at` is *position-scoped*: the occurrence's anchor
+    ///   span must cover `byte_offset`.  It is designed for `UndeclaredVariable`
+    ///   suppression.
+    /// - `dynamic_callable_may_be_visible_at` is *file-wide* for the import
+    ///   path (any dynamic import in the file is sufficient) and *name-scoped*
+    ///   for the eval-sub path (entity name must match).  It is designed for
+    ///   `UnquotedBareword` suppression where the callable is plausibly
+    ///   importable anywhere in the file.
+    ///
+    /// # Anti-patterns
+    ///
+    /// - Variables (sigil-prefixed names) are not callables and must never
+    ///   be matched by this query.  Callers must strip sigils before calling.
+    /// - A `None` return means "no evidence" — emit the diagnostic
+    ///   (conservative default).
+    ///
+    /// # Returns
+    ///
+    /// `None` when no dynamic import exists for the file and no eval-sub
+    /// evidence matches `symbol`, or when the semantic data for `file_id`
+    /// is unavailable.  Callers should fall back to emitting the diagnostic
+    /// when `None`.
+    ///
+    /// # Requirements
+    ///
+    /// - **Req 7.5**: Suppress `UnquotedBareword` diagnostics for barewords
+    ///   plausibly provided by a dynamic import or string-eval sub declaration.
+    fn dynamic_callable_may_be_visible_at(
+        &self,
+        file_id: FileId,
+        byte_offset: u32,
+        symbol: &str,
+    ) -> Option<OccurrenceFact>;
 }
 
 // ── WorkspaceSemanticQueries ──
@@ -767,6 +820,75 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
             }
 
             return Some(occurrence.clone());
+        }
+
+        None
+    }
+
+    fn dynamic_callable_may_be_visible_at(
+        &self,
+        file_id: FileId,
+        _byte_offset: u32,
+        symbol: &str,
+    ) -> Option<OccurrenceFact> {
+        // Guard: variables (sigil-prefixed) are not callables.
+        if symbol.starts_with(['$', '@', '%', '&', '*']) {
+            return None;
+        }
+
+        // ── Path 1: file has a Dynamic import ──
+        //
+        // `ImportSymbols::Dynamic` means the imported symbol list is not
+        // statically known (e.g. `Foo->import(@names)` or `require $var`).
+        // Any bareword in the file could plausibly come from this import.
+        let has_dynamic_import =
+            self.import_export_index.get_imports_for_file(file_id).iter().any(|spec| {
+                matches!(spec.symbols, perl_semantic_facts::ImportSymbols::Dynamic)
+            });
+
+        if has_dynamic_import {
+            // Return a synthetic DynamicBoundary occurrence as evidence.
+            // anchor_id 0 is a placeholder — callers only check is_some().
+            return Some(OccurrenceFact {
+                id: perl_semantic_facts::OccurrenceId(0),
+                kind: OccurrenceKind::DynamicBoundary,
+                entity_id: None,
+                anchor_id: AnchorId(0),
+                scope_id: None,
+                provenance: perl_semantic_facts::Provenance::DynamicBoundary,
+                confidence: perl_semantic_facts::Confidence::Low,
+            });
+        }
+
+        // ── Path 2: file has a DynamicBoundary occurrence for this exact name ──
+        //
+        // This covers `eval "sub NAME { ... }"` patterns where the extractor
+        // has emitted an OccurrenceFact with entity name == NAME.
+        let shard = match self.shard_for_file(file_id) {
+            Some(s) => s,
+            None => return None,
+        };
+
+        for occurrence in &shard.occurrences {
+            if occurrence.kind != OccurrenceKind::DynamicBoundary {
+                continue;
+            }
+
+            let entity_id = match occurrence.entity_id {
+                Some(eid) => eid,
+                // entity_id is None → fully dynamic, not a named eval-sub boundary.
+                // These are handled by Path 1 above; skip here to avoid over-matching.
+                None => continue,
+            };
+
+            let entity_matches = shard.entities.iter().any(|e| {
+                e.id == entity_id
+                    && (e.canonical_name == symbol || bare_name(&e.canonical_name) == symbol)
+            });
+
+            if entity_matches {
+                return Some(occurrence.clone());
+            }
         }
 
         None
@@ -3706,6 +3828,210 @@ mod tests {
 
         let result2 = queries.dynamic_boundary_at(file_id, 20, Some("foo"));
         assert!(result2.is_some(), "fully-dynamic boundary should accept 'foo'");
+        Ok(())
+    }
+
+    // ── dynamic_callable_may_be_visible_at tests ──
+
+    #[test]
+    fn dynamic_callable_returns_some_when_file_has_dynamic_import()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // When a file has an ImportSpec with ImportSymbols::Dynamic, any
+        // bareword in that file is potentially visible.
+        use crate::semantic::imports::ImportExportIndex;
+        use perl_semantic_facts::{ImportKind, ImportSpec, ImportSymbols};
+
+        let file_id = FileId(100);
+        let shard = make_shard("file:///test/dyn_import.pl", file_id, vec![], vec![], vec![], vec![]);
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let mut ie_index = ImportExportIndex::new();
+
+        // Add a Dynamic import for this file.
+        ie_index.add_file_imports(
+            "file:///test/dyn_import.pl",
+            file_id,
+            vec![ImportSpec {
+                module: "Foo".to_string(),
+                kind: ImportKind::Use,
+                symbols: ImportSymbols::Dynamic,
+                provenance: Provenance::DynamicBoundary,
+                confidence: Confidence::Low,
+                file_id: Some(file_id),
+                anchor_id: None,
+                scope_id: None,
+            }],
+        );
+
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        // Any bareword in this file should be covered.
+        let result = queries.dynamic_callable_may_be_visible_at(file_id, 100, "bar");
+        assert!(result.is_some(), "should return Some when file has Dynamic import");
+        let occ = result.ok_or("expected OccurrenceFact")?;
+        assert_eq!(occ.kind, OccurrenceKind::DynamicBoundary);
+        assert_eq!(occ.provenance, Provenance::DynamicBoundary);
+        assert_eq!(occ.confidence, Confidence::Low);
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_callable_returns_none_when_no_dynamic_import()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // A file with no Dynamic imports: no evidence for any bareword.
+        use perl_semantic_facts::{ImportKind, ImportSpec, ImportSymbols};
+
+        let file_id = FileId(101);
+        let shard = make_shard("file:///test/no_dyn.pl", file_id, vec![], vec![], vec![], vec![]);
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let mut ie_index = ImportExportIndex::new();
+
+        // Add an Explicit import (NOT dynamic).
+        ie_index.add_file_imports(
+            "file:///test/no_dyn.pl",
+            file_id,
+            vec![ImportSpec {
+                module: "Bar".to_string(),
+                kind: ImportKind::UseExplicitList,
+                symbols: ImportSymbols::Explicit(vec!["known_sub".to_string()]),
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+                file_id: Some(file_id),
+                anchor_id: None,
+                scope_id: None,
+            }],
+        );
+
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        let result = queries.dynamic_callable_may_be_visible_at(file_id, 100, "unknown_sub");
+        assert!(result.is_none(), "should return None when import is Explicit, not Dynamic");
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_callable_returns_some_when_eval_sub_boundary_matches_name()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // When a DynamicBoundary occurrence has an entity named "generated_sub",
+        // dynamic_callable_may_be_visible_at("generated_sub") returns Some.
+        let file_id = FileId(102);
+        // Build a shard with a DynamicBoundary occurrence for entity "generated_sub".
+        let entity_id = EntityId(200);
+        let anchor_id = AnchorId(201);
+        let occurrence_id = OccurrenceId(202);
+
+        let entity = EntityFact {
+            id: entity_id,
+            canonical_name: "generated_sub".to_string(),
+            kind: EntityKind::Subroutine,
+            anchor_id: Some(anchor_id),
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        };
+        let anchor = AnchorFact {
+            id: anchor_id,
+            file_id,
+            span_start_byte: 0,
+            span_end_byte: 50,
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        };
+        let occurrence = OccurrenceFact {
+            id: occurrence_id,
+            kind: OccurrenceKind::DynamicBoundary,
+            entity_id: Some(entity_id),
+            anchor_id,
+            scope_id: None,
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        };
+
+        let shard = make_shard(
+            "file:///test/eval_sub.pl",
+            file_id,
+            vec![anchor],
+            vec![entity],
+            vec![occurrence],
+            vec![],
+        );
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        // Should find the eval-sub boundary for "generated_sub".
+        let result = queries.dynamic_callable_may_be_visible_at(file_id, 100, "generated_sub");
+        assert!(result.is_some(), "should return Some for named eval-sub DynamicBoundary");
+
+        // Should NOT find for a different name.
+        let result2 =
+            queries.dynamic_callable_may_be_visible_at(file_id, 100, "truly_undefined_sub");
+        assert!(result2.is_none(), "should return None for different name (no evidence)");
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_callable_variable_sigil_never_matches() -> Result<(), Box<dyn std::error::Error>> {
+        // Variables (sigil-prefixed names) are not callables.
+        // Even with a Dynamic import, sigil-prefixed names must return None.
+        use perl_semantic_facts::{ImportKind, ImportSpec, ImportSymbols};
+
+        let file_id = FileId(103);
+        let shard =
+            make_shard("file:///test/sigil.pl", file_id, vec![], vec![], vec![], vec![]);
+        let mut shards = HashMap::new();
+        shards.insert(shard.source_uri.clone(), shard);
+
+        let ref_index = ReferenceIndex::new();
+        let mut ie_index = ImportExportIndex::new();
+        ie_index.add_file_imports(
+            "file:///test/sigil.pl",
+            file_id,
+            vec![ImportSpec {
+                module: String::new(),
+                kind: ImportKind::DynamicRequire,
+                symbols: ImportSymbols::Dynamic,
+                provenance: Provenance::DynamicBoundary,
+                confidence: Confidence::Low,
+                file_id: Some(file_id),
+                anchor_id: None,
+                scope_id: None,
+            }],
+        );
+
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        // Variables with sigils must be rejected even when a dynamic import exists.
+        for sigil_var in &["$foo", "@bar", "%baz", "&qux", "*glob"] {
+            let result = queries.dynamic_callable_may_be_visible_at(file_id, 0, sigil_var);
+            assert!(
+                result.is_none(),
+                "sigil-prefixed '{}' must never match dynamic_callable_may_be_visible_at",
+                sigil_var
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_callable_returns_none_for_unknown_file() -> Result<(), Box<dyn std::error::Error>> {
+        let ref_index = ReferenceIndex::new();
+        let ie_index = ImportExportIndex::new();
+        let shards = HashMap::new();
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        // FileId(999) has no shard and no import data.
+        let result = queries.dynamic_callable_may_be_visible_at(FileId(999), 0, "any_sub");
+        assert!(result.is_none(), "unknown file should return None");
         Ok(())
     }
 }

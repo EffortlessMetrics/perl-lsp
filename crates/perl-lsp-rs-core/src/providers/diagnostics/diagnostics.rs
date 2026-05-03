@@ -97,6 +97,15 @@ impl SemanticQueries for NullSemanticQueries {
     ) -> Option<OccurrenceFact> {
         None
     }
+
+    fn dynamic_callable_may_be_visible_at(
+        &self,
+        _file_id: FileId,
+        _byte_offset: u32,
+        _symbol: &str,
+    ) -> Option<OccurrenceFact> {
+        None
+    }
 }
 
 // Re-export diagnostic types from local internal types module.

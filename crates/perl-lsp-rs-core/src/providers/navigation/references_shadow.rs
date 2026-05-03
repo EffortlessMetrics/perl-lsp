@@ -325,6 +325,15 @@ mod tests {
         ) -> Option<OccurrenceFact> {
             None
         }
+
+        fn dynamic_callable_may_be_visible_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _symbol: &str,
+        ) -> Option<OccurrenceFact> {
+            None
+        }
     }
 
     fn make_occurrence(
