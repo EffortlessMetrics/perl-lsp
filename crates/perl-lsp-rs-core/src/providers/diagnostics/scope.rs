@@ -78,24 +78,35 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
 /// Convert scope analyzer issues to diagnostics with dynamic-boundary suppression.
 ///
 /// Extends [`scope_issues_to_diagnostics`] by consulting `semantic_queries`
-/// for each `UndeclaredVariable` issue. If the issue's position is covered by
-/// dynamic-boundary evidence (e.g., `require $var`, string `eval`, typeglob
-/// assignment, or AUTOLOAD scope), the diagnostic is **suppressed** for that
-/// specific variable.
+/// for `UndeclaredVariable` and `UnquotedBareword` issues.
 ///
-/// # Suppression policy (Q3 architectural decision)
+/// # Suppression policy
 ///
-/// - High-confidence normal missing symbol → diagnostic still fires.
-/// - Dynamic boundary covering THE specific variable → suppress that exact
-///   undefined diagnostic.
-/// - Ambiguous but not dynamic → emit the diagnostic (conservative default).
-/// - Unavailable semantic path (no shard for file) → fall back to emitting
-///   the diagnostic (no false suppression).
+/// ## `UndeclaredVariable` (position-scoped)
 ///
-/// Importantly, a dynamic construct anywhere in the file does **not** suppress
-/// unrelated diagnostics: `require $module; print $undeclared_static_var;`
-/// still fires for `$undeclared_static_var` because `dynamic_boundary_at`
-/// checks the *specific position* of each issue.
+/// Calls [`SemanticQueries::dynamic_boundary_at`] at the specific byte
+/// position of the issue. If the position is covered by dynamic-boundary
+/// evidence (e.g. `require $var` at that offset), the diagnostic is suppressed
+/// for that specific variable.
+///
+/// A dynamic construct **elsewhere** in the file does NOT suppress unrelated
+/// variables: `require $module; print $undeclared_static_var;` still fires for
+/// `$undeclared_static_var` because `dynamic_boundary_at` is position-scoped.
+///
+/// ## `UnquotedBareword` (file-wide dynamic callable)
+///
+/// Calls [`SemanticQueries::dynamic_callable_may_be_visible_at`] for the
+/// bareword name. Returns `Some` when:
+/// - The file has at least one `ImportSpec` with `ImportSymbols::Dynamic`
+///   (e.g. `Foo->import(@names)`) — any bareword in the file might be imported.
+/// - The file has a `DynamicBoundary` occurrence whose entity name matches the
+///   bareword (e.g. `eval "sub NAME { ... }"` — only `NAME` is suppressed).
+///
+/// Non-literal evals, non-Dynamic imports, and genuinely missing subs still fire.
+///
+/// ## All other issue kinds
+///
+/// Always emitted as diagnostics (no suppression).
 ///
 /// # Backward compatibility
 ///
@@ -107,6 +118,8 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
 ///
 /// - **Req 7.4**: Suppress undefined-symbol diagnostics for references within
 ///   dynamic boundary scopes.
+/// - **Req 7.5**: Suppress `UnquotedBareword` diagnostics for barewords
+///   plausibly provided by a dynamic import or string-eval sub declaration.
 pub fn scope_issues_to_diagnostics_with_semantics<Q: SemanticQueries>(
     issues: Vec<ScopeIssue>,
     file_id: FileId,
@@ -115,8 +128,12 @@ pub fn scope_issues_to_diagnostics_with_semantics<Q: SemanticQueries>(
     let mut diagnostics = Vec::new();
 
     for issue in issues {
-        // For UndeclaredVariable issues, check whether the specific variable
-        // position is covered by dynamic-boundary evidence.
+        // ── UndeclaredVariable suppression (position-scoped) ──
+        //
+        // Check whether the specific variable position is covered by a
+        // dynamic-boundary occurrence (e.g. `require $var` at that offset).
+        // This is deliberately narrow: only positions within the dynamic
+        // construct's span are suppressed.
         if issue.kind == IssueKind::UndeclaredVariable {
             let byte_offset = issue.range.0 as u32;
             // Strip the sigil from the variable name to get the bare symbol.
@@ -142,8 +159,43 @@ pub fn scope_issues_to_diagnostics_with_semantics<Q: SemanticQueries>(
             }
         }
 
-        // All other issue kinds — and UndeclaredVariable issues not covered by
-        // a dynamic boundary — are emitted as diagnostics.
+        // ── UnquotedBareword suppression (file-wide dynamic callable) ──
+        //
+        // Check whether a dynamic import or eval-sub evidence exists in the
+        // file that makes this bareword plausibly visible.
+        //
+        // Policy differences from UndeclaredVariable:
+        // - Coverage is file-wide when a Dynamic import exists (any bareword
+        //   in the file might come from an import with unknown symbol list).
+        // - Coverage is name-scoped when an eval-sub boundary exists (only
+        //   the sub named in the eval string is suppressed).
+        //
+        // This is intentionally conservative — non-literal evals, non-Dynamic
+        // imports, and barewords with genuinely no evidence are still flagged.
+        if issue.kind == IssueKind::UnquotedBareword {
+            let byte_offset = issue.range.0 as u32;
+            // Barewords have no sigil; use the name directly.
+            let symbol = issue.variable_name.as_str();
+
+            let is_callable_visible = semantic_queries
+                .dynamic_callable_may_be_visible_at(file_id, byte_offset, symbol)
+                .is_some();
+
+            if is_callable_visible {
+                tracing::debug!(
+                    bareword = %issue.variable_name,
+                    "suppressed UnquotedBareword diagnostic: dynamic callable evidence present"
+                );
+                continue;
+            }
+        }
+
+        // ── All other issue kinds ── (and unsuppressed UndeclaredVariable /
+        // UnquotedBareword) — always emit the diagnostic.
+        //
+        // This includes: VariableRedeclaration, DuplicateParameter,
+        // VariableShadowing, UnusedVariable, ParameterShadowsGlobal,
+        // UnusedParameter, UninitializedVariable, CaptureVarWithoutRegexMatch.
         let severity = match issue.kind {
             IssueKind::UndeclaredVariable
             | IssueKind::VariableRedeclaration
