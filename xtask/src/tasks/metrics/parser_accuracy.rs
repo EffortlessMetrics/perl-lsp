@@ -25,10 +25,31 @@ use perl_semantic_facts::{AnchorId, EntityId};
 use perl_workspace::workspace::workspace_index::{FileFactShard, WorkspaceIndex};
 use serde::{Deserialize, Serialize};
 
+use crate::tasks::metrics::ratchet::MetricReceipt;
 use crate::utils::project_root;
 
 const DEFAULT_MANIFEST: &str = "crates/perl-corpus/fixtures/parser_accuracy/manifest.json";
 const DEFAULT_OUTPUT: &str = "target/metrics/parser_accuracy.json";
+const DEFAULT_RATCHET_RECEIPT: &str = "target/receipts/metrics/parser_accuracy.json";
+const SAFETY_FLOOR_METRICS: &[(&str, f64)] =
+    &[("dynamic_false_precision_count", 0.0), ("fast_path_wrong_result_count", 0.0)];
+const DEFERRED_PRECISION_RECALL_CANDIDATES: &[&str] = &[
+    "line_construct_precision",
+    "line_construct_recall",
+    "line_construct_f1",
+    "ast_node_kind_precision",
+    "ast_node_kind_recall",
+    "ast_node_kind_f1",
+    "symbol_decl_precision",
+    "symbol_decl_recall",
+    "symbol_decl_f1",
+    "symbol_ref_precision",
+    "symbol_ref_recall",
+    "symbol_ref_f1",
+    "symbol_edge_precision",
+    "symbol_edge_recall",
+    "symbol_edge_f1",
+];
 
 #[derive(Debug, Clone, Deserialize)]
 struct ParserAccuracyManifest {
@@ -386,10 +407,22 @@ enum MetricRow {
     Measured {
         metric: String,
         value: f64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        previous: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        delta: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        floor: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        threshold: Option<f64>,
         sample_count: u64,
         direction: Direction,
         confidence: Confidence,
         cadence: Cadence,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        macro_value: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        micro_value: Option<f64>,
     },
     InsufficientData {
         metric: String,
@@ -402,6 +435,9 @@ enum MetricRow {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum Direction {
+    Up,
+    Down,
+    Flat,
     Neutral,
 }
 
@@ -740,6 +776,7 @@ pub fn run(
 
     if json {
         write_artifact(&output_path, &artifact)?;
+        write_ratchet_receipt(&root, &artifact)?;
         println!("parser accuracy artifact written: {}", output_path.display());
     } else {
         print_summary(&artifact);
@@ -788,14 +825,12 @@ fn build_artifact(
     let scale_cost_score = score_manifest_scale_cost(root, manifest)?;
     let determinism_score = score_manifest_determinism(root, manifest)?;
     let gold_drift = audit_gold_drift(root, manifest)?;
-    let mut metrics = vec![MetricRow::Measured {
-        metric: "denominator_fixture_count".to_string(),
-        value: fixture_count,
-        sample_count: denominator.fixture_count,
-        direction: Direction::Neutral,
-        confidence: Confidence::High,
+    let mut metrics = vec![measured_value(
+        "denominator_fixture_count",
+        fixture_count,
+        denominator.fixture_count,
         cadence,
-    }];
+    )];
     metrics.extend(line_metrics(&line_score, cadence));
     metrics.extend(ast_metrics(&ast_score, cadence));
     metrics.extend(symbol_metrics(&symbol_score, cadence));
@@ -811,6 +846,7 @@ fn build_artifact(
     metrics.extend(cache_reuse_metrics(&incremental_score, cadence));
     metrics.extend(determinism_metrics(&determinism_score, cadence));
     metrics.extend(gold_drift_metrics(&gold_drift, denominator.fixture_count, cadence));
+    apply_safety_floor_metadata(&mut metrics);
 
     Ok(ParserAccuracyArtifact {
         schema_version: 1,
@@ -3511,14 +3547,7 @@ fn gold_drift_metrics(drift: &GoldDrift, fixture_count: u64, cadence: Cadence) -
 fn sync_runtime_metric_rows(artifact: &mut ParserAccuracyArtifact, cadence: Cadence) {
     let runtime = &artifact.metric_runtime;
     artifact.metrics.extend([
-        MetricRow::Measured {
-            metric: "metric_runtime_ms".to_string(),
-            value: runtime.runtime_ms,
-            sample_count: 1,
-            direction: Direction::Neutral,
-            confidence: Confidence::High,
-            cadence,
-        },
+        measured_value("metric_runtime_ms", runtime.runtime_ms, 1, cadence),
         measured_count("metric_timeout_count", runtime.timeout_count, 1, cadence),
         measured_count("metric_flake_count", runtime.flake_count, 1, cadence),
         measured_count("metric_artifact_size_bytes", runtime.artifact_size_bytes, 1, cadence),
@@ -3611,14 +3640,7 @@ fn symbol_f1_metric(
 }
 
 fn measured_count(metric: &str, value: u64, sample_count: u64, cadence: Cadence) -> MetricRow {
-    MetricRow::Measured {
-        metric: metric.to_string(),
-        value: value as f64,
-        sample_count,
-        direction: Direction::Neutral,
-        confidence: Confidence::High,
-        cadence,
-    }
+    measured_value(metric, value as f64, sample_count, cadence)
 }
 
 fn optional_measured_count(
@@ -3642,27 +3664,30 @@ fn optional_measured_value(
     cadence: Cadence,
 ) -> MetricRow {
     match value {
-        Some(value) if sample_count > 0 => MetricRow::Measured {
-            metric: metric.to_string(),
-            value,
-            sample_count,
-            direction: Direction::Neutral,
-            confidence: Confidence::High,
-            cadence,
-        },
+        Some(value) if sample_count > 0 => measured_value(metric, value, sample_count, cadence),
         _ => insufficient(metric, insufficient_reason),
     }
 }
 
 fn measured_rate(metric: &str, numerator: u64, denominator: u64, cadence: Cadence) -> MetricRow {
     let value = ratio(numerator, denominator).unwrap_or(0.0);
+    measured_value(metric, value, denominator, cadence)
+}
+
+fn measured_value(metric: &str, value: f64, sample_count: u64, cadence: Cadence) -> MetricRow {
     MetricRow::Measured {
         metric: metric.to_string(),
         value,
-        sample_count: denominator,
+        previous: None,
+        delta: None,
+        floor: None,
+        threshold: None,
+        sample_count,
         direction: Direction::Neutral,
         confidence: Confidence::High,
         cadence,
+        macro_value: None,
+        micro_value: None,
     }
 }
 
@@ -3674,14 +3699,7 @@ fn optional_measured_rate(
     cadence: Cadence,
 ) -> MetricRow {
     match value {
-        Some(value) if sample_count > 0 => MetricRow::Measured {
-            metric: metric.to_string(),
-            value,
-            sample_count,
-            direction: Direction::Neutral,
-            confidence: Confidence::High,
-            cadence,
-        },
+        Some(value) if sample_count > 0 => measured_value(metric, value, sample_count, cadence),
         _ => insufficient(metric, insufficient_reason),
     }
 }
@@ -3777,6 +3795,70 @@ fn write_artifact(path: &Path, artifact: &ParserAccuracyArtifact) -> Result<()> 
     let json = render_artifact(artifact)?;
     fs::write(path, json).with_context(|| format!("writing {}", path.display()))?;
     Ok(())
+}
+
+fn write_ratchet_receipt(root: &Path, artifact: &ParserAccuracyArtifact) -> Result<()> {
+    let path = root.join(DEFAULT_RATCHET_RECEIPT);
+    let parent =
+        path.parent().ok_or_else(|| eyre!("parser accuracy ratchet receipt path has no parent"))?;
+    fs::create_dir_all(parent).with_context(|| {
+        format!("creating parser accuracy ratchet receipt dir {}", parent.display())
+    })?;
+    let receipt = ratchet_receipt_for_artifact(artifact);
+    let json = serde_json::to_string_pretty(&receipt)
+        .context("serializing parser accuracy ratchet receipt")?;
+    fs::write(&path, format!("{json}\n")).with_context(|| format!("writing {}", path.display()))?;
+    println!("parser accuracy ratchet receipt written: {}", path.display());
+    Ok(())
+}
+
+fn ratchet_receipt_for_artifact(artifact: &ParserAccuracyArtifact) -> MetricReceipt {
+    let floor_metrics = SAFETY_FLOOR_METRICS
+        .iter()
+        .map(|(metric, _floor)| ((*metric).to_string(), measured_metric_value(artifact, metric)))
+        .collect();
+    let improvement_metrics = DEFERRED_PRECISION_RECALL_CANDIDATES
+        .iter()
+        .map(|metric| ((*metric).to_string(), measured_metric_value(artifact, metric)))
+        .collect();
+
+    MetricReceipt {
+        subsystem: artifact.subsystem.to_string(),
+        generated_at: artifact.generated_at.clone(),
+        commit: artifact.commit.clone(),
+        floor_metrics,
+        improvement_metrics,
+    }
+}
+
+fn measured_metric_value(artifact: &ParserAccuracyArtifact, name: &str) -> Option<f64> {
+    artifact.metrics.iter().find_map(|row| match row {
+        MetricRow::Measured { metric, value, .. } if metric == name => Some(*value),
+        _ => None,
+    })
+}
+
+fn apply_safety_floor_metadata(metrics: &mut [MetricRow]) {
+    for row in metrics {
+        let MetricRow::Measured {
+            metric, value, previous, delta, floor, threshold, direction, ..
+        } = row
+        else {
+            continue;
+        };
+
+        let Some((_, floor_value)) =
+            SAFETY_FLOOR_METRICS.iter().find(|(candidate, _)| candidate == metric)
+        else {
+            continue;
+        };
+
+        *previous = Some(*floor_value);
+        *delta = Some(*value - *floor_value);
+        *floor = Some(*floor_value);
+        *threshold = Some(*floor_value);
+        *direction = Direction::Down;
+    }
 }
 
 fn render_artifact(artifact: &ParserAccuracyArtifact) -> Result<String> {
@@ -4347,6 +4429,82 @@ mod tests {
                         && (*value - 2.0).abs() < f64::EPSILON
             )
         }));
+    }
+
+    #[test]
+    fn safety_floor_metadata_marks_only_zero_false_precision_candidates() {
+        let mut metrics = vec![
+            measured_count("dynamic_false_precision_count", 0, 1, Cadence::Pr),
+            measured_count("fast_path_wrong_result_count", 0, 1, Cadence::Pr),
+            measured_count("line_construct_f1", 1, 1, Cadence::Pr),
+        ];
+
+        apply_safety_floor_metadata(&mut metrics);
+
+        for name in ["dynamic_false_precision_count", "fast_path_wrong_result_count"] {
+            assert!(metrics.iter().any(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured {
+                        metric,
+                        value,
+                        previous: Some(0.0),
+                        delta: Some(0.0),
+                        floor: Some(0.0),
+                        threshold: Some(0.0),
+                        direction: Direction::Down,
+                        sample_count: 1,
+                        ..
+                    } if metric == name && (*value - 0.0).abs() < f64::EPSILON
+                )
+            }));
+        }
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured {
+                    metric,
+                    floor: None,
+                    threshold: None,
+                    direction: Direction::Neutral,
+                    ..
+                } if metric == "line_construct_f1"
+            )
+        }));
+    }
+
+    #[test]
+    fn ratchet_receipt_keeps_precision_recall_metrics_out_of_floor_map() {
+        let artifact = ParserAccuracyArtifact {
+            schema_version: 1,
+            subsystem: "parser_accuracy",
+            generated_at: "2026-05-03T00:00:00Z".to_string(),
+            commit: "test".to_string(),
+            cadence: Cadence::Pr,
+            denominator: Denominator::default(),
+            families: Vec::new(),
+            metrics: vec![
+                measured_count("dynamic_false_precision_count", 0, 1, Cadence::Pr),
+                measured_count("fast_path_wrong_result_count", 0, 1, Cadence::Pr),
+                measured_value("line_construct_f1", 0.875, 8, Cadence::Pr),
+                measured_value("symbol_decl_precision", 0.9, 10, Cadence::Pr),
+            ],
+            failure_packets: Vec::new(),
+            gold_drift: GoldDrift::default(),
+            metric_runtime: MetricRuntime::default(),
+        };
+
+        let receipt = ratchet_receipt_for_artifact(&artifact);
+
+        assert_eq!(receipt.floor_metrics.len(), 2);
+        assert_eq!(receipt.floor_metrics.get("dynamic_false_precision_count"), Some(&Some(0.0)));
+        assert_eq!(receipt.floor_metrics.get("fast_path_wrong_result_count"), Some(&Some(0.0)));
+        assert!(
+            !receipt.floor_metrics.contains_key("line_construct_f1"),
+            "precision/recall rows must stay out of hard floors until sample counts stabilize"
+        );
+        assert_eq!(receipt.improvement_metrics.get("line_construct_f1"), Some(&Some(0.875)));
+        assert_eq!(receipt.improvement_metrics.get("symbol_decl_precision"), Some(&Some(0.9)));
     }
 
     #[test]
