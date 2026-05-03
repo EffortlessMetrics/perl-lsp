@@ -6989,8 +6989,8 @@ mod semantic_query_callback_tests {
     use perl_tdd_support::{must, must_some};
 
     #[test]
-    fn with_semantic_queries_for_uri_indexed_uri_invokes_callback(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn with_semantic_queries_for_uri_indexed_uri_invokes_callback()
+    -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = "file:///lib/Foo.pm";
         must(index.index_file(must(url::Url::parse(uri)), "sub foo { 1 }".to_string()));
@@ -7006,8 +7006,8 @@ mod semantic_query_callback_tests {
     }
 
     #[test]
-    fn with_semantic_queries_for_uri_unknown_uri_returns_none(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn with_semantic_queries_for_uri_unknown_uri_returns_none()
+    -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         // Do NOT index anything.
         let result = index.with_semantic_queries_for_uri("file:///not/indexed.pl", |_, _| 99u32);
@@ -7016,8 +7016,8 @@ mod semantic_query_callback_tests {
     }
 
     #[test]
-    fn with_semantic_queries_for_uri_file_id_matches_file_id_for_uri(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn with_semantic_queries_for_uri_file_id_matches_file_id_for_uri()
+    -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = "file:///lib/Bar.pm";
         must(index.index_file(must(url::Url::parse(uri)), "sub bar { 1 }".to_string()));
@@ -7034,8 +7034,8 @@ mod semantic_query_callback_tests {
     }
 
     #[test]
-    fn with_semantic_queries_for_uri_callback_not_called_when_not_indexed(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn with_semantic_queries_for_uri_callback_not_called_when_not_indexed()
+    -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let mut called = false;
         let _ = index.with_semantic_queries_for_uri("file:///ghost.pl", |_, _| {

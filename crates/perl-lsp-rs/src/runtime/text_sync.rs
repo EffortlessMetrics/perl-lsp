@@ -1060,24 +1060,23 @@ impl LspServer {
                     #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
                     let diagnostics = {
                         // Attempt semantic-aware path; fall back to legacy when URI not indexed.
-                        let semantic_diags =
-                            self.workspace_index().and_then(|workspace_index| {
-                                workspace_index.with_semantic_queries_for_uri(
-                                    uri,
-                                    |file_id, queries| {
-                                        provider.get_diagnostics_with_path_and_semantics(
-                                            ast,
-                                            &doc.parse_errors,
-                                            &doc.text,
-                                            None,
-                                            &[],
-                                            source_path.as_deref(),
-                                            file_id,
-                                            &queries,
-                                        )
-                                    },
-                                )
-                            });
+                        let semantic_diags = self.workspace_index().and_then(|workspace_index| {
+                            workspace_index.with_semantic_queries_for_uri(
+                                uri,
+                                |file_id, queries| {
+                                    provider.get_diagnostics_with_path_and_semantics(
+                                        ast,
+                                        &doc.parse_errors,
+                                        &doc.text,
+                                        None,
+                                        &[],
+                                        source_path.as_deref(),
+                                        file_id,
+                                        &queries,
+                                    )
+                                },
+                            )
+                        });
                         semantic_diags.unwrap_or_else(|| {
                             provider.get_diagnostics_with_path(
                                 ast,

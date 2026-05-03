@@ -56,8 +56,8 @@ fn items_from_report(
 /// Case 1: Dynamic import at byte 0 suppresses a bareword at a later offset.
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 #[test]
-fn case1_dynamic_import_before_bareword_suppresses_pl109(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn case1_dynamic_import_before_bareword_suppresses_pl109() -> Result<(), Box<dyn std::error::Error>>
+{
     use perl_lsp::features::diagnostics::DiagnosticsProvider;
     use perl_parser::Parser;
     use perl_semantic_facts::{
@@ -101,19 +101,22 @@ fn case1_dynamic_import_before_bareword_suppresses_pl109(
     );
 
     let mut shards = HashMap::new();
-    shards.insert(shard_key.to_string(), FileFactShard {
-        source_uri: shard_key.to_string(),
-        file_id,
-        content_hash: 0,
-        anchors_hash: None,
-        entities_hash: None,
-        occurrences_hash: None,
-        edges_hash: None,
-        anchors: vec![],
-        entities: vec![],
-        occurrences: vec![],
-        edges: vec![],
-    });
+    shards.insert(
+        shard_key.to_string(),
+        FileFactShard {
+            source_uri: shard_key.to_string(),
+            file_id,
+            content_hash: 0,
+            anchors_hash: None,
+            entities_hash: None,
+            occurrences_hash: None,
+            edges_hash: None,
+            anchors: vec![],
+            entities: vec![],
+            occurrences: vec![],
+            edges: vec![],
+        },
+    );
 
     let queries = WorkspaceSemanticQueries::new(&ref_index, &ie_index, &shards);
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
@@ -146,8 +149,8 @@ fn case1_dynamic_import_before_bareword_suppresses_pl109(
 /// Case 2: Dynamic import at a byte offset AFTER `bar` — PL109 must still fire.
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 #[test]
-fn case2_dynamic_import_after_bareword_pl109_still_fires(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn case2_dynamic_import_after_bareword_pl109_still_fires() -> Result<(), Box<dyn std::error::Error>>
+{
     use perl_lsp::features::diagnostics::DiagnosticsProvider;
     use perl_parser::Parser;
     use perl_semantic_facts::{
@@ -190,19 +193,22 @@ fn case2_dynamic_import_after_bareword_pl109_still_fires(
     );
 
     let mut shards = HashMap::new();
-    shards.insert(shard_key.to_string(), FileFactShard {
-        source_uri: shard_key.to_string(),
-        file_id,
-        content_hash: 0,
-        anchors_hash: None,
-        entities_hash: None,
-        occurrences_hash: None,
-        edges_hash: None,
-        anchors: vec![],
-        entities: vec![],
-        occurrences: vec![],
-        edges: vec![],
-    });
+    shards.insert(
+        shard_key.to_string(),
+        FileFactShard {
+            source_uri: shard_key.to_string(),
+            file_id,
+            content_hash: 0,
+            anchors_hash: None,
+            entities_hash: None,
+            occurrences_hash: None,
+            edges_hash: None,
+            anchors: vec![],
+            entities: vec![],
+            occurrences: vec![],
+            edges: vec![],
+        },
+    );
 
     let queries = WorkspaceSemanticQueries::new(&ref_index, &ie_index, &shards);
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
@@ -238,10 +244,9 @@ fn case2_dynamic_import_after_bareword_pl109_still_fires(
 /// WorkspaceIndex::index_file populates eval-sub evidence so PL109 must NOT fire.
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 #[test]
-fn case3_eval_named_sub_suppresses_pl109_for_that_name(
-) -> Result<(), Box<dyn std::error::Error>> {
-    use perl_workspace::workspace_index::WorkspaceIndex;
+fn case3_eval_named_sub_suppresses_pl109_for_that_name() -> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp::features::diagnostics::PullDiagnosticsContext;
+    use perl_workspace::workspace_index::WorkspaceIndex;
 
     let uri_str = "file:///test_eval_suppressed.pl";
     let uri: Uri = uri_str.parse()?;
@@ -279,10 +284,10 @@ fn case3_eval_named_sub_suppresses_pl109_for_that_name(
 /// Case 4: eval names one sub; `truly_undefined` must still fire as PL109.
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 #[test]
-fn case4_eval_named_sub_does_not_suppress_unrelated_pl109(
-) -> Result<(), Box<dyn std::error::Error>> {
-    use perl_workspace::workspace_index::WorkspaceIndex;
+fn case4_eval_named_sub_does_not_suppress_unrelated_pl109() -> Result<(), Box<dyn std::error::Error>>
+{
     use perl_lsp::features::diagnostics::PullDiagnosticsContext;
+    use perl_workspace::workspace_index::WorkspaceIndex;
 
     let uri_str = "file:///test_eval_unrelated.pl";
     let uri: Uri = uri_str.parse()?;
@@ -304,9 +309,8 @@ fn case4_eval_named_sub_does_not_suppress_unrelated_pl109(
     )?;
 
     // `generated_from_string` must be suppressed.
-    let pl109_generated = items
-        .iter()
-        .any(|d| has_code(d, "PL109") && d.message.contains("generated_from_string"));
+    let pl109_generated =
+        items.iter().any(|d| has_code(d, "PL109") && d.message.contains("generated_from_string"));
     if pl109_generated {
         return Err(format!(
             "Case 4: PL109 must NOT fire for `generated_from_string` \
@@ -359,10 +363,10 @@ fn case5_no_semantics_legacy_pl109_still_fires() -> Result<(), Box<dyn std::erro
 /// also threads semantic queries for eval-sub suppression (case 3 via pull path).
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 #[test]
-fn pull_diagnostics_eval_sub_suppression_via_workspace_context(
-) -> Result<(), Box<dyn std::error::Error>> {
-    use perl_workspace::workspace_index::WorkspaceIndex;
+fn pull_diagnostics_eval_sub_suppression_via_workspace_context()
+-> Result<(), Box<dyn std::error::Error>> {
     use perl_lsp::features::diagnostics::PullDiagnosticsContext;
+    use perl_workspace::workspace_index::WorkspaceIndex;
 
     let uri_str = "file:///test_pull_eval.pl";
     let uri: Uri = uri_str.parse()?;
