@@ -1053,9 +1053,42 @@ impl LspServer {
             let documents = self.documents.lock();
             if let Some(doc) = self.get_document(&documents, &normalized_uri) {
                 if let Some(ref ast) = doc.ast {
-                    // Run diagnostics
+                    // Run diagnostics, threading workspace semantic queries when available.
                     let provider = DiagnosticsProvider::new(ast, doc.text.clone());
                     let source_path = source_path_from_uri(uri);
+
+                    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+                    let diagnostics = {
+                        // Attempt semantic-aware path; fall back to legacy when URI not indexed.
+                        let semantic_diags = self.workspace_index().and_then(|workspace_index| {
+                            workspace_index.with_semantic_queries_for_uri(
+                                uri,
+                                |file_id, queries| {
+                                    provider.get_diagnostics_with_path_and_semantics(
+                                        ast,
+                                        &doc.parse_errors,
+                                        &doc.text,
+                                        None,
+                                        &[],
+                                        source_path.as_deref(),
+                                        file_id,
+                                        &queries,
+                                    )
+                                },
+                            )
+                        });
+                        semantic_diags.unwrap_or_else(|| {
+                            provider.get_diagnostics_with_path(
+                                ast,
+                                &doc.parse_errors,
+                                &doc.text,
+                                None,
+                                &[],
+                                source_path.as_deref(),
+                            )
+                        })
+                    };
+                    #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
                     let diagnostics = provider.get_diagnostics_with_path(
                         ast,
                         &doc.parse_errors,

@@ -279,7 +279,44 @@ impl PullDiagnosticsProvider {
 
                 let search_paths: Vec<String> = include_paths.clone();
 
-                let mut diagnostics = provider
+                // Wire workspace semantic queries when available (pull-text path).
+                #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+                let base_diagnostics: Vec<_> = {
+                    let semantic_diags =
+                        context.workspace_index.as_ref().and_then(|workspace_index| {
+                            workspace_index.with_semantic_queries_for_uri(
+                                &uri_str,
+                                |file_id, queries| {
+                                    provider.get_diagnostics_with_path_and_semantics(
+                                        &ast,
+                                        &parse_errors,
+                                        content,
+                                        Some(&resolver),
+                                        &search_paths,
+                                        source_path.as_deref(),
+                                        file_id,
+                                        &queries,
+                                    )
+                                },
+                            )
+                        });
+                    semantic_diags
+                        .unwrap_or_else(|| {
+                            provider.get_diagnostics_with_path(
+                                &ast,
+                                &parse_errors,
+                                content,
+                                Some(&resolver),
+                                &search_paths,
+                                source_path.as_deref(),
+                            )
+                        })
+                        .into_iter()
+                        .map(|d| self.to_lsp_diagnostic_with_context(uri, content, d, context))
+                        .collect()
+                };
+                #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
+                let base_diagnostics: Vec<_> = provider
                     .get_diagnostics_with_path(
                         &ast,
                         &parse_errors,
@@ -290,7 +327,9 @@ impl PullDiagnosticsProvider {
                     )
                     .into_iter()
                     .map(|d| self.to_lsp_diagnostic_with_context(uri, content, d, context))
-                    .collect::<Vec<_>>();
+                    .collect();
+
+                let mut diagnostics = base_diagnostics;
 
                 // Add built-in Perl::Critic policy violations
                 self.add_builtin_critic_diagnostics(uri, &ast, content, &mut diagnostics);
@@ -430,8 +469,42 @@ impl PullDiagnosticsProvider {
             };
 
             let search_paths: Vec<String> = include_paths.clone();
+            let uri_str = uri.to_string();
 
-            let mut diagnostics = provider
+            // Wire workspace semantic queries when available (pull-state path).
+            #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+            let base_diagnostics: Vec<_> = {
+                let semantic_diags = context.workspace_index.as_ref().and_then(|workspace_index| {
+                    workspace_index.with_semantic_queries_for_uri(&uri_str, |file_id, queries| {
+                        provider.get_diagnostics_with_path_and_semantics(
+                            ast,
+                            &doc_state.parse_errors,
+                            &doc_state.text,
+                            Some(&resolver),
+                            &search_paths,
+                            source_path.as_deref(),
+                            file_id,
+                            &queries,
+                        )
+                    })
+                });
+                semantic_diags
+                    .unwrap_or_else(|| {
+                        provider.get_diagnostics_with_path(
+                            ast,
+                            &doc_state.parse_errors,
+                            &doc_state.text,
+                            Some(&resolver),
+                            &search_paths,
+                            source_path.as_deref(),
+                        )
+                    })
+                    .into_iter()
+                    .map(|d| self.to_lsp_diagnostic_with_context(uri, &doc_state.text, d, context))
+                    .collect()
+            };
+            #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
+            let base_diagnostics: Vec<_> = provider
                 .get_diagnostics_with_path(
                     ast,
                     &doc_state.parse_errors,
@@ -442,7 +515,9 @@ impl PullDiagnosticsProvider {
                 )
                 .into_iter()
                 .map(|d| self.to_lsp_diagnostic_with_context(uri, &doc_state.text, d, context))
-                .collect::<Vec<_>>();
+                .collect();
+
+            let mut diagnostics = base_diagnostics;
 
             // Add built-in Perl::Critic policy violations
             self.add_builtin_critic_diagnostics(uri, ast, &doc_state.text, &mut diagnostics);
@@ -454,7 +529,7 @@ impl PullDiagnosticsProvider {
                     let dead_code_diags =
                         perl_lsp_rs_core::providers::diagnostics::detect_dead_code(
                             workspace_index,
-                            &uri.to_string(),
+                            &uri_str,
                             &doc_state.text,
                             &doc_state.line_starts,
                         );

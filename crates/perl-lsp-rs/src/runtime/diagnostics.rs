@@ -468,6 +468,38 @@ impl LspServer {
                 .map(|p| p.to_string_lossy().into_owned())
                 .collect();
             let source_path = source_path_from_uri(uri);
+
+            // Wire semantic queries when workspace data is available for this URI.
+            // Falls back to NullSemanticQueries (legacy behavior) when the URI is
+            // not yet indexed or the workspace feature is disabled.
+            #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+            let mut diagnostics = {
+                let semantic_diags = self.workspace_index().and_then(|workspace_index| {
+                    workspace_index.with_semantic_queries_for_uri(uri, |file_id, queries| {
+                        provider.get_diagnostics_with_path_and_semantics(
+                            ast,
+                            &parse_errors,
+                            &text,
+                            Some(&resolver),
+                            &search_paths,
+                            source_path.as_deref(),
+                            file_id,
+                            &queries,
+                        )
+                    })
+                });
+                semantic_diags.unwrap_or_else(|| {
+                    provider.get_diagnostics_with_path(
+                        ast,
+                        &parse_errors,
+                        &text,
+                        Some(&resolver),
+                        &search_paths,
+                        source_path.as_deref(),
+                    )
+                })
+            };
+            #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
             let mut diagnostics = provider.get_diagnostics_with_path(
                 ast,
                 &parse_errors,
@@ -1069,6 +1101,39 @@ impl LspServer {
                     .map(|p| p.to_string_lossy().into_owned())
                     .collect();
                 let source_path = source_path_from_uri(uri_str);
+
+                // Wire semantic queries when workspace data is available for this URI.
+                #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+                let mut diagnostics = {
+                    let semantic_diags = self.workspace_index().and_then(|workspace_index| {
+                        workspace_index.with_semantic_queries_for_uri(
+                            uri_str,
+                            |file_id, queries| {
+                                provider.get_diagnostics_with_path_and_semantics(
+                                    ast,
+                                    &doc.parse_errors,
+                                    &doc.text,
+                                    Some(&resolver),
+                                    &search_paths,
+                                    source_path.as_deref(),
+                                    file_id,
+                                    &queries,
+                                )
+                            },
+                        )
+                    });
+                    semantic_diags.unwrap_or_else(|| {
+                        provider.get_diagnostics_with_path(
+                            ast,
+                            &doc.parse_errors,
+                            &doc.text,
+                            Some(&resolver),
+                            &search_paths,
+                            source_path.as_deref(),
+                        )
+                    })
+                };
+                #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
                 let mut diagnostics = provider.get_diagnostics_with_path(
                     ast,
                     &doc.parse_errors,

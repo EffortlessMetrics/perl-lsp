@@ -130,6 +130,8 @@ perl-tdd-support = { workspace = true }
 parking_lot.workspace = true
 criterion.workspace = true
 perl-corpus = { workspace = true }
+# Needed by dynamic_diagnostics_suppression_tests for ImportSpec construction in cases 1-2.
+perl-semantic-facts = { workspace = true }
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/perl-lsp-{ version }-{ target }{ archive-suffix }"
