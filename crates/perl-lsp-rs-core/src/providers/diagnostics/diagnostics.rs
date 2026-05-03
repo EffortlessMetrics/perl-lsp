@@ -9,6 +9,11 @@ use perl_parser_core::error::ParseError;
 use perl_pragma::PragmaTracker;
 use perl_semantic_analyzer::scope_analyzer::ScopeAnalyzer;
 use perl_semantic_analyzer::symbol::SymbolExtractor;
+use perl_semantic_facts::{
+    DefinitionCandidate, EntityFact, EntityId, FileId, OccurrenceFact, RenamePlan, SafeDeletePlan,
+    ScopeId, VisibleSymbol,
+};
+use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
 
 use super::dedup::deduplicate_diagnostics;
 use super::lints::common_mistakes::check_common_mistakes;
@@ -30,7 +35,69 @@ use super::lints::unreachable_code::check_unreachable_code;
 use super::lints::unused_imports::check_unused_imports;
 use super::lints::version_compat::check_version_compat;
 use super::parse_errors::{parse_error_code, parse_error_severity};
-use super::scope::scope_issues_to_diagnostics;
+use super::scope::scope_issues_to_diagnostics_with_semantics;
+
+// ── NullSemanticQueries ──
+
+/// A no-op [`SemanticQueries`] implementation used as a fallback when no
+/// workspace semantic data is available.
+///
+/// Returns empty/None for all queries. `dynamic_boundary_at` returns `None`,
+/// so `scope_issues_to_diagnostics_with_semantics` degrades to the same
+/// behavior as `scope_issues_to_diagnostics` when no semantic data is wired.
+struct NullSemanticQueries;
+
+impl SemanticQueries for NullSemanticQueries {
+    fn symbol_at(
+        &self,
+        _file_id: FileId,
+        _byte_offset: u32,
+    ) -> Option<(EntityFact, OccurrenceFact)> {
+        None
+    }
+
+    fn definitions(&self, _symbol: &str, _context: &QueryContext) -> Vec<DefinitionCandidate> {
+        Vec::new()
+    }
+
+    fn references(&self, _entity_id: EntityId) -> Vec<OccurrenceFact> {
+        Vec::new()
+    }
+
+    fn visible_symbols_at(
+        &self,
+        _file_id: FileId,
+        _byte_offset: u32,
+        _scope_id: Option<ScopeId>,
+    ) -> Vec<VisibleSymbol> {
+        Vec::new()
+    }
+
+    fn method_candidates(
+        &self,
+        _receiver_package: &str,
+        _method_name: &str,
+    ) -> Vec<DefinitionCandidate> {
+        Vec::new()
+    }
+
+    fn rename_plan(&self, entity_id: EntityId, new_name: &str) -> RenamePlan {
+        RenamePlan::new(entity_id, String::new(), new_name.to_string(), vec![], vec![], vec![])
+    }
+
+    fn safe_delete_plan(&self, entity_id: EntityId) -> SafeDeletePlan {
+        SafeDeletePlan::new(entity_id, String::new(), vec![], vec![])
+    }
+
+    fn dynamic_boundary_at(
+        &self,
+        _file_id: FileId,
+        _byte_offset: u32,
+        _symbol: Option<&str>,
+    ) -> Option<OccurrenceFact> {
+        None
+    }
+}
 
 // Re-export diagnostic types from local internal types module.
 #[allow(unused_imports)]
@@ -133,11 +200,20 @@ impl DiagnosticsProvider {
             });
         }
 
-        // Run scope analysis to detect undeclared/unused/shadowing issues
+        // Run scope analysis to detect undeclared/unused/shadowing issues.
+        // Uses the semantics-aware variant with NullSemanticQueries as the
+        // default (no suppression). Callers with workspace semantic data should
+        // use get_diagnostics_with_path_and_semantics instead.
         let pragma_map = PragmaTracker::build(ast);
         let scope_analyzer = ScopeAnalyzer::new();
         let scope_issues = scope_analyzer.analyze(ast, source, &pragma_map);
-        diagnostics.extend(scope_issues_to_diagnostics(scope_issues));
+        // FileId(0) is the null file ID — NullSemanticQueries returns None for
+        // all queries regardless, so the file_id value does not matter here.
+        diagnostics.extend(scope_issues_to_diagnostics_with_semantics(
+            scope_issues,
+            FileId(0),
+            &NullSemanticQueries,
+        ));
 
         // Detect heredoc anti-patterns
         let heredoc_diags = super::heredoc_antipatterns::detect_heredoc_antipatterns(source);
