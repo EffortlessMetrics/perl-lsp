@@ -463,7 +463,9 @@ mod tests {
         EntityFact, EntityId, EntityKind, FileId, OccurrenceFact, Provenance, RenamePlan,
         SafeDeletePlan, ScopeId, VisibleSymbol, VisibleSymbolContext, VisibleSymbolSource,
     };
-    use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
+    use perl_workspace::semantic::queries::{
+        DynamicCallableEvidence, QueryContext, SemanticQueries,
+    };
     use perl_workspace::semantic_shadow_compare::ShadowCompareVerdict;
     use std::collections::BTreeMap;
 
@@ -529,7 +531,7 @@ mod tests {
             _file_id: FileId,
             _byte_offset: u32,
             _symbol: &str,
-        ) -> Option<OccurrenceFact> {
+        ) -> Option<DynamicCallableEvidence> {
             None
         }
     }
@@ -609,7 +611,7 @@ mod tests {
             _file_id: FileId,
             _byte_offset: u32,
             _symbol: &str,
-        ) -> Option<OccurrenceFact> {
+        ) -> Option<DynamicCallableEvidence> {
             None
         }
     }

@@ -196,6 +196,7 @@ mod tests {
             file_id: Some(FileId(1)),
             anchor_id: Some(AnchorId(10)),
             scope_id: Some(ScopeId(1)),
+            span_start_byte: None,
         }
     }
 
@@ -210,6 +211,7 @@ mod tests {
             file_id: Some(FileId(1)),
             anchor_id: Some(AnchorId(11)),
             scope_id: None,
+            span_start_byte: None,
         }
     }
 
@@ -429,6 +431,7 @@ mod tests {
             file_id: Some(file_id),
             anchor_id: Some(AnchorId(30)),
             scope_id: None,
+            span_start_byte: None,
         };
         index.add_file_imports("file:///lib/Main.pm", file_id, vec![updated_import]);
 
@@ -484,6 +487,7 @@ mod tests {
             file_id: Some(file_id),
             anchor_id: Some(AnchorId(99)),
             scope_id: Some(ScopeId(5)),
+            span_start_byte: None,
         };
 
         index.add_file_imports("file:///lib/My/Module.pm", file_id, vec![import]);

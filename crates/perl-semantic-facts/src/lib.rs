@@ -205,6 +205,13 @@ pub struct ImportSpec {
     pub anchor_id: Option<AnchorId>,
     /// Scope enclosing this import site, when known.
     pub scope_id: Option<ScopeId>,
+    /// Byte offset of the start of this import statement in the source file.
+    ///
+    /// Used for order-aware suppression: a dynamic import only suppresses
+    /// barewords that appear **after** the import statement in the file.
+    /// `None` means the position is unknown; callers should be conservative
+    /// (no suppression) when this is absent.
+    pub span_start_byte: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -217,6 +224,13 @@ pub enum ImportKind {
     RequireThenImport,
     UseConstant,
     DynamicRequire,
+    /// A `Class->import(...)` method call — not a `use` statement.
+    ///
+    /// Used when a class's `import` method is called directly, typically with
+    /// a dynamic argument list (`Foo->import(@names)`).  This is distinct from
+    /// `Use` (which is a `use Foo` statement) and `Require` (which is a bare
+    /// `require Foo` statement).
+    ManualImport,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

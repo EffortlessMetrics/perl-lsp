@@ -650,6 +650,7 @@ fn rename_plan_cross_module_export_fixture() -> (RenamePlan, bool) {
             file_id: Some(importer_file),
             anchor_id: None,
             scope_id: None,
+            span_start_byte: None,
         }],
     );
 
@@ -969,6 +970,7 @@ fn safe_delete_plan_imported_symbol_fixture() -> (SafeDeletePlan, bool) {
             file_id: Some(importer_file),
             anchor_id: None,
             scope_id: None,
+            span_start_byte: None,
         }],
     );
 

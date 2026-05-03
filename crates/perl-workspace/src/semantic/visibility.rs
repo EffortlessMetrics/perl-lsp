@@ -246,6 +246,13 @@ fn collect_import_visibility(
                 // Require without import and DynamicRequire do not make
                 // symbols visible in the importing file's namespace.
             }
+
+            ImportKind::ManualImport => {
+                // `Class->import(@dynamic)` — the symbol list is not statically
+                // known (ImportSymbols::Dynamic), so no specific symbols can be
+                // added to visibility here.  The dynamic_callable_may_be_visible_at
+                // query handles suppression at diagnostic time.
+            }
         }
     }
 }
@@ -549,6 +556,7 @@ mod tests {
             file_id: Some(file_id),
             anchor_id: Some(AnchorId(100)),
             scope_id: None,
+            span_start_byte: None,
         };
         index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 
@@ -587,6 +595,7 @@ mod tests {
             file_id: Some(file_id),
             anchor_id: Some(AnchorId(101)),
             scope_id: None,
+            span_start_byte: None,
         };
         index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 
@@ -626,6 +635,7 @@ mod tests {
             file_id: Some(file_id),
             anchor_id: Some(AnchorId(102)),
             scope_id: None,
+            span_start_byte: None,
         };
         index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 
@@ -667,6 +677,7 @@ mod tests {
             file_id: Some(file_id),
             anchor_id: Some(AnchorId(103)),
             scope_id: None,
+            span_start_byte: None,
         };
         index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 
@@ -739,6 +750,7 @@ mod tests {
             file_id: Some(file_id),
             anchor_id: Some(AnchorId(104)),
             scope_id: None,
+            span_start_byte: None,
         };
         index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 
@@ -770,6 +782,7 @@ mod tests {
             file_id: Some(file_id),
             anchor_id: Some(AnchorId(104)),
             scope_id: None,
+            span_start_byte: None,
         };
         index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 
@@ -797,6 +810,7 @@ mod tests {
             file_id: Some(file_id),
             anchor_id: Some(AnchorId(105)),
             scope_id: None,
+            span_start_byte: None,
         };
         index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 
@@ -824,6 +838,7 @@ mod tests {
             file_id: Some(file_id),
             anchor_id: Some(AnchorId(106)),
             scope_id: None,
+            span_start_byte: None,
         };
         index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 
@@ -861,6 +876,7 @@ mod tests {
             file_id: Some(file_id),
             anchor_id: Some(AnchorId(107)),
             scope_id: None,
+            span_start_byte: None,
         };
         index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 
@@ -932,6 +948,7 @@ mod tests {
                     file_id: Some(file_id),
                     anchor_id: Some(AnchorId(100)),
                     scope_id: None,
+                                span_start_byte: None,
                 };
                 index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 
@@ -1008,6 +1025,7 @@ mod tests {
                     file_id: Some(file_id),
                     anchor_id: Some(AnchorId(100)),
                     scope_id: None,
+                                span_start_byte: None,
                 };
                 index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 
@@ -1099,6 +1117,7 @@ mod tests {
                     file_id: Some(file_id),
                     anchor_id: Some(AnchorId(100)),
                     scope_id: None,
+                                span_start_byte: None,
                 };
                 index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 
@@ -1149,6 +1168,7 @@ mod tests {
             file_id: Some(file_id),
             anchor_id: Some(AnchorId(108)),
             scope_id: None,
+            span_start_byte: None,
         };
         index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
 

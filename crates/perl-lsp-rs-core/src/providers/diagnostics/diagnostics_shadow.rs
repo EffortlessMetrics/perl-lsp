@@ -343,7 +343,7 @@ mod tests {
         EntityFact, EntityId, EntityKind, FileId, OccurrenceFact, Provenance, RenamePlan,
         SafeDeletePlan, ScopeId, VisibleSymbol,
     };
-    use perl_workspace::semantic::queries::SemanticQueries;
+    use perl_workspace::semantic::queries::{DynamicCallableEvidence, SemanticQueries};
     use perl_workspace::semantic_shadow_compare::ShadowCompareVerdict;
 
     // ── Minimal SemanticQueries stub for testing ──
@@ -408,7 +408,7 @@ mod tests {
             _file_id: FileId,
             _byte_offset: u32,
             _symbol: &str,
-        ) -> Option<OccurrenceFact> {
+        ) -> Option<DynamicCallableEvidence> {
             None
         }
     }

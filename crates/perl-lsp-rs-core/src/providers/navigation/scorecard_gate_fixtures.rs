@@ -25,7 +25,9 @@ mod tests {
         PlanBlockerReason, PlannedEdit, PlannedEditCategory, Provenance, RenamePlan,
         SafeDeletePlan, ScopeId, VisibleSymbol, VisibleSymbolSource,
     };
-    use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
+    use perl_workspace::semantic::queries::{
+        DynamicCallableEvidence, QueryContext, SemanticQueries,
+    };
     use perl_workspace::semantic::scorecard::{Scorecard, ScorecardMode};
     use perl_workspace::workspace_index::WorkspaceIndex;
 
@@ -173,7 +175,7 @@ mod tests {
             _file_id: FileId,
             _byte_offset: u32,
             _symbol: &str,
-        ) -> Option<OccurrenceFact> {
+        ) -> Option<DynamicCallableEvidence> {
             None
         }
     }

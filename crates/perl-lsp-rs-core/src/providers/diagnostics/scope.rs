@@ -410,7 +410,9 @@ mod tests {
         OccurrenceId, OccurrenceKind, Provenance, RenamePlan, SafeDeletePlan, ScopeId,
         VisibleSymbol,
     };
-    use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
+    use perl_workspace::semantic::queries::{
+        DynamicCallableEvidence, QueryContext, SemanticQueries,
+    };
 
     // ── Stub that simulates dynamic boundary coverage at any position ──
 
@@ -481,7 +483,7 @@ mod tests {
             _file_id: FileId,
             _byte_offset: u32,
             _symbol: &str,
-        ) -> Option<OccurrenceFact> {
+        ) -> Option<DynamicCallableEvidence> {
             None
         }
     }
@@ -545,7 +547,7 @@ mod tests {
             _file_id: FileId,
             _byte_offset: u32,
             _symbol: &str,
-        ) -> Option<OccurrenceFact> {
+        ) -> Option<DynamicCallableEvidence> {
             None
         }
     }
@@ -640,19 +642,15 @@ mod tests {
 
         fn dynamic_callable_may_be_visible_at(
             &self,
-            _file_id: FileId,
+            file_id: FileId,
             _byte_offset: u32,
             _symbol: &str,
-        ) -> Option<OccurrenceFact> {
+        ) -> Option<DynamicCallableEvidence> {
             // Simulates a file with a dynamic import: any bareword might be visible.
-            Some(OccurrenceFact {
-                id: OccurrenceId(6666),
-                kind: OccurrenceKind::DynamicBoundary,
-                entity_id: None,
-                anchor_id: AnchorId(6666),
-                scope_id: None,
-                provenance: Provenance::DynamicBoundary,
-                confidence: Confidence::Low,
+            Some(DynamicCallableEvidence::DynamicImport {
+                file_id,
+                anchor_id: Some(AnchorId(6666)),
+                module: "StubModule".to_string(),
             })
         }
     }
@@ -770,7 +768,7 @@ mod tests {
                 _: FileId,
                 _: u32,
                 _: &str,
-            ) -> Option<OccurrenceFact> {
+            ) -> Option<DynamicCallableEvidence> {
                 None
             }
         }
@@ -907,17 +905,19 @@ mod tests {
                 _: FileId,
                 _: u32,
                 symbol: &str,
-            ) -> Option<OccurrenceFact> {
+            ) -> Option<DynamicCallableEvidence> {
                 // Only suppress the named sub from the eval string.
                 if symbol == "generated_from_string" {
-                    Some(OccurrenceFact {
-                        id: OccurrenceId(5555),
-                        kind: OccurrenceKind::DynamicBoundary,
-                        entity_id: None,
-                        anchor_id: AnchorId(5555),
-                        scope_id: None,
-                        provenance: Provenance::DynamicBoundary,
-                        confidence: Confidence::Low,
+                    Some(DynamicCallableEvidence::EvalSub {
+                        occurrence: OccurrenceFact {
+                            id: OccurrenceId(5555),
+                            kind: OccurrenceKind::DynamicBoundary,
+                            entity_id: None,
+                            anchor_id: AnchorId(5555),
+                            scope_id: None,
+                            provenance: Provenance::DynamicBoundary,
+                            confidence: Confidence::Low,
+                        },
                     })
                 } else {
                     None

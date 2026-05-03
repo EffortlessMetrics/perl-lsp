@@ -413,6 +413,7 @@ mod tests {
             file_id: None,
             anchor_id: None,
             scope_id: None,
+            span_start_byte: None,
         };
 
         let shard = build_canonical_fact_shard(
