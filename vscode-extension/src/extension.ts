@@ -42,6 +42,7 @@ let streamingController: StreamingCompletionController | undefined;
 let stateChangeDisposable: vscode.Disposable | undefined;
 const COEXISTENCE_GUIDE_URL =
     'https://github.com/EffortlessMetrics/perl-lsp/blob/master/vscode-extension/README.md#extension-coexistence';
+const MANAGED_BINARY_HEALTH_TIMEOUT_MS = 30_000;
 /**
  * Cached startup diagnosis from the last server failure.
  *
@@ -1362,23 +1363,36 @@ async function probeStartupFailure(serverPath: string): Promise<StartupErrorDiag
 /**
  * Run `perllsp --health` and return `true` if the binary responds with `ok`.
  *
- * Waits up to 5 seconds. Returns `false` on timeout, non-zero exit, or if
+ * Waits up to 30 seconds. Returns `false` on timeout, non-zero exit, or if
  * stdout does not start with `ok`.
  */
 async function runHealthCheck(serverPath: string): Promise<boolean> {
     return new Promise(resolve => {
-        execFile(serverPath, ['--health'], { timeout: 5000 }, (err: Error | null, stdout: string) => {
-            if (err) {
-                outputChannel.appendLine(`[health-check] Failed: ${err.message}`);
-                resolve(false);
-                return;
+        execFile(
+            serverPath,
+            ['--health'],
+            { timeout: MANAGED_BINARY_HEALTH_TIMEOUT_MS },
+            (err: Error | null, stdout: string, stderr: string) => {
+                if (err) {
+                    outputChannel.appendLine(`[health-check] Failed: ${err.message}`);
+                    const stderrText = stderr.trim();
+                    if (stderrText) {
+                        outputChannel.appendLine(`[health-check] stderr: ${stderrText}`);
+                    }
+                    const stdoutText = stdout.trim();
+                    if (stdoutText) {
+                        outputChannel.appendLine(`[health-check] stdout: ${stdoutText}`);
+                    }
+                    resolve(false);
+                    return;
+                }
+                const ok = stdout.trim().startsWith('ok');
+                if (!ok) {
+                    outputChannel.appendLine(`[health-check] Unexpected output: ${stdout.trim()}`);
+                }
+                resolve(ok);
             }
-            const ok = stdout.trim().startsWith('ok');
-            if (!ok) {
-                outputChannel.appendLine(`[health-check] Unexpected output: ${stdout.trim()}`);
-            }
-            resolve(ok);
-        });
+        );
     });
 }
 

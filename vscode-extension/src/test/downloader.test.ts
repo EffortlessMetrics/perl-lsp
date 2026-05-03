@@ -14,7 +14,9 @@ import {
   BinaryDownloader,
   buildBinaryAssetCandidateNames,
   compareVersions,
+  copyManagedFileWithRetry,
   findReleaseAssetName,
+  isTransientManagedInstallError,
   parseLocalVersion,
 } from '../downloader';
 
@@ -187,6 +189,50 @@ describe('BinaryDownloader.getLocalDapPath', () => {
     const lspPath: string = downloader.getLocalBinaryPath();
 
     expect(path.dirname(dapPath)).toBe(path.dirname(lspPath));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Managed binary installation
+// ---------------------------------------------------------------------------
+describe('BinaryDownloader managed file install', () => {
+  test('classifies transient file-lock errors as retryable', () => {
+    expect(isTransientManagedInstallError(Object.assign(new Error('locked'), { code: 'EBUSY' }))).toBe(true);
+    expect(isTransientManagedInstallError(Object.assign(new Error('denied'), { code: 'EPERM' }))).toBe(true);
+    expect(isTransientManagedInstallError(Object.assign(new Error('missing'), { code: 'ENOENT' }))).toBe(false);
+  });
+
+  test('retries transient file-lock errors while installing managed binaries', async () => {
+    const logs: string[] = [];
+    let attempts = 0;
+    const transientError = Object.assign(new Error('locked'), { code: 'EBUSY' });
+    const copyFile = jest.fn(() => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw transientError;
+      }
+    });
+
+    await copyManagedFileWithRetry('source', 'destination', 'perllsp', message => logs.push(message), [0], copyFile);
+
+    expect(attempts).toBe(2);
+    expect(copyFile).toHaveBeenCalledTimes(2);
+    expect(logs).toEqual([expect.stringContaining('Retrying perllsp install')]);
+  });
+
+  test('does not retry non-transient managed install errors', async () => {
+    const logs: string[] = [];
+    const missingError = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const copyFile = jest.fn(() => {
+      throw missingError;
+    });
+
+    await expect(
+      copyManagedFileWithRetry('source', 'destination', 'perllsp', message => logs.push(message), [0], copyFile),
+    ).rejects.toThrow('missing');
+
+    expect(copyFile).toHaveBeenCalledTimes(1);
+    expect(logs).toEqual([]);
   });
 });
 
