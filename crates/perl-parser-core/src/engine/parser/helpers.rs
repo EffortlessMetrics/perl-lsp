@@ -759,12 +759,17 @@ impl<'a> Parser<'a> {
             if self.is_sync_point() {
                 // Consume tokens that would cause infinite loops if left unconsumed.
                 // Semicolon: standard statement terminator, safe to skip.
-                // RightBrace: orphan closing brace at top level must be consumed
-                //             to prevent parse_program from looping forever.
-                // Both are valid sync points but need to be consumed for progress.
+                // RightBrace/RightParen/RightBracket: orphan closing delimiters
+                //   that must be consumed so parse_program does not loop forever.
+                //   Without consuming these, the caller re-calls parse_statement,
+                //   which fails on the same orphan closer, which calls synchronize
+                //   again in an infinite cycle (#parser-hang-orphan-closer).
                 if matches!(
                     self.peek_kind(),
-                    Some(TokenKind::Semicolon) | Some(TokenKind::RightBrace)
+                    Some(TokenKind::Semicolon)
+                        | Some(TokenKind::RightBrace)
+                        | Some(TokenKind::RightParen)
+                        | Some(TokenKind::RightBracket)
                 ) {
                     let _ = self.consume_token();
                 }
