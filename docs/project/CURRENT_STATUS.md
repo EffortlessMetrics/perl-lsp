@@ -13,6 +13,7 @@
 | Test counts & tracked debt | [status/tests.md](status/tests.md) |
 | Parser corpus & coverage | [status/parser.md](status/parser.md) |
 | Quality metrics | [status/quality.md](status/quality.md) |
+| Semantic capability dashboard | [status/semantic_capability_dashboard.md](status/semantic_capability_dashboard.md) |
 | Editor UX planning scaffold | [status/editor_ux.json](status/editor_ux.json) |
 | Release readiness & blockers | [status/release.md](status/release.md) |
 | Verification protocol | [protocols/verification.md](protocols/verification.md) |
