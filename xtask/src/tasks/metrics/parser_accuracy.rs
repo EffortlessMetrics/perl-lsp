@@ -787,6 +787,7 @@ fn build_artifact(
     let unsupported_score = score_manifest_unsupported(root, manifest, &line_score)?;
     let scale_cost_score = score_manifest_scale_cost(root, manifest)?;
     let determinism_score = score_manifest_determinism(root, manifest)?;
+    let gold_drift = audit_gold_drift(root, manifest)?;
     let mut metrics = vec![MetricRow::Measured {
         metric: "denominator_fixture_count".to_string(),
         value: fixture_count,
@@ -809,6 +810,7 @@ fn build_artifact(
     metrics.extend(cost_metrics(&scale_cost_score, cadence));
     metrics.extend(cache_reuse_metrics(&incremental_score, cadence));
     metrics.extend(determinism_metrics(&determinism_score, cadence));
+    metrics.extend(gold_drift_metrics(&gold_drift, denominator.fixture_count, cadence));
 
     Ok(ParserAccuracyArtifact {
         schema_version: 1,
@@ -820,7 +822,7 @@ fn build_artifact(
         families,
         metrics,
         failure_packets: Vec::new(),
-        gold_drift: GoldDrift::default(),
+        gold_drift,
         metric_runtime: MetricRuntime::default(),
     })
 }
@@ -1818,6 +1820,83 @@ fn stable_hash<T: Hash>(value: &T) -> u64 {
     let mut hasher = DefaultHasher::new();
     value.hash(&mut hasher);
     hasher.finish()
+}
+
+fn audit_gold_drift(root: &Path, manifest: &ParserAccuracyManifest) -> Result<GoldDrift> {
+    let mut drift = GoldDrift::default();
+    let mut symbol_ids = BTreeSet::new();
+
+    for fixture in &manifest.fixtures {
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy gold fixture source {}", source_path.display())
+        })?;
+        drift.span_error_count +=
+            count_span_expectation_errors(&source, &fixture.span_expectations);
+        drift.duplicate_symbol_id_count +=
+            count_duplicate_symbol_ids(&fixture.symbol_expectations, &mut symbol_ids);
+        drift.missing_resolves_to_target_count +=
+            count_missing_edge_targets(&fixture.symbol_expectations);
+    }
+
+    Ok(drift)
+}
+
+fn count_span_expectation_errors(source: &str, expectations: &[SpanExpectation]) -> u64 {
+    let mut error_count = 0;
+    for expectation in expectations {
+        if expectation.byte_end < expectation.byte_start
+            || expectation.byte_end > source.len()
+            || !source.is_char_boundary(expectation.byte_start)
+            || !source.is_char_boundary(expectation.byte_end)
+        {
+            error_count += 1;
+            continue;
+        }
+        let Some(actual) = source.get(expectation.byte_start..expectation.byte_end) else {
+            error_count += 1;
+            continue;
+        };
+        if actual != expectation.span_text {
+            error_count += 1;
+        }
+    }
+    error_count
+}
+
+fn count_duplicate_symbol_ids(
+    expectations: &SymbolExpectations,
+    seen: &mut BTreeSet<String>,
+) -> u64 {
+    let mut duplicate_count = 0;
+    for id in expectations
+        .entities
+        .iter()
+        .map(|entity| entity.id.as_str())
+        .chain(expectations.occurrences.iter().map(|occurrence| occurrence.id.as_str()))
+        .chain(expectations.edges.iter().map(|edge| edge.id.as_str()))
+    {
+        if !seen.insert(id.to_string()) {
+            duplicate_count += 1;
+        }
+    }
+    duplicate_count
+}
+
+fn count_missing_edge_targets(expectations: &SymbolExpectations) -> u64 {
+    let entity_names = expectations
+        .entities
+        .iter()
+        .map(|entity| entity.canonical_name.as_str())
+        .collect::<BTreeSet<_>>();
+    expectations
+        .edges
+        .iter()
+        .map(|edge| {
+            u64::from(!entity_names.contains(edge.from.as_str()))
+                + u64::from(!entity_names.contains(edge.to.as_str()))
+        })
+        .sum()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3384,6 +3463,51 @@ fn determinism_metrics(score: &DeterminismScore, cadence: Cadence) -> Vec<Metric
     ]
 }
 
+fn gold_drift_metrics(drift: &GoldDrift, fixture_count: u64, cadence: Cadence) -> Vec<MetricRow> {
+    vec![
+        optional_measured_count(
+            "gold_schema_errors",
+            drift.schema_error_count,
+            fixture_count,
+            "gold fixtures are not available",
+            cadence,
+        ),
+        optional_measured_count(
+            "gold_span_errors",
+            drift.span_error_count,
+            fixture_count,
+            "gold fixtures are not available",
+            cadence,
+        ),
+        optional_measured_count(
+            "gold_duplicate_symbol_ids",
+            drift.duplicate_symbol_id_count,
+            fixture_count,
+            "gold fixtures are not available",
+            cadence,
+        ),
+        optional_measured_count(
+            "gold_missing_resolves_to_targets",
+            drift.missing_resolves_to_target_count,
+            fixture_count,
+            "gold fixtures are not available",
+            cadence,
+        ),
+        insufficient("gold_changed_line_count", "gold drift baseline is not wired yet"),
+        insufficient("gold_changed_symbol_count", "gold drift baseline is not wired yet"),
+        insufficient("gold_removed_expectation_count", "gold drift baseline is not wired yet"),
+        insufficient("gold_added_expectation_count", "gold drift baseline is not wired yet"),
+        insufficient(
+            "gold_dynamic_expectation_change_count",
+            "gold drift baseline is not wired yet",
+        ),
+        insufficient(
+            "gold_weakening_explanation_required_count",
+            "gold weakening explanation checks require a baseline diff in CI",
+        ),
+    ]
+}
+
 fn sync_runtime_metric_rows(artifact: &mut ParserAccuracyArtifact, cadence: Cadence) {
     let runtime = &artifact.metric_runtime;
     artifact.metrics.extend([
@@ -4680,6 +4804,97 @@ mod tests {
                 MetricRow::Measured { metric, value, sample_count: 1, .. }
                     if metric == "metric_artifact_size_bytes"
                         && (*value - 900.0).abs() < f64::EPSILON
+            )
+        }));
+    }
+
+    #[test]
+    fn gold_drift_audit_counts_span_duplicate_and_missing_edge_errors() {
+        let span_expectations = vec![
+            SpanExpectation {
+                id: "good".to_string(),
+                span_text: "Alpha".to_string(),
+                occurrence: None,
+                byte_start: 0,
+                byte_end: 5,
+                line_start: 1,
+                line_end: 1,
+                utf16_start: SpanPositionExpectation { line: 0, character: 0 },
+                utf16_end: SpanPositionExpectation { line: 0, character: 5 },
+            },
+            SpanExpectation {
+                id: "bad_text".to_string(),
+                span_text: "Beta".to_string(),
+                occurrence: None,
+                byte_start: 0,
+                byte_end: 5,
+                line_start: 1,
+                line_end: 1,
+                utf16_start: SpanPositionExpectation { line: 0, character: 0 },
+                utf16_end: SpanPositionExpectation { line: 0, character: 4 },
+            },
+        ];
+        let expectations = SymbolExpectations {
+            entities: vec![SymbolEntityExpectation {
+                id: "dup".to_string(),
+                kind: "Package".to_string(),
+                canonical_name: "Alpha".to_string(),
+                span_text: "Alpha".to_string(),
+                package: None,
+                scope: None,
+                provenance: "ExactAst".to_string(),
+                confidence: "High".to_string(),
+            }],
+            occurrences: vec![SymbolOccurrenceExpectation {
+                id: "dup".to_string(),
+                kind: "Reference".to_string(),
+                canonical_name: Some("Alpha::missing".to_string()),
+                span_text: "missing".to_string(),
+                package: None,
+                scope: None,
+                provenance: "ExactAst".to_string(),
+                confidence: "High".to_string(),
+            }],
+            edges: vec![SymbolEdgeExpectation {
+                id: "edge".to_string(),
+                kind: "Defines".to_string(),
+                from: "Alpha".to_string(),
+                to: "Alpha::missing".to_string(),
+                provenance: "ExactAst".to_string(),
+                confidence: "High".to_string(),
+            }],
+        };
+        let mut seen = BTreeSet::new();
+
+        assert_eq!(count_span_expectation_errors("Alpha", &span_expectations), 1);
+        assert_eq!(count_duplicate_symbol_ids(&expectations, &mut seen), 1);
+        assert_eq!(count_missing_edge_targets(&expectations), 1);
+    }
+
+    #[test]
+    fn gold_drift_metrics_emit_validation_and_baseline_rows() {
+        let drift = GoldDrift {
+            span_error_count: 1,
+            duplicate_symbol_id_count: 2,
+            missing_resolves_to_target_count: 3,
+            ..GoldDrift::default()
+        };
+
+        let metrics = gold_drift_metrics(&drift, 4, Cadence::Pr);
+
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "gold_span_errors"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "gold_removed_expectation_count"
             )
         }));
     }

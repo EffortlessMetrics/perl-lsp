@@ -1227,7 +1227,7 @@
     {
       "state": "measured",
       "metric": "lex_ms_p95",
-      "value": 0.014,
+      "value": 0.0129,
       "sample_count": 9,
       "direction": "neutral",
       "confidence": "high",
@@ -1236,7 +1236,7 @@
     {
       "state": "measured",
       "metric": "parse_ms_p95",
-      "value": 0.011,
+      "value": 0.0155,
       "sample_count": 9,
       "direction": "neutral",
       "confidence": "high",
@@ -1245,7 +1245,7 @@
     {
       "state": "measured",
       "metric": "ast_projection_ms_p95",
-      "value": 0.0012,
+      "value": 0.0018,
       "sample_count": 9,
       "direction": "neutral",
       "confidence": "high",
@@ -1261,7 +1261,7 @@
     {
       "state": "measured",
       "metric": "semantic_extraction_ms_p95",
-      "value": 0.038099999999999995,
+      "value": 0.0498,
       "sample_count": 9,
       "direction": "neutral",
       "confidence": "high",
@@ -1473,8 +1473,86 @@
     },
     {
       "state": "measured",
+      "metric": "gold_schema_errors",
+      "value": 0.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "gold_span_errors",
+      "value": 0.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "gold_duplicate_symbol_ids",
+      "value": 0.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "measured",
+      "metric": "gold_missing_resolves_to_targets",
+      "value": 0.0,
+      "sample_count": 9,
+      "direction": "neutral",
+      "confidence": "high",
+      "cadence": "pr"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "gold_changed_line_count",
+      "reason": "gold drift baseline is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "gold_changed_symbol_count",
+      "reason": "gold drift baseline is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "gold_removed_expectation_count",
+      "reason": "gold drift baseline is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "gold_added_expectation_count",
+      "reason": "gold drift baseline is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "gold_dynamic_expectation_change_count",
+      "reason": "gold drift baseline is not wired yet",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "insufficient_data",
+      "metric": "gold_weakening_explanation_required_count",
+      "reason": "gold weakening explanation checks require a baseline diff in CI",
+      "sample_count": 0,
+      "confidence": "low"
+    },
+    {
+      "state": "measured",
       "metric": "metric_runtime_ms",
-      "value": 39.825199999999995,
+      "value": 170.5846,
       "sample_count": 1,
       "direction": "neutral",
       "confidence": "high",
@@ -1501,7 +1579,7 @@
     {
       "state": "measured",
       "metric": "metric_artifact_size_bytes",
-      "value": 37675.0,
+      "value": 39751.0,
       "sample_count": 1,
       "direction": "neutral",
       "confidence": "high",
@@ -1546,10 +1624,10 @@
     "dynamic_expectation_change_count": 0
   },
   "metric_runtime": {
-    "runtime_ms": 39.825199999999995,
+    "runtime_ms": 170.5846,
     "timeout_count": 0,
     "flake_count": 0,
-    "artifact_size_bytes": 37675,
+    "artifact_size_bytes": 39751,
     "ci_runner_failure_count": 0,
     "orphan_process_count": 0,
     "cache_hit_rate": null
