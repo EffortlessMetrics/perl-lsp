@@ -10,6 +10,22 @@
 //! are recognized. Non-literal evals (e.g. `eval $code`) are out of scope —
 //! the module name is not statically known and no evidence is emitted.
 //!
+//! # Placement note — circular dependency debt
+//!
+//! This extractor lives in `perl-workspace` rather than `perl-semantic-analyzer`
+//! because of a circular dependency: `perl-semantic-analyzer/Cargo.toml` declares
+//! `perl-workspace` as a dependency (for workspace indexing), so moving any
+//! producer into `perl-semantic-analyzer` would create a cycle.
+//!
+//! This is **temporary architectural debt**. The correct long-term placement is
+//! `perl-semantic-analyzer`, which owns the semantic production layer.
+//! The blocker is the current `perl-semantic-analyzer → perl-workspace` dep arc.
+//!
+//! **Follow-up**: invert or remove the `perl-semantic-analyzer → perl-workspace`
+//! dependency (possibly by introducing a `perl-workspace-types` leaf crate for
+//! the fact types), then move this extractor to `perl-semantic-analyzer`.
+//! Track this as a follow-up issue after the dynamic-boundary suppression PRs merge.
+//!
 //! # Requirements
 //!
 //! - **Req 7.5a**: Emit `DynamicBoundary` evidence for `eval "sub NAME { ... }"`
@@ -55,7 +71,7 @@ fn walk(node: &Node, file_id: FileId, out: &mut Vec<(EntityFact, AnchorFact, Occ
     if let NodeKind::Eval { block } = &node.kind {
         // Only literal string evals produce evidence.
         if let NodeKind::String { value, .. } = &block.kind {
-            extract_from_eval_string(value, node.location.start, file_id, out);
+            extract_from_eval_string(value, node.location.start, node.location.end, file_id, out);
         }
         // Recurse into the block for nested evals.
         walk(block, file_id, out);
@@ -69,11 +85,23 @@ fn walk(node: &Node, file_id: FileId, out: &mut Vec<(EntityFact, AnchorFact, Occ
 
 /// Parse `eval_string` for `sub NAME` patterns and emit triples.
 ///
-/// Handles simple identifiers: `sub foo_bar`, `sub _helper123`, etc.
-/// Does NOT handle `sub { ... }` anonymous subs (no name to extract).
+/// Handles plausible Perl sub declarations of the form:
+/// - `sub NAME {`   — named sub with body
+/// - `sub NAME ;`   — forward declaration
+/// - `sub NAME (`   — named sub with prototype/signature
+///
+/// Does NOT match:
+/// - `sub { ... }` — anonymous sub (no name)
+/// - `sub $name { ... }` — interpolated name (sigil-prefixed)
+/// - `sub NAME` followed by arbitrary text (conservative: reject if no
+///   plausible Perl delimiter follows)
+///
+/// This conservative approach avoids false positives from strings that
+/// contain the word `sub` in prose (e.g. `"no sub here really"`).
 fn extract_from_eval_string(
     eval_string: &str,
     node_start_byte: usize,
+    node_end_byte: usize,
     file_id: FileId,
     out: &mut Vec<(EntityFact, AnchorFact, OccurrenceFact)>,
 ) {
@@ -99,6 +127,16 @@ fn extract_from_eval_string(
             after_sub.len() - after_sub.trim_start_matches(|c: char| c.is_ascii_whitespace()).len();
         let after_ws = &after_sub[ws_len..];
 
+        // Reject: anonymous sub (`sub {`) or sigil-prefixed (`sub $name`).
+        if after_ws.starts_with('{') || after_ws.starts_with(['$', '@', '%', '&', '*']) {
+            let advance = sub_pos + 3 + ws_len.max(1);
+            if advance >= search.len() {
+                break;
+            }
+            search = &search[advance..];
+            continue;
+        }
+
         // Extract the identifier name.
         let name_len = after_ws
             .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
@@ -106,9 +144,22 @@ fn extract_from_eval_string(
 
         if name_len > 0 {
             let name = &after_ws[..name_len];
-            // Validate: must start with a letter or underscore.
+            // Validate: must start with a letter or underscore (not a digit).
             if name.as_bytes().first().is_some_and(|&b| b.is_ascii_alphabetic() || b == b'_') {
-                emit_triple(name, node_start_byte, file_id, out);
+                // Validate: what follows the name must look like a Perl sub declaration.
+                // Accept: `{`, `;`, `(` (optionally preceded by whitespace).
+                // - `sub NAME {`   — named sub with body
+                // - `sub NAME ;`   — forward declaration
+                // - `sub NAME (`   — named sub with prototype or signature
+                // Reject everything else, including bare `sub NAME` at end-of-string
+                // (ambiguous — could be prose containing the word "sub").
+                let after_name = after_ws[name_len..].trim_start();
+                let plausible = after_name.starts_with('{')
+                    || after_name.starts_with(';')
+                    || after_name.starts_with('(');
+                if plausible {
+                    emit_triple(name, node_start_byte, node_end_byte, file_id, out);
+                }
             }
         }
 
@@ -149,9 +200,14 @@ fn find_sub_keyword(text: &str) -> Option<usize> {
 
 /// Emit a `(EntityFact, AnchorFact, OccurrenceFact)` triple for a named sub
 /// found in an eval string.
+///
+/// `node_start_byte` and `node_end_byte` are from the enclosing `Eval` AST
+/// node's `location.start` and `location.end` — these are the real source
+/// positions of the eval expression, used directly as the anchor span.
 fn emit_triple(
     name: &str,
     node_start_byte: usize,
+    node_end_byte: usize,
     file_id: FileId,
     out: &mut Vec<(EntityFact, AnchorFact, OccurrenceFact)>,
 ) {
@@ -172,12 +228,16 @@ fn emit_triple(
         confidence: Confidence::Low,
     };
 
+    // Use the real AST span from the enclosing eval node.
+    // node_end_byte comes from node.location.end, which is the source position
+    // of the end of the entire eval expression (including closing quote/paren).
+    let span_end =
+        if node_end_byte > node_start_byte { node_end_byte } else { node_start_byte + 1 };
     let anchor = AnchorFact {
         id: anchor_id,
         file_id,
-        // Use the eval node's span — the sub lives within the eval string.
         span_start_byte: node_start_byte as u32,
-        span_end_byte: (node_start_byte + 1).max(node_start_byte + name.len()) as u32,
+        span_end_byte: span_end as u32,
         scope_id: None,
         provenance: Provenance::DynamicBoundary,
         confidence: Confidence::Low,
@@ -323,6 +383,67 @@ mod tests {
         let file_id = FileId(5);
         let triples = parse_and_extract(r#"eval "sub { 1 }";"#, file_id);
         assert!(triples.is_empty(), "anonymous sub in eval must not produce named evidence");
+        Ok(())
+    }
+
+    #[test]
+    fn prose_sub_in_eval_does_not_produce_evidence() -> Result<(), Box<dyn std::error::Error>> {
+        // A string that contains the word "sub" in prose should not produce evidence.
+        // "no sub here really sub baz" has no Perl declaration delimiters after the name.
+        let file_id = FileId(6);
+        // Parse as a Perl string literal rather than through the parser to test
+        // the extractor function directly.
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string("no sub here really sub baz", 0, 26, file_id, &mut out);
+            out
+        };
+        assert!(
+            triples.is_empty(),
+            "prose containing 'sub' without delimiters must not produce evidence, got: {:?}",
+            triples.iter().map(|(e, _, _)| e.canonical_name.as_str()).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn sub_with_semicolon_delimiter_is_accepted() -> Result<(), Box<dyn std::error::Error>> {
+        // Forward declaration: `sub foo;`
+        let file_id = FileId(7);
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string("sub forward_decl;", 0, 18, file_id, &mut out);
+            out
+        };
+        assert_eq!(triples.len(), 1, "sub NAME; (forward decl) should produce evidence");
+        assert_eq!(triples[0].0.canonical_name, "forward_decl");
+        Ok(())
+    }
+
+    #[test]
+    fn sub_with_prototype_is_accepted() -> Result<(), Box<dyn std::error::Error>> {
+        // Named sub with prototype: `sub proto_sub ($$) { }`
+        let file_id = FileId(8);
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string("sub proto_sub ($$) { 1 }", 0, 24, file_id, &mut out);
+            out
+        };
+        assert_eq!(triples.len(), 1, "sub NAME (proto) should produce evidence");
+        assert_eq!(triples[0].0.canonical_name, "proto_sub");
+        Ok(())
+    }
+
+    #[test]
+    fn interpolated_name_sub_does_not_produce_evidence() -> Result<(), Box<dyn std::error::Error>> {
+        // `sub $name { ... }` — dynamic name, cannot be extracted.
+        let file_id = FileId(9);
+        let triples = {
+            let mut out = Vec::new();
+            extract_from_eval_string("sub $dynamic_name { 1 }", 0, 23, file_id, &mut out);
+            out
+        };
+        assert!(triples.is_empty(), "sub with sigil-prefixed name must not produce evidence");
         Ok(())
     }
 
