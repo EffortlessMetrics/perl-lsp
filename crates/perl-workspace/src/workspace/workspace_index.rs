@@ -2623,9 +2623,9 @@ impl WorkspaceIndex {
         let file_id = shards_guard.get(&key)?.file_id;
 
         let queries = crate::semantic::queries::WorkspaceSemanticQueries::new(
-            &*ref_guard,
-            &*ie_guard,
-            &*shards_guard,
+            &ref_guard,
+            &ie_guard,
+            &shards_guard,
         );
 
         Some(f(file_id, queries))

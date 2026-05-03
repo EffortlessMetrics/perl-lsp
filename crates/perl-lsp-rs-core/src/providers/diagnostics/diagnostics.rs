@@ -187,6 +187,7 @@ impl DiagnosticsProvider {
     ///
     /// Call sites that do not have workspace semantic data should continue to
     /// call [`get_diagnostics_with_path`] — the fallback is preserved exactly.
+    #[allow(clippy::too_many_arguments)]
     pub fn get_diagnostics_with_path_and_semantics<Q: SemanticQueries>(
         &self,
         ast: &std::sync::Arc<Node>,
@@ -214,6 +215,7 @@ impl DiagnosticsProvider {
     ///
     /// All diagnostic generation lives here; the public wrappers differ only in
     /// which `SemanticQueries` implementation and `FileId` they supply.
+    #[allow(clippy::too_many_arguments)]
     fn get_diagnostics_with_path_and_semantics_impl<Q: SemanticQueries>(
         &self,
         ast: &std::sync::Arc<Node>,
