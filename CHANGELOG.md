@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-05-03
+
+Release notes: [v0.13.3](docs/releases/v0.13.3.md)
+
+### Fixed
+
+- **VS Code managed binary install reliability** — Reinstall now installs
+  into a versioned subdirectory and atomically updates a `current` pointer,
+  so a forced reinstall while the previous `perllsp.exe` is held by a
+  running process lands in a fresh sibling directory instead of failing
+  with `EBUSY`.
+- **Lifecycle-safe `Perl: Reinstall Server Binary`** — The command stops a
+  running language client before installing, restarts with the newly
+  installed binary on success, and falls back to the previous binary on
+  download or health-check failure so a failed reinstall never leaves the
+  user worse off than before.
+- **Extended retry budget for transient managed-install file locks** —
+  Total retry wait grows from ~4s to ~31s, covering the upper end of
+  Windows Defender first-time signature scans on a fresh release artifact.
+- **Singleflight managed install** — Activation auto-download, manual
+  Reinstall, and the silent update check coalesce so two installs cannot
+  race the same destination path.
+
+### Changed
+
+- Strengthened source and published VS Code smokes to reinstall twice
+  across Windows, macOS, and Linux, with the binary held by a spawned
+  process during the second pass. Smokes upload artifacts under
+  `target/receipts/vscode-smoke/<source>/<os>/` on every run.
+- Prepared the `v0.13.3` public-alpha patch train with workspace, crate,
+  feature catalog, and VS Code extension version surfaces aligned.
+
 ## [0.13.2] - 2026-05-02
 
 Release notes: [v0.13.2](docs/releases/v0.13.2.md)
