@@ -197,8 +197,12 @@ async function main(): Promise<void> {
   const downloadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-published-smoke-download-'));
   const harnessExtensionPath = path.resolve(process.cwd(), 'src/test/published/harness');
   const extensionTestsPath = path.resolve(__dirname, './suite');
+  const repoRoot = path.resolve(__dirname, '../../../..');
   const vscodeExecutablePath = await downloadAndUnzipVSCode();
   const installTarget = await resolveInstallTarget(source, downloadDir);
+  const receiptsRoot = process.env.PERL_LSP_SMOKE_RECEIPTS_DIR
+    || path.join(repoRoot, 'target', 'receipts', 'vscode-smoke');
+  fs.mkdirSync(receiptsRoot, { recursive: true });
 
   fs.writeFileSync(path.join(workspacePath, 'smoke.pl'), "use strict;\nuse warnings;\nprint \"ok\\n\";\n");
 
@@ -213,6 +217,8 @@ async function main(): Promise<void> {
       PERL_LSP_EXTENSION_TEST_SKIP_STARTUP: '1',
       PERL_LSP_PUBLISHED_EXTENSION_ID: envValue('PERL_LSP_PUBLISHED_EXTENSION_ID') || EXTENSION_ID,
       PERL_LSP_PUBLISHED_EXTENSION_SOURCE: source,
+      PERL_LSP_SMOKE_RECEIPTS_DIR: receiptsRoot,
+      PERL_LSP_SMOKE_SOURCE_LABEL: process.env.PERL_LSP_SMOKE_SOURCE_LABEL || source,
     },
     launchArgs: [
       workspacePath,

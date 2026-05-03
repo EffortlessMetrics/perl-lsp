@@ -23,8 +23,27 @@ interface Release {
     assets: ReleaseAsset[];
 }
 
-const MANAGED_INSTALL_RETRY_DELAYS_MS = [100, 250, 500, 1000, 2000];
+// Retry budget for transient managed-install file locks. Total wait grows to
+// ~31s so first-time Windows Defender signature scans of freshly extracted
+// perllsp.exe (5–15s on cold caches) and end-of-life lock release for a
+// running perllsp.exe both fit comfortably.
+const MANAGED_INSTALL_RETRY_DELAYS_MS = [100, 250, 500, 1000, 2000, 4000, 8000, 16000];
 const TRANSIENT_MANAGED_INSTALL_ERROR_CODES = new Set(['EBUSY', 'EPERM', 'EACCES', 'ETXTBSY']);
+
+// Module-level singleflight: coalesce concurrent managed-install calls so
+// activation auto-download, manual reinstall, and silent update-check do not
+// race the same destination path. Multiple BinaryDownloader instances are
+// constructed across call sites, so this state lives at module scope.
+type ManagedInstallReason = 'force' | 'ensure';
+interface ActiveManagedInstall {
+  promise: Promise<string | null>;
+  reason: ManagedInstallReason;
+}
+let activeManagedInstall: ActiveManagedInstall | undefined;
+
+export function __resetManagedInstallSingleflightForTesting(): void {
+  activeManagedInstall = undefined;
+}
 
 function delay(ms: number): Promise<void> {
     return new Promise(resolve => {
@@ -163,15 +182,48 @@ export class BinaryDownloader {
     
     async ensureBinary(forceDownload = false): Promise<string | null> {
         this.lastErrorMessage = undefined;
+        const myReason: ManagedInstallReason = forceDownload ? 'force' : 'ensure';
+
+        // Singleflight: if an install is already running, decide whether to
+        // join it or run our own afterward. A pending force install always
+        // satisfies all callers; an ensure call always joins; a force call
+        // that arrives while an ensure is in flight waits for it then runs
+        // its own to honor the explicit reinstall intent.
+        if (activeManagedInstall) {
+            const activeReason = activeManagedInstall.reason;
+            this.outputChannel.appendLine(
+                `Managed install already in progress (${activeReason}); ${myReason} call will join.`,
+            );
+            const joined = await activeManagedInstall.promise.catch(() => null);
+            if (!forceDownload || activeReason === 'force') {
+                return joined;
+            }
+            this.outputChannel.appendLine(
+                'Joined ensure-install completed; running explicit force-reinstall now.',
+            );
+        }
+
+        const promise = this.runEnsureBinary(forceDownload);
+        activeManagedInstall = { promise, reason: myReason };
+        try {
+            return await promise;
+        } finally {
+            if (activeManagedInstall && activeManagedInstall.promise === promise) {
+                activeManagedInstall = undefined;
+            }
+        }
+    }
+
+    private async runEnsureBinary(forceDownload: boolean): Promise<string | null> {
         const config = vscode.workspace.getConfiguration('perl-lsp');
         const channel = config.get<string>('channel', 'latest');
         const versionTag = config.get<string>('versionTag', '');
-        
+
         // If channel is 'tag' and versionTag is specified, use that specific version
         if (channel === 'tag' && versionTag) {
             this.outputChannel.appendLine(`Using specific version: ${versionTag}`);
         }
-        
+
         // Check if binary already exists
         const existingPath = this.getLocalBinaryPath();
         if (!forceDownload && existingPath && fs.existsSync(existingPath)) {
@@ -182,14 +234,14 @@ export class BinaryDownloader {
         if (forceDownload && existingPath && fs.existsSync(existingPath)) {
             this.outputChannel.appendLine(`Refreshing existing binary: ${existingPath}`);
         }
-        
+
         // Show status bar while downloading
         const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
         statusBar.text = '$(sync~spin) Perl LSP: downloading binary...';
         statusBar.tooltip = 'Downloading Perl Language Server... Click to show logs';
         statusBar.command = 'perl-lsp.showOutput';
         statusBar.show();
-        
+
         // Download binary
         try {
             return await this.downloadWithProgress();
@@ -404,22 +456,30 @@ export class BinaryDownloader {
                     throw new Error('Binary not found in archive');
                 }
                 
-                // Move to final location
+                // Move to final location. Each install lands in a unique
+                // versioned dir so a forced reinstall while perllsp.exe is
+                // running does not have to overwrite the running file. The
+                // active install is selected by an atomically-committed
+                // pointer file at the base dir.
                 progress.report({ increment: 15, message: 'Installing binary...' });
-                const finalPath = this.getLocalBinaryPath();
-                const finalDir = path.dirname(finalPath);
-                
-                if (!fs.existsSync(finalDir)) {
-                    fs.mkdirSync(finalDir, { recursive: true });
+                const baseDir = this.getManagedBaseDir();
+                if (!fs.existsSync(baseDir)) {
+                    fs.mkdirSync(baseDir, { recursive: true });
                 }
-                
+                const installDirName = this.buildVersionedInstallDirName(release.tag_name);
+                const installDir = path.join(baseDir, installDirName);
+                fs.mkdirSync(installDir, { recursive: true });
+
+                const binaryName = process.platform === 'win32' ? 'perllsp.exe' : 'perllsp';
+                const finalPath = path.join(installDir, binaryName);
+
                 await copyManagedFileWithRetry(
                     extractedBinary,
                     finalPath,
                     'perllsp',
                     message => this.outputChannel.appendLine(message)
                 );
-                
+
                 // Make executable on Unix
                 if (process.platform !== 'win32') {
                     fs.chmodSync(finalPath, 0o755);
@@ -429,7 +489,7 @@ export class BinaryDownloader {
                 const dapName = process.platform === 'win32' ? 'perl-dap.exe' : 'perl-dap';
                 const extractedDap = this.findBinary(extractDir, dapName);
                 if (extractedDap) {
-                    const dapDest = path.join(finalDir, dapName);
+                    const dapDest = path.join(installDir, dapName);
                     try {
                         await copyManagedFileWithRetry(
                             extractedDap,
@@ -446,9 +506,15 @@ export class BinaryDownloader {
                     }
                 }
 
+                // Atomically activate the new install. Old install dirs stay
+                // on disk for one generation as a fallback, then get pruned.
+                this.commitVersionedInstall(installDirName);
+                this.outputChannel.appendLine(`Active managed install: ${installDirName}`);
+                this.pruneOldVersionedInstalls(baseDir, installDirName);
+
                 progress.report({ increment: 5, message: 'Complete!' });
                 this.outputChannel.appendLine(`Binary installed to: ${finalPath}`);
-                
+
                 return finalPath;
                 
             } finally {
@@ -802,34 +868,136 @@ export class BinaryDownloader {
         );
     }
     
-    private getLocalBinaryPath(): string {
-        const platform = process.platform;
-        const arch = process.arch;
-        const binaryName = platform === 'win32' ? 'perllsp.exe' : 'perllsp';
-        
+    /**
+     * Root for managed installs: globalStorage/.../bin/<platform>-<arch>/.
+     * Inside this directory, the active install is selected by the `current`
+     * pointer file, falling back to a legacy flat layout (perllsp.exe at the
+     * top level) when the pointer is absent.
+     */
+    private getManagedBaseDir(): string {
+        return BinaryDownloader.computeManagedBaseDir(this.context);
+    }
+
+    private static computeManagedBaseDir(context: vscode.ExtensionContext): string {
         return path.join(
-            this.context.globalStorageUri.fsPath,
+            context.globalStorageUri.fsPath,
             'bin',
-            `${platform}-${arch}`,
-            binaryName
+            `${process.platform}-${process.arch}`,
         );
     }
-    
+
+    /**
+     * Reads the `current` pointer file at the managed base dir and returns the
+     * absolute path of the active install dir, or null if no pointer exists or
+     * the named subdir is missing or invalid. Pointer content is restricted to
+     * a single dir name with no separators or '..' components.
+     */
+    private static readActiveManagedInstallDir(context: vscode.ExtensionContext): string | null {
+        const baseDir = BinaryDownloader.computeManagedBaseDir(context);
+        const pointerPath = path.join(baseDir, 'current');
+        if (!fs.existsSync(pointerPath)) {
+            return null;
+        }
+        let content = '';
+        try {
+            content = fs.readFileSync(pointerPath, 'utf8').trim();
+        } catch {
+            return null;
+        }
+        if (!content) {
+            return null;
+        }
+        if (!/^[A-Za-z0-9._-]+$/.test(content) || content.includes('..')) {
+            return null;
+        }
+        const candidate = path.join(baseDir, content);
+        if (!fs.existsSync(candidate)) {
+            return null;
+        }
+        return candidate;
+    }
+
+    /**
+     * Builds a unique install dir name from a release tag plus an ISO timestamp.
+     * Uniqueness lets a forced reinstall of the same version land in a fresh
+     * directory instead of overwriting the running binary on Windows.
+     */
+    private buildVersionedInstallDirName(versionTag: string): string {
+        const sanitizedTag = (versionTag || 'unknown').replace(/[^A-Za-z0-9._-]/g, '_');
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        return `${sanitizedTag}-${stamp}`;
+    }
+
+    /**
+     * Atomically updates the `current` pointer to a freshly populated install
+     * dir. The temp + rename pattern is the strongest form of "commit on
+     * success" we can use with no extra dependencies.
+     */
+    private commitVersionedInstall(installDirName: string): void {
+        const baseDir = this.getManagedBaseDir();
+        const pointerPath = path.join(baseDir, 'current');
+        const tmpPath = `${pointerPath}.tmp`;
+        fs.writeFileSync(tmpPath, `${installDirName}\n`, { encoding: 'utf8' });
+        fs.renameSync(tmpPath, pointerPath);
+    }
+
+    /**
+     * Removes versioned install dirs older than the most recent two. Best
+     * effort only — failure to prune is logged but never propagates so it
+     * cannot mask install success.
+     *
+     * Keeps `currentName` plus one prior install for fallback recovery.
+     */
+    private pruneOldVersionedInstalls(baseDir: string, currentName: string): void {
+        let entries: { name: string; mtime: number }[] = [];
+        try {
+            entries = fs.readdirSync(baseDir, { withFileTypes: true })
+                .filter(d => d.isDirectory() && d.name !== currentName)
+                .map(d => {
+                    const full = path.join(baseDir, d.name);
+                    let mtime = 0;
+                    try { mtime = fs.statSync(full).mtimeMs; } catch { /* ignore */ }
+                    return { name: d.name, mtime };
+                })
+                .sort((a, b) => b.mtime - a.mtime);
+        } catch {
+            return;
+        }
+        // Keep most recent prior install; remove anything older.
+        for (const entry of entries.slice(1)) {
+            const target = path.join(baseDir, entry.name);
+            try {
+                fs.rmSync(target, { recursive: true, force: true });
+                this.outputChannel.appendLine(`Removed stale managed install: ${entry.name}`);
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : String(err);
+                this.outputChannel.appendLine(`Could not remove stale install ${entry.name}: ${msg}`);
+            }
+        }
+    }
+
+    private getLocalBinaryPath(): string {
+        const binaryName = process.platform === 'win32' ? 'perllsp.exe' : 'perllsp';
+        const activeDir = BinaryDownloader.readActiveManagedInstallDir(this.context);
+        if (activeDir) {
+            return path.join(activeDir, binaryName);
+        }
+        // Legacy flat layout — pre-versioned installs grandfathered.
+        return path.join(this.getManagedBaseDir(), binaryName);
+    }
+
     /**
      * Returns the path where perl-dap would be placed inside the auto-download
      * directory.  Used by debugAdapter.ts to locate the binary without
      * duplicating path logic.
      */
     static getLocalDapPath(context: vscode.ExtensionContext): string {
-        const platform = process.platform;
-        const arch = process.arch;
-        const dapName = platform === 'win32' ? 'perl-dap.exe' : 'perl-dap';
-        return path.join(
-            context.globalStorageUri.fsPath,
-            'bin',
-            `${platform}-${arch}`,
-            dapName
-        );
+        const dapName = process.platform === 'win32' ? 'perl-dap.exe' : 'perl-dap';
+        const activeDir = BinaryDownloader.readActiveManagedInstallDir(context);
+        if (activeDir) {
+            return path.join(activeDir, dapName);
+        }
+        return path.join(BinaryDownloader.computeManagedBaseDir(context), dapName);
     }
 
     /**

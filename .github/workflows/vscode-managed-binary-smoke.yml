@@ -59,3 +59,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: xvfb-run -a npm run test:integration
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-smoke-source-${{ matrix.os }}
+          path: target/receipts/vscode-smoke/**
+          if-no-files-found: warn
+          retention-days: 14

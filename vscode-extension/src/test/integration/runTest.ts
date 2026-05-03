@@ -23,11 +23,15 @@ function getGrepArg(args: string[]): string | undefined {
 
 async function main(): Promise<void> {
   const extensionDevelopmentPath = path.resolve(__dirname, '../../..');
+  const repoRoot = path.resolve(extensionDevelopmentPath, '..');
   const extensionTestsPath = path.resolve(__dirname, './suite');
   const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-vscode-smoke-workspace-'));
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-vscode-smoke-user-'));
   const extensionsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-vscode-smoke-extensions-'));
   const grep = getGrepArg(process.argv.slice(2));
+  const receiptsRoot = process.env.PERL_LSP_SMOKE_RECEIPTS_DIR
+    || path.join(repoRoot, 'target', 'receipts', 'vscode-smoke');
+  fs.mkdirSync(receiptsRoot, { recursive: true });
 
   fs.writeFileSync(path.join(workspacePath, 'smoke.pl'), "use strict;\nuse warnings;\nprint \"ok\\n\";\n");
 
@@ -37,6 +41,8 @@ async function main(): Promise<void> {
     extensionTestsEnv: {
       ...process.env,
       PERL_LSP_EXTENSION_TEST_SKIP_STARTUP: '1',
+      PERL_LSP_SMOKE_RECEIPTS_DIR: receiptsRoot,
+      PERL_LSP_SMOKE_SOURCE_LABEL: process.env.PERL_LSP_SMOKE_SOURCE_LABEL || 'integration',
       VSCODE_TEST_GREP: grep ?? '',
     },
     launchArgs: [

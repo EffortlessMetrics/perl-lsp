@@ -65,3 +65,12 @@ jobs:
       - name: Run published extension smoke under Xvfb
         if: runner.os == 'Linux'
         run: xvfb-run -a npm run test:published
+
+      - name: Upload published smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-smoke-published-${{ env.PERL_LSP_PUBLISHED_EXTENSION_SOURCE }}-${{ matrix.os }}
+          path: target/receipts/vscode-smoke/**
+          if-no-files-found: warn
+          retention-days: 14
