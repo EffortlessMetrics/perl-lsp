@@ -2,6 +2,7 @@
   "fixture_family_version": 1,
   "fixtures": [
     {"id": "autoload_dynamic_boundary", "family": "AUTOLOAD dynamic boundary", "path": "fixtures/autoload_dynamic_boundary.pl"},
+    {"id": "dynamic_import_via_variable", "family": "dynamic import via variable", "path": "fixtures/dynamic_import_via_variable.pl"},
     {"id": "dynamic_require_boundary", "family": "dynamic require boundary", "path": "fixtures/dynamic_require_boundary.pl"},
     {"id": "empty_import_suppression", "family": "empty import suppression", "path": "fixtures/empty_import_suppression.pl"},
     {"id": "eval_string_dynamic_boundary", "family": "eval STRING dynamic boundary", "path": "fixtures/eval_string_dynamic_boundary.pl"},
@@ -9,9 +10,12 @@
     {"id": "generated_accessor", "family": "generated accessor", "path": "fixtures/generated_accessor.pl"},
     {"id": "imported_function_visibility", "family": "imported function visibility", "path": "fixtures/imported_function_visibility.pl"},
     {"id": "inherited_method", "family": "inherited method", "path": "fixtures/inherited_method.pl"},
+    {"id": "normal_static_missing_symbol", "family": "normal static missing symbol", "path": "fixtures/normal_static_missing_symbol.pl"},
     {"id": "qualified_vs_bare_references", "family": "qualified vs bare references", "path": "fixtures/qualified_vs_bare_references.pl"},
     {"id": "role_method", "family": "role method", "path": "fixtures/role_method.pl"},
     {"id": "same_bare_sub_two_packages", "family": "same bare sub in two packages", "path": "fixtures/same_bare_sub_two_packages.pl"},
+    {"id": "static_class_dynamic_import", "family": "static class dynamic import", "path": "fixtures/static_class_dynamic_import.pl"},
+    {"id": "symbolic_deref_assign", "family": "symbolic dereference assign", "path": "fixtures/symbolic_deref_assign.pl"},
     {"id": "typeglob_alias", "family": "typeglob alias", "path": "fixtures/typeglob_alias.pl"}
   ]
 }
