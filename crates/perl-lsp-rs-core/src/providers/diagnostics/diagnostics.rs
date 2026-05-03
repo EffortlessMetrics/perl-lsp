@@ -163,6 +163,68 @@ impl DiagnosticsProvider {
         module_search_paths: &[String],
         source_path: Option<&Path>,
     ) -> Vec<Diagnostic> {
+        // Delegate to the shared inner function with the null semantic queries
+        // so dynamic-boundary suppression is dormant — legacy behavior preserved.
+        self.get_diagnostics_with_path_and_semantics_impl(
+            ast,
+            parse_errors,
+            source,
+            module_resolver,
+            module_search_paths,
+            source_path,
+            FileId(0),
+            &NullSemanticQueries,
+        )
+    }
+
+    /// Generate diagnostics using real workspace semantic queries.
+    ///
+    /// Identical to [`get_diagnostics_with_path`] but passes `file_id` and
+    /// `semantic_queries` to the scope-issue converter so that
+    /// `dynamic_callable_may_be_visible_at` and `dynamic_boundary_at` are
+    /// consulted.  Dynamic-import and literal-eval-named-sub suppression are
+    /// live when this method is used.
+    ///
+    /// Call sites that do not have workspace semantic data should continue to
+    /// call [`get_diagnostics_with_path`] — the fallback is preserved exactly.
+    pub fn get_diagnostics_with_path_and_semantics<Q: SemanticQueries>(
+        &self,
+        ast: &std::sync::Arc<Node>,
+        parse_errors: &[ParseError],
+        source: &str,
+        module_resolver: Option<&dyn Fn(&str) -> bool>,
+        module_search_paths: &[String],
+        source_path: Option<&Path>,
+        file_id: FileId,
+        semantic_queries: &Q,
+    ) -> Vec<Diagnostic> {
+        self.get_diagnostics_with_path_and_semantics_impl(
+            ast,
+            parse_errors,
+            source,
+            module_resolver,
+            module_search_paths,
+            source_path,
+            file_id,
+            semantic_queries,
+        )
+    }
+
+    /// Shared implementation for both public `get_diagnostics_with_path*` variants.
+    ///
+    /// All diagnostic generation lives here; the public wrappers differ only in
+    /// which `SemanticQueries` implementation and `FileId` they supply.
+    fn get_diagnostics_with_path_and_semantics_impl<Q: SemanticQueries>(
+        &self,
+        ast: &std::sync::Arc<Node>,
+        parse_errors: &[ParseError],
+        source: &str,
+        module_resolver: Option<&dyn Fn(&str) -> bool>,
+        module_search_paths: &[String],
+        source_path: Option<&Path>,
+        file_id: FileId,
+        semantic_queries: &Q,
+    ) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
         let source_len = source.len();
 
@@ -210,21 +272,13 @@ impl DiagnosticsProvider {
         }
 
         // Run scope analysis to detect undeclared/unused/shadowing issues.
-        //
-        // This default path passes `NullSemanticQueries`, which always returns
-        // `None`, so dynamic-boundary suppression does not trigger here — legacy
-        // behavior is preserved exactly. A follow-up PR (PR-B) will thread the
-        // real `WorkspaceSemanticQueries` from `LanguageServerCore` through to
-        // this call site, at which point suppression becomes live.
         let pragma_map = PragmaTracker::build(ast);
         let scope_analyzer = ScopeAnalyzer::new();
         let scope_issues = scope_analyzer.analyze(ast, source, &pragma_map);
-        // FileId(0) is a placeholder — NullSemanticQueries returns None for all
-        // queries regardless, so the file_id value does not matter here.
         diagnostics.extend(scope_issues_to_diagnostics_with_semantics(
             scope_issues,
-            FileId(0),
-            &NullSemanticQueries,
+            file_id,
+            semantic_queries,
         ));
 
         // Detect heredoc anti-patterns
