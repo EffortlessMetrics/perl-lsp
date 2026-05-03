@@ -16,7 +16,7 @@ families together by hand.
 
 - `Parser` plus `ast`, `position`, `error`, and `ParseResult`
 - `analysis::*` from `perl-semantic-analyzer`
-- `workspace::*` from `perl-workspace-index`
+- `workspace::*` from `perl-workspace`
 - `refactor::*` from `perl-refactoring`
 - `completion`, `diagnostics`, `rename`, and other LSP provider re-exports
 - `perl-parse` when the `cli` feature is enabled

@@ -20,7 +20,7 @@ fn crate_dir() -> anyhow::Result<PathBuf> {
     let parent = manifest_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("missing parent for CARGO_MANIFEST_DIR"))?;
-    Ok(parent.join("perl-workspace-index"))
+    Ok(parent.join("perl-workspace"))
 }
 
 fn workspace_root() -> anyhow::Result<PathBuf> {

@@ -1806,7 +1806,7 @@ perf-baseline:
     cargo bench -p perl-lexer --bench lexer_benchmarks --locked
     cargo bench -p perl-lsp-completion --bench completion_benchmark --locked
     cargo bench -p perl-lsp-navigation --bench navigation_benchmark --locked
-    cargo bench -p perl-workspace-index --bench workspace_index_benchmark --locked
+    cargo bench -p perl-workspace --bench workspace_index_benchmark --locked
     cargo bench -p perl-lsp-rs --bench rope_performance_benchmark --locked
     cargo bench -p perl-lsp-tooling --bench cache_benchmark --locked
     @echo "Baseline complete. See docs/project/PERFORMANCE_BASELINES.md"

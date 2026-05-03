@@ -31,7 +31,7 @@ fn count_perl_files(dir: &Path) -> usize {
 
 /// Count the number of `#[test]` annotated functions in the workspace scorecard test file.
 fn count_scorecard_tests(root: &Path) -> usize {
-    let path = root.join("crates/perl-workspace-index/tests/workspace_scorecard.rs");
+    let path = root.join("crates/perl-workspace/tests/workspace_scorecard.rs");
     let Ok(content) = fs::read_to_string(&path) else { return 0 };
     content.matches("#[test]").count()
 }
@@ -50,7 +50,7 @@ pub(super) fn generate_workspace_status(root: &Path, original: &str) -> Result<S
 
     let stale_row = format!(
         "| **Stale-index defect rate** | 0 / {scorecard_tests} scenarios tested | 0% | \
-         see `cargo test -p perl-workspace-index -- scorecard` |"
+         see `cargo test -p perl-workspace -- scorecard` |"
     );
 
     let slo_table = "\
@@ -78,7 +78,7 @@ pub(super) fn generate_workspace_status(root: &Path, original: &str) -> Result<S
 
     let bullets = format!(
         "- **Stale-index defect rate**: 0 stale-symbol defects across {scorecard_tests} tested deletion/rename scenarios \
-         (unit tests in `crates/perl-workspace-index/tests/workspace_scorecard.rs`)\n\
+         (unit tests in `crates/perl-workspace/tests/workspace_scorecard.rs`)\n\
          - **Incremental reindex SLO**: P95 target = 100ms (from `perl-workspace-index-slo`); measured in `scorecard_incremental_reindex_latency_within_slo`\n\
          - **Multi-root tests**: 8 integration tests in `crates/perl-lsp-rs/tests/multi_root_workspace_tests.rs` activated in nightly CI gate via `just ci-workspace-multiroot` (PR #4137)\n\
          - **Fixture workspaces**: 4 scales at `test_corpus/workspaces/` ({small_count} / {medium_count} / {large_count} committed + xlarge generated on demand)"

@@ -4542,7 +4542,7 @@ mod tests {
     #[test]
     fn excluded_test_paths_skip_bin_directories() {
         assert!(is_excluded_test_path(Path::new(
-            "crates/perl-workspace-index/src/bin/workspace_memory_profile.rs"
+            "crates/perl-workspace/src/bin/workspace_memory_profile.rs"
         )));
     }
 
@@ -4890,9 +4890,7 @@ mod tests {
             ("perl-lsp", "perl-lsp"),
             ("perl-dap", "perl-dap"),
             ("perl-uri", "perl-uri"),
-            // Package name changed perl-workspace-index → perl-workspace (#4426),
-            // but the directory crates/perl-workspace-index/ was not renamed.
-            ("perl-workspace", "perl-workspace-index"),
+            ("perl-workspace", "perl-workspace"),
             ("perl-dap-platform", "perl-dap-platform"),
         ];
 

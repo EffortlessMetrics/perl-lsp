@@ -18,7 +18,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const DEFAULT_FIXTURE_MANIFEST: &str =
-    "crates/perl-workspace-index/tests/fixtures/semantic_scorecard/manifest.json";
+    "crates/perl-workspace/tests/fixtures/semantic_scorecard/manifest.json";
 const DEFAULT_OUTPUT: &str = "docs/project/status/semantic_scorecard.json";
 const DEFAULT_STATUS_MD: &str = "docs/project/status/semantic_scorecard.md";
 

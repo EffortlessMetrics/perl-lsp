@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 
 - **Crate**: `perl-symbol` (NEW published crate, Wave B collapse of 4 `perl-symbol-*` satellites)
 - **Version**: workspace (currently 0.12.4)
-- **Tier**: Tier 2+ (depends on `perl-ast`; consumed by `perl-workspace-index`, `perl-semantic-analyzer`, `perl-lsp`, `perl-lsp-rename`, `perl-lsp-performance`)
+- **Tier**: Tier 2+ (depends on `perl-ast`; consumed by `perl-workspace`, `perl-semantic-analyzer`, `perl-lsp`, `perl-lsp-rename`, `perl-lsp-performance`)
 - **Purpose**: Unified Perl symbol model for the entire perl-lsp ecosystem — taxonomy, cursor extraction, search indexing, and AST surface projection.
 
 ## Commands
@@ -36,7 +36,7 @@ dependency inversion that ADR-0041 explicitly consolidated away.
 
 ### Downstream Consumers
 
-- `perl-workspace-index` — workspace-wide symbol indexing (uses `types`)
+- `perl-workspace` — workspace-wide symbol indexing (uses `types`)
 - `perl-semantic-analyzer` — semantic analysis (uses `types`)
 - `perl-lsp` — LSP server (uses `cursor`)
 - `perl-lsp-rename` — rename provider (uses `cursor`)

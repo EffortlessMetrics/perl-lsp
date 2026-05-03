@@ -8,7 +8,7 @@ preservation layers without the higher-level workspace or LSP facades.
 ## Where it fits
 
 `perl-parser-core` is the low-level parsing layer used by `perl-parser`,
-`perl-semantic-analyzer`, `perl-workspace-index`, and `perl-refactoring`. It
+`perl-semantic-analyzer`, `perl-workspace`, and `perl-refactoring`. It
 turns source text into AST nodes and exposes the building blocks that higher
 layers compose.
 

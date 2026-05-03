@@ -38,8 +38,7 @@ fn test_unified_api_paths_resolve() {
         // We use the workaround of checking that the unified crate name exists
         // by attempting to construct a path that would need the module.
         let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-        let crate_dir =
-            PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+        let crate_dir = PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace");
 
         // The module files must exist after collapse
         let expected_modules = vec![
@@ -309,8 +308,7 @@ fn test_no_old_crate_names_in_source() {
 #[test]
 fn test_backward_compat_workspace_module_exists() {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+    let crate_dir = PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace");
 
     // Check that workspace/mod.rs exists and declares the modules
     let workspace_mod = crate_dir.join("src/workspace/mod.rs");
@@ -347,8 +345,7 @@ fn test_backward_compat_workspace_module_exists() {
 #[test]
 fn test_api_reexport_surface_explicit() {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+    let crate_dir = PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace");
 
     let api_file = crate_dir.join("src/api.rs");
 
@@ -390,8 +387,7 @@ fn test_api_reexport_surface_explicit() {
 #[test]
 fn test_lib_rs_declares_new_modules() {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+    let crate_dir = PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace");
 
     let lib_file = crate_dir.join("src/lib.rs");
     assert!(lib_file.exists(), "lib.rs not found");
@@ -429,11 +425,10 @@ fn test_lib_rs_declares_new_modules() {
 #[test]
 fn test_package_name_renamed_to_perl_workspace() {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir =
-        PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace-index");
+    let crate_dir = PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace");
 
     let cargo_toml = crate_dir.join("Cargo.toml");
-    assert!(cargo_toml.exists(), "Cargo.toml not found in perl-workspace-index");
+    assert!(cargo_toml.exists(), "Cargo.toml not found in perl-workspace");
 
     let content = std::fs::read_to_string(&cargo_toml).expect("Failed to read Cargo.toml");
 
