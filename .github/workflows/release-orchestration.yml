@@ -104,15 +104,43 @@ jobs:
             exit 1
           fi
 
-          echo "Checking CI status for ${HEAD_SHA}..."
-          CI_STATE="$(gh api repos/${{ github.repository }}/commits/${HEAD_SHA}/status --jq '.state')"
-          if [ -z "$CI_STATE" ]; then
-            echo "::error::Unable to determine CI state for ${HEAD_SHA}"
-            exit 1
-          fi
+          # Poll combined-status with a bounded window. Master CI on a just-
+          # squash-merged commit can return `pending` for several minutes
+          # before all required checks report; that is "no signal yet," not
+          # "negative signal." Treat `pending` as wait-and-retry; fail fast
+          # only on explicit `failure`/`error` from a required check, or on
+          # timeout. See docs/forensics/2026-05-03-validate-release-squash-
+          # timing-race.md for the incident this prevents.
+          POLL_TIMEOUT_SECONDS="${VALIDATE_RELEASE_CI_TIMEOUT_SECONDS:-300}"
+          POLL_INTERVAL_SECONDS="${VALIDATE_RELEASE_CI_POLL_INTERVAL_SECONDS:-30}"
+          DEADLINE=$(($(date +%s) + POLL_TIMEOUT_SECONDS))
+          CI_STATE=""
+
+          echo "Polling CI status for ${HEAD_SHA} (timeout ${POLL_TIMEOUT_SECONDS}s)..."
+          while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+            CI_STATE="$(gh api repos/${{ github.repository }}/commits/${HEAD_SHA}/status --jq '.state' 2>/dev/null || true)"
+            case "$CI_STATE" in
+              success)
+                break
+                ;;
+              failure|error)
+                echo "::error::Commit ${HEAD_SHA} CI reported ${CI_STATE}"
+                exit 1
+                ;;
+              pending|"")
+                REMAINING=$((DEADLINE - $(date +%s)))
+                echo "  CI state: ${CI_STATE:-unknown}; waiting ${POLL_INTERVAL_SECONDS}s (${REMAINING}s remaining)"
+                sleep "$POLL_INTERVAL_SECONDS"
+                ;;
+              *)
+                echo "::warning::Unexpected CI state '${CI_STATE}' for ${HEAD_SHA}; retrying"
+                sleep "$POLL_INTERVAL_SECONDS"
+                ;;
+            esac
+          done
 
           if [ "$CI_STATE" != "success" ]; then
-            echo "::error::Commit ${HEAD_SHA} is not in a successful CI state (${CI_STATE})"
+            echo "::error::Commit ${HEAD_SHA} did not reach success CI state within ${POLL_TIMEOUT_SECONDS}s (last state: ${CI_STATE:-unknown})"
             exit 1
           fi
 
