@@ -78,24 +78,35 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
 /// Convert scope analyzer issues to diagnostics with dynamic-boundary suppression.
 ///
 /// Extends [`scope_issues_to_diagnostics`] by consulting `semantic_queries`
-/// for each `UndeclaredVariable` issue. If the issue's position is covered by
-/// dynamic-boundary evidence (e.g., `require $var`, string `eval`, typeglob
-/// assignment, or AUTOLOAD scope), the diagnostic is **suppressed** for that
-/// specific variable.
+/// for `UndeclaredVariable` and `UnquotedBareword` issues.
 ///
-/// # Suppression policy (Q3 architectural decision)
+/// # Suppression policy
 ///
-/// - High-confidence normal missing symbol → diagnostic still fires.
-/// - Dynamic boundary covering THE specific variable → suppress that exact
-///   undefined diagnostic.
-/// - Ambiguous but not dynamic → emit the diagnostic (conservative default).
-/// - Unavailable semantic path (no shard for file) → fall back to emitting
-///   the diagnostic (no false suppression).
+/// ## `UndeclaredVariable` (position-scoped)
 ///
-/// Importantly, a dynamic construct anywhere in the file does **not** suppress
-/// unrelated diagnostics: `require $module; print $undeclared_static_var;`
-/// still fires for `$undeclared_static_var` because `dynamic_boundary_at`
-/// checks the *specific position* of each issue.
+/// Calls [`SemanticQueries::dynamic_boundary_at`] at the specific byte
+/// position of the issue. If the position is covered by dynamic-boundary
+/// evidence (e.g. `require $var` at that offset), the diagnostic is suppressed
+/// for that specific variable.
+///
+/// A dynamic construct **elsewhere** in the file does NOT suppress unrelated
+/// variables: `require $module; print $undeclared_static_var;` still fires for
+/// `$undeclared_static_var` because `dynamic_boundary_at` is position-scoped.
+///
+/// ## `UnquotedBareword` (file-wide dynamic callable)
+///
+/// Calls [`SemanticQueries::dynamic_callable_may_be_visible_at`] for the
+/// bareword name. Returns `Some` when:
+/// - The file has at least one `ImportSpec` with `ImportSymbols::Dynamic`
+///   (e.g. `Foo->import(@names)`) — any bareword in the file might be imported.
+/// - The file has a `DynamicBoundary` occurrence whose entity name matches the
+///   bareword (e.g. `eval "sub NAME { ... }"` — only `NAME` is suppressed).
+///
+/// Non-literal evals, non-Dynamic imports, and genuinely missing subs still fire.
+///
+/// ## All other issue kinds
+///
+/// Always emitted as diagnostics (no suppression).
 ///
 /// # Backward compatibility
 ///
@@ -107,6 +118,8 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
 ///
 /// - **Req 7.4**: Suppress undefined-symbol diagnostics for references within
 ///   dynamic boundary scopes.
+/// - **Req 7.5**: Suppress `UnquotedBareword` diagnostics for barewords
+///   plausibly provided by a dynamic import or string-eval sub declaration.
 pub fn scope_issues_to_diagnostics_with_semantics<Q: SemanticQueries>(
     issues: Vec<ScopeIssue>,
     file_id: FileId,
@@ -115,8 +128,12 @@ pub fn scope_issues_to_diagnostics_with_semantics<Q: SemanticQueries>(
     let mut diagnostics = Vec::new();
 
     for issue in issues {
-        // For UndeclaredVariable issues, check whether the specific variable
-        // position is covered by dynamic-boundary evidence.
+        // ── UndeclaredVariable suppression (position-scoped) ──
+        //
+        // Check whether the specific variable position is covered by a
+        // dynamic-boundary occurrence (e.g. `require $var` at that offset).
+        // This is deliberately narrow: only positions within the dynamic
+        // construct's span are suppressed.
         if issue.kind == IssueKind::UndeclaredVariable {
             let byte_offset = issue.range.0 as u32;
             // Strip the sigil from the variable name to get the bare symbol.
@@ -142,8 +159,43 @@ pub fn scope_issues_to_diagnostics_with_semantics<Q: SemanticQueries>(
             }
         }
 
-        // All other issue kinds — and UndeclaredVariable issues not covered by
-        // a dynamic boundary — are emitted as diagnostics.
+        // ── UnquotedBareword suppression (file-wide dynamic callable) ──
+        //
+        // Check whether a dynamic import or eval-sub evidence exists in the
+        // file that makes this bareword plausibly visible.
+        //
+        // Policy differences from UndeclaredVariable:
+        // - Coverage is file-wide when a Dynamic import exists (any bareword
+        //   in the file might come from an import with unknown symbol list).
+        // - Coverage is name-scoped when an eval-sub boundary exists (only
+        //   the sub named in the eval string is suppressed).
+        //
+        // This is intentionally conservative — non-literal evals, non-Dynamic
+        // imports, and barewords with genuinely no evidence are still flagged.
+        if issue.kind == IssueKind::UnquotedBareword {
+            let byte_offset = issue.range.0 as u32;
+            // Barewords have no sigil; use the name directly.
+            let symbol = issue.variable_name.as_str();
+
+            let is_callable_visible = semantic_queries
+                .dynamic_callable_may_be_visible_at(file_id, byte_offset, symbol)
+                .is_some();
+
+            if is_callable_visible {
+                tracing::debug!(
+                    bareword = %issue.variable_name,
+                    "suppressed UnquotedBareword diagnostic: dynamic callable evidence present"
+                );
+                continue;
+            }
+        }
+
+        // ── All other issue kinds ── (and unsuppressed UndeclaredVariable /
+        // UnquotedBareword) — always emit the diagnostic.
+        //
+        // This includes: VariableRedeclaration, DuplicateParameter,
+        // VariableShadowing, UnusedVariable, ParameterShadowsGlobal,
+        // UnusedParameter, UninitializedVariable, CaptureVarWithoutRegexMatch.
         let severity = match issue.kind {
             IssueKind::UndeclaredVariable
             | IssueKind::VariableRedeclaration
@@ -358,7 +410,9 @@ mod tests {
         OccurrenceId, OccurrenceKind, Provenance, RenamePlan, SafeDeletePlan, ScopeId,
         VisibleSymbol,
     };
-    use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
+    use perl_workspace::semantic::queries::{
+        DynamicCallableEvidence, QueryContext, SemanticQueries,
+    };
 
     // ── Stub that simulates dynamic boundary coverage at any position ──
 
@@ -423,6 +477,15 @@ mod tests {
                 confidence: Confidence::Low,
             })
         }
+
+        fn dynamic_callable_may_be_visible_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _symbol: &str,
+        ) -> Option<DynamicCallableEvidence> {
+            None
+        }
     }
 
     /// No-op stub — no dynamic boundary coverage anywhere.
@@ -478,6 +541,15 @@ mod tests {
         ) -> Option<OccurrenceFact> {
             None
         }
+
+        fn dynamic_callable_may_be_visible_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _symbol: &str,
+        ) -> Option<DynamicCallableEvidence> {
+            None
+        }
     }
 
     // ── Helper ──
@@ -499,6 +571,87 @@ mod tests {
             line: 1,
             range,
             description: format!("Variable '{}' unused", name),
+        }
+    }
+
+    fn bareword_issue(name: &str, range: (usize, usize)) -> ScopeIssue {
+        ScopeIssue {
+            kind: IssueKind::UnquotedBareword,
+            variable_name: name.to_string(),
+            line: 1,
+            range,
+            description: format!("Bareword '{}' not allowed under 'use strict'", name),
+        }
+    }
+
+    /// Stub that returns `Some` from `dynamic_callable_may_be_visible_at`
+    /// for any symbol (simulates a file with a dynamic import or eval sub).
+    struct DynamicCallableStubQueries;
+
+    impl SemanticQueries for DynamicCallableStubQueries {
+        fn symbol_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+        ) -> Option<(EntityFact, OccurrenceFact)> {
+            None
+        }
+
+        fn definitions(&self, _symbol: &str, _context: &QueryContext) -> Vec<DefinitionCandidate> {
+            Vec::new()
+        }
+
+        fn references(&self, _entity_id: EntityId) -> Vec<OccurrenceFact> {
+            Vec::new()
+        }
+
+        fn visible_symbols_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _scope_id: Option<ScopeId>,
+        ) -> Vec<VisibleSymbol> {
+            Vec::new()
+        }
+
+        fn method_candidates(
+            &self,
+            _receiver_package: &str,
+            _method_name: &str,
+        ) -> Vec<DefinitionCandidate> {
+            Vec::new()
+        }
+
+        fn rename_plan(&self, entity_id: EntityId, new_name: &str) -> RenamePlan {
+            RenamePlan::new(entity_id, String::new(), new_name.to_string(), vec![], vec![], vec![])
+        }
+
+        fn safe_delete_plan(&self, entity_id: EntityId) -> SafeDeletePlan {
+            SafeDeletePlan::new(entity_id, String::new(), vec![], vec![])
+        }
+
+        fn dynamic_boundary_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _symbol: Option<&str>,
+        ) -> Option<OccurrenceFact> {
+            // No variable boundary coverage (this stub is for callables only).
+            None
+        }
+
+        fn dynamic_callable_may_be_visible_at(
+            &self,
+            file_id: FileId,
+            _byte_offset: u32,
+            _symbol: &str,
+        ) -> Option<DynamicCallableEvidence> {
+            // Simulates a file with a dynamic import: any bareword might be visible.
+            Some(DynamicCallableEvidence::DynamicImport {
+                file_id,
+                anchor_id: Some(AnchorId(6666)),
+                module: "StubModule".to_string(),
+            })
         }
     }
 
@@ -609,6 +762,15 @@ mod tests {
                     None
                 }
             }
+
+            fn dynamic_callable_may_be_visible_at(
+                &self,
+                _: FileId,
+                _: u32,
+                _: &str,
+            ) -> Option<DynamicCallableEvidence> {
+                None
+            }
         }
 
         let dynamic_var = undeclared_issue("$dynamic_var", (15, 27)); // covered (15 < 30)
@@ -627,6 +789,175 @@ mod tests {
             diagnostics[0].message.contains("static_var"),
             "The remaining diagnostic should be for $static_var, got: {:?}",
             diagnostics[0].message
+        );
+        Ok(())
+    }
+
+    // ── UnquotedBareword suppression tests (PR-B) ──
+    //
+    // Cases 2 and 3 from the spec:
+    //   2. `Foo->import(@names); bar()` — dynamic import, bareword should be suppressed
+    //   3. `eval "sub generated_from_string { 1 }"; generated_from_string()` — suppressed
+    //
+    // Controls:
+    //   4. `$undeclared_static_var` — UndeclaredVariable must still fire
+    //   5. `truly_undefined_sub()` — UnquotedBareword with no dynamic evidence must still fire
+    //   6. eval defines NAME but other bareword is unrelated — only NAME suppressed
+
+    #[test]
+    fn suppresses_unquoted_bareword_when_dynamic_callable_may_be_visible()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Case 2/3: dynamic import or eval-sub evidence → suppress UnquotedBareword.
+        // DynamicCallableStubQueries returns Some for dynamic_callable_may_be_visible_at.
+        let issues = vec![bareword_issue("bar", (20, 23))];
+        let queries = DynamicCallableStubQueries;
+
+        let diagnostics = scope_issues_to_diagnostics_with_semantics(issues, FileId(1), &queries);
+
+        assert!(
+            diagnostics.is_empty(),
+            "UnquotedBareword covered by dynamic callable evidence should be suppressed"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn does_not_suppress_unquoted_bareword_when_no_dynamic_evidence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Case 5: no dynamic evidence → UnquotedBareword must still fire.
+        // NullStubQueries returns None for all queries.
+        let issues = vec![bareword_issue("truly_undefined_sub", (10, 29))];
+        let queries = NullStubQueries;
+
+        let diagnostics = scope_issues_to_diagnostics_with_semantics(issues, FileId(1), &queries);
+
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "UnquotedBareword with no dynamic evidence must still fire"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn undeclared_variable_still_fires_when_only_callable_evidence_present()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Case 4: UndeclaredVariable is suppressed by dynamic_boundary_at (position-based),
+        // NOT by dynamic_callable_may_be_visible_at. When only callable evidence is
+        // present (DynamicCallableStubQueries returns None from dynamic_boundary_at),
+        // UndeclaredVariable must still fire.
+        let issues = vec![undeclared_issue("$undeclared_static_var", (10, 32))];
+        let queries = DynamicCallableStubQueries;
+
+        let diagnostics = scope_issues_to_diagnostics_with_semantics(issues, FileId(1), &queries);
+
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "UndeclaredVariable must not be suppressed by callable evidence (wrong query)"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn eval_sub_boundary_suppresses_named_sub_not_other_barewords()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Case 6: eval defines NAME → NAME suppressed, other bareword still fires.
+        // Use a stub that suppresses "generated_from_string" but not "truly_undefined_sub".
+        struct NamedEvalSubStub;
+        impl SemanticQueries for NamedEvalSubStub {
+            fn symbol_at(&self, _: FileId, _: u32) -> Option<(EntityFact, OccurrenceFact)> {
+                None
+            }
+            fn definitions(&self, _: &str, _: &QueryContext) -> Vec<DefinitionCandidate> {
+                Vec::new()
+            }
+            fn references(&self, _: EntityId) -> Vec<OccurrenceFact> {
+                Vec::new()
+            }
+            fn visible_symbols_at(
+                &self,
+                _: FileId,
+                _: u32,
+                _: Option<ScopeId>,
+            ) -> Vec<VisibleSymbol> {
+                Vec::new()
+            }
+            fn method_candidates(&self, _: &str, _: &str) -> Vec<DefinitionCandidate> {
+                Vec::new()
+            }
+            fn rename_plan(&self, id: EntityId, n: &str) -> RenamePlan {
+                RenamePlan::new(id, String::new(), n.to_string(), vec![], vec![], vec![])
+            }
+            fn safe_delete_plan(&self, id: EntityId) -> SafeDeletePlan {
+                SafeDeletePlan::new(id, String::new(), vec![], vec![])
+            }
+            fn dynamic_boundary_at(
+                &self,
+                _: FileId,
+                _: u32,
+                _: Option<&str>,
+            ) -> Option<OccurrenceFact> {
+                None
+            }
+            fn dynamic_callable_may_be_visible_at(
+                &self,
+                _: FileId,
+                _: u32,
+                symbol: &str,
+            ) -> Option<DynamicCallableEvidence> {
+                // Only suppress the named sub from the eval string.
+                if symbol == "generated_from_string" {
+                    Some(DynamicCallableEvidence::EvalSub {
+                        occurrence: OccurrenceFact {
+                            id: OccurrenceId(5555),
+                            kind: OccurrenceKind::DynamicBoundary,
+                            entity_id: None,
+                            anchor_id: AnchorId(5555),
+                            scope_id: None,
+                            provenance: Provenance::DynamicBoundary,
+                            confidence: Confidence::Low,
+                        },
+                    })
+                } else {
+                    None
+                }
+            }
+        }
+
+        let generated = bareword_issue("generated_from_string", (10, 31));
+        let unrelated = bareword_issue("truly_undefined_sub", (40, 59));
+        let issues = vec![generated, unrelated];
+
+        let diagnostics =
+            scope_issues_to_diagnostics_with_semantics(issues, FileId(1), &NamedEvalSubStub);
+
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "Only 'truly_undefined_sub' should fire; 'generated_from_string' should be suppressed"
+        );
+        assert!(
+            diagnostics[0].message.contains("truly_undefined_sub"),
+            "The remaining diagnostic should be for 'truly_undefined_sub', got: {:?}",
+            diagnostics[0].message
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn other_issue_kinds_never_suppressed_by_dynamic_callable_evidence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Non-UndeclaredVariable, non-UnquotedBareword issues are never suppressed.
+        let issues = vec![unused_issue("$bar", (20, 24))];
+        let queries = DynamicCallableStubQueries;
+
+        let diagnostics = scope_issues_to_diagnostics_with_semantics(issues, FileId(1), &queries);
+
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "UnusedVariable should NOT be suppressed by dynamic callable evidence"
         );
         Ok(())
     }

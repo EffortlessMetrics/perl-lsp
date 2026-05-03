@@ -318,6 +318,7 @@ mod tests {
                 file_id: Some(importer_fid),
                 anchor_id: None,
                 scope_id: None,
+                span_start_byte: None,
             }],
         );
 
@@ -748,6 +749,7 @@ mod tests {
                 file_id: Some(importer_fid),
                 anchor_id: None,
                 scope_id: None,
+                span_start_byte: None,
             }],
         );
 
@@ -835,6 +837,7 @@ mod tests {
                 file_id: Some(importer_fid),
                 anchor_id: None,
                 scope_id: None,
+                span_start_byte: None,
             }],
         );
 
@@ -958,6 +961,7 @@ mod tests {
                 file_id: Some(importer_fid),
                 anchor_id: None,
                 scope_id: None,
+                span_start_byte: None,
             }],
         );
 

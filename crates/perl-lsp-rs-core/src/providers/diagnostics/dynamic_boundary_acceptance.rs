@@ -30,7 +30,9 @@ mod tests {
         EntityFact, EntityId, EntityKind, FileId, OccurrenceFact, PlanBlocker, PlanBlockerReason,
         Provenance, RenamePlan, SafeDeletePlan, ScopeId, VisibleSymbol,
     };
-    use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
+    use perl_workspace::semantic::queries::{
+        DynamicCallableEvidence, QueryContext, SemanticQueries,
+    };
 
     // ── Configurable SemanticQueries stub ──
 
@@ -157,6 +159,25 @@ mod tests {
                     scope_id: None,
                     provenance: perl_semantic_facts::Provenance::DynamicBoundary,
                     confidence: perl_semantic_facts::Confidence::Low,
+                })
+            } else {
+                None
+            }
+        }
+
+        fn dynamic_callable_may_be_visible_at(
+            &self,
+            file_id: FileId,
+            _byte_offset: u32,
+            _symbol: &str,
+        ) -> Option<DynamicCallableEvidence> {
+            // When the stub is in a dynamic scope, dynamic callables may also
+            // be visible (same condition as dynamic_boundary_at).
+            if self.rename_blocked || self.safe_delete_blocked {
+                Some(DynamicCallableEvidence::DynamicImport {
+                    file_id,
+                    anchor_id: Some(AnchorId(9998)),
+                    module: "DynamicBoundaryStub".to_string(),
                 })
             } else {
                 None
@@ -579,6 +600,14 @@ mod tests {
                 _: Option<&str>,
             ) -> Option<OccurrenceFact> {
                 None // no dynamic boundary anywhere
+            }
+            fn dynamic_callable_may_be_visible_at(
+                &self,
+                _: FileId,
+                _: u32,
+                _: &str,
+            ) -> Option<DynamicCallableEvidence> {
+                None // no dynamic callables either
             }
         }
 

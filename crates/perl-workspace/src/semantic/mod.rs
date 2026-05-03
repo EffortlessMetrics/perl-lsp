@@ -35,6 +35,9 @@ pub mod invalidation;
 /// Semantic query facade: `SemanticQueries` trait and `WorkspaceSemanticQueries` impl.
 pub mod queries;
 
+/// Literal-eval sub extractor for dynamic boundary evidence.
+pub mod eval_sub_extractor;
+
 /// Per-provider scorecard gate fixture suites (test-only).
 #[cfg(test)]
 mod scorecard_gate_fixtures;
