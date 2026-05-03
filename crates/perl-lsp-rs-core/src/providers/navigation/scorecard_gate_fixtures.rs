@@ -158,6 +158,15 @@ mod tests {
         fn safe_delete_plan(&self, _entity_id: EntityId) -> SafeDeletePlan {
             self.safe_delete_plan_result.clone()
         }
+
+        fn dynamic_boundary_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _symbol: Option<&str>,
+        ) -> Option<OccurrenceFact> {
+            None
+        }
     }
 
     // ── Helpers ──
