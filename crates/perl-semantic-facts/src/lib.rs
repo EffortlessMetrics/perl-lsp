@@ -947,6 +947,7 @@ mod tests {
             file_id: None,
             anchor_id: None,
             scope_id: None,
+            span_start_byte: None,
         };
 
         let serialized = serde_json::to_string(&spec)?;
