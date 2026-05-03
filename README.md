@@ -30,7 +30,7 @@ These are behavioral and corpus-backed signals, not feature-inventory counts. Pr
 <!-- BEGIN: README_STATUS -->
 | Area | Current signal |
 |---|---:|
-| Release track | `v0.13.2` public-alpha patch |
+| Release track | `v0.13.3` public-alpha patch |
 | Published crate surface | 31 crates in `[workspace.metadata.publish.allow]` |
 | Ubuntu system Perl corpus | 94.5% clean (`2825/2990`) |
 | CPAN top 1000 corpus | 95.3% clean (`8931/9372`) |
