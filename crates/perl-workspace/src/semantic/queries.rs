@@ -198,44 +198,65 @@ pub trait SemanticQueries {
     /// Return evidence that a dynamic callable named `symbol` may be visible at
     /// a given position in `file_id`.
     ///
-    /// # Contract (file-wide import coverage + named DynamicBoundary)
+    /// # Contract (order-aware import coverage + named DynamicBoundary)
     ///
-    /// Returns `Some(OccurrenceFact)` when **either** of the following holds:
+    /// Returns `Some(DynamicCallableEvidence)` when **either** of the following
+    /// holds:
     ///
-    /// 1. The file at `file_id` has at least one `ImportSpec` with
-    ///    `ImportSymbols::Dynamic` — the imported symbols are not statically
-    ///    known, so *any* bareword call in the file might have come from that
-    ///    import.  This covers `Foo->import(@names)` (static class, dynamic
-    ///    arg list) and `require $var` (dynamic module, unknown exports).
+    /// 1. The file at `file_id` has an `ImportSpec` with
+    ///    `ImportSymbols::Dynamic` whose `span_start_byte <= byte_offset` — the
+    ///    imported symbols are not statically known, so any bareword call *at
+    ///    or after the import* might have come from that import. This covers
+    ///    `Foo->import(@names)` (static class, dynamic arg list) and
+    ///    `require $var` (dynamic module, unknown exports). Returns
+    ///    [`DynamicCallableEvidence::DynamicImport`] with the file id, the
+    ///    import's anchor id (when known), and the module/class name.
     /// 2. The file has at least one occurrence with
     ///    `kind = OccurrenceKind::DynamicBoundary` whose associated entity's
-    ///    canonical name matches `symbol`.  This covers `eval "sub NAME { ... }"`
-    ///    patterns where the sub name is literally present in the string.
+    ///    canonical name matches `symbol`. This covers
+    ///    `eval "sub NAME { ... }"` patterns where the sub name is literally
+    ///    present in the string. Returns [`DynamicCallableEvidence::EvalSub`]
+    ///    with the matching `OccurrenceFact`.
+    ///
+    /// # Order-awareness
+    ///
+    /// The dynamic-import branch is **order-aware**: it only matches when
+    /// `byte_offset >= span_start_byte` of the import. This is critical to
+    /// avoid suppressing earlier static diagnostics in the file:
+    ///
+    /// ```text
+    /// Foo->import(@names);   bar();   // bar() suppressed (after import)
+    /// bar();                 Foo->import(@names);  // bar() still diagnosed (before import)
+    /// ```
+    ///
+    /// If an `ImportSpec` is `Dynamic` but has no `span_start_byte` (None),
+    /// it is **not** used for suppression — conservative default. The eval-sub
+    /// branch is name-scoped, not position-scoped (the entity name must match
+    /// `symbol`).
     ///
     /// # Differences from `dynamic_boundary_at`
     ///
-    /// - `dynamic_boundary_at` is *position-scoped*: the occurrence's anchor
-    ///   span must cover `byte_offset`.  It is designed for `UndeclaredVariable`
+    /// - `dynamic_boundary_at` is *position-scoped* on a `DynamicBoundary`
+    ///   occurrence's anchor span. Designed for `UndeclaredVariable`
     ///   suppression.
-    /// - `dynamic_callable_may_be_visible_at` is *file-wide* for the import
-    ///   path (any dynamic import in the file is sufficient) and *name-scoped*
-    ///   for the eval-sub path (entity name must match).  It is designed for
+    /// - `dynamic_callable_may_be_visible_at` is *order-aware* for the import
+    ///   path and *name-scoped* for the eval-sub path. Designed for
     ///   `UnquotedBareword` suppression where the callable is plausibly
-    ///   importable anywhere in the file.
+    ///   importable from a dynamic source visible at this position.
     ///
     /// # Anti-patterns
     ///
-    /// - Variables (sigil-prefixed names) are not callables and must never
-    ///   be matched by this query.  Callers must strip sigils before calling.
+    /// - Variables (sigil-prefixed names) are not callables and must never be
+    ///   matched by this query. Callers must strip sigils before calling.
     /// - A `None` return means "no evidence" — emit the diagnostic
     ///   (conservative default).
     ///
     /// # Returns
     ///
-    /// `None` when no dynamic import exists for the file and no eval-sub
-    /// evidence matches `symbol`, or when the semantic data for `file_id`
-    /// is unavailable.  Callers should fall back to emitting the diagnostic
-    /// when `None`.
+    /// `None` when no dynamic import precedes `byte_offset` in the file and
+    /// no eval-sub evidence matches `symbol`, or when the semantic data for
+    /// `file_id` is unavailable. Callers should fall back to emitting the
+    /// diagnostic when `None`.
     ///
     /// # Requirements
     ///
