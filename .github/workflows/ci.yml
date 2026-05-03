@@ -249,8 +249,18 @@ jobs:
           mkdir -p target/receipts/shards
           for gate in ${{ matrix.gates }}; do
             printf '::group::gate %s\n' "$gate"
+            gate_start_ms=$(date +%s%3N)
+            set +e
             cargo xtask gates --gate "$gate" --receipt --receipt-path "target/receipts/shards/${gate}.json"
+            gate_exit=$?
+            set -e
+            gate_end_ms=$(date +%s%3N)
+            gate_dur_ms=$((gate_end_ms - gate_start_ms))
+            printf '::notice::gate %s finished in %dms (exit %d)\n' "$gate" "$gate_dur_ms" "$gate_exit"
             printf '::endgroup::\n'
+            if [ "$gate_exit" -ne 0 ]; then
+              exit "$gate_exit"
+            fi
           done
 
       - name: Upload gate receipt
@@ -333,7 +343,7 @@ jobs:
       - ux-tests
       - windows-guardrails
       - merge-gate-shards
-    if: always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
+    if: always()
     permissions:
       statuses: write
     steps:
@@ -341,53 +351,94 @@ jobs:
         shell: bash
         env:
           NEEDS_JSON: ${{ toJson(needs) }}
+          RUN_CI: ${{ needs.draft-pr-check.outputs.run_ci }}
+          IS_LATEST: ${{ needs.preflight-latest-check.outputs.is_latest }}
         run: |
           python3 - <<'PY'
           import json
           import os
+          import sys
           from pathlib import Path
 
           needs = json.loads(os.environ["NEEDS_JSON"])
-          lines = ["### CI Gate aggregate", ""]
-          lines.append("| Dependency | Result |")
-          lines.append("| --- | --- |")
-          failed = []
-          for name, value in sorted(needs.items()):
-              result = value.get("result", "")
-              lines.append(f"| {name} | {result} |")
-              if result != "success":
-                  failed.append(name)
-
-          if failed:
-              lines.extend(["", f"Blocking dependency failure(s): {', '.join(failed)}"])
-          else:
-              lines.extend(["", "All merge-gate dependencies passed."])
-
+          run_ci = os.environ.get("RUN_CI", "").lower() == "true"
+          is_latest = os.environ.get("IS_LATEST", "").lower() == "true"
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          github_env = os.environ.get("GITHUB_ENV", "/dev/null")
+
+          lines = ["### CI Gate aggregate", ""]
+
+          if not run_ci:
+              # Draft PR: CI is intentionally skipped until the PR is marked ready.
+              ci_state = "pending"
+              ci_description = "FULL_CI_NOT_RUN_DRAFT: mark ready for review to trigger CI"
+              lines.extend([
+                  "> **Draft PR** — Full CI is intentionally skipped.",
+                  "> Mark the PR ready for review to trigger all CI gates.",
+                  "",
+                  "| Dependency | Result |",
+                  "| --- | --- |",
+              ])
+              for name, value in sorted(needs.items()):
+                  lines.append(f"| {name} | {value.get('result', '')} |")
+              lines.extend(["", "Status: `FULL_CI_NOT_RUN_DRAFT`"])
+          elif not is_latest:
+              # Superseded SHA: a newer push is in flight and will run full CI.
+              ci_state = "success"
+              ci_description = "STALE_CONTEXT_SKIPPED: superseded SHA, newer commit runs CI"
+              lines.extend([
+                  "> **Superseded SHA** — A newer commit exists on this branch.",
+                  "> CI skipped to save cost; the newer commit will run full CI.",
+                  "",
+                  "Status: `STALE_CONTEXT_SKIPPED`",
+              ])
+          else:
+              # Full CI ran: aggregate dependency results.
+              # draft-pr-check and preflight-latest-check are control-flow jobs that
+              # are always success when full CI reaches this point.
+              control_flow = {"draft-pr-check", "preflight-latest-check"}
+              lines.extend([
+                  "| Dependency | Result |",
+                  "| --- | --- |",
+              ])
+              failed = []
+              for name, value in sorted(needs.items()):
+                  result = value.get("result", "")
+                  lines.append(f"| {name} | {result} |")
+                  if name not in control_flow and result != "success":
+                      failed.append(name)
+
+              if failed:
+                  ci_state = "failure"
+                  ci_description = f"Failed: {', '.join(failed[:3])}"
+                  if len(failed) > 3:
+                      ci_description += f" (+{len(failed) - 3} more)"
+                  lines.extend(["", f"❌ Blocking failure(s): {', '.join(failed)}"])
+              else:
+                  ci_state = "success"
+                  ci_description = "All merge-gate dependencies passed"
+                  lines.extend(["", "✅ All merge-gate dependencies passed."])
+
           if summary_path:
               Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-          if failed:
-              raise SystemExit(1)
+          with open(github_env, "a") as f:
+              f.write(f"CI_MERGE_GATE_STATE={ci_state}\n")
+              f.write(f"CI_MERGE_GATE_DESCRIPTION={ci_description[:140]}\n")
+
+          if ci_state == "failure":
+              sys.exit(1)
           PY
 
       - name: Set PR status (check)
         if: always()
         uses: actions/github-script@v9
-        env:
-          NEEDS_JSON: ${{ toJson(needs) }}
         with:
           script: |
-            const needs = JSON.parse(process.env.NEEDS_JSON || '{}');
-            const failed = Object.entries(needs)
-              .filter(([name, value]) => value.result !== 'success')
-              .map(([name]) => name);
-            const status = failed.length === 0 ? 'success' : 'failure';
-            const description = failed.length === 0
-              ? 'All merge-gate dependencies passed'
-              : `Failed dependency: ${failed.join(', ')}`;
+            const state = process.env.CI_MERGE_GATE_STATE || 'failure';
+            const description = process.env.CI_MERGE_GATE_DESCRIPTION || 'Unknown CI gate state';
 
-            console.log(`Setting PR status to: ${status}`);
+            console.log(`Setting ci/merge-gate status to: ${state}`);
             console.log(`Description: ${description}`);
 
             try {
@@ -395,14 +446,14 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 sha: context.sha,
-                state: status,
+                state,
                 context: 'ci/merge-gate',
                 description,
                 target_url: `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
               });
             } catch (error) {
               if (error.status === 403) {
-                core.warning(`Could not create ci/merge-gate commit status from this workflow context: ${error.message}`);
+                core.warning(`Could not create ci/merge-gate commit status: ${error.message}`);
               } else {
                 throw error;
               }

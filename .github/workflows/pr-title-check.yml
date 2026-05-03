@@ -7,6 +7,7 @@ on:
 permissions:
   pull-requests: write
   checks: write
+  statuses: write
 
 jobs:
   validate-title:
@@ -38,14 +39,37 @@ jobs:
             }
 
             const BOT_MARKER = '<!-- pr-title-check-bot -->';
+            const prHeadSha = pr.head.sha;
+            const statusContext = 'ci/pr-title';
+            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+
+            // Post a commit status so stale failures for the same SHA are always
+            // overwritten when the title is subsequently fixed (without a new push).
+            async function postTitleStatus(state, description) {
+              try {
+                await github.rest.repos.createCommitStatus({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  sha: prHeadSha,
+                  state,
+                  context: statusContext,
+                  description: description.slice(0, 140),
+                  target_url: runUrl,
+                });
+              } catch (err) {
+                core.warning(`Could not post ci/pr-title commit status: ${err.message}`);
+              }
+            }
 
             if (!/\B#\d+\b/.test(title)) {
               core.setFailed(
                 `PR title must reference an issue (e.g. "feat: add thing (#42)"). Got: "${title}"`
               );
 
+              await postTitleStatus('failure', 'PR title missing issue reference (#NNN)');
+
               const commentBody = [
-                '## \u26a0\ufe0f PR Title Check Failed',
+                '## ⚠️ PR Title Check Failed',
                 '',
                 BOT_MARKER,
                 '',
@@ -108,4 +132,7 @@ jobs:
               }
             }
 
+            // Post success status — overwrites any stale failure from a prior title edit
+            // on this same SHA (e.g. title fixed without a new commit push).
+            await postTitleStatus('success', 'PR title passes validation');
             core.info('PR title passes validation.');
