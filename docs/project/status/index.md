@@ -25,6 +25,7 @@
 | DAP debugger scorecard | [dap.md](dap.md) | Generator | Every DAP-touching merge |
 | Release readiness | [release.md](release.md) | Human | Ship readiness changes |
 | Workspace & indexing scorecard | [workspace.md](workspace.md) | Generator | Every workspace-touching merge |
+| Semantic capability dashboard | [semantic_capability_dashboard.md](semantic_capability_dashboard.md) | Human | Semantic release-readiness changes |
 | CI hardening implementation status | [ci_hardening.md](ci_hardening.md) | Human | CI hardening state changes |
 
 ## What's Next
