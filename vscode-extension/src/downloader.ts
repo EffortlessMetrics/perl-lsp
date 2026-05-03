@@ -23,6 +23,48 @@ interface Release {
     assets: ReleaseAsset[];
 }
 
+const MANAGED_INSTALL_RETRY_DELAYS_MS = [100, 250, 500, 1000, 2000];
+const TRANSIENT_MANAGED_INSTALL_ERROR_CODES = new Set(['EBUSY', 'EPERM', 'EACCES', 'ETXTBSY']);
+
+function delay(ms: number): Promise<void> {
+    return new Promise(resolve => {
+        setTimeout(resolve, ms);
+    });
+}
+
+export function isTransientManagedInstallError(error: unknown): boolean {
+    const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : '';
+    return TRANSIENT_MANAGED_INSTALL_ERROR_CODES.has(code);
+}
+
+export async function copyManagedFileWithRetry(
+    sourcePath: string,
+    destinationPath: string,
+    label: string,
+    log: (message: string) => void,
+    retryDelaysMs = MANAGED_INSTALL_RETRY_DELAYS_MS,
+    copyFile: (source: string, destination: string) => void = fs.copyFileSync
+): Promise<void> {
+    for (let attempt = 0; ; attempt += 1) {
+        try {
+            copyFile(sourcePath, destinationPath);
+            return;
+        } catch (error: unknown) {
+            const canRetry = attempt < retryDelaysMs.length && isTransientManagedInstallError(error);
+            if (!canRetry) {
+                throw error;
+            }
+
+            const message = error instanceof Error ? error.message : String(error);
+            const delayMs = retryDelaysMs[attempt];
+            log(`Retrying ${label} install after transient file lock (${message}); waiting ${delayMs}ms.`);
+            await delay(delayMs);
+        }
+    }
+}
+
 function githubApiHeaders(url: string): Record<string, string> {
     const headers: Record<string, string> = {
         'User-Agent': 'vscode-perl-lsp',
@@ -371,7 +413,12 @@ export class BinaryDownloader {
                     fs.mkdirSync(finalDir, { recursive: true });
                 }
                 
-                fs.copyFileSync(extractedBinary, finalPath);
+                await copyManagedFileWithRetry(
+                    extractedBinary,
+                    finalPath,
+                    'perllsp',
+                    message => this.outputChannel.appendLine(message)
+                );
                 
                 // Make executable on Unix
                 if (process.platform !== 'win32') {
@@ -384,7 +431,12 @@ export class BinaryDownloader {
                 if (extractedDap) {
                     const dapDest = path.join(finalDir, dapName);
                     try {
-                        fs.copyFileSync(extractedDap, dapDest);
+                        await copyManagedFileWithRetry(
+                            extractedDap,
+                            dapDest,
+                            'perl-dap',
+                            message => this.outputChannel.appendLine(message)
+                        );
                         if (process.platform !== 'win32') {
                             fs.chmodSync(dapDest, 0o755);
                         }
@@ -409,7 +461,7 @@ export class BinaryDownloader {
             }
         });
     }
-    
+
     private async getLatestRelease(): Promise<Release> {
         const config = vscode.workspace.getConfiguration('perl-lsp');
         const channel = config.get<string>('channel', 'latest');
