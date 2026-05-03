@@ -598,6 +598,836 @@
           ]
         }
       ]
+    },
+    {
+      "id": "imports_exports",
+      "family": "imports_exports",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/imports_exports.pl",
+      "scored_lines": 5,
+      "scored_symbols": 2,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "import"
+          ]
+        },
+        {
+          "line": 4,
+          "expected_tags": [
+            "import"
+          ]
+        },
+        {
+          "line": 6,
+          "expected_tags": [
+            "variable_decl"
+          ]
+        },
+        {
+          "line": 8,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        }
+      ],
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "imports_exports_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::ImportsExports",
+            "span_text": "Accuracy::ImportsExports",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "imports_exports_answer_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::ImportsExports::answer",
+            "span_text": "answer",
+            "package": "Accuracy::ImportsExports",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ]
+      }
+    },
+    {
+      "id": "qualified_refs",
+      "family": "qualified_references",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/qualified_refs.pl",
+      "scored_lines": 5,
+      "scored_symbols": 3,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 7,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 8,
+          "expected_tags": [
+            "function_call"
+          ]
+        },
+        {
+          "line": 9,
+          "expected_tags": [
+            "function_call"
+          ]
+        }
+      ],
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "qualified_refs_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::Refs",
+            "span_text": "Accuracy::Refs",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "qualified_refs_target_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::Refs::target",
+            "span_text": "target",
+            "package": "Accuracy::Refs",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "qualified_refs_caller_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::Refs::caller",
+            "span_text": "caller",
+            "package": "Accuracy::Refs",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ]
+      }
+    },
+    {
+      "id": "same_bare_subs",
+      "family": "same_bare_subs",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/same_bare_subs.pl",
+      "scored_lines": 8,
+      "scored_symbols": 6,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 7,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 9,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 13,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 15,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 16,
+          "expected_tags": [
+            "function_call"
+          ]
+        },
+        {
+          "line": 17,
+          "expected_tags": [
+            "function_call"
+          ]
+        }
+      ],
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "same_bare_subs_a_package",
+            "kind": "Package",
+            "canonical_name": "Accuracy::Same::A",
+            "span_text": "Accuracy::Same::A",
+            "package": "Accuracy::Same",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "same_bare_subs_a_run",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::Same::A::run",
+            "span_text": "run",
+            "package": "Accuracy::Same::A",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "same_bare_subs_b_package",
+            "kind": "Package",
+            "canonical_name": "Accuracy::Same::B",
+            "span_text": "Accuracy::Same::B",
+            "package": "Accuracy::Same",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "same_bare_subs_b_run",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::Same::B::run",
+            "span_text": "run",
+            "package": "Accuracy::Same::B",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "same_bare_subs_main_package",
+            "kind": "Package",
+            "canonical_name": "Accuracy::Same::Main",
+            "span_text": "Accuracy::Same::Main",
+            "package": "Accuracy::Same",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "same_bare_subs_call_both",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::Same::Main::call_both",
+            "span_text": "call_both",
+            "package": "Accuracy::Same::Main",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ]
+      }
+    },
+    {
+      "id": "heredoc_basic",
+      "family": "heredoc",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/heredoc_basic.pl",
+      "scored_lines": 3,
+      "scored_symbols": 2,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "variable_decl"
+          ]
+        },
+        {
+          "line": 7,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "regex_match",
+      "family": "regex",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/regex_match.pl",
+      "scored_lines": 4,
+      "scored_symbols": 2,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 4,
+          "expected_tags": [
+            "variable_decl"
+          ]
+        },
+        {
+          "line": 5,
+          "expected_tags": [
+            "regex"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "method_call",
+      "family": "method_call",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/method_call.pl",
+      "scored_lines": 4,
+      "scored_symbols": 2,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 4,
+          "expected_tags": [
+            "variable_decl"
+          ]
+        },
+        {
+          "line": 5,
+          "expected_tags": [
+            "method_call"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "autoload_boundary",
+      "family": "autoload",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/autoload_boundary.pl",
+      "scored_lines": 5,
+      "scored_symbols": 3,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 1,
+      "unsupported_constructs": 1,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "variable_decl"
+          ]
+        },
+        {
+          "line": 5,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 9,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 10,
+          "expected_tags": [
+            "method_call"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "eval_string_boundary",
+      "family": "eval_string",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/eval_string_boundary.pl",
+      "scored_lines": 5,
+      "scored_symbols": 2,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 1,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "variable_decl"
+          ]
+        },
+        {
+          "line": 4,
+          "expected_tags": [
+            "function_call"
+          ]
+        },
+        {
+          "line": 6,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "control_do_until",
+      "family": "control_flow",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/control_do_until.pl",
+      "scored_lines": 4,
+      "scored_symbols": 2,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 4,
+          "expected_tags": [
+            "variable_decl"
+          ]
+        },
+        {
+          "line": 5,
+          "expected_tags": [
+            "do_while"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "format_decl",
+      "family": "format",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/format_decl.pl",
+      "scored_lines": 3,
+      "scored_symbols": 2,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "format_decl"
+          ]
+        },
+        {
+          "line": 8,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "postderef_boundary",
+      "family": "postderef",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/postderef_boundary.pl",
+      "scored_lines": 3,
+      "scored_symbols": 2,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 1,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 4,
+          "expected_tags": [
+            "variable_decl"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "signatures_basic",
+      "family": "signatures",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/signatures_basic.pl",
+      "scored_lines": 4,
+      "scored_symbols": 2,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 1,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "import"
+          ]
+        },
+        {
+          "line": 4,
+          "expected_tags": [
+            "function_call"
+          ]
+        },
+        {
+          "line": 6,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "role_method",
+      "family": "role_method",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/role_method.pl",
+      "scored_lines": 5,
+      "scored_symbols": 4,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 7,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 9,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 10,
+          "expected_tags": [
+            "function_call"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inherited_method",
+      "family": "inherited_method",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/inherited_method.pl",
+      "scored_lines": 6,
+      "scored_symbols": 4,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 7,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 9,
+          "expected_tags": [
+            "variable_decl"
+          ]
+        },
+        {
+          "line": 11,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 12,
+          "expected_tags": [
+            "method_call"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "export_tags",
+      "family": "export_tags",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/export_tags.pl",
+      "scored_lines": 5,
+      "scored_symbols": 4,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "variable_decl"
+          ]
+        },
+        {
+          "line": 7,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 11,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "quote_like",
+      "family": "quote_like",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/quote_like.pl",
+      "scored_lines": 4,
+      "scored_symbols": 2,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        },
+        {
+          "line": 4,
+          "expected_tags": [
+            "variable_decl"
+          ]
+        }
+      ]
     }
   ]
 }

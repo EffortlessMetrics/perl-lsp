@@ -31,9 +31,9 @@
 | Layer | State | Notes | Source |
 | --- | --- | --- |
 <!-- BEGIN: PARSER_ACCURACY_SUMMARY -->
-| **Accuracy denominator** | 9 fixtures / 9 families | 29 scored lines, 17 scored symbols, 2 fully labeled, 6 partial, 5 unknown, 5 negative, 2 dynamic boundaries, 2 unsupported, 0 real-project, 0 generated, 9 hand-labeled; cadence `pr` | `target/metrics/parser_accuracy.json`; `.kiro/specs/parser-accuracy-observability` |
-| **Accuracy families** | dynamic_require (1), generated_accessor (1), incremental (1), negative_symbol_regions (1), operators (1), packages (1), +3 more | fixture family inventory from parser accuracy manifest | `target/metrics/parser_accuracy.json` |
-| **Accuracy scorers** | selected line_construct_f1=0.8 (n=11), ast_node_kind_f1=1.0 (n=9), symbol_decl_f1=0.9 (n=7), symbol_ref_f1=1.0 (n=2), dynamic_false_precision_count=0.0 (n=1), fast_path_wrong_result_count=0.0 (n=1); 119 additional measured rows; 52 insufficient_data rows preserved | missing accuracy rows stay `insufficient_data`; they are not rendered as zero or pass | `.ci/schemas/parser-accuracy.schema.json` |
+| **Accuracy denominator** | 25 fixtures / 25 families | 102 scored lines, 61 scored symbols, 2 fully labeled, 22 partial, 21 unknown, 5 negative, 4 dynamic boundaries, 5 unsupported, 0 real-project, 0 generated, 25 hand-labeled; cadence `pr` | `target/metrics/parser_accuracy.json`; `.kiro/specs/parser-accuracy-observability` |
+| **Accuracy families** | autoload (1), control_flow (1), dynamic_require (1), eval_string (1), export_tags (1), format (1), +19 more | fixture family inventory from parser accuracy manifest | `target/metrics/parser_accuracy.json` |
+| **Accuracy scorers** | selected line_construct_f1=0.9 (n=81), ast_node_kind_f1=1.0 (n=9), symbol_decl_f1=1.0 (n=18), symbol_ref_f1=1.0 (n=2), dynamic_false_precision_count=0.0 (n=1), fast_path_wrong_result_count=0.0 (n=1); 119 additional measured rows; 52 insufficient_data rows preserved | missing accuracy rows stay `insufficient_data`; they are not rendered as zero or pass | `.ci/schemas/parser-accuracy.schema.json` |
 <!-- END: PARSER_ACCURACY_SUMMARY -->
 
 ## Parser Performance Regimes
