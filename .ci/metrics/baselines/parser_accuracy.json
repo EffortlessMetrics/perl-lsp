@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-05-03T00:00:00Z",
+  "subsystem": "parser_accuracy",
+  "commit": "bootstrap",
+  "floor_metrics": {
+    "dynamic_false_precision_count": 0,
+    "fast_path_wrong_result_count": 0
+  },
+  "improvement_metrics": {
+    "line_construct_precision": 0.8181818181818182,
+    "line_construct_recall": 0.8181818181818182,
+    "line_construct_f1": 0.8181818181818182,
+    "ast_node_kind_precision": 1.0,
+    "ast_node_kind_recall": 1.0,
+    "ast_node_kind_f1": 1.0,
+    "symbol_decl_precision": 1.0,
+    "symbol_decl_recall": 0.8571428571428571,
+    "symbol_decl_f1": 0.9230769230769231,
+    "symbol_ref_precision": 1.0,
+    "symbol_ref_recall": 1.0,
+    "symbol_ref_f1": 1.0,
+    "symbol_edge_precision": 1.0,
+    "symbol_edge_recall": 1.0,
+    "symbol_edge_f1": 1.0
+  },
+  "tolerance_pct": 0.0
+}

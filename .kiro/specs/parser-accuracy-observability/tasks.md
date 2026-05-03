@@ -117,23 +117,23 @@ Build a layered parser accuracy scorecard that starts with denominator visibilit
   - [x] 13.3 Require explanation for weakening changes
     - Removing expected symbols, widening spans, lowering thresholds, changing dynamic expectations, or removing fixture families requires PR text
 
-- [ ] 14. Add ratchet candidates after stable measurements
-  - [ ] 14.1 Start with safety floors only
+- [x] 14. Add ratchet candidates after stable measurements
+  - [x] 14.1 Start with safety floors only
     - `dynamic_false_precision_count == 0`
     - `fast_path_wrong_result_count == 0`
-  - [ ] 14.2 Defer precision/recall floors until sample counts stabilize
+  - [x] 14.2 Defer precision/recall floors until sample counts stabilize
     - No floor raise from a single run
     - Require current/previous/delta/floor/threshold/direction/sample_count/confidence for all floor candidates
 
-- [ ] 15. Final verification checkpoint
-  - [ ] 15.1 Parser accuracy command
+- [x] 15. Final verification checkpoint
+  - [x] 15.1 Parser accuracy command
     - `cargo xtask metrics parser-accuracy --json`
     - Artifact validates against schema
     - No generated `target/` artifacts committed
-  - [ ] 15.2 Parser status
+  - [x] 15.2 Parser status
     - `cargo xtask update-status --only parser --check`
     - Parser status shows measured denominator rows and insufficient-data rows honestly
-  - [ ] 15.3 Focused tests
+  - [x] 15.3 Focused tests
     - `cargo test -p xtask parser_accuracy`
     - `cargo test -p xtask update_status::parser --profile agent --locked`
     - `cargo check -p xtask --all-targets --profile agent --locked`

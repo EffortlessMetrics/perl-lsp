@@ -219,8 +219,6 @@ fn test_parser_accuracy_artifact_renders_denominator_and_metric_rows() -> Result
         parser_accuracy: Some(ParserAccuracyArtifactSummary {
             schema_version: 1,
             subsystem: "parser_accuracy".to_string(),
-            generated_at: "2026-05-02T15:00:00Z".to_string(),
-            commit: "abc123".to_string(),
             cadence: "pr".to_string(),
             denominator: ParserAccuracyDenominator {
                 fixture_count: 2,

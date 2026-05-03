@@ -182,12 +182,15 @@ pub fn run_ratchet_check(
 
     // Load current metrics from receipt file, falling back to the baseline
     // values themselves when no receipt exists yet (bootstrapping).
-    let current_metrics: BTreeMap<String, Option<f64>> = if receipt_path.exists() {
+    let (current_floor_metrics, current_improvement_metrics): (
+        BTreeMap<String, Option<f64>>,
+        BTreeMap<String, Option<f64>>,
+    ) = if receipt_path.exists() {
         let raw = std::fs::read_to_string(&receipt_path)
             .with_context(|| format!("Failed to read receipt: {}", receipt_path.display()))?;
         let receipt: MetricReceipt = serde_json::from_str(&raw)
             .with_context(|| format!("Failed to parse receipt: {}", receipt_path.display()))?;
-        receipt.floor_metrics
+        (receipt.floor_metrics, receipt.improvement_metrics)
     } else {
         // No receipt yet — fall back to baseline values (idempotent, always
         // passes, confirms infrastructure is wired).
@@ -195,10 +198,10 @@ pub fn run_ratchet_check(
             "note: no receipt at {} — using baseline values as current (bootstrap mode)",
             receipt_path.display()
         );
-        baseline.floor_metrics.clone()
+        (baseline.floor_metrics.clone(), BTreeMap::new())
     };
 
-    let violations = check_floor_metrics(&baseline, &current_metrics);
+    let violations = check_floor_metrics(&baseline, &current_floor_metrics);
 
     if violations.is_empty() {
         println!("ratchet-check [{subsystem}]: all floor metrics passed");
@@ -250,7 +253,12 @@ pub fn run_ratchet_check(
 
         let commit = std::env::var("GITHUB_SHA").unwrap_or_else(|_| "unknown".to_string());
         let timestamp = Utc::now().to_rfc3339();
-        record_run(&mut state, &commit, &timestamp, &current_metrics);
+        let record_metrics = if current_improvement_metrics.is_empty() {
+            &current_floor_metrics
+        } else {
+            &current_improvement_metrics
+        };
+        record_run(&mut state, &commit, &timestamp, record_metrics);
 
         let json = serde_json::to_string_pretty(&state)
             .context("Failed to serialize stable-wins state")?;
@@ -503,6 +511,64 @@ mod tests {
             "regression_pct should be ~1.0 (100%), got {}",
             violations[0].regression_pct
         );
+    }
+
+    #[test]
+    fn test_ratchet_record_prefers_improvement_metrics_from_receipt() -> Result<()> {
+        use crate::tasks::metrics::stable_wins::StableWinsState;
+
+        let dir = tempfile::tempdir()?;
+        let baseline_dir = dir.path().join(".ci/metrics/baselines");
+        let receipt_dir = dir.path().join("target/receipts/metrics");
+        std::fs::create_dir_all(&baseline_dir)?;
+        std::fs::create_dir_all(&receipt_dir)?;
+
+        std::fs::write(
+            baseline_dir.join("test.json"),
+            r#"{
+  "schema_version": 1,
+  "measured_at": "2026-05-03T00:00:00Z",
+  "subsystem": "test",
+  "commit": "baseline",
+  "floor_metrics": {
+    "dynamic_false_precision_count": 0
+  },
+  "improvement_metrics": {
+    "line_construct_f1": 0.8
+  },
+  "tolerance_pct": 0.0
+}"#,
+        )?;
+        std::fs::write(
+            receipt_dir.join("test.json"),
+            r#"{
+  "subsystem": "test",
+  "generated_at": "2026-05-03T00:00:00Z",
+  "commit": "current",
+  "floor_metrics": {
+    "dynamic_false_precision_count": 0
+  },
+  "improvement_metrics": {
+    "line_construct_f1": 0.9
+  }
+}"#,
+        )?;
+
+        run_ratchet_check(dir.path(), "test", None, true)?;
+
+        let state_path = dir.path().join("target/metrics/stable_wins/test.json");
+        let raw = std::fs::read_to_string(&state_path)?;
+        let state: StableWinsState = serde_json::from_str(&raw)?;
+        assert!(
+            state.recent_runs.contains_key("line_construct_f1"),
+            "recorded stable-wins state should track improvement candidates"
+        );
+        assert!(
+            !state.recent_runs.contains_key("dynamic_false_precision_count"),
+            "floor metrics should not crowd out receipt improvement candidates"
+        );
+
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
