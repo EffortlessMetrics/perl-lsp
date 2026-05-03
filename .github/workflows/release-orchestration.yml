@@ -170,6 +170,28 @@ jobs:
           fi
           echo "✅ Found curated release notes: $NOTE_FILE"
 
+      - name: Verify RELEASE_HISTORY ledger row exists
+        run: |
+          # Trip-wire: a missing ledger row breaks the release-history drift
+          # gate for *every* PR opened against master, not just release PRs.
+          # The bundling guarantee (version bump and ledger row land together)
+          # is enforced both upstream by `cargo xtask bump-version` (which
+          # appends the row) and here at finalization (so a manually-edited
+          # release-prep PR can't bypass the upstream generator).
+          # See docs/forensics/2026-05-03-release-history-ledger-drift.md.
+          VERSION="${{ steps.resolve.outputs.version }}"
+          if [ ! -f RELEASE_HISTORY.md ]; then
+            echo "::warning::RELEASE_HISTORY.md not found in repo; skipping ledger check"
+            exit 0
+          fi
+          if ! grep -qE "^\| \[${VERSION}\]" RELEASE_HISTORY.md; then
+            echo "::error file=RELEASE_HISTORY.md::Missing RELEASE_HISTORY.md row for ${VERSION}"
+            echo "::error::Release-prep was incomplete. Either run 'cargo xtask bump-version ${VERSION}' (which appends the row automatically) or add the row by hand before re-dispatching."
+            echo "::error::See docs/forensics/2026-05-03-release-history-ledger-drift.md for context."
+            exit 1
+          fi
+          echo "✅ RELEASE_HISTORY.md contains row for ${VERSION}"
+
       - name: Summary
         run: |
           echo "## Release Validation Complete :white_check_mark:" >> "$GITHUB_STEP_SUMMARY"

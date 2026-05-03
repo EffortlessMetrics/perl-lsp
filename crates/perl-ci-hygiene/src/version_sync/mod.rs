@@ -156,6 +156,12 @@ pub fn check(repo_root: &Path) -> Result<()> {
 
 /// Rewrite every discovered site to `new_version`. Idempotent — sites
 /// already at `new_version` are left untouched.
+///
+/// Also appends a row + 4 link refs to `RELEASE_HISTORY.md` if the new
+/// version is not already present there. The bundling guarantee is
+/// load-bearing: missing ledger rows fail the release-history drift gate
+/// for *every* PR opened against master, not just release PRs. See
+/// `docs/forensics/2026-05-03-release-history-ledger-drift.md`.
 pub fn bump(repo_root: &Path, new_version: &str) -> Result<BumpReport> {
     validate_version_format(new_version)?;
 
@@ -221,7 +227,182 @@ pub fn bump(repo_root: &Path, new_version: &str) -> Result<BumpReport> {
         report.sites_total += file_updated + file_unchanged;
     }
 
+    // Bundle the RELEASE_HISTORY ledger update with the version bump so
+    // master cannot be left in drift after a release-prep PR merges.
+    if append_release_history_row(repo_root, new_version)? {
+        report.files_updated += 1;
+        report.touched_files.push(PathBuf::from("RELEASE_HISTORY.md"));
+    }
+
     Ok(report)
+}
+
+/// Append a row + 4 link refs to `RELEASE_HISTORY.md` for `new_version`.
+/// Idempotent: returns `Ok(false)` if a row already exists for this version.
+///
+/// The row uses placeholder values for fields that aren't known at bump
+/// time (tag commit SHA — release-orchestration backfills) and best-effort
+/// values for fields that are roughly knowable (today's date, schema-shape
+/// asset/crate counts that match recent releases).
+///
+/// If `RELEASE_HISTORY.md` does not exist, this is a no-op (some forks may
+/// not maintain a ledger). Existing files must be parseable (have a prior
+/// version row to anchor insertion against), or this returns an error so
+/// the bump fails fast rather than silently emitting a malformed ledger.
+fn append_release_history_row(repo_root: &Path, new_version: &str) -> Result<bool> {
+    let path = repo_root.join("RELEASE_HISTORY.md");
+    if !path.exists() {
+        return Ok(false);
+    }
+    let content =
+        fs::read_to_string(&path).map_err(|e| eyre!("reading {}: {e}", path.display()))?;
+
+    // Idempotency: the ledger row begins with "| [<version>]". If we find
+    // that prefix already, this version has been added — don't duplicate.
+    let row_marker = format!("| [{new_version}]");
+    if content.contains(&row_marker) {
+        return Ok(false);
+    }
+
+    // Find the previous (topmost data) version by scanning rows of the form
+    // "| [<semver>]". The topmost match is the most recent prior release.
+    let prev_version = find_topmost_ledger_version(&content).ok_or_else(|| {
+        eyre!(
+            "RELEASE_HISTORY.md has no prior version row to anchor insertion against; \
+             cannot synthesize a row for {new_version} automatically"
+        )
+    })?;
+
+    let today = today_iso_date();
+    let new_row = format!(
+        "| [{v}] | `v{v}` | [yes][gh-{v}] | {date} | `pending` | [v{prev}...v{v}] | \
+         10 (7 binaries, VSIX, SHA256SUMS, SBOM) | {v} (31 crates) | [perl-lsp-rs][vsce] | \
+         [v{v}][n-{v}] |",
+        v = new_version,
+        prev = prev_version,
+        date = today,
+    );
+    let new_n_ref = format!("[n-{v}]: docs/releases/v{v}.md", v = new_version);
+    let new_v_ref = format!("[{v}]: docs/releases/v{v}.md", v = new_version);
+    let new_gh_ref = format!(
+        "[gh-{v}]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v{v}",
+        v = new_version,
+    );
+    let new_compare_ref = format!(
+        "[v{prev}...v{v}]: https://github.com/EffortlessMetrics/perl-lsp/compare/v{prev}...v{v}",
+        v = new_version,
+        prev = prev_version,
+    );
+
+    // Insert each new line above the topmost matching prior line. We rely
+    // on stable patterns from the existing schema rather than trying to
+    // parse markdown structurally.
+    let prev_row_prefix = format!("| [{prev_version}]");
+    let prev_n_ref_prefix = format!("[n-{prev_version}]:");
+    let prev_v_ref_prefix = format!("[{prev_version}]:");
+    let prev_gh_ref_prefix = format!("[gh-{prev_version}]:");
+    let prev_compare_ref_anchor = format!("...v{prev_version}]:");
+
+    let mut updated = String::with_capacity(content.len() + 1024);
+    let mut inserted_row = false;
+    let mut inserted_n_ref = false;
+    let mut inserted_v_ref = false;
+    let mut inserted_gh_ref = false;
+    let mut inserted_compare_ref = false;
+
+    for line in content.lines() {
+        if !inserted_row && line.starts_with(&prev_row_prefix) {
+            updated.push_str(&new_row);
+            updated.push('\n');
+            inserted_row = true;
+        }
+        if !inserted_n_ref && line.starts_with(&prev_n_ref_prefix) {
+            updated.push_str(&new_n_ref);
+            updated.push('\n');
+            inserted_n_ref = true;
+        } else if !inserted_v_ref
+            && line.starts_with(&prev_v_ref_prefix)
+            && !line.starts_with("[n-")
+            && !line.starts_with("[gh-")
+        {
+            updated.push_str(&new_v_ref);
+            updated.push('\n');
+            inserted_v_ref = true;
+        }
+        if !inserted_gh_ref && line.starts_with(&prev_gh_ref_prefix) {
+            updated.push_str(&new_gh_ref);
+            updated.push('\n');
+            inserted_gh_ref = true;
+        }
+        if !inserted_compare_ref
+            && line.starts_with("[v")
+            && line.contains(&prev_compare_ref_anchor)
+        {
+            updated.push_str(&new_compare_ref);
+            updated.push('\n');
+            inserted_compare_ref = true;
+        }
+        updated.push_str(line);
+        updated.push('\n');
+    }
+
+    if !inserted_row {
+        bail!(
+            "could not find prior version row '{prev_row_prefix}' in RELEASE_HISTORY.md; \
+             ledger schema may have changed"
+        );
+    }
+    if !inserted_n_ref || !inserted_v_ref || !inserted_gh_ref || !inserted_compare_ref {
+        bail!(
+            "could not find all four prior link refs for {prev_version} in RELEASE_HISTORY.md; \
+             ledger schema may have changed (n_ref={inserted_n_ref}, v_ref={inserted_v_ref}, \
+             gh_ref={inserted_gh_ref}, compare_ref={inserted_compare_ref})"
+        );
+    }
+
+    // Preserve the file's trailing-newline shape. `lines()` strips the
+    // final newline; if the original ended without one, drop ours.
+    if !content.ends_with('\n') && updated.ends_with('\n') {
+        updated.pop();
+    }
+
+    fs::write(&path, updated).map_err(|e| eyre!("writing {}: {e}", path.display()))?;
+    Ok(true)
+}
+
+/// Find the most recent version listed in the `RELEASE_HISTORY.md` ledger.
+/// The ledger is ordered most-recent-first, so the topmost data row is the
+/// previous release.
+fn find_topmost_ledger_version(content: &str) -> Option<String> {
+    static ROW_PATTERN: LazyLock<Regex> =
+        LazyLock::new(|| compile_regex(r"^\|\s*\[(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\]"));
+    for line in content.lines() {
+        if let Some(caps) = ROW_PATTERN.captures(line)
+            && let Some(m) = caps.get(1)
+        {
+            return Some(m.as_str().to_string());
+        }
+    }
+    None
+}
+
+/// Today's date as `YYYY-MM-DD` in UTC. Best-effort — release-orchestration
+/// can backfill the actual publish date if needed.
+fn today_iso_date() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
+    // Ymd from unix epoch: standard civil-from-days conversion (Howard Hinnant).
+    let z = now.div_euclid(86_400) + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 // ---------------------------------------------------------------------------
@@ -890,5 +1071,166 @@ perl-token = { path = "../perl-token", version = "0.42.0" }
         let caps = ROADMAP_WORKSPACE_RE.captures(line);
         assert!(caps.is_some(), "ROADMAP_WORKSPACE_RE must match pre-release versions");
         assert_eq!(&caps.unwrap()[1], "0.13.0-rc1");
+    }
+
+    // -----------------------------------------------------------------------
+    // RELEASE_HISTORY ledger generator tests
+    //
+    // These lock the bundling guarantee documented in
+    // docs/forensics/2026-05-03-release-history-ledger-drift.md: bump-version
+    // must append the ledger row in the same operation as the version-site
+    // updates so master cannot be left in drift after a release-prep PR
+    // merges.
+    // -----------------------------------------------------------------------
+
+    fn ledger_fixture() -> String {
+        // Minimal fixture matching the schema of the real RELEASE_HISTORY.md.
+        r#"# Release History
+
+## Release ledger
+
+| Version | Tag | GitHub Release | Released | Tag commit | Compare | Assets | crates.io | VS Code Marketplace | Notes file |
+|---------|-----|----------------|----------|------------|---------|--------|-----------|---------------------|------------|
+| [0.13.3] | `v0.13.3` | [yes][gh-0.13.3] | 2026-05-03 | `06fc1443` | [v0.13.2...v0.13.3] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | 0.13.3 (31 crates) | [perl-lsp-rs][vsce] | [v0.13.3][n-0.13.3] |
+| [0.13.2] | `v0.13.2` | [yes][gh-0.13.2] | 2026-05-02 | `0e9c5d78` | [v0.13.1...v0.13.2] | 10 (7 binaries, VSIX, SHA256SUMS, SBOM) | 0.13.2 (31 crates) | [perl-lsp-rs][vsce] | [v0.13.2][n-0.13.2] |
+
+## Links
+
+<!-- Notes files -->
+[n-0.13.3]: docs/releases/v0.13.3.md
+[n-0.13.2]: docs/releases/v0.13.2.md
+
+<!-- Version links (to notes files) -->
+[0.13.3]: docs/releases/v0.13.3.md
+[0.13.2]: docs/releases/v0.13.2.md
+
+<!-- GitHub Releases -->
+[gh-0.13.3]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.3
+[gh-0.13.2]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.2
+
+<!-- Compare ranges -->
+[v0.13.2...v0.13.3]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.2...v0.13.3
+[v0.13.1...v0.13.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.1...v0.13.2
+
+<!-- Channels -->
+[vsce]: https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs
+"#
+        .to_string()
+    }
+
+    #[test]
+    fn append_release_history_inserts_row_and_four_link_refs() -> Result<()> {
+        let dir = unique_temp_repo_dir("ledger-append")?;
+        let path = dir.join("RELEASE_HISTORY.md");
+        fs::write(&path, ledger_fixture())?;
+
+        let inserted = append_release_history_row(&dir, "0.13.4")?;
+        assert!(inserted, "first call should insert the row");
+
+        let content = fs::read_to_string(&path)?;
+        // New row is now topmost data row.
+        let row_idx = content.find("| [0.13.4]").expect("row for 0.13.4 should be inserted");
+        let prev_row_idx = content.find("| [0.13.3]").unwrap();
+        assert!(row_idx < prev_row_idx, "0.13.4 row should appear above 0.13.3");
+
+        // Link refs all present in their respective sections.
+        assert!(content.contains("[n-0.13.4]: docs/releases/v0.13.4.md"));
+        assert!(content.contains("[0.13.4]: docs/releases/v0.13.4.md"));
+        assert!(content.contains(
+            "[gh-0.13.4]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.13.4"
+        ));
+        assert!(content.contains(
+            "[v0.13.3...v0.13.4]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.13.3...v0.13.4"
+        ));
+
+        // Compare-range link references the correct prev version.
+        assert!(content.contains("[v0.13.3...v0.13.4]"));
+
+        // Tag-commit SHA is the placeholder.
+        assert!(
+            content.contains("`pending`"),
+            "tag-commit SHA should be `pending` placeholder for release-orchestration to fill in"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+        Ok(())
+    }
+
+    #[test]
+    fn append_release_history_is_idempotent() -> Result<()> {
+        let dir = unique_temp_repo_dir("ledger-idempotent")?;
+        let path = dir.join("RELEASE_HISTORY.md");
+        fs::write(&path, ledger_fixture())?;
+
+        let first = append_release_history_row(&dir, "0.13.4")?;
+        assert!(first, "first call inserts");
+        let after_first = fs::read_to_string(&path)?;
+
+        let second = append_release_history_row(&dir, "0.13.4")?;
+        assert!(!second, "second call should detect existing row and skip");
+        let after_second = fs::read_to_string(&path)?;
+
+        assert_eq!(
+            after_first, after_second,
+            "ledger content must be byte-identical after redundant append"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+        Ok(())
+    }
+
+    #[test]
+    fn append_release_history_no_op_when_file_missing() -> Result<()> {
+        let dir = unique_temp_repo_dir("ledger-missing")?;
+        // Deliberately do not create RELEASE_HISTORY.md.
+        let inserted = append_release_history_row(&dir, "0.13.4")?;
+        assert!(!inserted, "missing ledger file is a no-op (forks may not maintain a ledger)");
+        fs::remove_dir_all(&dir).ok();
+        Ok(())
+    }
+
+    #[test]
+    fn append_release_history_fails_when_no_prior_row_exists() -> Result<()> {
+        let dir = unique_temp_repo_dir("ledger-empty")?;
+        let path = dir.join("RELEASE_HISTORY.md");
+        // Ledger exists but has no data rows.
+        fs::write(&path, "# Release History\n\n## Links\n")?;
+        let result = append_release_history_row(&dir, "0.13.4");
+        assert!(
+            result.is_err(),
+            "empty ledger must fail loudly so the bump aborts rather than emitting a malformed row"
+        );
+        fs::remove_dir_all(&dir).ok();
+        Ok(())
+    }
+
+    #[test]
+    fn find_topmost_ledger_version_picks_first_data_row() {
+        let content = ledger_fixture();
+        assert_eq!(find_topmost_ledger_version(&content).as_deref(), Some("0.13.3"));
+    }
+
+    #[test]
+    fn find_topmost_ledger_version_handles_pre_release() {
+        let content = "## Release ledger\n\n| [0.14.0-rc1] | `v0.14.0-rc1` | ... |\n";
+        assert_eq!(find_topmost_ledger_version(content).as_deref(), Some("0.14.0-rc1"));
+    }
+
+    #[test]
+    fn today_iso_date_is_well_formed() {
+        let today = today_iso_date();
+        assert_eq!(today.len(), 10);
+        assert!(
+            today.chars().nth(4) == Some('-') && today.chars().nth(7) == Some('-'),
+            "expected YYYY-MM-DD, got {today}"
+        );
+        let parts: Vec<&str> = today.split('-').collect();
+        assert_eq!(parts.len(), 3);
+        let year: i32 = parts[0].parse().unwrap();
+        let month: u32 = parts[1].parse().unwrap();
+        let day: u32 = parts[2].parse().unwrap();
+        assert!(year >= 2025 && year <= 2100, "year {year} out of expected range");
+        assert!(month >= 1 && month <= 12, "month {month} invalid");
+        assert!(day >= 1 && day <= 31, "day {day} invalid");
     }
 }
