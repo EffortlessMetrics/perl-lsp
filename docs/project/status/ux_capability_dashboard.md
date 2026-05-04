@@ -181,10 +181,11 @@ resolution of dynamic Perl.
 
 ## Next recommended UX improvement
 
-Receiver-aware method completion ranking using value-shape-lite hints:
+Confidence-aware method completion ranking using existing receiver evidence:
 
-- `$self->` — current package methods rank higher
-- `Foo->new` assignment — `Foo` methods rank higher
-- literal `bless` — package methods rank with medium confidence
-- unknown receiver — safe fallback to broad workspace candidates
-- dynamic receiver — low confidence; never outranks exact evidence
+- `$self->` / `$this->` — current package evidence, high confidence
+- `Foo->new` assignment — constructor evidence, high confidence
+- literal `bless ..., "Package"` — package evidence, medium confidence
+- type-engine inferred receiver — confidence follows the inferred shape source
+- unknown receiver — keep existing conservative behavior; do not invent broad candidates in this step
+- dynamic receiver — low confidence; never outranks exact receiver evidence
