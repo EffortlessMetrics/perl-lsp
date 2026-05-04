@@ -1209,15 +1209,15 @@ $self->"#;
     let own = must_some(completions.iter().find(|item| item.label == "own_method"));
     assert_eq!(
         own.detail.as_deref(),
-        Some("method from Child"),
-        "workspace own method should use semantic method candidate detail"
+        Some("method from Child — receiver: self/this"),
+        "workspace own method should use semantic method candidate detail with receiver evidence (#7918)"
     );
 
     let inherited = must_some(completions.iter().find(|item| item.label == "inherited_method"));
     assert_eq!(
         inherited.detail.as_deref(),
-        Some("inherited method from Parent"),
-        "inherited method should use semantic method candidate detail"
+        Some("inherited method from Parent — receiver: self/this"),
+        "inherited method should use semantic method candidate detail with receiver evidence (#7918)"
     );
 
     Ok(())
@@ -1265,8 +1265,8 @@ $self->"#;
 
     assert_eq!(
         method.detail.as_deref(),
-        Some("inherited method from Parent"),
-        "nearest ancestor should shadow a farther ancestor with the same method name"
+        Some("inherited method from Parent — receiver: self/this"),
+        "nearest ancestor should shadow a farther ancestor with the same method name (with #7918 receiver suffix)"
     );
 
     Ok(())
@@ -1613,6 +1613,225 @@ $x->"#;
         completions.iter().any(|c| c.label == "bark"),
         "bless [1, 2, 3], \"Foo\" should infer Foo and suggest bark; got: {:?}",
         completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// -------------------------------------------------------------------------
+// Receiver-evidence in method completion detail text (issue #7918)
+//
+// These tests assert that the existing `ReceiverEvidence` provenance
+// (#7917) is now appended to method completion `detail` text. They also
+// pin invariants that label / insert_text / filter_text / sort_text /
+// the candidate set itself are unchanged — this PR is detail-only.
+// -------------------------------------------------------------------------
+
+#[test]
+fn detail_includes_static_package_receiver_evidence() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = "Foo->";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = must_some(completions.iter().find(|c| c.label == "bark"));
+    let detail = must_some(bark.detail.as_deref());
+    assert!(
+        detail.contains("receiver: static package"),
+        "Foo->bark detail should include static-package receiver evidence; got {detail:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn detail_includes_receiver_evidence_for_constructor_assignment()
+-> Result<(), Box<dyn std::error::Error>> {
+    // For `my $x = Foo->new; $x->`, two receiver-evidence paths could
+    // legitimately fire:
+    //   - text-pattern `ConstructorAssignment` (matches `Foo->new`
+    //     assignment in the source)
+    //   - `TypeInferenceEngine` (which DOES infer `$x : Foo` from
+    //     constructor-method calls in production today, contrary to the
+    //     `bless`-only limitation)
+    //
+    // `classify_receiver` tries the type engine first, so production
+    // currently produces `TypeEngine` for this fixture. Both
+    // suffix labels are correct receiver evidence; this test asserts
+    // either is present rather than pinning one path.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub new { bless {}, shift }
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $x = Foo->new;
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = must_some(completions.iter().find(|c| c.label == "bark"));
+    let detail = must_some(bark.detail.as_deref());
+    assert!(
+        detail.contains("receiver: constructor assignment")
+            || detail.contains("receiver: type engine"),
+        "my $$x = Foo->new; $$x->bark detail should include receiver evidence \
+         (constructor assignment or type engine); got {detail:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn detail_includes_literal_bless_receiver_evidence() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $x = bless {}, "Foo";
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = must_some(completions.iter().find(|c| c.label == "bark"));
+    let detail = must_some(bark.detail.as_deref());
+    assert!(
+        detail.contains("receiver: literal bless"),
+        "literal bless detail should include literal-bless receiver evidence; got {detail:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn detail_for_inherited_preserves_from_annotation_and_appends_receiver()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Inherited methods must keep `(from Base)` (or the semantic-path
+    // equivalent `inherited method from Parent`) AND get the receiver
+    // suffix appended.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Parent.pm")?,
+        r#"package Parent;
+sub inherited_method { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/Child.pm")?,
+        r#"package Child;
+use parent 'Parent';
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"package Child;
+sub run {
+my $self = shift;
+$self->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let inherited = must_some(completions.iter().find(|c| c.label == "inherited_method"));
+    let detail = must_some(inherited.detail.as_deref());
+    assert!(
+        detail.contains("Parent"),
+        "inherited detail should still mention defining package Parent; got {detail:?}"
+    );
+    assert!(
+        detail.contains("receiver: self/this"),
+        "inherited detail should append self/this receiver evidence; got {detail:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn detail_change_does_not_alter_label_insert_filter_or_sort_text()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Invariant: the only field that changes from #7918 is `detail`.
+    // `label`, `insert_text`, `filter_text`, and `sort_text` must remain
+    // unchanged for the same input (verified against literal expected
+    // values that match pre-#7918 production behavior).
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = "Foo->";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = must_some(completions.iter().find(|c| c.label == "bark"));
+    assert_eq!(bark.label, "bark", "label must not change");
+    assert_eq!(bark.insert_text.as_deref(), Some("bark()"), "insert_text must not change");
+    assert_eq!(bark.filter_text.as_deref(), Some("bark"), "filter_text must not change");
+    let sort_text = must_some(bark.sort_text.as_deref());
+    assert!(
+        sort_text.ends_with("bark"),
+        "sort_text must still end with the method name (tier_<name> format unchanged); got {sort_text:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn detail_unchanged_when_no_receiver_evidence_path_reachable()
+-> Result<(), Box<dyn std::error::Error>> {
+    // When receiver inference fails, the production callsite returns no
+    // method completions at all (existing pre-#7918 behavior). This test
+    // pins that contract: an unknown receiver yields no exact-receiver
+    // suggestions, so no method-detail text is produced for `bark`.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = "$nonexistent->";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        !completions.iter().any(|c| c.label == "bark"),
+        "unknown receiver must not produce Foo's methods (pre-#7918 behavior preserved)"
     );
     Ok(())
 }

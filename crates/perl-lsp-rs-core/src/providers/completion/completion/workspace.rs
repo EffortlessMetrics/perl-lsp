@@ -576,6 +576,31 @@ impl ReceiverEvidence {
             Self::Unknown => None,
         }
     }
+
+    /// Short, user-facing suffix describing the evidence source, suitable
+    /// for appending to a `CompletionItem.detail` string. `Unknown`
+    /// returns `None` — when there is no evidence, there is nothing to
+    /// say. Issue #7918: explanatory only, no ranking / inclusion change.
+    pub(super) fn detail_suffix(&self) -> Option<&'static str> {
+        match self {
+            Self::StaticPackage(_) => Some("receiver: static package"),
+            Self::SelfOrThis(_) => Some("receiver: self/this"),
+            Self::ConstructorAssignment(_) => Some("receiver: constructor assignment"),
+            Self::LiteralBless(_) => Some("receiver: literal bless"),
+            Self::TypeEngine(_) => Some("receiver: type engine"),
+            Self::Unknown => None,
+        }
+    }
+}
+
+/// Apply the receiver-evidence detail suffix to an existing base detail
+/// string. Returns the unchanged base when the evidence carries no suffix
+/// (e.g. `Unknown`). Issue #7918.
+fn detail_with_evidence(base: String, evidence: &ReceiverEvidence) -> String {
+    match evidence.detail_suffix() {
+        Some(suffix) => format!("{base} — {suffix}"),
+        None => base,
+    }
 }
 
 /// Classify the receiver of a `->` method-completion call site.
@@ -895,6 +920,7 @@ pub fn add_workspace_method_completions(
         method_prefix,
         &method_symbols,
         auto_import_edit.as_ref(),
+        &evidence,
     ) {
         return;
     }
@@ -905,11 +931,15 @@ pub fn add_workspace_method_completions(
 
         // Show which package actually defines the method for inherited completions
         let defining_pkg = symbol.container_name.as_deref().unwrap_or(package_name.as_str());
-        let detail = if defining_pkg == package_name {
+        let base_detail = if defining_pkg == package_name {
             format!("{package_name} method")
         } else {
             format!("{package_name} method (from {defining_pkg})")
         };
+        // Append receiver-evidence suffix from #7918. Detail-only — no
+        // change to label, insert_text, filter_text, sort_text, or the
+        // candidate set.
+        let detail = detail_with_evidence(base_detail, &evidence);
 
         // Own-class methods rank above inherited: tier 2 for own, tier 3 for inherited.
         // This ensures $obj->zoom (own) sorts before $obj->abstract_method (inherited)
@@ -955,6 +985,7 @@ fn add_semantic_method_completions(
     method_prefix: &str,
     method_symbols: &[&WorkspaceSymbol],
     auto_import_edit: Option<&(SourceLocation, String)>,
+    evidence: &ReceiverEvidence,
 ) -> bool {
     let legacy_names = method_symbol_names(method_symbols);
     if legacy_names.is_empty() {
@@ -995,7 +1026,7 @@ fn add_semantic_method_completions(
         completions.push(CompletionItem {
             label: candidate.display_name.clone(),
             kind: CompletionItemKind::Function,
-            detail: Some(semantic_method_detail(package_name, &candidate)),
+            detail: Some(semantic_method_detail(package_name, &candidate, evidence)),
             documentation: Some(semantic_method_documentation(package_name, &candidate)),
             insert_text: Some(format!("{}()", candidate.display_name)),
             sort_text: Some(format!(
@@ -1139,13 +1170,18 @@ fn semantic_method_sort_rank(receiver_package: &str, candidate: &DefinitionCandi
     }
 }
 
-fn semantic_method_detail(receiver_package: &str, candidate: &DefinitionCandidate) -> String {
+fn semantic_method_detail(
+    receiver_package: &str,
+    candidate: &DefinitionCandidate,
+    evidence: &ReceiverEvidence,
+) -> String {
     let defining_pkg = candidate.package.as_deref().unwrap_or(receiver_package);
-    match candidate.kind {
+    let base = match candidate.kind {
         EntityKind::GeneratedMember => format!("generated accessor from {defining_pkg}"),
         _ if defining_pkg == receiver_package => format!("method from {receiver_package}"),
         _ => format!("inherited method from {defining_pkg}"),
-    }
+    };
+    detail_with_evidence(base, evidence)
 }
 
 fn semantic_method_documentation(
