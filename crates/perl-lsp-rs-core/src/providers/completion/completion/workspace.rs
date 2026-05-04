@@ -556,12 +556,175 @@ fn infer_receiver_package(context: &CompletionContext, source: &str) -> Option<S
                             return Some(pkg.to_string());
                         }
                     }
+                    // Pattern: `bless REF, "Class"` / `bless REF, 'Class'`
+                    // Only literal-string class names produce inference; dynamic
+                    // forms like `bless {}, $class` intentionally fall through.
+                    if let Some(class) = extract_bless_literal_class(rhs) {
+                        return Some(class);
+                    }
                 }
             }
         }
     }
 
     None
+}
+
+/// Extract the literal class name from a `bless REF, "Class"` expression.
+///
+/// Anchored to RHS-as-builtin-bless-expression: only succeeds when the
+/// RHS, after trimming leading whitespace, *starts* with `bless` followed
+/// by end-of-string, ASCII whitespace, or `(`. This means the helper
+/// returns `None` for nested forms like `wrapper(bless {}, "Foo")` (where
+/// the assignment result is not necessarily the blessed object) and for
+/// non-builtin punctuation-suffixed forms like `bless::factory {}, "Foo"`
+/// (where the call target is a different sub that merely shares the
+/// `bless` prefix).
+///
+/// Trailing content after the closing quote of the class literal must be
+/// only whitespace, the matching closing paren if a leading `(` was
+/// consumed, and an optional terminating `;`. Anything else — `. $suffix`,
+/// `|| "Bar"`, `, $extra`, etc. — disables inference (fails closed) so
+/// non-literal class expressions never produce false-precision evidence.
+///
+/// Returns `Some(class)` only for the conservative literal form. Returns
+/// `None` for dynamic forms (`bless {}, $class`), 1-arg forms
+/// (`bless {}` — defaults to caller package, intentionally not inferred
+/// here), nested forms, expression-tail forms, and anything that fails
+/// to parse cleanly.
+fn extract_bless_literal_class(rhs: &str) -> Option<String> {
+    // Anchor: RHS must START with the builtin `bless` expression.
+    let trimmed = rhs.trim_start();
+    if !starts_with_bless_expression(trimmed) {
+        return None;
+    }
+    let after_bless = &trimmed["bless".len()..];
+
+    // Allow optional `(` and whitespace.
+    let scan = after_bless.trim_start();
+    let (scan, expect_rparen) = match scan.strip_prefix('(') {
+        Some(rest) => (rest, true),
+        None => (scan, false),
+    };
+
+    // Find the comma separating the two args, respecting balanced delimiters
+    // and string literals so that hash/array contents like
+    // `bless { a => 1, b => 2 }, "Foo"` and `bless [1, 2, 3], "Foo"` parse.
+    let comma_pos = find_top_level_comma(scan)?;
+    let after_comma = scan[comma_pos + 1..].trim_start();
+
+    // Require a literal quoted string for the class.
+    let bytes = after_comma.as_bytes();
+    let close_char = match bytes.first()? {
+        b'"' => '"',
+        b'\'' => '\'',
+        _ => return None,
+    };
+    let body = &after_comma[1..];
+    let close_pos = body.find(close_char)?;
+    let class = &body[..close_pos];
+
+    if !is_valid_perl_package_name(class) {
+        return None;
+    }
+
+    // Validate trailing content: only whitespace, the matching `)` if a
+    // leading `(` was consumed, and an optional `;` then EOF. Anything else
+    // (concatenation, logical-or, extra arg, expression continuation) means
+    // the class expression is not a plain literal — fail closed.
+    let mut tail = body[close_pos + 1..].trim_start();
+    if expect_rparen {
+        tail = tail.strip_prefix(')')?.trim_start();
+    }
+    let tail = tail.strip_prefix(';').unwrap_or(tail).trim();
+    if !tail.is_empty() {
+        return None;
+    }
+
+    Some(class.to_string())
+}
+
+/// Returns `true` when `s` begins with the builtin `bless` expression.
+///
+/// Stricter than a generic word-boundary check: after `bless`, only end
+/// of string, ASCII whitespace, or `(` are accepted. This rejects
+/// non-builtin forms like `bless::factory(...)`, `bless+REF`, `bless.foo`,
+/// and similar punctuation-suffixed identifiers that happen to share the
+/// `bless` prefix but are not the Perl builtin.
+fn starts_with_bless_expression(s: &str) -> bool {
+    if !s.starts_with("bless") {
+        return false;
+    }
+    match s.as_bytes().get("bless".len()).copied() {
+        None => true,
+        Some(b) => b.is_ascii_whitespace() || b == b'(',
+    }
+}
+
+/// Find the first top-level `,` outside of `()`, `{}`, `[]`, and string
+/// literals. Used to identify the arg separator in `bless REF, CLASS`.
+fn find_top_level_comma(s: &str) -> Option<usize> {
+    let mut depth_paren: i32 = 0;
+    let mut depth_brace: i32 = 0;
+    let mut depth_bracket: i32 = 0;
+    let mut in_string: Option<char> = None;
+    let mut prev_was_backslash = false;
+
+    for (i, c) in s.char_indices() {
+        if let Some(q) = in_string {
+            if !prev_was_backslash && c == q {
+                in_string = None;
+            }
+            prev_was_backslash = !prev_was_backslash && c == '\\';
+            continue;
+        }
+        prev_was_backslash = false;
+        match c {
+            '(' => depth_paren += 1,
+            ')' => depth_paren -= 1,
+            '{' => depth_brace += 1,
+            '}' => depth_brace -= 1,
+            '[' => depth_bracket += 1,
+            ']' => depth_bracket -= 1,
+            '"' => in_string = Some('"'),
+            '\'' => in_string = Some('\''),
+            ',' if depth_paren <= 0 && depth_brace <= 0 && depth_bracket <= 0 => {
+                return Some(i);
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Validate a Perl package name: identifier segments separated by `::`.
+fn is_valid_perl_package_name(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    let mut start_of_segment = true;
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if start_of_segment {
+            if !(c.is_ascii_alphabetic() || c == '_') {
+                return false;
+            }
+            start_of_segment = false;
+            continue;
+        }
+        if c == ':' {
+            // Must be `::`, then a fresh segment.
+            if chars.next() != Some(':') {
+                return false;
+            }
+            start_of_segment = true;
+            continue;
+        }
+        if !(c.is_ascii_alphanumeric() || c == '_') {
+            return false;
+        }
+    }
+    !start_of_segment
 }
 
 fn infer_receiver_package_from_type_engine(
