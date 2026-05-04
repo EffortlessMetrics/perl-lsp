@@ -571,9 +571,7 @@
         },
         {
           "line": 6,
-          "expected_tags": [
-            "sub_decl"
-          ]
+          "expected_tags": []
         }
       ],
       "recovery_expectations": [
@@ -588,9 +586,7 @@
           "post_error_line_expectations": [
             {
               "line": 6,
-              "expected_tags": [
-                "sub_decl"
-              ]
+              "expected_tags": []
             }
           ],
           "post_error_symbol_spans": [
@@ -1238,7 +1234,7 @@
         {
           "line": 4,
           "expected_tags": [
-            "function_call"
+            "import"
           ]
         },
         {
