@@ -14,19 +14,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-def escape_xml(text: str) -> str:
-    """Escape XML special characters."""
-    if not isinstance(text, str):
-        text = str(text)
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&apos;")
-    )
-
-
 def parse_receipt(data: Any) -> Optional[List[Dict[str, Any]]]:
     """
     Parse receipt data and extract testcases.
@@ -64,8 +51,8 @@ def gate_to_testcase(
     status = str(gate.get("status", "unknown")).lower()
 
     testcase = ET.Element("testcase")
-    testcase.set("classname", escape_xml(classname))
-    testcase.set("name", escape_xml(name))
+    testcase.set("classname", classname)
+    testcase.set("name", name)
     testcase.set("time", str(duration_sec))
 
     # Determine pass/skip/fail
@@ -101,7 +88,7 @@ def ux_to_testcase(receipt: Dict[str, Any], classname: str) -> Tuple[ET.Element,
     Returns (element, is_passed).
     """
     testcase = ET.Element("testcase")
-    testcase.set("classname", escape_xml(classname))
+    testcase.set("classname", classname)
     testcase.set("name", "ux-regression")
     testcase.set("time", "0.0")
 
@@ -135,17 +122,17 @@ def ux_to_testcase(receipt: Dict[str, Any], classname: str) -> Tuple[ET.Element,
 
 def receipts_to_junit(
     input_path: Path, suite_name: str
-) -> Tuple[ET.Element, int, int, int]:
+) -> Tuple[ET.Element, int, int, int, int]:
     """
     Convert receipt file(s) to JUnit XML structure.
-    Returns (root_element, total_tests, failures, skipped).
+    Returns (root_element, total_tests, failures, errors, skipped).
     """
     root = ET.Element("testsuites")
 
     if not input_path.exists():
         # No files found, emit a skipped testcase
         testsuite = ET.SubElement(root, "testsuite")
-        testsuite.set("name", escape_xml(suite_name))
+        testsuite.set("name", suite_name)
         testsuite.set("tests", "1")
         testsuite.set("failures", "0")
         testsuite.set("skipped", "1")
@@ -153,13 +140,13 @@ def receipts_to_junit(
         testsuite.set("time", "0.0")
 
         testcase = ET.SubElement(testsuite, "testcase")
-        testcase.set("classname", escape_xml(suite_name))
+        testcase.set("classname", suite_name)
         testcase.set("name", "no-files-found")
         testcase.set("time", "0.0")
         skipped = ET.SubElement(testcase, "skipped")
         skipped.set("message", "No receipt files found")
 
-        return root, 1, 0, 1
+        return root, 1, 0, 0, 1
 
     # Determine if input is file or directory
     json_files = []
@@ -171,7 +158,7 @@ def receipts_to_junit(
     if not json_files:
         # No files found, emit a skipped testcase
         testsuite = ET.SubElement(root, "testsuite")
-        testsuite.set("name", escape_xml(suite_name))
+        testsuite.set("name", suite_name)
         testsuite.set("tests", "1")
         testsuite.set("failures", "0")
         testsuite.set("skipped", "1")
@@ -179,17 +166,15 @@ def receipts_to_junit(
         testsuite.set("time", "0.0")
 
         testcase = ET.SubElement(testsuite, "testcase")
-        testcase.set("classname", escape_xml(suite_name))
+        testcase.set("classname", suite_name)
         testcase.set("name", "no-files-found")
         testcase.set("time", "0.0")
         skipped = ET.SubElement(testcase, "skipped")
         skipped.set("message", "No JSON files found")
 
-        return root, 1, 0, 1
+        return root, 1, 0, 0, 1
 
     all_testcases = []
-    total_failures = 0
-    total_skipped = 0
     total_time = 0.0
 
     for json_file in json_files:
@@ -201,8 +186,8 @@ def receipts_to_junit(
             if testcases is None:
                 # Not a recognized receipt format, emit an error testcase
                 testcase = ET.Element("testcase")
-                testcase.set("classname", escape_xml(suite_name))
-                testcase.set("name", escape_xml(f"parse-{json_file.name}"))
+                testcase.set("classname", suite_name)
+                testcase.set("name", f"parse-{json_file.name}")
                 testcase.set("time", "0.0")
                 error = ET.SubElement(testcase, "error")
                 error.set("type", "UnrecognizedFormat")
@@ -221,20 +206,13 @@ def receipts_to_junit(
                 duration_sec = float(testcase.get("time", 0))
                 total_time += duration_sec
 
-                if not is_passed:
-                    # Check if it's skipped or failed/error
-                    if testcase.find("skipped") is not None:
-                        total_skipped += 1
-                    else:
-                        total_failures += 1
-
                 all_testcases.append(testcase)
 
         except json.JSONDecodeError as e:
             # JSON parse error, emit an error testcase
             testcase = ET.Element("testcase")
-            testcase.set("classname", escape_xml(suite_name))
-            testcase.set("name", escape_xml(f"parse-{json_file.name}"))
+            testcase.set("classname", suite_name)
+            testcase.set("name", f"parse-{json_file.name}")
             testcase.set("time", "0.0")
             error = ET.SubElement(testcase, "error")
             error.set("type", "JSONDecodeError")
@@ -244,8 +222,8 @@ def receipts_to_junit(
         except Exception as e:
             # General error, emit an error testcase
             testcase = ET.Element("testcase")
-            testcase.set("classname", escape_xml(suite_name))
-            testcase.set("name", escape_xml(f"parse-{json_file.name}"))
+            testcase.set("classname", suite_name)
+            testcase.set("name", f"parse-{json_file.name}")
             testcase.set("time", "0.0")
             error = ET.SubElement(testcase, "error")
             error.set("type", type(e).__name__)
@@ -254,18 +232,22 @@ def receipts_to_junit(
 
     # Build testsuite
     testsuite = ET.SubElement(root, "testsuite")
-    testsuite.set("name", escape_xml(suite_name))
+    testsuite.set("name", suite_name)
     total_tests = len(all_testcases)
+    total_failures = sum(1 for tc in all_testcases if tc.find("failure") is not None)
+    total_errors = sum(1 for tc in all_testcases if tc.find("error") is not None)
+    total_skipped = sum(1 for tc in all_testcases if tc.find("skipped") is not None)
+
     testsuite.set("tests", str(total_tests))
     testsuite.set("failures", str(total_failures))
+    testsuite.set("errors", str(total_errors))
     testsuite.set("skipped", str(total_skipped))
-    testsuite.set("errors", str(max(0, total_failures - total_skipped)))
     testsuite.set("time", str(total_time))
 
     for testcase in all_testcases:
         testsuite.append(testcase)
 
-    return root, total_tests, total_failures, total_skipped
+    return root, total_tests, total_failures, total_errors, total_skipped
 
 
 def main() -> int:
@@ -303,7 +285,8 @@ Examples:
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     # Convert receipts to JUnit
-    root, total_tests, total_failures, total_skipped = receipts_to_junit(
+    # Convert receipts to JUnit
+    root, total_tests, total_failures, total_errors, total_skipped = receipts_to_junit(
         args.input, args.suite_name
     )
 
@@ -313,7 +296,7 @@ Examples:
 
     print(f"✓ Generated JUnit XML: {args.output}")
     print(f"  Suite: {args.suite_name}")
-    print(f"  Tests: {total_tests}, Failures: {total_failures}, Skipped: {total_skipped}")
+    print(f"  Tests: {total_tests}, Failures: {total_failures}, Errors: {total_errors}, Skipped: {total_skipped}")
 
     return 0
 
