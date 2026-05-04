@@ -21,6 +21,68 @@ those metrics translate into user-facing capability claims.
 | `semantic-live-with-fallback` | Semantic path drives behavior when available; legacy path remains fallback. |
 | `insufficient_data` | Not enough proof to make a durable claim. |
 
+## Data ownership
+
+This dashboard consumes existing parser accuracy and semantic scorecard
+artifacts. It does not recompute metrics and does not own their source values.
+
+Source-of-truth artifacts:
+
+| Input family | Source of truth |
+|---|---|
+| Parser accuracy | [parser.md](parser.md) and parser-accuracy artifacts |
+| Semantic facts / readiness | [semantic_capability_dashboard.md](semantic_capability_dashboard.md) and semantic scorecard artifacts |
+| Shadow comparison | semantic shadow-compare receipts |
+| UX status | this dashboard, manually maintained from source artifacts |
+
+When a source value changes, update the source artifact first, then refresh
+the corresponding row here. Never edit a row in this dashboard to "fix" a
+number that disagrees with its source — fix the source.
+
+## TBD policy
+
+`TBD` means the row shape is defined but no durable value has been assigned
+yet. A `TBD` row should become one of:
+
+- `legacy`
+- `semantic-shadow`
+- `semantic-live`
+- `semantic-live-with-fallback`
+- `insufficient_data`
+
+during a follow-up population PR. `TBD` is not a permanent status — it is a
+placeholder that signals "structure is set, value pending."
+
+## Status transition rules
+
+| From | To | Requirement |
+|---|---|---|
+| `legacy` | `semantic-shadow` | Semantic path exists and has shadow / proof receipts |
+| `semantic-shadow` | `semantic-live` | Provider uses semantic path as primary behavior |
+| `semantic-live` | `semantic-live-with-fallback` | Provider uses semantic path when indexed data exists and preserves legacy fallback |
+| any | `insufficient_data` | Proof source is missing, stale, or too thin |
+| any | `legacy` | Semantic path removed or disabled |
+
+A transition is a documentation change in this dashboard *plus* a link to
+the receipt that proves the new state. Promotions without a receipt should
+remain at the previous level.
+
+## First population pass
+
+The first population PR fills only rows backed by durable artifacts:
+
+- existing scorecard receipts
+- existing shadow-compare receipts
+- existing parser-accuracy receipts
+- merged provider behavior already in production
+
+It does **not**:
+
+- infer values from code inspection alone
+- promote rows to `semantic-live` without a runtime receipt
+- copy numbers that may go stale; prefer linking to the source artifact
+- expand the dashboard's scope into other rails
+
 ## Parser accuracy inputs
 
 Compact summary only. Full detail lives in the parser accuracy status
