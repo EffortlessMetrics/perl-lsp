@@ -90,15 +90,15 @@ artifact; this table consumes it without mirroring numbers that live elsewhere.
 
 | Input | Current read | Why it matters |
 |---|---:|---|
-| `fixture_count` / `family_count` | TBD | Denominator quality |
-| `line_construct_f1` | TBD | Source-shape understanding |
-| `ast_node_kind_f1` | TBD | AST structural accuracy |
-| `symbol_decl_f1` | TBD | Declaration extraction |
-| `symbol_ref_f1` | TBD | Reference extraction |
-| `dynamic_false_precision_count` | TBD | Perl dynamic safety |
-| `fast_path_wrong_result_count` | TBD | Incremental / fast-path safety |
-| `failure_packet_count` | TBD | Actionable remaining gaps |
-| `insufficient_data_count` | TBD | Honesty about unproven rows |
+| `fixture_count` / `family_count` | 25 / 25 | Denominator quality |
+| `line_construct_f1` | 0.9 (n=81) | Source-shape understanding |
+| `ast_node_kind_f1` | 1.0 (n=9) | AST structural accuracy |
+| `symbol_decl_f1` | 1.0 (n=18) | Declaration extraction |
+| `symbol_ref_f1` | 1.0 (n=2) | Reference extraction |
+| `dynamic_false_precision_count` | 0 (n=1) | Perl dynamic safety |
+| `fast_path_wrong_result_count` | 0 (n=1) | Incremental / fast-path safety |
+| `failure_packet_count` | `insufficient_data` | Not surfaced as a named row in [parser.md](parser.md) |
+| `insufficient_data_count` | 52 rows preserved | Honesty about unproven rows |
 
 See [parser.md](parser.md) for the canonical parser corpus and coverage view.
 
@@ -109,18 +109,18 @@ release-readability dashboards.
 
 | Input | Current read | Why it matters |
 |---|---:|---|
-| `declaration_facts` | TBD | Symbol declarations |
-| `occurrence_facts` | TBD | Uses / references |
-| `definition_candidates` | TBD | Goto / hover / rename substrate |
-| `reference_edges` | TBD | References and safe edits |
-| `import_specs` | TBD | Visibility and diagnostics |
-| `export_facts` | TBD | Completion / rename safety |
-| `package_graph_edges` | TBD | Inheritance / roles / methods |
-| `method_candidates_fixture_pass_rate` | TBD | Method completion |
-| `rename_plan_pass_rate` | TBD | Safe rename |
-| `safe_delete_plan_pass_rate` | TBD | Safe delete |
-| `undefined_symbol_false_positive_fixture_rate` | TBD | Diagnostic trust |
-| `visible_symbols_fixture_pass_rate` | TBD | Completion and hover visibility |
+| `declaration_facts` | 41 (16/16 fixtures) | Symbol declarations |
+| `occurrence_facts` | 26 (16/16 fixtures) | Uses / references |
+| `definition_candidates` | 41 (16/16 fixtures) | Goto / hover / rename substrate |
+| `reference_edges` | 1 (16/16 fixtures) | References and safe edits |
+| `import_specs` | 11 (16/16 fixtures) | Visibility and diagnostics |
+| `export_facts` | 3 (16/16 fixtures) | Completion / rename safety |
+| `package_graph_edges` | 2 (16/16 fixtures) | Inheritance / roles / methods |
+| `method_candidates_fixture_pass_rate` | 100% (pass) | Method completion |
+| `rename_plan_pass_rate` | 100% (pass; `rename_unsafe_edit_count = 0`) | Safe rename |
+| `safe_delete_plan_pass_rate` | 100% (pass) | Safe delete |
+| `undefined_symbol_false_positive_fixture_rate` | 0% (pass) | Diagnostic trust |
+| `visible_symbols_fixture_pass_rate` | 100% (pass) | Completion and hover visibility |
 
 See [semantic_capability_dashboard.md](semantic_capability_dashboard.md) for the
 release-readable view, and `semantic_scorecard.md` / `semantic_scorecard.json`
@@ -133,28 +133,28 @@ improvement so the dashboard identifies leverage as well as state.
 
 | UX surface | Status | Proof source | Current user-facing claim | Current limits | Next improvement |
 |---|---|---|---|---|---|
-| Completion | TBD | TBD | TBD | TBD | Rank visible symbols by provenance |
-| Method completion | TBD | TBD | TBD | TBD | Receiver-aware value-shape ranking |
-| Hover | TBD | TBD | TBD | TBD | Explain origin / confidence / dynamic boundaries |
-| Diagnostics | TBD | TBD | TBD | TBD | Count dynamic-boundary suppressions |
-| Goto definition | TBD | TBD | TBD | TBD | Improve candidate confidence explanations |
-| Find references | TBD | TBD | TBD | TBD | Deepen callsite / coderef / typeglob coverage |
-| Rename | TBD | TBD | TBD | TBD | Expose blocker explanations in LSP responses |
-| Safe delete | TBD | TBD | TBD | TBD | Expose blocker explanations in LSP responses |
-| Document symbols | TBD | TBD | TBD | TBD | Tie to parser / symbol accuracy rows |
-| Workspace symbols | TBD | TBD | TBD | TBD | Tie to workspace semantic index |
-| Semantic tokens | TBD | TBD | TBD | TBD | Tie to parser line / AST accuracy |
+| Completion | `semantic-shadow` | [semantic_capability_dashboard.md](semantic_capability_dashboard.md) `completion_import_pass_rate = 100%`; [semantic_scorecard.md](semantic_scorecard.md) `completion_import_fixture_pass_rate = pass` | Import/export visibility passes the deterministic fixtures, including empty-import suppression and export-tag expansion. | Real-workspace coverage is one small CPAN-style family (4 files, 2 baseline tests). | Rank visible symbols by provenance |
+| Method completion | `semantic-shadow` | [semantic_capability_dashboard.md](semantic_capability_dashboard.md) `method_completion_shadow_or_cutover_status` (guarded cutover; 0 regressions, 0 unavailable receipts) | Semantic method candidates surface own / inherited / generated context only when they fully cover the legacy method set. | Receiver-shape ranking is not yet the completion ranking proof. | Receiver-aware value-shape ranking |
+| Hover | `insufficient_data` | No hover-readiness row in current scorecard or capability dashboard; [semantic_shadow_compare.md](semantic_shadow_compare.md) records one schema-fixture `Hover` verdict as `unavailable`. | None claimed in current artifacts. | Hover semantic path is not currently measured. | Explain origin / confidence / dynamic boundaries |
+| Diagnostics | `insufficient_data` | [semantic_scorecard.md](semantic_scorecard.md) `undefined_symbol_false_positive_fixture_rate = 0%` is fixture-only; current committed [semantic_capability_dashboard.md](semantic_capability_dashboard.md) does not (yet) describe diagnostics as live. | Undefined-symbol false-positive rate is `0%` in the current fixture receipts. | Runtime live-diagnostic claims are not yet committed in the source dashboard. | Count dynamic-boundary suppressions |
+| Goto definition | `semantic-shadow` | [semantic_scorecard.md](semantic_scorecard.md) `definition_candidates = available` (16/16 fixtures), `definition_shadow_regressions = 0`; [semantic_shadow_compare.md](semantic_shadow_compare.md) release-readiness `FindDefinition` `same` (1 → 1) | Definition candidates are available across the deterministic fixtures with zero release-readiness regressions. | Provider cutover beyond fixtures is not separately proven. | Improve candidate confidence explanations |
+| Find references | `semantic-shadow` | [semantic_scorecard.md](semantic_scorecard.md) `reference_edges = available`, `reference_shadow_regressions = 0`; [semantic_shadow_compare.md](semantic_shadow_compare.md) release-readiness `FindReferences` `improved` (1 → 2) | Reference edges are fixture-backed and shadow-compare reports an improvement against the legacy path. | Deeper callsite / coderef / typeglob coverage is not yet proven. | Deepen callsite / coderef / typeglob coverage |
+| Rename | `semantic-shadow` | [semantic_scorecard.md](semantic_scorecard.md) `rename_plan = 100% pass`, `rename_unsafe_edit_count = 0` | Rename planning is fixture-backed and currently produces no unsafe edits. | Blocker explanations in user-visible LSP responses are not separately documented. | Expose blocker explanations in LSP responses |
+| Safe delete | `semantic-shadow` | [semantic_scorecard.md](semantic_scorecard.md) `safe_delete_plan = 100% pass`, `safe_delete_blocker_fixture_pass_rate = 100% pass` | Safe-delete blocker planning is fixture-backed for the current cases. | Blocker explanations in user-visible LSP responses are not separately documented. | Expose blocker explanations in LSP responses |
+| Document symbols | `insufficient_data` | No document-symbol-readiness row in current artifacts. | None claimed in current artifacts. | Document-symbol provider is not currently measured here. | Tie to parser / symbol accuracy rows |
+| Workspace symbols | `insufficient_data` | [semantic_scorecard.md](semantic_scorecard.md) `visible_symbols_fixture_pass_rate = 100%` speaks to in-file visibility, not the workspace-symbol provider. | None claimed in current artifacts. | Workspace-symbol provider path is not separately measured. | Tie to workspace semantic index |
+| Semantic tokens | `insufficient_data` | No semantic-tokens-readiness row in current artifacts. | None claimed in current artifacts. | Semantic tokens are not currently measured here. | Tie to parser line / AST accuracy |
 
 ## Dynamic Perl honesty
 
 | Row | Current read | Policy |
 |---|---:|---|
-| dynamic boundary detected | TBD | Prefer conservative `unavailable` / `ambiguous` over false exactness |
-| ambiguous result | TBD | Surface uncertainty; do not pretend exactness |
-| unavailable result | TBD | Acceptable when dynamic Perl prevents safe resolution |
-| low-confidence result | TBD | May inform ranking, not unsafe edits |
-| false-exact result count | TBD | Should be zero |
-| unsafe-edit count | TBD | Should be zero |
+| dynamic boundary detected | 4 dynamic-boundary fixture families; 5 dynamic-boundary facts in [semantic_scorecard.md](semantic_scorecard.md) confidence breakdown | Prefer conservative `unavailable` / `ambiguous` over false exactness |
+| ambiguous result | 0 release-readiness, 1 schema-fixture ([semantic_shadow_compare.md](semantic_shadow_compare.md)) | Surface uncertainty; do not pretend exactness |
+| unavailable result | 0 release-readiness, 1 schema-fixture ([semantic_shadow_compare.md](semantic_shadow_compare.md)) | Acceptable when dynamic Perl prevents safe resolution |
+| low-confidence result | 1 heuristic fact across the fixture family ([semantic_scorecard.md](semantic_scorecard.md) fact coverage) | May inform ranking, not unsafe edits |
+| false-exact result count | `dynamic_false_precision_count = 0` ([parser.md](parser.md) accuracy scorers) | Should be zero |
+| unsafe-edit count | `rename_unsafe_edit_count = 0` ([semantic_scorecard.md](semantic_scorecard.md)) | Should be zero |
 
 The dashboard rewards conservative honesty. It does not imply full static
 resolution of dynamic Perl.
