@@ -172,6 +172,24 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Convert PR-fast receipt to JUnit
+        if: always()
+        run: |
+          python3 scripts/ci/receipts-to-junit.py \
+            --input target/receipts/receipt.json \
+            --output target/test-results/pr-fast-junit.xml \
+            --suite-name pr-fast
+
+      - name: Upload PR-fast test results to Codecov
+        if: always() && env.CODECOV_TOKEN != ''
+        continue-on-error: true
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: target/test-results/pr-fast-junit.xml
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
       # Note: workspace-wide integration-test compilation is covered by the
       # parallel check-all-targets job (just check-all-targets), which runs
       # cargo check --workspace --all-targets --locked independently of pr-smoke.
@@ -264,6 +282,24 @@ jobs:
             target/receipts/artifacts/*
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Convert gate shard receipts to JUnit
+        if: always()
+        run: |
+          python3 scripts/ci/receipts-to-junit.py \
+            --input target/receipts/shards \
+            --output target/test-results/gate-shard-${{ matrix.name }}-junit.xml \
+            --suite-name "gate-${{ matrix.name }}"
+
+      - name: Upload gate shard test results to Codecov
+        if: always() && env.CODECOV_TOKEN != ''
+        continue-on-error: true
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: target/test-results/gate-shard-${{ matrix.name }}-junit.xml
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Dump gate failures on error
         if: failure()
@@ -471,6 +507,24 @@ jobs:
             target/receipts/ux-regression.log
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Convert UX regression receipt to JUnit
+        if: always()
+        run: |
+          python3 scripts/ci/receipts-to-junit.py \
+            --input target/receipts/ux-regression.json \
+            --output target/test-results/ux-regression-junit.xml \
+            --suite-name ux-regression
+
+      - name: Upload UX regression test results to Codecov
+        if: always() && env.CODECOV_TOKEN != ''
+        continue-on-error: true
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: target/test-results/ux-regression-junit.xml
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: UX regression summary
         if: always()
