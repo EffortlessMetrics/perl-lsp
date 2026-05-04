@@ -1718,10 +1718,106 @@ $x->"#;
 
     let bark = must_some(completions.iter().find(|c| c.label == "bark"));
     let detail = must_some(bark.detail.as_deref());
+    // Outcome C from #7925: medium-confidence evidence (LiteralBless) gets
+    // an explicit `, medium confidence` suffix.
     assert!(
-        detail.contains("receiver: literal bless"),
-        "literal bless detail should include literal-bless receiver evidence; got {detail:?}"
+        detail.contains("receiver: literal bless, medium confidence"),
+        "literal bless detail should include `receiver: literal bless, medium confidence`; got {detail:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn detail_omits_confidence_label_for_high_confidence_static_package()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Outcome C from #7925: high-confidence evidence (StaticPackage) stays
+    // unlabelled — the detail must not contain "medium confidence" or
+    // "high confidence" noise.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = "Foo->";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = must_some(completions.iter().find(|c| c.label == "bark"));
+    let detail = must_some(bark.detail.as_deref());
+    assert!(
+        detail.contains("receiver: static package"),
+        "static-package detail should still include receiver suffix; got {detail:?}"
+    );
+    assert!(
+        !detail.contains("medium confidence"),
+        "high-confidence StaticPackage detail must not be labelled medium confidence; got {detail:?}"
+    );
+    assert!(
+        !detail.contains("high confidence"),
+        "high-confidence StaticPackage detail must not be labelled high confidence; got {detail:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn detail_includes_medium_confidence_label_for_type_engine_or_constructor_assignment()
+-> Result<(), Box<dyn std::error::Error>> {
+    // For `my $x = Foo->new; $x->`, two paths can fire:
+    //   - TypeEngine (medium) → labelled
+    //   - ConstructorAssignment (high) → unlabelled
+    //
+    // Outcome C from #7925: detail must include the medium label only
+    // when the firing variant is medium-confidence. This test asserts the
+    // (label present) ⇔ (TypeEngine fired) implication so neither path
+    // accidentally drops or adds a label.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub new { bless {}, shift }
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $x = Foo->new;
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = must_some(completions.iter().find(|c| c.label == "bark"));
+    let detail = must_some(bark.detail.as_deref());
+
+    let has_type_engine = detail.contains("receiver: type engine");
+    let has_constructor = detail.contains("receiver: constructor assignment");
+    let has_medium_label = detail.contains("medium confidence");
+
+    assert!(
+        has_type_engine || has_constructor,
+        "constructor-assignment fixture must emit one of the two valid receiver labels; got {detail:?}"
+    );
+    if has_type_engine {
+        assert!(
+            has_medium_label,
+            "TypeEngine evidence is medium-confidence; detail must include `medium confidence`; got {detail:?}"
+        );
+    } else {
+        // ConstructorAssignment fired; high-confidence, unlabelled.
+        assert!(
+            !has_medium_label,
+            "ConstructorAssignment is high-confidence; detail must NOT include `medium confidence`; got {detail:?}"
+        );
+    }
     Ok(())
 }
 
@@ -1834,12 +1930,15 @@ fn detail_with_evidence_helper_handles_both_base_formats() {
 
     // Semantic path's base format ("method from Foo" / "inherited method from Parent"
     // / "generated accessor from Foo"):
+    // LiteralBless is medium-confidence — outcome C from #7925 appends
+    // ", medium confidence".
     let semantic_own = detail_with_evidence(
         "method from Foo".to_string(),
         &ReceiverEvidence::LiteralBless("Foo".to_string()),
     );
-    assert_eq!(semantic_own, "method from Foo — receiver: literal bless");
+    assert_eq!(semantic_own, "method from Foo — receiver: literal bless, medium confidence");
 
+    // ConstructorAssignment is high-confidence — no label appended.
     let semantic_inherited = detail_with_evidence(
         "inherited method from Parent".to_string(),
         &ReceiverEvidence::ConstructorAssignment("Foo".to_string()),
@@ -1849,11 +1948,12 @@ fn detail_with_evidence_helper_handles_both_base_formats() {
         "inherited method from Parent — receiver: constructor assignment"
     );
 
+    // TypeEngine is medium-confidence — outcome C appends label.
     let generated = detail_with_evidence(
         "generated accessor from Foo".to_string(),
         &ReceiverEvidence::TypeEngine("Foo".to_string()),
     );
-    assert_eq!(generated, "generated accessor from Foo — receiver: type engine");
+    assert_eq!(generated, "generated accessor from Foo — receiver: type engine, medium confidence");
 
     // Unknown evidence: base detail is returned unchanged.
     let unknown = detail_with_evidence("Foo method".to_string(), &ReceiverEvidence::Unknown);
