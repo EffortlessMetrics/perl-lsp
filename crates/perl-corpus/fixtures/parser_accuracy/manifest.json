@@ -544,6 +544,278 @@
       ]
     },
     {
+      "id": "span_utf8_multibyte",
+      "family": "span_coordinates",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/span_utf8_multibyte.pl",
+      "scored_lines": 1,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "span_expectations": [
+        {
+          "id": "span_utf8_multibyte_literal",
+          "span_text": "cafeé",
+          "byte_start": 42,
+          "byte_end": 48,
+          "line_start": 2,
+          "line_end": 2,
+          "utf16_start": {
+            "line": 1,
+            "character": 13
+          },
+          "utf16_end": {
+            "line": 1,
+            "character": 18
+          }
+        }
+      ]
+    },
+    {
+      "id": "span_emoji",
+      "family": "span_coordinates",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/span_emoji.pl",
+      "scored_lines": 1,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "span_expectations": [
+        {
+          "id": "span_emoji_character",
+          "span_text": "😀",
+          "byte_start": 42,
+          "byte_end": 48,
+          "line_start": 2,
+          "line_end": 2,
+          "utf16_start": {
+            "line": 1,
+            "character": 12
+          },
+          "utf16_end": {
+            "line": 1,
+            "character": 16
+          }
+        }
+      ]
+    },
+    {
+      "id": "span_crlf",
+      "family": "span_coordinates",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/span_crlf.pl",
+      "scored_lines": 1,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "span_expectations": [
+        {
+          "id": "span_crlf_values",
+          "span_text": "my $value = \"line1\";\r\nmy $other = \"line2\";",
+          "byte_start": 29,
+          "byte_end": 71,
+          "line_start": 2,
+          "line_end": 3,
+          "utf16_start": {
+            "line": 1,
+            "character": 0
+          },
+          "utf16_end": {
+            "line": 2,
+            "character": 20
+          }
+        }
+      ]
+    },
+    {
+      "id": "span_tabs",
+      "family": "span_coordinates",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/span_tabs.pl",
+      "scored_lines": 1,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "span_expectations": [
+        {
+          "id": "span_tabs_line",
+          "span_text": "\tmy $indented = $value;",
+          "byte_start": 45,
+          "byte_end": 68,
+          "line_start": 3,
+          "line_end": 3,
+          "utf16_start": {
+            "line": 2,
+            "character": 0
+          },
+          "utf16_end": {
+            "line": 2,
+            "character": 23
+          }
+        }
+      ]
+    },
+    {
+      "id": "span_bom",
+      "family": "span_coordinates",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/span_bom.pl",
+      "scored_lines": 1,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "span_expectations": [
+        {
+          "id": "span_bom_package",
+          "span_text": "Accuracy::SpanBOM",
+          "byte_start": 11,
+          "byte_end": 28,
+          "line_start": 1,
+          "line_end": 1,
+          "utf16_start": {
+            "line": 0,
+            "character": 9
+          },
+          "utf16_end": {
+            "line": 0,
+            "character": 26
+          }
+        }
+      ]
+    },
+    {
+      "id": "span_cross_line",
+      "family": "span_coordinates",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/span_cross_line.pl",
+      "scored_lines": 1,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "span_expectations": [
+        {
+          "id": "span_cross_line_block",
+          "span_text": "sub say {\n    return \"done\";\r\n}",
+          "byte_start": 34,
+          "byte_end": 66,
+          "line_start": 2,
+          "line_end": 4,
+          "utf16_start": {
+            "line": 1,
+            "character": 0
+          },
+          "utf16_end": {
+            "line": 3,
+            "character": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "span_mixed_newlines",
+      "family": "span_coordinates",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/span_mixed_newlines.pl",
+      "scored_lines": 1,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "span_expectations": [
+        {
+          "id": "span_mixed_newlines_head",
+          "span_text": "package Accuracy::SpanMixed;\nmy $lf = 1;\r\nmy $crlf = 2;",
+          "byte_start": 0,
+          "byte_end": 55,
+          "line_start": 1,
+          "line_end": 3,
+          "utf16_start": {
+            "line": 0,
+            "character": 0
+          },
+          "utf16_end": {
+            "line": 2,
+            "character": 13
+          }
+        }
+      ]
+    },
+    {
+      "id": "span_empty_at_eof",
+      "family": "span_coordinates",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/span_empty_at_eof.pl",
+      "scored_lines": 1,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "span_expectations": [
+        {
+          "id": "span_empty_at_eof_marker",
+          "span_text": "",
+          "byte_start": 48,
+          "byte_end": 48,
+          "line_start": 4,
+          "line_end": 4,
+          "utf16_start": {
+            "line": 3,
+            "character": 9
+          },
+          "utf16_end": {
+            "line": 3,
+            "character": 9
+          }
+        }
+      ]
+    },
+    {
       "id": "incremental_small_edit",
       "family": "incremental",
       "label_mode": "partial",
