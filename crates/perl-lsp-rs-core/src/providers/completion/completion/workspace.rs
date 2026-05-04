@@ -597,9 +597,16 @@ impl ReceiverEvidence {
 /// string. Returns the unchanged base when the evidence carries no suffix
 /// (e.g. `Unknown`). Issue #7918.
 pub(super) fn detail_with_evidence(base: String, evidence: &ReceiverEvidence) -> String {
-    match evidence.detail_suffix() {
-        Some(suffix) => format!("{base} — {suffix}"),
-        None => base,
+    let Some(suffix) = evidence.detail_suffix() else {
+        return base;
+    };
+    // Outcome C from #7925: append `, medium confidence` only to medium-
+    // confidence evidence. High-confidence evidence (the common case)
+    // stays clean. `Unknown` already returns `None` from `detail_suffix`
+    // and was handled by the early return above.
+    match evidence.confidence() {
+        Some(Confidence::Medium) => format!("{base} — {suffix}, medium confidence"),
+        _ => format!("{base} — {suffix}"),
     }
 }
 
