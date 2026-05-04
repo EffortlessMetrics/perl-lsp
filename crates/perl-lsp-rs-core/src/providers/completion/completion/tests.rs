@@ -1626,7 +1626,8 @@ $x->"#;
 // ordering — they assert on the evidence variant and confidence level.
 // -------------------------------------------------------------------------
 
-use super::workspace::{ReceiverEvidence, classify_text_pattern_receiver};
+use super::workspace::{ReceiverEvidence, classify_receiver, classify_text_pattern_receiver};
+use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_semantic_facts::Confidence;
 
 fn ctx_for(prefix: &str, current_package: &str, source_position: usize) -> CompletionContext {
@@ -1772,6 +1773,50 @@ fn classify_receiver_unknown_has_no_package() {
     let ev = ReceiverEvidence::Unknown;
     assert_eq!(ev.package(), None);
     assert_eq!(ev.confidence(), None);
+}
+
+#[test]
+fn type_engine_variant_has_medium_confidence() {
+    // Direct accessor proof for the TypeEngine variant. End-to-end
+    // production-callsite proof (a `classify_receiver` call that returns
+    // TypeEngine from a natural Perl source) is deferred: the current
+    // `TypeInferenceEngine` does not infer `PerlType::Object` from
+    // `my $x = Foo->new` or `bless` (per `real_world_patterns.rs:1718`,
+    // "bless is not directly tracked by type inference"), and its
+    // `global_env` is private with no public setter, so we cannot seed
+    // an Object type in tests through the supported API. This test
+    // pins the variant's package / confidence accessors so the future
+    // PR that wires Object types into the engine has a stable contract
+    // to land against.
+    let ev = ReceiverEvidence::TypeEngine("Foo".to_string());
+    assert_eq!(ev.package(), Some("Foo"));
+    assert_eq!(ev.confidence(), Some(Confidence::Medium));
+}
+
+#[test]
+fn classify_receiver_engine_present_but_empty_falls_through_to_text_pattern() {
+    // Proves the type-engine arm of `classify_receiver` is wired
+    // correctly and fails over to the text-pattern arm when the engine
+    // has no Object type for the receiver variable. With the engine
+    // supplied but empty, `my $x = Foo->new; $x->` should classify as
+    // ConstructorAssignment (text-pattern), not TypeEngine.
+    let source = "my $x = Foo->new;\n$x->";
+    let ctx = ctx_for("$x->", "main", source.len());
+    let engine = TypeInferenceEngine::new();
+    let ev = classify_receiver(&ctx, source, Some(&engine));
+    assert_eq!(ev, ReceiverEvidence::ConstructorAssignment("Foo".to_string()));
+    assert_eq!(ev.confidence(), Some(Confidence::High));
+}
+
+#[test]
+fn classify_receiver_no_engine_uses_text_pattern() {
+    // Sanity counterpart: with no type engine supplied, the same source
+    // must still classify (via the text-pattern arm) as
+    // ConstructorAssignment.
+    let source = "my $x = Foo->new;\n$x->";
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_receiver(&ctx, source, None);
+    assert_eq!(ev, ReceiverEvidence::ConstructorAssignment("Foo".to_string()));
 }
 
 // -------------------------------------------------------------------------
