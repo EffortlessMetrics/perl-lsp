@@ -9,8 +9,15 @@
 | <!-- BEGIN: PARSER_TRACKING_TABLE -->
 | **Ubuntu system Perl** | 96.8% clean (`6871/7095`) / 20.5% salvage | Compatibility baseline; Perl `5.038002`, `48` unreadable, `36` recovery-only, `140` ERROR-node files, `0` catastrophic, baseline `2026-04-28` | `.ci/parser-corpus-baseline.json` |
 | **CPAN top 1000** | 95.3% clean (`8931/9372`) / insufficient_data salvage | Ecosystem breadth baseline; `6` unreadable, `0` recovery-only, `0` ERROR-node files, `0` catastrophic, cached downloads in `target/cpan-corpus/.cpanm`, baseline `2026-04-09` | `.ci/cpan-corpus-baseline.json` |
-| **Project corpus** | 74.7% clean (`71/95`) | Deterministic regression baseline; `73` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `24` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
+| **Project corpus** | 100.0% clean (`95/95`) | Deterministic regression baseline; `73` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
 <!-- END: PARSER_TRACKING_TABLE -->
+
+## Project Corpus Timeout Worklist
+| --- | --- | --- | --- |
+<!-- BEGIN: PARSER_TIMEOUT_WORKLIST -->
+| **Project timeout worklist** | 0 | no timed-out files in latest audit | `corpus_audit::parse_outcomes.timeout_worklist` |
+
+<!-- END: PARSER_TIMEOUT_WORKLIST -->
 
 ## Parser Scorecard
 
@@ -20,7 +27,7 @@
 | **Node-kind coverage** | 65/69 (94.2%) | 4 never-seen node kinds | `corpus_audit` |
 <!-- END: PARSER_NODEKIND_ROW -->
 <!-- BEGIN: PARSER_RELIABILITY_ROW -->
-| **Reliability** | Ubuntu: 48 unread / CPAN: 6 unread / Project: 24 timeout, 0 panic, 0 unread | -- | `.ci/*-baseline.json` |
+| **Reliability** | Ubuntu: 48 unread / CPAN: 6 unread / Project: 0 timeout, 0 panic, 0 unread | -- | `.ci/*-baseline.json` |
 <!-- END: PARSER_RELIABILITY_ROW -->
 <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->
 | **Strict-clean subset** | insufficient_data | 10 pinned modules; run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |
@@ -33,8 +40,12 @@
 <!-- BEGIN: PARSER_ACCURACY_SUMMARY -->
 | **Accuracy denominator** | 25 fixtures / 25 families | 102 scored lines, 61 scored symbols, 2 fully labeled, 22 partial, 21 unknown, 5 negative, 4 dynamic boundaries, 5 unsupported, 0 real-project, 0 generated, 25 hand-labeled; cadence `pr` | `target/metrics/parser_accuracy.json`; `.kiro/specs/parser-accuracy-observability` |
 | **Accuracy families** | autoload (1), control_flow (1), dynamic_require (1), eval_string (1), export_tags (1), format (1), +19 more | fixture family inventory from parser accuracy manifest | `target/metrics/parser_accuracy.json` |
-| **Accuracy scorers** | selected line_construct_f1=0.9 (n=81), ast_node_kind_f1=1.0 (n=9), symbol_decl_f1=1.0 (n=18), symbol_ref_f1=1.0 (n=2), dynamic_false_precision_count=0.0 (n=1), fast_path_wrong_result_count=0.0 (n=1); 119 additional measured rows; 52 insufficient_data rows preserved | missing accuracy rows stay `insufficient_data`; they are not rendered as zero or pass | `.ci/schemas/parser-accuracy.schema.json` |
+| **Accuracy scorers** | selected line_construct_f1=1.0 (n=80), ast_node_kind_f1=1.0 (n=9), symbol_decl_f1=1.0 (n=18), symbol_ref_f1=1.0 (n=2), dynamic_false_precision_count=0.0 (n=1), fast_path_wrong_result_count=0.0 (n=1); 118 additional measured rows; 53 insufficient_data rows preserved | missing accuracy rows stay `insufficient_data`; they are not rendered as zero or pass | `.ci/schemas/parser-accuracy.schema.json` |
 <!-- END: PARSER_ACCURACY_SUMMARY -->
+
+## Parser Accuracy Failure Worklist
+
+- [Failure triage: `parser_accuracy_failure_worklist.md`](parser_accuracy_failure_worklist.md)
 
 ## Parser Performance Regimes
 

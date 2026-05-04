@@ -1021,7 +1021,7 @@ fn line_tag_for_node(node: &Node) -> Option<LineTag> {
         NodeKind::VariableDeclaration { .. } | NodeKind::VariableListDeclaration { .. } => {
             Some(LineTag::VariableDecl)
         }
-        NodeKind::Use { .. } => Some(LineTag::Import),
+        NodeKind::Use { .. } | NodeKind::No { .. } => Some(LineTag::Import),
         NodeKind::FunctionCall { name, .. } if name == "require" => Some(LineTag::Import),
         NodeKind::FunctionCall { .. } => Some(LineTag::FunctionCall),
         NodeKind::MethodCall { .. } => Some(LineTag::MethodCall),
