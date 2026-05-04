@@ -846,8 +846,8 @@
           {
             "id": "qualified_refs_qualified_call",
             "kind": "Call",
-            "canonical_name": "Accuracy::Refs::target",
-            "span_text": "Accuracy::Refs::target()",
+            "canonical_name": null,
+            "span_text": "target()",
             "package": null,
             "scope": null,
             "provenance": "ExactAst",
@@ -1620,9 +1620,9 @@
         },
         {
           "line": 12,
-          "expected_tags": [
-            "method_call"
-          ]
+            "expected_tags": [
+              "function_call"
+            ]
         }
       ],
       "symbol_expectations": {

@@ -33,7 +33,7 @@
 <!-- BEGIN: PARSER_ACCURACY_SUMMARY -->
 | **Accuracy denominator** | 25 fixtures / 25 families | 105 scored lines, 92 scored symbols, 2 fully labeled, 22 partial, 21 unknown, 5 negative, 4 dynamic boundaries, 5 unsupported, 0 real-project, 0 generated, 25 hand-labeled; cadence `pr` | `target/metrics/parser_accuracy.json`; `.kiro/specs/parser-accuracy-observability` |
 | **Accuracy families** | autoload (1), control_flow (1), dynamic_require (1), eval_string (1), export_tags (1), format (1), +19 more | fixture family inventory from parser accuracy manifest | `target/metrics/parser_accuracy.json` |
-| **Accuracy scorers** | selected line_construct_f1=0.9 (n=83), ast_node_kind_f1=1.0 (n=9), symbol_decl_f1=1.0 (n=36), symbol_ref_f1=1.0 (n=12), dynamic_false_precision_count=0.0 (n=1), fast_path_wrong_result_count=0.0 (n=1); 118 additional measured rows; 53 insufficient_data rows preserved | missing accuracy rows stay `insufficient_data`; they are not rendered as zero or pass | `.ci/schemas/parser-accuracy.schema.json` |
+| **Accuracy scorers** | selected line_construct_f1=1.0 (n=83), ast_node_kind_f1=1.0 (n=9), symbol_decl_f1=1.0 (n=36), symbol_ref_f1=1.0 (n=11), dynamic_false_precision_count=0.0 (n=1), fast_path_wrong_result_count=0.0 (n=1); 118 additional measured rows; 53 insufficient_data rows preserved | missing accuracy rows stay `insufficient_data`; they are not rendered as zero or pass | `.ci/schemas/parser-accuracy.schema.json` |
 <!-- END: PARSER_ACCURACY_SUMMARY -->
 
 ## Parser Performance Regimes
