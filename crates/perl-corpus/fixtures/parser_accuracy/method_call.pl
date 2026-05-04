@@ -2,7 +2,12 @@ package Accuracy::MethodCall;
 
 sub invoke {
     my $object = shift;
-    $object->run("arg");
+    $object->run;
+    Accuracy::MethodCall->run();
+}
+
+sub run {
+    return 1;
 }
 
 1;
