@@ -498,76 +498,190 @@ pub fn add_use_qw_import_completions(
     }
 }
 
-/// Infer the package type of a `->` receiver from the source context.
+/// Classification of how a method-completion receiver was inferred at the
+/// call site.
 ///
-/// Looks for patterns like `My::Package->method` (static call) or attempts to
-/// find the type from variable assignment context like `my $obj = My::Package->new`.
-fn infer_receiver_package(context: &CompletionContext, source: &str) -> Option<String> {
+/// This is *typed receiver-evidence provenance*: it does not change which
+/// candidates appear in the completion list, and it does not (yet) reorder
+/// candidates. It records *why* a particular package was inferred, so that
+/// a later PR can wire confidence into ordering or explanation when a real
+/// seam emerges.
+///
+/// Today, the existing method-completion path infers a single receiver
+/// package and collects candidates only from that package's `@ISA` graph;
+/// there are no candidates from multiple receiver sources competing for
+/// ordering, so confidence has nothing to re-order between. Outcome B in
+/// issue #7910: provenance + classification tests, no ranking change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum ReceiverEvidence {
+    /// Literal package name on the left of `->`, e.g. `Foo->method` or
+    /// `Foo::Bar->method`. High confidence.
+    StaticPackage(String),
+    /// `$self->` or `$this->` inside a non-`main` `package Foo;` block.
+    /// Resolves to the enclosing package via `context.current_package`.
+    /// High confidence.
+    SelfOrThis(String),
+    /// Variable-method call against `$x` assigned earlier in the source as
+    /// `my $x = Foo->new(...)`. The constructor convention pins the
+    /// receiver to `Foo`. High confidence.
+    ConstructorAssignment(String),
+    /// Variable-method call against `$x` assigned earlier as
+    /// `my $x = bless ..., "Foo"`. Literal `bless` with a literal class.
+    /// Medium confidence — strong static evidence, still a Perl runtime
+    /// construct.
+    LiteralBless(String),
+    /// Receiver type was resolved by [`TypeInferenceEngine`] for a `$var`
+    /// call site. Medium confidence — confidence ultimately follows the
+    /// engine's source, but at this layer we treat all engine results as
+    /// medium.
+    TypeEngine(String),
+    /// No receiver evidence found, OR a positively-detected dynamic form
+    /// (e.g. `bless {}, $class`, expression-tail class, nested call,
+    /// non-builtin `bless`-prefixed identifier). Method completion does
+    /// not suggest any specific package's methods in this case — same as
+    /// the pre-#7910 behavior.
+    Unknown,
+}
+
+impl ReceiverEvidence {
+    /// Returns the inferred receiver package, if any. `Unknown` returns
+    /// `None`.
+    pub(super) fn package(&self) -> Option<&str> {
+        match self {
+            Self::StaticPackage(p)
+            | Self::SelfOrThis(p)
+            | Self::ConstructorAssignment(p)
+            | Self::LiteralBless(p)
+            | Self::TypeEngine(p) => Some(p.as_str()),
+            Self::Unknown => None,
+        }
+    }
+
+    /// Returns the confidence level for this evidence kind, using the
+    /// shared `perl_semantic_facts::Confidence` vocabulary so the rest of
+    /// the semantic stack speaks the same language. `Unknown` returns
+    /// `None` — there is no confidence when there is no evidence.
+    ///
+    /// Today the production method-completion callsite does not read this;
+    /// it is exposed for tests and for the future PR that wires confidence
+    /// into ranking or detail text once a real seam emerges (issue #7910,
+    /// outcome B).
+    #[allow(dead_code)]
+    pub(super) fn confidence(&self) -> Option<Confidence> {
+        match self {
+            Self::StaticPackage(_) | Self::SelfOrThis(_) | Self::ConstructorAssignment(_) => {
+                Some(Confidence::High)
+            }
+            Self::LiteralBless(_) | Self::TypeEngine(_) => Some(Confidence::Medium),
+            Self::Unknown => None,
+        }
+    }
+}
+
+/// Classify the receiver of a `->` method-completion call site.
+///
+/// Tries the type-inference engine first (matching the historical
+/// precedence of `infer_receiver_package_from_type_engine`), then falls
+/// back to text-pattern receiver inference. Returns
+/// [`ReceiverEvidence::Unknown`] when no evidence is found.
+pub(super) fn classify_receiver(
+    context: &CompletionContext,
+    source: &str,
+    type_engine: Option<&TypeInferenceEngine>,
+) -> ReceiverEvidence {
+    if let Some(pkg) = type_engine_receiver(context, type_engine) {
+        return ReceiverEvidence::TypeEngine(pkg);
+    }
+    classify_text_pattern_receiver(context, source)
+}
+
+/// Type-engine arm of [`classify_receiver`]. Extracted from the legacy
+/// `infer_receiver_package_from_type_engine` body, behavior preserved.
+fn type_engine_receiver(
+    context: &CompletionContext,
+    type_engine: Option<&TypeInferenceEngine>,
+) -> Option<String> {
+    let arrow_prefix = context.prefix.trim_end_matches("->");
+    let var_name = arrow_prefix.strip_prefix('$')?;
+    let ty = type_engine?.get_type_at(var_name)?;
+    match ty {
+        PerlType::Object(class) => Some(class),
+        PerlType::Reference(inner) => match inner.as_ref() {
+            PerlType::Object(class) => Some(class.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Text-pattern arm of [`classify_receiver`]. Looks for `Foo->method`
+/// (static), `$self->` / `$this->` (self), `my $x = Foo->new` (constructor
+/// assignment), and `my $x = bless ..., "Foo"` (literal bless).
+pub(super) fn classify_text_pattern_receiver(
+    context: &CompletionContext,
+    source: &str,
+) -> ReceiverEvidence {
     let arrow_prefix = context.prefix.trim_end_matches("->");
 
-    // Case 1: Static method call like `My::Package->meth` or `Package->meth`
-    // The prefix already contains the package name (starts with uppercase, no sigil)
+    // Case 1: Static method call like `My::Package->meth` or `Package->meth`.
+    // The prefix already contains the package name (starts with uppercase, no sigil).
     if !arrow_prefix.starts_with('$')
         && !arrow_prefix.starts_with('@')
         && !arrow_prefix.starts_with('%')
         && arrow_prefix.chars().next().is_some_and(|c| c.is_ascii_uppercase())
     {
-        return Some(arrow_prefix.to_string());
+        return ReceiverEvidence::StaticPackage(arrow_prefix.to_string());
     }
 
-    // Case 3: Self-call inside a method — `$self->` or `$this->` resolves to the
-    // current package. Standard Perl OO convention: the invocant of `bless` is
-    // assigned to `$self` (or `$this`) via `my $self = shift`.  The RHS is just
-    // `shift`, so Case 2 would not match any constructor pattern.  Instead we
-    // fall back to `context.current_package` which the context analyser already
-    // sets correctly from the surrounding `package` declaration.
+    // Case 3: Self-call inside a method — `$self->` or `$this->` resolves to
+    // the current package. Standard Perl OO convention: the invocant of `bless`
+    // is assigned to `$self` (or `$this`) via `my $self = shift`. The RHS is
+    // just `shift`, so Case 2 below would not match any constructor pattern.
+    // Instead we fall back to `context.current_package` which the context
+    // analyser already sets correctly from the surrounding `package`
+    // declaration.
     if matches!(arrow_prefix, "$self" | "$this")
         && !context.current_package.is_empty()
         && context.current_package != "main"
     {
-        return Some(context.current_package.clone());
+        return ReceiverEvidence::SelfOrThis(context.current_package.clone());
     }
 
-    // Case 2: Variable method call like `$obj->meth`
-    // Try to find the type from assignment context
+    // Case 2: Variable method call like `$obj->meth` — try to find the
+    // receiver type from a recent assignment.
     if arrow_prefix.starts_with('$') {
         let var_name = arrow_prefix;
-        // Look for assignment pattern: `my $var = Package->new`
-        // Search backwards in source for the variable assignment
         let before = &source[..context.position.min(source.len())];
 
-        // Find the most recent assignment to this variable
         for line in before.lines().rev() {
             let trimmed = line.trim();
-            // Match patterns like: `my $var = Package::Name->new(...)`
-            // or `$var = Package::Name->new(...)`
-            // We need a single `=` that is not part of `==`, `!=`, `<=`, `>=`, `=~`.
             let assign_pos = find_assignment_eq(trimmed);
             if let Some(assign_pos) = assign_pos {
                 let lhs = trimmed[..assign_pos].trim();
                 if lhs.ends_with(var_name) || lhs.contains(&format!("{var_name} ")) {
                     let rhs = trimmed[assign_pos + 1..].trim();
-                    // Extract package name from `Package::Name->new(...)` pattern
+                    // Pattern: `Package::Name->new(...)`
                     if let Some(arrow_pos) = rhs.find("->") {
                         let pkg = rhs[..arrow_pos].trim();
                         if pkg.contains("::")
                             || pkg.chars().next().is_some_and(|c| c.is_ascii_uppercase())
                         {
-                            return Some(pkg.to_string());
+                            return ReceiverEvidence::ConstructorAssignment(pkg.to_string());
                         }
                     }
-                    // Pattern: `bless REF, "Class"` / `bless REF, 'Class'`
+                    // Pattern: `bless REF, "Class"` / `bless REF, 'Class'`.
                     // Only literal-string class names produce inference; dynamic
-                    // forms like `bless {}, $class` intentionally fall through.
+                    // forms like `bless {}, $class` intentionally fall through
+                    // (extract_bless_literal_class is fail-closed).
                     if let Some(class) = extract_bless_literal_class(rhs) {
-                        return Some(class);
+                        return ReceiverEvidence::LiteralBless(class);
                     }
                 }
             }
         }
     }
 
-    None
+    ReceiverEvidence::Unknown
 }
 
 /// Extract the literal class name from a `bless REF, "Class"` expression.
@@ -727,24 +841,6 @@ fn is_valid_perl_package_name(s: &str) -> bool {
     !start_of_segment
 }
 
-fn infer_receiver_package_from_type_engine(
-    context: &CompletionContext,
-    type_engine: Option<&TypeInferenceEngine>,
-) -> Option<String> {
-    let arrow_prefix = context.prefix.trim_end_matches("->");
-    let var_name = arrow_prefix.strip_prefix('$')?;
-    let ty = type_engine?.get_type_at(var_name)?;
-
-    match ty {
-        PerlType::Object(class) => Some(class),
-        PerlType::Reference(inner) => match inner.as_ref() {
-            PerlType::Object(class) => Some(class.clone()),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
 /// Add method completions from the workspace index for `->` expressions.
 ///
 /// When the user types `$obj->` or `Package->`, queries the workspace index for
@@ -766,10 +862,14 @@ pub fn add_workspace_method_completions(
         return;
     }
 
-    let package_name = infer_receiver_package_from_type_engine(context, type_engine)
-        .or_else(|| infer_receiver_package(context, source));
-
-    let Some(package_name) = package_name else {
+    // The receiver-evidence kind / confidence is now classified, but is not
+    // yet used to reorder or annotate completions: today's pipeline scopes
+    // candidates to a single inferred package's `@ISA` graph, so there are no
+    // candidates from multiple receiver sources competing for ordering. A
+    // future PR can wire confidence into ranking or detail text once a real
+    // seam emerges. See issue #7910 (outcome B).
+    let evidence = classify_receiver(context, source, type_engine);
+    let Some(package_name) = evidence.package().map(str::to_string) else {
         return;
     };
 

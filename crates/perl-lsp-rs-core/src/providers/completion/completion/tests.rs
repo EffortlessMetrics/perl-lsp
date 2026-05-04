@@ -1108,7 +1108,7 @@ fn test_self_arrow_resolves_workspace_methods() -> Result<(), Box<dyn std::error
     //
     // The methods are ONLY in the workspace index (a separate .pm file), not in
     // the currently-parsed source. This tests the workspace path specifically:
-    // `infer_receiver_package` must return `MyService` for `$self->` when
+    // `classify_text_pattern_receiver` must return `SelfOrThis("MyService")` for `$self->` when
     // `context.current_package == "MyService"`.
     let index = Arc::new(WorkspaceIndex::new());
     let module_uri = Url::parse("file:///workspace/MyService.pm")?;
@@ -1615,6 +1615,163 @@ $x->"#;
         completions.iter().map(|c| &c.label).collect::<Vec<_>>()
     );
     Ok(())
+}
+
+// -------------------------------------------------------------------------
+// Receiver-evidence classification (issue #7910, outcome B)
+//
+// These tests pin the typed receiver-evidence provenance produced by
+// `classify_text_pattern_receiver` and `classify_receiver`. They do not
+// assert on completion ordering — outcome B explicitly does not change
+// ordering — they assert on the evidence variant and confidence level.
+// -------------------------------------------------------------------------
+
+use super::workspace::{ReceiverEvidence, classify_text_pattern_receiver};
+use perl_semantic_facts::Confidence;
+
+fn ctx_for(prefix: &str, current_package: &str, source_position: usize) -> CompletionContext {
+    CompletionContext {
+        position: source_position,
+        trigger_character: None,
+        in_string: false,
+        in_regex: false,
+        in_comment: false,
+        in_use_statement: false,
+        current_package: current_package.to_string(),
+        prefix: prefix.to_string(),
+        prefix_start: source_position.saturating_sub(prefix.len()),
+        cursor_scope_id: 0,
+    }
+}
+
+#[test]
+fn classify_receiver_static_package_is_high_confidence() {
+    let source = "Foo->";
+    let ctx = ctx_for("Foo->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::StaticPackage("Foo".to_string()));
+    assert_eq!(ev.package(), Some("Foo"));
+    assert_eq!(ev.confidence(), Some(Confidence::High));
+}
+
+#[test]
+fn classify_receiver_qualified_static_package() {
+    let source = "Foo::Bar->";
+    let ctx = ctx_for("Foo::Bar->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::StaticPackage("Foo::Bar".to_string()));
+    assert_eq!(ev.confidence(), Some(Confidence::High));
+}
+
+#[test]
+fn classify_receiver_self_is_high_confidence() {
+    let source = "package MyService;\n$self->";
+    let ctx = ctx_for("$self->", "MyService", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::SelfOrThis("MyService".to_string()));
+    assert_eq!(ev.confidence(), Some(Confidence::High));
+}
+
+#[test]
+fn classify_receiver_this_is_high_confidence() {
+    let source = "package MyHandler;\n$this->";
+    let ctx = ctx_for("$this->", "MyHandler", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::SelfOrThis("MyHandler".to_string()));
+    assert_eq!(ev.confidence(), Some(Confidence::High));
+}
+
+#[test]
+fn classify_receiver_self_in_main_package_is_unknown() {
+    // `$self->` in main package does not classify — guard matches the
+    // existing receiver-inference behavior pre-#7910.
+    let source = "$self->";
+    let ctx = ctx_for("$self->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Unknown);
+    assert_eq!(ev.confidence(), None);
+}
+
+#[test]
+fn classify_receiver_constructor_assignment_is_high_confidence() {
+    let source = "my $x = Foo->new;\n$x->";
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::ConstructorAssignment("Foo".to_string()));
+    assert_eq!(ev.confidence(), Some(Confidence::High));
+}
+
+#[test]
+fn classify_receiver_qualified_constructor_assignment() {
+    let source = "my $x = Foo::Bar->new;\n$x->";
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::ConstructorAssignment("Foo::Bar".to_string()));
+    assert_eq!(ev.confidence(), Some(Confidence::High));
+}
+
+#[test]
+fn classify_receiver_literal_bless_is_medium_confidence() {
+    let source = r#"my $x = bless {}, "Foo";
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::LiteralBless("Foo".to_string()));
+    assert_eq!(ev.confidence(), Some(Confidence::Medium));
+}
+
+#[test]
+fn classify_receiver_literal_bless_qualified_class_is_medium_confidence() {
+    let source = r#"my $x = bless {}, "Foo::Bar";
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::LiteralBless("Foo::Bar".to_string()));
+    assert_eq!(ev.confidence(), Some(Confidence::Medium));
+}
+
+#[test]
+fn classify_receiver_dynamic_bless_is_unknown() {
+    // `bless {}, $class` is dynamic — extract_bless_literal_class fails
+    // closed, and the classifier therefore reports Unknown rather than
+    // inventing a package.
+    let source = r#"my $class = "Foo";
+my $x = bless {}, $class;
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Unknown);
+    assert_eq!(ev.confidence(), None);
+}
+
+#[test]
+fn classify_receiver_no_assignment_is_unknown() {
+    // Variable with no preceding assignment — no evidence, classifier
+    // reports Unknown and the production callsite returns no method
+    // completions.
+    let source = "$nonexistent->";
+    let ctx = ctx_for("$nonexistent->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Unknown);
+    assert_eq!(ev.confidence(), None);
+}
+
+#[test]
+fn classify_receiver_lowercase_static_prefix_is_unknown() {
+    // Lowercase identifier on the left of `->` is not a Perl package name
+    // (packages start uppercase by convention). The classifier falls
+    // through to Unknown.
+    let source = "foo->";
+    let ctx = ctx_for("foo->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Unknown);
+}
+
+#[test]
+fn classify_receiver_unknown_has_no_package() {
+    let ev = ReceiverEvidence::Unknown;
+    assert_eq!(ev.package(), None);
+    assert_eq!(ev.confidence(), None);
 }
 
 // -------------------------------------------------------------------------
