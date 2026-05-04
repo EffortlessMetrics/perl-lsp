@@ -53,6 +53,14 @@ fn multiple_orphan_closers_do_not_hang() -> R {
     parse_with_timeout(r#") ] ) my $x = 1;"#)
 }
 
+#[test]
+fn missing_comma_paren_list_inside_block_does_not_hang() -> R {
+    // Exercises parse_block recovery (vs parse_program) — both call sites of
+    // synchronize() must consume orphan closers, otherwise a malformed list
+    // inside a sub body still hangs the parser.
+    parse_with_timeout(r#"sub foo { my @x = (1 2 3); }"#)
+}
+
 // ── recovery produces diagnostics (not silent swallowing) ─────────────────────
 
 fn assert_has_errors_no_hang(source: &'static str) -> R {
