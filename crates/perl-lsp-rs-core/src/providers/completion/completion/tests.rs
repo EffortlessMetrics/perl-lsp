@@ -1798,12 +1798,66 @@ sub bark { }
     assert_eq!(bark.label, "bark", "label must not change");
     assert_eq!(bark.insert_text.as_deref(), Some("bark()"), "insert_text must not change");
     assert_eq!(bark.filter_text.as_deref(), Some("bark"), "filter_text must not change");
-    let sort_text = must_some(bark.sort_text.as_deref());
-    assert!(
-        sort_text.ends_with("bark"),
-        "sort_text must still end with the method name (tier_<name> format unchanged); got {sort_text:?}"
+    assert_eq!(
+        bark.sort_text.as_deref(),
+        Some("2_bark"),
+        "sort_text must remain `<tier>_<name>` with tier 2 (own method); \
+         receiver-evidence detail must not change ranking"
     );
     Ok(())
+}
+
+#[test]
+fn detail_with_evidence_helper_handles_both_base_formats() {
+    // Direct unit test for the formatting helper that both the semantic
+    // and inline-fallback paths call. Forcing the inline-fallback path
+    // end-to-end requires synthetic workspace-index state not exposed by
+    // the public test harness (semantic cutover succeeds for fixtures
+    // where `index.index_file()` populates both the workspace symbol
+    // table and the semantic fact shards together). This unit test pins
+    // the contract that BOTH base-detail formats receive the same suffix
+    // treatment.
+    use super::workspace::detail_with_evidence;
+
+    // Inline-fallback path's base format ("Foo method" / "Foo method (from Base)"):
+    let fallback_own = detail_with_evidence(
+        "Foo method".to_string(),
+        &ReceiverEvidence::StaticPackage("Foo".to_string()),
+    );
+    assert_eq!(fallback_own, "Foo method — receiver: static package");
+
+    let fallback_inherited = detail_with_evidence(
+        "Foo method (from Base)".to_string(),
+        &ReceiverEvidence::SelfOrThis("Foo".to_string()),
+    );
+    assert_eq!(fallback_inherited, "Foo method (from Base) — receiver: self/this");
+
+    // Semantic path's base format ("method from Foo" / "inherited method from Parent"
+    // / "generated accessor from Foo"):
+    let semantic_own = detail_with_evidence(
+        "method from Foo".to_string(),
+        &ReceiverEvidence::LiteralBless("Foo".to_string()),
+    );
+    assert_eq!(semantic_own, "method from Foo — receiver: literal bless");
+
+    let semantic_inherited = detail_with_evidence(
+        "inherited method from Parent".to_string(),
+        &ReceiverEvidence::ConstructorAssignment("Foo".to_string()),
+    );
+    assert_eq!(
+        semantic_inherited,
+        "inherited method from Parent — receiver: constructor assignment"
+    );
+
+    let generated = detail_with_evidence(
+        "generated accessor from Foo".to_string(),
+        &ReceiverEvidence::TypeEngine("Foo".to_string()),
+    );
+    assert_eq!(generated, "generated accessor from Foo — receiver: type engine");
+
+    // Unknown evidence: base detail is returned unchanged.
+    let unknown = detail_with_evidence("Foo method".to_string(), &ReceiverEvidence::Unknown);
+    assert_eq!(unknown, "Foo method");
 }
 
 #[test]

@@ -596,7 +596,7 @@ impl ReceiverEvidence {
 /// Apply the receiver-evidence detail suffix to an existing base detail
 /// string. Returns the unchanged base when the evidence carries no suffix
 /// (e.g. `Unknown`). Issue #7918.
-fn detail_with_evidence(base: String, evidence: &ReceiverEvidence) -> String {
+pub(super) fn detail_with_evidence(base: String, evidence: &ReceiverEvidence) -> String {
     match evidence.detail_suffix() {
         Some(suffix) => format!("{base} — {suffix}"),
         None => base,
