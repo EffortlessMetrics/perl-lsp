@@ -1305,6 +1305,183 @@ $self->"#;
 }
 
 // -------------------------------------------------------------------------
+// Literal `bless` receiver inference (issue #7896)
+// -------------------------------------------------------------------------
+
+#[test]
+fn test_bless_double_quoted_class_resolves_methods() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+sub fetch { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $x = bless {}, "Foo";
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "bark"),
+        "bless {{}}, \"Foo\" should infer Foo and suggest bark; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    assert!(
+        completions.iter().any(|c| c.label == "fetch"),
+        "bless {{}}, \"Foo\" should infer Foo and suggest fetch"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_bless_single_quoted_class_resolves_methods() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $x = bless {}, 'Foo';
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "bark"),
+        "bless {{}}, 'Foo' should infer Foo and suggest bark; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_bless_with_hash_content_resolves_methods() -> Result<(), Box<dyn std::error::Error>> {
+    // Hash content with internal commas must not confuse the arg-separator
+    // comma finder.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $x = bless { a => 1, b => 2 }, "Foo";
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "bark"),
+        "bless with hash content + class should still infer Foo; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_bless_with_parens_resolves_methods() -> Result<(), Box<dyn std::error::Error>> {
+    // `bless({}, "Foo")` form — parenthesized call.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $x = bless({}, "Foo");
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "bark"),
+        "bless({{}}, \"Foo\") should infer Foo and suggest bark; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_bless_qualified_class_resolves_methods() -> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo/Bar.pm")?,
+        r#"package Foo::Bar;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $x = bless {}, "Foo::Bar";
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "bark"),
+        "bless {{}}, \"Foo::Bar\" should infer Foo::Bar and suggest bark; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_bless_dynamic_class_does_not_resolve() -> Result<(), Box<dyn std::error::Error>> {
+    // `bless {}, $class` is dynamic — we must not infer a static package and
+    // must not suggest methods from any specific package on its behalf.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $class = "Foo";
+my $x = bless {}, $class;
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        !completions.iter().any(|c| c.label == "bark"),
+        "bless {{}}, $class is dynamic — must not infer Foo. got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// -------------------------------------------------------------------------
 // Tests for is_use_statement_context and add_use_module_completions
 // -------------------------------------------------------------------------
 

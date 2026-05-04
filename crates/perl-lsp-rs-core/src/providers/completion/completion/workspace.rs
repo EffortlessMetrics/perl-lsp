@@ -556,12 +556,144 @@ fn infer_receiver_package(context: &CompletionContext, source: &str) -> Option<S
                             return Some(pkg.to_string());
                         }
                     }
+                    // Pattern: `bless REF, "Class"` / `bless REF, 'Class'`
+                    // Only literal-string class names produce inference; dynamic
+                    // forms like `bless {}, $class` intentionally fall through.
+                    if let Some(class) = extract_bless_literal_class(rhs) {
+                        return Some(class);
+                    }
                 }
             }
         }
     }
 
     None
+}
+
+/// Extract the literal class name from a `bless REF, "Class"` expression.
+///
+/// Returns `Some(class)` when the second argument to `bless` is a literal
+/// double- or single-quoted string containing a valid Perl package name.
+/// Returns `None` for dynamic forms (`bless {}, $class`), missing-class
+/// forms (`bless {}` — defaults to caller package, intentionally not
+/// inferred here), or anything that fails to parse cleanly.
+fn extract_bless_literal_class(rhs: &str) -> Option<String> {
+    let bless_start = find_word(rhs, "bless")?;
+    let after_bless = &rhs[bless_start + "bless".len()..];
+
+    // Allow optional `(` and whitespace after `bless`.
+    let scan = after_bless.trim_start();
+    let scan = scan.strip_prefix('(').unwrap_or(scan);
+
+    // Find the comma separating the two args, respecting balanced delimiters
+    // and string literals so that hash/array contents like
+    // `bless { a => 1, b => 2 }, "Foo"` parse correctly.
+    let comma_pos = find_top_level_comma(scan)?;
+    let after_comma = scan[comma_pos + 1..].trim_start();
+
+    // Require a literal quoted string for the class.
+    let bytes = after_comma.as_bytes();
+    let close_char = match bytes.first()? {
+        b'"' => '"',
+        b'\'' => '\'',
+        _ => return None,
+    };
+    let body = &after_comma[1..];
+    let close_pos = body.find(close_char)?;
+    let class = &body[..close_pos];
+
+    if !is_valid_perl_package_name(class) {
+        return None;
+    }
+    Some(class.to_string())
+}
+
+/// Find `needle` in `haystack` as a whole word (not inside an identifier).
+fn find_word(haystack: &str, needle: &str) -> Option<usize> {
+    let bytes = haystack.as_bytes();
+    let nlen = needle.len();
+    let mut start = 0;
+    while let Some(rel) = haystack[start..].find(needle) {
+        let abs = start + rel;
+        let before_ok = abs == 0 || !is_perl_ident_byte(bytes[abs - 1]);
+        let after_idx = abs + nlen;
+        let after_ok = after_idx >= bytes.len() || !is_perl_ident_byte(bytes[after_idx]);
+        if before_ok && after_ok {
+            return Some(abs);
+        }
+        start = abs + nlen;
+    }
+    None
+}
+
+fn is_perl_ident_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Find the first top-level `,` outside of `()`, `{}`, `[]`, and string
+/// literals. Used to identify the arg separator in `bless REF, CLASS`.
+fn find_top_level_comma(s: &str) -> Option<usize> {
+    let mut depth_paren: i32 = 0;
+    let mut depth_brace: i32 = 0;
+    let mut depth_bracket: i32 = 0;
+    let mut in_string: Option<char> = None;
+    let mut prev_was_backslash = false;
+
+    for (i, c) in s.char_indices() {
+        if let Some(q) = in_string {
+            if !prev_was_backslash && c == q {
+                in_string = None;
+            }
+            prev_was_backslash = !prev_was_backslash && c == '\\';
+            continue;
+        }
+        prev_was_backslash = false;
+        match c {
+            '(' => depth_paren += 1,
+            ')' => depth_paren -= 1,
+            '{' => depth_brace += 1,
+            '}' => depth_brace -= 1,
+            '[' => depth_bracket += 1,
+            ']' => depth_bracket -= 1,
+            '"' => in_string = Some('"'),
+            '\'' => in_string = Some('\''),
+            ',' if depth_paren <= 0 && depth_brace <= 0 && depth_bracket <= 0 => {
+                return Some(i);
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Validate a Perl package name: identifier segments separated by `::`.
+fn is_valid_perl_package_name(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    let mut start_of_segment = true;
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if start_of_segment {
+            if !(c.is_ascii_alphabetic() || c == '_') {
+                return false;
+            }
+            start_of_segment = false;
+            continue;
+        }
+        if c == ':' {
+            // Must be `::`, then a fresh segment.
+            if chars.next() != Some(':') {
+                return false;
+            }
+            start_of_segment = true;
+            continue;
+        }
+        if !(c.is_ascii_alphanumeric() || c == '_') {
+            return false;
+        }
+    }
+    !start_of_segment
 }
 
 fn infer_receiver_package_from_type_engine(
