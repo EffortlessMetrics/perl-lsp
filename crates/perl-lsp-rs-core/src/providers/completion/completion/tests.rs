@@ -1320,6 +1320,16 @@ sub fetch { }
 "#
         .to_string(),
     )?;
+    // Index an unrelated package to prove the inference stays scoped to Foo
+    // and does not leak unrelated workspace methods into completions.
+    index.index_file(
+        Url::parse("file:///workspace/Unrelated.pm")?,
+        r#"package Unrelated;
+sub quack { }
+1;
+"#
+        .to_string(),
+    )?;
 
     let code = r#"my $x = bless {}, "Foo";
 $x->"#;
@@ -1336,6 +1346,10 @@ $x->"#;
     assert!(
         completions.iter().any(|c| c.label == "fetch"),
         "bless {{}}, \"Foo\" should infer Foo and suggest fetch"
+    );
+    assert!(
+        !completions.iter().any(|c| c.label == "quack"),
+        "bless {{}}, \"Foo\" must not leak Unrelated::quack into completions"
     );
     Ok(())
 }
@@ -1476,6 +1490,96 @@ $x->"#;
     assert!(
         !completions.iter().any(|c| c.label == "bark"),
         "bless {{}}, $class is dynamic — must not infer Foo. got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_bless_with_concat_class_does_not_resolve() -> Result<(), Box<dyn std::error::Error>> {
+    // `bless {}, "Foo" . $suffix` is a non-literal class expression — must
+    // fail closed and not infer Foo even though the literal `"Foo"` appears.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $suffix = "Bar";
+my $x = bless {}, "Foo" . $suffix;
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        !completions.iter().any(|c| c.label == "bark"),
+        "bless {{}}, \"Foo\" . $suffix is non-literal — must not infer Foo. got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_bless_nested_in_call_does_not_resolve() -> Result<(), Box<dyn std::error::Error>> {
+    // `wrapper(bless {}, "Foo")` does not establish that `$x` is Foo — the
+    // assignment result is whatever `wrapper` returns. The helper must
+    // anchor on RHS-starts-with-bless and reject this nested case.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"sub wrapper { return $_[0]; }
+my $x = wrapper(bless {}, "Foo");
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        !completions.iter().any(|c| c.label == "bark"),
+        "wrapper(bless {{}}, \"Foo\") is nested — must not infer Foo. got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_bless_array_ref_with_class_resolves_methods() -> Result<(), Box<dyn std::error::Error>> {
+    // Array-ref content with internal commas must not confuse the
+    // arg-separator scan (delimiter-balanced top-level comma finder).
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $x = bless [1, 2, 3], "Foo";
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "bark"),
+        "bless [1, 2, 3], \"Foo\" should infer Foo and suggest bark; got: {:?}",
         completions.iter().map(|c| &c.label).collect::<Vec<_>>()
     );
     Ok(())

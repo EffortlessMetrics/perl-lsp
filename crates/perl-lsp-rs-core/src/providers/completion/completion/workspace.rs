@@ -572,22 +572,41 @@ fn infer_receiver_package(context: &CompletionContext, source: &str) -> Option<S
 
 /// Extract the literal class name from a `bless REF, "Class"` expression.
 ///
-/// Returns `Some(class)` when the second argument to `bless` is a literal
-/// double- or single-quoted string containing a valid Perl package name.
-/// Returns `None` for dynamic forms (`bless {}, $class`), missing-class
-/// forms (`bless {}` — defaults to caller package, intentionally not
-/// inferred here), or anything that fails to parse cleanly.
+/// Anchored to RHS-as-bless-expression: only succeeds when the RHS, after
+/// trimming leading whitespace, *starts* with `bless` as a whole word
+/// (optionally followed by `(`). This means the helper returns `None`
+/// for nested forms like `wrapper(bless {}, "Foo")` where the assignment
+/// result is not necessarily the blessed object.
+///
+/// Trailing content after the closing quote of the class literal must be
+/// only whitespace, the matching closing paren if a leading `(` was
+/// consumed, and an optional terminating `;`. Anything else — `. $suffix`,
+/// `|| "Bar"`, `, $extra`, etc. — disables inference (fails closed) so
+/// non-literal class expressions never produce false-precision evidence.
+///
+/// Returns `Some(class)` only for the conservative literal form. Returns
+/// `None` for dynamic forms (`bless {}, $class`), 1-arg forms
+/// (`bless {}` — defaults to caller package, intentionally not inferred
+/// here), nested forms, expression-tail forms, and anything that fails
+/// to parse cleanly.
 fn extract_bless_literal_class(rhs: &str) -> Option<String> {
-    let bless_start = find_word(rhs, "bless")?;
-    let after_bless = &rhs[bless_start + "bless".len()..];
+    // Anchor: RHS must START with `bless` as a whole word.
+    let trimmed = rhs.trim_start();
+    if !starts_with_word(trimmed, "bless") {
+        return None;
+    }
+    let after_bless = &trimmed["bless".len()..];
 
-    // Allow optional `(` and whitespace after `bless`.
+    // Allow optional `(` and whitespace.
     let scan = after_bless.trim_start();
-    let scan = scan.strip_prefix('(').unwrap_or(scan);
+    let (scan, expect_rparen) = match scan.strip_prefix('(') {
+        Some(rest) => (rest, true),
+        None => (scan, false),
+    };
 
     // Find the comma separating the two args, respecting balanced delimiters
     // and string literals so that hash/array contents like
-    // `bless { a => 1, b => 2 }, "Foo"` parse correctly.
+    // `bless { a => 1, b => 2 }, "Foo"` and `bless [1, 2, 3], "Foo"` parse.
     let comma_pos = find_top_level_comma(scan)?;
     let after_comma = scan[comma_pos + 1..].trim_start();
 
@@ -605,25 +624,34 @@ fn extract_bless_literal_class(rhs: &str) -> Option<String> {
     if !is_valid_perl_package_name(class) {
         return None;
     }
+
+    // Validate trailing content: only whitespace, the matching `)` if a
+    // leading `(` was consumed, and an optional `;` then EOF. Anything else
+    // (concatenation, logical-or, extra arg, expression continuation) means
+    // the class expression is not a plain literal — fail closed.
+    let mut tail = body[close_pos + 1..].trim_start();
+    if expect_rparen {
+        tail = tail.strip_prefix(')')?.trim_start();
+    }
+    let tail = tail.strip_prefix(';').unwrap_or(tail).trim();
+    if !tail.is_empty() {
+        return None;
+    }
+
     Some(class.to_string())
 }
 
-/// Find `needle` in `haystack` as a whole word (not inside an identifier).
-fn find_word(haystack: &str, needle: &str) -> Option<usize> {
-    let bytes = haystack.as_bytes();
-    let nlen = needle.len();
-    let mut start = 0;
-    while let Some(rel) = haystack[start..].find(needle) {
-        let abs = start + rel;
-        let before_ok = abs == 0 || !is_perl_ident_byte(bytes[abs - 1]);
-        let after_idx = abs + nlen;
-        let after_ok = after_idx >= bytes.len() || !is_perl_ident_byte(bytes[after_idx]);
-        if before_ok && after_ok {
-            return Some(abs);
-        }
-        start = abs + nlen;
+/// Returns `true` when `s` begins with `word` as a whole word (i.e., the
+/// character following `word` is absent or not a Perl identifier
+/// character).
+fn starts_with_word(s: &str, word: &str) -> bool {
+    if !s.starts_with(word) {
+        return false;
     }
-    None
+    match s.as_bytes().get(word.len()).copied() {
+        None => true,
+        Some(b) => !is_perl_ident_byte(b),
+    }
 }
 
 fn is_perl_ident_byte(b: u8) -> bool {
