@@ -134,7 +134,7 @@ improvement so the dashboard identifies leverage as well as state.
 | UX surface | Status | Proof source | Current user-facing claim | Current limits | Next improvement |
 |---|---|---|---|---|---|
 | Completion | `semantic-shadow` | [semantic_capability_dashboard.md](semantic_capability_dashboard.md) `completion_import_pass_rate = 100%`; [semantic_scorecard.md](semantic_scorecard.md) `completion_import_fixture_pass_rate = pass` | Import/export visibility passes the deterministic fixtures, including empty-import suppression and export-tag expansion. | Real-workspace coverage is one small CPAN-style family (4 files, 2 baseline tests). | Rank visible symbols by provenance |
-| Method completion | `semantic-shadow` | [semantic_capability_dashboard.md](semantic_capability_dashboard.md) `method_completion_shadow_or_cutover_status` (guarded cutover; 0 regressions, 0 unavailable receipts) | Semantic method candidates surface own / inherited / generated context only when they fully cover the legacy method set. | Receiver-shape ranking is not yet the completion ranking proof. | Receiver-aware value-shape ranking |
+| Method completion | `semantic-shadow` | [semantic_capability_dashboard.md](semantic_capability_dashboard.md) `method_completion_shadow_or_cutover_status` (guarded cutover; 0 regressions, 0 unavailable receipts); [#7901](https://github.com/EffortlessMetrics/perl-lsp/pull/7901) literal `bless` receiver inference | Semantic method candidates surface own / inherited / generated context when they fully cover the legacy method set. Receiver evidence now includes static package calls (`Foo->method`), `$self->` / `$this->`, `Package->new` constructor assignments, type-engine inferred receivers, and literal `bless ..., "Package"` forms. | Dynamic / non-literal `bless` (`bless {}, $class`, expression-tail forms, nested calls, non-builtin `bless`-prefixed identifiers) fails closed and does not infer. Unknown receivers still do not get broad fallback completions. | Confidence-aware receiver ranking |
 | Hover | `insufficient_data` | No hover-readiness row in current scorecard or capability dashboard; [semantic_shadow_compare.md](semantic_shadow_compare.md) records one schema-fixture `Hover` verdict as `unavailable`. | None claimed in current artifacts. | Hover semantic path is not currently measured. | Explain origin / confidence / dynamic boundaries |
 | Diagnostics | `insufficient_data` | [semantic_scorecard.md](semantic_scorecard.md) `undefined_symbol_false_positive_fixture_rate = 0%` is fixture-only; current committed [semantic_capability_dashboard.md](semantic_capability_dashboard.md) does not (yet) describe diagnostics as live. | Undefined-symbol false-positive rate is `0%` in the current fixture receipts. | Runtime live-diagnostic claims are not yet committed in the source dashboard. | Count dynamic-boundary suppressions |
 | Goto definition | `semantic-shadow` | [semantic_scorecard.md](semantic_scorecard.md) `definition_candidates = available` (16/16 fixtures), `definition_shadow_regressions = 0`; [semantic_shadow_compare.md](semantic_shadow_compare.md) release-readiness `FindDefinition` `same` (1 → 1) | Definition candidates are available across the deterministic fixtures with zero release-readiness regressions. | Provider cutover beyond fixtures is not separately proven. | Improve candidate confidence explanations |
@@ -181,10 +181,11 @@ resolution of dynamic Perl.
 
 ## Next recommended UX improvement
 
-Receiver-aware method completion ranking using value-shape-lite hints:
+Confidence-aware method completion ranking using existing receiver evidence:
 
-- `$self->` — current package methods rank higher
-- `Foo->new` assignment — `Foo` methods rank higher
-- literal `bless` — package methods rank with medium confidence
-- unknown receiver — safe fallback to broad workspace candidates
-- dynamic receiver — low confidence; never outranks exact evidence
+- `$self->` / `$this->` — current package evidence, high confidence
+- `Foo->new` assignment — constructor evidence, high confidence
+- literal `bless ..., "Package"` — package evidence, medium confidence
+- type-engine inferred receiver — confidence follows the inferred shape source
+- unknown receiver — keep existing conservative behavior; do not invent broad candidates in this step
+- dynamic receiver — low confidence; never outranks exact receiver evidence
