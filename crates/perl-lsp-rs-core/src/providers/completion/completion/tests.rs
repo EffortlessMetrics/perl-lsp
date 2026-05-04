@@ -1557,6 +1557,38 @@ $x->"#;
 }
 
 #[test]
+fn test_bless_qualified_prefix_does_not_resolve() -> Result<(), Box<dyn std::error::Error>> {
+    // `bless::class {}, "Foo"` is a fully-qualified call to a sub named
+    // `class` in package `bless`, NOT the builtin `bless` expression. The
+    // assignment result is whatever that sub returns, not a Foo. The
+    // stricter `starts_with_bless_expression` guard must reject this even
+    // though the byte after `bless` (`:`) is not a Perl identifier byte.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $x = bless::class {}, "Foo";
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        !completions.iter().any(|c| c.label == "bark"),
+        "bless::class {{}}, \"Foo\" is not the builtin bless — must not infer Foo. got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
 fn test_bless_array_ref_with_class_resolves_methods() -> Result<(), Box<dyn std::error::Error>> {
     // Array-ref content with internal commas must not confuse the
     // arg-separator scan (delimiter-balanced top-level comma finder).

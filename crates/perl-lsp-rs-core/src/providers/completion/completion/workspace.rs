@@ -572,11 +572,14 @@ fn infer_receiver_package(context: &CompletionContext, source: &str) -> Option<S
 
 /// Extract the literal class name from a `bless REF, "Class"` expression.
 ///
-/// Anchored to RHS-as-bless-expression: only succeeds when the RHS, after
-/// trimming leading whitespace, *starts* with `bless` as a whole word
-/// (optionally followed by `(`). This means the helper returns `None`
-/// for nested forms like `wrapper(bless {}, "Foo")` where the assignment
-/// result is not necessarily the blessed object.
+/// Anchored to RHS-as-builtin-bless-expression: only succeeds when the
+/// RHS, after trimming leading whitespace, *starts* with `bless` followed
+/// by end-of-string, ASCII whitespace, or `(`. This means the helper
+/// returns `None` for nested forms like `wrapper(bless {}, "Foo")` (where
+/// the assignment result is not necessarily the blessed object) and for
+/// non-builtin punctuation-suffixed forms like `bless::factory {}, "Foo"`
+/// (where the call target is a different sub that merely shares the
+/// `bless` prefix).
 ///
 /// Trailing content after the closing quote of the class literal must be
 /// only whitespace, the matching closing paren if a leading `(` was
@@ -590,9 +593,9 @@ fn infer_receiver_package(context: &CompletionContext, source: &str) -> Option<S
 /// here), nested forms, expression-tail forms, and anything that fails
 /// to parse cleanly.
 fn extract_bless_literal_class(rhs: &str) -> Option<String> {
-    // Anchor: RHS must START with `bless` as a whole word.
+    // Anchor: RHS must START with the builtin `bless` expression.
     let trimmed = rhs.trim_start();
-    if !starts_with_word(trimmed, "bless") {
+    if !starts_with_bless_expression(trimmed) {
         return None;
     }
     let after_bless = &trimmed["bless".len()..];
@@ -641,21 +644,21 @@ fn extract_bless_literal_class(rhs: &str) -> Option<String> {
     Some(class.to_string())
 }
 
-/// Returns `true` when `s` begins with `word` as a whole word (i.e., the
-/// character following `word` is absent or not a Perl identifier
-/// character).
-fn starts_with_word(s: &str, word: &str) -> bool {
-    if !s.starts_with(word) {
+/// Returns `true` when `s` begins with the builtin `bless` expression.
+///
+/// Stricter than a generic word-boundary check: after `bless`, only end
+/// of string, ASCII whitespace, or `(` are accepted. This rejects
+/// non-builtin forms like `bless::factory(...)`, `bless+REF`, `bless.foo`,
+/// and similar punctuation-suffixed identifiers that happen to share the
+/// `bless` prefix but are not the Perl builtin.
+fn starts_with_bless_expression(s: &str) -> bool {
+    if !s.starts_with("bless") {
         return false;
     }
-    match s.as_bytes().get(word.len()).copied() {
+    match s.as_bytes().get("bless".len()).copied() {
         None => true,
-        Some(b) => !is_perl_ident_byte(b),
+        Some(b) => b.is_ascii_whitespace() || b == b'(',
     }
-}
-
-fn is_perl_ident_byte(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_'
 }
 
 /// Find the first top-level `,` outside of `()`, `{}`, `[]`, and string
