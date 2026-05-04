@@ -141,6 +141,24 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Convert UX regression receipt to JUnit
+        if: always() && steps.harness_check.outputs.harness_available == 'true'
+        run: |
+          python3 scripts/ci/receipts-to-junit.py \
+            --input target/receipts/ux-regression.json \
+            --output target/test-results/ux-regression-gate-junit.xml \
+            --suite-name ux-regression-gate
+
+      - name: Upload UX regression gate test results to Codecov
+        if: always() && steps.harness_check.outputs.harness_available == 'true' && env.CODECOV_TOKEN != ''
+        continue-on-error: true
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: target/test-results/ux-regression-gate-junit.xml
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
       - name: Parse and summarize UX test results
         if: always() && steps.harness_check.outputs.harness_available == 'true'
         run: |

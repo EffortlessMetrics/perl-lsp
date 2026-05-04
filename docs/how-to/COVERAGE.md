@@ -140,6 +140,14 @@ The workflow uses optimized settings:
 - `CARGO_BUILD_JOBS=2` - Limit parallelism to avoid memory pressure
 - `RUST_TEST_THREADS=2` - Adaptive threading for LSP tests
 
+## Codecov Repository Secret
+
+Set this GitHub Actions secret at the repository or organization level:
+
+- `CODECOV_TOKEN`
+
+The coverage and test-results uploads use this token. Codecov upload failures are configured as non-blocking so service outages or missing token setup do not block merge-gate CI.
+
 ## Configuration Files
 
 ### codecov.yml
@@ -188,6 +196,15 @@ The workflow sets `fail_ci_if_error: false` so Codecov upload failures don't blo
 1. Codecov service status: https://status.codecov.io/
 2. Workflow logs for upload details
 3. Codecov dashboard for processing status
+
+### Test Analytics upload fails
+
+Check:
+
+1. `CODECOV_TOKEN` is configured as a GitHub Actions secret.
+2. The JUnit file exists under `target/test-results/`.
+3. The receipt JSON exists under `target/receipts/`.
+4. The Codecov upload step is non-blocking, so failures should be visible in logs without failing the gate.
 
 ### Coverage numbers look wrong
 
@@ -245,6 +262,29 @@ Coverage is **not** part of the fast merge gate (`just ci-gate`) to avoid slowin
 Branch coverage in the parser coverage lane is enforced separately through the baseline ratchet in `.ci/coverage-baseline.txt`.
 
 This keeps the merge gate fast (<5 min) while providing coverage visibility when needed.
+
+## Test Analytics
+
+Codecov Test Analytics is populated from CI receipt artifacts.
+
+The CI gates already emit structured receipts under `target/receipts/`. The helper script `scripts/ci/receipts-to-junit.py` converts those receipts into JUnit XML and uploads them with `codecov/test-results-action@v1`.
+
+Current uploaded suites:
+
+- `pr-fast` — PR smoke test results
+- `gate-<shard>` — Merge gate shard results (meta, foundation, analysis, lsp, support, corpus, policy)
+- `ux-regression` — UX regression test results from main CI
+- `ux-regression-gate` — UX regression gate results (standalone workflow)
+
+This avoids rerunning tests solely to produce JUnit XML and keeps the existing `xtask gates` runner as the source of truth.
+
+## Bundle Analysis
+
+Codecov Bundle Analysis is intentionally deferred.
+
+The VS Code extension currently compiles TypeScript and packages a VSIX. It does not use Vite, Rollup, Webpack, Remix, Nuxt, SvelteKit, or SolidStart as its production bundler.
+
+Do not add `@codecov/vite-plugin` until the extension adopts a supported JavaScript bundler. When that happens, add the Codecov bundler plugin to the actual bundler config and use `CODECOV_TOKEN` for upload.
 
 ## Related Documentation
 
