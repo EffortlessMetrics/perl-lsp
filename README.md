@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml"><img src="https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://crates.io/crates/perl-lsp-rs"><img src="https://img.shields.io/crates/v/perl-lsp-rs.svg" alt="crates.io" /></a>
+  <a href="https://crates.io/crates/perl-lsp-rs"><img src="https://img.shields.io/crates/d/perl-lsp-rs.svg?label=crates.io%20downloads" alt="perl-lsp-rs on crates.io" /></a>
   <a href="https://docs.rs/perl-lsp-rs"><img src="https://docs.rs/perl-lsp-rs/badge.svg" alt="docs.rs" /></a>
   <a href="https://github.com/EffortlessMetrics/perl-lsp/releases"><img src="https://img.shields.io/github/v/release/EffortlessMetrics/perl-lsp?display_name=tag" alt="GitHub release" /></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs"><img src="https://img.shields.io/badge/VS%20Marketplace-277%20installs-0078D4" alt="VS Marketplace installs" /></a>
