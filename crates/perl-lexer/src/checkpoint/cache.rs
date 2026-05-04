@@ -1,4 +1,4 @@
-use crate::checkpoint::{CheckpointContext, LexerCheckpoint};
+use crate::checkpoint::LexerCheckpoint;
 
 /// A checkpoint cache for efficient incremental parsing
 pub struct CheckpointCache {
@@ -135,11 +135,11 @@ impl CheckpointCache {
             *pos = checkpoint.position;
         }
 
-        self.checkpoints
-            .retain(|(_, cp)| !matches!(cp.context, CheckpointContext::Normal) || cp.position > 0);
-
         // Edits can move checkpoints backward (or to the same position), so
         // restore the sorted-order invariant required by binary-search lookups.
+        // NOTE: do NOT drop checkpoints that landed at position 0 — a Normal
+        // checkpoint shifted to byte 0 by a deletion is a valid start-of-file
+        // anchor and must be preserved for incremental re-lexing (#7508).
         self.checkpoints.sort_unstable_by_key(|(pos, _)| *pos);
     }
 }

@@ -374,3 +374,23 @@ fn test_checkpoint_apply_edit_resets_position_tracking_on_shift_and_invalidate()
     assert_eq!(invalidated.mode, LexerMode::ExpectTerm);
     assert_eq!(invalidated.context, CheckpointContext::Normal);
 }
+
+// Regression test for #7508: a Normal checkpoint shifted to byte-0 by a
+// leading deletion must survive apply_edit so it can serve as a start-of-file
+// anchor for the next incremental re-lex pass.
+#[test]
+fn test_checkpoint_cache_apply_edit_preserves_start_checkpoint()
+-> std::result::Result<(), Box<dyn std::error::Error>> {
+    let mut cache = CheckpointCache::new(4);
+    cache.add(LexerCheckpoint::at_position(10));
+
+    // Delete the 10 bytes before it: checkpoint shifts from 10 → 0.
+    cache.apply_edit(0, 10, 0);
+
+    let cp = cache
+        .find_before(0)
+        .ok_or("checkpoint shifted to position 0 must be preserved as start-of-file anchor")?;
+    assert_eq!(cp.position, 0, "checkpoint should have shifted to byte 0");
+    assert_eq!(cp.context, CheckpointContext::Normal, "context must remain Normal");
+    Ok(())
+}
