@@ -235,7 +235,7 @@
       "label_mode": "partial",
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/typeglob_alias.pl",
       "scored_lines": 4,
-      "scored_symbols": 4,
+      "scored_symbols": 7,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
@@ -307,7 +307,7 @@
       "label_mode": "partial",
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/generated_accessor.pl",
       "scored_lines": 4,
-      "scored_symbols": 4,
+      "scored_symbols": 7,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
@@ -318,6 +318,16 @@
       "generated": false,
       "symbol_expectations": {
         "entities": [
+          {
+            "id": "generated_accessor_call_name_accessor_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::GeneratedAccessor::call_name_accessor",
+            "span_text": "call_name_accessor",
+            "package": "Accuracy::GeneratedAccessor",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
           {
             "id": "generated_accessor_package_entity",
             "kind": "Package",
@@ -349,8 +359,27 @@
             "confidence": "High"
           }
         ],
-        "occurrences": [],
+        "occurrences": [
+          {
+            "id": "generated_accessor_call_name_accessor",
+            "kind": "MethodCall",
+            "canonical_name": null,
+            "span_text": "$obj->name",
+            "package": null,
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "Medium"
+          }
+        ],
         "edges": [
+          {
+            "id": "generated_accessor_defines_call_name_accessor",
+            "kind": "Defines",
+            "from": "Accuracy::GeneratedAccessor",
+            "to": "Accuracy::GeneratedAccessor::call_name_accessor",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
           {
             "id": "generated_accessor_defines_existing",
             "kind": "Defines",
@@ -600,8 +629,8 @@
       "family": "imports_exports",
       "label_mode": "partial",
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/imports_exports.pl",
-      "scored_lines": 5,
-      "scored_symbols": 2,
+      "scored_lines": 6,
+      "scored_symbols": 7,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
@@ -640,6 +669,12 @@
           "expected_tags": [
             "sub_decl"
           ]
+        },
+        {
+          "line": 19,
+          "expected_tags": [
+            "function_call"
+          ]
         }
       ],
       "symbol_expectations": {
@@ -663,6 +698,56 @@
             "scope": null,
             "provenance": "ExactAst",
             "confidence": "High"
+          },
+          {
+            "id": "imports_exports_consumer_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::ImportsConsumer",
+            "span_text": "Accuracy::ImportsConsumer",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "imports_exports_call_imported_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::ImportsConsumer::call_imported",
+            "span_text": "call_imported",
+            "package": "Accuracy::ImportsConsumer",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "occurrences": [
+          {
+            "id": "imports_exports_call_answer",
+            "kind": "Call",
+            "canonical_name": null,
+            "span_text": "answer()",
+            "package": null,
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "edges": [
+          {
+            "id": "imports_exports_defines_answer",
+            "kind": "Defines",
+            "from": "Accuracy::ImportsExports",
+            "to": "Accuracy::ImportsExports::answer",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "imports_exports_defines_call_imported",
+            "kind": "Defines",
+            "from": "Accuracy::ImportsConsumer",
+            "to": "Accuracy::ImportsConsumer::call_imported",
+            "provenance": "ExactAst",
+            "confidence": "High"
           }
         ]
       }
@@ -673,7 +758,7 @@
       "label_mode": "partial",
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/qualified_refs.pl",
       "scored_lines": 5,
-      "scored_symbols": 3,
+      "scored_symbols": 7,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
@@ -743,6 +828,46 @@
             "span_text": "caller",
             "package": "Accuracy::Refs",
             "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "occurrences": [
+          {
+            "id": "qualified_refs_bare_call",
+            "kind": "Call",
+            "canonical_name": null,
+            "span_text": "target()",
+            "package": null,
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "qualified_refs_qualified_call",
+            "kind": "Call",
+            "canonical_name": null,
+            "span_text": "target()",
+            "package": null,
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "edges": [
+          {
+            "id": "qualified_refs_defines_target",
+            "kind": "Defines",
+            "from": "Accuracy::Refs",
+            "to": "Accuracy::Refs::target",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "qualified_refs_defines_caller",
+            "kind": "Defines",
+            "from": "Accuracy::Refs",
+            "to": "Accuracy::Refs::caller",
             "provenance": "ExactAst",
             "confidence": "High"
           }
@@ -962,8 +1087,8 @@
       "family": "method_call",
       "label_mode": "partial",
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/method_call.pl",
-      "scored_lines": 4,
-      "scored_symbols": 2,
+      "scored_lines": 5,
+      "scored_symbols": 7,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
@@ -996,8 +1121,88 @@
           "expected_tags": [
             "method_call"
           ]
+        },
+        {
+          "line": 6,
+          "expected_tags": [
+            "method_call"
+          ]
         }
-      ]
+      ],
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "method_call_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::MethodCall",
+            "span_text": "Accuracy::MethodCall",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "method_call_invoke_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::MethodCall::invoke",
+            "span_text": "invoke",
+            "package": "Accuracy::MethodCall",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "method_call_run_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::MethodCall::run",
+            "span_text": "run",
+            "package": "Accuracy::MethodCall",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "occurrences": [
+          {
+            "id": "method_call_instance_call",
+            "kind": "MethodCall",
+            "canonical_name": null,
+            "span_text": "$object->run",
+            "package": null,
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "Medium"
+          },
+          {
+            "id": "method_call_static_call",
+            "kind": "StaticMethodCall",
+            "canonical_name": "Accuracy::MethodCall::run",
+            "span_text": "Accuracy::MethodCall->run()",
+            "package": "Accuracy::MethodCall",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "edges": [
+          {
+            "id": "method_call_defines_invoke",
+            "kind": "Defines",
+            "from": "Accuracy::MethodCall",
+            "to": "Accuracy::MethodCall::invoke",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "method_call_defines_run",
+            "kind": "Defines",
+            "from": "Accuracy::MethodCall",
+            "to": "Accuracy::MethodCall::run",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ]
+      }
     },
     {
       "id": "autoload_boundary",
@@ -1251,7 +1456,7 @@
       "label_mode": "partial",
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/role_method.pl",
       "scored_lines": 5,
-      "scored_symbols": 4,
+      "scored_symbols": 7,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
@@ -1291,7 +1496,81 @@
             "function_call"
           ]
         }
-      ]
+      ],
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "role_method_role_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::Role",
+            "span_text": "Accuracy::Role",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "role_method_role_provided_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::Role::provided",
+            "span_text": "provided",
+            "package": "Accuracy::Role",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "role_method_consumer_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::RoleConsumer",
+            "span_text": "Accuracy::RoleConsumer",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "role_method_consumer_local_method_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::RoleConsumer::local_method",
+            "span_text": "local_method",
+            "package": "Accuracy::RoleConsumer",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "occurrences": [
+          {
+            "id": "role_method_provided_call",
+            "kind": "Call",
+            "canonical_name": null,
+            "span_text": "provided()",
+            "package": null,
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "edges": [
+          {
+            "id": "role_method_defines_provided",
+            "kind": "Defines",
+            "from": "Accuracy::Role",
+            "to": "Accuracy::Role::provided",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "role_method_defines_local_method",
+            "kind": "Defines",
+            "from": "Accuracy::RoleConsumer",
+            "to": "Accuracy::RoleConsumer::local_method",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ]
+      }
     },
     {
       "id": "inherited_method",
@@ -1299,7 +1578,7 @@
       "label_mode": "partial",
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/inherited_method.pl",
       "scored_lines": 6,
-      "scored_symbols": 4,
+      "scored_symbols": 7,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
@@ -1341,19 +1620,93 @@
         },
         {
           "line": 12,
-          "expected_tags": [
-            "method_call"
-          ]
+            "expected_tags": [
+              "function_call"
+            ]
         }
-      ]
+      ],
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "inherited_method_parent_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::Parent",
+            "span_text": "Accuracy::Parent",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "inherited_method_inherited_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::Parent::inherited",
+            "span_text": "inherited",
+            "package": "Accuracy::Parent",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "inherited_method_child_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::Child",
+            "span_text": "Accuracy::Child",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "inherited_method_call_parent_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::Child::call_parent",
+            "span_text": "call_parent",
+            "package": "Accuracy::Child",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "occurrences": [
+          {
+            "id": "inherited_method_inherited_call",
+            "kind": "Call",
+            "canonical_name": "Accuracy::Parent::inherited",
+            "span_text": "Accuracy::Parent::inherited()",
+            "package": "Accuracy::Parent",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "edges": [
+          {
+            "id": "inherited_method_parent_defines_inherited",
+            "kind": "Defines",
+            "from": "Accuracy::Parent",
+            "to": "Accuracy::Parent::inherited",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "inherited_method_child_defines_call_parent",
+            "kind": "Defines",
+            "from": "Accuracy::Child",
+            "to": "Accuracy::Child::call_parent",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ]
+      }
     },
     {
       "id": "export_tags",
       "family": "export_tags",
       "label_mode": "partial",
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/export_tags.pl",
-      "scored_lines": 5,
-      "scored_symbols": 4,
+      "scored_lines": 6,
+      "scored_symbols": 9,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
@@ -1386,8 +1739,106 @@
           "expected_tags": [
             "sub_decl"
           ]
+        },
+        {
+          "line": 16,
+          "expected_tags": [
+            "function_call"
+          ]
         }
-      ]
+      ],
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "export_tags_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::ExportTags",
+            "span_text": "Accuracy::ExportTags",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "export_tags_foo_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::ExportTags::foo",
+            "span_text": "foo",
+            "package": "Accuracy::ExportTags",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "export_tags_bar_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::ExportTags::bar",
+            "span_text": "bar",
+            "package": "Accuracy::ExportTags",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "export_tags_use_exports_entity",
+            "kind": "Subroutine",
+            "canonical_name": "Accuracy::ExportTags::use_exports",
+            "span_text": "use_exports",
+            "package": "Accuracy::ExportTags",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "occurrences": [
+          {
+            "id": "export_tags_foo_call",
+            "kind": "Call",
+            "canonical_name": null,
+            "span_text": "foo()",
+            "package": null,
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "export_tags_bar_call",
+            "kind": "Call",
+            "canonical_name": null,
+            "span_text": "bar()",
+            "package": null,
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "edges": [
+          {
+            "id": "export_tags_defines_foo",
+            "kind": "Defines",
+            "from": "Accuracy::ExportTags",
+            "to": "Accuracy::ExportTags::foo",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "export_tags_defines_bar",
+            "kind": "Defines",
+            "from": "Accuracy::ExportTags",
+            "to": "Accuracy::ExportTags::bar",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "export_tags_defines_use_exports",
+            "kind": "Defines",
+            "from": "Accuracy::ExportTags",
+            "to": "Accuracy::ExportTags::use_exports",
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ]
+      }
     },
     {
       "id": "quote_like",

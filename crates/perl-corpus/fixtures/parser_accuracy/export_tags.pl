@@ -12,4 +12,8 @@ sub bar {
     return 2;
 }
 
+sub use_exports {
+    return foo() + bar();
+}
+
 1;

@@ -9,7 +9,7 @@ package Accuracy::Child;
 our @ISA = qw(Accuracy::Parent);
 
 sub call_parent {
-    return Accuracy::Child->inherited();
+    return Accuracy::Parent::inherited();
 }
 
 1;
