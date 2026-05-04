@@ -36,6 +36,16 @@ These documents are polished prose ready for editorial review or direct publicat
 | [PARSER_WINS.md](PARSER_WINS.md) | "Perl Parsing Hall of Fame" | Hardest constructs handled: heredocs, slash ambiguity, fat arrows |
 | [THREE_LAYER_PRODUCT.md](THREE_LAYER_PRODUCT.md) | "The Three-Layer Product" — LSP + swarm OS + memory/evidence | Why the repo is three products in one |
 
+### Session 2026-05-03: ChatGPT Pro ↔ Claude Lean-Loop Methodology
+
+Articles from the 2026-05-03 dynamic-diagnostics chain (4 PRs landing strict-bareword
+suppression as live runtime behavior). Methodology focus: how a tight ChatGPT Pro +
+Claude loop replaces the swarm conveyor for capability integration work.
+
+| File | Title | Notes |
+|------|-------|-------|
+| [SESSION_2026_05_03_CHATGPT_LEAN_LOOP.md](SESSION_2026_05_03_CHATGPT_LEAN_LOOP.md) | "ChatGPT Pro ↔ Claude Lean-Loop Learnings" | 4-PR feature chain (#7869, #7873, #7880, #7885); 7 replicable rules (mechanical autonomy, cache-warm-during-CI, batched-question format, state header, issue-first, all-targets standard, scoped callback for borrowed lifetimes); 3 anti-patterns ("infrastructure PR" smell, sentinel evidence, stale connector reads); codebase gotchas (PL109 nuance, dep-cycle producer placement, stale validate-title, `WorkspaceSemanticQueries<'a>` lifetime). |
+
 ### Session 2026-04-24: Economic Maturity + Deep Review Catalog + Architecture Audit
 
 Articles from the 2026-04-24 session (75 merged, 156 closed, 231 total resolved). Economic
