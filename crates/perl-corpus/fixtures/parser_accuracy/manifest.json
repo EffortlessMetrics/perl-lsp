@@ -2517,6 +2517,69 @@
       }
     },
     {
+      "id": "navigation_provider",
+      "family": "provider_navigation",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/navigation_provider.pl",
+      "scored_lines": 0,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 1,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "provider_expectations": {
+        "navigation": [
+          {
+            "id": "document_symbol_spans",
+            "symbol": "own_sub",
+            "expected_document_symbols": [
+              "sub own_sub { 1 }",
+              "sub own_method { 1 }"
+            ]
+          },
+          {
+            "id": "bare_call_goto",
+            "symbol": "own_sub",
+            "cursor_marker": "cursor:bare_call",
+            "cursor_symbol": "own_sub",
+            "expected_definition_span": "own_sub"
+          },
+          {
+            "id": "qualified_call_goto",
+            "symbol": "Accuracy::Navigation::UseCases::own_sub",
+            "cursor_marker": "cursor:qualified_call",
+            "cursor_symbol": "own_sub",
+            "expected_definition_span": "own_sub",
+            "hover_contains": [
+              "Accuracy::Navigation::UseCases::own_sub",
+              "Subroutine"
+            ]
+          },
+          {
+            "id": "imported_symbol_goto_and_hover",
+            "symbol": "imported_nav",
+            "cursor_marker": "cursor:imported_nav",
+            "cursor_symbol": "imported_nav",
+            "expected_definition_span": "imported_nav"
+          },
+          {
+            "id": "own_sub_references",
+            "symbol": "Accuracy::Navigation::UseCases::own_sub",
+            "expected_references": [
+              "Accuracy::Navigation::UseCases::own_sub()"
+            ],
+            "unexpected_references": [
+              "&$name()"
+            ]
+          }
+        ]
+      }
+    },
+    {
       "id": "diagnostic_provider",
       "family": "provider_diagnostics",
       "label_mode": "partial",

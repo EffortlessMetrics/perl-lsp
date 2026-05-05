@@ -136,6 +136,14 @@ fn parser_accuracy_metric_summary(metrics: &[ParserAccuracyMetricSummary]) -> St
         "diagnostic_dynamic_boundary_false_positive_count",
         "diagnostic_undefined_symbol_false_positive_count",
         "diagnostic_undefined_symbol_false_negative_count",
+        "document_symbol_span_exact_rate",
+        "goto_definition_hit_rate",
+        "goto_definition_span_exact_rate",
+        "goto_definition_false_target_count",
+        "references_precision",
+        "references_recall",
+        "references_false_positive_count",
+        "hover_origin_accuracy",
     ];
 
     if metrics.is_empty() {
