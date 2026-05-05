@@ -1890,6 +1890,23 @@ coverage-baseline-refresh:
     @just coverage-lcov
     @bash ./scripts/update-coverage-baseline.sh lcov.info .ci/coverage-baseline.txt
 
+# Generate parser-focused branch coverage output for perl-parser and perl-parser-core.
+# Writes target/coverage/parser.lcov when cargo-llvm-cov is available.
+# In environments without cargo-llvm-cov, records the intended command and exits successfully.
+coverage-parser:
+    @echo "📊 Generating parser coverage (perl-parser + perl-parser-core)..."
+    @mkdir -p target/coverage
+    @if [[ ! -x "$HOME/.cargo/bin/cargo-llvm-cov" ]]; then \
+        echo "⚠️  cargo-llvm-cov not installed; recording the expected command instead."; \
+        printf '%s\n' \
+          'cargo llvm-cov -p perl-parser -p perl-parser-core --all-features --branch --lcov --output-path target/coverage/parser.lcov' \
+          > target/coverage/parser.command.txt; \
+        echo "📝 Wrote target/coverage/parser.command.txt"; \
+        exit 0; \
+    fi
+    @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser -p perl-parser-core --all-features --branch --lcov --output-path target/coverage/parser.lcov
+    @echo "✅ Parser coverage: target/coverage/parser.lcov"
+
 # ============================================================================
 # Technical Debt Tracking (Issue #XXX)
 # ============================================================================
