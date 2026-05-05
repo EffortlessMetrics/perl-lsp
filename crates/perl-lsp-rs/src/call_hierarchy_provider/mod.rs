@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use perl_parser::PositionMapper;
-use perl_parser::ast::{Node, NodeKind};
+use perl_parser::ast::{Node, NodeKind, SourceLocation};
 use perl_position_tracking::{WirePosition, WireRange};
 use serde_json::{Value, json};
 
@@ -124,50 +124,17 @@ impl CallHierarchyProvider {
             match &node.kind {
                 NodeKind::Subroutine { name, prototype: _, signature, name_span, .. } => {
                     if let Some(name_str) = name {
-                        if let Some(span) = name_span {
-                            if offset >= span.start && offset <= span.end {
-                                let range = self.node_to_range(node);
-                                let selection_range =
-                                    self.selection_range_from_name_span(name_span, &range);
-
-                                let detail = if signature.is_some() {
-                                    Some("(signature)".to_string())
-                                } else {
-                                    None
-                                };
-
-                                return Some(CallHierarchyItem {
-                                    name: name_str.clone(),
-                                    kind: "function".to_string(),
-                                    uri: uri.clone(),
-                                    range,
-                                    selection_range,
-                                    detail,
-                                    package_name: None,
-                                    qualified_name: None,
-                                });
-                            }
-                        } else {
-                            let range = self.node_to_range(node);
-                            let selection_range =
-                                self.selection_range_from_name_span(name_span, &range);
-
-                            let detail = if signature.is_some() {
-                                Some("(signature)".to_string())
-                            } else {
-                                None
-                            };
-
-                            return Some(CallHierarchyItem {
-                                name: name_str.clone(),
-                                kind: "function".to_string(),
-                                uri: uri.clone(),
-                                range,
-                                selection_range,
-                                detail,
-                                package_name: None,
-                                qualified_name: None,
-                            });
+                        let includes_offset = name_span
+                            .as_ref()
+                            .is_none_or(|span| offset >= span.start && offset <= span.end);
+                        if includes_offset {
+                            return Some(self.call_hierarchy_subroutine_item(
+                                node,
+                                uri,
+                                name_str,
+                                name_span,
+                                signature.is_some(),
+                            ));
                         }
                     }
                 }
@@ -204,6 +171,29 @@ impl CallHierarchyProvider {
             self.visit_children(node, |child| self.find_callable_at_position(child, offset))
         } else {
             None
+        }
+    }
+
+    fn call_hierarchy_subroutine_item(
+        &self,
+        node: &Node,
+        uri: &str,
+        name: &str,
+        name_span: &Option<SourceLocation>,
+        has_signature: bool,
+    ) -> CallHierarchyItem {
+        let range = self.node_to_range(node);
+        let selection_range = self.selection_range_from_name_span(name_span, &range);
+        let detail = has_signature.then(|| "(signature)".to_string());
+        CallHierarchyItem {
+            name: name.to_string(),
+            kind: "function".to_string(),
+            uri: uri.to_string(),
+            range,
+            selection_range,
+            detail,
+            package_name: None,
+            qualified_name: None,
         }
     }
 
