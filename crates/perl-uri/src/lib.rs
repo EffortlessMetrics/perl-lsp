@@ -82,6 +82,23 @@ pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
     Some(repair_path_mojibake(path))
 }
 
+/// Convert either a `file://` URI or absolute filesystem path to a source path.
+///
+/// This helper accepts:
+/// - absolute native paths (including Windows drive paths)
+/// - `file://` URIs that map to local filesystem paths
+///
+/// It returns `None` for non-file schemes, invalid inputs, and relative paths.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn source_path_from_uri_or_path(input: &str) -> Option<std::path::PathBuf> {
+    let path = std::path::Path::new(input);
+    if path.is_absolute() {
+        return Some(path.to_path_buf());
+    }
+
+    uri_to_fs_path(input)
+}
+
 /// Convert a filesystem path to a `file://` URI.
 ///
 /// Properly handles percent-encoding and works with spaces, Windows paths,
@@ -442,6 +459,40 @@ mod tests {
             let uri = must(fs_path_to_uri(original));
             let path = must_some(uri_to_fs_path(&uri));
             assert!(path.ends_with("roundtrip-test.pl"));
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_rejects_non_file_scheme() {
+            assert!(source_path_from_uri_or_path("https://example.com/a.pl").is_none());
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_rejects_relative_path() {
+            assert!(source_path_from_uri_or_path("lib/Foo.pm").is_none());
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_accepts_file_uri_and_absolute_path() {
+            let from_uri = must_some(source_path_from_uri_or_path("file:///tmp/from-uri.pl"));
+            assert!(from_uri.ends_with("from-uri.pl"));
+
+            let absolute_path = std::env::temp_dir().join("from-path.pl");
+            let from_path =
+                must_some(source_path_from_uri_or_path(absolute_path.to_string_lossy().as_ref()));
+            assert!(from_path.ends_with("from-path.pl"));
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_localhost_file_uri() {
+            let path = must_some(source_path_from_uri_or_path("file://localhost/tmp/localhost.pl"));
+            assert!(path.ends_with("localhost.pl"));
+        }
+
+        #[cfg(windows)]
+        #[test]
+        fn test_source_path_from_uri_or_path_accepts_windows_drive_path() {
+            let path = must_some(source_path_from_uri_or_path("C:\\tmp\\drive-path.pl"));
+            assert!(path.ends_with("drive-path.pl"));
         }
     }
 }
