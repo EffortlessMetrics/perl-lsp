@@ -2,9 +2,10 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use lsp_types::{
-    Diagnostic as LspDiagnostic, DiagnosticRelatedInformation,
+    CodeDescription, Diagnostic as LspDiagnostic, DiagnosticRelatedInformation,
     DiagnosticSeverity as LspDiagnosticSeverity, DiagnosticTag as LspDiagnosticTag,
     DocumentDiagnosticReport, FullDocumentDiagnosticReport, Location, NumberOrString, Position,
     Range, RelatedFullDocumentDiagnosticReport, RelatedUnchangedDocumentDiagnosticReport,
@@ -670,7 +671,7 @@ impl PullDiagnosticsProvider {
             range,
             severity,
             code,
-            code_description: None,
+            code_description: code_description_from_lsp_code(code.as_ref()),
             source: Some("perl-lsp".to_string()),
             message,
             related_information,
@@ -753,7 +754,7 @@ impl PullDiagnosticsProvider {
             range,
             severity,
             code,
-            code_description: None,
+            code_description: code_description_from_lsp_code(code.as_ref()),
             source: diagnostic_source(code_for_source.as_ref()),
             message,
             related_information,
@@ -830,7 +831,7 @@ impl PullDiagnosticsProvider {
             range,
             severity,
             code,
-            code_description: None,
+            code_description: code_description_from_lsp_code(code.as_ref()),
             source: diagnostic_source(code_for_source.as_ref()),
             message,
             related_information: None,
@@ -907,7 +908,7 @@ impl PullDiagnosticsProvider {
             range,
             severity: Some(to_lsp_severity(parse_error_severity(error))),
             code: Some(NumberOrString::String(code_str.to_string())),
-            code_description: None,
+            code_description: code_description_from_lsp_code(code.as_ref()),
             source: Some("perl-lsp".to_string()),
             message,
             related_information: to_lsp_related_information(uri, text, &[]),
@@ -915,6 +916,18 @@ impl PullDiagnosticsProvider {
             data,
         }
     }
+}
+
+fn code_description_from_lsp_code(code: Option<&NumberOrString>) -> Option<CodeDescription> {
+    match code {
+        Some(NumberOrString::String(code_str)) => code_description_for_code_str(code_str),
+        _ => None,
+    }
+}
+
+fn code_description_for_code_str(code: &str) -> Option<CodeDescription> {
+    let href = DiagnosticCode::parse_code(code).and_then(|parsed| parsed.documentation_url())?;
+    Uri::from_str(href).ok().map(|uri| CodeDescription { href: uri })
 }
 
 fn lsp_range_from_offsets(text: &str, start: usize, end: usize) -> Range {
