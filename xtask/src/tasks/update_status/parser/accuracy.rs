@@ -133,6 +133,9 @@ fn parser_accuracy_metric_summary(metrics: &[ParserAccuracyMetricSummary]) -> St
         "method_completion_false_receiver_count",
         "method_completion_dynamic_receiver_fallback_count",
         "method_completion_visible_symbol_relevance",
+        "diagnostic_dynamic_boundary_false_positive_count",
+        "diagnostic_undefined_symbol_false_positive_count",
+        "diagnostic_undefined_symbol_false_negative_count",
     ];
 
     if metrics.is_empty() {

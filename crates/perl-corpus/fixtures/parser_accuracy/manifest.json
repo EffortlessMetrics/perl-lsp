@@ -2515,6 +2515,82 @@
           }
         ]
       }
+    },
+    {
+      "id": "diagnostic_provider",
+      "family": "provider_diagnostics",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/diagnostic_provider.pl",
+      "scored_lines": 0,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 4,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "provider_expectations": {
+        "diagnostics": [
+          {
+            "id": "eval_generated_symbol_suppressed",
+            "expected_code": "PL109",
+            "message_contains": "eval_generated_symbol",
+            "expected_present": false,
+            "dynamic_boundary": true
+          },
+          {
+            "id": "dynamic_imported_symbol_suppressed",
+            "expected_code": "PL109",
+            "message_contains": "dynamic_imported_symbol",
+            "expected_present": false,
+            "dynamic_boundary": true
+          },
+          {
+            "id": "generated_accessor_suppressed",
+            "expected_code": "PL109",
+            "message_contains": "generated_accessor",
+            "expected_present": false,
+            "dynamic_boundary": true
+          },
+          {
+            "id": "autoload_symbol_suppressed",
+            "expected_code": "PL103",
+            "message_contains": "$AUTOLOAD",
+            "expected_present": false,
+            "dynamic_boundary": true
+          },
+          {
+            "id": "known_imported_symbol_not_diagnosed",
+            "expected_code": "PL109",
+            "message_contains": "imported_known",
+            "expected_present": false,
+            "dynamic_boundary": false
+          },
+          {
+            "id": "package_local_symbol_not_diagnosed",
+            "expected_code": "PL103",
+            "message_contains": "$package_local_symbol",
+            "expected_present": false,
+            "dynamic_boundary": false
+          },
+          {
+            "id": "ordinary_undefined_variable_diagnosed",
+            "expected_code": "PL103",
+            "message_contains": "$ordinary_missing",
+            "expected_present": true,
+            "dynamic_boundary": false
+          },
+          {
+            "id": "ordinary_undefined_bareword_diagnosed",
+            "expected_code": "PL109",
+            "message_contains": "truly_missing_symbol",
+            "expected_present": true,
+            "dynamic_boundary": false
+          }
+        ]
+      }
     }
   ]
 }

@@ -15,6 +15,7 @@ use std::time::Instant;
 use chrono::Utc;
 use color_eyre::eyre::{Context, Result, bail, eyre};
 use perl_lsp_rs_core::providers::completion::CompletionProvider;
+use perl_lsp_rs_core::providers::diagnostics::{Diagnostic, DiagnosticsProvider};
 use perl_parser::apply_edits;
 use perl_parser::edit::Edit as CoreEdit;
 use perl_parser::incremental_v2::IncrementalParserV2;
@@ -137,6 +138,8 @@ struct AstPrediction {
 struct ProviderExpectations {
     #[serde(default)]
     method_completion: Vec<MethodCompletionProviderExpectation>,
+    #[serde(default)]
+    diagnostics: Vec<DiagnosticProviderExpectation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -149,6 +152,16 @@ struct MethodCompletionProviderExpectation {
     #[serde(default)]
     expected_absent: Vec<String>,
     expected_fallback: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct DiagnosticProviderExpectation {
+    id: String,
+    expected_code: String,
+    message_contains: String,
+    expected_present: bool,
+    #[serde(default)]
+    dynamic_boundary: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -763,6 +776,16 @@ struct MethodCompletionProviderScore {
     relevance_assertion_correct_count: u64,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct DiagnosticProviderScore {
+    dynamic_boundary_expected_absent_count: u64,
+    dynamic_boundary_false_positive_count: u64,
+    undefined_expected_absent_count: u64,
+    undefined_false_positive_count: u64,
+    undefined_expected_present_count: u64,
+    undefined_false_negative_count: u64,
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 struct ScaleCostScore {
     fixture_count: u64,
@@ -877,6 +900,7 @@ fn build_artifact(
     let unsupported_score = score_manifest_unsupported(root, manifest, &line_score)?;
     let method_completion_provider_score =
         score_method_completion_provider_expectations(root, manifest)?;
+    let diagnostic_provider_score = score_diagnostic_provider_expectations(root, manifest)?;
     let scale_cost_score = score_manifest_scale_cost(root, manifest)?;
     let determinism_score = score_manifest_determinism(root, manifest)?;
     let gold_drift = audit_gold_drift(root, manifest)?;
@@ -895,7 +919,11 @@ fn build_artifact(
     metrics.extend(span_metrics(&span_score, cadence));
     metrics.extend(confidence_metrics(&symbol_score, cadence));
     metrics.extend(unsupported_metrics(&unsupported_score, cadence));
-    metrics.extend(provider_impact_metrics(&method_completion_provider_score, cadence));
+    metrics.extend(provider_impact_metrics(
+        &method_completion_provider_score,
+        &diagnostic_provider_score,
+        cadence,
+    ));
     metrics.extend(scale_metrics(&scale_cost_score, cadence));
     metrics.extend(cost_metrics(&scale_cost_score, cadence));
     metrics.extend(cache_reuse_metrics(&incremental_score, cadence));
@@ -1799,6 +1827,99 @@ fn score_method_completion_expectation(
             score.relevance_assertion_correct_count += 1;
         }
     }
+}
+
+fn score_diagnostic_provider_expectations(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+) -> Result<DiagnosticProviderScore> {
+    let mut score = DiagnosticProviderScore::default();
+
+    for fixture in &manifest.fixtures {
+        if fixture.provider_expectations.diagnostics.is_empty() {
+            continue;
+        }
+
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy diagnostic provider fixture {}", source_path.display())
+        })?;
+        let provider_source = provider_diagnostic_source(&source)?;
+        let index_source = provider_diagnostic_index_source(&source)?;
+
+        let index = WorkspaceIndex::new();
+        let source_path_text = source_path.to_string_lossy();
+        index.index_file_str(&source_path_text, &index_source).map_err(|err| {
+            eyre!("indexing parser accuracy diagnostic fixture {}: {err}", source_path.display())
+        })?;
+
+        let mut parser = Parser::new(&provider_source);
+        let output = parser.parse_with_recovery();
+        let ast = Arc::new(output.ast);
+        let provider = DiagnosticsProvider::new(&ast, provider_source.clone());
+        let diagnostics = index
+            .with_semantic_queries_for_uri(&source_path_text, |file_id, semantic_queries| {
+                provider.get_diagnostics_with_path_and_semantics(
+                    &ast,
+                    &output.diagnostics,
+                    &provider_source,
+                    None,
+                    &[],
+                    Some(&source_path),
+                    file_id,
+                    &semantic_queries,
+                )
+            })
+            .ok_or_else(|| {
+                eyre!(
+                    "missing semantic queries for parser accuracy diagnostic fixture {}",
+                    source_path.display()
+                )
+            })?;
+
+        for expectation in &fixture.provider_expectations.diagnostics {
+            score_diagnostic_expectation(expectation, &diagnostics, &mut score);
+        }
+    }
+
+    Ok(score)
+}
+
+fn score_diagnostic_expectation(
+    expectation: &DiagnosticProviderExpectation,
+    diagnostics: &[Diagnostic],
+    score: &mut DiagnosticProviderScore,
+) {
+    let matched = diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some(expectation.expected_code.as_str())
+            && diagnostic.message.contains(&expectation.message_contains)
+    });
+
+    if expectation.expected_present {
+        score.undefined_expected_present_count += 1;
+        if !matched {
+            score.undefined_false_negative_count += 1;
+        }
+    } else if expectation.dynamic_boundary {
+        score.dynamic_boundary_expected_absent_count += 1;
+        if matched {
+            score.dynamic_boundary_false_positive_count += 1;
+        }
+    } else {
+        score.undefined_expected_absent_count += 1;
+        if matched {
+            score.undefined_false_positive_count += 1;
+        }
+    }
+}
+
+fn provider_diagnostic_source(source: &str) -> Result<String> {
+    let masked_support = mask_provider_index_support_blocks(source)?;
+    mask_cursor_marker_comments(&masked_support)
+}
+
+fn provider_diagnostic_index_source(source: &str) -> Result<String> {
+    mask_cursor_marker_comments(source)
 }
 
 fn provider_completion_source(source: &str) -> Result<String> {
@@ -3517,6 +3638,7 @@ fn unsupported_metrics(score: &UnsupportedScore, cadence: Cadence) -> Vec<Metric
 
 fn provider_impact_metrics(
     method_completion_score: &MethodCompletionProviderScore,
+    diagnostic_score: &DiagnosticProviderScore,
     cadence: Cadence,
 ) -> Vec<MetricRow> {
     const PROVIDER_METRICS: &[&str] = &[
@@ -3567,6 +3689,27 @@ fn provider_impact_metrics(
             ),
             method_completion_score.relevance_assertion_count,
             "no method-completion visible-symbol assertions are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "diagnostic_dynamic_boundary_false_positive_count",
+            diagnostic_score.dynamic_boundary_false_positive_count,
+            diagnostic_score.dynamic_boundary_expected_absent_count,
+            "no diagnostic dynamic-boundary expectations are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "diagnostic_undefined_symbol_false_positive_count",
+            diagnostic_score.undefined_false_positive_count,
+            diagnostic_score.undefined_expected_absent_count,
+            "no diagnostic undefined-symbol false-positive expectations are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "diagnostic_undefined_symbol_false_negative_count",
+            diagnostic_score.undefined_false_negative_count,
+            diagnostic_score.undefined_expected_present_count,
+            "no diagnostic undefined-symbol false-negative expectations are available",
             cadence,
         ),
     ];
@@ -4243,6 +4386,68 @@ sub dynamic_bless_case {
         Ok(())
     }
 
+    fn write_diagnostic_provider_fixture(root: &Path) -> Result<()> {
+        fs::write(
+            root.join("diagnostic_provider.pl"),
+            r#"# provider-index-support:start
+package Accuracy::Diagnostics::Exporter;
+use Exporter 'import';
+our @EXPORT_OK = qw(imported_known);
+sub imported_known { 1 }
+# provider-index-support:end
+
+package Accuracy::Diagnostics::UseCases;
+use strict;
+use warnings;
+use Accuracy::Diagnostics::Exporter qw(imported_known);
+
+sub ordinary_undefined_variable {
+    print $ordinary_missing;
+}
+
+sub ordinary_undefined_bareword {
+    print truly_missing_symbol;
+}
+
+sub eval_string_boundary {
+    eval "sub eval_generated_symbol { 1 }";
+    print eval_generated_symbol;
+}
+
+sub dynamic_require_boundary {
+    my $module = "Accuracy::Diagnostics::Dynamic";
+    require $module;
+    $module->import(qw(dynamic_imported_symbol generated_accessor));
+    print dynamic_imported_symbol;
+    print generated_accessor;
+}
+
+our $AUTOLOAD;
+sub AUTOLOAD {
+    our $AUTOLOAD;
+    return $AUTOLOAD;
+}
+
+sub autoload_boundary {
+    print $AUTOLOAD;
+}
+
+sub known_imported_symbol {
+    print imported_known;
+}
+
+our $package_local_symbol;
+
+sub package_local_symbol_case {
+    print $package_local_symbol;
+}
+
+1;
+"#,
+        )?;
+        Ok(())
+    }
+
     fn fixture_manifest() -> ParserAccuracyManifest {
         ParserAccuracyManifest {
             schema_version: 1,
@@ -4444,6 +4649,97 @@ sub dynamic_bless_case {
                             expected_fallback: true,
                         },
                     ],
+                    diagnostics: vec![],
+                },
+            }],
+        }
+    }
+
+    fn diagnostic_provider_manifest() -> ParserAccuracyManifest {
+        ParserAccuracyManifest {
+            schema_version: 1,
+            fixtures: vec![FixtureMetadata {
+                id: "diagnostic_provider".to_string(),
+                family: "provider_diagnostics".to_string(),
+                label_mode: LabelMode::Partial,
+                source_path: "diagnostic_provider.pl".to_string(),
+                scored_lines: 0,
+                scored_symbols: 0,
+                fully_labeled_regions: 0,
+                partial_labeled_regions: 1,
+                unknown_regions: 0,
+                negative_regions: 0,
+                dynamic_boundaries: 4,
+                unsupported_constructs: 0,
+                real_project_file: false,
+                generated: false,
+                line_expectations: vec![],
+                ast_expectations: vec![],
+                symbol_expectations: SymbolExpectations::default(),
+                symbol_safety_regions: vec![],
+                recovery_expectations: vec![],
+                incremental_expectations: vec![],
+                span_expectations: vec![],
+                provider_expectations: ProviderExpectations {
+                    method_completion: vec![],
+                    diagnostics: vec![
+                        DiagnosticProviderExpectation {
+                            id: "eval_generated_symbol_suppressed".to_string(),
+                            expected_code: "PL109".to_string(),
+                            message_contains: "eval_generated_symbol".to_string(),
+                            expected_present: false,
+                            dynamic_boundary: true,
+                        },
+                        DiagnosticProviderExpectation {
+                            id: "dynamic_imported_symbol_suppressed".to_string(),
+                            expected_code: "PL109".to_string(),
+                            message_contains: "dynamic_imported_symbol".to_string(),
+                            expected_present: false,
+                            dynamic_boundary: true,
+                        },
+                        DiagnosticProviderExpectation {
+                            id: "generated_accessor_suppressed".to_string(),
+                            expected_code: "PL109".to_string(),
+                            message_contains: "generated_accessor".to_string(),
+                            expected_present: false,
+                            dynamic_boundary: true,
+                        },
+                        DiagnosticProviderExpectation {
+                            id: "autoload_symbol_suppressed".to_string(),
+                            expected_code: "PL103".to_string(),
+                            message_contains: "$AUTOLOAD".to_string(),
+                            expected_present: false,
+                            dynamic_boundary: true,
+                        },
+                        DiagnosticProviderExpectation {
+                            id: "known_imported_symbol_not_diagnosed".to_string(),
+                            expected_code: "PL109".to_string(),
+                            message_contains: "imported_known".to_string(),
+                            expected_present: false,
+                            dynamic_boundary: false,
+                        },
+                        DiagnosticProviderExpectation {
+                            id: "package_local_symbol_not_diagnosed".to_string(),
+                            expected_code: "PL103".to_string(),
+                            message_contains: "$package_local_symbol".to_string(),
+                            expected_present: false,
+                            dynamic_boundary: false,
+                        },
+                        DiagnosticProviderExpectation {
+                            id: "ordinary_undefined_variable_diagnosed".to_string(),
+                            expected_code: "PL103".to_string(),
+                            message_contains: "$ordinary_missing".to_string(),
+                            expected_present: true,
+                            dynamic_boundary: false,
+                        },
+                        DiagnosticProviderExpectation {
+                            id: "ordinary_undefined_bareword_diagnosed".to_string(),
+                            expected_code: "PL109".to_string(),
+                            message_contains: "truly_missing_symbol".to_string(),
+                            expected_present: true,
+                            dynamic_boundary: false,
+                        },
+                    ],
                 },
             }],
         }
@@ -4494,7 +4790,8 @@ sub dynamic_bless_case {
         assert_eq!(score.relevance_assertion_count, 6);
         assert_eq!(score.relevance_assertion_correct_count, 6);
 
-        let metrics = provider_impact_metrics(&score, Cadence::Pr);
+        let metrics =
+            provider_impact_metrics(&score, &DiagnosticProviderScore::default(), Cadence::Pr);
         let false_receiver = metrics
             .iter()
             .find(|metric| {
@@ -4508,6 +4805,41 @@ sub dynamic_bless_case {
         assert!(matches!(
             false_receiver,
             MetricRow::Measured { value, sample_count: 1, .. }
+                if (*value - 0.0).abs() < f64::EPSILON
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn diagnostic_provider_scorer_measures_false_positive_and_negative_rows() -> Result<()> {
+        let tmp = tempfile::tempdir()?;
+        write_diagnostic_provider_fixture(tmp.path())?;
+
+        let score =
+            score_diagnostic_provider_expectations(tmp.path(), &diagnostic_provider_manifest())?;
+
+        assert_eq!(score.dynamic_boundary_expected_absent_count, 4);
+        assert_eq!(score.dynamic_boundary_false_positive_count, 0);
+        assert_eq!(score.undefined_expected_absent_count, 2);
+        assert_eq!(score.undefined_false_positive_count, 0);
+        assert_eq!(score.undefined_expected_present_count, 2);
+        assert_eq!(score.undefined_false_negative_count, 0);
+
+        let metrics =
+            provider_impact_metrics(&MethodCompletionProviderScore::default(), &score, Cadence::Pr);
+        let dynamic_false_positive = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "diagnostic_dynamic_boundary_false_positive_count"
+                )
+            })
+            .ok_or_else(|| eyre!("diagnostic dynamic-boundary false-positive row should exist"))?;
+        assert!(matches!(
+            dynamic_false_positive,
+            MetricRow::Measured { value, sample_count: 4, .. }
                 if (*value - 0.0).abs() < f64::EPSILON
         ));
         Ok(())
@@ -5209,8 +5541,11 @@ sub dynamic_bless_case {
 
     #[test]
     fn provider_impact_metrics_remain_insufficient_until_gold_exists() {
-        let metrics =
-            provider_impact_metrics(&MethodCompletionProviderScore::default(), Cadence::Pr);
+        let metrics = provider_impact_metrics(
+            &MethodCompletionProviderScore::default(),
+            &DiagnosticProviderScore::default(),
+            Cadence::Pr,
+        );
 
         assert!(metrics.iter().any(|metric| {
             matches!(
