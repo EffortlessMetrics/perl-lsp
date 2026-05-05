@@ -1,4 +1,4 @@
-use crate::meta::Section;
+use crate::meta::{IdSource, Section};
 use anyhow::{Result, bail};
 use regex::Regex;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -297,7 +297,13 @@ pub fn check_sections(sections: &[Section], config: &LintConfig) -> LintResult {
     for section in sections {
         // Check ID format
         if section.id.is_empty() {
-            result.errors.push(format!("Missing @id in {}: {}", section.file, section.title));
+            result
+                .errors
+                .push(format!("Missing effective ID in {}: {}", section.file, section.title));
+        } else if section.id_source == IdSource::Generated {
+            result
+                .errors
+                .push(format!("Missing explicit @id in {}: {}", section.file, section.title));
         } else if !ID_RE.as_ref().is_some_and(|re| re.is_match(&section.id)) {
             result.errors.push(format!(
                 "Invalid @id format '{}' in {}: {} (must match [a-z0-9._-]+)",

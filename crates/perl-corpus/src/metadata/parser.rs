@@ -1,5 +1,5 @@
-use crate::metadata::Section;
 use crate::metadata::ids::{make_section_id, slugify_title};
+use crate::metadata::{ExpectedBlock, ExpectedFormat, IdSource, Section};
 use regex::Regex;
 use std::collections::HashMap;
 use std::path::Path;
@@ -82,13 +82,19 @@ pub fn parse_sections(text: &str, path: &Path) -> Vec<Section> {
             }
         }
 
+        let explicit_id = meta.get("id").cloned().filter(|value| !value.trim().is_empty());
         let id = make_section_id(
-            &meta.get("id").cloned().unwrap_or_default(),
+            explicit_id.as_deref().unwrap_or_default(),
             &file_stem,
             &title,
             section_index,
             &mut auto_ids,
         );
+        let (id_source, generated_id) = if explicit_id.is_some() {
+            (IdSource::Explicit, None)
+        } else {
+            (IdSource::Generated, Some(id.clone()))
+        };
         let tags = meta
             .get("tags")
             .map(|s| {
@@ -107,20 +113,45 @@ pub fn parse_sections(text: &str, path: &Path) -> Vec<Section> {
         let body_end =
             body_lines.iter().position(|line| line.trim() == "---").unwrap_or(body_lines.len());
         let body = body_lines[..body_end].join("\n").trim().to_string();
+        let expected = body_lines.get(body_end + 1..).and_then(|lines| {
+            let raw = lines.join("\n").trim().to_string();
+            (!raw.is_empty()).then(|| ExpectedBlock { format: infer_expected_format(&raw), raw })
+        });
         let line_num = text[..start].lines().count() + 1;
         let file_name = path.file_name().unwrap_or_default();
 
         sections.push(Section {
             id,
+            id_source,
+            explicit_id,
+            generated_id,
             title,
             file: file_name.to_string_lossy().into(),
             tags,
             perl,
             flags,
             body,
+            expected,
             line: Some(line_num),
         });
     }
 
     sections
+}
+
+fn infer_expected_format(raw: &str) -> ExpectedFormat {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return ExpectedFormat::Unknown;
+    }
+    if trimmed.starts_with('(') {
+        return ExpectedFormat::TreeSitterSexp;
+    }
+    if trimmed.starts_with('{') || trimmed.starts_with('[') {
+        if trimmed.contains("\"diagnostic\"") || trimmed.contains("\"diagnostics\"") {
+            return ExpectedFormat::DiagnosticsJson;
+        }
+        return ExpectedFormat::AstJson;
+    }
+    ExpectedFormat::PlainText
 }

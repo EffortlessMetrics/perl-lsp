@@ -297,8 +297,12 @@ my $y = 2;
         let tagged_section = must_some(sections.iter().find(|s| s.id == "custom.id"));
 
         assert_eq!(sample_section.body, "my $x = 1;");
+        assert!(sample_section.explicit_id.is_none());
+        assert!(sample_section.generated_id.is_some());
+        assert!(sample_section.expected.is_some());
         assert!(!sample_section.body.contains("---"));
         assert_eq!(tagged_section.id, "custom.id");
+        assert_eq!(tagged_section.explicit_id.as_deref(), Some("custom.id"));
         assert_eq!(tagged_section.tags, vec!["alpha".to_string(), "beta".to_string()]);
         assert_eq!(tagged_section.flags, vec!["parser-sensitive".to_string()]);
         assert_eq!(tagged_section.body, "my $y = 2;");
