@@ -30,6 +30,14 @@ const STALE_PATTERNS: &[(&str, &str, &str)] = &[
 ];
 
 type ClaimHit = (PathBuf, usize, &'static str, &'static str, &'static str);
+const FORBIDDEN_CRATE_NAME: &str = "`perl-workspace-index`";
+const CRATE_NAME_GUARD_FILES: &[&str] = &[
+    "README.md",
+    "crates/perl-workspace/README.md",
+    "crates/perl-workspace/src/api.rs",
+    "docs/project/status/workspace.md",
+];
+const CRATE_NAME_EXCEPTIONS: &[&str] = &["docs/MIGRATION_v0.13.md"];
 
 pub fn run() -> Result<()> {
     let root = project_root()?;
@@ -63,6 +71,7 @@ pub fn run() -> Result<()> {
     }
 
     if hits.is_empty() {
+        check_forbidden_workspace_crate_name(&root)?;
         println!(
             "Doc claims OK: {} articles scanned, {} stale patterns checked, 0 violations found",
             files.len(),
@@ -83,4 +92,19 @@ pub fn run() -> Result<()> {
     eprintln!("{} stale claim(s) found in docs/articles.", hits.len());
     eprintln!("\nTo fix: update the article to match docs/project/PUBLICATION_FACTS_LEDGER.md");
     bail!("doc claim check failed");
+}
+
+fn check_forbidden_workspace_crate_name(root: &std::path::Path) -> Result<()> {
+    for rel in CRATE_NAME_GUARD_FILES {
+        if CRATE_NAME_EXCEPTIONS.contains(rel) {
+            continue;
+        }
+        let path = root.join(rel);
+        let text = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read guard file {}", path.display()))?;
+        if text.contains(FORBIDDEN_CRATE_NAME) || text.contains(" -p perl-workspace-index ") {
+            bail!("forbidden stale crate name '{}' found in {}", FORBIDDEN_CRATE_NAME, rel);
+        }
+    }
+    Ok(())
 }

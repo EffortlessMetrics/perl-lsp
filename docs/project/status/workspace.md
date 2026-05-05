@@ -22,7 +22,7 @@ This scorecard measures three properties of the index substrate:
 ## Stale-Index Defect Rate
 
 <!-- BEGIN: WORKSPACE_STALE_RATE -->
-| **Stale-index defect rate** | 0 / 7 scenarios tested | 0% | see `cargo test -p perl-workspace-index -- scorecard` |
+| **Stale-index defect rate** | 0 / 7 scenarios tested | 0% | see `cargo test -p perl-workspace -- scorecard` |
 <!-- END: WORKSPACE_STALE_RATE -->
 
 ## SLO Targets
@@ -57,7 +57,7 @@ This scorecard measures three properties of the index substrate:
 ## Metrics Bullets
 
 <!-- BEGIN: WORKSPACE_METRICS_BULLETS -->
-- **Stale-index defect rate**: 0 stale-symbol defects across 7 tested deletion/rename scenarios (unit tests in `crates/perl-workspace-index/tests/workspace_scorecard.rs`)
+- **Stale-index defect rate**: 0 stale-symbol defects across 7 tested deletion/rename scenarios (unit tests in `crates/perl-workspace/tests/workspace_scorecard.rs`)
 - **Incremental reindex SLO**: P95 target = 100ms (from `perl-workspace-index-slo`); measured in `scorecard_incremental_reindex_latency_within_slo`
 - **Multi-root tests**: 8 integration tests in `crates/perl-lsp-rs/tests/multi_root_workspace_tests.rs` activated in nightly CI gate via `just ci-workspace-multiroot` (PR #4137)
 - **Fixture workspaces**: 4 scales at `test_corpus/workspaces/` (10 / 100 / 1000 committed + xlarge generated on demand)
@@ -67,7 +67,7 @@ This scorecard measures three properties of the index substrate:
 
 - PR 3 of 3 (per plan-reviewer option A): stale-index defect harness with realistic LSP session replay (didOpen → didChange → didSave → delete → assert)
 - Promote `ci-workspace-multiroot` from nightly to merge gate once 10 consecutive nightly passes are confirmed
-- Surface real P50/P95 latency numbers from benchmarks (`perl-workspace-index/benches/workspace_index_benchmark.rs`) into this file via `xtask update-status --only workspace`
+- Surface real P50/P95 latency numbers from benchmarks (`crates/perl-workspace/benches/workspace_index_benchmark.rs`) into this file via `xtask update-status --only workspace`
 - Add a direct signal row for the shipped `workspace/configuration` handler (#3515) in the next `xtask update-status --only workspace` refresh
 
 ## How to Update
@@ -75,6 +75,6 @@ This scorecard measures three properties of the index substrate:
 ```bash
 cargo xtask update-status --only workspace   # regenerate all marked sections
 cargo xtask update-status --check --only workspace   # verify (CI gate)
-cargo test -p perl-workspace-index -- scorecard_  # run the scorecard tests
+cargo test -p perl-workspace -- scorecard_  # run the scorecard tests
 just ci-workspace-multiroot                  # run multi-root integration tests (nightly)
 ```
