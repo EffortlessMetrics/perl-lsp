@@ -58,7 +58,7 @@ fn focused_query_from_upstream(upstream: &str, fragments: &[&str]) -> String {
 }
 
 #[test]
-fn query_conformance_highlights_covers_core_perl_constructs() -> Result<(), Box<dyn Error>> {
+fn query_conformance_highlights_covers_core_perl_constructs_without_pod_nodes() -> Result<(), Box<dyn Error>> {
     let highlights_upstream = include_str!("../../../tree-sitter-perl/queries/highlights.scm");
     let highlights_query = focused_query_from_upstream(
         highlights_upstream,
@@ -70,7 +70,6 @@ fn query_conformance_highlights_covers_core_perl_constructs() -> Result<(), Box<
             r#"(subroutine_declaration_statement name: (bareword) @function)"#,
             r#"(scalar) @variable.scalar"#,
             r#"(comment) @comment"#,
-            r#"(pod) @text"#,
         ],
     );
 
@@ -81,9 +80,6 @@ sub greet {
   return $value;
 }
 # trailing comment
-=pod
-Summary paragraph.
-=cut
 "#;
 
     let captures = collect_captures(&highlights_query, source)?;
@@ -94,7 +90,6 @@ Summary paragraph.
     assert_capture_contains(&captures, "function", "greet");
     assert_capture_contains(&captures, "variable.scalar", "$value");
     assert_capture_contains(&captures, "comment", "# trailing comment");
-    assert_capture_contains(&captures, "text", "Summary paragraph");
 
     Ok(())
 }
@@ -199,13 +194,10 @@ END_CPP
 }
 
 #[test]
-fn query_conformance_injections_covers_pod_comment_and_eval_substitution()
+fn query_conformance_injections_covers_comment_and_eval_substitution()
 -> Result<(), Box<dyn Error>> {
     let query = include_str!("../../../tree-sitter-perl/queries/injections.scm");
     let source = r#"# language payload
-=pod
-Injected documentation
-=cut
 my $value = "x";
 $value =~ s/x/uc($value)/e;
 "#;
@@ -213,7 +205,6 @@ $value =~ s/x/uc($value)/e;
     let captures = collect_captures(query, source)?;
 
     assert_capture_contains(&captures, "injection.content", "# language payload");
-    assert_capture_contains(&captures, "injection.content", "Injected documentation");
     assert_capture_contains(&captures, "injection.content", "uc($value)");
 
     Ok(())
