@@ -1,0 +1,5 @@
+---
+source: crates/tree-sitter-perl-c/tests/snapshots.rs
+expression: "sexp(\"for my $item (@items) { print $item, \\\"\\\\n\\\"; }\")"
+---
+(source_file (for_statement variable: (scalar (varname)) list: (array (varname)) block: (block (expression_statement (ambiguous_function_call_expression function: (function) arguments: (list_expression (scalar (varname)) (interpolated_string_literal content: (string_content (escape_sequence)))))))))
