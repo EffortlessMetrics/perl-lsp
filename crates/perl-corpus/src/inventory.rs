@@ -1,6 +1,7 @@
 use crate::files::{CorpusPaths, get_test_files_from};
 use crate::lint::KNOWN_TAGS;
 use crate::meta::Section;
+use crate::metadata::IdSource;
 use crate::parse_file;
 use anyhow::Result;
 use serde::Serialize;
@@ -28,9 +29,13 @@ pub struct CorpusInventory {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct InventoryIds {
-    pub total: usize,
-    pub missing: usize,
-    pub duplicates: Vec<String>,
+    pub explicit: usize,
+    pub generated: usize,
+    pub missing_explicit_ids: usize,
+    pub generated_ids: Vec<String>,
+    pub duplicate_effective_ids: Vec<String>,
+    pub duplicate_explicit_ids: Vec<String>,
+    pub id_source_breakdown: BTreeMap<String, usize>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -68,7 +73,12 @@ pub fn build_inventory_from_paths(paths: &CorpusPaths) -> Result<CorpusInventory
 /// Build an inventory from explicit section data.
 pub fn inventory_from_sections(file_count: usize, sections: &[Section]) -> CorpusInventory {
     let mut id_counts: BTreeMap<&str, usize> = BTreeMap::new();
-    let mut missing_ids = 0usize;
+    let mut explicit_ids = 0usize;
+    let mut generated_ids = 0usize;
+    let mut missing_explicit_ids = 0usize;
+    let mut generated_id_values = Vec::new();
+    let mut explicit_id_counts: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut id_source_breakdown: BTreeMap<String, usize> = BTreeMap::new();
     let mut known_tags = BTreeSet::new();
     let mut unknown_tags = BTreeSet::new();
     let known_tag_set: BTreeSet<&str> = KNOWN_TAGS.iter().copied().collect();
@@ -76,10 +86,23 @@ pub fn inventory_from_sections(file_count: usize, sections: &[Section]) -> Corpu
     let mut markers = InventoryMarkers { expected_error: 0, wip: 0, parser_sensitive: 0 };
 
     for section in sections {
-        if section.id.trim().is_empty() {
-            missing_ids += 1;
-        } else {
+        if !section.id.trim().is_empty() {
             *id_counts.entry(section.id.as_str()).or_default() += 1;
+        }
+        match section.id_source {
+            IdSource::Explicit => {
+                explicit_ids += 1;
+                *id_source_breakdown.entry("explicit".to_string()).or_default() += 1;
+                if let Some(explicit_id) = section.explicit_id.as_deref() {
+                    *explicit_id_counts.entry(explicit_id).or_default() += 1;
+                }
+            }
+            IdSource::Generated => {
+                generated_ids += 1;
+                missing_explicit_ids += 1;
+                *id_source_breakdown.entry("generated".to_string()).or_default() += 1;
+                generated_id_values.push(section.id.clone());
+            }
         }
 
         for tag in &section.tags {
@@ -105,10 +128,16 @@ pub fn inventory_from_sections(file_count: usize, sections: &[Section]) -> Corpu
         }
     }
 
-    let duplicates = id_counts
+    let duplicate_effective_ids = id_counts
         .into_iter()
         .filter_map(|(id, count)| (count > 1).then_some(id.to_string()))
         .collect::<Vec<_>>();
+    let duplicate_explicit_ids = explicit_id_counts
+        .into_iter()
+        .filter_map(|(id, count)| (count > 1).then_some(id.to_string()))
+        .collect::<Vec<_>>();
+    generated_id_values.sort();
+    generated_id_values.dedup();
 
     CorpusInventory {
         schema_version: 1,
@@ -116,9 +145,13 @@ pub fn inventory_from_sections(file_count: usize, sections: &[Section]) -> Corpu
         sections: sections.len(),
         cases: sections.len(),
         ids: InventoryIds {
-            total: sections.len().saturating_sub(missing_ids),
-            missing: missing_ids,
-            duplicates,
+            explicit: explicit_ids,
+            generated: generated_ids,
+            missing_explicit_ids,
+            generated_ids: generated_id_values,
+            duplicate_effective_ids,
+            duplicate_explicit_ids,
+            id_source_breakdown,
         },
         tags: InventoryTags {
             known: known_tags.into_iter().collect(),
@@ -219,15 +252,19 @@ fn populate_fixture_coverage(gold_root: &Path, inventory: &mut CorpusInventory) 
 mod tests {
     use super::*;
 
-    fn sample_section(id: &str, tags: &[&str], flags: &[&str]) -> Section {
+    fn sample_section(id: &str, explicit: bool, tags: &[&str], flags: &[&str]) -> Section {
         Section {
             id: id.to_string(),
+            id_source: if explicit { IdSource::Explicit } else { IdSource::Generated },
+            explicit_id: explicit.then(|| id.to_string()),
+            generated_id: (!explicit).then(|| id.to_string()),
             title: "title".to_string(),
             file: "sample.txt".to_string(),
             tags: tags.iter().map(|tag| (*tag).to_string()).collect(),
             perl: None,
             flags: flags.iter().map(|flag| (*flag).to_string()).collect(),
             body: "my $x = 1;".to_string(),
+            expected: None,
             line: Some(1),
         }
     }
@@ -235,9 +272,9 @@ mod tests {
     #[test]
     fn inventory_reports_missing_and_duplicate_ids() {
         let sections = vec![
-            sample_section("case.1", &["regex"], &[]),
-            sample_section("case.1", &["regex", "custom-tag"], &["parser-sensitive"]),
-            sample_section("", &["custom-tag"], &["wip"]),
+            sample_section("case.1", true, &["regex"], &[]),
+            sample_section("case.1", true, &["regex", "custom-tag"], &["parser-sensitive"]),
+            sample_section("sample-title-1", false, &["custom-tag"], &["wip"]),
         ];
 
         let inventory = inventory_from_sections(2, &sections);
@@ -245,9 +282,12 @@ mod tests {
         assert_eq!(inventory.schema_version, 1);
         assert_eq!(inventory.files, 2);
         assert_eq!(inventory.sections, 3);
-        assert_eq!(inventory.ids.total, 2);
-        assert_eq!(inventory.ids.missing, 1);
-        assert_eq!(inventory.ids.duplicates, vec!["case.1".to_string()]);
+        assert_eq!(inventory.ids.explicit, 2);
+        assert_eq!(inventory.ids.generated, 1);
+        assert_eq!(inventory.ids.missing_explicit_ids, 1);
+        assert_eq!(inventory.ids.generated_ids, vec!["sample-title-1".to_string()]);
+        assert_eq!(inventory.ids.duplicate_effective_ids, vec!["case.1".to_string()]);
+        assert_eq!(inventory.ids.duplicate_explicit_ids, vec!["case.1".to_string()]);
         assert_eq!(inventory.tags.known, vec!["regex".to_string()]);
         assert_eq!(inventory.tags.unknown, vec!["custom-tag".to_string()]);
         assert_eq!(inventory.markers.parser_sensitive, 1);
@@ -257,14 +297,14 @@ mod tests {
     #[test]
     fn inventory_is_deterministic() {
         let sections = vec![
-            sample_section("z.case", &["z-unknown", "regex"], &["todo"]),
-            sample_section("a.case", &["regex", "a-unknown"], &["parser-sensitive"]),
+            sample_section("z.case", true, &["z-unknown", "regex"], &["todo"]),
+            sample_section("a.case", false, &["regex", "a-unknown"], &["parser-sensitive"]),
         ];
 
         let first = inventory_from_sections(1, &sections);
         let second = inventory_from_sections(1, &sections);
         assert_eq!(first, second);
         assert_eq!(first.tags.unknown, vec!["a-unknown".to_string(), "z-unknown".to_string()]);
-        assert_eq!(first.ids.duplicates, Vec::<String>::new());
+        assert_eq!(first.ids.duplicate_effective_ids, Vec::<String>::new());
     }
 }
