@@ -317,6 +317,34 @@ pub fn normalize_uri(uri: &str) -> String {
 
 /// URI classification and key normalization helpers (previously `perl-uri-classify`).
 pub mod classify;
+
+/// Convert a URI or absolute filesystem path into a source path.
+///
+/// This helper accepts:
+/// - `file://` URIs
+/// - absolute filesystem paths
+/// - Windows drive paths like `C:\path\file.pl`
+///
+/// Relative paths and non-file schemes return `None`.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn source_path_from_uri_or_path(input: &str) -> Option<std::path::PathBuf> {
+    if input.len() > 2 && input.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
+        if input.chars().nth(1) == Some(':') && !input.starts_with("file://") {
+            let path = std::path::Path::new(input);
+            if path.is_absolute() {
+                return Some(path.to_path_buf());
+            }
+        }
+    }
+
+    if let Some(path) = uri_to_fs_path(input) {
+        return Some(path);
+    }
+
+    let path = std::path::Path::new(input);
+    if path.is_absolute() { Some(path.to_path_buf()) } else { None }
+}
+
 pub use classify::{is_file_uri, is_special_scheme, uri_extension, uri_key};
 
 #[cfg(test)]
@@ -443,5 +471,30 @@ mod tests {
             let path = must_some(uri_to_fs_path(&uri));
             assert!(path.ends_with("roundtrip-test.pl"));
         }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_file_uri() {
+            let path = must_some(source_path_from_uri_or_path("file:///tmp/test.pl"));
+            assert!(path.ends_with("test.pl"));
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_file_localhost_uri() {
+            let path = must_some(source_path_from_uri_or_path("file://localhost/tmp/test.pl"));
+            assert!(path.ends_with("test.pl"));
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_absolute_path() {
+            let input = std::env::temp_dir().join("source-path-absolute.pl");
+            let parsed = must_some(source_path_from_uri_or_path(&input.to_string_lossy()));
+            assert_eq!(parsed, input);
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_non_file_scheme() {
+            assert!(source_path_from_uri_or_path("https://example.com").is_none());
+        }
+
     }
 }
