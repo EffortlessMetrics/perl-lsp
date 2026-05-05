@@ -3773,3 +3773,308 @@ fn collect_used_module_names_excludes_lowercase_pragmas() {
         "`use feature` (lowercase pragma) must be excluded; got {modules:?}"
     );
 }
+
+// -------------------------------------------------------------------------
+// Real-workspace baselines for unknown-receiver fallback quality (#7960)
+//
+// Quality goals proven here against a single multi-file fixture:
+//   1. Useful fallback hits — bounded fallback surfaces methods the user
+//      can plausibly want from used / current packages.
+//   2. No unrelated leak — packages neither imported nor in the current
+//      package graph stay out of the fallback list (no all-workspace
+//      fallback).
+//   3. Dynamic stays fail-closed — Dynamic receivers receive no fallback
+//      at all, even when the relevant package is imported.
+//   4. Exact receiver non-regression — exact receiver completions keep
+//      their existing label / detail / sort tier; no `unknown` leaks.
+//   5. No bounded source → no fallback — when used_modules ∪ {current_package}
+//      is empty, no fallback fires regardless of how many packages are
+//      indexed.
+//
+// Counters proven by these baselines:
+//   useful_fallback_hit_count       = 4   (bark, helper, child_method, parent_method)
+//   unrelated_method_leak_count     = 0   (quack never appears in fallback)
+//   dynamic_fallback_leak_count     = 0   (no fallback for Dynamic receivers)
+//   exact_receiver_regression_count = 0   (Foo->bark detail / sort unchanged)
+// -------------------------------------------------------------------------
+
+fn build_baseline_workspace() -> Result<Arc<WorkspaceIndex>, Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+sub fetch { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/Unrelated.pm")?,
+        r#"package Unrelated;
+sub quack { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/MyService.pm")?,
+        r#"package MyService;
+sub helper { }
+sub serve { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/Parent.pm")?,
+        r#"package Parent;
+sub parent_method { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/Child.pm")?,
+        r#"package Child;
+use parent 'Parent';
+sub child_method { }
+1;
+"#
+        .to_string(),
+    )?;
+    Ok(index)
+}
+
+#[test]
+fn baseline_imported_package_useful_hit_no_unrelated_leak() -> Result<(), Box<dyn std::error::Error>>
+{
+    let index = build_baseline_workspace()?;
+
+    // Realistic shape: buffer imports Foo, calls a method on a sub
+    // parameter that has no constructor / bless / type-engine evidence —
+    // receiver is `Unknown`, fallback should fire from imported Foo.
+    let code = r#"use Foo;
+
+sub do_things {
+    my ($obj) = @_;
+    $obj->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    // Useful hits: imported Foo's `bark` carries low-confidence detail
+    // and tier 6 sort.
+    let bark = must_some(completions.iter().find(|c| c.label == "bark"));
+    let bark_detail = must_some(bark.detail.as_deref());
+    assert!(
+        bark_detail.contains("receiver: unknown, low confidence"),
+        "imported `bark` should carry low-confidence fallback detail; got {bark_detail:?}"
+    );
+    let bark_sort = must_some(bark.sort_text.as_deref());
+    assert!(
+        bark_sort.starts_with("6_"),
+        "fallback `bark` should sort at tier 6; got {bark_sort:?}"
+    );
+
+    // Unrelated leak guard: Unrelated.pm is indexed in the workspace but
+    // is neither imported nor in the current package graph. Its `quack`
+    // must NOT appear in the completion list.
+    assert!(
+        !completions.iter().any(|c| c.label == "quack"),
+        "unrelated `quack` must not leak into fallback; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    // Same guard for MyService and Child / Parent — none of those are
+    // imported, none are in the current (main) package graph.
+    for label in ["helper", "serve", "child_method", "parent_method"] {
+        assert!(
+            !completions.iter().any(|c| c.label == label),
+            "unrelated `{label}` must not leak; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn baseline_current_package_useful_hit_no_unrelated_leak() -> Result<(), Box<dyn std::error::Error>>
+{
+    let index = build_baseline_workspace()?;
+
+    // Buffer is in `package MyService;` with no `use`. Receiver is
+    // Unknown, current-package fallback should surface `helper`.
+    let code = r#"package MyService;
+
+sub run {
+    my ($obj) = @_;
+    $obj->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let helper = must_some(completions.iter().find(|c| c.label == "helper"));
+    let detail = must_some(helper.detail.as_deref());
+    assert!(
+        detail.contains("receiver: unknown, low confidence"),
+        "current-package `helper` should carry low-confidence detail; got {detail:?}"
+    );
+    let sort = must_some(helper.sort_text.as_deref());
+    assert!(sort.starts_with("6_"), "current-package fallback should sort at tier 6; got {sort:?}");
+
+    // Unrelated workspace packages must not leak when current-package
+    // fallback fires.
+    for label in ["bark", "fetch", "quack", "child_method", "parent_method"] {
+        assert!(
+            !completions.iter().any(|c| c.label == label),
+            "unrelated `{label}` must not leak when current-package fallback fires; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn baseline_current_package_graph_includes_inherited_methods()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Buffer is in `package Child;`. Child.pm in the workspace declares
+    // `use parent 'Parent';`, so `collect_all_package_members` follows
+    // the @ISA chain into Parent. The bounded fallback should therefore
+    // include both `child_method` and `parent_method`.
+    let index = build_baseline_workspace()?;
+    let code = r#"package Child;
+
+sub do_thing {
+    my ($obj) = @_;
+    $obj->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let child = must_some(completions.iter().find(|c| c.label == "child_method"));
+    let child_detail = must_some(child.detail.as_deref());
+    assert!(
+        child_detail.contains("receiver: unknown, low confidence"),
+        "Child's `child_method` should be in low-confidence fallback; got {child_detail:?}"
+    );
+    let child_sort = must_some(child.sort_text.as_deref());
+    assert!(
+        child_sort.starts_with("6_"),
+        "current-package fallback should sort at tier 6; got {child_sort:?}"
+    );
+
+    let parent = must_some(completions.iter().find(|c| c.label == "parent_method"));
+    let parent_detail = must_some(parent.detail.as_deref());
+    assert!(
+        parent_detail.contains("receiver: unknown, low confidence"),
+        "Parent's `parent_method` should appear via @ISA in fallback; got {parent_detail:?}"
+    );
+    let parent_sort = must_some(parent.sort_text.as_deref());
+    assert!(
+        parent_sort.starts_with("6_"),
+        "inherited fallback should sort at tier 6; got {parent_sort:?}"
+    );
+
+    // Unrelated must not leak into the current-package graph fallback.
+    for label in ["bark", "fetch", "quack", "helper"] {
+        assert!(
+            !completions.iter().any(|c| c.label == label),
+            "unrelated `{label}` must not leak; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn baseline_dynamic_receiver_no_fallback_leak() -> Result<(), Box<dyn std::error::Error>> {
+    let index = build_baseline_workspace()?;
+    // `bless {}, $class` is the canonical Dynamic form. Even with Foo
+    // imported, fallback must NOT fire — Dynamic stays fail-closed.
+    let code = r#"use Foo;
+
+sub make {
+    my ($class) = @_;
+    my $x = bless {}, $class;
+    $x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    // No imported method should appear — fallback is suppressed entirely.
+    for label in ["bark", "fetch", "quack", "helper", "child_method", "parent_method"] {
+        assert!(
+            !completions.iter().any(|c| c.label == label),
+            "Dynamic receiver must not get fallback; `{label}` leaked. Got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn baseline_exact_receiver_non_regression() -> Result<(), Box<dyn std::error::Error>> {
+    let index = build_baseline_workspace()?;
+    // Exact static-package receiver. Detail, sort, and label must match
+    // the pre-#7930 contract (#7920 / #7926). No `unknown` / `low
+    // confidence` may leak in.
+    let code = "Foo->";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = must_some(completions.iter().find(|c| c.label == "bark"));
+    let bark_detail = must_some(bark.detail.as_deref());
+    assert!(
+        bark_detail.contains("receiver: static package"),
+        "exact receiver detail should say `receiver: static package`; got {bark_detail:?}"
+    );
+    assert!(
+        !bark_detail.contains("unknown"),
+        "exact receiver detail must not contain `unknown`; got {bark_detail:?}"
+    );
+    assert!(
+        !bark_detail.contains("low confidence"),
+        "exact receiver detail must not be marked low confidence; got {bark_detail:?}"
+    );
+    let bark_sort = must_some(bark.sort_text.as_deref());
+    assert!(
+        bark_sort.starts_with("2_") || bark_sort.starts_with("3_"),
+        "exact receiver should keep tier 2 or 3; got {bark_sort:?}"
+    );
+    assert_eq!(bark.label, "bark", "exact receiver label must be unchanged");
+    Ok(())
+}
+
+#[test]
+fn baseline_no_bounded_source_no_all_workspace_fallback() -> Result<(), Box<dyn std::error::Error>>
+{
+    let index = build_baseline_workspace()?;
+    // Buffer is in `main` (current_package excluded by `Unknown` fallback
+    // policy) and has no `use`. `allowed_packages` is empty — fallback
+    // must emit nothing, regardless of how many packages are indexed.
+    let code = r#"sub run {
+    my ($obj) = @_;
+    $obj->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    for label in ["bark", "fetch", "quack", "helper", "serve", "child_method", "parent_method"] {
+        assert!(
+            !completions.iter().any(|c| c.label == label),
+            "no bounded source means no fallback — `{label}` must not appear; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+    }
+    Ok(())
+}
