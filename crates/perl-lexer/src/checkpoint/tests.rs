@@ -374,3 +374,36 @@ fn test_checkpoint_apply_edit_resets_position_tracking_on_shift_and_invalidate()
     assert_eq!(invalidated.mode, LexerMode::ExpectTerm);
     assert_eq!(invalidated.context, CheckpointContext::Normal);
 }
+
+/// Regression test: a Normal checkpoint shifted to position 0 by a leading deletion
+/// must be preserved in the cache (prior bug: retain dropped it, breaking
+/// `find_before(0)` after start-of-file edits).
+#[test]
+fn test_checkpoint_cache_apply_edit_preserves_start_checkpoint()
+-> std::result::Result<(), Box<dyn std::error::Error>> {
+    let mut cache = CheckpointCache::new(5);
+    cache.add(LexerCheckpoint::at_position(10));
+
+    // Delete the 10 bytes before the checkpoint; it shifts from 10 to 0.
+    cache.apply_edit(0, 10, 0);
+
+    let cp =
+        cache.find_before(0).ok_or("Normal checkpoint shifted to position 0 must be preserved")?;
+    assert_eq!(cp.position, 0, "shifted checkpoint must remain in cache at position 0");
+    Ok(())
+}
+
+/// A checkpoint that was overlapped-and-reset to position 0 must also survive.
+#[test]
+fn test_checkpoint_cache_apply_edit_preserves_overlap_reset_to_start()
+-> std::result::Result<(), Box<dyn std::error::Error>> {
+    let mut cache = CheckpointCache::new(5);
+    // Checkpoint at 5, inside an edit spanning [0, 8) — reset to start=0.
+    cache.add(LexerCheckpoint::at_position(5));
+    cache.apply_edit(0, 8, 0);
+
+    let cp =
+        cache.find_before(0).ok_or("overlap-reset checkpoint at position 0 must be preserved")?;
+    assert_eq!(cp.position, 0, "overlap-reset checkpoint must remain as a start-of-file anchor");
+    Ok(())
+}
