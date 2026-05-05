@@ -89,7 +89,9 @@ impl SymbolIndex {
     /// Returns all symbols starting with the given prefix.
     #[must_use]
     pub fn search_prefix(&self, prefix: &str) -> Vec<String> {
-        self.trie.search_prefix(prefix)
+        let mut results = self.trie.search_prefix(prefix);
+        results.sort();
+        results
     }
 
     /// Fuzzy search symbols.
@@ -110,7 +112,12 @@ impl SymbolIndex {
 
         // Sort by relevance (number of matching tokens)
         let mut sorted: Vec<_> = results.into_iter().collect();
-        sorted.sort_by(|(_, a), (_, b)| b.cmp(a));
+        sorted.sort_by(|(name_a, score_a), (name_b, score_b)| {
+            score_b
+                .cmp(score_a)
+                .then_with(|| name_a.len().cmp(&name_b.len()))
+                .then_with(|| name_a.cmp(name_b))
+        });
 
         sorted.into_iter().map(|(symbol, _)| symbol).collect()
     }
@@ -360,6 +367,86 @@ mod tests {
         assert!(
             !results.contains(&"get_user_name".to_string()),
             "replaced symbol must be removed from fuzzy index"
+        );
+    }
+
+    #[test]
+    fn duplicate_add_symbol_is_idempotent_for_prefix_and_fuzzy() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("get_user_name".to_string());
+        index.add_symbol("get_user_name".to_string());
+
+        assert_eq!(index.search_prefix("get"), vec!["get_user_name".to_string()]);
+        assert_eq!(index.search_fuzzy("user name"), vec!["get_user_name".to_string()]);
+    }
+
+    #[test]
+    fn replace_document_symbols_deduplicates_symbols_within_document() {
+        let mut index = SymbolIndex::new();
+        index.replace_document_symbols(
+            "file:///a.pl",
+            vec!["shared_symbol".to_string(), "shared_symbol".to_string()],
+        );
+
+        assert_eq!(index.search_prefix("shared"), vec!["shared_symbol".to_string()]);
+        assert_eq!(index.search_fuzzy("shared"), vec!["shared_symbol".to_string()]);
+    }
+
+    #[test]
+    fn fuzzy_ranking_prefers_more_query_token_matches() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("alpha_beta_gamma".to_string());
+        index.add_symbol("alpha_beta".to_string());
+        index.add_symbol("alpha".to_string());
+
+        let results = index.search_fuzzy("alpha beta gamma");
+        assert_eq!(results[0], "alpha_beta_gamma");
+        assert_eq!(results[1], "alpha_beta");
+        assert_eq!(results[2], "alpha");
+    }
+
+    #[test]
+    fn fuzzy_tokenization_handles_camel_snake_and_mixed_delimiters() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("calculateTotalCount".to_string());
+        index.add_symbol("calculate_total_count".to_string());
+        index.add_symbol("calculate-total.count".to_string());
+
+        let results = index.search_fuzzy("total count");
+        assert_eq!(results.len(), 3);
+    }
+
+    #[test]
+    fn empty_fuzzy_query_and_unknown_prefix_return_empty_results() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("known_symbol".to_string());
+
+        assert!(index.search_fuzzy("").is_empty());
+        assert!(index.search_prefix("unknown").is_empty());
+    }
+
+    #[test]
+    fn search_results_use_deterministic_tie_break_ordering() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("zeta_alpha".to_string());
+        index.add_symbol("beta_alpha".to_string());
+        index.add_symbol("alpha_alpha".to_string());
+
+        assert_eq!(
+            index.search_fuzzy("alpha"),
+            vec![
+                "alpha_alpha".to_string(),
+                "beta_alpha".to_string(),
+                "zeta_alpha".to_string(),
+            ]
+        );
+        assert_eq!(
+            index.search_prefix(""),
+            vec![
+                "alpha_alpha".to_string(),
+                "beta_alpha".to_string(),
+                "zeta_alpha".to_string(),
+            ]
         );
     }
 }
