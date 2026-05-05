@@ -1874,6 +1874,20 @@ coverage-summary:
     @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser --lib --locked --branch \
         --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
 
+
+# Generate parser library branch coverage in LCOV format (CI-safe when cargo-llvm-cov is unavailable)
+coverage-parser:
+    @echo "📊 Generating parser coverage (perl-parser + perl-parser-core libs)..."
+    @if [[ ! -x "$HOME/.cargo/bin/cargo-llvm-cov" ]]; then \
+        echo "⚠️ cargo-llvm-cov not found. Skipping run."; \
+        echo "   Install and run:"; \
+        echo "   rustup run nightly cargo llvm-cov -p perl-parser -p perl-parser-core --lib --locked --branch --lcov --output-path target/coverage/parser.lcov"; \
+        exit 0; \
+    fi
+    @mkdir -p target/coverage
+    @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser -p perl-parser-core --lib --locked --branch --lcov --output-path target/coverage/parser.lcov \
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
+    @echo "✅ Parser coverage: target/coverage/parser.lcov"
 # Generate branch coverage and fail if it regresses against the baseline policy
 coverage-branch-gate:
     @echo "📊 Generating branch coverage gate data..."

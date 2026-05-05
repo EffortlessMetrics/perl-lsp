@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "crate_group": "parser",
+  "enforcement": "advisory",
+  "coverage_artifact": "target/coverage/parser.lcov",
+  "measured_scope": "perl-parser-lib + perl-parser-core-lib",
+  "source_of_truth_gate": ".ci/coverage-baseline.txt",
+  "ratchet_status": "existing parser-lib branch gate remains the enforceable baseline",
+  "candidate_scopes": [
+    "perl-parser --all-targets"
+  ],
+  "known_blockers": [
+    {
+      "scope": "perl-parser --all-targets coverage",
+      "reason": "coverage-mode regressions in tests/error_classifier_tests.rs"
+    }
+  ],
+  "risk_targets": {
+    "critical_parser_behavior": {
+      "priority": "highest",
+      "coverage_signal": "branch",
+      "paths": [
+        "crates/perl-parser-core/src/engine/parser/statements.rs",
+        "crates/perl-parser-core/src/syntax/heredoc.rs",
+        "crates/perl-parser-core/src/engine/parser/"
+      ]
+    },
+    "recovery_and_error_handling": {
+      "priority": "highest",
+      "coverage_signal": "branch",
+      "paths": [
+        "crates/perl-parser-core/src/engine/parser/",
+        "crates/perl-parser/src/"
+      ]
+    },
+    "span_and_position_correctness": {
+      "priority": "high",
+      "coverage_signal": "branch",
+      "paths": [
+        "crates/perl-parser-core/src/",
+        "crates/perl-parser/src/"
+      ]
+    },
+    "incremental_parsing": {
+      "priority": "high",
+      "coverage_signal": "branch",
+      "paths": [
+        "crates/perl-parser-core/src/"
+      ]
+    },
+    "facade_and_reexport_glue": {
+      "priority": "low",
+      "coverage_signal": "smoke",
+      "paths": [
+        "crates/perl-parser/src/"
+      ]
+    }
+  }
+}
