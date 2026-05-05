@@ -1992,6 +1992,24 @@ fn detail_with_evidence_helper_handles_both_base_formats() {
 }
 
 #[test]
+fn detail_with_evidence_helper_handles_empty_and_punctuated_base_details() {
+    use super::workspace::detail_with_evidence;
+
+    // Edge case: empty base detail should still format deterministically.
+    let empty_base =
+        detail_with_evidence(String::new(), &ReceiverEvidence::TypeEngine("Foo".to_string()));
+    assert_eq!(empty_base, " — receiver: type engine, medium confidence");
+
+    // Edge case: inherited details can already include punctuation; suffix
+    // insertion should append cleanly without altering the original text.
+    let punctuated = detail_with_evidence(
+        "method from Foo (experimental; v2)".to_string(),
+        &ReceiverEvidence::StaticPackage("Foo".to_string()),
+    );
+    assert_eq!(punctuated, "method from Foo (experimental; v2) — receiver: static package");
+}
+
+#[test]
 fn detail_unchanged_when_no_receiver_evidence_path_reachable()
 -> Result<(), Box<dyn std::error::Error>> {
     // When receiver inference fails, the production callsite returns no
