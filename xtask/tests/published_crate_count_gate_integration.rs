@@ -276,6 +276,15 @@ fn published_crate_count_gate_is_in_ci_gate_job_mapping() {
          The gate must be listed in the ci-gate job mapping to run in CI.",
         gate_names
     );
+
+    let published_count = gate_names.iter().filter(|name| **name == GATE_NAME).count();
+    assert_eq!(
+        published_count, 1,
+        "published_crate_count gate must appear exactly once in ci-gate mapping.\n\
+         Duplicate entries can mask policy drift and lead to confusing receipts.\n\
+         Found gates: {:?}",
+        gate_names
+    );
 }
 
 /// Test that `nested_lock_check` gate precedes `published_crate_count` in policy.
