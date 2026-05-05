@@ -368,6 +368,7 @@ A: Nothing. Those are generated per-subsystem status files that describe *what i
 
 ### Related docs
 
+- [docs/project/metrics/RATCHET.md](RATCHET.md) — operational guide: how to run ratchet checks locally, promote a baseline, and read the CI enforcement job.
 - [docs/project/metrics/WORKFLOW_SCORECARDS.md](WORKFLOW_SCORECARDS.md) — workflow-level scorecard contracts layered above the subsystem scorecards.
 - [docs/project/status/index.md](../status/index.md) — generated per-subsystem status surface (what is true *right now*).
 - [docs/project/ROADMAP.md](../ROADMAP.md) — milestone view of what each scorecard is aiming at.

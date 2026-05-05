@@ -459,6 +459,39 @@ jobs:
         # Uses cargo public-api --simplified to omit blanket-impl noise; baselines in .ci/public-api-baselines/
         run: just public-api-check
 
+  scorecard-ratchet-check:
+    name: Scorecard Floor-Metric Ratchet Check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:metrics-ratchet'))
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          key: scorecard-ratchet-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
+
+      - name: Install just
+        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        with:
+          tool: just
+
+      - name: Check floor-metric ratchet (bootstrap-safe)
+        # Passes if no receipt exists; compares against committed baselines when receipt is present.
+        # See docs/project/metrics/RATCHET.md for the four-layer model and promotion workflow.
+        run: just ci-metrics-ratchet
+
   clippy-strict:
     name: Clippy (Strict)
     timeout-minutes: 20
