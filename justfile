@@ -1863,6 +1863,21 @@ coverage-lcov:
         --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
     @echo "✅ Coverage: lcov.info"
 
+# Generate parser-focused branch coverage output for perl-parser and perl-parser-core.
+# Writes LCOV output to target/coverage/parser.lcov.
+coverage-parser:
+    @echo "📊 Generating parser coverage (branch + lcov)..."
+    @if ! command -v cargo-llvm-cov >/dev/null 2>&1; then \
+        echo "⚠️ cargo-llvm-cov is not installed."; \
+        echo "   Install with: cargo install cargo-llvm-cov --locked"; \
+        echo "   Then run: just coverage-parser"; \
+        exit 0; \
+    fi
+    @mkdir -p target/coverage
+    @cargo llvm-cov -p perl-parser -p perl-parser-core --all-features --branch --lcov \
+        --output-path target/coverage/parser.lcov --locked
+    @echo "✅ Parser coverage: target/coverage/parser.lcov"
+
 # Show coverage summary (terminal)
 coverage-summary:
     @echo "📊 Coverage Summary"
