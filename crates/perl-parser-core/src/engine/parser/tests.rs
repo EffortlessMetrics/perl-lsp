@@ -345,7 +345,7 @@ fn test_source_filter_detection() {
 }
 
 #[test]
-fn test_regex_code_execution_detection() {
+fn test_regex_code_execution_rejected() {
     // Regex with code execution
     let code = r#"my $re = qr/(?{ print "hi" })/;"#;
     let mut parser = Parser::new(code);
@@ -353,7 +353,11 @@ fn test_regex_code_execution_detection() {
     assert!(result.is_ok());
     let ast = must(result);
     let sexp = ast.to_sexp();
-    assert!(sexp.contains("(risk:code)"), "Should detect regex code execution in: {}", sexp);
+    assert!(
+        sexp.contains("Embedded code execution is not allowed in regex patterns"),
+        "Should reject regex code execution in: {}",
+        sexp
+    );
 
     // Safe regex
     let code_safe = r#"my $re = qr/hello/;"#;
