@@ -49,6 +49,9 @@ const FAILURE_PACKET_STATUS_RECEIPT: &str =
     "docs/project/status/parser_accuracy_failure_packets.json";
 const FIXTURE_INVENTORY_STATUS_RECEIPT: &str =
     "docs/project/status/parser_accuracy_fixture_inventory.json";
+const FAILURE_WORKLIST_STATUS_RECEIPT: &str =
+    "docs/project/status/parser_accuracy_failure_worklist.md";
+const NEXT_POINTER_STATUS_RECEIPT: &str = "docs/project/status/parser_accuracy_next.md";
 const SAFETY_FLOOR_METRICS: &[(&str, f64)] =
     &[("dynamic_false_precision_count", 0.0), ("fast_path_wrong_result_count", 0.0)];
 const DEFERRED_PRECISION_RECALL_CANDIDATES: &[&str] = &[
@@ -4766,6 +4769,15 @@ struct FixtureInventoryStatusEntry {
     provider_expectation_counts: ProviderExpectationCounts,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FailureWorklistRow {
+    family: String,
+    count: u64,
+    likely_layer: String,
+    first_fixture: String,
+    suggested_pr: String,
+}
+
 #[derive(Debug, Serialize)]
 struct ProviderExpectationCounts {
     method_completion: u64,
@@ -4837,6 +4849,16 @@ fn status_receipt_files(
             path: root.join(FIXTURE_INVENTORY_STATUS_RECEIPT),
             content: render_fixture_inventory_status_receipt(manifest, artifact)?,
         },
+        StatusReceiptFile {
+            name: FAILURE_WORKLIST_STATUS_RECEIPT,
+            path: root.join(FAILURE_WORKLIST_STATUS_RECEIPT),
+            content: render_failure_worklist_status_receipt(artifact),
+        },
+        StatusReceiptFile {
+            name: NEXT_POINTER_STATUS_RECEIPT,
+            path: root.join(NEXT_POINTER_STATUS_RECEIPT),
+            content: render_next_pointer_status_receipt(artifact),
+        },
     ])
 }
 
@@ -4845,7 +4867,7 @@ fn render_failure_packet_status_receipt(artifact: &ParserAccuracyArtifact) -> Re
         schema_version: 1,
         commit: artifact.commit.clone(),
         cadence: artifact.cadence,
-        generated_by: "cargo xtask update-status --only parser --write",
+        generated_by: "cargo xtask metrics parser-accuracy --export-status-receipts",
         failure_packet_count: artifact.failure_packets.len() as u64,
         failure_packets: artifact.failure_packets.iter().map(failure_packet_status_entry).collect(),
     };
@@ -4907,7 +4929,7 @@ fn render_fixture_inventory_status_receipt(
     let receipt = FixtureInventoryStatusReceipt {
         schema_version: 1,
         commit: artifact.commit.clone(),
-        generated_by: "cargo xtask update-status --only parser --write",
+        generated_by: "cargo xtask metrics parser-accuracy --export-status-receipts",
         fixture_count: artifact.denominator.fixture_count,
         family_count: artifact.denominator.fixture_family_count,
         scored_lines: artifact.denominator.scored_line_count,
@@ -4915,6 +4937,89 @@ fn render_fixture_inventory_status_receipt(
         fixtures: manifest.fixtures.iter().map(fixture_inventory_status_entry).collect(),
     };
     render_json_with_newline(&receipt)
+}
+
+fn render_failure_worklist_status_receipt(artifact: &ParserAccuracyArtifact) -> String {
+    let rows = failure_worklist_rows(artifact);
+    let mut output = String::new();
+    output.push_str("# Parser-accuracy failure worklist\n\n");
+    output.push_str(&format!(
+        "Source: `target/metrics/parser_accuracy.json` ({} failure packets)\n\n",
+        artifact.failure_packets.len()
+    ));
+    output.push_str("| Family | Count | Likely layer | First fixture | Suggested PR |\n");
+    output.push_str("|---|---:|---|---|---|\n");
+
+    if rows.is_empty() {
+        output.push_str("| none | 0 | n/a | n/a | n/a |\n");
+    } else {
+        for row in rows {
+            output.push_str(&format!(
+                "| {} | {} | {} | `{}` | `{}` |\n",
+                row.family, row.count, row.likely_layer, row.first_fixture, row.suggested_pr
+            ));
+        }
+    }
+
+    output
+}
+
+fn render_next_pointer_status_receipt(artifact: &ParserAccuracyArtifact) -> String {
+    let rows = failure_worklist_rows(artifact);
+    let mut output = String::new();
+    output.push_str("# Parser Accuracy Next\n\n");
+    output.push_str("Source: `target/metrics/parser_accuracy.json`\n\n");
+    output.push_str(&format!(
+        "Denominator: {} fixtures / {} families; {} scored lines; {} scored symbols.\n\n",
+        artifact.denominator.fixture_count,
+        artifact.denominator.fixture_family_count,
+        artifact.denominator.scored_line_count,
+        artifact.denominator.scored_symbol_count
+    ));
+    output.push_str(&format!("Failure packets: {} active.\n\n", artifact.failure_packets.len()));
+
+    if let Some(row) = rows.first() {
+        output.push_str("| Field | Value |\n");
+        output.push_str("|---|---|\n");
+        output.push_str(&format!("| Pointer | `{}` |\n", row.family));
+        output.push_str(&format!("| Packet count | {} |\n", row.count));
+        output.push_str(&format!("| Likely layer | `{}` |\n", row.likely_layer));
+        output.push_str(&format!("| First fixture | `{}` |\n", row.first_fixture));
+        output.push_str(&format!("| Suggested PR | `{}` |\n", row.suggested_pr));
+        output.push_str(
+            "\nUse this pointer only after open measurement/tracking PRs are settled. If the pointed lane has already landed, regenerate this file and take the next row.\n",
+        );
+    } else {
+        output.push_str("Pointer: no active failure packets.\n");
+    }
+
+    output
+}
+
+fn failure_worklist_rows(artifact: &ParserAccuracyArtifact) -> Vec<FailureWorklistRow> {
+    let mut rows: BTreeMap<String, FailureWorklistRow> = BTreeMap::new();
+
+    for packet in &artifact.failure_packets {
+        let family = packet.failure_kind.clone();
+        let suggested_pr = suggested_next_pr_for_failure_packet(packet);
+        rows.entry(family.clone())
+            .and_modify(|row| {
+                row.count += 1;
+            })
+            .or_insert_with(|| FailureWorklistRow {
+                family,
+                count: 1,
+                likely_layer: packet.likely_layer.clone(),
+                first_fixture: packet.fixture_id.clone(),
+                suggested_pr,
+            });
+    }
+
+    let mut rows: Vec<_> = rows.into_values().collect();
+    rows.sort_by(|left, right| {
+        right.count.cmp(&left.count).then_with(|| left.family.cmp(&right.family))
+    });
+    rows
 }
 
 fn fixture_inventory_status_entry(fixture: &FixtureMetadata) -> FixtureInventoryStatusEntry {
@@ -6184,7 +6289,7 @@ sub dynamic_boundary_case {
     }
 
     #[test]
-    fn status_receipts_export_failure_packets_and_fixture_inventory() -> Result<()> {
+    fn status_receipts_export_failure_packets_inventory_worklist_and_pointer() -> Result<()> {
         let manifest = fixture_manifest();
         let artifact = ParserAccuracyArtifact {
             schema_version: 1,
@@ -6223,6 +6328,24 @@ sub dynamic_boundary_case {
         let inventory_receipt = render_fixture_inventory_status_receipt(&manifest, &artifact)?;
         assert!(inventory_receipt.contains("\"fixture_count\": 2"));
         assert!(inventory_receipt.contains("\"provider_expectation_counts\""));
+
+        let worklist = render_failure_worklist_status_receipt(&artifact);
+        assert!(worklist.contains("| missing_symbol_reference | 1 | semantic_fact_extraction |"));
+        assert!(worklist.contains("fix(semantic): resolve parser-accuracy semantic fact packet"));
+
+        let pointer = render_next_pointer_status_receipt(&artifact);
+        assert!(pointer.contains("| Pointer | `missing_symbol_reference` |"));
+        assert!(pointer.contains("| First fixture | `qualified_refs` |"));
+
+        let files = status_receipt_files(Path::new("."), &manifest, &artifact)?;
+        assert!(
+            files.iter().any(|file| file.name == FAILURE_WORKLIST_STATUS_RECEIPT),
+            "status export must include parser_accuracy_failure_worklist.md"
+        );
+        assert!(
+            files.iter().any(|file| file.name == NEXT_POINTER_STATUS_RECEIPT),
+            "status export must include parser_accuracy_next.md"
+        );
         Ok(())
     }
 

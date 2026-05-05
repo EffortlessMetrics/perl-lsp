@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "commit": "01b8bdc8d",
+  "commit": "d146f9c1d",
   "cadence": "pr",
-  "generated_by": "cargo xtask update-status --only parser --write",
+  "generated_by": "cargo xtask metrics parser-accuracy --export-status-receipts",
   "failure_packet_count": 12,
   "failure_packets": [
     {
