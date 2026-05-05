@@ -54,6 +54,9 @@ use crate::import_optimizer::ImportOptimizer;
 use crate::workspace_index::{
     SymKind, SymbolKey, WorkspaceIndex, fs_path_to_uri, normalize_var, uri_to_fs_path,
 };
+
+use super::edit_plan::{RefactorOperationKind, RefactorPlan, RefactorSafety};
+use super::edit_validation::validate_file_edits;
 use perl_module::path::module_name_to_path;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -336,6 +339,8 @@ impl WorkspaceRefactor {
             }
         }
 
+        let used_fallback = locations.is_empty();
+
         for loc in locations {
             let path = uri_to_fs_path(&loc.uri).ok_or_else(|| {
                 RefactorError::UriConversion(format!("Failed to convert URI to path: {}", loc.uri))
@@ -365,8 +370,20 @@ impl WorkspaceRefactor {
         let file_edits: Vec<FileEdit> =
             edits.into_iter().map(|(file_path, edits)| FileEdit { file_path, edits }).collect();
 
+        validate_file_edits(&file_edits, |path| {
+            fs_path_to_uri(path).ok().and_then(|uri| {
+                store.get(&uri).map(|document| document.text.clone())
+            })
+        })
+        .map_err(|error| RefactorError::InvalidInput(error.to_string()))?;
+
+        let mut plan = RefactorPlan::new(RefactorOperationKind::Rename, file_edits);
+        if used_fallback {
+            plan.safety = RefactorSafety::NeedsPreview;
+        }
+
         let description = format!("Rename '{}' to '{}'", old_name, new_name);
-        Ok(RefactorResult { file_edits, description, warnings: vec![] })
+        Ok(RefactorResult { file_edits: plan.edits, description, warnings: vec![] })
     }
 
     /// Extract selected code into a new module
