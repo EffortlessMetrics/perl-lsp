@@ -45,6 +45,9 @@
 pub mod ast;
 
 /// Incremental parsing AST types extracted into a dedicated microcrate.
+///
+/// This re-export is experimental while incremental-parse compatibility is
+/// still being hardened.
 pub use perl_ast_v2 as v2;
 
 /// Primary AST node -- the building block of every syntax tree.
