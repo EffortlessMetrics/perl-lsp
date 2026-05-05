@@ -17,7 +17,7 @@
 //!
 //! # Quick Start
 //!
-//! ## Bridge Mode (Phase 1 - Implemented)
+//! ## Bridge Mode (Legacy compatibility mode)
 //!
 //! The bridge adapter proxies DAP messages to Perl::LanguageServer:
 //!
@@ -103,23 +103,9 @@
 //!
 //! # Architecture
 //!
-//! The DAP adapter follows a phased implementation approach:
+//! The DAP adapter currently ships in two runtime modes:
 //!
-//! ## Phase 1: Bridge Adapter (Implemented)
-//!
-//! **Acceptance Criteria: AC1-AC4**
-//!
-//! - **[`BridgeAdapter`]**: Message proxy between VSCode and Perl::LanguageServer
-//! - **[`LaunchConfiguration`]**: Launch debugging configuration and validation
-//! - **[`AttachConfiguration`]**: Attach debugging configuration for TCP connections
-//! - **[`platform`]**: Cross-platform path resolution and environment setup
-//!
-//! Phase 1 provides immediate debugging support by bridging to the mature
-//! Perl::LanguageServer implementation while the native adapter is developed.
-//!
-//! ## Phase 2: Native Adapter (Planned)
-//!
-//! **Acceptance Criteria: AC5-AC12**
+//! ## Native Adapter (default)
 //!
 //! - **[`protocol`]**: DAP protocol types and message definitions
 //! - **[`dispatcher`]**: Request routing and method dispatch
@@ -130,18 +116,19 @@
 //! - **Control Flow**: Step, continue, pause, and breakpoint control
 //! - **Safe Evaluation**: Expression evaluation in debug context
 //!
-//! Phase 2 will provide a native Rust DAP implementation with tighter integration
-//! to `perl_parser` for enhanced validation and performance.
+//! The native adapter is the primary production path and is used for launch and
+//! attach sessions.
 //!
-//! ## Phase 3: Production Hardening (Planned)
+//! ## Bridge Adapter (`--bridge`)
 //!
-//! **Acceptance Criteria: AC13-AC19**
+//! Bridge mode remains available as a compatibility path during migrations from
+//! Perl::LanguageServer:
 //!
-//! - **Security Validation**: Input sanitization and command injection prevention
-//! - **Performance Optimization**: Efficient variable inspection and stepping
-//! - **Packaging**: Distribution via cargo, VSCode marketplace, and package managers
-//! - **Documentation**: Comprehensive usage guides and troubleshooting
-//! - **Testing**: End-to-end integration tests with real debugging scenarios
+//! - **[`BridgeAdapter`]**: Message proxy between VSCode and Perl::LanguageServer
+//! - **[`LaunchConfiguration`]** / **[`AttachConfiguration`]**: Shared configuration validation
+//! - **[`platform`]**: Cross-platform path resolution and environment setup
+//!
+//! Bridge mode requires the `Perl::LanguageServer` CPAN module to be installed.
 //!
 //! # Protocol Support
 //!

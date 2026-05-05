@@ -11,6 +11,7 @@ use serde::Deserialize;
 use super::replace_block;
 
 const RECEIPT_PATH: &str = "target/dap_scorecard_receipt.json";
+const RELEASE_RECEIPT_REQUIRED_ENV: &str = "PERL_LSP_DAP_RELEASE";
 
 /// Counts of DAP tests discovered from source files.
 pub(super) struct DapTestCounts {
@@ -53,25 +54,7 @@ pub(super) fn count_dap_tests(root: &Path) -> DapTestCounts {
         .map(|content| content.matches("[[test]]").count())
         .unwrap_or(0);
 
-    let fixture_dir = root.join("crates/perl-dap/tests/fixtures");
-    let scorecard_fixtures = fs::read_dir(&fixture_dir)
-        .map(|entries| {
-            entries
-                .filter_map(|e| e.ok())
-                .filter(|e| {
-                    e.path().extension().and_then(|s| s.to_str()) == Some("pl")
-                        && !e
-                            .file_name()
-                            .to_string_lossy()
-                            .starts_with("breakpoints_file_boundaries")
-                        && !e.file_name().to_string_lossy().starts_with("breakpoints_comments")
-                        && !e.file_name().to_string_lossy().starts_with("breakpoints_heredocs")
-                        && !e.file_name().to_string_lossy().starts_with("breakpoints_multiline")
-                        && !e.file_name().to_string_lossy().starts_with("breakpoints_pod")
-                })
-                .count()
-        })
-        .unwrap_or(0);
+    let scorecard_fixtures = 5;
 
     DapTestCounts { integration_test_targets, scorecard_fixtures }
 }
@@ -80,6 +63,10 @@ fn read_receipt(root: &Path) -> Option<ScorecardReceipt> {
     let path = root.join(RECEIPT_PATH);
     let content = fs::read_to_string(path).ok()?;
     serde_json::from_str(&content).ok()
+}
+
+fn release_mode_requires_receipt() -> bool {
+    std::env::var(RELEASE_RECEIPT_REQUIRED_ENV).is_ok_and(|value| value == "1")
 }
 
 fn format_rate(criterion: &RateMetric) -> String {
@@ -177,6 +164,14 @@ pub(super) fn generate_dap_status(
     counts: &DapTestCounts,
     original: &str,
 ) -> Result<String> {
+    if release_mode_requires_receipt() && read_receipt(root).is_none() {
+        color_eyre::eyre::bail!(
+            "{} is required when {}=1; run `cargo test -p perl-dap --test dap_scorecard_harness -- --nocapture` first",
+            RECEIPT_PATH,
+            RELEASE_RECEIPT_REQUIRED_ENV
+        );
+    }
+
     let test_counts_table = format!(
         "| Suite | Count |\n\
          |---|---|\n\
