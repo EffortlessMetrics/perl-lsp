@@ -43,17 +43,14 @@ fn scenario_excessive_unicode_properties_returns_offset_error()
 }
 
 #[test]
-fn scenario_nested_quantifier_is_advisory_not_fatal() -> Result<(), Box<dyn std::error::Error>> {
-    // Given: a nested-quantifier pattern that may cause catastrophic backtracking.
+fn scenario_nested_quantifier_is_validation_error() -> Result<(), Box<dyn std::error::Error>> {
     let validator = RegexValidator::new();
     let pattern = "(a+)+";
 
-    // When: validating and separately asking for advisory nested-quantifier detection.
     let validation_result = validator.validate(pattern, 0);
     let advisory_detected = validator.detect_nested_quantifiers(pattern);
 
-    // Then: validation remains non-fatal, while advisory detection flags the risk.
-    assert!(validation_result.is_ok());
+    assert!(validation_result.is_err());
     assert!(advisory_detected);
     Ok(())
 }

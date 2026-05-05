@@ -16,6 +16,10 @@ impl<'a> RegexCursor<'a> {
         self.bytes.get(self.pos + offset).copied()
     }
 
+    pub(crate) fn pos(&self) -> usize {
+        self.pos
+    }
+
     pub(crate) fn bump(&mut self) {
         self.pos += 1;
     }
