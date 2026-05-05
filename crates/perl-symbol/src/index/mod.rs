@@ -89,7 +89,9 @@ impl SymbolIndex {
     /// Returns all symbols starting with the given prefix.
     #[must_use]
     pub fn search_prefix(&self, prefix: &str) -> Vec<String> {
-        self.trie.search_prefix(prefix)
+        let mut results = self.trie.search_prefix(prefix);
+        results.sort();
+        results
     }
 
     /// Fuzzy search symbols.
@@ -110,7 +112,12 @@ impl SymbolIndex {
 
         // Sort by relevance (number of matching tokens)
         let mut sorted: Vec<_> = results.into_iter().collect();
-        sorted.sort_by(|(_, a), (_, b)| b.cmp(a));
+        sorted.sort_by(|(name_a, score_a), (name_b, score_b)| {
+            score_b
+                .cmp(score_a)
+                .then_with(|| name_a.len().cmp(&name_b.len()))
+                .then_with(|| name_a.cmp(name_b))
+        });
 
         sorted.into_iter().map(|(symbol, _)| symbol).collect()
     }
@@ -278,6 +285,16 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_add_symbol_does_not_duplicate_search_results() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("get_user_name".to_string());
+        index.add_symbol("get_user_name".to_string());
+
+        assert_eq!(index.search_prefix("get"), vec!["get_user_name".to_string()]);
+        assert_eq!(index.search_fuzzy("user name"), vec!["get_user_name".to_string()]);
+    }
+
+    #[test]
     fn replace_document_symbols_removes_stale_entries() {
         let mut index = SymbolIndex::new();
         index.replace_document_symbols(
@@ -360,6 +377,84 @@ mod tests {
         assert!(
             !results.contains(&"get_user_name".to_string()),
             "replaced symbol must be removed from fuzzy index"
+        );
+    }
+
+    #[test]
+    fn replace_document_symbols_deduplicates_same_symbol_in_one_document() {
+        let mut index = SymbolIndex::new();
+        index.replace_document_symbols(
+            "file:///a.pl",
+            vec!["shared_name".to_string(), "shared_name".to_string()],
+        );
+
+        assert_eq!(index.search_prefix("shared"), vec!["shared_name".to_string()]);
+        assert_eq!(index.search_fuzzy("shared name"), vec!["shared_name".to_string()]);
+    }
+
+    #[test]
+    fn fuzzy_ranking_prefers_more_matching_tokens() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("alpha_beta_gamma".to_string());
+        index.add_symbol("alpha_beta".to_string());
+        index.add_symbol("alpha_only".to_string());
+
+        assert_eq!(
+            index.search_fuzzy("alpha beta gamma"),
+            vec![
+                "alpha_beta_gamma".to_string(),
+                "alpha_beta".to_string(),
+                "alpha_only".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn fuzzy_handles_camel_snake_and_mixed_delimiters() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("parseHTTPHeader".to_string());
+        index.add_symbol("parse_http_header".to_string());
+        index.add_symbol("parse-http-header".to_string());
+
+        let results = index.search_fuzzy("parse http header");
+        assert_eq!(
+            results,
+            vec![
+                "parse-http-header".to_string(),
+                "parse_http_header".to_string(),
+                "parseHTTPHeader".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn empty_query_returns_empty_result() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("anything".to_string());
+        assert!(index.search_fuzzy("").is_empty());
+    }
+
+    #[test]
+    fn unknown_prefix_returns_empty_result() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("known_symbol".to_string());
+        assert!(index.search_prefix("zzz").is_empty());
+    }
+
+    #[test]
+    fn fuzzy_tie_breakers_are_deterministic() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("alpha_zeta".to_string());
+        index.add_symbol("alpha_beta".to_string());
+        index.add_symbol("alpha".to_string());
+
+        assert_eq!(
+            index.search_fuzzy("alpha"),
+            vec![
+                "alpha".to_string(),
+                "alpha_beta".to_string(),
+                "alpha_zeta".to_string()
+            ]
         );
     }
 }
