@@ -701,13 +701,15 @@ pub(super) fn classify_text_pattern_receiver(
         let var_name = arrow_prefix;
         let before = &source[..context.position.min(source.len())];
 
-        for line in before.lines().rev() {
+        let lines: Vec<&str> = before.lines().collect();
+        for (line_idx, line) in lines.iter().enumerate().rev() {
             let trimmed = line.trim();
             let assign_pos = find_assignment_eq(trimmed);
             if let Some(assign_pos) = assign_pos {
                 let lhs = trimmed[..assign_pos].trim();
                 if lhs.ends_with(var_name) || lhs.contains(&format!("{var_name} ")) {
-                    let rhs = trimmed[assign_pos + 1..].trim();
+                    let rhs = collect_assignment_rhs(&lines, line_idx, assign_pos);
+                    let rhs = rhs.trim();
                     // Pattern: `Package::Name->new(...)`
                     if let Some(arrow_pos) = rhs.find("->") {
                         let pkg = rhs[..arrow_pos].trim();
@@ -740,6 +742,62 @@ pub(super) fn classify_text_pattern_receiver(
     }
 
     ReceiverEvidence::Unknown
+}
+
+fn collect_assignment_rhs(lines: &[&str], line_idx: usize, assign_pos: usize) -> String {
+    let first_line = lines[line_idx].trim();
+    let mut rhs = first_line[assign_pos + 1..].trim().to_string();
+    if truncate_after_top_level_semicolon(&rhs).len() < rhs.len() {
+        return truncate_after_top_level_semicolon(&rhs).to_string();
+    }
+
+    for continuation in lines.iter().skip(line_idx + 1) {
+        if !rhs.is_empty() {
+            rhs.push('\n');
+        }
+        rhs.push_str(continuation.trim_end());
+        let truncated = truncate_after_top_level_semicolon(&rhs);
+        if truncated.len() < rhs.len() {
+            return truncated.to_string();
+        }
+    }
+
+    rhs
+}
+
+fn truncate_after_top_level_semicolon(s: &str) -> &str {
+    let mut depth_paren: i32 = 0;
+    let mut depth_brace: i32 = 0;
+    let mut depth_bracket: i32 = 0;
+    let mut in_string: Option<char> = None;
+    let mut prev_was_backslash = false;
+
+    for (idx, ch) in s.char_indices() {
+        if let Some(q) = in_string {
+            if !prev_was_backslash && ch == q {
+                in_string = None;
+            }
+            prev_was_backslash = !prev_was_backslash && ch == '\\';
+            continue;
+        }
+
+        prev_was_backslash = false;
+        match ch {
+            '"' | '\'' => in_string = Some(ch),
+            '(' => depth_paren += 1,
+            ')' => depth_paren -= 1,
+            '{' => depth_brace += 1,
+            '}' => depth_brace -= 1,
+            '[' => depth_bracket += 1,
+            ']' => depth_bracket -= 1,
+            ';' if depth_paren == 0 && depth_brace == 0 && depth_bracket == 0 => {
+                return &s[..idx + ch.len_utf8()];
+            }
+            _ => {}
+        }
+    }
+
+    s
 }
 
 /// Returns `true` when the RHS contains a *call-like* `bless` keyword
