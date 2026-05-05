@@ -151,7 +151,67 @@ impl PragmaStateQuery {
 /// queries and expose immutable snapshots.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CompileTimePragmaEnvironment {
-    map: Vec<(Range<usize>, PragmaSnapshot)>,
+    map: PragmaMap,
+    legacy_map: Vec<(Range<usize>, PragmaSnapshot)>,
+}
+
+/// A timeline entry representing pragma state for a byte range.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PragmaEntry {
+    /// Source byte range where this snapshot takes effect.
+    pub range: Range<usize>,
+    /// Immutable state snapshot for this range transition.
+    pub snapshot: PragmaSnapshot,
+}
+
+/// Range-indexed timeline of pragma transitions.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PragmaMap {
+    entries: Box<[PragmaEntry]>,
+}
+
+impl PragmaMap {
+    /// Construct a pragma timeline from ordered entries.
+    #[must_use]
+    pub fn from_entries(entries: Vec<PragmaEntry>) -> Self {
+        Self { entries: entries.into_boxed_slice() }
+    }
+
+    /// Iterate over all timeline entries.
+    pub fn iter(&self) -> impl Iterator<Item = &PragmaEntry> {
+        self.entries.iter()
+    }
+
+    /// Return the immutable snapshot active at `offset`.
+    #[must_use]
+    pub fn state_at(&self, offset: usize) -> PragmaSnapshot {
+        let idx = self.entries.partition_point(|entry| entry.range.start <= offset);
+        let mut snapshot = if idx > 0 {
+            self.entries[idx - 1].snapshot.clone()
+        } else {
+            PragmaSnapshot::default()
+        };
+
+        if snapshot.state.signatures_strict {
+            snapshot.state.strict_vars = true;
+            snapshot.state.strict_subs = true;
+            snapshot.state.strict_refs = true;
+        }
+
+        snapshot
+    }
+
+    /// Return the final snapshot after the full file is processed.
+    #[must_use]
+    pub fn final_state(&self) -> PragmaSnapshot {
+        self.entries.last().map_or_else(PragmaSnapshot::default, |entry| entry.snapshot.clone())
+    }
+
+    /// Borrow all entries as a slice.
+    #[must_use]
+    pub fn as_slice(&self) -> &[PragmaEntry] {
+        &self.entries
+    }
 }
 
 impl CompileTimePragmaEnvironment {
@@ -163,10 +223,19 @@ impl CompileTimePragmaEnvironment {
         PragmaTracker::build_ranges(ast, &mut current_state, &mut ranges);
         ranges.sort_by_key(|(range, _)| range.start);
 
-        let map =
-            ranges.into_iter().map(|(range, state)| (range, PragmaSnapshot::from(state))).collect();
+        let legacy_map: Vec<(Range<usize>, PragmaSnapshot)> = ranges
+            .iter()
+            .cloned()
+            .map(|(range, state)| (range, PragmaSnapshot::from(state)))
+            .collect();
+        let map = PragmaMap::from_entries(
+            ranges
+                .into_iter()
+                .map(|(range, state)| PragmaEntry { range, snapshot: PragmaSnapshot::from(state) })
+                .collect(),
+        );
 
-        Self { map }
+        Self { map, legacy_map }
     }
 
     /// Return a position query object with immutable state snapshot.
@@ -178,22 +247,18 @@ impl CompileTimePragmaEnvironment {
     /// Return the immutable snapshot active at the given byte offset.
     #[must_use]
     pub fn snapshot_at(&self, offset: usize) -> PragmaSnapshot {
-        let idx = self.map.partition_point(|(range, _)| range.start <= offset);
-        let mut snapshot =
-            if idx > 0 { self.map[idx - 1].1.clone() } else { PragmaSnapshot::default() };
-
-        if snapshot.state.signatures_strict {
-            snapshot.state.strict_vars = true;
-            snapshot.state.strict_subs = true;
-            snapshot.state.strict_refs = true;
-        }
-
-        snapshot
+        self.map.state_at(offset)
     }
 
     /// Access the underlying range map for advanced consumers.
     #[must_use]
     pub fn as_map(&self) -> &[(Range<usize>, PragmaSnapshot)] {
+        &self.legacy_map
+    }
+
+    /// Access the typed pragma timeline.
+    #[must_use]
+    pub fn pragma_map(&self) -> &PragmaMap {
         &self.map
     }
 }
@@ -689,11 +754,18 @@ impl PragmaTracker {
         pragma_map: &[(Range<usize>, PragmaState)],
         offset: usize,
     ) -> PragmaState {
-        let map = pragma_map
+        let legacy_map = pragma_map
             .iter()
             .map(|(range, state)| (range.clone(), PragmaSnapshot::from(state.clone())))
-            .collect();
-        let environment = CompileTimePragmaEnvironment { map };
+            .collect::<Vec<_>>();
+        let map = PragmaMap::from_entries(
+            legacy_map
+                .iter()
+                .cloned()
+                .map(|(range, snapshot)| PragmaEntry { range, snapshot })
+                .collect(),
+        );
+        let environment = CompileTimePragmaEnvironment { map, legacy_map };
         environment.snapshot_at(offset).into()
     }
 
