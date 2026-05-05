@@ -17,6 +17,8 @@ pub(super) struct ParserAccuracyArtifactSummary {
     pub(super) denominator: ParserAccuracyDenominator,
     pub(super) families: Vec<ParserAccuracyFamilySummary>,
     pub(super) metrics: Vec<ParserAccuracyMetricSummary>,
+    #[serde(default)]
+    pub(super) failure_packets: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -86,7 +88,9 @@ pub(super) fn parser_accuracy_rows(artifact: Option<&ParserAccuracyArtifactSumma
     format!(
         "| **Accuracy denominator** | {} fixtures / {} families | {} scored lines, {} scored symbols, {} fully labeled, {} partial, {} unknown, {} negative, {} dynamic boundaries, {} unsupported, {} real-project, {} generated, {} hand-labeled; cadence `{}` | {ARTIFACT_PATH}; {SPEC_PATH} |\n\
          | **Accuracy families** | {} | fixture family inventory from parser accuracy manifest | {ARTIFACT_PATH} |\n\
-         | **Accuracy scorers** | {} | missing accuracy rows stay `insufficient_data`; they are not rendered as zero or pass | {SCHEMA_PATH} |",
+         | **Accuracy scorers** | {} | missing accuracy rows stay `insufficient_data`; they are not rendered as zero or pass | {SCHEMA_PATH} |\n\
+         | **Failure packets** | {} active packets | See `parser_accuracy_failure_packets.json` for committed packet details | generated |\n\
+         | **Fixture inventory** | {} fixtures / {} families | See `parser_accuracy_fixture_inventory.json` for compact fixture metadata | generated |",
         d.fixture_count,
         d.fixture_family_count,
         d.scored_line_count,
@@ -103,6 +107,9 @@ pub(super) fn parser_accuracy_rows(artifact: Option<&ParserAccuracyArtifactSumma
         artifact.cadence,
         family_summary,
         metric_summary,
+        artifact.failure_packets.len(),
+        d.fixture_count,
+        d.fixture_family_count,
     )
 }
 

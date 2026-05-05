@@ -1646,6 +1646,9 @@ enum MetricsCommand {
         /// Validate the generated artifact contract without writing target output.
         #[arg(long)]
         check: bool,
+        /// Export committed parser status receipts under docs/project/status/.
+        #[arg(long)]
+        export_status_receipts: bool,
         /// Fixture manifest path.
         #[arg(long)]
         manifest: Option<PathBuf>,
@@ -2196,9 +2199,21 @@ fn main() -> Result<()> {
         Commands::CheckTestWiring => check_test_wiring::run(),
         Commands::Metrics { command } => match command {
             MetricsCommand::ParserStats { input, json } => metrics::parser_stats::run(input, json),
-            MetricsCommand::ParserAccuracy { json, check, manifest, output, cadence } => {
-                metrics::parser_accuracy::run(json, check, manifest, output, &cadence)
-            }
+            MetricsCommand::ParserAccuracy {
+                json,
+                check,
+                export_status_receipts,
+                manifest,
+                output,
+                cadence,
+            } => metrics::parser_accuracy::run(
+                json,
+                check,
+                export_status_receipts,
+                manifest,
+                output,
+                &cadence,
+            ),
             MetricsCommand::LspStats { json, receipt_dir } => {
                 metrics::lsp_stats::run_with_receipt_dir(json, receipt_dir.as_deref())
             }

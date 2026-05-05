@@ -20,6 +20,9 @@ use std::path::PathBuf;
 use color_eyre::eyre::{Context, Result, eyre};
 use regex::Regex;
 
+use crate::tasks::metrics::parser_accuracy::{
+    status_receipt_equivalent_ignoring_commit, status_receipt_files_from_target,
+};
 use crate::utils::project_root;
 
 mod cmd;
@@ -192,6 +195,12 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
                     parser_path,
                     updated_parser,
                 ));
+            }
+            for receipt in status_receipt_files_from_target(&root)? {
+                let original_receipt = fs::read_to_string(&receipt.path).unwrap_or_default();
+                if !status_receipt_equivalent_ignoring_commit(&original_receipt, &receipt.content) {
+                    files_to_update.push((receipt.name, receipt.path, receipt.content));
+                }
             }
             Ok(())
         })?;
