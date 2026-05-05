@@ -239,19 +239,7 @@ impl<'a> Parser<'a> {
                 let token = self.tokens.next()?;
                 let (pattern, body, modifiers) = quote_parser::extract_regex_parts(&token.text);
 
-                // Validate regex complexity and check for embedded code
-                let validator = crate::engine::regex_validator::RegexValidator::new();
-                validator.validate(&body, token.start)?;
-                // Nested quantifiers are recorded as a non-fatal diagnostic
-                // rather than a hard error to avoid false positives on valid
-                // Perl patterns like (?:/\.)+, (\w+)*, (?:pattern)+
-                if validator.detect_nested_quantifiers(&body) {
-                    self.record_error(ParseError::syntax(
-                        "Nested quantifiers detected (possible backtracking risk)",
-                        token.start,
-                    ));
-                }
-                let has_embedded_code = validator.detects_code_execution(&body);
+                let has_embedded_code = self.analyze_regex_body_for_ast(&body, token.start)?;
 
                 Ok(Node::new(
                     NodeKind::Regex { pattern, replacement: None, modifiers, has_embedded_code },
@@ -409,16 +397,7 @@ impl<'a> Parser<'a> {
                         },
                     )?;
 
-                // Validate regex complexity and check for embedded code
-                let validator = crate::engine::regex_validator::RegexValidator::new();
-                validator.validate(&pattern, token.start)?;
-                if validator.detect_nested_quantifiers(&pattern) {
-                    self.record_error(ParseError::syntax(
-                        "Nested quantifiers detected (possible backtracking risk)",
-                        token.start,
-                    ));
-                }
-                let has_embedded_code = validator.detects_code_execution(&pattern);
+                let has_embedded_code = self.analyze_regex_body_for_ast(&pattern, token.start)?;
 
                 // Substitution as a standalone expression (will be used with =~ later)
                 Ok(Node::new(

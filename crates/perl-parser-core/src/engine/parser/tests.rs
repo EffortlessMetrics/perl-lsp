@@ -345,19 +345,27 @@ fn test_source_filter_detection() {
 }
 
 #[test]
-fn test_regex_code_execution_rejected() {
-    // Regex with code execution
-    let code = r#"my $re = qr/(?{ print "hi" })/;"#;
-    let mut parser = Parser::new(code);
-    let result = parser.parse();
-    assert!(result.is_ok());
-    let ast = must(result);
-    let sexp = ast.to_sexp();
-    assert!(
-        sexp.contains("Embedded code execution is not allowed in regex patterns"),
-        "Should reject regex code execution in: {}",
-        sexp
-    );
+fn test_regex_code_execution_annotated() {
+    let cases = [
+        ("qr operator", r#"my $re = qr/(?{ print "hi" })/;"#),
+        ("match operator", r#"$x =~ m/(?{ print "hi" })/;"#),
+        ("bare match", r#"$x =~ /(?{ print "hi" })/;"#),
+        ("substitution", r#"$x =~ s/(?{ print "hi" })/ok/;"#),
+    ];
+
+    for (name, code) in cases {
+        let mut parser = Parser::new(code);
+        let result = parser.parse();
+        assert!(result.is_ok(), "{name} should parse successfully: {:?}", result.err());
+        let ast = must(result);
+        let sexp = ast.to_sexp();
+        assert!(sexp.contains("(risk:code)"), "{name} should mark embedded code: {sexp}");
+        assert!(
+            !sexp.contains("Embedded code execution is not allowed in regex patterns"),
+            "{name} should not reject valid Perl embedded-code regex syntax: {sexp}"
+        );
+        assert!(!sexp.contains("ERROR"), "{name} should not recover through ERROR: {sexp}");
+    }
 
     // Safe regex
     let code_safe = r#"my $re = qr/hello/;"#;
@@ -367,6 +375,23 @@ fn test_regex_code_execution_rejected() {
     let ast_safe = must(result_safe);
     let sexp_safe = ast_safe.to_sexp();
     assert!(!sexp_safe.contains("(risk:code)"), "Should not flag safe regex in: {}", sexp_safe);
+}
+
+#[test]
+fn test_regex_code_execution_preserves_nested_quantifier_diagnostic() {
+    let code = r#"my $re = qr/(?{ print "hi" })(a+)+/;"#;
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "embedded-code regex should parse successfully: {:?}", result.err());
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("(risk:code)"), "Should annotate embedded code: {sexp}");
+
+    let found = parser.errors().iter().any(|error| {
+        error.to_string().contains("Nested quantifiers detected")
+            || error.to_string().contains("backtracking risk")
+    });
+    assert!(found, "Should preserve nested-quantifier diagnostic: {:?}", parser.errors());
 }
 
 #[test]
