@@ -45,6 +45,9 @@ pub struct UxRegressionReceipt {
     friendly_repro: Option<String>,
     first_failing_line: Option<String>,
     route: UxRoute,
+    blocking: bool,
+    merge_action: String,
+    human_summary: String,
     component: Option<UxComponent>,
     run_id: Option<String>,
     attempt: Option<u32>,
@@ -95,6 +98,15 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
     });
 
     let route = route_for_failure_class(failure_class);
+    let result = if raw.contains("test result: ok") { "pass" } else { "fail" }.to_string();
+    let blocking = result != "pass";
+    let merge_action = merge_action_for(&result, failure_class).to_string();
+    let human_summary = human_summary_for(
+        &result,
+        first_failing_test.as_deref(),
+        failure_class,
+        canonical_repro.as_deref(),
+    );
 
     UxRegressionReceipt {
         kind: "ux_regression_receipt",
@@ -105,13 +117,16 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
         scenario_file: scenario.clone(),
         scenario,
         first_failing_test,
-        result: if raw.contains("test result: ok") { "pass" } else { "fail" }.to_string(),
+        result,
         failure_class,
         panic_location,
         canonical_repro,
         friendly_repro,
         first_failing_line: first_fail_line,
         route,
+        blocking,
+        merge_action,
+        human_summary,
         component: None,
         run_id: None,
         attempt: None,
@@ -126,7 +141,11 @@ fn scenario_from_test_name(test: &str) -> Option<String> {
 
 fn infer_failure_class(raw: &str) -> UxFailureClass {
     let lower = raw.to_ascii_lowercase();
-    if lower.contains("fixture matrix") || lower.contains("matrix drift") {
+    if looks_like_scenario_19_race(&lower) {
+        UxFailureClass::TestRace
+    } else if looks_like_scenario_14_provider_regression(&lower) {
+        UxFailureClass::ProviderRegression
+    } else if lower.contains("fixture matrix") || lower.contains("matrix drift") {
         UxFailureClass::MatrixDrift
     } else if lower.contains("baseline") || lower.contains("snapshot") {
         UxFailureClass::BaselineDrift
@@ -149,6 +168,77 @@ fn infer_failure_class(raw: &str) -> UxFailureClass {
         UxFailureClass::ServerCrash
     } else {
         UxFailureClass::Unknown
+    }
+}
+
+fn looks_like_scenario_19_race(lower: &str) -> bool {
+    lower.contains("scenario_19_diagnostics_clear_after_fix")
+        && (lower.contains("pre-fix")
+            || lower.contains("post-fix")
+            || lower.contains("diagnostics race")
+            || lower.contains("events:")
+            || lower.contains("expected diagnostics to clear"))
+}
+
+fn looks_like_scenario_14_provider_regression(lower: &str) -> bool {
+    lower.contains("ux_scenario_14_inc_conformance")
+        && (lower.contains("goto-definition")
+            || lower.contains("include path")
+            || lower.contains("include_paths")
+            || lower.contains("includepaths")
+            || lower.contains("perl5lib")
+            || lower.contains("usesysteminc")
+            || lower.contains("@inc"))
+}
+
+fn merge_action_for(result: &str, failure_class: UxFailureClass) -> &'static str {
+    if result == "pass" {
+        return "merge_allowed";
+    }
+
+    match failure_class {
+        UxFailureClass::TestRace => "quarantine_or_fix_test",
+        UxFailureClass::ProviderRegression => "fix_provider",
+        UxFailureClass::MatrixDrift => "update_fixture_matrix",
+        UxFailureClass::BaselineDrift => "update_baseline",
+        UxFailureClass::Timeout => "triage_timeout",
+        UxFailureClass::Infra => "fix_ci_infra",
+        UxFailureClass::ServerCrash => "fix_crash",
+        UxFailureClass::NewTestBug => "fix_test",
+        UxFailureClass::Unknown => "triage",
+        _ => "triage",
+    }
+}
+
+fn human_summary_for(
+    result: &str,
+    first_failing_test: Option<&str>,
+    failure_class: UxFailureClass,
+    canonical_repro: Option<&str>,
+) -> String {
+    if result == "pass" {
+        return "UX regression passed; merge allowed.".to_string();
+    }
+    let test = first_failing_test.unwrap_or("unknown_test");
+    let repro = canonical_repro.unwrap_or("repro unavailable");
+    format!(
+        "UX regression failed in {test}; classified as {}; repro: {repro}",
+        failure_class_label(failure_class)
+    )
+}
+
+fn failure_class_label(failure_class: UxFailureClass) -> &'static str {
+    match failure_class {
+        UxFailureClass::ProviderRegression => "provider_regression",
+        UxFailureClass::ServerCrash => "server_crash",
+        UxFailureClass::Timeout => "timeout",
+        UxFailureClass::TestRace => "test_race",
+        UxFailureClass::Infra => "infra",
+        UxFailureClass::MatrixDrift => "matrix_drift",
+        UxFailureClass::BaselineDrift => "baseline_drift",
+        UxFailureClass::NewTestBug => "new_test_bug",
+        UxFailureClass::Unknown => "unknown",
+        _ => "unknown",
     }
 }
 
@@ -245,6 +335,7 @@ mod tests {
             "fixture matrix log should classify as MatrixDrift"
         );
         assert_eq!(receipt.route, UxRoute::FixtureUpdate, "MatrixDrift routes to FixtureUpdate");
+        assert_eq!(receipt.merge_action, "update_fixture_matrix");
     }
 
     #[test]
@@ -260,6 +351,7 @@ mod tests {
             UxRoute::BaselineUpdate,
             "BaselineDrift routes to BaselineUpdate"
         );
+        assert_eq!(receipt.merge_action, "update_baseline");
     }
 
     #[test]
@@ -299,6 +391,8 @@ mod tests {
         let log = "running 5 tests\ntest result: ok. 5 passed; 0 failed";
         let receipt = classify(log, Some("sha7".to_string()));
         assert_eq!(receipt.result, "pass", "log with 'test result: ok' should produce result=pass");
+        assert!(!receipt.blocking, "passing result must be non-blocking");
+        assert_eq!(receipt.merge_action, "merge_allowed");
     }
 
     #[test]
@@ -429,6 +523,8 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out";
             receipt.failure_class
         );
         assert_eq!(receipt.route, UxRoute::ProviderFix, "ProviderRegression routes to ProviderFix");
+        assert!(receipt.blocking, "failing provider regression should be blocking");
+        assert_eq!(receipt.merge_action, "fix_provider");
         assert_eq!(
             receipt.scenario.as_deref(),
             Some("ux_scenario_14_inc_conformance.rs"),
@@ -474,6 +570,8 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out";
             receipt.failure_class
         );
         assert_eq!(receipt.route, UxRoute::ProviderFix, "ProviderRegression routes to ProviderFix");
+        assert!(receipt.blocking, "failing provider regression should be blocking");
+        assert_eq!(receipt.merge_action, "fix_provider");
         assert_eq!(
             receipt.scenario.as_deref(),
             Some("ux_scenario_14_inc_conformance.rs"),
@@ -523,6 +621,8 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out";
             receipt.failure_class
         );
         assert_eq!(receipt.route, UxRoute::TestFix, "TestRace routes to TestFix");
+        assert!(receipt.blocking, "failing test race should be blocking");
+        assert_eq!(receipt.merge_action, "quarantine_or_fix_test");
         assert_eq!(
             receipt.scenario.as_deref(),
             Some("ux_scenario_19_diagnostics_lifecycle.rs"),

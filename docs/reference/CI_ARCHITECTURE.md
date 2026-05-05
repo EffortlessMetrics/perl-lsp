@@ -580,6 +580,31 @@ differing only in `metadata.environment.type` ("local" vs "ci").
 
 ---
 
+## Section 11 — UX Regression Pre-Merge Behavior
+
+The `UX Regression Tests` lane in `.github/workflows/ci.yml` is merge-blocking. A failed
+UX run still fails the gate; classification only improves triage routing.
+
+The lane always emits:
+
+- `target/receipts/ux-regression.log`
+- `target/receipts/ux-regression.json`
+
+The JSON receipt classifies the first observed failure and includes a canonical repro
+command.
+
+| Failure class | Route | Expected action |
+| --- | --- | --- |
+| `provider_regression` | `provider_fix` | Fix LSP/provider behavior before merge |
+| `test_race` | `test_fix` | Stabilize or quarantine with a tracked issue |
+| `matrix_drift` | `fixture_update` | Update fixture matrix expectations |
+| `baseline_drift` | `baseline_update` | Regenerate accepted baseline output |
+| `timeout` | `timeout_triage` | Separate CI slowness from product regression |
+| `infra` | `ci_investigation` | Fix CI or harness infrastructure |
+| `unknown` | `triage` | Inspect log and extend classifier coverage |
+
+---
+
 ## See Also
 
 - [OCTOPUS_CLUSTER.md](OCTOPUS_CLUSTER.md) — umbrella system design, vocabulary
