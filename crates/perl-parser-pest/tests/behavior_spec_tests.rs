@@ -93,6 +93,53 @@ fn when_hash_uses_fat_comma_pairs_then_parser_keeps_hash_assignment_structure() 
 }
 
 #[test]
+fn when_hash_uses_quoted_fat_comma_keys_then_assignment_remains_parseable() {
+    let sexp = parse_to_sexp("%hash = ('alpha' => 1, \"beta\" => 2);");
+
+    assert!(
+        sexp.contains("(assignment (hash_variable %hash) (=)")
+            && sexp.contains("(string_literal 'alpha')")
+            && sexp.contains("(string_literal beta)"),
+        "expected quoted fat-comma hash assignment to parse; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_scalar_assignment_uses_percent_string_then_normalization_keeps_assignment_shape() {
+    let sexp = parse_to_sexp(r#"my $symbol = "%";"#);
+
+    assert!(
+        sexp.contains("(variable_declaration")
+            && sexp.contains("$symbol")
+            && sexp.contains("(string_literal %)"),
+        "expected scalar percent-string assignment to parse; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_foreach_iterates_over_hash_keys_then_foreach_shape_is_retained() {
+    let sexp = parse_to_sexp("foreach my $key (keys %hash) { print $key; }");
+
+    assert!(
+        sexp.contains("(foreach_statement") || sexp.contains("(for_statement"),
+        "expected foreach-compatible loop node in output; got: {sexp}"
+    );
+    assert!(sexp.contains("$key"), "expected loop variable to be preserved; got: {sexp}");
+}
+
+#[test]
+fn when_multiple_double_dollar_dereferences_are_used_then_normalization_remains_stable() {
+    let sexp = parse_to_sexp("my $value = $$name; my $again = $$other;");
+
+    let deref_count = sexp.matches("(dereference").count();
+    assert!(deref_count >= 2, "expected two dereference nodes; got: {sexp}");
+    assert!(
+        sexp.contains("$name") && sexp.contains("$other"),
+        "expected both dereference targets to be preserved; got: {sexp}"
+    );
+}
+
+#[test]
 fn when_given_when_has_default_clause_then_parser_emits_given_shape() {
     let sexp = parse_to_sexp(
         r#"
