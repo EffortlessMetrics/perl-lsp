@@ -96,6 +96,7 @@ doc-coverage = []  # SPEC-149 documentation coverage tests
 [dev-dependencies]
 insta = { version = "1.47.2", features = ["yaml"] }
 criterion.workspace = true
+perl-uri = { workspace = true }
 regex.workspace = true
 serial_test = "3.4.0"
 tempfile.workspace = true

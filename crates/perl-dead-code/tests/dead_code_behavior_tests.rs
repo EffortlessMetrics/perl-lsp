@@ -4,11 +4,19 @@
 
 use perl_dead_code::{DeadCodeDetector, DeadCodeType};
 use perl_workspace::workspace_index::WorkspaceIndex;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+fn test_uri_to_index_uri(uri: &str) -> Result<String, String> {
+    match uri.strip_prefix("file://") {
+        Some(path) => perl_uri::fs_path_to_uri(PathBuf::from(path)),
+        None => Ok(uri.to_string()),
+    }
+}
 
 fn detector_with_single_file(uri: &str, source: &str) -> Result<DeadCodeDetector, String> {
     let index = WorkspaceIndex::new();
-    index.index_file_str(uri, source)?;
+    let index_uri = test_uri_to_index_uri(uri)?;
+    index.index_file_str(&index_uri, source)?;
     Ok(DeadCodeDetector::new(index))
 }
 
@@ -104,8 +112,10 @@ fn scenario_nested_parenthesized_false_condition_is_detected() -> Result<(), Str
 fn scenario_workspace_analysis_aggregates_unreachable_and_dead_branch() -> Result<(), String> {
     // Given a workspace with both unreachable code and a dead branch
     let index = WorkspaceIndex::new();
-    index.index_file_str("file:///scenario_a.pl", "exit 1;\nprint 'never';\n")?;
-    index.index_file_str("file:///scenario_b.pl", "if (0) {\n    print 'dead';\n}\n")?;
+    let scenario_a_uri = test_uri_to_index_uri("file:///scenario_a.pl")?;
+    let scenario_b_uri = test_uri_to_index_uri("file:///scenario_b.pl")?;
+    index.index_file_str(&scenario_a_uri, "exit 1;\nprint 'never';\n")?;
+    index.index_file_str(&scenario_b_uri, "if (0) {\n    print 'dead';\n}\n")?;
     let detector = DeadCodeDetector::new(index);
 
     // When workspace analysis runs

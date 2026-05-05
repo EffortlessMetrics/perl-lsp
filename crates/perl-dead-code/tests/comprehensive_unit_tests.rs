@@ -16,7 +16,8 @@ use std::path::PathBuf;
 /// Build a WorkspaceIndex containing a single Perl file.
 fn index_with_file(uri: &str, code: &str) -> Result<WorkspaceIndex, String> {
     let index = WorkspaceIndex::new();
-    index.index_file_str(uri, code)?;
+    let indexed_uri = test_uri_to_index_uri(uri)?;
+    index.index_file_str(&indexed_uri, code)?;
     Ok(index)
 }
 
@@ -24,9 +25,17 @@ fn index_with_file(uri: &str, code: &str) -> Result<WorkspaceIndex, String> {
 fn index_with_files(files: &[(&str, &str)]) -> Result<WorkspaceIndex, String> {
     let index = WorkspaceIndex::new();
     for (uri, code) in files {
-        index.index_file_str(uri, code)?;
+        let indexed_uri = test_uri_to_index_uri(uri)?;
+        index.index_file_str(&indexed_uri, code)?;
     }
     Ok(index)
+}
+
+fn test_uri_to_index_uri(uri: &str) -> Result<String, String> {
+    match uri.strip_prefix("file://") {
+        Some(path) => perl_uri::fs_path_to_uri(PathBuf::from(path)),
+        None => Ok(uri.to_string()),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -242,15 +251,58 @@ fn analyze_file_only_flags_first_unreachable_line() -> Result<(), String> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn analyze_file_return_at_end_of_sub_flags_closing_brace() -> Result<(), String> {
-    // The stub implementation is line-by-line and flags the closing brace
-    // since it is the next non-empty line after `return`
+fn analyze_file_return_at_end_of_sub_does_not_flag_closing_brace() -> Result<(), String> {
     let code = "sub foo {\n    return 42;\n}\n";
     let index = index_with_file("file:///test_end_return.pl", code)?;
     let detector = DeadCodeDetector::new(index);
 
     let results = detector.analyze_file(&PathBuf::from("/test_end_return.pl"))?;
-    assert_eq!(results.len(), 1, "closing brace after return is flagged by stub");
+    assert!(results.is_empty(), "closing brace after return should not be flagged");
+    Ok(())
+}
+
+#[test]
+fn analyze_file_conditional_return_does_not_mark_following_statement_dead() -> Result<(), String> {
+    let code = "return if $cond;\nsay \"live\";\n";
+    let index = index_with_file("file:///test_return_if.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_return_if.pl"))?;
+    assert!(results.is_empty(), "postfix conditional return should not be unconditional");
+    Ok(())
+}
+
+#[test]
+fn analyze_file_conditional_return_with_value_does_not_mark_following_statement_dead()
+-> Result<(), String> {
+    let code = "return 42 if $cond;\nsay \"live\";\n";
+    let index = index_with_file("file:///test_return_value_if.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_return_value_if.pl"))?;
+    assert!(results.is_empty(), "postfix conditional return value should not be unconditional");
+    Ok(())
+}
+
+#[test]
+fn analyze_file_return_prefix_inside_identifier_is_not_a_terminator() -> Result<(), String> {
+    let code = "return42();\nsay \"live\";\n";
+    let index = index_with_file("file:///test_return42.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_return42.pl"))?;
+    assert!(results.is_empty(), "return42 should not match the return terminator");
+    Ok(())
+}
+
+#[test]
+fn analyze_file_unconditional_return_in_sub_still_flags_real_statement() -> Result<(), String> {
+    let code = "sub foo {\n    return 42;\n    say \"dead\";\n}\n";
+    let index = index_with_file("file:///test_dead_after_return.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_dead_after_return.pl"))?;
+    assert_eq!(results.len(), 1, "statement after unconditional return should be dead");
     assert_eq!(results[0].start_line, 3);
     Ok(())
 }
