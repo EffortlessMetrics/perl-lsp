@@ -1,5 +1,7 @@
 //! Refactoring and modernization helpers.
 
+pub mod edit_plan;
+pub mod edit_validation;
 pub mod import_optimizer;
 pub mod inline;
 pub mod modernize;

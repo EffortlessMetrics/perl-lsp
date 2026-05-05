@@ -50,6 +50,10 @@
 //! let optimized = refactor.optimize_imports()?;
 //! ```
 
+use super::edit_plan::{
+    RefactorConfidence, RefactorDiagnostic, RefactorOperationKind, RefactorPlan, RefactorSafety,
+};
+use super::edit_validation::validate_file_edits;
 use crate::import_optimizer::ImportOptimizer;
 use crate::workspace_index::{
     SymKind, SymbolKey, WorkspaceIndex, fs_path_to_uri, normalize_var, uri_to_fs_path,
@@ -517,10 +521,25 @@ impl WorkspaceRefactor {
             });
         }
 
-        Ok(RefactorResult {
+        let plan = RefactorPlan::with_edits(
+            RefactorOperationKind::OptimizeImports,
             file_edits,
+            vec![RefactorDiagnostic {
+                code: "import-optimizer.regex-compat".to_string(),
+                message: "Using compatibility import optimizer implementation".to_string(),
+            }],
+            RefactorConfidence::ScopeAware,
+            RefactorSafety::NeedsPreview,
+        );
+
+        let roots = [Path::new(".")];
+        validate_file_edits(&plan.edits, &roots, &|path| std::fs::read_to_string(path).ok())
+            .map_err(|err| format!("Edit validation failed: {err:?}"))?;
+
+        Ok(RefactorResult {
+            file_edits: plan.edits,
             description: "Optimize imports across workspace".to_string(),
-            warnings: vec![],
+            warnings: plan.diagnostics.into_iter().map(|d| d.message).collect(),
         })
     }
 
