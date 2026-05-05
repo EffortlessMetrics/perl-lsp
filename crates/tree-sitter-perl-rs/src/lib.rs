@@ -27,7 +27,7 @@
 //!   The v3 parser is highly error-tolerant and almost always produces a partial tree.
 //! - `Node::to_sexp()` delegates to `perl_ast::Node::to_sexp()` for tree-sitter-compatible
 //!   S-expression output.
-//! - `Node::kind()` returns the `NodeKind::kind_name()` string.
+//! - `Node::kind()` returns the tree-sitter grammar-canonical kind string.
 //! - `Node::start_byte()` / `Node::end_byte()` expose the `SourceLocation` byte offsets.
 //! - `Node::children()` and `Node::child()` mirror tree-sitter traversal conventions.
 //!
@@ -341,24 +341,9 @@ pub struct Node<'tree> {
 }
 
 impl<'tree> Node<'tree> {
-    /// Returns the node kind string (e.g. `"Program"`, `"Subroutine"`, `"Variable"`).
-    ///
-    /// Delegates to [`NodeKind::kind_name`][perl_ast::NodeKind::kind_name].
-    ///
-    /// Note: this returns the v3 internal kind name, not the tree-sitter grammar node
-    /// type string. For example, the root node returns `"Program"` rather than
-    /// `"source_file"`. Use [`grammar_kind`][Node::grammar_kind] for the canonical
-    /// tree-sitter grammar name, or [`to_sexp`][Node::to_sexp] for tree-sitter-compatible
-    /// S-expression output which uses the canonical grammar names.
-    pub fn kind(&self) -> &'static str {
-        self.inner.kind.kind_name()
-    }
-
     /// Returns the tree-sitter grammar-canonical node kind name.
     ///
-    /// Unlike [`kind`][Node::kind], which returns the v3 internal PascalCase name
-    /// (e.g., `"Program"`, `"Subroutine"`), this method returns the grammar name
-    /// used in S-expressions (e.g., `"source_file"`, `"sub"`).
+    /// Returns the same tree-sitter grammar name as [`kind`][Node::kind].
     /// This matches the kind strings returned by `tree-sitter-perl-c` and the
     /// upstream tree-sitter Perl grammar.
     /// Error nodes use `"ERROR"` (uppercase), matching tree-sitter convention.
@@ -377,6 +362,22 @@ impl<'tree> Node<'tree> {
     /// assert!(tree.is_some());
     /// assert_eq!(tree.unwrap().root_node().grammar_kind(), "source_file");
     /// ```
+    pub fn kind(&self) -> String {
+        self.grammar_kind()
+    }
+
+    /// Returns the v3 internal node kind string (e.g. `"Program"`, `"Subroutine"`).
+    ///
+    /// This reflects the native parser AST naming and is primarily useful for
+    /// backend diagnostics and compatibility checks. Tree-sitter-facing callers
+    /// should prefer [`kind`][Node::kind].
+    pub fn native_kind(&self) -> &'static str {
+        self.inner.kind.kind_name()
+    }
+
+    /// Returns the tree-sitter grammar-canonical node kind name.
+    ///
+    /// Alias of [`kind`][Node::kind]. Kept for compatibility with earlier releases.
     pub fn grammar_kind(&self) -> String {
         // Extract the node type from the leading `(word` in the S-expression.
         // to_sexp() always starts with `(kind_name` or just `(kind_name)`.
@@ -729,7 +730,7 @@ mod tests {
     fn test_root_node_kind() {
         let mut p = Parser::new();
         let tree = must_some(p.parse("my $x = 42;"));
-        assert_eq!(tree.root_node().kind(), "Program");
+        assert_eq!(tree.root_node().kind(), "source_file");
     }
 
     #[test]
@@ -1148,7 +1149,7 @@ mod tests {
         // and still have a node (the last sibling).
         let node = cursor.node();
         assert!(
-            !node.kind().is_empty(),
+            !node.native_kind().is_empty(),
             "cursor should remain at valid node after exhausting siblings"
         );
     }
