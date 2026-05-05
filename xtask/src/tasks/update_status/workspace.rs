@@ -166,4 +166,21 @@ mod tests {
         }
         Ok(())
     }
+
+    #[test]
+    fn test_workspace_status_does_not_emit_renamed_crate_package_id() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let template = "\
+<!-- BEGIN: WORKSPACE_STALE_RATE -->\nold\n<!-- END: WORKSPACE_STALE_RATE -->\n\
+<!-- BEGIN: WORKSPACE_SLO_TABLE -->\nold\n<!-- END: WORKSPACE_SLO_TABLE -->\n\
+<!-- BEGIN: WORKSPACE_MULTIROOT -->\nold\n<!-- END: WORKSPACE_MULTIROOT -->\n\
+<!-- BEGIN: WORKSPACE_FIXTURES -->\nold\n<!-- END: WORKSPACE_FIXTURES -->\n\
+<!-- BEGIN: WORKSPACE_METRICS_BULLETS -->\nold\n<!-- END: WORKSPACE_METRICS_BULLETS -->\n";
+        let result = generate_workspace_status(&root, template)?;
+        assert!(
+            !result.contains("cargo test -p perl-workspace-index"),
+            "workspace status must use the current crate package name"
+        );
+        Ok(())
+    }
 }

@@ -1,4 +1,4 @@
-//! Unified public API surface for `perl-workspace-index`.
+//! Unified public API surface for `perl-workspace`.
 //!
 //! This module defines the crate's stable "import once" entry-point for callers
 //! that only need discovery, folder parsing, and ignore-policy helpers.
@@ -16,7 +16,7 @@
 //! # Typical usage
 //!
 //! ```rust
-//! use perl_workspace_index::api::{
+//! use perl_workspace::api::{
 //!     discover_perl_files, extract_workspace_folder_uris, is_skipped_dir_name,
 //! };
 //!
