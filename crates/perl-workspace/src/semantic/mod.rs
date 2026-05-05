@@ -38,6 +38,9 @@ pub mod queries;
 /// Literal-eval sub extractor for dynamic boundary evidence.
 pub mod eval_sub_extractor;
 
+/// Framework generated member extractor for package-level `has` declarations.
+pub mod generated_member_extractor;
+
 /// Import-spec extractor for `ImportExportIndex` population during `index_file`.
 pub mod workspace_import_extractor;
 

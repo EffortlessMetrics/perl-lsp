@@ -2499,6 +2499,10 @@ impl WorkspaceIndex {
             crate::semantic::eval_sub_extractor::extract_eval_sub_boundaries(ast, file_id);
         let dynamic_boundaries: Vec<perl_semantic_facts::OccurrenceFact> =
             eval_sub_triples.iter().map(|(_, _, occ)| occ.clone()).collect();
+        let generated_member_facts =
+            crate::semantic::generated_member_extractor::extract_generated_member_facts(
+                ast, file_id,
+            );
 
         // Build the canonical fact shard.
         // Import specs (for `use`, `require`, `ClassName->import()`) are
@@ -2512,20 +2516,24 @@ impl WorkspaceIndex {
             &dynamic_boundaries,
         );
 
-        // Merge entity and anchor facts from eval-sub extraction into the shard.
+        // Merge entity and anchor facts from semantic producers into the shard.
         // The `build_canonical_fact_shard` function only accepts OccurrenceFact
-        // slices for dynamic_boundaries; entities and anchors must be merged
-        // manually so that the query can resolve entity names from occurrence IDs.
+        // slices for dynamic_boundaries; extra entities and anchors must be
+        // merged manually so queries can resolve those semantic facts.
         //
-        // NOTE: This post-build merge means `entities_hash` and `anchors_hash`
-        // do not reflect the eval-sub additions. Incremental replacement
-        // (`replace_fact_shard_incremental`) may miss a change if only the eval
-        // string changes — the `content_hash` (whole-file) will still catch it.
+        // NOTE: This post-build merge means `entities_hash` and `anchors_hash` do
+        // not reflect these additions. Incremental replacement
+        // (`replace_fact_shard_incremental`) may miss a change if only synthetic
+        // facts change — the `content_hash` (whole-file) will still catch it.
         // A future refactor should extend `build_canonical_fact_shard`'s API to
         // accept extra entity/anchor slices alongside `dynamic_boundaries`.
         for (entity, anchor, _) in eval_sub_triples {
             shard.entities.push(entity);
             shard.anchors.push(anchor);
+        }
+        for fact in generated_member_facts {
+            shard.entities.push(fact.entity);
+            shard.anchors.push(fact.anchor);
         }
 
         shard
