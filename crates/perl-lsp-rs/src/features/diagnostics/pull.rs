@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use lsp_types::{
-    Diagnostic as LspDiagnostic, DiagnosticRelatedInformation,
+    CodeDescription, Diagnostic as LspDiagnostic, DiagnosticRelatedInformation,
     DiagnosticSeverity as LspDiagnosticSeverity, DiagnosticTag as LspDiagnosticTag,
     DocumentDiagnosticReport, FullDocumentDiagnosticReport, Location, NumberOrString, Position,
     Range, RelatedFullDocumentDiagnosticReport, RelatedUnchangedDocumentDiagnosticReport,
@@ -666,11 +666,13 @@ impl PullDiagnosticsProvider {
             }
         });
 
+        let code_description = lsp_code_description(code.as_ref());
+
         LspDiagnostic {
             range,
             severity,
             code,
-            code_description: None,
+            code_description,
             source: Some("perl-lsp".to_string()),
             message,
             related_information,
@@ -749,11 +751,13 @@ impl PullDiagnosticsProvider {
             }
         });
 
+        let code_description = lsp_code_description(code.as_ref());
+
         LspDiagnostic {
             range,
             severity,
             code,
-            code_description: None,
+            code_description,
             source: diagnostic_source(code_for_source.as_ref()),
             message,
             related_information,
@@ -826,11 +830,13 @@ impl PullDiagnosticsProvider {
             }
         });
 
+        let code_description = lsp_code_description(code.as_ref());
+
         LspDiagnostic {
             range,
             severity,
             code,
-            code_description: None,
+            code_description,
             source: diagnostic_source(code_for_source.as_ref()),
             message,
             related_information: None,
@@ -907,7 +913,7 @@ impl PullDiagnosticsProvider {
             range,
             severity: Some(to_lsp_severity(parse_error_severity(error))),
             code: Some(NumberOrString::String(code_str.to_string())),
-            code_description: None,
+            code_description: lsp_code_description_from_str(code_str),
             source: Some("perl-lsp".to_string()),
             message,
             related_information: to_lsp_related_information(uri, text, &[]),
@@ -915,6 +921,20 @@ impl PullDiagnosticsProvider {
             data,
         }
     }
+}
+
+fn lsp_code_description(code: Option<&NumberOrString>) -> Option<CodeDescription> {
+    match code {
+        Some(NumberOrString::String(code_str)) => lsp_code_description_from_str(code_str),
+        _ => None,
+    }
+}
+
+fn lsp_code_description_from_str(code_str: &str) -> Option<CodeDescription> {
+    DiagnosticCode::parse_code(code_str)
+        .and_then(|code| code.documentation_url())
+        .and_then(|url| url.parse::<Uri>().ok())
+        .map(|href| CodeDescription { href })
 }
 
 fn lsp_range_from_offsets(text: &str, start: usize, end: usize) -> Range {
@@ -1075,6 +1095,13 @@ mod tests {
         assert_eq!(data["code"], "PL001");
         assert_eq!(data["category"], "Parser");
         assert_eq!(data["fixable"], true);
+        let code_description = diag
+            .code_description
+            .as_ref()
+            .ok_or("codeDescription should be populated for PL001")?;
+        let expected_url =
+            DiagnosticCode::ParseError.documentation_url().ok_or("PL001 should have docs")?;
+        assert_eq!(code_description.href.to_string(), expected_url);
         let tags = data["tags"].as_array().ok_or("tags should be an array")?;
         assert!(tags.is_empty());
         Ok(())
@@ -1108,6 +1135,29 @@ mod tests {
         assert_eq!(data["code"], "PL100");
         assert_eq!(data["category"], "StrictWarnings");
         assert_eq!(data["fixable"], true);
+        let code_description = diag
+            .code_description
+            .as_ref()
+            .ok_or("codeDescription should be populated for PL100")?;
+        let expected_url =
+            DiagnosticCode::MissingStrict.documentation_url().ok_or("PL100 should have docs")?;
+        assert_eq!(code_description.href.to_string(), expected_url);
+        Ok(())
+    }
+
+    #[test]
+    fn code_description_is_catalog_backed_and_fail_closed() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let parse_error_description =
+            lsp_code_description_from_str("PL001").ok_or("PL001 should have codeDescription")?;
+        let parse_error_url =
+            DiagnosticCode::ParseError.documentation_url().ok_or("PL001 should have docs")?;
+        assert_eq!(parse_error_description.href.to_string(), parse_error_url);
+
+        assert!(lsp_code_description_from_str("TestingAndDebugging::RequireUseStrict").is_none());
+        assert!(lsp_code_description_from_str("PC101").is_none());
+        assert!(lsp_code_description(Some(&NumberOrString::Number(101))).is_none());
+        assert!(lsp_code_description(None).is_none());
         Ok(())
     }
 
