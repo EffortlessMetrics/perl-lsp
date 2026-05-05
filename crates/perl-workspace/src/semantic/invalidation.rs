@@ -137,4 +137,26 @@ mod tests {
         assert!(plan.occurrences_updated);
         assert!(!plan.edges_updated);
     }
+
+    #[test]
+    fn first_insert_marks_all_categories_updated() {
+        let new = hashes(7, Some(70), Some(80), Some(90), Some(100));
+
+        let plan = plan_shard_replacement(None, new);
+
+        assert!(!plan.content_unchanged);
+        assert!(plan.anchors_updated);
+        assert!(plan.entities_updated);
+        assert!(plan.occurrences_updated);
+        assert!(plan.edges_updated);
+    }
+
+    #[test]
+    fn category_hash_changed_handles_all_hash_presence_combinations() {
+        assert!(!category_hash_changed(Some(5), Some(5)));
+        assert!(category_hash_changed(Some(5), Some(6)));
+        assert!(category_hash_changed(None, Some(6)));
+        assert!(category_hash_changed(Some(5), None));
+        assert!(category_hash_changed(None, None));
+    }
 }
