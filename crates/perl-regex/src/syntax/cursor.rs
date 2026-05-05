@@ -20,6 +20,10 @@ impl<'a> RegexCursor<'a> {
         self.pos += 1;
     }
 
+    pub(crate) fn position(&self) -> usize {
+        self.pos
+    }
+
     pub(crate) fn skip_escape(&mut self) -> bool {
         if self.current() == Some(b'\\') {
             self.pos += 2;

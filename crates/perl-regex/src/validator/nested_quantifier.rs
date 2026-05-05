@@ -1,4 +1,8 @@
 pub(crate) fn detect_nested_quantifiers(pattern: &str) -> bool {
+    find_nested_quantifier(pattern, 0).is_some()
+}
+
+pub(crate) fn find_nested_quantifier(pattern: &str, start_pos: usize) -> Option<usize> {
     let bytes = pattern.as_bytes();
     let mut i = 0;
     let mut group_stack = Vec::new();
@@ -9,6 +13,19 @@ pub(crate) fn detect_nested_quantifiers(pattern: &str) -> bool {
                 i += 2;
                 last_type = 0;
                 continue;
+            }
+            b'[' => {
+                i += 1;
+                while i < bytes.len() {
+                    if bytes[i] == b'\\' {
+                        i += 2;
+                    } else if bytes[i] == b']' {
+                        break;
+                    } else {
+                        i += 1;
+                    }
+                }
+                last_type = 0;
             }
             b'(' => {
                 if i + 1 < bytes.len() && bytes[i + 1] == b'?' {
@@ -35,13 +52,13 @@ pub(crate) fn detect_nested_quantifiers(pattern: &str) -> bool {
                     if bytes[i] == b'{' {
                         let mut j = i + 1;
                         if is_brace_quantifier(bytes, &mut j) {
-                            return true;
+                            return Some(start_pos + i);
                         }
                         last_type = 0;
                         i += 1;
                         continue;
                     }
-                    return true;
+                    return Some(start_pos + i);
                 }
                 if let Some(last) = group_stack.last_mut() {
                     *last = true;
@@ -52,7 +69,7 @@ pub(crate) fn detect_nested_quantifiers(pattern: &str) -> bool {
         }
         i += 1;
     }
-    false
+    None
 }
 
 fn is_brace_quantifier(bytes: &[u8], i: &mut usize) -> bool {
