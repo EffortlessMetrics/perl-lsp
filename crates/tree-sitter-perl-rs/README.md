@@ -52,8 +52,9 @@ if let Some(tree) = parser.parse("my $x = 42;") {
 | `Tree::edit(&mut self, edit: &InputEdit)` | Records a source edit; pass the updated tree to `parse_with_old_tree` |
 | `Tree::root_node() -> Node<'_>` | Get the root of the syntax tree |
 | `Tree::source() -> &str` | Source text this tree was built from |
-| `Node::kind() -> &'static str` | Node type name (v3 internal, e.g. `"Program"`) |
-| `Node::grammar_kind() -> String` | Grammar-canonical name (e.g. `"source_file"`) matching tree-sitter output |
+| `Node::kind() -> String` | Grammar-canonical name (e.g. `"source_file"`) matching tree-sitter output |
+| `Node::native_kind() -> &'static str` | Node type name from the v3 parser internals (e.g. `"Program"`) |
+| `Node::grammar_kind() -> String` | Alias of `kind()` retained for compatibility |
 | `Node::to_sexp() -> String` | Tree-sitter-compatible S-expression for this subtree |
 | `Node::child_count() -> usize` | Number of direct children |
 | `Node::child(i: usize) -> Option<Node>` | `i`-th direct child |
@@ -83,7 +84,7 @@ This means you can pipe any Perl source through this parser and rely on getting 
 
 - `Node::children()` allocates a `Vec` internally on each call. Prefer iterating once over calling repeatedly.
 - `RecursionLimit` / `NestingTooDeep` parse errors produce `None` rather than a partial tree.
-- `Node::kind()` returns v3 internal names (e.g. `"Program"`) rather than tree-sitter grammar names (e.g. `"source_file"`). Use `Node::grammar_kind()` for the canonical name or `Node::to_sexp()` for full canonical output.
+- `Node::native_kind()` exposes v3 internal names (e.g. `"Program"`), while `Node::kind()` / `Node::grammar_kind()` return canonical tree-sitter grammar names (e.g. `"source_file"`).
 
 ## Backlog roadmap
 

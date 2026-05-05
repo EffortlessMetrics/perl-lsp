@@ -25,7 +25,8 @@ fn when_parsing_valid_perl_then_tree_and_source_are_available() {
 fn when_requesting_root_kind_then_program_is_returned() {
     let tree = parse("my $x = 42;");
 
-    assert_eq!(tree.root_node().kind(), "Program");
+    assert_eq!(tree.root_node().kind(), "source_file");
+    assert_eq!(tree.root_node().native_kind(), "Program");
 }
 
 #[test]
@@ -106,17 +107,18 @@ fn when_requesting_grammar_kind_of_subroutine_then_sub_is_returned() {
     let tree = parse("sub greet { 1 }");
     let root = tree.root_node();
     // Find the subroutine child
-    let sub_node = must_some(root.children().find(|n| n.kind() == "Subroutine"));
+    let sub_node = must_some(root.children().find(|n| n.native_kind() == "Subroutine"));
     assert_eq!(sub_node.grammar_kind(), "sub");
 }
 
 #[test]
-fn when_v3_kind_and_grammar_kind_are_both_available_then_they_differ_for_program() {
+fn when_native_kind_and_grammar_kind_are_both_available_then_they_match_tree_sitter_expectations() {
     let tree = parse("1;");
     let root = tree.root_node();
-    assert_eq!(root.kind(), "Program");
+    assert_eq!(root.kind(), "source_file");
+    assert_eq!(root.native_kind(), "Program");
     assert_eq!(root.grammar_kind(), "source_file");
-    assert_ne!(root.kind(), root.grammar_kind());
+    assert_eq!(root.kind(), root.grammar_kind());
 }
 
 #[test]
