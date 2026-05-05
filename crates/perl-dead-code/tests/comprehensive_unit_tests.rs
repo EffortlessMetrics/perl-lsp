@@ -242,16 +242,40 @@ fn analyze_file_only_flags_first_unreachable_line() -> Result<(), String> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn analyze_file_return_at_end_of_sub_flags_closing_brace() -> Result<(), String> {
-    // The stub implementation is line-by-line and flags the closing brace
-    // since it is the next non-empty line after `return`
+fn analyze_file_return_at_end_of_sub_does_not_flag_closing_brace() -> Result<(), String> {
     let code = "sub foo {\n    return 42;\n}\n";
     let index = index_with_file("file:///test_end_return.pl", code)?;
     let detector = DeadCodeDetector::new(index);
 
     let results = detector.analyze_file(&PathBuf::from("/test_end_return.pl"))?;
-    assert_eq!(results.len(), 1, "closing brace after return is flagged by stub");
+    assert!(results.is_empty(), "closing brace should not be flagged as unreachable");
+    Ok(())
+}
+
+#[test]
+fn analyze_file_unconditional_return_flags_next_statement() -> Result<(), String> {
+    let code = "sub foo {\n    return 42;\n    say \"dead\";\n}\n";
+    let index = index_with_file("file:///test_dead_statement.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_dead_statement.pl"))?;
+    assert_eq!(results.len(), 1, "statement after unconditional return should be dead");
     assert_eq!(results[0].start_line, 3);
+    assert_eq!(results[0].code_type, DeadCodeType::UnreachableCode);
+    Ok(())
+}
+
+#[test]
+fn analyze_file_postfix_conditional_return_is_not_unconditional() -> Result<(), String> {
+    let code = "return if $cond;\nsay \"live\";\n";
+    let index = index_with_file("file:///test_return_if.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_return_if.pl"))?;
+    assert!(
+        !results.iter().any(|item| item.code_type == DeadCodeType::UnreachableCode),
+        "postfix conditional return should not trigger unreachable diagnostics"
+    );
     Ok(())
 }
 

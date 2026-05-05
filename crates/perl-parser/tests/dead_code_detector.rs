@@ -37,3 +37,33 @@ fn detects_dead_code() -> TestResult {
     ));
     Ok(())
 }
+
+#[test]
+fn return_at_end_of_sub_does_not_flag_closing_brace() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index.index_file_str("file:///module.pm", "sub foo {\n    return 42;\n}\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/module.pm"))?;
+
+    assert!(
+        !dead.iter().any(|d| d.code_type == DeadCodeType::UnreachableCode),
+        "closing brace should not be flagged as unreachable"
+    );
+    Ok(())
+}
+
+#[test]
+fn postfix_conditional_return_is_not_unconditional_terminator() -> TestResult {
+    let index = WorkspaceIndex::new();
+    index.index_file_str("file:///script.pl", "return if $cond;\nsay 'live';\n")?;
+
+    let detector = DeadCodeDetector::new(index);
+    let dead = detector.analyze_file(&PathBuf::from("/script.pl"))?;
+
+    assert!(
+        !dead.iter().any(|d| d.code_type == DeadCodeType::UnreachableCode),
+        "postfix conditional return should not produce unreachable diagnostics"
+    );
+    Ok(())
+}
