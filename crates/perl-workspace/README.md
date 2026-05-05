@@ -1,4 +1,4 @@
-# perl-workspace-index
+# perl-workspace
 
 Workspace indexing and cross-file lookup for Perl tooling.
 
@@ -7,7 +7,7 @@ answer workspace-wide queries such as references, symbols, and rename targets.
 
 ## Where it fits
 
-`perl-workspace-index` sits above `perl-parser-core` and below the editor and
+`perl-workspace` sits above `perl-parser-core` and below the editor and
 refactoring layers. It owns document storage, incremental updates, and the
 workspace symbol index that the rest of the stack queries.
 
@@ -20,6 +20,6 @@ workspace symbol index that the rest of the stack queries.
 
 ## Typical use
 
-Use `perl-workspace-index` when you already have parsed documents and need to
+Use `perl-workspace` when you already have parsed documents and need to
 keep the workspace view current as files change. If you only need syntax trees,
 depend on `perl-parser-core` instead.

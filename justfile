@@ -1373,6 +1373,9 @@ clean:
 ci-docs-check:
     @echo "📝 Checking missing docs baseline..."
     @cargo xtask ci-hygiene check-missing-docs
+    @if rg -n "perl-workspace-index" README.md docs/project/status/workspace.md crates/perl-workspace/README.md crates/perl-workspace/src/api.rs | rg -v "MIGRATION|compat|renamed"; then \
+        echo "❌ stale crate name perl-workspace-index found in canonical docs"; exit 1; \
+    fi
     @echo "✅ Missing docs check passed"
 
 # Policy and governance checks

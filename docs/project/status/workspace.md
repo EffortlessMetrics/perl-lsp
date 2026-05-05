@@ -22,7 +22,7 @@ This scorecard measures three properties of the index substrate:
 ## Stale-Index Defect Rate
 
 <!-- BEGIN: WORKSPACE_STALE_RATE -->
-| **Stale-index defect rate** | 0 / 7 scenarios tested | 0% | see `cargo test -p perl-workspace-index -- scorecard` |
+| **Stale-index defect rate** | 0 / 7 scenarios tested | 0% | see `cargo test -p perl-workspace -- scorecard` |
 <!-- END: WORKSPACE_STALE_RATE -->
 
 ## SLO Targets
@@ -75,6 +75,6 @@ This scorecard measures three properties of the index substrate:
 ```bash
 cargo xtask update-status --only workspace   # regenerate all marked sections
 cargo xtask update-status --check --only workspace   # verify (CI gate)
-cargo test -p perl-workspace-index -- scorecard_  # run the scorecard tests
+cargo test -p perl-workspace -- scorecard_  # run the scorecard tests
 just ci-workspace-multiroot                  # run multi-root integration tests (nightly)
 ```
