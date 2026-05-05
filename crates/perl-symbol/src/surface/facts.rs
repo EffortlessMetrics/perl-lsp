@@ -268,6 +268,7 @@ fn stable_id(namespace: &str, name: &str, start: usize, end: usize) -> u64 {
 mod tests {
     use super::*;
     use crate::types::VarKind;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn adapter_is_deterministic_for_mixed_decls() {
@@ -367,20 +368,13 @@ mod tests {
         // "FooBar" would be a wrong resolution.
         assert_eq!(facts.defines_edges.len(), 1, "should have exactly one Defines edge");
         let edge = &facts.defines_edges[0];
-        let bar_entity = facts
-            .entities
-            .iter()
-            .find(|e| e.canonical_name == "Bar")
-            .expect("Bar entity must exist");
+        let bar_entity = must_some(facts.entities.iter().find(|e| e.canonical_name == "Bar"));
         assert_eq!(
             edge.from_entity_id, bar_entity.id,
             "Defines edge must point FROM Bar (not FooBar)"
         );
-        let baz_entity = facts
-            .entities
-            .iter()
-            .find(|e| e.canonical_name == "FooBar::baz")
-            .expect("FooBar::baz entity must exist");
+        let baz_entity =
+            must_some(facts.entities.iter().find(|e| e.canonical_name == "FooBar::baz"));
         assert_eq!(edge.to_entity_id, baz_entity.id, "Defines edge must point TO FooBar::baz");
         // No false unsupported reports — "Bar" container was found.
         assert!(
@@ -471,21 +465,9 @@ mod tests {
         assert_eq!(facts.defines_edges.len(), 3, "should have 3 Defines edges");
         assert!(facts.unsupported.is_empty(), "no unsupported entries");
 
-        let c_entity = facts
-            .entities
-            .iter()
-            .find(|e| e.canonical_name == "A::B::C")
-            .expect("A::B::C entity must exist");
-        let d_entity = facts
-            .entities
-            .iter()
-            .find(|e| e.canonical_name == "A::B::C::D")
-            .expect("A::B::C::D entity must exist");
-        let d_edge = facts
-            .defines_edges
-            .iter()
-            .find(|e| e.to_entity_id == d_entity.id)
-            .expect("Defines edge to A::B::C::D must exist");
+        let c_entity = must_some(facts.entities.iter().find(|e| e.canonical_name == "A::B::C"));
+        let d_entity = must_some(facts.entities.iter().find(|e| e.canonical_name == "A::B::C::D"));
+        let d_edge = must_some(facts.defines_edges.iter().find(|e| e.to_entity_id == d_entity.id));
         assert_eq!(
             d_edge.from_entity_id, c_entity.id,
             "Defines edge for A::B::C::D must come FROM A::B::C"

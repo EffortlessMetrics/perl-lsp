@@ -108,9 +108,14 @@ impl SymbolIndex {
             }
         }
 
-        // Sort by relevance (number of matching tokens)
+        // Sort by relevance with deterministic tie-breakers.
         let mut sorted: Vec<_> = results.into_iter().collect();
-        sorted.sort_by(|(_, a), (_, b)| b.cmp(a));
+        sorted.sort_by(|(name_a, score_a), (name_b, score_b)| {
+            score_b
+                .cmp(score_a)
+                .then_with(|| name_a.len().cmp(&name_b.len()))
+                .then_with(|| name_a.cmp(name_b))
+        });
 
         sorted.into_iter().map(|(symbol, _)| symbol).collect()
     }
@@ -226,6 +231,7 @@ impl SymbolTrie {
         // Collect all symbols from this node and descendants
         let mut results = Vec::new();
         Self::collect_all(node, &mut results);
+        results.sort();
         results
     }
 
@@ -360,6 +366,81 @@ mod tests {
         assert!(
             !results.contains(&"get_user_name".to_string()),
             "replaced symbol must be removed from fuzzy index"
+        );
+    }
+
+    #[test]
+    fn duplicate_add_symbol_is_idempotent_for_prefix_and_fuzzy() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("foo_bar".to_string());
+        index.add_symbol("foo_bar".to_string());
+
+        assert_eq!(index.search_prefix("foo"), vec!["foo_bar".to_string()]);
+        assert_eq!(index.search_fuzzy("foo bar"), vec!["foo_bar".to_string()]);
+    }
+
+    #[test]
+    fn replace_document_symbols_deduplicates_symbols_within_document() {
+        let mut index = SymbolIndex::new();
+        index.replace_document_symbols(
+            "file:///a.pl",
+            vec!["dedup_me".to_string(), "dedup_me".to_string(), "dedup_me".to_string()],
+        );
+
+        assert_eq!(index.search_prefix("dedup"), vec!["dedup_me".to_string()]);
+        assert_eq!(index.search_fuzzy("dedup me"), vec!["dedup_me".to_string()]);
+    }
+
+    #[test]
+    fn fuzzy_ranking_prefers_symbols_matching_more_query_tokens() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("foo_bar_baz".to_string());
+        index.add_symbol("foo_bar".to_string());
+        index.add_symbol("foo".to_string());
+
+        let results = index.search_fuzzy("foo bar baz");
+        assert_eq!(results[0], "foo_bar_baz".to_string());
+        assert_eq!(results[1], "foo_bar".to_string());
+        assert_eq!(results[2], "foo".to_string());
+    }
+
+    #[test]
+    fn fuzzy_search_tokenizes_camel_snake_and_mixed_delimiters() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("getUserName".to_string());
+        index.add_symbol("get_user_email".to_string());
+        index.add_symbol("set-user-name".to_string());
+
+        assert!(index.search_fuzzy("user name").contains(&"getUserName".to_string()));
+        assert!(index.search_fuzzy("user email").contains(&"get_user_email".to_string()));
+        assert!(index.search_fuzzy("user name").contains(&"set-user-name".to_string()));
+    }
+
+    #[test]
+    fn empty_query_and_unknown_prefix_return_empty_results() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("known_symbol".to_string());
+
+        assert!(index.search_fuzzy("").is_empty());
+        assert!(index.search_fuzzy("   ").is_empty());
+        assert!(index.search_prefix("missing").is_empty());
+    }
+
+    #[test]
+    fn deterministic_ordering_for_equal_fuzzy_scores_and_prefix_results() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("beta_symbol".to_string());
+        index.add_symbol("alpha_symbol".to_string());
+        index.add_symbol("gamma_symbol".to_string());
+
+        assert_eq!(
+            index.search_prefix(""),
+            vec!["alpha_symbol".to_string(), "beta_symbol".to_string(), "gamma_symbol".to_string()]
+        );
+
+        assert_eq!(
+            index.search_fuzzy("symbol"),
+            vec!["beta_symbol".to_string(), "alpha_symbol".to_string(), "gamma_symbol".to_string()]
         );
     }
 }
