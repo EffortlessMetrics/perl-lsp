@@ -9,7 +9,7 @@
 //!
 //! - [`ast`] -- The primary AST used by the current recursive-descent parser.
 //! - [`v2`] -- Experimental second-generation AST with full position tracking
-//!   for incremental parsing.
+//!   for incremental parsing. Re-exported from `perl-ast-v2`.
 //!
 //! # Quick start
 //!
@@ -44,7 +44,7 @@
 
 pub mod ast;
 
-/// Incremental parsing AST types extracted into a dedicated microcrate.
+/// Experimental incremental parsing AST types extracted into a dedicated microcrate.
 pub use perl_ast_v2 as v2;
 
 /// Primary AST node -- the building block of every syntax tree.
