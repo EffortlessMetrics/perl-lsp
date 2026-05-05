@@ -1439,6 +1439,37 @@ $x->"#;
 }
 
 #[test]
+fn test_bless_with_newline_separated_args_resolves_methods()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Newline-separated bless arguments are valid Perl and should still be
+    // classified as a literal-bless receiver for completion inference.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $x = bless {},
+    "Foo";
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "bark"),
+        "newline-separated bless args should infer Foo and suggest bark; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
 fn test_bless_qualified_class_resolves_methods() -> Result<(), Box<dyn std::error::Error>> {
     let index = Arc::new(WorkspaceIndex::new());
     index.index_file(
