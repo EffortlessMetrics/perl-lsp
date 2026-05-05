@@ -128,6 +128,10 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Coroutine support issue #3539 is re-scoped: defer hypothetical core syntax, split upstream-tracking from CPAN-library IDE support planning
 - Semantic substrate migration status now tracks Wave 2 reality (facts vocabulary, SymbolDecl adapter, FileFactShard write-through, and DefinitionCandidate multimap landed; SymbolRef adapter and typed-reference global index still staged; ExportInfo -> ExportSet landed) in [SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md](SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md); provider cutover remains explicitly deferred until Wave 3 foundations (`ImportSpec` + `visible_symbols_at`) are proven
 - CI/control-plane next-wave execution sequencing is tracked in [CI_WAVE_EXECUTION_PLAN.md](CI_WAVE_EXECUTION_PLAN.md), with #7404 (`update-status --write` streaming) as the top urgency lane.
+- Editor-trust sequencing for the next product wave is explicitly: availability -> completion proof -> diagnostics truth -> real-workspace semantic baseline -> `@INC` consistency -> parser recovery-under-edit -> UX fixture substrate -> ratchets -> semantic boundary cleanup (#7952).
+- Completion work should remain conservative: improve ranking inside the bounded fallback set first (post-#7961), and avoid all-workspace method dumps that inflate low-confidence noise.
+- Diagnostics suppression should remain evidence-gated: suppress only when indexed semantic facts prove symbol availability; otherwise preserve conservative warnings (#7948, #7949).
+- Ratchet enforcement follows the staged policy from #4105/#7945: nightly first, label-gated PR checks second, merge-blocking only after metrics are deterministic and cheap.
 
 ### Next (post v0.13.2)
 
