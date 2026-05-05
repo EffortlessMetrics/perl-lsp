@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::Path;
 
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, bail};
 use serde::Deserialize;
 
 use super::replace_block;
@@ -68,6 +68,7 @@ pub(super) fn count_dap_tests(root: &Path) -> DapTestCounts {
                         && !e.file_name().to_string_lossy().starts_with("breakpoints_heredocs")
                         && !e.file_name().to_string_lossy().starts_with("breakpoints_multiline")
                         && !e.file_name().to_string_lossy().starts_with("breakpoints_pod")
+                        && e.file_name().to_string_lossy() != "dap_real_session_data.pl"
                 })
                 .count()
         })
@@ -80,6 +81,12 @@ fn read_receipt(root: &Path) -> Option<ScorecardReceipt> {
     let path = root.join(RECEIPT_PATH);
     let content = fs::read_to_string(path).ok()?;
     serde_json::from_str(&content).ok()
+}
+
+fn require_receipt_for_status_refresh() -> bool {
+    std::env::var("XTASK_UPDATE_STATUS_REQUIRE_DAP_RECEIPT")
+        .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
 }
 
 fn format_rate(criterion: &RateMetric) -> String {
@@ -186,6 +193,11 @@ pub(super) fn generate_dap_status(
     );
 
     let receipt = read_receipt(root);
+    if receipt.is_none() && require_receipt_for_status_refresh() {
+        bail!(
+            "missing {RECEIPT_PATH}; run `cargo test -p perl-dap --test dap_scorecard_harness -- --nocapture` before `cargo xtask update-status --only dap`"
+        );
+    }
     let launch_table = launch_table_from_receipt(receipt.as_ref());
     let session_table = session_table_from_receipt(receipt.as_ref());
 

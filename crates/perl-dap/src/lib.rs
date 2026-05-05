@@ -8,18 +8,21 @@
 //!
 //! # Features
 //!
-//! - **Bridge Mode**: Proxy to existing Perl::LanguageServer DAP implementation
+//! - **Native Runtime**: Current launch/attach implementation for Perl debugging sessions
 //! - **Launch Debugging**: Start and debug Perl processes with full control
 //! - **Attach Debugging**: Attach to running Perl processes via TCP
+//! - **Legacy Bridge Mode**: Compatibility proxy for Perl::LanguageServer installations
 //! - **AST-Based Validation**: Breakpoint validation using parsed syntax trees
 //! - **Cross-Platform**: Windows, macOS, and Linux support with path normalization
 //! - **Configuration Snippets**: VSCode launch.json generation
 //!
 //! # Quick Start
 //!
-//! ## Bridge Mode (Phase 1 - Implemented)
+//! ## Native and Bridge Modes
 //!
-//! The bridge adapter proxies DAP messages to Perl::LanguageServer:
+//! Native launch and attach are the current default runtime paths for new sessions.
+//! The legacy bridge adapter remains available when an installation still needs to
+//! proxy DAP messages to Perl::LanguageServer:
 //!
 //! ```no_run
 //! use perl_dap::BridgeAdapter;
@@ -103,45 +106,20 @@
 //!
 //! # Architecture
 //!
-//! The DAP adapter follows a phased implementation approach:
+//! `perl-dap` exposes a dual architecture that supports both current runtime use
+//! and compatibility migration:
 //!
-//! ## Phase 1: Bridge Adapter (Implemented)
+//! - **Native runtime (`DapServer` + `DebugAdapter`)** handles launch/attach
+//!   flows, request dispatch, breakpoint/state management, and variable/evaluate
+//!   inspection paths.
+//! - **Legacy bridge (`BridgeAdapter`)** proxies traffic to
+//!   `Perl::LanguageServer` for compatibility when teams are still migrating.
+//! - **Shared foundations** (`protocol`, `dispatcher`, `breakpoints`,
+//!   `platform`) provide message contracts, routing, validation, and
+//!   cross-platform process setup.
 //!
-//! **Acceptance Criteria: AC1-AC4**
-//!
-//! - **[`BridgeAdapter`]**: Message proxy between VSCode and Perl::LanguageServer
-//! - **[`LaunchConfiguration`]**: Launch debugging configuration and validation
-//! - **[`AttachConfiguration`]**: Attach debugging configuration for TCP connections
-//! - **[`platform`]**: Cross-platform path resolution and environment setup
-//!
-//! Phase 1 provides immediate debugging support by bridging to the mature
-//! Perl::LanguageServer implementation while the native adapter is developed.
-//!
-//! ## Phase 2: Native Adapter (Planned)
-//!
-//! **Acceptance Criteria: AC5-AC12**
-//!
-//! - **[`protocol`]**: DAP protocol types and message definitions
-//! - **[`dispatcher`]**: Request routing and method dispatch
-//! - **[`breakpoints`]**: Breakpoint management with AST validation
-//! - **Session Management**: Debug session lifecycle and state tracking
-//! - **Variable Renderer**: Lazy variable expansion for complex data structures
-//! - **Stack Trace Provider**: Call stack navigation with source mapping
-//! - **Control Flow**: Step, continue, pause, and breakpoint control
-//! - **Safe Evaluation**: Expression evaluation in debug context
-//!
-//! Phase 2 will provide a native Rust DAP implementation with tighter integration
-//! to `perl_parser` for enhanced validation and performance.
-//!
-//! ## Phase 3: Production Hardening (Planned)
-//!
-//! **Acceptance Criteria: AC13-AC19**
-//!
-//! - **Security Validation**: Input sanitization and command injection prevention
-//! - **Performance Optimization**: Efficient variable inspection and stepping
-//! - **Packaging**: Distribution via cargo, VSCode marketplace, and package managers
-//! - **Documentation**: Comprehensive usage guides and troubleshooting
-//! - **Testing**: End-to-end integration tests with real debugging scenarios
+//! This keeps one crate boundary for editor integrations while allowing
+//! per-session selection between native execution and bridge fallback behavior.
 //!
 //! # Protocol Support
 //!
