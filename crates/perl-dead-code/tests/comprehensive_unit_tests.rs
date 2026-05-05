@@ -226,14 +226,15 @@ fn analyze_file_error_for_unindexed_file() {
 }
 
 #[test]
-fn analyze_file_only_flags_first_unreachable_line() -> Result<(), String> {
-    // The implementation breaks after the first unreachable line
+fn analyze_file_reports_full_unreachable_range() -> Result<(), String> {
     let code = "return;\nprint 1;\nprint 2;\n";
     let index = index_with_file("file:///test_multi.pl", code)?;
     let detector = DeadCodeDetector::new(index);
 
     let results = detector.analyze_file(&PathBuf::from("/test_multi.pl"))?;
-    assert_eq!(results.len(), 1, "detector should report only first unreachable line");
+    assert_eq!(results.len(), 1, "detector should aggregate one unreachable range");
+    assert_eq!(results[0].start_line, 2);
+    assert_eq!(results[0].end_line, 3);
     Ok(())
 }
 
@@ -242,16 +243,13 @@ fn analyze_file_only_flags_first_unreachable_line() -> Result<(), String> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn analyze_file_return_at_end_of_sub_flags_closing_brace() -> Result<(), String> {
-    // The stub implementation is line-by-line and flags the closing brace
-    // since it is the next non-empty line after `return`
+fn analyze_file_return_at_end_of_sub_does_not_flag_closing_brace() -> Result<(), String> {
     let code = "sub foo {\n    return 42;\n}\n";
     let index = index_with_file("file:///test_end_return.pl", code)?;
     let detector = DeadCodeDetector::new(index);
 
     let results = detector.analyze_file(&PathBuf::from("/test_end_return.pl"))?;
-    assert_eq!(results.len(), 1, "closing brace after return is flagged by stub");
-    assert_eq!(results[0].start_line, 3);
+    assert!(results.is_empty(), "closing brace after return should not be flagged");
     Ok(())
 }
 

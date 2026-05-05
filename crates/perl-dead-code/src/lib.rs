@@ -119,40 +119,101 @@ impl DeadCodeDetector {
             .ok_or_else(|| "file not indexed".to_string())?;
 
         let mut dead = Vec::new();
-        let mut terminator: Option<(usize, String)> = None;
-
-        for (i, line) in text.lines().enumerate() {
-            let trimmed = line.trim();
-            if let Some((term_line, term_kw)) = &terminator {
-                if !trimmed.is_empty() {
-                    dead.push(DeadCode {
-                        code_type: DeadCodeType::UnreachableCode,
-                        name: None,
-                        file_path: file_path.to_path_buf(),
-                        start_line: i + 1,
-                        end_line: i + 1,
-                        reason: format!(
-                            "Code is unreachable after `{}` on line {}",
-                            term_kw, term_line
-                        ),
-                        confidence: 0.5,
-                        suggestion: Some("Remove or restructure this code".to_string()),
-                    });
-                    break;
-                }
-            }
-
-            if ["return", "die", "exit"].iter().any(|kw| trimmed.starts_with(kw)) {
-                if let Some(first_word) = trimmed.split_whitespace().next() {
-                    terminator = Some((i + 1, first_word.to_string()));
-                }
-            }
-        }
+        dead.extend(self.detect_unreachable_ranges(file_path, &text));
 
         // Dead branch detection: scan for constant-condition patterns.
         detect_dead_branches(file_path, &text, &mut dead);
 
         Ok(dead)
+    }
+
+    fn detect_unreachable_ranges(&self, file_path: &Path, text: &str) -> Vec<DeadCode> {
+        let mut findings = Vec::new();
+        let mut depth: i32 = 0;
+        let mut terminator: Option<(usize, String, i32)> = None;
+        let mut unreachable_start: Option<usize> = None;
+        let mut unreachable_end: Option<usize> = None;
+        let mut in_pod = false;
+
+        for (i, line) in text.lines().enumerate() {
+            let line_no = i + 1;
+            let trimmed = line.trim();
+
+            if trimmed.starts_with("=") && !trimmed.starts_with("=cut") {
+                in_pod = true;
+            }
+            if trimmed == "=cut" {
+                in_pod = false;
+                continue;
+            }
+            if in_pod {
+                continue;
+            }
+
+            let close_count = trimmed.chars().filter(|c| *c == '}').count() as i32;
+            let open_count = trimmed.chars().filter(|c| *c == '{').count() as i32;
+            let depth_before = depth;
+            depth -= close_count;
+
+            let is_comment = trimmed.starts_with('#');
+            let is_structural = trimmed.is_empty() || is_comment || trimmed == "{" || trimmed == "}";
+
+            if let Some((term_line, term_kw, term_depth)) = &terminator {
+                if depth_before < *term_depth {
+                    if let (Some(start), Some(end)) = (unreachable_start.take(), unreachable_end.take()) {
+                        findings.push(DeadCode {
+                            code_type: DeadCodeType::UnreachableCode,
+                            name: None,
+                            file_path: file_path.to_path_buf(),
+                            start_line: start,
+                            end_line: end,
+                            reason: format!("Code is unreachable after `{}` on line {}", term_kw, term_line),
+                            confidence: 0.8,
+                            suggestion: Some("Remove or restructure this code".to_string()),
+                        });
+                    }
+                    terminator = None;
+                } else if !is_structural {
+                    unreachable_start.get_or_insert(line_no);
+                    unreachable_end = Some(line_no);
+                }
+            }
+
+            if terminator.is_none() && Self::is_terminator(trimmed) {
+                if let Some(first_word) = trimmed.split_whitespace().next() {
+                    terminator = Some((line_no, first_word.trim_end_matches(';').to_string(), depth_before));
+                }
+            }
+
+            depth += open_count;
+        }
+
+        if let Some((term_line, term_kw, _)) = terminator
+            && let (Some(start), Some(end)) = (unreachable_start, unreachable_end)
+        {
+            findings.push(DeadCode {
+                code_type: DeadCodeType::UnreachableCode,
+                name: None,
+                file_path: file_path.to_path_buf(),
+                start_line: start,
+                end_line: end,
+                reason: format!("Code is unreachable after `{}` on line {}", term_kw, term_line),
+                confidence: 0.8,
+                suggestion: Some("Remove or restructure this code".to_string()),
+            });
+        }
+
+        findings
+    }
+
+    fn is_terminator(trimmed: &str) -> bool {
+        ["return", "die", "exit", "goto", "last", "next", "redo"]
+            .iter()
+            .any(|kw| {
+                trimmed == *kw
+                    || trimmed.starts_with(&format!("{kw} "))
+                    || trimmed.starts_with(&format!("{kw};"))
+            })
     }
 
     /// Analyze entire workspace for dead code
