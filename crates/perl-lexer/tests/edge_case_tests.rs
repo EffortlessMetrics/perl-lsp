@@ -720,6 +720,30 @@ fn malformed_quote_like_constructs_do_not_panic() -> R {
     Ok(())
 }
 
+#[test]
+fn unclosed_quote_like_constructs_emit_unclosed_errors() -> R {
+    let cases = [
+        ("qq{hello;", "unclosed qq delimiter '{'"),
+        ("q{hello;", "unclosed q delimiter '{'"),
+        ("qx{cmd;", "unclosed qx delimiter '{'"),
+        ("qr{pat;", "unclosed qr delimiter '{'"),
+        ("s{a}{", "unclosed s delimiter '{'"),
+        ("tr{a}{", "unclosed tr delimiter '{'"),
+    ];
+
+    for (src, expected) in cases {
+        let token = first_significant(src).ok_or("no token")?;
+        assert!(matches!(token.token_type, TokenType::Error(_)), "{src:?} should lex as error");
+        assert_eq!(token.text.as_ref(), src, "error token should retain original text");
+        match &token.token_type {
+            TokenType::Error(message) => assert_eq!(message.as_ref(), expected),
+            _ => unreachable!(),
+        }
+    }
+
+    Ok(())
+}
+
 // ===========================================================================
 // 4. Special variables
 // ===========================================================================

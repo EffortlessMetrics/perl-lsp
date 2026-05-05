@@ -84,6 +84,12 @@ fn malformed_missing_quote_like_closer_still_reports_error() {
 }
 
 #[test]
+fn malformed_missing_substitution_or_transliteration_closer_reports_unclosed() {
+    assert_has_error(r#"my $s = s{a}{;"#, "unclosed");
+    assert_has_error(r#"my $s = tr{a}{;"#, "unclosed");
+}
+
+#[test]
 fn malformed_missing_call_paren_still_reports_error() {
     assert_has_error(r#"my $x = func($a, $b;"#, "insertedcloser");
 }
