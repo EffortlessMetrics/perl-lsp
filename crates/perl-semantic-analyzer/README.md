@@ -36,3 +36,7 @@ let _symbols = SymbolExtractor::new().extract(&ast);
 Use `perl-semantic-analyzer` when you are building hover, declaration, type,
 or diagnostics features from parsed Perl source. If you need cross-file lookup
 or document caching, pair it with `perl-workspace`.
+
+## Architecture notes
+
+- [Dependency boundary audit](docs/dependency-boundary-audit.md)

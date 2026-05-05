@@ -141,7 +141,7 @@ proptest! {
         let table = SymbolExtractor::new_with_source(&src).extract(&ast);
         let src_len = src.len();
 
-        for (_, syms) in &table.symbols {
+        for syms in table.symbols.values() {
             for sym in syms {
                 prop_assert!(
                     sym.location.start <= sym.location.end,
@@ -168,7 +168,7 @@ proptest! {
         let Ok(ast) = parser.parse() else { return Ok(()) };
 
         let table = SymbolExtractor::new_with_source(&src).extract(&ast);
-        for (name, _) in &table.symbols {
+        for name in table.symbols.keys() {
             prop_assert!(!name.is_empty(), "empty symbol name found in {:?}", src);
         }
     }
