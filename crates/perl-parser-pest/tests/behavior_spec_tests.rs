@@ -93,6 +93,45 @@ fn when_hash_uses_fat_comma_pairs_then_parser_keeps_hash_assignment_structure() 
 }
 
 #[test]
+fn when_hash_uses_quoted_fat_comma_pairs_then_parser_keeps_assignment_shape() {
+    let sexp = parse_to_sexp(r#"%labels = ("alpha" => 1, "beta" => 2);"#);
+
+    assert!(
+        sexp.contains("(assignment (hash_variable %labels) (=)")
+            && sexp.contains("(string_literal alpha)")
+            && sexp.contains("(string_literal beta)"),
+        "expected quoted fat-comma hash assignment to parse; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_hash_assignment_uses_mixed_pair_value_shapes_then_parser_preserves_pair_entries() {
+    let sexp = parse_to_sexp("%config = (workers => 4, mode => $mode, active => 1);\n");
+
+    assert!(
+        sexp.contains("(assignment (hash_variable %config) (=)")
+            && sexp.contains("(identifier workers )")
+            && sexp.contains("(identifier mode )")
+            && sexp.contains("(identifier active )"),
+        "expected mixed hash pairs in assignment output; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_foreach_and_double_dollar_and_spaced_bitnot_appear_together_then_parser_still_parses() {
+    let sexp = parse_to_sexp(
+        "foreach my $name (@names) { my $value = $$name; $value = ~ $value; print $value; }",
+    );
+
+    assert!(sexp.contains("(foreach_statement") || sexp.contains("(for_statement"));
+    assert!(sexp.contains("(dereference"), "expected dereference node; got: {sexp}");
+    assert!(
+        sexp.contains("(assignment") || sexp.contains("bitnot"),
+        "expected spaced bitnot assignment-compatible output; got: {sexp}"
+    );
+}
+
+#[test]
 fn when_given_when_has_default_clause_then_parser_emits_given_shape() {
     let sexp = parse_to_sexp(
         r#"
