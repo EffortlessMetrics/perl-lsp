@@ -82,6 +82,24 @@ pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
     Some(repair_path_mojibake(path))
 }
 
+/// Convert a source input to an absolute filesystem path.
+///
+/// Accepts either:
+/// - `file://` URIs (including localhost authority)
+/// - Absolute filesystem paths
+/// - Windows absolute drive paths such as `C:\foo\bar.pl`
+///
+/// Returns `None` for unsupported schemes and relative paths.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn source_path_from_uri_or_path(input: &str) -> Option<std::path::PathBuf> {
+    if let Some(path) = uri_to_fs_path(input) {
+        return Some(path);
+    }
+
+    let path = std::path::Path::new(input);
+    if path.is_absolute() { Some(path.to_path_buf()) } else { None }
+}
+
 /// Convert a filesystem path to a `file://` URI.
 ///
 /// Properly handles percent-encoding and works with spaces, Windows paths,
@@ -408,6 +426,36 @@ mod tests {
         fn test_fs_path_to_uri_with_spaces() {
             let uri = must(fs_path_to_uri("/tmp/path with spaces/test.pl"));
             assert!(uri.contains("%20") || uri.contains("path with spaces"));
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_supports_file_uri() {
+            let path = must_some(source_path_from_uri_or_path("file:///tmp/test.pl"));
+            assert!(path.ends_with("test.pl"));
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_supports_file_localhost_uri() {
+            let path = must_some(source_path_from_uri_or_path("file://localhost/tmp/test.pl"));
+            assert!(path.ends_with("test.pl"));
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_supports_absolute_path() {
+            let path = std::env::temp_dir().join("source-path-from-uri-or-path.pl");
+            let raw_path = path.to_string_lossy();
+
+            assert_eq!(source_path_from_uri_or_path(raw_path.as_ref()), Some(path));
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_rejects_non_file_uri() {
+            assert!(source_path_from_uri_or_path("https://example.com/path.pl").is_none());
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path_rejects_relative_path() {
+            assert!(source_path_from_uri_or_path("lib/Foo.pm").is_none());
         }
 
         #[test]
