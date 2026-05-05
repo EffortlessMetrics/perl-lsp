@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use lsp_types::{
     Diagnostic as LspDiagnostic, DiagnosticRelatedInformation,
@@ -20,10 +21,10 @@ use crate::util::uri::parse_uri;
 use perl_diagnostics::codes::DiagnosticCode;
 use perl_lsp_rs_core::providers::diagnostics::{parse_error_code, parse_error_severity};
 use perl_module::resolution::use_lib::resolve_use_lib_paths_from_source;
-use perl_parser::Parser;
 use perl_parser::error::ParseError;
 use perl_parser::position::offset_to_utf16_line_col;
 use perl_parser::util::code_slice;
+use perl_parser::Parser;
 
 // Import core diagnostics types from perl-lsp-providers (via parent module re-export)
 use super::{
@@ -670,7 +671,7 @@ impl PullDiagnosticsProvider {
             range,
             severity,
             code,
-            code_description: None,
+            code_description: code_description_for_code(code.as_ref()),
             source: Some("perl-lsp".to_string()),
             message,
             related_information,
@@ -753,7 +754,7 @@ impl PullDiagnosticsProvider {
             range,
             severity,
             code,
-            code_description: None,
+            code_description: code_description_for_code(code.as_ref()),
             source: diagnostic_source(code_for_source.as_ref()),
             message,
             related_information,
@@ -830,7 +831,7 @@ impl PullDiagnosticsProvider {
             range,
             severity,
             code,
-            code_description: None,
+            code_description: code_description_for_code(code.as_ref()),
             source: diagnostic_source(code_for_source.as_ref()),
             message,
             related_information: None,
@@ -907,7 +908,7 @@ impl PullDiagnosticsProvider {
             range,
             severity: Some(to_lsp_severity(parse_error_severity(error))),
             code: Some(NumberOrString::String(code_str.to_string())),
-            code_description: None,
+            code_description: code_description_for_code(code.as_ref()),
             source: Some("perl-lsp".to_string()),
             message,
             related_information: to_lsp_related_information(uri, text, &[]),
@@ -915,6 +916,18 @@ impl PullDiagnosticsProvider {
             data,
         }
     }
+}
+
+fn code_description_for_code(code: Option<&NumberOrString>) -> Option<lsp_types::CodeDescription> {
+    let code_str = match code {
+        Some(NumberOrString::String(value)) => value,
+        _ => return None,
+    };
+
+    let diagnostic_code = DiagnosticCode::parse_code(code_str)?;
+    let docs_url = diagnostic_code.documentation_url()?;
+    let href = Uri::from_str(docs_url).ok()?;
+    Some(lsp_types::CodeDescription { href })
 }
 
 fn lsp_range_from_offsets(text: &str, start: usize, end: usize) -> Range {
@@ -1059,6 +1072,50 @@ mod tests {
     }
 
     #[test]
+    fn built_in_codes_include_code_description_href() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = PullDiagnosticsProvider::new();
+        let uri: Uri = "file:///test.pl".parse()?;
+        let items =
+            get_full_items(provider.get_document_diagnostics(&uri, "print 'hello';\n", None, None));
+        let diag = items
+            .iter()
+            .find(|d| {
+                d.code.as_ref().map(|c| matches!(c, NumberOrString::String(s) if s == "PL100"))
+                    == Some(true)
+            })
+            .ok_or("expected PL100 diagnostic")?;
+        let href = diag
+            .code_description
+            .as_ref()
+            .map(|desc| desc.href.as_str())
+            .ok_or("expected code description href")?;
+        assert!(href.contains("PL100"));
+        Ok(())
+    }
+
+    #[test]
+    fn external_codes_leave_code_description_empty() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = PullDiagnosticsProvider::new();
+        let uri: Uri = "file:///test.pl".parse()?;
+        let diagnostic = InternalDiagnostic {
+            range: (0, 1),
+            severity: InternalDiagnosticSeverity::Warning,
+            code: Some("TestingAndDebugging::RequireUseStrict".to_string()),
+            message: "policy".to_string(),
+            related_information: Vec::new(),
+            tags: Vec::new(),
+            suggestion: None,
+        };
+        let lsp = provider.to_lsp_diagnostic_with_context(
+            &uri,
+            "x",
+            diagnostic,
+            &PullDiagnosticsContext::new(),
+        );
+        assert!(lsp.code_description.is_none());
+        Ok(())
+    }
+
     fn diagnostic_data_for_parse_error() -> Result<(), Box<dyn std::error::Error>> {
         let provider = PullDiagnosticsProvider::new();
         let uri: Uri = "file:///test.pl".parse()?;
@@ -1112,8 +1169,8 @@ mod tests {
     }
 
     #[test]
-    fn diagnostic_data_fixable_true_for_variable_redeclaration()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn diagnostic_data_fixable_true_for_variable_redeclaration(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // PL105 (VariableRedeclaration) offers a quick-fix that removes the duplicate `my`,
         // so the enriched diagnostic data must advertise it as fixable.
         let provider = PullDiagnosticsProvider::new();
@@ -1159,8 +1216,8 @@ mod tests {
     }
 
     #[test]
-    fn invalid_prototype_syntax_error_maps_to_pl302_warning()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn invalid_prototype_syntax_error_maps_to_pl302_warning(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let provider = PullDiagnosticsProvider::new();
         let uri: Uri = "file:///test.pl".parse()?;
         let diagnostic = provider.parse_error_to_diagnostic(
@@ -1190,8 +1247,8 @@ mod tests {
     }
 
     #[test]
-    fn unknown_subroutine_attribute_syntax_error_stays_warning()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn unknown_subroutine_attribute_syntax_error_stays_warning(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let provider = PullDiagnosticsProvider::new();
         let uri: Uri = "file:///test.pl".parse()?;
         let diagnostic = provider.parse_error_to_diagnostic(
