@@ -210,10 +210,10 @@ fn validate_single_unicode_property() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-fn validate_nested_quantifiers_no_longer_hard_error() -> Result<(), Box<dyn std::error::Error>> {
+fn validate_nested_quantifiers_is_hard_error() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
-    // validate() no longer rejects nested quantifiers (they are advisory, not fatal)
-    v.validate("(a+)+", 100)?;
+    // validate() rejects nested quantifiers as a safety error
+    assert!(v.validate("(a+)+", 100).is_err());
     // detect_nested_quantifiers() still detects them for callers that want to warn
     assert!(v.detect_nested_quantifiers("(a+)+"));
     Ok(())
@@ -236,55 +236,55 @@ fn validate_quantifier_on_group_without_inner_quantifier() -> Result<(), Box<dyn
     Ok(())
 }
 
-// ── validate() — nested quantifiers are now accepted (advisory only) ──
+// ── validate() — nested quantifiers are rejected ──
 
 #[test]
-fn validate_accepts_nested_plus() -> Result<(), Box<dyn std::error::Error>> {
+fn validate_rejects_nested_plus() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
     // validate() no longer rejects nested quantifiers
-    v.validate("(a+)+", 0)?;
+    assert!(v.validate("(a+)+", 0).is_err());
     // but detect_nested_quantifiers() still flags them
     assert!(v.detect_nested_quantifiers("(a+)+"));
     Ok(())
 }
 
 #[test]
-fn validate_accepts_nested_star() -> Result<(), Box<dyn std::error::Error>> {
+fn validate_rejects_nested_star() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
-    v.validate("(a*)*", 0)?;
+    assert!(v.validate("(a*)*", 0).is_err());
     assert!(v.detect_nested_quantifiers("(a*)*"));
     Ok(())
 }
 
 #[test]
-fn validate_accepts_star_on_plus_group() -> Result<(), Box<dyn std::error::Error>> {
+fn validate_rejects_star_on_plus_group() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
-    v.validate("(a+)*", 0)?;
+    assert!(v.validate("(a+)*", 0).is_err());
     assert!(v.detect_nested_quantifiers("(a+)*"));
     Ok(())
 }
 
 #[test]
-fn validate_accepts_plus_on_star_group() -> Result<(), Box<dyn std::error::Error>> {
+fn validate_rejects_plus_on_star_group() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
-    v.validate("(a*)+", 0)?;
+    assert!(v.validate("(a*)+", 0).is_err());
     assert!(v.detect_nested_quantifiers("(a*)+"));
     Ok(())
 }
 
 #[test]
-fn validate_accepts_question_on_plus_group() -> Result<(), Box<dyn std::error::Error>> {
+fn validate_rejects_question_on_plus_group() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
-    v.validate("(a+)?", 0)?;
+    assert!(v.validate("(a+)?", 0).is_err());
     assert!(v.detect_nested_quantifiers("(a+)?"));
     Ok(())
 }
 
 #[test]
-fn validate_accepts_brace_quantifier_on_quantified_group() -> Result<(), Box<dyn std::error::Error>>
+fn validate_rejects_brace_quantifier_on_quantified_group() -> Result<(), Box<dyn std::error::Error>>
 {
     let v = RegexValidator::new();
-    v.validate("(a+){2,5}", 0)?;
+    assert!(v.validate("(a+){2,5}", 0).is_err());
     assert!(v.detect_nested_quantifiers("(a+){2,5}"));
     Ok(())
 }
@@ -813,10 +813,10 @@ fn validate_accepts_non_capturing_group_with_escaped_dot() -> Result<(), Box<dyn
 }
 
 #[test]
-fn validate_accepts_word_class_quantifier_in_group() -> Result<(), Box<dyn std::error::Error>> {
+fn validate_rejects_word_class_quantifier_in_group() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
     // (\w+)* is valid Perl (though possibly questionable practice)
-    v.validate(r"(\w+)*", 0)?;
+    assert!(v.validate(r"(\w+)*", 0).is_err());
     Ok(())
 }
 
