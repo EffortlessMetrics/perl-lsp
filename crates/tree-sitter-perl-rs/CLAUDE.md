@@ -36,8 +36,9 @@ impl Tree {
 
 pub struct Node<'tree> { /* borrows from Tree */ }
 impl<'tree> Node<'tree> {
-    pub fn kind(&self) -> &'static str;        // v3 internal name, e.g. "Program"
-    pub fn grammar_kind(&self) -> String;      // canonical grammar name, e.g. "source_file"
+    pub fn kind(&self) -> String;              // canonical grammar name, e.g. "source_file"
+    pub fn native_kind(&self) -> &'static str; // v3 internal name, e.g. "Program"
+    pub fn grammar_kind(&self) -> String;      // compatibility alias of kind()
     pub fn to_sexp(&self) -> String;           // delegates to perl_ast::Node::to_sexp()
     pub fn child_count(&self) -> usize;
     pub fn child(&self, i: usize) -> Option<Node<'tree>>;

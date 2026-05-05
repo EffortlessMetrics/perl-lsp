@@ -4,7 +4,7 @@
 
 - `Parser` / `Tree` / `Node<'tree>` types with tree-sitter-compatible API shape
 - `to_sexp()` — tree-sitter-compatible S-expression output
-- `kind()`, `grammar_kind()`, `child_count()`, `child()`, `children()` — tree traversal
+- `kind()`, `native_kind()`, `grammar_kind()`, `child_count()`, `child()`, `children()` — tree traversal
 - `start_byte()`, `end_byte()`, `start_position()`, `end_position()`, `utf8_text()` — source location and extraction
 - `is_leaf()`, `inner()`, `tree_source()` — utility and escape hatch
 - `TreeCursor` — zero-allocation streaming traversal (`walk()`, `goto_first_child()`, `goto_next_sibling()`, `goto_parent()`)
@@ -35,6 +35,6 @@ tree-sitter query API.
 - `RecursionLimit` / `NestingTooDeep` parse errors from the v3 parser produce `None` from
   `Parser::parse()` rather than a partial tree. In practice this only affects pathologically
   deep nesting.
-- `Node::kind()` returns v3 internal kind names, not tree-sitter grammar node type strings.
-  The root node reports `"Program"` rather than `"source_file"`. Use `to_sexp()` for output
-  that uses canonical grammar names.
+- `Node::kind()` returns grammar-canonical tree-sitter node type strings such as
+  `"source_file"`. Use `Node::native_kind()` when callers need v3 internal kind names
+  such as `"Program"`.
