@@ -136,6 +136,29 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Keep the install story verified across all distribution channels
 - Keep public-alpha release notes concise and tied to concrete channel receipts
 
+### Next-wave execution frame: editor trust first (#7952)
+
+The next product wave should optimize for editor trust before expanding capability surface area.
+
+Execution order:
+
+1. Availability and typing-time recovery hardening
+2. Completion fallback proof (bounded usefulness, no noise leakage)
+3. Diagnostics truth proof (semantic evidence required for suppression)
+4. Real-workspace semantic baselines
+5. `@INC` and module-resolution consumer consistency
+6. Parser recovery under incomplete code while typing
+7. Canonical UX harness + machine-checkable fixture schema
+8. Ratchet promotion (nightly first, then label-gated, merge-blocking only after stability)
+9. Semantic producer boundary cleanup before the next expansion wave
+
+Guardrails for this lane:
+
+- No all-workspace completion fallback broadening while bounded fallback ranking is still being calibrated.
+- No diagnostic suppression without indexed semantic evidence.
+- No merge-blocking ratchets until metrics are deterministic, low-flake, and cheap to run.
+- Keep queue triage focused on product value (availability, trust, and proof), not micro-shard throughput.
+
 ## Milestone Ladder
 
 ### v0.11.0
