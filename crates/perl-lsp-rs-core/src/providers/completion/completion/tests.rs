@@ -1822,6 +1822,48 @@ $x->"#;
 }
 
 #[test]
+fn detail_marks_type_engine_receiver_as_medium_confidence() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Edge case: constructor assignment pattern does not apply because the
+    // receiver variable is assigned from another variable. This should force
+    // TypeEngine evidence (medium confidence) rather than constructor assignment.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub new { bless {}, shift }
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"my $factory = Foo;
+my $x = $factory->new;
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = must_some(completions.iter().find(|c| c.label == "bark"));
+    let detail = must_some(bark.detail.as_deref());
+    assert!(
+        detail.contains("receiver: type engine"),
+        "variable-dispatched constructor should use type-engine receiver evidence; got {detail:?}"
+    );
+    assert!(
+        detail.contains("medium confidence"),
+        "type-engine receiver evidence should include medium-confidence label; got {detail:?}"
+    );
+    assert!(
+        !detail.contains("receiver: constructor assignment"),
+        "variable-dispatched constructor should not be classified as constructor assignment; got {detail:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn detail_for_inherited_preserves_from_annotation_and_appends_receiver()
 -> Result<(), Box<dyn std::error::Error>> {
     // Inherited methods must keep `(from Base)` (or the semantic-path
