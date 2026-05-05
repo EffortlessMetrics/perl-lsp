@@ -551,6 +551,14 @@ jobs:
                   lines.append(f"- First failing test: `{data.get('first_failing_test')}`")
               if data.get("first_failing_line"):
                   lines.append(f"- First failing line: `{data.get('first_failing_line')}`")
+              if data.get("route"):
+                  lines.append(f"- Route: `{data.get('route')}`")
+              if data.get("merge_action"):
+                  lines.append(f"- Merge action: `{data.get('merge_action')}`")
+              if data.get("canonical_repro"):
+                  lines.append(f"- Repro: `{data.get('canonical_repro')}`")
+              if data.get("human_summary"):
+                  lines.append(f"- Summary: {data.get('human_summary')}")
           else:
               lines.append("- Receipt unavailable.")
 

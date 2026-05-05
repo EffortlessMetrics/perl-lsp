@@ -222,6 +222,31 @@ budget and a re-evaluation deadline.
 
 ---
 
+## UX Regression pre-merge behavior
+
+The `ux-tests` lane in `.github/workflows/ci.yml` is merge-blocking and always emits:
+
+- `target/receipts/ux-regression.log`
+- `target/receipts/ux-regression.json`
+
+The JSON receipt classifies the first observed failure and provides routing metadata and
+repro commands. Classification helps routing and triage, but it does **not** make a
+failing UX run pass.
+
+| Failure class | Route | Expected action |
+| --- | --- | --- |
+| `provider_regression` | `provider_fix` | Fix LSP/provider behavior before merge |
+| `test_race` | `test_fix` | Stabilize harness or quarantine with a tracked follow-up issue |
+| `matrix_drift` | `fixture_update` | Update fixture matrix inputs/expectations |
+| `baseline_drift` | `baseline_update` | Regenerate accepted baseline |
+| `timeout` | `timeout_triage` | Separate CI slowness from product regression |
+| `infra` | `ci_investigation` | Fix CI/harness infrastructure |
+| `server_crash` | `crash_fix` | Fix process crash before merge |
+| `new_test_bug` | `test_fix` | Fix test logic/regression in scenario |
+| `unknown` | `triage` | Inspect receipt log and extend classifier coverage |
+
+---
+
 ## Section 3 — Scoping: How `ci-scope` Selects Lanes
 
 The pr-smoke job uses `cargo xtask ci-scope --base origin/master --format json` to
