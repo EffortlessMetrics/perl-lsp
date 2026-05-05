@@ -1,31 +1,8 @@
 {
   "schema_version": 1,
-  "commit": "81de1ca6a",
+  "commit": "1db620b99",
   "cadence": "pr",
   "generated_by": "cargo xtask metrics parser-accuracy --export-status-receipts",
-  "failure_packet_count": 1,
-  "failure_packets": [
-    {
-      "id": "packet-49df877b06d09f87",
-      "failure_kind": "missing_symbol_declaration",
-      "likely_layer": "semantic_fact_extraction",
-      "fixture_id": "generated_accessor",
-      "family": "generated_accessor",
-      "metric": "symbol_decl_f1",
-      "expected": [
-        "GeneratedMember Accuracy::GeneratedAccessor::name span=\"name\""
-      ],
-      "actual": [],
-      "actual_nearest": [
-        "Package Accuracy::GeneratedAccessor span=\"Accuracy::GeneratedAccessor\"",
-        "Subroutine Accuracy::GeneratedAccessor::call_name_accessor span=\"call_name_accessor\"",
-        "Subroutine Accuracy::GeneratedAccessor::existing span=\"existing\"",
-        "Variable Accuracy::GeneratedAccessor::obj span=\"$obj\""
-      ],
-      "source_excerpt": "has name => (is => 'ro');",
-      "details": "gold symbol expectation was not present in canonical fact predictions",
-      "suggested_next_fix": "inspect fact extraction for this fixture before changing the gold expectation",
-      "suggested_next_pr": "fix(semantic): resolve parser-accuracy semantic fact packet"
-    }
-  ]
+  "failure_packet_count": 0,
+  "failure_packets": []
 }
