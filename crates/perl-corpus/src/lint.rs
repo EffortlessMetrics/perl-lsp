@@ -1,4 +1,5 @@
 use crate::meta::Section;
+use crate::metadata::IdSource;
 use anyhow::{Result, bail};
 use regex::Regex;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -286,6 +287,7 @@ pub fn check_sections(sections: &[Section], config: &LintConfig) -> LintResult {
 
     // Track seen IDs for duplicate detection
     let mut seen_ids = BTreeSet::new();
+    let mut seen_explicit_ids = BTreeSet::new();
 
     // Track sections per file
     let mut per_file: BTreeMap<&str, usize> = BTreeMap::new();
@@ -296,7 +298,7 @@ pub fn check_sections(sections: &[Section], config: &LintConfig) -> LintResult {
 
     for section in sections {
         // Check ID format
-        if section.id.is_empty() {
+        if matches!(section.id_source, IdSource::Generated) || section.explicit_id.is_none() {
             result.errors.push(format!("Missing @id in {}: {}", section.file, section.title));
         } else if !ID_RE.as_ref().is_some_and(|re| re.is_match(&section.id)) {
             result.errors.push(format!(
@@ -308,6 +310,13 @@ pub fn check_sections(sections: &[Section], config: &LintConfig) -> LintResult {
         // Check for duplicate IDs
         if !section.id.is_empty() && !seen_ids.insert(&section.id) {
             result.errors.push(format!("Duplicate @id '{}' in {}", section.id, section.file));
+        }
+        if let Some(explicit_id) = section.explicit_id.as_deref()
+            && !seen_explicit_ids.insert(explicit_id)
+        {
+            result
+                .errors
+                .push(format!("Duplicate explicit @id '{}' in {}", explicit_id, section.file));
         }
 
         // Count sections per file

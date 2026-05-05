@@ -1,6 +1,7 @@
 use crate::files::{CorpusPaths, get_test_files_from};
 use crate::lint::KNOWN_TAGS;
 use crate::meta::Section;
+use crate::metadata::IdSource;
 use crate::parse_file;
 use anyhow::Result;
 use serde::Serialize;
@@ -28,9 +29,12 @@ pub struct CorpusInventory {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct InventoryIds {
-    pub total: usize,
-    pub missing: usize,
-    pub duplicates: Vec<String>,
+    pub explicit: usize,
+    pub generated: usize,
+    pub missing_explicit_ids: usize,
+    pub duplicate_effective_ids: Vec<String>,
+    pub duplicate_explicit_ids: Vec<String>,
+    pub id_source_breakdown: BTreeMap<String, usize>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -68,7 +72,11 @@ pub fn build_inventory_from_paths(paths: &CorpusPaths) -> Result<CorpusInventory
 /// Build an inventory from explicit section data.
 pub fn inventory_from_sections(file_count: usize, sections: &[Section]) -> CorpusInventory {
     let mut id_counts: BTreeMap<&str, usize> = BTreeMap::new();
-    let mut missing_ids = 0usize;
+    let mut explicit = 0usize;
+    let mut generated = 0usize;
+    let mut missing_explicit_ids = 0usize;
+    let mut explicit_id_counts: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut id_source_breakdown: BTreeMap<String, usize> = BTreeMap::new();
     let mut known_tags = BTreeSet::new();
     let mut unknown_tags = BTreeSet::new();
     let known_tag_set: BTreeSet<&str> = KNOWN_TAGS.iter().copied().collect();
@@ -76,10 +84,20 @@ pub fn inventory_from_sections(file_count: usize, sections: &[Section]) -> Corpu
     let mut markers = InventoryMarkers { expected_error: 0, wip: 0, parser_sensitive: 0 };
 
     for section in sections {
-        if section.id.trim().is_empty() {
-            missing_ids += 1;
-        } else {
-            *id_counts.entry(section.id.as_str()).or_default() += 1;
+        *id_counts.entry(section.id.as_str()).or_default() += 1;
+        match section.id_source {
+            IdSource::Explicit => {
+                explicit += 1;
+                *id_source_breakdown.entry("explicit".to_string()).or_default() += 1;
+                if let Some(explicit_id) = section.explicit_id.as_deref() {
+                    *explicit_id_counts.entry(explicit_id).or_default() += 1;
+                }
+            }
+            IdSource::Generated => {
+                generated += 1;
+                missing_explicit_ids += 1;
+                *id_source_breakdown.entry("generated".to_string()).or_default() += 1;
+            }
         }
 
         for tag in &section.tags {
@@ -105,20 +123,27 @@ pub fn inventory_from_sections(file_count: usize, sections: &[Section]) -> Corpu
         }
     }
 
-    let duplicates = id_counts
+    let duplicate_effective_ids = id_counts
+        .into_iter()
+        .filter_map(|(id, count)| (count > 1).then_some(id.to_string()))
+        .collect::<Vec<_>>();
+    let duplicate_explicit_ids = explicit_id_counts
         .into_iter()
         .filter_map(|(id, count)| (count > 1).then_some(id.to_string()))
         .collect::<Vec<_>>();
 
     CorpusInventory {
-        schema_version: 1,
+        schema_version: 2,
         files: file_count,
         sections: sections.len(),
         cases: sections.len(),
         ids: InventoryIds {
-            total: sections.len().saturating_sub(missing_ids),
-            missing: missing_ids,
-            duplicates,
+            explicit,
+            generated,
+            missing_explicit_ids,
+            duplicate_effective_ids,
+            duplicate_explicit_ids,
+            id_source_breakdown,
         },
         tags: InventoryTags {
             known: known_tags.into_iter().collect(),
@@ -222,12 +247,16 @@ mod tests {
     fn sample_section(id: &str, tags: &[&str], flags: &[&str]) -> Section {
         Section {
             id: id.to_string(),
+            id_source: IdSource::Explicit,
+            explicit_id: Some(id.to_string()),
+            generated_id: None,
             title: "title".to_string(),
             file: "sample.txt".to_string(),
             tags: tags.iter().map(|tag| (*tag).to_string()).collect(),
             perl: None,
             flags: flags.iter().map(|flag| (*flag).to_string()).collect(),
             body: "my $x = 1;".to_string(),
+            expected: None,
             line: Some(1),
         }
     }
@@ -237,17 +266,31 @@ mod tests {
         let sections = vec![
             sample_section("case.1", &["regex"], &[]),
             sample_section("case.1", &["regex", "custom-tag"], &["parser-sensitive"]),
-            sample_section("", &["custom-tag"], &["wip"]),
+            Section {
+                id: "generated.sample".to_string(),
+                id_source: IdSource::Generated,
+                explicit_id: None,
+                generated_id: Some("generated.sample".to_string()),
+                title: "title".to_string(),
+                file: "sample.txt".to_string(),
+                tags: vec!["custom-tag".to_string()],
+                perl: None,
+                flags: vec!["wip".to_string()],
+                body: "my $x = 1;".to_string(),
+                expected: None,
+                line: Some(1),
+            },
         ];
 
         let inventory = inventory_from_sections(2, &sections);
 
-        assert_eq!(inventory.schema_version, 1);
+        assert_eq!(inventory.schema_version, 2);
         assert_eq!(inventory.files, 2);
         assert_eq!(inventory.sections, 3);
-        assert_eq!(inventory.ids.total, 2);
-        assert_eq!(inventory.ids.missing, 1);
-        assert_eq!(inventory.ids.duplicates, vec!["case.1".to_string()]);
+        assert_eq!(inventory.ids.explicit, 2);
+        assert_eq!(inventory.ids.generated, 1);
+        assert_eq!(inventory.ids.missing_explicit_ids, 1);
+        assert_eq!(inventory.ids.duplicate_effective_ids, vec!["case.1".to_string()]);
         assert_eq!(inventory.tags.known, vec!["regex".to_string()]);
         assert_eq!(inventory.tags.unknown, vec!["custom-tag".to_string()]);
         assert_eq!(inventory.markers.parser_sensitive, 1);
@@ -265,6 +308,6 @@ mod tests {
         let second = inventory_from_sections(1, &sections);
         assert_eq!(first, second);
         assert_eq!(first.tags.unknown, vec!["a-unknown".to_string(), "z-unknown".to_string()]);
-        assert_eq!(first.ids.duplicates, Vec::<String>::new());
+        assert_eq!(first.ids.duplicate_effective_ids, Vec::<String>::new());
     }
 }

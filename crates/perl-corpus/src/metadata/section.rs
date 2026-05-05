@@ -5,6 +5,12 @@ use serde::{Deserialize, Serialize};
 pub struct Section {
     /// Stable unique key, e.g., "regex.pos.001"
     pub id: String,
+    /// Source of `id` (explicit from metadata or generated fallback)
+    pub id_source: IdSource,
+    /// Explicit id from `# @id:` when provided
+    pub explicit_id: Option<String>,
+    /// Generated fallback id when `# @id:` is missing
+    pub generated_id: Option<String>,
 
     /// Display title (line after "=====")
     pub title: String,
@@ -23,10 +29,33 @@ pub struct Section {
 
     /// Body text (source code of the section)
     pub body: String,
+    /// Optional expected block after `---`
+    pub expected: Option<ExpectedBlock>,
 
     /// Line number where section starts (for error reporting)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub line: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum IdSource {
+    Explicit,
+    Generated,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ExpectedBlock {
+    pub raw: String,
+    pub format: ExpectedFormat,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ExpectedFormat {
+    TreeSitterSexp,
+    AstJson,
+    DiagnosticsJson,
+    PlainText,
+    Unknown,
 }
 
 impl Section {

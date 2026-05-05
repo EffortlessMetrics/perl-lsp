@@ -1,3 +1,4 @@
+use crate::metadata::{ExpectedBlock, ExpectedFormat, IdSource};
 use crate::metadata::Section;
 use crate::metadata::ids::{make_section_id, slugify_title};
 use regex::Regex;
@@ -82,13 +83,19 @@ pub fn parse_sections(text: &str, path: &Path) -> Vec<Section> {
             }
         }
 
+        let explicit_id = meta.get("id").cloned().filter(|id| !id.is_empty());
         let id = make_section_id(
-            &meta.get("id").cloned().unwrap_or_default(),
+            &explicit_id.clone().unwrap_or_default(),
             &file_stem,
             &title,
             section_index,
             &mut auto_ids,
         );
+        let (id_source, generated_id) = if explicit_id.is_some() {
+            (IdSource::Explicit, None)
+        } else {
+            (IdSource::Generated, Some(id.clone()))
+        };
         let tags = meta
             .get("tags")
             .map(|s| {
@@ -107,20 +114,52 @@ pub fn parse_sections(text: &str, path: &Path) -> Vec<Section> {
         let body_end =
             body_lines.iter().position(|line| line.trim() == "---").unwrap_or(body_lines.len());
         let body = body_lines[..body_end].join("\n").trim().to_string();
+        let expected = if body_end < body_lines.len() {
+            let raw = body_lines[body_end + 1..].join("\n").trim().to_string();
+            if raw.is_empty() {
+                None
+            } else {
+                Some(ExpectedBlock { format: detect_expected_format(&raw), raw })
+            }
+        } else {
+            None
+        };
         let line_num = text[..start].lines().count() + 1;
         let file_name = path.file_name().unwrap_or_default();
 
         sections.push(Section {
             id,
+            id_source,
+            explicit_id,
+            generated_id,
             title,
             file: file_name.to_string_lossy().into(),
             tags,
             perl,
             flags,
             body,
+            expected,
             line: Some(line_num),
         });
     }
 
     sections
+}
+
+fn detect_expected_format(raw: &str) -> ExpectedFormat {
+    let trimmed = raw.trim_start();
+    if trimmed.starts_with('(') {
+        return ExpectedFormat::TreeSitterSexp;
+    }
+    if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
+        if trimmed.contains("\"diagnostic\"") || trimmed.contains("\"diagnostics\"") {
+            return ExpectedFormat::DiagnosticsJson;
+        }
+        return ExpectedFormat::AstJson;
+    }
+    if trimmed.is_empty() {
+        ExpectedFormat::Unknown
+    } else {
+        ExpectedFormat::PlainText
+    }
 }
