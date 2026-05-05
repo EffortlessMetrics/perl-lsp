@@ -17,6 +17,9 @@ const VALID_COMPONENTS: &[&str] = &[
     "rename",
     "hover",
     "goto_definition",
+    "signature_help",
+    "code_lens",
+    "folding_range",
     "infra",
     "ai_completion",
 ];

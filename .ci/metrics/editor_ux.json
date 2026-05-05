@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "measured_at": "2026-04-30T20:54:03.456684600+00:00",
+  "measured_at": "2026-05-06T01:52:15.573099+00:00",
   "subsystem": "editor_ux",
   "top_line": {
     "workflow_pass_rate": {
@@ -1300,10 +1300,145 @@
           "insufficient data"
         ]
       }
+    },
+    {
+      "id": "signature_help_core",
+      "scenario": "ux_scenario_25_signature_help.rs",
+      "subsystem_owner": "editor_intelligence",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "code_lens_core",
+      "scenario": "ux_scenario_26_code_lens.rs",
+      "subsystem_owner": "editor_intelligence",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
+    },
+    {
+      "id": "folding_range_core",
+      "scenario": "ux_scenario_27_folding_range.rs",
+      "subsystem_owner": "editor_intelligence",
+      "pass_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "stability_rate": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "assumptions": [
+          "insufficient data"
+        ]
+      },
+      "p95_time_to_first_useful_result_ms": {
+        "state": "insufficient_data",
+        "value": null,
+        "kind": "measured",
+        "basis": [
+          "no receipts"
+        ],
+        "coverage": "receipts_included",
+        "confidence": "low",
+        "method": "p95",
+        "assumptions": [
+          "insufficient data"
+        ]
+      }
     }
   ],
   "provenance": {
-    "fixture_matrix": "H:\\Code\\Rust2\\perl-lsp\\crates\\perl-lsp-ux-tests\\fixtures\\editor_ux_fixture_matrix.json",
+    "fixture_matrix": "H:\\Code\\Rust\\perl-lsp\\crates\\perl-lsp-ux-tests\\fixtures\\editor_ux_fixture_matrix.json",
     "harness": "crates/perl-lsp-ux-tests",
     "tiers": []
   }

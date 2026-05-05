@@ -81,6 +81,9 @@ pub enum UxComponent {
     Rename,
     Hover,
     GotoDefinition,
+    SignatureHelp,
+    CodeLens,
+    FoldingRange,
     Infra,
     AiCompletion,
 }
@@ -223,6 +226,9 @@ mod tests {
             UxComponent::Rename,
             UxComponent::Hover,
             UxComponent::GotoDefinition,
+            UxComponent::SignatureHelp,
+            UxComponent::CodeLens,
+            UxComponent::FoldingRange,
             UxComponent::Infra,
             UxComponent::AiCompletion,
         ];
