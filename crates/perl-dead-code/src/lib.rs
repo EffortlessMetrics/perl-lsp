@@ -119,34 +119,57 @@ impl DeadCodeDetector {
             .ok_or_else(|| "file not indexed".to_string())?;
 
         let mut dead = Vec::new();
-        let mut terminator: Option<(usize, String)> = None;
+        let mut terminator: Option<(usize, String, usize)> = None;
+        let mut block_depth = 0usize;
 
         for (i, line) in text.lines().enumerate() {
             let trimmed = line.trim();
-            if let Some((term_line, term_kw)) = &terminator {
-                if !trimmed.is_empty() {
-                    dead.push(DeadCode {
-                        code_type: DeadCodeType::UnreachableCode,
-                        name: None,
-                        file_path: file_path.to_path_buf(),
-                        start_line: i + 1,
-                        end_line: i + 1,
-                        reason: format!(
-                            "Code is unreachable after `{}` on line {}",
-                            term_kw, term_line
-                        ),
-                        confidence: 0.5,
-                        suggestion: Some("Remove or restructure this code".to_string()),
-                    });
-                    break;
+            let line_number = i + 1;
+            let structural_close_only = trimmed.chars().all(|ch| ch == '}');
+
+            if let Some((term_line, term_kw, term_depth)) = &terminator {
+                if block_depth == *term_depth {
+                    if is_executable_line(trimmed) {
+                        dead.push(DeadCode {
+                            code_type: DeadCodeType::UnreachableCode,
+                            name: None,
+                            file_path: file_path.to_path_buf(),
+                            start_line: line_number,
+                            end_line: line_number,
+                            reason: format!(
+                                "Code is unreachable after `{}` on line {}",
+                                term_kw, term_line
+                            ),
+                            confidence: 0.9,
+                            suggestion: Some("Remove or restructure this code".to_string()),
+                        });
+                        break;
+                    }
+                } else if block_depth < *term_depth {
+                    terminator = None;
                 }
             }
 
-            if ["return", "die", "exit"].iter().any(|kw| trimmed.starts_with(kw)) {
-                if let Some(first_word) = trimmed.split_whitespace().next() {
-                    terminator = Some((i + 1, first_word.to_string()));
+            if structural_close_only {
+                block_depth = block_depth.saturating_sub(trimmed.chars().count());
+                if let Some((_, _, term_depth)) = &terminator {
+                    if block_depth < *term_depth {
+                        terminator = None;
+                    }
                 }
+                continue;
             }
+
+            if terminator.is_none()
+                && let Some(term_kw) = detect_unconditional_terminator(trimmed)
+            {
+                terminator = Some((line_number, term_kw.to_string(), block_depth));
+            }
+
+            let opens = line.chars().filter(|ch| *ch == '{').count();
+            let closes = line.chars().filter(|ch| *ch == '}').count();
+            block_depth += opens;
+            block_depth = block_depth.saturating_sub(closes);
         }
 
         // Dead branch detection: scan for constant-condition patterns.
@@ -212,5 +235,59 @@ impl DeadCodeDetector {
         }
 
         DeadCodeAnalysis { dead_code, stats, files_analyzed: docs.len(), total_lines }
+    }
+}
+
+fn is_executable_line(trimmed: &str) -> bool {
+    if trimmed.is_empty() || trimmed.starts_with('#') {
+        return false;
+    }
+
+    !trimmed.chars().all(|ch| ch == '{' || ch == '}')
+}
+
+fn detect_unconditional_terminator(trimmed: &str) -> Option<&'static str> {
+    let code = strip_inline_comment(trimmed).trim();
+    if code.is_empty() {
+        return None;
+    }
+
+    for (raw, canonical) in [
+        ("return", "return"),
+        ("die", "die"),
+        ("exit", "exit"),
+        ("CORE::exit", "CORE::exit"),
+    ] {
+        if starts_with_keyword(code, raw) {
+            let rest = code[raw.len()..].trim_start();
+            if starts_with_postfix_conditional(rest) {
+                return None;
+            }
+            return Some(canonical);
+        }
+    }
+
+    None
+}
+
+fn starts_with_keyword(code: &str, keyword: &str) -> bool {
+    code.starts_with(keyword)
+        && code
+            .chars()
+            .nth(keyword.len())
+            .is_none_or(|ch| !ch.is_ascii_alphanumeric() && ch != '_')
+}
+
+fn starts_with_postfix_conditional(rest: &str) -> bool {
+    ["if", "unless", "while", "until", "for", "foreach", "when"]
+        .iter()
+        .any(|kw| starts_with_keyword(rest, kw))
+}
+
+fn strip_inline_comment(line: &str) -> &str {
+    if let Some((code, _)) = line.split_once('#') {
+        code
+    } else {
+        line
     }
 }
