@@ -7,7 +7,11 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use tree_sitter_perl_c::{parse_perl_bytes, parse_perl_code, parse_perl_file};
+use tree_sitter::Parser;
+use tree_sitter_perl_c::{
+    ParsePerlError, PerlParser, parse_perl_bytes, parse_perl_code, parse_perl_file,
+    try_parse_perl_bytes_with_parser,
+};
 
 fn unique_temp_file(name: &str) -> PathBuf {
     let nanos =
@@ -128,4 +132,28 @@ fn regression_file_parse_with_unclosed_construct_is_recoverable() -> Result<(), 
     assert!(tree.root_node().has_error(), "unclosed block should still return a partial tree");
 
     Ok(())
+}
+
+#[test]
+fn regression_reusable_parser_supports_multiple_back_to_back_parses() -> Result<(), Box<dyn Error>> {
+    let mut parser = PerlParser::new()?;
+
+    let first_tree = parser.parse_code("my $value = 1;\n")?;
+    assert_eq!(first_tree.root_node().kind(), "source_file");
+    assert!(!first_tree.root_node().has_error());
+
+    let second_tree = parser.parse_code("my $broken = ;\nmy $ok = 2;\n")?;
+    assert_eq!(second_tree.root_node().kind(), "source_file");
+    assert!(second_tree.root_node().has_error());
+
+    Ok(())
+}
+
+#[test]
+fn regression_typed_parse_with_unconfigured_parser_returns_parse_returned_none() {
+    let mut parser = Parser::new();
+
+    let result = try_parse_perl_bytes_with_parser(&mut parser, b"my $value = 1;\n");
+
+    assert!(matches!(result, Err(ParsePerlError::ParseReturnedNone)));
 }
