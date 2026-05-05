@@ -147,11 +147,84 @@ impl PragmaStateQuery {
     }
 }
 
+/// Single transition entry in a pragma timeline.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PragmaEntry {
+    /// Byte range where this entry is introduced.
+    pub range: Range<usize>,
+    /// Immutable state snapshot for this transition.
+    pub snapshot: PragmaSnapshot,
+}
+
+/// Transition timeline for pragma state snapshots.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PragmaMap {
+    entries: Box<[PragmaEntry]>,
+}
+
+impl PragmaMap {
+    /// Build a `PragmaMap` from range/snapshot pairs.
+    #[must_use]
+    pub fn from_entries(entries: Vec<PragmaEntry>) -> Self {
+        Self { entries: entries.into_boxed_slice() }
+    }
+
+    /// Read-only access to all timeline entries.
+    #[must_use]
+    pub fn entries(&self) -> &[PragmaEntry] {
+        &self.entries
+    }
+
+    /// Return the snapshot active at the given byte offset.
+    #[must_use]
+    pub fn snapshot_at(&self, offset: usize) -> PragmaSnapshot {
+        let idx = self.entries.partition_point(|entry| entry.range.start <= offset);
+        let mut snapshot =
+            if idx > 0 { self.entries[idx - 1].snapshot.clone() } else { PragmaSnapshot::default() };
+
+        if snapshot.state.signatures_strict {
+            snapshot.state.strict_vars = true;
+            snapshot.state.strict_subs = true;
+            snapshot.state.strict_refs = true;
+        }
+
+        snapshot
+    }
+
+    /// Return the state active at the given byte offset.
+    #[must_use]
+    pub fn state_at(&self, offset: usize) -> PragmaState {
+        self.snapshot_at(offset).into()
+    }
+
+    /// Create a monotonic query cursor for this map.
+    #[must_use]
+    pub fn cursor(&self) -> PragmaQueryCursor {
+        PragmaQueryCursor::new()
+    }
+
+    /// Return the final top-level state after all lexical scopes close.
+    #[must_use]
+    pub fn final_state(&self) -> PragmaState {
+        let mut state = self.entries.last().map_or_else(PragmaState::default, |entry| {
+            entry.snapshot.clone().into()
+        });
+
+        if state.signatures_strict {
+            state.strict_vars = true;
+            state.strict_subs = true;
+            state.strict_refs = true;
+        }
+
+        state
+    }
+}
+
 /// Explicit compile-time pragma environment that can answer file-position
 /// queries and expose immutable snapshots.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CompileTimePragmaEnvironment {
-    map: Vec<(Range<usize>, PragmaSnapshot)>,
+    map: PragmaMap,
 }
 
 impl CompileTimePragmaEnvironment {
@@ -163,10 +236,12 @@ impl CompileTimePragmaEnvironment {
         PragmaTracker::build_ranges(ast, &mut current_state, &mut ranges);
         ranges.sort_by_key(|(range, _)| range.start);
 
-        let map =
-            ranges.into_iter().map(|(range, state)| (range, PragmaSnapshot::from(state))).collect();
+        let map = ranges
+            .into_iter()
+            .map(|(range, state)| PragmaEntry { range, snapshot: PragmaSnapshot::from(state) })
+            .collect();
 
-        Self { map }
+        Self { map: PragmaMap::from_entries(map) }
     }
 
     /// Return a position query object with immutable state snapshot.
@@ -178,22 +253,18 @@ impl CompileTimePragmaEnvironment {
     /// Return the immutable snapshot active at the given byte offset.
     #[must_use]
     pub fn snapshot_at(&self, offset: usize) -> PragmaSnapshot {
-        let idx = self.map.partition_point(|(range, _)| range.start <= offset);
-        let mut snapshot =
-            if idx > 0 { self.map[idx - 1].1.clone() } else { PragmaSnapshot::default() };
-
-        if snapshot.state.signatures_strict {
-            snapshot.state.strict_vars = true;
-            snapshot.state.strict_subs = true;
-            snapshot.state.strict_refs = true;
-        }
-
-        snapshot
+        self.map.snapshot_at(offset)
     }
 
     /// Access the underlying range map for advanced consumers.
     #[must_use]
-    pub fn as_map(&self) -> &[(Range<usize>, PragmaSnapshot)] {
+    pub fn as_map(&self) -> &[PragmaEntry] {
+        self.map.entries()
+    }
+
+    /// Access the timeline map for advanced consumers.
+    #[must_use]
+    pub fn pragma_map(&self) -> &PragmaMap {
         &self.map
     }
 }
@@ -680,7 +751,7 @@ impl PragmaTracker {
         CompileTimePragmaEnvironment::build(ast)
             .as_map()
             .iter()
-            .map(|(range, snapshot)| (range.clone(), snapshot.clone().into()))
+            .map(|entry| (entry.range.clone(), entry.snapshot.clone().into()))
             .collect()
     }
 
@@ -689,26 +760,27 @@ impl PragmaTracker {
         pragma_map: &[(Range<usize>, PragmaState)],
         offset: usize,
     ) -> PragmaState {
-        let map = pragma_map
+        let entries = pragma_map
             .iter()
-            .map(|(range, state)| (range.clone(), PragmaSnapshot::from(state.clone())))
+            .map(|(range, state)| PragmaEntry {
+                range: range.clone(),
+                snapshot: PragmaSnapshot::from(state.clone()),
+            })
             .collect();
-        let environment = CompileTimePragmaEnvironment { map };
-        environment.snapshot_at(offset).into()
+        PragmaMap::from_entries(entries).state_at(offset)
     }
 
     /// Get the final top-level pragma state after all lexical scopes close.
     #[must_use]
     pub fn final_state(pragma_map: &[(Range<usize>, PragmaState)]) -> PragmaState {
-        let mut state = pragma_map.last().map_or_else(PragmaState::default, |(_, s)| s.clone());
-
-        if state.signatures_strict {
-            state.strict_vars = true;
-            state.strict_subs = true;
-            state.strict_refs = true;
-        }
-
-        state
+        let entries = pragma_map
+            .iter()
+            .map(|(range, state)| PragmaEntry {
+                range: range.clone(),
+                snapshot: PragmaSnapshot::from(state.clone()),
+            })
+            .collect();
+        PragmaMap::from_entries(entries).final_state()
     }
 
     /// Process a lexically scoped body and then restore the caller state.
