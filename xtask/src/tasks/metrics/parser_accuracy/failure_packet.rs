@@ -91,6 +91,7 @@ fn collect_ast_failure_packets(
         .into_iter()
         .filter(|prediction| expected_lines.contains(&prediction.line))
         .collect::<Vec<_>>();
+    let mut matched = BTreeSet::new();
 
     for expectation in &fixture.ast_expectations {
         if packets.len() >= FAILURE_PACKET_LIMIT {
@@ -101,9 +102,8 @@ fn collect_ast_failure_packets(
             .iter()
             .filter(|prediction| prediction.line == expectation.line)
             .collect::<Vec<_>>();
-        let matching_kind =
-            predictions_on_line.iter().find(|prediction| prediction.kind == expectation.kind);
-        let Some(prediction) = matching_kind else {
+        let prediction_index = best_ast_prediction_index(expectation, &predictions, &matched);
+        let Some(prediction_index) = prediction_index else {
             push_failure_packet(
                 packets,
                 FailurePacket {
@@ -137,6 +137,8 @@ fn collect_ast_failure_packets(
             continue;
         };
 
+        matched.insert(prediction_index);
+        let prediction = &predictions[prediction_index];
         let parent_matches = expectation
             .parent_kind
             .as_ref()

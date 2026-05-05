@@ -2926,16 +2926,7 @@ fn score_ast_expectations(
 
     let mut matched = BTreeSet::new();
     for expectation in expectations {
-        let prediction_index = predictions.iter().enumerate().find_map(|(index, prediction)| {
-            if matched.contains(&index) {
-                return None;
-            }
-            if prediction.kind == expectation.kind && prediction.line == expectation.line {
-                Some(index)
-            } else {
-                None
-            }
-        });
+        let prediction_index = best_ast_prediction_index(expectation, predictions, &matched);
 
         let Some(prediction_index) = prediction_index else {
             score.node_kind_false_negative_count += 1;
@@ -2979,6 +2970,56 @@ fn score_ast_expectations(
         .enumerate()
         .filter(|(index, prediction)| !matched.contains(index) && prediction.kind != "Error")
         .count() as u64;
+}
+
+fn best_ast_prediction_index(
+    expectation: &AstExpectation,
+    predictions: &[AstPrediction],
+    matched: &BTreeSet<usize>,
+) -> Option<usize> {
+    let mut best = None;
+    for (index, prediction) in predictions.iter().enumerate() {
+        if matched.contains(&index) {
+            continue;
+        }
+        if prediction.kind != expectation.kind || prediction.line != expectation.line {
+            continue;
+        }
+
+        let score = ast_prediction_match_score(expectation, prediction);
+        if best.is_none_or(|(_, best_score)| score > best_score) {
+            best = Some((index, score));
+        }
+    }
+    best.map(|(index, _)| index)
+}
+
+fn ast_prediction_match_score(expectation: &AstExpectation, prediction: &AstPrediction) -> u8 {
+    let mut score = 0;
+    if prediction.span_text == expectation.span_text {
+        score += 8;
+    }
+    if let Some(parent_kind) = &expectation.parent_kind
+        && prediction.parent_kind.as_ref() == Some(parent_kind)
+    {
+        score += 4;
+    }
+    if let Some(depth) = expectation.depth
+        && prediction.depth == depth
+    {
+        score += 2;
+    }
+    if let Some(operator) = &expectation.operator
+        && prediction.operator.as_ref() == Some(operator)
+    {
+        score += 2;
+    }
+    if let Some(parent_operator) = &expectation.parent_operator
+        && prediction.parent_operator.as_ref() == Some(parent_operator)
+    {
+        score += 1;
+    }
+    score
 }
 
 fn score_manifest_symbols(root: &Path, manifest: &ParserAccuracyManifest) -> Result<SymbolScore> {
@@ -5955,6 +5996,50 @@ sub dynamic_boundary_case {
         assert_eq!(score.node_kind_true_positive_count, 1);
         assert_eq!(score.parent_child_expected_count, 1);
         assert_eq!(score.parent_child_correct_count, 0);
+    }
+
+    #[test]
+    fn ast_scorer_prefers_best_shape_when_kind_and_line_are_ambiguous() -> Result<()> {
+        let expectations = vec![AstExpectation {
+            id: "operator_multiplication".to_string(),
+            kind: "Binary".to_string(),
+            line: 3,
+            span_text: "2 * 3".to_string(),
+            parent_kind: Some("Binary".to_string()),
+            depth: Some(3),
+            operator: Some("*".to_string()),
+            parent_operator: Some("+".to_string()),
+        }];
+        let predictions = vec![
+            AstPrediction {
+                kind: "Binary".to_string(),
+                line: 3,
+                span_text: "1 + 2 * 3".to_string(),
+                parent_kind: Some("VariableDeclaration".to_string()),
+                depth: 2,
+                operator: Some("+".to_string()),
+                parent_operator: None,
+            },
+            AstPrediction {
+                kind: "Binary".to_string(),
+                line: 3,
+                span_text: "2 * 3".to_string(),
+                parent_kind: Some("Binary".to_string()),
+                depth: 3,
+                operator: Some("*".to_string()),
+                parent_operator: Some("+".to_string()),
+            },
+        ];
+        let mut score = AstScore::default();
+
+        score_ast_expectations(&expectations, &predictions, &mut score);
+
+        assert_eq!(score.node_kind_true_positive_count, 1);
+        assert_eq!(score.span_exact_count, 1);
+        assert_eq!(score.parent_child_correct_count, 1);
+        assert_eq!(score.tree_depth_correct_count, 1);
+        assert_eq!(score.operator_precedence_correct_count, 1);
+        Ok(())
     }
 
     #[test]
