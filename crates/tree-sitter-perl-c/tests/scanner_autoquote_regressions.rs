@@ -61,3 +61,27 @@ fn fat_comma_autoquote_skips_pod_like_gap() -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
+
+#[test]
+fn fat_comma_autoquote_skips_blank_lines_between_key_and_arrow() -> Result<(), Box<dyn Error>> {
+    let source = "my %h = ( key\n\n\n  => 1 );\n";
+    let captures = captured_autoquoted_barewords(source)?;
+
+    assert!(
+        captures.iter().any(|capture| capture == "key"),
+        "expected autoquoted_bareword capture for `key`, got {captures:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn brace_autoquote_skips_whitespace_only_gap_before_closing_brace() -> Result<(), Box<dyn Error>> {
+    let source = "my %h = ( key => 1 );\nmy $v = $h{key\n\n\n};\n";
+    let captures = captured_autoquoted_barewords(source)?;
+
+    assert!(
+        captures.iter().any(|capture| capture == "key"),
+        "expected autoquoted_bareword capture for `key`, got {captures:?}"
+    );
+    Ok(())
+}
