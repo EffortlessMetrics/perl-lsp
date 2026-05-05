@@ -135,6 +135,10 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Resume parser, corpus, semantic, and DAP hardening after the release-channel receipts close
 - Keep the install story verified across all distribution channels
 - Keep public-alpha release notes concise and tied to concrete channel receipts
+- Editor-trust sequencing for #7952 should remain the product-ordering default: availability first, bounded completion proof next, diagnostics truth after that, then real-workspace semantic baseline, `@INC` consumer consistency, parser recovery-under-edit, UX fixture substrate consolidation, ratchet promotion, and semantic producer-boundary cleanup.
+- Completion follow-ups should improve **ranking** inside the existing bounded unknown-receiver fallback candidate set (no all-workspace fallback broadening) and keep uncertainty labels explicit.
+- Diagnostics suppression should stay semantic and conservative: suppress only when indexed evidence shows a symbol may exist; keep dynamic uncertainty fail-closed and preserve legacy behavior when no semantic index is available.
+- Ratchet policy should stay phased: nightly evidence first, label-gated PR checks second, merge-blocking floors only for cheap deterministic invariants (panic-free parser, no exact-receiver regressions, no dynamic false-precision leaks, no stale-index regressions).
 
 ## Milestone Ladder
 
