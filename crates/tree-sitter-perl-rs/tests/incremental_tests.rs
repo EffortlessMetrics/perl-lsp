@@ -122,7 +122,7 @@ fn when_parse_with_old_tree_given_empty_new_source_then_tree_is_returned() {
     let new_tree = must_some(new_tree);
     assert_eq!(new_tree.source(), "", "tree source must be the empty string");
     // The root is still a Program node (empty program).
-    assert_eq!(new_tree.root_node().kind(), "Program");
+    assert_eq!(new_tree.root_node().kind(), "source_file");
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn when_reparse_after_edit_then_new_tree_has_correct_ast() {
     let new_tree = must_some(parser.parse_with_old_tree(new_source, &old_tree));
     assert_eq!(new_tree.source(), new_source);
     // Root must still be a Program node.
-    assert_eq!(new_tree.root_node().kind(), "Program");
+    assert_eq!(new_tree.root_node().kind(), "source_file");
     // The new program has children (the sub declaration).
     assert!(
         new_tree.root_node().child_count() >= 1,
