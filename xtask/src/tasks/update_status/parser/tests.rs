@@ -254,6 +254,7 @@ fn test_parser_accuracy_artifact_renders_denominator_and_metric_rows() -> Result
                     sample_count: 6,
                 },
             ],
+            failure_packets: vec![],
         }),
         token_metrics: token::token_metrics_fixture(),
     };

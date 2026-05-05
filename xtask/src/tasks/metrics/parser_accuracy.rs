@@ -45,6 +45,10 @@ mod failure_packet;
 const DEFAULT_MANIFEST: &str = "crates/perl-corpus/fixtures/parser_accuracy/manifest.json";
 const DEFAULT_OUTPUT: &str = "target/metrics/parser_accuracy.json";
 const DEFAULT_RATCHET_RECEIPT: &str = "target/receipts/metrics/parser_accuracy.json";
+const FAILURE_PACKET_STATUS_RECEIPT: &str =
+    "docs/project/status/parser_accuracy_failure_packets.json";
+const FIXTURE_INVENTORY_STATUS_RECEIPT: &str =
+    "docs/project/status/parser_accuracy_fixture_inventory.json";
 const SAFETY_FLOOR_METRICS: &[(&str, f64)] =
     &[("dynamic_false_precision_count", 0.0), ("fast_path_wrong_result_count", 0.0)];
 const DEFERRED_PRECISION_RECALL_CANDIDATES: &[&str] = &[
@@ -408,7 +412,7 @@ const LINE_TAG_VOCABULARY: &[LineTag] = &[
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ParserAccuracyArtifact {
     schema_version: u32,
-    subsystem: &'static str,
+    subsystem: String,
     generated_at: String,
     commit: String,
     cadence: Cadence,
@@ -873,6 +877,7 @@ struct DeterminismScore {
 pub fn run(
     json: bool,
     check: bool,
+    export_status_receipts: bool,
     manifest: Option<PathBuf>,
     output: Option<PathBuf>,
     cadence: &str,
@@ -902,8 +907,14 @@ pub fn run(
         write_artifact(&output_path, &artifact)?;
         write_ratchet_receipt(&root, &artifact)?;
         println!("parser accuracy artifact written: {}", output_path.display());
+    } else if export_status_receipts {
+        write_ratchet_receipt(&root, &artifact)?;
     } else {
         print_summary(&artifact);
+    }
+
+    if export_status_receipts {
+        write_status_receipts(&root, &manifest, &artifact)?;
     }
 
     Ok(())
@@ -983,7 +994,7 @@ fn build_artifact(
 
     Ok(ParserAccuracyArtifact {
         schema_version: 1,
-        subsystem: "parser_accuracy",
+        subsystem: "parser_accuracy".to_string(),
         generated_at: Utc::now().to_rfc3339(),
         commit: git_commit(root),
         cadence,
@@ -4681,6 +4692,261 @@ fn write_artifact(path: &Path, artifact: &ParserAccuracyArtifact) -> Result<()> 
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatusReceiptFile {
+    pub name: &'static str,
+    pub path: PathBuf,
+    pub content: String,
+}
+
+#[derive(Debug, Serialize)]
+struct FailurePacketStatusReceipt {
+    schema_version: u32,
+    commit: String,
+    cadence: Cadence,
+    generated_by: &'static str,
+    failure_packet_count: u64,
+    failure_packets: Vec<FailurePacketStatusEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct FailurePacketStatusEntry {
+    id: String,
+    failure_kind: String,
+    likely_layer: String,
+    fixture_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    family: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    metric: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    line: Option<u64>,
+    expected: Vec<String>,
+    actual: Vec<String>,
+    actual_nearest: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_excerpt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    details: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    suggested_next_fix: Option<String>,
+    suggested_next_pr: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    first_observed_commit: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct FixtureInventoryStatusReceipt {
+    schema_version: u32,
+    commit: String,
+    generated_by: &'static str,
+    fixture_count: u64,
+    family_count: u64,
+    scored_lines: u64,
+    scored_symbols: u64,
+    fixtures: Vec<FixtureInventoryStatusEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct FixtureInventoryStatusEntry {
+    id: String,
+    family: String,
+    source_path: String,
+    label_mode: LabelMode,
+    scored_lines: u64,
+    scored_symbols: u64,
+    fully_labeled_regions: u64,
+    partial_labeled_regions: u64,
+    unknown_regions: u64,
+    negative_regions: u64,
+    dynamic_boundaries: u64,
+    unsupported_constructs: u64,
+    real_project_file: bool,
+    generated: bool,
+    provider_expectation_counts: ProviderExpectationCounts,
+}
+
+#[derive(Debug, Serialize)]
+struct ProviderExpectationCounts {
+    method_completion: u64,
+    diagnostics: u64,
+    navigation: u64,
+}
+
+pub fn status_receipt_files_from_target(root: &Path) -> Result<Vec<StatusReceiptFile>> {
+    let manifest_path = root.join(DEFAULT_MANIFEST);
+    let manifest = read_manifest(root, &manifest_path)?;
+    let artifact_path = root.join(DEFAULT_OUTPUT);
+    let raw = fs::read_to_string(&artifact_path)
+        .with_context(|| format!("reading parser accuracy artifact {}", artifact_path.display()))?;
+    let artifact: ParserAccuracyArtifact = serde_json::from_str(&raw)
+        .with_context(|| format!("parsing parser accuracy artifact {}", artifact_path.display()))?;
+    validate_artifact_contract(&artifact)?;
+    status_receipt_files(root, &manifest, &artifact)
+}
+
+pub fn status_receipt_equivalent_ignoring_commit(existing: &str, generated: &str) -> bool {
+    let Ok(mut existing_value) = serde_json::from_str::<serde_json::Value>(existing) else {
+        return existing == generated;
+    };
+    let Ok(mut generated_value) = serde_json::from_str::<serde_json::Value>(generated) else {
+        return existing == generated;
+    };
+    if let (Some(existing_object), Some(generated_object)) =
+        (existing_value.as_object_mut(), generated_value.as_object_mut())
+    {
+        existing_object.remove("commit");
+        generated_object.remove("commit");
+    }
+    existing_value == generated_value
+}
+
+fn write_status_receipts(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+    artifact: &ParserAccuracyArtifact,
+) -> Result<()> {
+    for receipt in status_receipt_files(root, manifest, artifact)? {
+        let parent = receipt
+            .path
+            .parent()
+            .ok_or_else(|| eyre!("parser accuracy status receipt path has no parent"))?;
+        fs::create_dir_all(parent).with_context(|| {
+            format!("creating parser accuracy status receipt dir {}", parent.display())
+        })?;
+        fs::write(&receipt.path, receipt.content)
+            .with_context(|| format!("writing {}", receipt.path.display()))?;
+        println!("parser accuracy status receipt written: {}", receipt.path.display());
+    }
+    Ok(())
+}
+
+fn status_receipt_files(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+    artifact: &ParserAccuracyArtifact,
+) -> Result<Vec<StatusReceiptFile>> {
+    Ok(vec![
+        StatusReceiptFile {
+            name: FAILURE_PACKET_STATUS_RECEIPT,
+            path: root.join(FAILURE_PACKET_STATUS_RECEIPT),
+            content: render_failure_packet_status_receipt(artifact)?,
+        },
+        StatusReceiptFile {
+            name: FIXTURE_INVENTORY_STATUS_RECEIPT,
+            path: root.join(FIXTURE_INVENTORY_STATUS_RECEIPT),
+            content: render_fixture_inventory_status_receipt(manifest, artifact)?,
+        },
+    ])
+}
+
+fn render_failure_packet_status_receipt(artifact: &ParserAccuracyArtifact) -> Result<String> {
+    let receipt = FailurePacketStatusReceipt {
+        schema_version: 1,
+        commit: artifact.commit.clone(),
+        cadence: artifact.cadence,
+        generated_by: "cargo xtask update-status --only parser --write",
+        failure_packet_count: artifact.failure_packets.len() as u64,
+        failure_packets: artifact.failure_packets.iter().map(failure_packet_status_entry).collect(),
+    };
+    render_json_with_newline(&receipt)
+}
+
+fn failure_packet_status_entry(packet: &FailurePacket) -> FailurePacketStatusEntry {
+    FailurePacketStatusEntry {
+        id: failure_packet_status_id(packet),
+        failure_kind: packet.failure_kind.clone(),
+        likely_layer: packet.likely_layer.clone(),
+        fixture_id: packet.fixture_id.clone(),
+        family: packet.family.clone(),
+        metric: packet.metric.clone(),
+        line: packet.line,
+        expected: packet.expected.clone(),
+        actual: packet.actual.clone(),
+        actual_nearest: packet.nearest_predictions.clone(),
+        source_excerpt: packet.source_excerpt.clone(),
+        details: packet.details.clone(),
+        suggested_next_fix: packet.suggested_next_fix.clone(),
+        suggested_next_pr: suggested_next_pr_for_failure_packet(packet),
+        first_observed_commit: None,
+    }
+}
+
+fn failure_packet_status_id(packet: &FailurePacket) -> String {
+    let identity = format!(
+        "{}|{}|{}|{}|{:?}|{:?}|{:?}|{:?}",
+        packet.failure_kind,
+        packet.likely_layer,
+        packet.fixture_id,
+        packet.family.as_deref().unwrap_or(""),
+        packet.metric,
+        packet.line,
+        packet.expected,
+        packet.source_excerpt
+    );
+    format!("packet-{:016x}", stable_hash(&identity))
+}
+
+fn suggested_next_pr_for_failure_packet(packet: &FailurePacket) -> String {
+    match packet.likely_layer.as_str() {
+        "parser" => "fix(parser-core): resolve parser projection failure packet".to_string(),
+        "ast_projection" => {
+            "feat(parser-accuracy): tighten AST projection fixture expectations".to_string()
+        }
+        "semantic_fact_extraction" => {
+            "fix(semantic): resolve parser-accuracy semantic fact packet".to_string()
+        }
+        layer => format!("fix(parser-accuracy): resolve {layer} failure packet"),
+    }
+}
+
+fn render_fixture_inventory_status_receipt(
+    manifest: &ParserAccuracyManifest,
+    artifact: &ParserAccuracyArtifact,
+) -> Result<String> {
+    let receipt = FixtureInventoryStatusReceipt {
+        schema_version: 1,
+        commit: artifact.commit.clone(),
+        generated_by: "cargo xtask update-status --only parser --write",
+        fixture_count: artifact.denominator.fixture_count,
+        family_count: artifact.denominator.fixture_family_count,
+        scored_lines: artifact.denominator.scored_line_count,
+        scored_symbols: artifact.denominator.scored_symbol_count,
+        fixtures: manifest.fixtures.iter().map(fixture_inventory_status_entry).collect(),
+    };
+    render_json_with_newline(&receipt)
+}
+
+fn fixture_inventory_status_entry(fixture: &FixtureMetadata) -> FixtureInventoryStatusEntry {
+    FixtureInventoryStatusEntry {
+        id: fixture.id.clone(),
+        family: fixture.family.clone(),
+        source_path: fixture.source_path.clone(),
+        label_mode: fixture.label_mode,
+        scored_lines: fixture.scored_lines,
+        scored_symbols: fixture.scored_symbols,
+        fully_labeled_regions: fixture.fully_labeled_regions,
+        partial_labeled_regions: fixture.partial_labeled_regions,
+        unknown_regions: fixture.unknown_regions,
+        negative_regions: fixture.negative_regions,
+        dynamic_boundaries: fixture.dynamic_boundaries,
+        unsupported_constructs: fixture.unsupported_constructs,
+        real_project_file: fixture.real_project_file,
+        generated: fixture.generated,
+        provider_expectation_counts: ProviderExpectationCounts {
+            method_completion: fixture.provider_expectations.method_completion.len() as u64,
+            diagnostics: fixture.provider_expectations.diagnostics.len() as u64,
+            navigation: fixture.provider_expectations.navigation.len() as u64,
+        },
+    }
+}
+
+fn render_json_with_newline(value: &impl Serialize) -> Result<String> {
+    let mut rendered = serde_json::to_string_pretty(value)?;
+    rendered.push('\n');
+    Ok(rendered)
+}
+
 fn write_ratchet_receipt(root: &Path, artifact: &ParserAccuracyArtifact) -> Result<()> {
     let path = root.join(DEFAULT_RATCHET_RECEIPT);
     let parent =
@@ -5887,7 +6153,7 @@ sub dynamic_boundary_case {
     fn ratchet_receipt_keeps_precision_recall_metrics_out_of_floor_map() {
         let artifact = ParserAccuracyArtifact {
             schema_version: 1,
-            subsystem: "parser_accuracy",
+            subsystem: "parser_accuracy".to_string(),
             generated_at: "2026-05-03T00:00:00Z".to_string(),
             commit: "test".to_string(),
             cadence: Cadence::Pr,
@@ -5915,6 +6181,59 @@ sub dynamic_boundary_case {
         );
         assert_eq!(receipt.improvement_metrics.get("line_construct_f1"), Some(&Some(0.875)));
         assert_eq!(receipt.improvement_metrics.get("symbol_decl_precision"), Some(&Some(0.9)));
+    }
+
+    #[test]
+    fn status_receipts_export_failure_packets_and_fixture_inventory() -> Result<()> {
+        let manifest = fixture_manifest();
+        let artifact = ParserAccuracyArtifact {
+            schema_version: 1,
+            subsystem: "parser_accuracy".to_string(),
+            generated_at: "2026-05-05T00:00:00Z".to_string(),
+            commit: "test-commit".to_string(),
+            cadence: Cadence::Pr,
+            denominator: compute_denominator(&manifest),
+            families: summarize_families(&manifest),
+            metrics: vec![measured_count("dynamic_false_precision_count", 0, 1, Cadence::Pr)],
+            failure_packets: vec![FailurePacket {
+                failure_kind: "missing_symbol_reference".to_string(),
+                likely_layer: "semantic_fact_extraction".to_string(),
+                fixture_id: "qualified_refs".to_string(),
+                family: Some("qualified_references".to_string()),
+                metric: Some("symbol_ref_f1".to_string()),
+                line: Some(7),
+                expected: vec!["Accuracy::Refs::target".to_string()],
+                actual: vec![],
+                nearest_predictions: vec!["Accuracy::Refs::nearby".to_string()],
+                source_excerpt: Some("Accuracy::Refs::target();".to_string()),
+                details: None,
+                suggested_next_fix: Some(
+                    "Inspect reference extraction before changing gold.".to_string(),
+                ),
+            }],
+            gold_drift: GoldDrift::default(),
+            metric_runtime: MetricRuntime::default(),
+        };
+
+        let failure_receipt = render_failure_packet_status_receipt(&artifact)?;
+        assert!(failure_receipt.contains("\"failure_packet_count\": 1"));
+        assert!(failure_receipt.contains("\"actual_nearest\""));
+        assert!(failure_receipt.contains("\"suggested_next_pr\""));
+
+        let inventory_receipt = render_fixture_inventory_status_receipt(&manifest, &artifact)?;
+        assert!(inventory_receipt.contains("\"fixture_count\": 2"));
+        assert!(inventory_receipt.contains("\"provider_expectation_counts\""));
+        Ok(())
+    }
+
+    #[test]
+    fn status_receipt_stale_check_ignores_commit_only() {
+        let existing = r#"{"schema_version":1,"commit":"old","fixture_count":2}"#;
+        let generated = r#"{"schema_version":1,"commit":"new","fixture_count":2}"#;
+        let stale = r#"{"schema_version":1,"commit":"new","fixture_count":3}"#;
+
+        assert!(status_receipt_equivalent_ignoring_commit(existing, generated));
+        assert!(!status_receipt_equivalent_ignoring_commit(existing, stale));
     }
 
     #[test]
@@ -6345,7 +6664,7 @@ sub dynamic_boundary_case {
     fn runtime_metric_rows_are_synced_after_artifact_size_settles() {
         let mut artifact = ParserAccuracyArtifact {
             schema_version: 1,
-            subsystem: "parser_accuracy",
+            subsystem: "parser_accuracy".to_string(),
             generated_at: "2026-05-02T00:00:00Z".to_string(),
             commit: "test".to_string(),
             cadence: Cadence::Pr,
