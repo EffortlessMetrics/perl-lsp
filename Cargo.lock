@@ -1559,6 +1559,7 @@ dependencies = [
 name = "perl-dead-code"
 version = "0.13.3"
 dependencies = [
+ "perl-uri",
  "perl-workspace",
  "serde",
  "serde_json",
@@ -1748,6 +1749,7 @@ dependencies = [
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
+ "perl-uri",
  "perl-workspace",
  "proptest",
  "regex",
