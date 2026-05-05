@@ -1862,7 +1862,6 @@ dependencies = [
  "perl-symbol",
  "perl-tdd-support",
  "perl-test-generators",
- "perl-workspace",
  "proptest",
  "regex",
  "rustc-hash",

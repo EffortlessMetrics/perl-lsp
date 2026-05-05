@@ -1427,10 +1427,12 @@ impl LspServer {
                                 )
                             {
                                 tracing::debug!(symbol_key = ?symbol_key, "looking for definition");
+                                let workspace_symbol_key =
+                                    super::to_workspace_symbol_key(&symbol_key);
 
                                 if let Some(def_location) = find_symbol_key_definition_location(
                                     workspace_index,
-                                    &symbol_key,
+                                    &workspace_symbol_key,
                                 ) {
                                     tracing::debug!(location = ?def_location, "found definition");
                                     // Convert internal Location to LSP Location
@@ -1443,14 +1445,14 @@ impl LspServer {
                                     }
                                 }
 
-                                if symbol_key.kind == crate::workspace_index::SymKind::Sub
-                                    && symbol_key.sigil.is_none()
+                                if workspace_symbol_key.kind == crate::workspace_index::SymKind::Sub
+                                    && workspace_symbol_key.sigil.is_none()
                                     && let Some(import_source) =
-                                        self.find_import_source(ast, &symbol_key.name)
+                                        self.find_import_source(ast, &workspace_symbol_key.name)
                                     && let Some(def_location) = find_workspace_definition_location(
                                         workspace_index,
                                         &import_source,
-                                        &symbol_key.name,
+                                        &workspace_symbol_key.name,
                                     )
                                     && let Some(lsp_location) =
                                         crate::workspace_index::lsp_adapter::to_lsp_location(
@@ -1458,7 +1460,7 @@ impl LspServer {
                                         )
                                 {
                                     tracing::debug!(
-                                        symbol = %symbol_key.name,
+                                        symbol = %workspace_symbol_key.name,
                                         source_pkg = %import_source,
                                         "resolved bare imported symbol through require/import source"
                                     );

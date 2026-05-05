@@ -244,11 +244,13 @@ impl LspServer {
                         Some(c) if is_perl_sigil(c) => &normalized_name[c.len_utf8()..],
                         _ => normalized_name.as_str(),
                     };
+                    let workspace_symbol_key =
+                        symbol_key.as_ref().map(super::to_workspace_symbol_key);
 
                     match access_mode {
                         IndexAccessMode::Partial(reason) => {
                             if let (Some(coordinator), Some(key)) =
-                                (self.coordinator(), symbol_key.as_ref())
+                                (self.coordinator(), workspace_symbol_key.as_ref())
                             {
                                 match crate::workspace_rename::build_rename_edit(
                                     coordinator.index(),
@@ -292,7 +294,7 @@ impl LspServer {
                             // Fall through to same-file rename
                         }
                         IndexAccessMode::Full(coordinator) => {
-                            if let Some(key) = symbol_key.as_ref() {
+                            if let Some(key) = workspace_symbol_key.as_ref() {
                                 // Use coordinator.index() directly instead of workspace_index()
                                 // to ensure we go through routing policy
                                 let idx = coordinator.index();

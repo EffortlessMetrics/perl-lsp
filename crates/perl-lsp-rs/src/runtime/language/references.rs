@@ -71,11 +71,13 @@ impl LspServer {
                     #[cfg(feature = "workspace")]
                     {
                         let access_mode = route_index_access(self.coordinator());
+                        let workspace_symbol_key =
+                            symbol_key.as_ref().map(super::to_workspace_symbol_key);
 
                         match access_mode {
                             IndexAccessMode::Full(coordinator) => {
                                 let index = coordinator.index();
-                                if let Some(symbol_key) = symbol_key.as_ref() {
+                                if let Some(symbol_key) = workspace_symbol_key.as_ref() {
                                     tracing::debug!(key = ?symbol_key, "Looking for references");
 
                                     // Try to find references using the symbol key
@@ -371,7 +373,7 @@ impl LspServer {
                                     "References: attempting partial workspace lookup"
                                 );
                                 if let (Some(coordinator), Some(symbol_key)) =
-                                    (self.coordinator(), symbol_key.as_ref())
+                                    (self.coordinator(), workspace_symbol_key.as_ref())
                                 {
                                     let index = coordinator.index();
                                     let mut partial_refs = index.find_refs(symbol_key);

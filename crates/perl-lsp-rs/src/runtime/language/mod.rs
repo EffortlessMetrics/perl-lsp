@@ -33,3 +33,24 @@ mod semantic_tokens;
 mod streaming;
 mod symbols;
 mod virtual_content;
+
+#[cfg(feature = "workspace")]
+fn to_workspace_sym_kind(kind: perl_parser::index::SymKind) -> crate::workspace_index::SymKind {
+    match kind {
+        perl_parser::index::SymKind::Pack => crate::workspace_index::SymKind::Pack,
+        perl_parser::index::SymKind::Sub => crate::workspace_index::SymKind::Sub,
+        perl_parser::index::SymKind::Var => crate::workspace_index::SymKind::Var,
+    }
+}
+
+#[cfg(feature = "workspace")]
+fn to_workspace_symbol_key(
+    key: &perl_parser::index::SymbolKey,
+) -> crate::workspace_index::SymbolKey {
+    crate::workspace_index::SymbolKey {
+        pkg: key.pkg.clone(),
+        name: key.name.clone(),
+        sigil: key.sigil,
+        kind: to_workspace_sym_kind(key.kind),
+    }
+}

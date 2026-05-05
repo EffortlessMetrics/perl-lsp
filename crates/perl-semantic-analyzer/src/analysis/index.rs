@@ -3,8 +3,36 @@
 //! This module provides efficient indexing of symbols across all files in a workspace,
 //! enabling fast cross-file navigation, references, and refactoring.
 
+use crate::analysis::import_extractor::ImportExtractor;
 use crate::symbol::{SymbolKind, SymbolTable};
+use crate::{Node, NodeKind, Parser};
+use perl_semantic_facts::FileId;
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, RwLock};
+
+/// Symbol kinds for cross-file indexing during Index/Navigate workflows.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum SymKind {
+    /// Variable symbol ($, @, or % sigil)
+    Var,
+    /// Subroutine definition (sub foo)
+    Sub,
+    /// Package declaration (package Foo)
+    Pack,
+}
+
+/// A normalized symbol key for cross-file lookups in Index/Navigate workflows.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct SymbolKey {
+    /// Package name containing this symbol
+    pub pkg: Arc<str>,
+    /// Bare name without sigil prefix
+    pub name: Arc<str>,
+    /// Variable sigil ($, @, or %) if applicable
+    pub sigil: Option<char>,
+    /// Kind of symbol (variable, subroutine, package)
+    pub kind: SymKind,
+}
 
 /// A symbol definition in the workspace
 #[derive(Clone, Debug)]
@@ -28,6 +56,8 @@ pub struct WorkspaceIndex {
     by_name: HashMap<String, Vec<SymbolDef>>,
     /// Index from URI to all symbol names in that file (for fast removal)
     by_uri: HashMap<String, HashSet<String>>,
+    /// Import/module dependencies by URI.
+    imports_by_uri: RwLock<HashMap<String, HashSet<String>>>,
 }
 
 impl WorkspaceIndex {
@@ -37,7 +67,7 @@ impl WorkspaceIndex {
     }
 
     /// Update the index with symbols from a document
-    pub fn update_from_document(&mut self, uri: &str, _content: &str, symtab: &SymbolTable) {
+    pub fn update_from_document(&mut self, uri: &str, content: &str, symtab: &SymbolTable) {
         // Remove old symbols from this file
         self.remove_document(uri);
 
@@ -64,6 +94,12 @@ impl WorkspaceIndex {
 
         // Track which names are in this file
         self.by_uri.insert(uri.to_string(), names_in_file);
+
+        if !content.is_empty()
+            && let Ok(dependencies) = Self::extract_dependencies(content)
+        {
+            self.set_file_dependencies(uri, dependencies);
+        }
     }
 
     /// Remove all symbols from a document
@@ -78,6 +114,107 @@ impl WorkspaceIndex {
                 }
             }
         }
+        self.remove_file_dependencies(uri);
+    }
+
+    /// Index import dependencies from raw file contents.
+    pub fn index_file_str(&self, uri: &str, content: &str) -> Result<(), String> {
+        let dependencies = Self::extract_dependencies(content)?;
+        let mut imports = self
+            .imports_by_uri
+            .write()
+            .map_err(|_| "workspace import index lock poisoned".to_string())?;
+        imports.insert(uri.to_string(), dependencies);
+        Ok(())
+    }
+
+    /// Return modules imported or required by a file.
+    pub fn file_dependencies(&self, uri: &str) -> HashSet<String> {
+        let Ok(imports) = self.imports_by_uri.read() else {
+            return HashSet::new();
+        };
+        imports.get(uri).cloned().unwrap_or_default()
+    }
+
+    fn set_file_dependencies(&self, uri: &str, dependencies: HashSet<String>) {
+        if let Ok(mut imports) = self.imports_by_uri.write() {
+            imports.insert(uri.to_string(), dependencies);
+        }
+    }
+
+    fn remove_file_dependencies(&self, uri: &str) {
+        if let Ok(mut imports) = self.imports_by_uri.write() {
+            imports.remove(uri);
+        }
+    }
+
+    fn extract_dependencies(content: &str) -> Result<HashSet<String>, String> {
+        let mut parser = Parser::new(content);
+        let ast = parser.parse().map_err(|err| format!("Parse error: {err}"))?;
+        let mut dependencies: HashSet<String> = ImportExtractor::extract(&ast, FileId(0))
+            .into_iter()
+            .filter_map(|spec| {
+                if spec.module.is_empty() || matches!(spec.module.as_str(), "parent" | "base") {
+                    None
+                } else {
+                    Some(spec.module)
+                }
+            })
+            .collect();
+
+        Self::collect_parent_dependencies(&ast, &mut dependencies);
+        Ok(dependencies)
+    }
+
+    fn collect_parent_dependencies(node: &Node, dependencies: &mut HashSet<String>) {
+        if let NodeKind::Use { module, args, .. } = &node.kind
+            && matches!(module.as_str(), "parent" | "base")
+        {
+            for name in Self::parent_names_from_args(args) {
+                dependencies.insert(name);
+            }
+        }
+
+        for child in node.children() {
+            Self::collect_parent_dependencies(child, dependencies);
+        }
+    }
+
+    fn parent_names_from_args(args: &[String]) -> Vec<String> {
+        args.iter()
+            .flat_map(|arg| Self::expand_parent_arg(arg))
+            .filter(|name| !name.starts_with('-'))
+            .collect()
+    }
+
+    fn expand_parent_arg(arg: &str) -> Vec<String> {
+        let trimmed = arg.trim();
+        if trimmed.is_empty() {
+            return Vec::new();
+        }
+
+        if let Some(content) = Self::parse_qw_content(trimmed) {
+            return content.split_whitespace().map(str::to_string).collect();
+        }
+
+        let unquoted = trimmed.trim_matches('\'').trim_matches('"').trim();
+        if unquoted.is_empty() { Vec::new() } else { vec![unquoted.to_string()] }
+    }
+
+    fn parse_qw_content(arg: &str) -> Option<&str> {
+        let rest = arg.strip_prefix("qw")?;
+        let mut chars = rest.chars();
+        let open = chars.next()?;
+        let close = match open {
+            '(' => ')',
+            '{' => '}',
+            '[' => ']',
+            '<' => '>',
+            delimiter => delimiter,
+        };
+        let start = open.len_utf8();
+        let end = rest.rfind(close)?;
+        (end >= start).then_some(&rest[start..end])
     }
 
     /// Find all definitions of a symbol by name
