@@ -1961,6 +1961,30 @@ fn detail_with_evidence_helper_handles_both_base_formats() {
 }
 
 #[test]
+fn detail_with_evidence_unknown_confidence_stays_unlabelled() {
+    use super::workspace::detail_with_evidence;
+
+    let detail = detail_with_evidence(
+        "method from Foo".to_string(),
+        &ReceiverEvidence::GeneratedAccessor("Foo".to_string()),
+    );
+    assert_eq!(detail, "method from Foo — receiver: generated accessor");
+    assert!(
+        !detail.contains("medium confidence"),
+        "unknown-confidence evidence must not gain a medium-confidence suffix"
+    );
+}
+
+#[test]
+fn detail_with_evidence_does_not_append_for_unknown_variant() {
+    use super::workspace::detail_with_evidence;
+
+    let base = "inherited method from Parent".to_string();
+    let detail = detail_with_evidence(base.clone(), &ReceiverEvidence::Unknown);
+    assert_eq!(detail, base, "Unknown evidence must keep detail text unchanged");
+}
+
+#[test]
 fn detail_unchanged_when_no_receiver_evidence_path_reachable()
 -> Result<(), Box<dyn std::error::Error>> {
     // When receiver inference fails, the production callsite returns no
