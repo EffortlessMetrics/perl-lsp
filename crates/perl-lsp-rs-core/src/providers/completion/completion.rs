@@ -171,6 +171,12 @@ pub struct CompletionProvider {
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
+    /// Modules referenced by `use` statements in the buffer, regardless
+    /// of explicit symbol lists. Used by the bounded Unknown-receiver
+    /// method-completion fallback (#7929) — bare `use Foo;` *is*
+    /// captured here, while `import_map` only tracks explicit symbol
+    /// lists.
+    used_modules: HashSet<String>,
     include_paths: Vec<PathBuf>,
     system_inc_paths: Vec<PathBuf>,
     include_system_inc: bool,
@@ -287,6 +293,7 @@ impl CompletionProvider {
             type_engine
         });
         let import_map = import_map::extract_import_map(ast);
+        let used_modules = import_map::collect_used_module_names(ast);
 
         CompletionProvider {
             symbol_table,
@@ -294,6 +301,7 @@ impl CompletionProvider {
             type_engine,
             workspace_index,
             import_map,
+            used_modules,
             include_paths,
             system_inc_paths,
             include_system_inc,
@@ -553,6 +561,7 @@ impl CompletionProvider {
                 source,
                 self.type_engine.as_ref(),
                 &self.workspace_index,
+                &self.used_modules,
             );
         } else if context.prefix.starts_with('$') && context.prefix.contains("::") {
             packages::add_package_completions(&mut completions, &context, &self.workspace_index);

@@ -537,15 +537,23 @@ pub(super) enum ReceiverEvidence {
     TypeEngine(String),
     /// No receiver evidence found, OR a positively-detected dynamic form
     /// (e.g. `bless {}, $class`, expression-tail class, nested call,
-    /// non-builtin `bless`-prefixed identifier). Method completion does
-    /// not suggest any specific package's methods in this case — same as
-    /// the pre-#7910 behavior.
+    /// Positively-detected dynamic / fail-closed receiver form — e.g.
+    /// `bless {}, $class`, `bless {}, "Foo" . $suffix`,
+    /// `wrapper(bless {}, "Foo")`, `bless::class {}, "Foo"`. The user
+    /// typed something we *can* see is a `bless` expression but the
+    /// resulting class is not a literal we can pin down. Method
+    /// completion stays fail-closed for these — no exact receiver
+    /// completions and no Unknown-receiver fallback (#7929 outcome A).
+    Dynamic,
+    /// No receiver evidence found at all (e.g. `$obj->` where `$obj` is
+    /// a sub parameter with no assignment in scope). Eligible for the
+    /// bounded low-confidence fallback added in #7929 outcome A.
     Unknown,
 }
 
 impl ReceiverEvidence {
-    /// Returns the inferred receiver package, if any. `Unknown` returns
-    /// `None`.
+    /// Returns the inferred receiver package, if any. `Dynamic` and
+    /// `Unknown` both return `None`.
     pub(super) fn package(&self) -> Option<&str> {
         match self {
             Self::StaticPackage(p)
@@ -553,19 +561,26 @@ impl ReceiverEvidence {
             | Self::ConstructorAssignment(p)
             | Self::LiteralBless(p)
             | Self::TypeEngine(p) => Some(p.as_str()),
-            Self::Unknown => None,
+            Self::Dynamic | Self::Unknown => None,
         }
+    }
+
+    /// Returns `true` only when this evidence is eligible for the
+    /// bounded Unknown-receiver fallback (#7929). `Dynamic` is
+    /// explicitly *not* eligible — dynamic boundaries stay fail-closed.
+    pub(super) fn is_unknown_fallback_eligible(&self) -> bool {
+        matches!(self, Self::Unknown)
     }
 
     /// Returns the confidence level for this evidence kind, using the
     /// shared `perl_semantic_facts::Confidence` vocabulary so the rest of
-    /// the semantic stack speaks the same language. `Unknown` returns
-    /// `None` — there is no confidence when there is no evidence.
+    /// the semantic stack speaks the same language. `Dynamic` and
+    /// `Unknown` return `None` — there is no confidence when there is
+    /// no exact evidence.
     ///
-    /// Today the production method-completion callsite does not read this;
-    /// it is exposed for tests and for the future PR that wires confidence
-    /// into ranking or detail text once a real seam emerges (issue #7910,
-    /// outcome B).
+    /// Today the production method-completion callsite reads this only
+    /// to decide medium-confidence labelling on detail text (#7925
+    /// outcome C). It does not yet drive ranking.
     #[allow(dead_code)]
     pub(super) fn confidence(&self) -> Option<Confidence> {
         match self {
@@ -573,14 +588,15 @@ impl ReceiverEvidence {
                 Some(Confidence::High)
             }
             Self::LiteralBless(_) | Self::TypeEngine(_) => Some(Confidence::Medium),
-            Self::Unknown => None,
+            Self::Dynamic | Self::Unknown => None,
         }
     }
 
     /// Short, user-facing suffix describing the evidence source, suitable
-    /// for appending to a `CompletionItem.detail` string. `Unknown`
-    /// returns `None` — when there is no evidence, there is nothing to
-    /// say. Issue #7918: explanatory only, no ranking / inclusion change.
+    /// for appending to a `CompletionItem.detail` string. `Dynamic` and
+    /// `Unknown` return `None` — when there is no exact evidence, there
+    /// is nothing to label. Issue #7918: explanatory only, no ranking /
+    /// inclusion change.
     pub(super) fn detail_suffix(&self) -> Option<&'static str> {
         match self {
             Self::StaticPackage(_) => Some("receiver: static package"),
@@ -588,7 +604,7 @@ impl ReceiverEvidence {
             Self::ConstructorAssignment(_) => Some("receiver: constructor assignment"),
             Self::LiteralBless(_) => Some("receiver: literal bless"),
             Self::TypeEngine(_) => Some("receiver: type engine"),
-            Self::Unknown => None,
+            Self::Dynamic | Self::Unknown => None,
         }
     }
 }
@@ -708,12 +724,108 @@ pub(super) fn classify_text_pattern_receiver(
                     if let Some(class) = extract_bless_literal_class(rhs) {
                         return ReceiverEvidence::LiteralBless(class);
                     }
+                    // Pattern: dynamic / fail-closed `bless` form (#7929).
+                    // We saw a `bless` keyword in the RHS (outside string
+                    // literals) but could not extract a literal class —
+                    // covers `bless {}, $class`, `bless {}, "Foo" . $suffix`,
+                    // `wrapper(bless {}, "Foo")`, `bless::class {}, "Foo"`,
+                    // etc. The receiver is dynamic; fail closed (no exact
+                    // package and no Unknown-receiver fallback).
+                    if rhs_has_bless_keyword_outside_strings(rhs) {
+                        return ReceiverEvidence::Dynamic;
+                    }
                 }
             }
         }
     }
 
     ReceiverEvidence::Unknown
+}
+
+/// Returns `true` when the RHS contains a *call-like* `bless` keyword
+/// outside string literals and comments. Used by
+/// `classify_text_pattern_receiver` to detect dynamic / fail-closed bless
+/// expressions that could not be resolved to a literal class — these
+/// include nested calls (`wrapper(bless {}, "Foo")`), expression-tail
+/// forms (`bless {}, "Foo" . $suffix`), dynamic class
+/// (`bless {}, $class`), and non-builtin `bless`-prefixed identifiers
+/// (`bless::class {}, "Foo"`). Issue #7929.
+///
+/// "Call-like" means `bless` is followed by ASCII whitespace, `(`, or
+/// `::` (the qualified non-builtin form), and is not preceded by a Perl
+/// sigil (`$`/`@`/`%`/`&`), an identifier byte, or a hash-key opener
+/// (`{`). This rejects harmless mentions like `$bless`, `$obj->{bless}`,
+/// and `# bless ...` comments which should remain Unknown / fallback-
+/// eligible rather than fail-closed Dynamic.
+fn rhs_has_bless_keyword_outside_strings(rhs: &str) -> bool {
+    let bytes = rhs.as_bytes();
+    let needle = b"bless";
+    let mut in_string: Option<u8> = None;
+    let mut prev_was_backslash = false;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if let Some(q) = in_string {
+            if !prev_was_backslash && b == q {
+                in_string = None;
+            }
+            prev_was_backslash = !prev_was_backslash && b == b'\\';
+            i += 1;
+            continue;
+        }
+        prev_was_backslash = false;
+        // Outside strings, `#` starts a comment that runs to end-of-line.
+        // The RHS scan is single-line, so terminate here.
+        if b == b'#' {
+            return false;
+        }
+        if b == b'"' || b == b'\'' {
+            in_string = Some(b);
+            i += 1;
+            continue;
+        }
+        if i + needle.len() <= bytes.len()
+            && &bytes[i..i + needle.len()] == needle
+            && is_call_like_bless(bytes, i)
+        {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Returns `true` when the `bless` token at `bytes[i..i+5]` is *call-like*:
+/// not preceded by a sigil/ident-byte/hash-key opener, and followed by
+/// whitespace, `(`, or `::`. See [`rhs_has_bless_keyword_outside_strings`].
+fn is_call_like_bless(bytes: &[u8], i: usize) -> bool {
+    let prev_ok = match i.checked_sub(1).map(|j| bytes[j]) {
+        None => true,
+        Some(p) => {
+            !is_perl_ident_byte_local(p)
+                && p != b'$'
+                && p != b'@'
+                && p != b'%'
+                && p != b'&'
+                && p != b'{'
+        }
+    };
+    if !prev_ok {
+        return false;
+    }
+    let next_idx = i + b"bless".len();
+    match bytes.get(next_idx).copied() {
+        None => false,
+        Some(n) => {
+            n.is_ascii_whitespace()
+                || n == b'('
+                || (n == b':' && bytes.get(next_idx + 1).copied() == Some(b':'))
+        }
+    }
+}
+
+fn is_perl_ident_byte_local(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }
 
 /// Extract the literal class name from a `bless REF, "Class"` expression.
@@ -879,12 +991,21 @@ fn is_valid_perl_package_name(s: &str) -> bool {
 /// methods defined in the receiver's package and suggests them.
 ///
 /// Auto-import edits are attached when the receiver package is not yet imported.
+///
+/// When receiver inference returns [`ReceiverEvidence::Unknown`] (no exact
+/// receiver evidence found), the bounded low-confidence fallback added in
+/// #7929 fires: methods from imported / visible packages plus the current
+/// file's package and its `@ISA` chain are offered with a low-confidence
+/// detail label and a sort tier that puts them below all exact-receiver
+/// completions. [`ReceiverEvidence::Dynamic`] (positively-detected dynamic
+/// `bless` forms) is *not* fallback-eligible and stays fail-closed.
 pub fn add_workspace_method_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     source: &str,
     type_engine: Option<&TypeInferenceEngine>,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    used_modules: &HashSet<String>,
 ) {
     let Some(index) = workspace_index else {
         return;
@@ -902,6 +1023,12 @@ pub fn add_workspace_method_completions(
     // seam emerges. See issue #7910 (outcome B).
     let evidence = classify_receiver(context, source, type_engine);
     let Some(package_name) = evidence.package().map(str::to_string) else {
+        // No exact receiver package. Trigger bounded Unknown-receiver
+        // fallback (#7929) only for `Unknown` evidence; `Dynamic` stays
+        // fail-closed.
+        if evidence.is_unknown_fallback_eligible() {
+            add_unknown_receiver_fallback(completions, context, index, used_modules);
+        }
         return;
     };
 
@@ -968,6 +1095,83 @@ pub fn add_workspace_method_completions(
             commit_characters: None,
             label_details: None,
         });
+    }
+}
+
+/// Bounded low-confidence fallback for method completion when receiver
+/// evidence is [`ReceiverEvidence::Unknown`] (#7929 outcome A).
+///
+/// Sources are restricted to:
+/// - imported / visible packages from the current file's `import_map`
+/// - the current package and its `@ISA` chain (via
+///   [`collect_all_package_members`]) when `current_package` is set and
+///   not `main`
+///
+/// All-workspace fallback is intentionally not used. Fallback candidates
+/// carry a `receiver: unknown, low confidence` detail suffix and use sort
+/// tier 6 so they always sort below exact-receiver completions (which
+/// use tiers 1–4).
+fn add_unknown_receiver_fallback(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    index: &WorkspaceIndex,
+    used_modules: &HashSet<String>,
+) {
+    let mut allowed_packages: HashSet<String> = used_modules.clone();
+    if !context.current_package.is_empty() && context.current_package != "main" {
+        allowed_packages.insert(context.current_package.clone());
+    }
+    if allowed_packages.is_empty() {
+        return;
+    }
+
+    let method_prefix = context.prefix.rsplit("->").next().unwrap_or("");
+    let existing_labels: HashSet<String> =
+        completions.iter().map(|item| item.label.clone()).collect();
+    let mut emitted: HashSet<String> = HashSet::new();
+
+    for package_name in &allowed_packages {
+        let members = collect_all_package_members(index, package_name);
+        for symbol in members {
+            if !matches!(symbol.kind, WsSymbolKind::Subroutine | WsSymbolKind::Method) {
+                continue;
+            }
+            if !method_prefix.is_empty() && !symbol.name.starts_with(method_prefix) {
+                continue;
+            }
+            if existing_labels.contains(&symbol.name) {
+                continue;
+            }
+            if !emitted.insert(symbol.name.clone()) {
+                continue;
+            }
+
+            let defining_pkg = symbol.container_name.as_deref().unwrap_or(package_name.as_str());
+            let detail = format!(
+                "workspace method — receiver: unknown, low confidence (from {defining_pkg})"
+            );
+
+            completions.push(CompletionItem {
+                label: symbol.name.clone(),
+                kind: CompletionItemKind::Function,
+                detail: Some(detail),
+                documentation: symbol.documentation.clone().or_else(|| {
+                    Some(format!(
+                        "Workspace method `{}::{}` (low-confidence fallback for unknown receiver).",
+                        defining_pkg, symbol.name
+                    ))
+                }),
+                insert_text: Some(format!("{}()", symbol.name)),
+                // Tier 6: below all exact-receiver completion tiers
+                // (existing tiers 1–4) and below other tier-5 catch-alls.
+                sort_text: Some(format!("6_{}", symbol.name)),
+                filter_text: Some(symbol.name.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+                label_details: None,
+            });
+        }
     }
 }
 

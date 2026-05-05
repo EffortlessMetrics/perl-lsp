@@ -1991,6 +1991,319 @@ sub bark { }
 }
 
 // -------------------------------------------------------------------------
+// Unknown-receiver bounded fallback (issue #7929, outcome A)
+//
+// These tests pin the production-callsite behavior of the bounded
+// low-confidence fallback. Source policy:
+//   - imported / visible packages from the buffer's `import_map`
+//   - current package (when not `main`) and its `@ISA` chain
+// All-workspace fallback is intentionally NOT used. Dynamic (positively
+// detected fail-closed bless forms) is NOT fallback-eligible.
+// -------------------------------------------------------------------------
+
+#[test]
+fn fallback_offers_imported_package_methods_for_unknown_receiver()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    // Buffer imports Foo and calls a method on a variable that has no
+    // receiver-evidence assignment (`$obj` is undeclared / unknown).
+    // Receiver evidence is `Unknown` — fallback should fire from the
+    // imported `Foo` package.
+    let code = r#"use Foo;
+1;
+$obj->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = completions.iter().find(|c| c.label == "bark");
+    if bark.is_none() {
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        panic!("fallback should include imported Foo's `bark`; got labels: {labels:?}");
+    }
+    let bark = bark.expect("checked above");
+    let detail = must_some(bark.detail.as_deref());
+    assert!(
+        detail.contains("receiver: unknown, low confidence"),
+        "fallback detail should say receiver: unknown, low confidence; got {detail:?}"
+    );
+    let sort_text = must_some(bark.sort_text.as_deref());
+    assert!(sort_text.starts_with("6_"), "fallback sort_text should be tier 6; got {sort_text:?}");
+    Ok(())
+}
+
+#[test]
+fn fallback_offers_current_package_methods_for_unknown_receiver()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/MyService.pm")?,
+        r#"package MyService;
+sub helper { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    // In package MyService, calling a method on an undeclared variable —
+    // receiver is Unknown, current-package methods are the bounded source.
+    let code = r#"package MyService;
+$obj->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let helper = must_some(completions.iter().find(|c| c.label == "helper"));
+    let detail = must_some(helper.detail.as_deref());
+    assert!(
+        detail.contains("receiver: unknown, low confidence"),
+        "fallback detail should say receiver: unknown, low confidence; got {detail:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn fallback_does_not_include_unrelated_workspace_packages() -> Result<(), Box<dyn std::error::Error>>
+{
+    // `Unrelated` is indexed in the workspace but neither imported by
+    // the buffer nor part of the current package graph. Bounded fallback
+    // must NOT include `Unrelated::quack`.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/Unrelated.pm")?,
+        r#"package Unrelated;
+sub quack { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"use Foo;
+1;
+$obj->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        completions.iter().any(|c| c.label == "bark"),
+        "fallback should include imported Foo's methods; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    assert!(
+        !completions.iter().any(|c| c.label == "quack"),
+        "fallback must NOT include unrelated workspace packages (#7929 bounded source policy)"
+    );
+    Ok(())
+}
+
+#[test]
+fn fallback_does_not_fire_for_dynamic_receiver() -> Result<(), Box<dyn std::error::Error>> {
+    // `bless {}, $class` is Dynamic — fail-closed. Even though Foo is
+    // imported, fallback must not fire (Dynamic is explicitly not
+    // fallback-eligible per #7929).
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = r#"use Foo;
+my $class = "Foo";
+my $x = bless {}, $class;
+$x->"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        !completions.iter().any(|c| c.label == "bark"),
+        "Dynamic receiver must stay fail-closed even with Foo imported; got {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn fallback_does_not_alter_exact_receiver_detail_or_order() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Exact receiver case: `Foo->bark`. After this PR fallback exists,
+    // but exact-receiver completions must keep their existing detail
+    // (with `receiver: static package`), tier-2 sort, and label/insert
+    // shape. No `receiver: unknown` should leak into exact completions.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = "Foo->";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    let bark = must_some(completions.iter().find(|c| c.label == "bark"));
+    let detail = must_some(bark.detail.as_deref());
+    assert!(
+        detail.contains("receiver: static package"),
+        "exact static-package detail unchanged; got {detail:?}"
+    );
+    assert!(
+        !detail.contains("unknown"),
+        "exact-receiver detail must not contain 'unknown'; got {detail:?}"
+    );
+    assert_eq!(bark.sort_text.as_deref(), Some("2_bark"), "exact-receiver sort tier unchanged");
+    Ok(())
+}
+
+#[test]
+fn fallback_tier_is_below_exact_receiver_tiers() -> Result<(), Box<dyn std::error::Error>> {
+    // Pins the tier-vs-tier contract by running two completion requests
+    // against the same workspace index:
+    //   1. exact:    `Foo->`         must surface `bark` at tier 2 or 3
+    //                                with no `unknown` in detail
+    //   2. fallback: `use Bar;\n$obj->` must surface `mew` at tier 6
+    //                                with `receiver: unknown, low confidence`
+    // The earlier `fallback_sorts_below_exact_receiver_completions` test
+    // only exercised path #1 (fallback never fires for `Foo->`), so it
+    // could not actually prove the tier discipline. This replacement
+    // exercises both paths and asserts the numeric tier ordering.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+    index.index_file(
+        Url::parse("file:///workspace/Bar.pm")?,
+        r#"package Bar;
+sub mew { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    // Request 1 — exact receiver via `Foo->`.
+    let exact_code = "Foo->";
+    let mut parser_exact = Parser::new(exact_code);
+    let exact_ast = must(parser_exact.parse());
+    let exact_provider = CompletionProvider::new_with_index(&exact_ast, Some(index.clone()));
+    let exact_completions = exact_provider.get_completions(exact_code, exact_code.len());
+    let bark = must_some(exact_completions.iter().find(|c| c.label == "bark"));
+    let bark_sort = must_some(bark.sort_text.as_deref());
+    let bark_detail = must_some(bark.detail.as_deref());
+    assert!(
+        bark_sort.starts_with("2_") || bark_sort.starts_with("3_"),
+        "exact Foo->bark must use tier 2 or 3; got {bark_sort:?}"
+    );
+    assert!(
+        !bark_detail.contains("unknown"),
+        "exact-receiver detail must not contain 'unknown'; got {bark_detail:?}"
+    );
+
+    // Request 2 — Unknown receiver fallback via `use Bar;\n$obj->`.
+    let fallback_code = "use Bar;\n$obj->";
+    let mut parser_fb = Parser::new(fallback_code);
+    let fallback_ast = must(parser_fb.parse());
+    let fallback_provider = CompletionProvider::new_with_index(&fallback_ast, Some(index));
+    let fallback_completions =
+        fallback_provider.get_completions(fallback_code, fallback_code.len());
+    let mew = must_some(fallback_completions.iter().find(|c| c.label == "mew"));
+    let mew_sort = must_some(mew.sort_text.as_deref());
+    let mew_detail = must_some(mew.detail.as_deref());
+    assert!(
+        mew_sort.starts_with("6_"),
+        "Unknown-receiver fallback `mew` must use tier 6; got {mew_sort:?}"
+    );
+    assert!(
+        mew_detail.contains("receiver: unknown, low confidence"),
+        "fallback detail should say receiver: unknown, low confidence; got {mew_detail:?}"
+    );
+
+    // Numeric tier proof: exact tier (2 or 3) < fallback tier (6).
+    let exact_tier: u8 = bark_sort
+        .as_bytes()
+        .first()
+        .copied()
+        .and_then(|b| (b as char).to_digit(10).map(|d| d as u8))
+        .expect("exact sort_text must start with a digit");
+    let fallback_tier: u8 = mew_sort
+        .as_bytes()
+        .first()
+        .copied()
+        .and_then(|b| (b as char).to_digit(10).map(|d| d as u8))
+        .expect("fallback sort_text must start with a digit");
+    assert!(
+        exact_tier < fallback_tier,
+        "exact tier {exact_tier} must sort above fallback tier {fallback_tier}"
+    );
+    Ok(())
+}
+
+#[test]
+fn fallback_omits_when_no_imports_and_main_package() -> Result<(), Box<dyn std::error::Error>> {
+    // No `use` and the buffer is in main package — `allowed_packages`
+    // is empty in `add_unknown_receiver_fallback`, so fallback emits
+    // no candidates. This is the `detail_unchanged_when_no_receiver_…`
+    // contract: bounded fallback respects the bound.
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/Foo.pm")?,
+        r#"package Foo;
+sub bark { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let code = "$nonexistent->";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+
+    assert!(
+        !completions.iter().any(|c| c.label == "bark"),
+        "no imports + main package + Unknown receiver = no fallback (bounded source empty); got {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// -------------------------------------------------------------------------
 // Receiver-evidence classification (issue #7910, outcome B)
 //
 // These tests pin the typed receiver-evidence provenance produced by
@@ -2105,17 +2418,118 @@ $x->"#;
 }
 
 #[test]
-fn classify_receiver_dynamic_bless_is_unknown() {
+fn classify_receiver_dynamic_bless_is_dynamic() {
     // `bless {}, $class` is dynamic — extract_bless_literal_class fails
-    // closed, and the classifier therefore reports Unknown rather than
-    // inventing a package.
+    // closed. After #7929 the classifier reports `Dynamic` (not
+    // `Unknown`) so the Unknown-receiver fallback stays fail-closed
+    // instead of offering bounded fallback methods for the variable.
     let source = r#"my $class = "Foo";
 my $x = bless {}, $class;
 $x->"#;
     let ctx = ctx_for("$x->", "main", source.len());
     let ev = classify_text_pattern_receiver(&ctx, source);
-    assert_eq!(ev, ReceiverEvidence::Unknown);
+    assert_eq!(ev, ReceiverEvidence::Dynamic);
     assert_eq!(ev.confidence(), None);
+    assert!(!ev.is_unknown_fallback_eligible());
+}
+
+#[test]
+fn classify_receiver_dynamic_concat_class_is_dynamic() {
+    // `bless {}, "Foo" . $suffix` is non-literal — Dynamic, not Unknown.
+    let source = r#"my $suffix = "Bar";
+my $x = bless {}, "Foo" . $suffix;
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Dynamic);
+    assert!(!ev.is_unknown_fallback_eligible());
+}
+
+#[test]
+fn classify_receiver_dynamic_nested_bless_is_dynamic() {
+    // `wrapper(bless {}, "Foo")` is nested — assignment result is the
+    // wrapper return, not the blessed object. Dynamic, not Unknown.
+    let source = r#"sub wrapper { return $_[0]; }
+my $x = wrapper(bless {}, "Foo");
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Dynamic);
+    assert!(!ev.is_unknown_fallback_eligible());
+}
+
+#[test]
+fn classify_receiver_dynamic_qualified_prefix_is_dynamic() {
+    // `bless::class {}, "Foo"` is a non-builtin qualified call. Dynamic.
+    let source = r#"my $x = bless::class {}, "Foo";
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Dynamic);
+    assert!(!ev.is_unknown_fallback_eligible());
+}
+
+#[test]
+fn classify_receiver_unknown_is_fallback_eligible() {
+    // True unknown — no `bless` keyword, no assignment evidence — is
+    // fallback-eligible.
+    let source = "$nonexistent->";
+    let ctx = ctx_for("$nonexistent->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Unknown);
+    assert!(ev.is_unknown_fallback_eligible());
+}
+
+#[test]
+fn classify_receiver_bless_keyword_inside_string_is_not_dynamic() {
+    // The substring `bless` appears in a string literal, not as a Perl
+    // keyword. The `rhs_has_bless_keyword_outside_strings` helper must
+    // skip string contents — this scenario is Unknown, not Dynamic.
+    let source = r#"my $x = "I bless this house";
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Unknown);
+}
+
+#[test]
+fn classify_receiver_variable_named_bless_is_unknown_fallback_eligible() {
+    // `$bless` as RHS — the substring `bless` is preceded by a `$` sigil
+    // and is therefore an identifier suffix, not a call-like `bless`
+    // keyword. Must NOT be classified as Dynamic; must remain Unknown so
+    // the bounded fallback (#7929) is still eligible.
+    let source = r#"my $x = $bless;
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Unknown);
+    assert!(ev.is_unknown_fallback_eligible());
+}
+
+#[test]
+fn classify_receiver_bless_in_comment_is_not_dynamic() {
+    // A `# bless ...` comment after the assignment must not be treated as
+    // a dynamic bless expression. The RHS scan should stop at `#`
+    // (single-line comment terminator), keeping evidence Unknown.
+    let source = r#"my $x = $obj; # bless this later
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Unknown);
+    assert!(ev.is_unknown_fallback_eligible());
+}
+
+#[test]
+fn classify_receiver_hash_key_bless_is_not_dynamic() {
+    // `$obj->{bless}` is a hash-key access whose key happens to be the
+    // word `bless`. Preceded by `{`, this is not a call-like `bless`
+    // and must not become Dynamic.
+    let source = r#"my $x = $obj->{bless};
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Unknown);
+    assert!(ev.is_unknown_fallback_eligible());
 }
 
 #[test]
@@ -3265,4 +3679,66 @@ fn test_non_empty_inc_paths_do_not_change_phase1_completions()
         "non-empty include paths must not change completions in phase 1 (no filesystem scanning yet)"
     );
     Ok(())
+}
+
+// -------------------------------------------------------------------------
+// `collect_used_module_names` direct tests (issue #7929)
+//
+// The Unknown-receiver bounded fallback consumes this helper to decide
+// which workspace packages count as "visible" to the buffer. Pin the
+// inclusion / exclusion contract directly so the source-policy is
+// reviewable without going through the full completion pipeline.
+// -------------------------------------------------------------------------
+
+#[test]
+fn collect_used_module_names_includes_bare_use() {
+    let code = "use Foo;\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let modules = super::import_map::collect_used_module_names(&ast);
+    assert!(modules.contains("Foo"), "bare `use Foo;` should include Foo; got {modules:?}");
+}
+
+#[test]
+fn collect_used_module_names_includes_empty_import_list() {
+    let code = "use Foo ();\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let modules = super::import_map::collect_used_module_names(&ast);
+    assert!(
+        modules.contains("Foo"),
+        "`use Foo ();` should still include Foo as a visible package; got {modules:?}"
+    );
+}
+
+#[test]
+fn collect_used_module_names_includes_qw_list() {
+    let code = "use Foo qw(bar baz);\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let modules = super::import_map::collect_used_module_names(&ast);
+    assert!(
+        modules.contains("Foo"),
+        "`use Foo qw(...);` should include Foo as a visible package; got {modules:?}"
+    );
+}
+
+#[test]
+fn collect_used_module_names_excludes_lowercase_pragmas() {
+    let code = "use strict;\nuse warnings;\nuse feature 'say';\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let modules = super::import_map::collect_used_module_names(&ast);
+    assert!(
+        !modules.contains("strict"),
+        "`use strict` (lowercase pragma) must be excluded; got {modules:?}"
+    );
+    assert!(
+        !modules.contains("warnings"),
+        "`use warnings` (lowercase pragma) must be excluded; got {modules:?}"
+    );
+    assert!(
+        !modules.contains("feature"),
+        "`use feature` (lowercase pragma) must be excluded; got {modules:?}"
+    );
 }
