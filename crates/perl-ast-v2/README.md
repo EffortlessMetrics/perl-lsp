@@ -13,3 +13,8 @@ incremental parsing consumers can depend on a smaller, more focused microcrate.
 - `NodeIdGenerator`
 - `DiagnosticId`
 - `MissingKind`
+## Stability
+
+`perl-ast-v2` is intentionally published for incremental parsing integration
+experiments, but remains pre-stability and may evolve until promoted by the
+project [AST compatibility contract](../../docs/reference/ast-contract.md).
