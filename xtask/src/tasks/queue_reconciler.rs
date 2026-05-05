@@ -736,6 +736,13 @@ fn fetch_current_review_receipt(pr_number: u64) -> Result<Option<ReviewReceipt>>
     Ok(extract_latest_review_receipt(&comments_json))
 }
 
+fn is_trusted_review_receipt_comment(comment: &serde_json::Value) -> bool {
+    matches!(
+        comment.get("author_association").and_then(serde_json::Value::as_str),
+        Some("OWNER" | "MEMBER" | "COLLABORATOR")
+    )
+}
+
 /// Pure helper: scan a list of GitHub issue-comment JSON objects (each with a
 /// `body` string) and return the latest parseable `review_receipt` payload.
 ///
@@ -752,6 +759,9 @@ fn fetch_current_review_receipt(pr_number: u64) -> Result<Option<ReviewReceipt>>
 fn extract_latest_review_receipt(comments: &[serde_json::Value]) -> Option<ReviewReceipt> {
     let mut latest: Option<ReviewReceipt> = None;
     for comment in comments {
+        if !is_trusted_review_receipt_comment(comment) {
+            continue;
+        }
         let Some(body) = comment.get("body").and_then(serde_json::Value::as_str) else {
             continue;
         };
@@ -1228,8 +1238,16 @@ mod tests {
     // Receipt extraction from PR comment bodies (loader wiring)
     // -----------------------------------------------------------------------
 
-    fn comment(body: &str) -> serde_json::Value {
-        serde_json::json!({ "body": body })
+    fn trusted_comment(body: &str) -> serde_json::Value {
+        trusted_comment_with_association("MEMBER", body)
+    }
+
+    fn trusted_comment_with_association(association: &str, body: &str) -> serde_json::Value {
+        serde_json::json!({ "body": body, "author_association": association })
+    }
+
+    fn untrusted_comment_with_association(association: &str, body: &str) -> serde_json::Value {
+        serde_json::json!({ "body": body, "author_association": association })
     }
 
     #[test]
@@ -1240,10 +1258,13 @@ mod tests {
         let newer = r#"```json
 {"kind":"review_receipt","schema_version":1,"pr":42,"sha":"sha-42","verdict":"approved","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}
 ```"#;
-        let comments = vec![comment(older), comment(newer)];
-        let receipt = extract_latest_review_receipt(&comments).expect("a receipt should parse");
-        assert_eq!(receipt.sha, "sha-42");
-        assert_eq!(receipt.verdict, ReviewReceiptVerdict::Approved);
+        let comments = vec![trusted_comment(older), trusted_comment(newer)];
+        let receipt = extract_latest_review_receipt(&comments);
+        assert_eq!(receipt.as_ref().map(|receipt| receipt.sha.as_str()), Some("sha-42"));
+        assert_eq!(
+            receipt.as_ref().map(|receipt| &receipt.verdict),
+            Some(&ReviewReceiptVerdict::Approved)
+        );
     }
 
     #[test]
@@ -1251,7 +1272,7 @@ mod tests {
         let other = r#"```json
 {"kind":"queue-snapshot","captured_at":"2026-04-30T00:00:00Z"}
 ```"#;
-        let comments = vec![comment(other)];
+        let comments = vec![trusted_comment(other)];
         let receipt = extract_latest_review_receipt(&comments);
         assert!(receipt.is_none(), "non-review kinds should be ignored");
     }
@@ -1261,7 +1282,7 @@ mod tests {
         let bad = r#"```json
 { this is not valid json
 ```"#;
-        let comments = vec![comment(bad)];
+        let comments = vec![trusted_comment(bad)];
         assert!(extract_latest_review_receipt(&comments).is_none());
     }
 
@@ -1270,8 +1291,94 @@ mod tests {
         let perl = r#"```perl
 my $x = 1;
 ```"#;
-        let comments = vec![comment(perl)];
+        let comments = vec![trusted_comment(perl)];
         assert!(extract_latest_review_receipt(&comments).is_none());
+    }
+
+    #[test]
+    fn review_receipt_trust_guard_accepts_privileged_associations() {
+        let payload = r#"```json
+{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"sha-42","verdict":"approved","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}
+```"#;
+        for association in ["OWNER", "MEMBER", "COLLABORATOR"] {
+            let comments = vec![trusted_comment_with_association(association, payload)];
+            let receipt = extract_latest_review_receipt(&comments);
+            assert_eq!(
+                receipt.as_ref().map(|receipt| receipt.sha.as_str()),
+                Some("sha-42"),
+                "{association} should be trusted"
+            );
+        }
+    }
+
+    #[test]
+    fn review_receipt_trust_guard_rejects_untrusted_associations() {
+        let payload = r#"```json
+{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"sha-42","verdict":"approved","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}
+```"#;
+        for association in
+            ["NONE", "CONTRIBUTOR", "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR", "MANNEQUIN", "member"]
+        {
+            let comments = vec![untrusted_comment_with_association(association, payload)];
+            assert!(
+                extract_latest_review_receipt(&comments).is_none(),
+                "{association} should not be trusted"
+            );
+        }
+    }
+
+    #[test]
+    fn review_receipt_trust_guard_rejects_missing_or_malformed_author_association() {
+        let payload = r#"```json
+{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"sha-42","verdict":"approved","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}
+```"#;
+        let missing = serde_json::json!({ "body": payload });
+        let malformed = serde_json::json!({ "body": payload, "author_association": 123 });
+
+        assert!(extract_latest_review_receipt(&[missing]).is_none());
+        assert!(extract_latest_review_receipt(&[malformed]).is_none());
+    }
+
+    #[test]
+    fn extract_latest_review_receipt_uses_latest_trusted_parseable_payload() {
+        let trusted_payload = r#"```json
+{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"trusted-sha","verdict":"approved","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}
+```"#;
+        let untrusted_later_payload = r#"```json
+{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"untrusted-later-sha","verdict":"needs_builder","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}
+```"#;
+        let comments = vec![
+            trusted_comment(trusted_payload),
+            untrusted_comment_with_association("NONE", untrusted_later_payload),
+        ];
+
+        let receipt = extract_latest_review_receipt(&comments);
+        assert_eq!(receipt.as_ref().map(|receipt| receipt.sha.as_str()), Some("trusted-sha"));
+        assert_eq!(
+            receipt.as_ref().map(|receipt| &receipt.verdict),
+            Some(&ReviewReceiptVerdict::Approved)
+        );
+    }
+
+    #[test]
+    fn extract_latest_review_receipt_accepts_trusted_payload_after_untrusted_payload() {
+        let untrusted_payload = r#"```json
+{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"untrusted-sha","verdict":"needs_builder","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}
+```"#;
+        let trusted_later_payload = r#"```json
+{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"trusted-later-sha","verdict":"approved","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}
+```"#;
+        let comments = vec![
+            untrusted_comment_with_association("NONE", untrusted_payload),
+            trusted_comment(trusted_later_payload),
+        ];
+
+        let receipt = extract_latest_review_receipt(&comments);
+        assert_eq!(receipt.as_ref().map(|receipt| receipt.sha.as_str()), Some("trusted-later-sha"));
+        assert_eq!(
+            receipt.as_ref().map(|receipt| &receipt.verdict),
+            Some(&ReviewReceiptVerdict::Approved)
+        );
     }
 
     #[test]
@@ -1315,7 +1422,7 @@ my $x = 1;
 {{"kind":"review_receipt","schema_version":1,"pr":42,"sha":"sha-42","verdict":"approved","review_depth":"deep","fix_forward_applied":false,"blocking_findings":[],"labels_projected":[]}}
 ```"#
         );
-        let comments = vec![comment(&body)];
+        let comments = vec![trusted_comment(&body)];
         let receipt = extract_latest_review_receipt(&comments);
         assert!(receipt.is_some(), "loader must extract the embedded receipt");
 
