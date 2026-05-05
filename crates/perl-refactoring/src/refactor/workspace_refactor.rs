@@ -51,6 +51,10 @@
 //! ```
 
 use crate::import_optimizer::ImportOptimizer;
+use crate::refactor::edit_plan::{
+    RefactorConfidence, RefactorOperationKind, RefactorPlan, RefactorSafety, RefactorStats,
+};
+use crate::refactor::edit_validation::validate_refactor_plan;
 use crate::workspace_index::{
     SymKind, SymbolKey, WorkspaceIndex, fs_path_to_uri, normalize_var, uri_to_fs_path,
 };
@@ -365,8 +369,23 @@ impl WorkspaceRefactor {
         let file_edits: Vec<FileEdit> =
             edits.into_iter().map(|(file_path, edits)| FileEdit { file_path, edits }).collect();
 
+        let mut plan = RefactorPlan {
+            operation: RefactorOperationKind::Rename,
+            edits: file_edits.clone(),
+            diagnostics: Vec::new(),
+            confidence: RefactorConfidence::ScopeAware,
+            safety: RefactorSafety::Safe,
+            stats: RefactorStats {
+                files_changed: file_edits.len(),
+                edit_count: file_edits.iter().map(|file_edit| file_edit.edits.len()).sum(),
+            },
+        };
+        plan.diagnostics = validate_refactor_plan(&plan);
+
         let description = format!("Rename '{}' to '{}'", old_name, new_name);
-        Ok(RefactorResult { file_edits, description, warnings: vec![] })
+        let warnings = plan.diagnostics.into_iter().map(|diagnostic| diagnostic.message).collect();
+
+        Ok(RefactorResult { file_edits, description, warnings })
     }
 
     /// Extract selected code into a new module
