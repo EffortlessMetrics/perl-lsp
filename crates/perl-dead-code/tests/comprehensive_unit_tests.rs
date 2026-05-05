@@ -242,16 +242,24 @@ fn analyze_file_only_flags_first_unreachable_line() -> Result<(), String> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn analyze_file_return_at_end_of_sub_flags_closing_brace() -> Result<(), String> {
-    // The stub implementation is line-by-line and flags the closing brace
-    // since it is the next non-empty line after `return`
+fn analyze_file_return_at_end_of_sub_does_not_flag_closing_brace() -> Result<(), String> {
     let code = "sub foo {\n    return 42;\n}\n";
     let index = index_with_file("file:///test_end_return.pl", code)?;
     let detector = DeadCodeDetector::new(index);
 
     let results = detector.analyze_file(&PathBuf::from("/test_end_return.pl"))?;
-    assert_eq!(results.len(), 1, "closing brace after return is flagged by stub");
-    assert_eq!(results[0].start_line, 3);
+    assert!(results.is_empty(), "closing brace must not be reported as unreachable");
+    Ok(())
+}
+
+#[test]
+fn analyze_file_postfix_conditional_return_does_not_mark_following_code() -> Result<(), String> {
+    let code = "return if $cond;\nsay \"live\";\n";
+    let index = index_with_file("file:///test_postfix.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_postfix.pl"))?;
+    assert!(results.is_empty(), "postfix-conditional return is not an unconditional terminator");
     Ok(())
 }
 
