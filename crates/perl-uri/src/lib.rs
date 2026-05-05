@@ -82,6 +82,34 @@ pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
     Some(repair_path_mojibake(path))
 }
 
+/// Convert a URI or absolute filesystem path into a source path.
+///
+/// This helper accepts:
+/// - `file://` URIs (including localhost authority)
+/// - absolute filesystem paths (Unix or Windows)
+///
+/// Returns `None` for non-file URI schemes and relative paths.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn source_path_from_uri_or_path(input: &str) -> Option<std::path::PathBuf> {
+    // On Windows, filesystem paths like `C:\file` can be misparsed by Url::parse()
+    // as having scheme `C`. Check for Windows drive letters first.
+    if input.len() > 2 && input.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
+        if input.chars().nth(1) == Some(':') && !input.starts_with("file://") {
+            let path = std::path::Path::new(input);
+            if path.is_absolute() {
+                return Some(path.to_path_buf());
+            }
+        }
+    }
+
+    if let Some(path) = uri_to_fs_path(input) {
+        return Some(path);
+    }
+
+    let path = std::path::Path::new(input);
+    if path.is_absolute() { Some(path.to_path_buf()) } else { None }
+}
+
 /// Convert a filesystem path to a `file://` URI.
 ///
 /// Properly handles percent-encoding and works with spaces, Windows paths,
@@ -379,6 +407,22 @@ mod tests {
         fn test_uri_to_fs_path_non_file() {
             assert!(uri_to_fs_path("https://example.com").is_none());
             assert!(uri_to_fs_path("untitled:Untitled-1").is_none());
+        }
+
+        #[test]
+        fn test_source_path_from_uri_or_path() {
+            let file_uri_path = source_path_from_uri_or_path("file:///tmp/test.pl");
+            assert!(file_uri_path.is_some());
+
+            let localhost_path = source_path_from_uri_or_path("file://localhost/tmp/test.pl");
+            assert!(localhost_path.is_some());
+
+            assert!(source_path_from_uri_or_path("https://example.com/tmp/test.pl").is_none());
+
+            let absolute_path = source_path_from_uri_or_path("/tmp/test.pl");
+            assert!(absolute_path.is_some());
+
+            assert!(source_path_from_uri_or_path("tmp/test.pl").is_none());
         }
 
         #[test]
