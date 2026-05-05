@@ -7,11 +7,17 @@ AST (Abstract Syntax Tree) node definitions for the Perl parser ecosystem.
 `perl-ast` provides the typed node structures used to represent parsed Perl source code. It contains two AST modules:
 
 - **`ast`** -- The primary AST used by `perl-parser`. Defines `Node` (kind + `SourceLocation`) and the `NodeKind` enum with 50+ variants covering declarations, expressions, control flow, regex, OO constructs, and error recovery nodes. Includes S-expression serialization via `to_sexp()`.
-- **`v2`** -- An enhanced AST for incremental parsing. Nodes carry a unique `NodeId` and use `Range` (line/column) positions instead of byte offsets. Adds `NodeIdGenerator`, `MissingKind`, `DiagnosticId`, and lightweight `ErrorRef` nodes.
+- **`v2`** -- A re-export of the extracted `perl-ast-v2` microcrate for incremental parsing experiments. Nodes carry a unique `NodeId` and use `Range` (line/column) positions instead of byte offsets. Adds `NodeIdGenerator`, `MissingKind`, `DiagnosticId`, and lightweight `ErrorRef` nodes. This surface is experimental until the incremental compatibility contract is finalized.
 
 ## Public API
 
 Re-exports from `lib.rs`: `Node`, `NodeKind`, `SourceLocation`.
+
+## Compatibility Contract
+
+- Stable contract: `perl_ast::Node` and `perl_ast::NodeKind` (`ast` module).
+- Experimental contract: `perl_ast::v2` (re-exported from `perl-ast-v2`).
+- See [`docs/reference/ast-contract.md`](../../docs/reference/ast-contract.md) for the required coverage checklist when introducing a new `NodeKind` variant.
 
 ## Workspace Role
 
