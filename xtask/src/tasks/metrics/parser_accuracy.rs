@@ -1152,6 +1152,7 @@ fn line_tag_for_node(node: &Node) -> Option<LineTag> {
         NodeKind::FunctionCall { name, .. } if name == "require" => Some(LineTag::Import),
         NodeKind::FunctionCall { .. } => Some(LineTag::FunctionCall),
         NodeKind::MethodCall { .. } => Some(LineTag::MethodCall),
+        NodeKind::Eval { .. } => Some(LineTag::FunctionCall),
         NodeKind::Regex { .. }
         | NodeKind::Match { .. }
         | NodeKind::Substitution { .. }
@@ -5939,6 +5940,18 @@ sub dynamic_boundary_case {
         assert_eq!(score.false_positive_count, 1);
         assert_eq!(score.false_negative_count, 1);
         assert_eq!(score.exact_match_count, 0);
+    }
+
+    #[test]
+    fn line_tags_count_eval_as_function_like_call() -> Result<()> {
+        let actual_by_line =
+            extract_line_tags("package Accuracy::Eval;\n\nmy $code = '1';\neval $code;\n");
+        let line_tags = actual_by_line
+            .get(&4)
+            .ok_or_else(|| eyre!("expected line 4 tags for eval expression"))?;
+
+        assert!(line_tags.contains(&LineTag::FunctionCall));
+        Ok(())
     }
 
     #[test]
