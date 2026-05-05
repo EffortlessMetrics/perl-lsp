@@ -148,93 +148,80 @@ impl ExecuteCommandProvider {
         let ext_path = normalize_path_for_external_command(file_path);
 
         match runner {
-            TestRunner::Yath => {
-                let mut yath_cmd = Command::new("yath");
-                yath_cmd.arg("-v").arg("--").arg(ext_path.as_os_str());
-                match crate::util::run_command_with_timeout(yath_cmd, 30) {
-                    Ok(result) => {
-                        Ok(self.format_command_result(result, Some(("command", "yath".into()))))
-                    }
-                    Err(error) => {
-                        if self.command_exists("prove") {
-                            let mut prove_cmd = Command::new("prove");
-                            prove_cmd.arg("-v").arg("--").arg(ext_path.as_os_str());
-                            match crate::util::run_command_with_timeout(prove_cmd, 30) {
-                                Ok(result) => Ok(self.format_command_result(
-                                    result,
-                                    Some(("command", "prove".into())),
-                                )),
-                                Err(fallback_error) => {
-                                    let mut perl_cmd = Command::new("perl");
-                                    perl_cmd.arg("--").arg(ext_path.as_os_str());
-                                    match crate::util::run_command_with_timeout(perl_cmd, 30) {
-                                        Ok(result) => Ok(self.format_command_result(
-                                            result,
-                                            Some(("command", "perl".into())),
-                                        )),
-                                        Err(perl_error) => Ok(self.format_command_launch_failure(
-                                            "yath",
-                                            format!(
-                                                "Failed to run yath: {error}; prove fallback also failed: {fallback_error}; perl fallback also failed: {perl_error}"
-                                            ),
-                                        )),
-                                    }
-                                }
-                            }
-                        } else {
-                            let mut perl_cmd = Command::new("perl");
-                            perl_cmd.arg("--").arg(ext_path.as_os_str());
-                            match crate::util::run_command_with_timeout(perl_cmd, 30) {
-                                Ok(result) => Ok(self
-                                    .format_command_result(result, Some(("command", "perl".into())))),
-                                Err(perl_error) => Ok(self.format_command_launch_failure(
-                                    "yath",
-                                    format!(
-                                        "Failed to run yath: {error}; perl fallback also failed: {perl_error}"
-                                    ),
-                                )),
-                            }
-                        }
-                    }
-                }
-            }
-            TestRunner::Prove => {
-                let mut prove_cmd = Command::new("prove");
-                prove_cmd.arg("-v").arg("--").arg(ext_path.as_os_str());
-                match crate::util::run_command_with_timeout(prove_cmd, 30) {
-                    Ok(result) => {
-                        Ok(self.format_command_result(result, Some(("command", "prove".into()))))
-                    }
-                    Err(error) => {
-                        let mut perl_cmd = Command::new("perl");
-                        perl_cmd.arg("--").arg(ext_path.as_os_str());
-                        match crate::util::run_command_with_timeout(perl_cmd, 30) {
-                            Ok(result) => Ok(self
-                                .format_command_result(result, Some(("command", "perl".into())))),
-                            Err(fallback_error) => Ok(self.format_command_launch_failure(
-                                "prove",
+            TestRunner::Yath => self.run_tests_with_yath_fallback(&ext_path),
+            TestRunner::Prove => self.run_tests_with_prove_fallback(&ext_path),
+            TestRunner::Perl => self.run_tests_with_perl(&ext_path, "perl"),
+        }
+    }
+
+    fn run_tests_with_yath_fallback(&self, ext_path: &Path) -> Result<Value, String> {
+        match self.run_test_command("yath", ext_path) {
+            Ok(value) => Ok(value),
+            Err(yath_error) => {
+                if self.command_exists("prove") {
+                    match self.run_test_command("prove", ext_path) {
+                        Ok(value) => Ok(value),
+                        Err(prove_error) => match self.run_test_command("perl", ext_path) {
+                            Ok(value) => Ok(value),
+                            Err(perl_error) => Ok(self.format_command_launch_failure(
+                                "yath",
                                 format!(
-                                    "Failed to run prove: {error}; perl fallback also failed: {fallback_error}"
+                                    "Failed to run yath: {yath_error}; prove fallback also failed: {prove_error}; perl fallback also failed: {perl_error}"
                                 ),
                             )),
-                        }
+                        },
                     }
-                }
-            }
-            TestRunner::Perl => {
-                let mut perl_cmd = Command::new("perl");
-                perl_cmd.arg("--").arg(ext_path.as_os_str());
-                match crate::util::run_command_with_timeout(perl_cmd, 30) {
-                    Ok(result) => {
-                        Ok(self.format_command_result(result, Some(("command", "perl".into()))))
+                } else {
+                    match self.run_test_command("perl", ext_path) {
+                        Ok(value) => Ok(value),
+                        Err(perl_error) => Ok(self.format_command_launch_failure(
+                            "yath",
+                            format!(
+                                "Failed to run yath: {yath_error}; perl fallback also failed: {perl_error}"
+                            ),
+                        )),
                     }
-                    Err(error) => Ok(self.format_command_launch_failure(
-                        "perl",
-                        format!("Failed to run perl: {error}"),
-                    )),
                 }
             }
         }
+    }
+
+    fn run_tests_with_prove_fallback(&self, ext_path: &Path) -> Result<Value, String> {
+        match self.run_test_command("prove", ext_path) {
+            Ok(value) => Ok(value),
+            Err(prove_error) => match self.run_test_command("perl", ext_path) {
+                Ok(value) => Ok(value),
+                Err(perl_error) => Ok(self.format_command_launch_failure(
+                    "prove",
+                    format!(
+                        "Failed to run prove: {prove_error}; perl fallback also failed: {perl_error}"
+                    ),
+                )),
+            },
+        }
+    }
+
+    fn run_tests_with_perl(&self, ext_path: &Path, command_name: &str) -> Result<Value, String> {
+        match self.run_test_command("perl", ext_path) {
+            Ok(value) => Ok(value),
+            Err(error) => Ok(self.format_command_launch_failure(
+                command_name,
+                format!("Failed to run {command_name}: {error}"),
+            )),
+        }
+    }
+
+    fn run_test_command(&self, command: &str, ext_path: &Path) -> Result<Value, String> {
+        let mut cmd = Command::new(command);
+        if command == "perl" {
+            cmd.arg("--").arg(ext_path.as_os_str());
+        } else {
+            cmd.arg("-v").arg("--").arg(ext_path.as_os_str());
+        }
+
+        crate::util::run_command_with_timeout(cmd, 30)
+            .map(|result| self.format_command_result(result, Some(("command", command.into()))))
+            .map_err(|error| error.to_string())
     }
 
     pub(crate) fn run_test_sub(&self, file_path: &Path, sub_name: &str) -> Result<Value, String> {
