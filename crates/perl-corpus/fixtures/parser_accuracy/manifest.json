@@ -2387,6 +2387,134 @@
           ]
         }
       ]
+    },
+    {
+      "id": "method_completion_provider",
+      "family": "provider_method_completion",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/method_completion_provider.pl",
+      "scored_lines": 0,
+      "scored_symbols": 0,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 4,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "provider_expectations": {
+        "method_completion": [
+          {
+            "id": "self_receiver_methods",
+            "cursor_marker": "cursor:self",
+            "expected_receiver_package": "Accuracy::Provider::Foo",
+            "expected_present": [
+              "own_method",
+              "shared_name",
+              "inherited_method"
+            ],
+            "expected_absent": [
+              "unrelated_method"
+            ],
+            "expected_fallback": false
+          },
+          {
+            "id": "constructor_receiver_methods",
+            "cursor_marker": "cursor:constructor",
+            "expected_receiver_package": "Accuracy::Provider::Foo",
+            "expected_present": [
+              "own_method",
+              "shared_name",
+              "inherited_method"
+            ],
+            "expected_absent": [
+              "unrelated_method"
+            ],
+            "expected_fallback": false
+          },
+          {
+            "id": "literal_bless_receiver_methods",
+            "cursor_marker": "cursor:literal_bless",
+            "expected_receiver_package": "Accuracy::Provider::Foo",
+            "expected_present": [
+              "own_method",
+              "shared_name",
+              "inherited_method"
+            ],
+            "expected_absent": [
+              "unrelated_method"
+            ],
+            "expected_fallback": false
+          },
+          {
+            "id": "qualified_literal_bless_receiver_methods",
+            "cursor_marker": "cursor:qualified_bless",
+            "expected_receiver_package": "Accuracy::Provider::Foo",
+            "expected_present": [
+              "own_method",
+              "shared_name",
+              "inherited_method"
+            ],
+            "expected_absent": [
+              "unrelated_method"
+            ],
+            "expected_fallback": false
+          },
+          {
+            "id": "dynamic_bless_does_not_infer_exact_receiver",
+            "cursor_marker": "cursor:dynamic_bless",
+            "expected_receiver_package": null,
+            "expected_present": [],
+            "expected_absent": [
+              "own_method",
+              "shared_name",
+              "inherited_method",
+              "unrelated_method"
+            ],
+            "expected_fallback": true
+          },
+          {
+            "id": "concat_bless_does_not_infer_exact_receiver",
+            "cursor_marker": "cursor:concat_bless",
+            "expected_receiver_package": null,
+            "expected_present": [],
+            "expected_absent": [
+              "own_method",
+              "shared_name",
+              "inherited_method",
+              "unrelated_method"
+            ],
+            "expected_fallback": true
+          },
+          {
+            "id": "nested_bless_does_not_infer_exact_receiver",
+            "cursor_marker": "cursor:nested_bless",
+            "expected_receiver_package": null,
+            "expected_present": [],
+            "expected_absent": [
+              "own_method",
+              "shared_name",
+              "inherited_method",
+              "unrelated_method"
+            ],
+            "expected_fallback": true
+          },
+          {
+            "id": "unknown_receiver_does_not_infer_exact_receiver",
+            "cursor_marker": "cursor:unknown",
+            "expected_receiver_package": null,
+            "expected_present": [],
+            "expected_absent": [
+              "own_method",
+              "shared_name",
+              "inherited_method",
+              "unrelated_method"
+            ],
+            "expected_fallback": true
+          }
+        ]
+      }
     }
   ]
 }
