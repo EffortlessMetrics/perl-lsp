@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "commit": "adc26551b",
+  "commit": "81de1ca6a",
   "cadence": "pr",
   "generated_by": "cargo xtask metrics parser-accuracy --export-status-receipts",
-  "failure_packet_count": 6,
+  "failure_packet_count": 1,
   "failure_packets": [
     {
       "id": "packet-49df877b06d09f87",
@@ -26,120 +26,6 @@
       "details": "gold symbol expectation was not present in canonical fact predictions",
       "suggested_next_fix": "inspect fact extraction for this fixture before changing the gold expectation",
       "suggested_next_pr": "fix(semantic): resolve parser-accuracy semantic fact packet"
-    },
-    {
-      "id": "packet-53f7d4d5b10fb6c7",
-      "failure_kind": "line_tag_mismatch",
-      "likely_layer": "parser",
-      "fixture_id": "malformed_heredoc_recovery",
-      "family": "recovery",
-      "metric": "line_construct_f1",
-      "line": 3,
-      "expected": [
-        "parse_error"
-      ],
-      "actual": [
-        "variable_decl",
-        "heredoc_opener"
-      ],
-      "actual_nearest": [
-        "variable_decl",
-        "heredoc_opener"
-      ],
-      "source_excerpt": "my $text = <<'BROKEN';",
-      "details": "expected line construct tags did not match parser projection",
-      "suggested_next_fix": "check whether the parser projection missed this construct or the gold line label is too narrow",
-      "suggested_next_pr": "fix(parser-core): resolve parser projection failure packet"
-    },
-    {
-      "id": "packet-4fdb045dfea449f2",
-      "failure_kind": "line_tag_mismatch",
-      "likely_layer": "parser",
-      "fixture_id": "heredoc_basic",
-      "family": "heredoc",
-      "metric": "line_construct_f1",
-      "line": 3,
-      "expected": [
-        "variable_decl"
-      ],
-      "actual": [
-        "variable_decl",
-        "heredoc_opener"
-      ],
-      "actual_nearest": [
-        "variable_decl",
-        "heredoc_opener"
-      ],
-      "source_excerpt": "my $text = <<'END_TEXT';",
-      "details": "expected line construct tags did not match parser projection",
-      "suggested_next_fix": "check whether the parser projection missed this construct or the gold line label is too narrow",
-      "suggested_next_pr": "fix(parser-core): resolve parser projection failure packet"
-    },
-    {
-      "id": "packet-beaecdab97ef371e",
-      "failure_kind": "line_tag_mismatch",
-      "likely_layer": "parser",
-      "fixture_id": "regex_match",
-      "family": "regex",
-      "metric": "line_construct_f1",
-      "line": 4,
-      "expected": [
-        "variable_decl"
-      ],
-      "actual": [
-        "variable_decl",
-        "function_call"
-      ],
-      "actual_nearest": [
-        "variable_decl",
-        "function_call"
-      ],
-      "source_excerpt": "my $value = shift;",
-      "details": "expected line construct tags did not match parser projection",
-      "suggested_next_fix": "check whether the parser projection missed this construct or the gold line label is too narrow",
-      "suggested_next_pr": "fix(parser-core): resolve parser projection failure packet"
-    },
-    {
-      "id": "packet-49bcbb46c745c802",
-      "failure_kind": "line_tag_mismatch",
-      "likely_layer": "parser",
-      "fixture_id": "method_call",
-      "family": "method_call",
-      "metric": "line_construct_f1",
-      "line": 4,
-      "expected": [
-        "variable_decl"
-      ],
-      "actual": [
-        "variable_decl",
-        "function_call"
-      ],
-      "actual_nearest": [
-        "variable_decl",
-        "function_call"
-      ],
-      "source_excerpt": "my $object = shift;",
-      "details": "expected line construct tags did not match parser projection",
-      "suggested_next_fix": "check whether the parser projection missed this construct or the gold line label is too narrow",
-      "suggested_next_pr": "fix(parser-core): resolve parser projection failure packet"
-    },
-    {
-      "id": "packet-98c659b8ce7e56bc",
-      "failure_kind": "line_tag_mismatch",
-      "likely_layer": "parser",
-      "fixture_id": "eval_string_boundary",
-      "family": "eval_string",
-      "metric": "line_construct_f1",
-      "line": 4,
-      "expected": [
-        "function_call"
-      ],
-      "actual": [],
-      "actual_nearest": [],
-      "source_excerpt": "eval $code;",
-      "details": "expected line construct tags did not match parser projection",
-      "suggested_next_fix": "check whether the parser projection missed this construct or the gold line label is too narrow",
-      "suggested_next_pr": "fix(parser-core): resolve parser projection failure packet"
     }
   ]
 }

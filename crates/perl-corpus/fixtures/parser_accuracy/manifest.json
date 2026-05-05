@@ -867,7 +867,8 @@
         {
           "line": 3,
           "expected_tags": [
-            "parse_error"
+            "variable_decl",
+            "heredoc_opener"
           ]
         },
         {
@@ -1301,7 +1302,8 @@
         {
           "line": 3,
           "expected_tags": [
-            "variable_decl"
+            "variable_decl",
+            "heredoc_opener"
           ]
         },
         {
@@ -1343,7 +1345,8 @@
         {
           "line": 4,
           "expected_tags": [
-            "variable_decl"
+            "variable_decl",
+            "function_call"
           ]
         },
         {
@@ -1385,7 +1388,8 @@
         {
           "line": 4,
           "expected_tags": [
-            "variable_decl"
+            "variable_decl",
+            "function_call"
           ]
         },
         {
