@@ -2187,12 +2187,17 @@ sub bark { }
 }
 
 #[test]
-fn fallback_sorts_below_exact_receiver_completions() -> Result<(), Box<dyn std::error::Error>> {
-    // When both an exact receiver and a fallback could produce the same
-    // method label, the existing dedup means the fallback skips
-    // already-emitted labels. This test pins the tier discipline:
-    // fallback uses tier 6, exact uses tiers 2/3, so any overlap-free
-    // fallback method sorts after exact-receiver methods.
+fn fallback_tier_is_below_exact_receiver_tiers() -> Result<(), Box<dyn std::error::Error>> {
+    // Pins the tier-vs-tier contract by running two completion requests
+    // against the same workspace index:
+    //   1. exact:    `Foo->`         must surface `bark` at tier 2 or 3
+    //                                with no `unknown` in detail
+    //   2. fallback: `use Bar;\n$obj->` must surface `mew` at tier 6
+    //                                with `receiver: unknown, low confidence`
+    // The earlier `fallback_sorts_below_exact_receiver_completions` test
+    // only exercised path #1 (fallback never fires for `Foo->`), so it
+    // could not actually prove the tier discipline. This replacement
+    // exercises both paths and asserts the numeric tier ordering.
     let index = Arc::new(WorkspaceIndex::new());
     index.index_file(
         Url::parse("file:///workspace/Foo.pm")?,
@@ -2211,27 +2216,60 @@ sub mew { }
         .to_string(),
     )?;
 
-    // Use Bar (its method `mew` should be in fallback) and call exact
-    // `Foo->bark`. The exact `bark` is tier 2; fallback `mew` is tier 6.
-    let code = r#"use Bar;
-Foo->"#;
-    let mut parser = Parser::new(code);
-    let ast = must(parser.parse());
-    let provider = CompletionProvider::new_with_index(&ast, Some(index));
-    let completions = provider.get_completions(code, code.len());
+    // Request 1 — exact receiver via `Foo->`.
+    let exact_code = "Foo->";
+    let mut parser_exact = Parser::new(exact_code);
+    let exact_ast = must(parser_exact.parse());
+    let exact_provider = CompletionProvider::new_with_index(&exact_ast, Some(index.clone()));
+    let exact_completions = exact_provider.get_completions(exact_code, exact_code.len());
+    let bark = must_some(exact_completions.iter().find(|c| c.label == "bark"));
+    let bark_sort = must_some(bark.sort_text.as_deref());
+    let bark_detail = must_some(bark.detail.as_deref());
+    assert!(
+        bark_sort.starts_with("2_") || bark_sort.starts_with("3_"),
+        "exact Foo->bark must use tier 2 or 3; got {bark_sort:?}"
+    );
+    assert!(
+        !bark_detail.contains("unknown"),
+        "exact-receiver detail must not contain 'unknown'; got {bark_detail:?}"
+    );
 
-    let bark = completions.iter().find(|c| c.label == "bark");
-    if let Some(bark) = bark {
-        // Static `Foo->` is exact receiver, so we expect tier 2 here.
-        let s = must_some(bark.sort_text.as_deref());
-        assert!(
-            s.starts_with("2_") || s.starts_with("3_"),
-            "exact Foo->bark must use tier 2 or 3; got {s:?}"
-        );
-    }
-    // Note: in the "Foo->" prefix case, fallback does not fire because
-    // the receiver is `StaticPackage`. We're really pinning that exact-
-    // receiver completion went through tier 2/3 unchanged.
+    // Request 2 — Unknown receiver fallback via `use Bar;\n$obj->`.
+    let fallback_code = "use Bar;\n$obj->";
+    let mut parser_fb = Parser::new(fallback_code);
+    let fallback_ast = must(parser_fb.parse());
+    let fallback_provider = CompletionProvider::new_with_index(&fallback_ast, Some(index));
+    let fallback_completions =
+        fallback_provider.get_completions(fallback_code, fallback_code.len());
+    let mew = must_some(fallback_completions.iter().find(|c| c.label == "mew"));
+    let mew_sort = must_some(mew.sort_text.as_deref());
+    let mew_detail = must_some(mew.detail.as_deref());
+    assert!(
+        mew_sort.starts_with("6_"),
+        "Unknown-receiver fallback `mew` must use tier 6; got {mew_sort:?}"
+    );
+    assert!(
+        mew_detail.contains("receiver: unknown, low confidence"),
+        "fallback detail should say receiver: unknown, low confidence; got {mew_detail:?}"
+    );
+
+    // Numeric tier proof: exact tier (2 or 3) < fallback tier (6).
+    let exact_tier: u8 = bark_sort
+        .as_bytes()
+        .first()
+        .copied()
+        .and_then(|b| (b as char).to_digit(10).map(|d| d as u8))
+        .expect("exact sort_text must start with a digit");
+    let fallback_tier: u8 = mew_sort
+        .as_bytes()
+        .first()
+        .copied()
+        .and_then(|b| (b as char).to_digit(10).map(|d| d as u8))
+        .expect("fallback sort_text must start with a digit");
+    assert!(
+        exact_tier < fallback_tier,
+        "exact tier {exact_tier} must sort above fallback tier {fallback_tier}"
+    );
     Ok(())
 }
 
@@ -2452,6 +2490,46 @@ $x->"#;
     let ctx = ctx_for("$x->", "main", source.len());
     let ev = classify_text_pattern_receiver(&ctx, source);
     assert_eq!(ev, ReceiverEvidence::Unknown);
+}
+
+#[test]
+fn classify_receiver_variable_named_bless_is_unknown_fallback_eligible() {
+    // `$bless` as RHS — the substring `bless` is preceded by a `$` sigil
+    // and is therefore an identifier suffix, not a call-like `bless`
+    // keyword. Must NOT be classified as Dynamic; must remain Unknown so
+    // the bounded fallback (#7929) is still eligible.
+    let source = r#"my $x = $bless;
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Unknown);
+    assert!(ev.is_unknown_fallback_eligible());
+}
+
+#[test]
+fn classify_receiver_bless_in_comment_is_not_dynamic() {
+    // A `# bless ...` comment after the assignment must not be treated as
+    // a dynamic bless expression. The RHS scan should stop at `#`
+    // (single-line comment terminator), keeping evidence Unknown.
+    let source = r#"my $x = $obj; # bless this later
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Unknown);
+    assert!(ev.is_unknown_fallback_eligible());
+}
+
+#[test]
+fn classify_receiver_hash_key_bless_is_not_dynamic() {
+    // `$obj->{bless}` is a hash-key access whose key happens to be the
+    // word `bless`. Preceded by `{`, this is not a call-like `bless`
+    // and must not become Dynamic.
+    let source = r#"my $x = $obj->{bless};
+$x->"#;
+    let ctx = ctx_for("$x->", "main", source.len());
+    let ev = classify_text_pattern_receiver(&ctx, source);
+    assert_eq!(ev, ReceiverEvidence::Unknown);
+    assert!(ev.is_unknown_fallback_eligible());
 }
 
 #[test]
@@ -3601,4 +3679,66 @@ fn test_non_empty_inc_paths_do_not_change_phase1_completions()
         "non-empty include paths must not change completions in phase 1 (no filesystem scanning yet)"
     );
     Ok(())
+}
+
+// -------------------------------------------------------------------------
+// `collect_used_module_names` direct tests (issue #7929)
+//
+// The Unknown-receiver bounded fallback consumes this helper to decide
+// which workspace packages count as "visible" to the buffer. Pin the
+// inclusion / exclusion contract directly so the source-policy is
+// reviewable without going through the full completion pipeline.
+// -------------------------------------------------------------------------
+
+#[test]
+fn collect_used_module_names_includes_bare_use() {
+    let code = "use Foo;\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let modules = super::import_map::collect_used_module_names(&ast);
+    assert!(modules.contains("Foo"), "bare `use Foo;` should include Foo; got {modules:?}");
+}
+
+#[test]
+fn collect_used_module_names_includes_empty_import_list() {
+    let code = "use Foo ();\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let modules = super::import_map::collect_used_module_names(&ast);
+    assert!(
+        modules.contains("Foo"),
+        "`use Foo ();` should still include Foo as a visible package; got {modules:?}"
+    );
+}
+
+#[test]
+fn collect_used_module_names_includes_qw_list() {
+    let code = "use Foo qw(bar baz);\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let modules = super::import_map::collect_used_module_names(&ast);
+    assert!(
+        modules.contains("Foo"),
+        "`use Foo qw(...);` should include Foo as a visible package; got {modules:?}"
+    );
+}
+
+#[test]
+fn collect_used_module_names_excludes_lowercase_pragmas() {
+    let code = "use strict;\nuse warnings;\nuse feature 'say';\n";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let modules = super::import_map::collect_used_module_names(&ast);
+    assert!(
+        !modules.contains("strict"),
+        "`use strict` (lowercase pragma) must be excluded; got {modules:?}"
+    );
+    assert!(
+        !modules.contains("warnings"),
+        "`use warnings` (lowercase pragma) must be excluded; got {modules:?}"
+    );
+    assert!(
+        !modules.contains("feature"),
+        "`use feature` (lowercase pragma) must be excluded; got {modules:?}"
+    );
 }

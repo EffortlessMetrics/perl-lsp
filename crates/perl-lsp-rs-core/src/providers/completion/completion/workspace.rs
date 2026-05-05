@@ -742,14 +742,21 @@ pub(super) fn classify_text_pattern_receiver(
     ReceiverEvidence::Unknown
 }
 
-/// Returns `true` when the RHS contains the `bless` keyword as a whole
-/// word, outside string literals. Used by `classify_text_pattern_receiver`
-/// to detect dynamic / fail-closed bless expressions that could not be
-/// resolved to a literal class — these include nested calls
-/// (`wrapper(bless {}, "Foo")`), expression-tail forms
-/// (`bless {}, "Foo" . $suffix`), dynamic class
+/// Returns `true` when the RHS contains a *call-like* `bless` keyword
+/// outside string literals and comments. Used by
+/// `classify_text_pattern_receiver` to detect dynamic / fail-closed bless
+/// expressions that could not be resolved to a literal class — these
+/// include nested calls (`wrapper(bless {}, "Foo")`), expression-tail
+/// forms (`bless {}, "Foo" . $suffix`), dynamic class
 /// (`bless {}, $class`), and non-builtin `bless`-prefixed identifiers
 /// (`bless::class {}, "Foo"`). Issue #7929.
+///
+/// "Call-like" means `bless` is followed by ASCII whitespace, `(`, or
+/// `::` (the qualified non-builtin form), and is not preceded by a Perl
+/// sigil (`$`/`@`/`%`/`&`), an identifier byte, or a hash-key opener
+/// (`{`). This rejects harmless mentions like `$bless`, `$obj->{bless}`,
+/// and `# bless ...` comments which should remain Unknown / fallback-
+/// eligible rather than fail-closed Dynamic.
 fn rhs_has_bless_keyword_outside_strings(rhs: &str) -> bool {
     let bytes = rhs.as_bytes();
     let needle = b"bless";
@@ -767,22 +774,54 @@ fn rhs_has_bless_keyword_outside_strings(rhs: &str) -> bool {
             continue;
         }
         prev_was_backslash = false;
+        // Outside strings, `#` starts a comment that runs to end-of-line.
+        // The RHS scan is single-line, so terminate here.
+        if b == b'#' {
+            return false;
+        }
         if b == b'"' || b == b'\'' {
             in_string = Some(b);
             i += 1;
             continue;
         }
-        if i + needle.len() <= bytes.len() && &bytes[i..i + needle.len()] == needle {
-            let prev_ok = i == 0 || !is_perl_ident_byte_local(bytes[i - 1]);
-            let next_idx = i + needle.len();
-            let next_ok = next_idx >= bytes.len() || !is_perl_ident_byte_local(bytes[next_idx]);
-            if prev_ok && next_ok {
-                return true;
-            }
+        if i + needle.len() <= bytes.len()
+            && &bytes[i..i + needle.len()] == needle
+            && is_call_like_bless(bytes, i)
+        {
+            return true;
         }
         i += 1;
     }
     false
+}
+
+/// Returns `true` when the `bless` token at `bytes[i..i+5]` is *call-like*:
+/// not preceded by a sigil/ident-byte/hash-key opener, and followed by
+/// whitespace, `(`, or `::`. See [`rhs_has_bless_keyword_outside_strings`].
+fn is_call_like_bless(bytes: &[u8], i: usize) -> bool {
+    let prev_ok = match i.checked_sub(1).map(|j| bytes[j]) {
+        None => true,
+        Some(p) => {
+            !is_perl_ident_byte_local(p)
+                && p != b'$'
+                && p != b'@'
+                && p != b'%'
+                && p != b'&'
+                && p != b'{'
+        }
+    };
+    if !prev_ok {
+        return false;
+    }
+    let next_idx = i + b"bless".len();
+    match bytes.get(next_idx).copied() {
+        None => false,
+        Some(n) => {
+            n.is_ascii_whitespace()
+                || n == b'('
+                || (n == b':' && bytes.get(next_idx + 1).copied() == Some(b':'))
+        }
+    }
 }
 
 fn is_perl_ident_byte_local(b: u8) -> bool {
