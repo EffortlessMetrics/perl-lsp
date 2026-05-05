@@ -1,0 +1,203 @@
+# Scorecard Floor-Metric Ratchet — Operational Guide
+
+> **Audience**: contributors and CI operators.
+> **What this is**: the operational layer on top of the conceptual scorecard
+> framework in [README.md](README.md).  It answers the practical questions:
+> how do you run a ratchet check, how do you promote a baseline, and where
+> does the CI enforcement live?
+>
+> For the *why* and the four-layer model rationale, read [README.md](README.md)
+> and tracking issue [#4105](https://github.com/effortlessmetrics/perl-lsp/issues/4105).
+
+---
+
+## Quick Reference
+
+```bash
+# Check that all committed baselines pass (bootstrap-safe: passes if no receipt)
+just ci-metrics-ratchet
+
+# Check a single subsystem
+just ci-metrics-ratchet-check parser
+
+# Promote a metric from improvement → floor (after stable-wins threshold)
+cargo xtask metrics promote-baseline parser
+
+# Ratchet parser baseline up after a confirmed improvement
+# (edit .ci/metrics/baselines/parser.json, run just ci-metrics-ratchet, commit)
+```
+
+---
+
+## Four-Layer Model (Summary)
+
+Full rationale is in [README.md](README.md).  The operational summary:
+
+| Layer | What it means | Who touches it |
+|-------|---------------|----------------|
+| **1. One JSON file per subsystem** | `.ci/metrics/baselines/<subsystem>.json` is the committed truth | CI + maintainer |
+| **2. Floor vs improvement split** | `floor_metrics` block a merge; `improvement_metrics` are informational | Baseline author |
+| **3. Ratchet only on stable wins** | Don't raise the floor after one lucky run — require `STABLE_WIN_THRESHOLD` consecutive improvements | `cargo xtask metrics promote-baseline` |
+| **4. Issue ↔ scorecard linkage** | Every open issue states which scorecard metric it improves | Issue author |
+
+---
+
+## Committed Baselines
+
+Baselines live at `.ci/metrics/baselines/<subsystem>.json`.  The schema is
+defined in `xtask/src/tasks/metrics/ratchet.rs` (`SubsystemBaseline`):
+
+```json
+{
+  "schema_version": 1,
+  "measured_at": "2026-04-24T00:00:00Z",
+  "subsystem": "parser",
+  "commit": "522c47f",
+  "floor_metrics": {
+    "system_clean_rate": 0.944816,
+    "system_crash_count": 0,
+    "cpan_clean_rate": 0.952945,
+    "strict_clean_subset_pass_rate": 1.0
+  },
+  "improvement_metrics": {
+    "recovery_salvage_rate": 0.204545,
+    "error_density_per_1k_loc": 1.95,
+    "node_kind_coverage": 0.942029
+  },
+  "tolerance_pct": 0.005
+}
+```
+
+### Active subsystems
+
+| File | Subsystem | Floor gate |
+|------|-----------|------------|
+| `.ci/metrics/baselines/parser.json` | Parser corpus cleanliness | `system_clean_rate`, `cpan_clean_rate`, `system_crash_count`, `strict_clean_subset_pass_rate` |
+| `.ci/metrics/baselines/engineering_health.json` | Build/test hygiene | `strict_clean_subset_pass_rate` |
+| `.ci/metrics/baselines/parser_accuracy.json` | Span / AST correctness | See file |
+| `.ci/metrics/baselines/token.json` | Lexer token health | See file |
+| `.ci/metrics/baselines/editor_ux.json` | Editor UX scorecard | See file |
+
+---
+
+## Metric Direction Convention
+
+The ratchet determines regression direction from the metric name:
+
+| Suffix | Direction | Regression = |
+|--------|-----------|--------------|
+| `_count`, `_nodes`, `_unreadable` | **Lower is better** | current > baseline × (1 + tolerance) |
+| anything else | **Higher is better** | current < baseline × (1 − tolerance) |
+| listed in `lower_is_better` array | **Lower is better** | same as `_count` |
+
+Tolerance default is `0.005` (0.5 %).  Each baseline can override via
+`"tolerance_pct": <value>`.
+
+---
+
+## Running the Ratchet Locally
+
+```bash
+# Check both committed subsystems (bootstrap-safe)
+just ci-metrics-ratchet
+
+# Single subsystem
+just ci-metrics-ratchet-check parser
+```
+
+**Bootstrap mode**: when no receipt exists at
+`target/receipts/metrics/<subsystem>.json`, the xtask falls back to the
+committed baseline values.  This means the check always passes until a sweep
+generates a fresh receipt.  This is intentional — infrastructure validation
+before measurement instrumentation.
+
+**With a fresh receipt**: after running the parser sweep the xtask reads the
+receipt and compares against the baseline.  Any floor-metric regression causes
+a non-zero exit.
+
+---
+
+## CI Integration
+
+### Nightly gate (`ci-nightly.yml`)
+
+A dedicated `scorecard-ratchet-check` job runs the committed scorecard floor
+checks:
+
+- **Trigger**: nightly schedule, `workflow_dispatch`, or `ci:metrics-ratchet`
+  label on a PR.
+- **Effect**: non-zero exit on any floor-metric regression.  If a subsystem has
+  no fresh receipt in `target/receipts/metrics/`, the check uses baseline values
+  as current values and reports bootstrap mode.
+- **Bootstrap safety**: job passes if no receipt exists (see above).
+
+### Merge gate (`ci-gate`)
+
+`just ci-metrics-ratchet` is NOT currently in `ci-gate` (merge-blocking).
+The nightly job is the enforcement point for v1.  Rationale: receipts are
+generated by the full corpus sweep which is too slow for every PR.  Once
+a per-PR parser-smoke step emits a lightweight receipt, `ci-gate` can include
+a ratchet check against a smoke-subset baseline.
+
+---
+
+## Promoting a Baseline
+
+Use `promote-baseline` to raise a floor after confirming stable improvement:
+
+```bash
+# 1.  Check which improvement metrics are stable (≥3 consecutive runs, +1%)
+cargo xtask metrics promote-baseline parser
+
+# 2.  If candidates are listed, edit .ci/metrics/baselines/parser.json:
+#     - Move the metric from improvement_metrics to floor_metrics (or raise the floor value)
+#     - Update measured_at and commit fields
+
+# 3.  Verify the promoted baseline still passes
+just ci-metrics-ratchet
+
+# 4.  Commit the updated baseline as a standalone PR titled:
+#     "chore(ratchet): promote parser <metric> floor to <value>"
+```
+
+The stable-wins state is written to `target/metrics/stable_wins/<subsystem>.json`
+by `cargo xtask metrics ratchet-check <subsystem> --record`.  The nightly CI
+job does not record stable-wins state yet; use `--record` during an intentional
+baseline-promotion run after collecting fresh receipts.
+
+---
+
+## Adding a New Subsystem
+
+1. Create `.ci/metrics/baselines/<subsystem>.json` following the schema above.
+   Set `improvement_metrics` fields to `null` until you have a measurement.
+2. Add `cargo run -p xtask -- metrics ratchet-check <subsystem>` to
+   `just ci-metrics-ratchet` in the justfile.
+3. Add the subsystem to the active subsystems table in this document.
+4. Open a follow-up issue linking the subsystem to its improvement metrics.
+
+---
+
+## Issue ↔ Scorecard Linkage
+
+Every open issue that changes parser or engineering-health behavior should
+include a line:
+
+> **Scorecard impact**: improves `parser` → `<metric>` from `<baseline>` toward `<target>`.
+
+This creates an auditable chain from "work merged" to "floor moved".  See
+[README.md §Layer 4](README.md) for the full issue-family → scorecard mapping.
+
+---
+
+## Related Files
+
+| File | Purpose |
+|------|---------|
+| `xtask/src/tasks/metrics/ratchet.rs` | Ratchet check implementation + tests |
+| `xtask/src/tasks/metrics/stable_wins.rs` | Stable-wins state tracking |
+| `.ci/metrics/baselines/` | Committed floor baselines |
+| `target/receipts/metrics/` | Runtime receipts (gitignored) |
+| `target/metrics/stable_wins/` | Stable-wins ledger (gitignored) |
+| `.github/workflows/ci-nightly.yml` | Nightly ratchet job |
+| `justfile` (recipe `ci-metrics-ratchet`) | Local ratchet runner |

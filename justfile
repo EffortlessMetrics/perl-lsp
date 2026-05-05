@@ -2682,12 +2682,15 @@ ci-metrics-ratchet-check subsystem:
     cargo run -p xtask -- metrics ratchet-check {{subsystem}}
     @echo "Scorecard ratchet passed for {{subsystem}}"
 
-# Check all committed scorecard baselines (parser + engineering_health).
+# Check all committed scorecard baselines.
 # Soft gate: run after ci-gate, warns on violation, does not block PR in v1.
 ci-metrics-ratchet:
     @echo "Checking scorecard floor metrics..."
     cargo run -p xtask -- metrics ratchet-check parser
     cargo run -p xtask -- metrics ratchet-check engineering_health
+    cargo run -p xtask -- metrics ratchet-check parser_accuracy
+    cargo run -p xtask -- metrics ratchet-check token
+    cargo run -p xtask -- metrics ratchet-check editor_ux
     @echo "Scorecard ratchet passed"
 
 # Tier C: full suite (nightly, all integration tests)
