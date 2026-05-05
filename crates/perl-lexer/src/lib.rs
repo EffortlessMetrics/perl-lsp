@@ -2868,7 +2868,8 @@ impl<'a> PerlLexer<'a> {
         start: usize,
         delimiter: char,
     ) -> Option<Token> {
-        self.read_delimited_body(delimiter);
+        let (_pattern, pattern_closed) = self.read_delimited_body(delimiter);
+        let replacement_closed;
 
         let pattern_is_paired = quote_handler::paired_close(delimiter).is_some();
         if pattern_is_paired {
@@ -2880,10 +2881,14 @@ impl<'a> PerlLexer<'a> {
                 && Self::is_quote_delim(repl_delim)
             {
                 self.advance();
-                self.read_delimited_body(repl_delim);
+                let (_replacement, closed) = self.read_delimited_body(repl_delim);
+                replacement_closed = closed;
+            } else {
+                replacement_closed = false;
             }
         } else {
-            self.read_delimited_body(delimiter);
+            let (_replacement, closed) = self.read_delimited_body(delimiter);
+            replacement_closed = closed;
         }
 
         // Parse modifiers - include all alphanumeric for proper validation in parser (MUT_005 fix)
@@ -2898,12 +2903,16 @@ impl<'a> PerlLexer<'a> {
         let text = &self.input[start..self.position];
         self.mode = LexerMode::ExpectOperator;
 
-        Some(Token {
-            token_type: TokenType::Substitution,
-            text: Arc::from(text),
-            start,
-            end: self.position,
-        })
+        let token_type = if pattern_closed && replacement_closed {
+            TokenType::Substitution
+        } else {
+            TokenType::Error(Arc::from(format!(
+                "unclosed quote-like operator 's' delimiter '{}'",
+                delimiter
+            )))
+        };
+
+        Some(Token { token_type, text: Arc::from(text), start, end: self.position })
     }
 
     fn parse_transliteration(&mut self, start: usize) -> Option<Token> {
@@ -2922,7 +2931,8 @@ impl<'a> PerlLexer<'a> {
         start: usize,
         delimiter: char,
     ) -> Option<Token> {
-        self.read_delimited_body(delimiter);
+        let (_search, search_closed) = self.read_delimited_body(delimiter);
+        let replacement_closed;
 
         let search_is_paired = quote_handler::paired_close(delimiter).is_some();
         if search_is_paired {
@@ -2934,10 +2944,14 @@ impl<'a> PerlLexer<'a> {
                 && Self::is_quote_delim(repl_delim)
             {
                 self.advance();
-                self.read_delimited_body(repl_delim);
+                let (_replacement, closed) = self.read_delimited_body(repl_delim);
+                replacement_closed = closed;
+            } else {
+                replacement_closed = false;
             }
         } else {
-            self.read_delimited_body(delimiter);
+            let (_replacement, closed) = self.read_delimited_body(delimiter);
+            replacement_closed = closed;
         }
 
         // Parse modifiers - include all alphanumeric for proper validation in parser (MUT_005 fix)
@@ -2952,12 +2966,17 @@ impl<'a> PerlLexer<'a> {
         let text = &self.input[start..self.position];
         self.mode = LexerMode::ExpectOperator;
 
-        Some(Token {
-            token_type: TokenType::Transliteration,
-            text: Arc::from(text),
-            start,
-            end: self.position,
-        })
+        let token_type = if search_closed && replacement_closed {
+            TokenType::Transliteration
+        } else {
+            TokenType::Error(Arc::from(format!(
+                "unclosed quote-like operator '{}' delimiter '{}'",
+                if self.input[start..].starts_with("tr") { "tr" } else { "y" },
+                delimiter
+            )))
+        };
+
+        Some(Token { token_type, text: Arc::from(text), start, end: self.position })
     }
 
     /// Read content between delimiters.
