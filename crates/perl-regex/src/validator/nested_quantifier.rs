@@ -1,28 +1,34 @@
+use crate::syntax::cursor::RegexCursor;
+
+use super::RegexFinding;
+
 pub(crate) fn detect_nested_quantifiers(pattern: &str) -> bool {
+    find_nested_quantifier(pattern, 0).is_some()
+}
+
+pub(crate) fn find_nested_quantifier(pattern: &str, start_pos: usize) -> Option<RegexFinding> {
+    let mut cursor = RegexCursor::new(pattern);
     let bytes = pattern.as_bytes();
-    let mut i = 0;
     let mut group_stack = Vec::new();
     let mut last_type = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'\\' => {
-                i += 2;
-                last_type = 0;
-                continue;
-            }
+    while let Some(ch) = cursor.current() {
+        if cursor.skip_escape() || cursor.skip_char_class() {
+            last_type = 0;
+            continue;
+        }
+
+        match ch {
             b'(' => {
-                if i + 1 < bytes.len() && bytes[i + 1] == b'?' {
-                    i += 2;
-                    if i < bytes.len()
-                        && matches!(bytes[i], b':' | b'=' | b'!' | b'<' | b'>' | b'|' | b'P' | b'#')
+                cursor.bump();
+                if cursor.current() == Some(b'?') {
+                    cursor.bump();
+                    if let Some(marker) = cursor.current()
+                        && matches!(marker, b':' | b'=' | b'!' | b'<' | b'>' | b'|' | b'P' | b'#')
                     {
-                        i += 1;
+                        cursor.bump();
                     }
-                } else {
-                    i += 1;
                 }
                 group_stack.push(false);
-                last_type = 0;
                 continue;
             }
             b')' => {
@@ -32,16 +38,14 @@ pub(crate) fn detect_nested_quantifiers(pattern: &str) -> bool {
             }
             b'+' | b'*' | b'?' | b'{' => {
                 if last_type == 2 {
-                    if bytes[i] == b'{' {
-                        let mut j = i + 1;
+                    if ch == b'{' {
+                        let mut j = cursor.position() + 1;
                         if is_brace_quantifier(bytes, &mut j) {
-                            return true;
+                            return Some(RegexFinding { offset: start_pos + cursor.position() });
                         }
-                        last_type = 0;
-                        i += 1;
-                        continue;
+                    } else {
+                        return Some(RegexFinding { offset: start_pos + cursor.position() });
                     }
-                    return true;
                 }
                 if let Some(last) = group_stack.last_mut() {
                     *last = true;
@@ -50,9 +54,9 @@ pub(crate) fn detect_nested_quantifiers(pattern: &str) -> bool {
             }
             _ => last_type = 0,
         }
-        i += 1;
+        cursor.bump();
     }
-    false
+    None
 }
 
 fn is_brace_quantifier(bytes: &[u8], i: &mut usize) -> bool {

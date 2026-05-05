@@ -8,6 +8,11 @@ pub use config::RegexValidationConfig;
 
 use crate::error::RegexError;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RegexFinding {
+    pub offset: usize,
+}
+
 pub struct RegexValidator {
     config: RegexValidationConfig,
 }
@@ -32,6 +37,20 @@ impl RegexValidator {
     }
 
     pub fn validate(&self, pattern: &str, start_pos: usize) -> Result<(), RegexError> {
+        if let Some(finding) = self.find_code_execution(pattern, start_pos) {
+            return Err(RegexError::syntax(
+                "Embedded code execution is not allowed in regex patterns",
+                finding.offset,
+            ));
+        }
+
+        if let Some(finding) = self.find_nested_quantifier(pattern, start_pos) {
+            return Err(RegexError::syntax(
+                "Nested quantifiers may cause catastrophic backtracking",
+                finding.offset,
+            ));
+        }
+
         complexity::check_complexity(pattern, start_pos, &self.config)
     }
 
@@ -39,7 +58,19 @@ impl RegexValidator {
         code_execution::detects_code_execution(pattern)
     }
 
+    pub fn find_code_execution(&self, pattern: &str, start_pos: usize) -> Option<RegexFinding> {
+        code_execution::find_code_execution(pattern, start_pos)
+    }
+
     pub fn detect_nested_quantifiers(&self, pattern: &str) -> bool {
         nested_quantifier::detect_nested_quantifiers(pattern)
+    }
+
+    pub fn find_nested_quantifier(
+        &self,
+        pattern: &str,
+        start_pos: usize,
+    ) -> Option<RegexFinding> {
+        nested_quantifier::find_nested_quantifier(pattern, start_pos)
     }
 }

@@ -153,6 +153,28 @@ mod tests {
         assert!(v.validate("[(?{]", 0).is_ok());
     }
 
+    #[test]
+    fn validate_rejects_embedded_code() {
+        let v = RegexValidator::new();
+        assert!(v.validate("(?{ print 'hi' })", 0).is_err());
+        assert!(v.validate("(??{ some_code() })", 0).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_nested_quantifiers() {
+        let v = RegexValidator::new();
+        assert!(v.validate("(a+)+", 0).is_err());
+        assert!(v.validate("(a+){2,5}", 0).is_err());
+    }
+
+    #[test]
+    fn validate_allows_escaped_and_char_class_quantifiers() {
+        let v = RegexValidator::new();
+        assert!(v.validate(r"(a\+)+", 0).is_ok());
+        assert!(v.validate("([a+])+", 0).is_ok());
+        assert!(v.validate("([a{2}])+", 0).is_ok());
+    }
+
     // --- RegexValidator::detects_code_execution ---
 
     #[test]
