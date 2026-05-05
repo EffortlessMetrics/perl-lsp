@@ -17,7 +17,7 @@
 //!
 //! # Quick Start
 //!
-//! ## Bridge Mode (Phase 1 - Implemented)
+//! ## Bridge Mode (Legacy Compatibility)
 //!
 //! The bridge adapter proxies DAP messages to Perl::LanguageServer:
 //!
@@ -114,34 +114,15 @@
 //! - **[`AttachConfiguration`]**: Attach debugging configuration for TCP connections
 //! - **[`platform`]**: Cross-platform path resolution and environment setup
 //!
-//! Phase 1 provides immediate debugging support by bridging to the mature
-//! Perl::LanguageServer implementation while the native adapter is developed.
+//! Native mode handles launch and attach workflows, request dispatch, breakpoint validation, stack/scopes/variables/evaluate inspection, and execution control in Rust.
+
+//! ## Bridge adapter (`--bridge`)
 //!
-//! ## Phase 2: Native Adapter (Planned)
+//! Bridge mode remains available for compatibility/migration workflows that still rely on `Perl::LanguageServer`. It proxies DAP traffic while preserving this crate's launch/attach configuration surfaces.
 //!
-//! **Acceptance Criteria: AC5-AC12**
+//! ## Operational hardening
 //!
-//! - **[`protocol`]**: DAP protocol types and message definitions
-//! - **[`dispatcher`]**: Request routing and method dispatch
-//! - **[`breakpoints`]**: Breakpoint management with AST validation
-//! - **Session Management**: Debug session lifecycle and state tracking
-//! - **Variable Renderer**: Lazy variable expansion for complex data structures
-//! - **Stack Trace Provider**: Call stack navigation with source mapping
-//! - **Control Flow**: Step, continue, pause, and breakpoint control
-//! - **Safe Evaluation**: Expression evaluation in debug context
-//!
-//! Phase 2 will provide a native Rust DAP implementation with tighter integration
-//! to `perl_parser` for enhanced validation and performance.
-//!
-//! ## Phase 3: Production Hardening (Planned)
-//!
-//! **Acceptance Criteria: AC13-AC19**
-//!
-//! - **Security Validation**: Input sanitization and command injection prevention
-//! - **Performance Optimization**: Efficient variable inspection and stepping
-//! - **Packaging**: Distribution via cargo, VSCode marketplace, and package managers
-//! - **Documentation**: Comprehensive usage guides and troubleshooting
-//! - **Testing**: End-to-end integration tests with real debugging scenarios
+//! The project keeps expanding verification (scorecards, integration flows, and platform validation) so native behavior stays predictable under editor workloads.
 //!
 //! # Protocol Support
 //!

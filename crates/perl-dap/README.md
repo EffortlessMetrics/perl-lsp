@@ -23,6 +23,17 @@ DAP-capable editors and tools.
 - `BridgeAdapter` supports migration from `Perl::LanguageServer`.
 - `TcpAttachConfig` and `BreakpointStore` support socket attach and breakpoint tracking.
 
+## Modes and dependencies
+
+- **Native launch (`--stdio`)**: starts a native DAP server over stdio for editor-driven launch flows.
+- **Native TCP attach (`--socket --port <PORT>`)**: starts the native adapter in socket mode for TCP attach workflows.
+- **Legacy bridge (`--bridge`)**: proxies to `Perl::LanguageServer` during migration and requires external CPAN dependencies.
+
+Bridge-mode external dependency requirements:
+
+- CPAN module `Perl::LanguageServer` must be installed and loadable.
+- Verify with `perl -e "use Perl::LanguageServer::DebuggerInterface; print qq{OK\n};"`.
+
 ## Run
 
 ```bash

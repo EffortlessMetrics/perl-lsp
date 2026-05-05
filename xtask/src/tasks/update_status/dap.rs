@@ -11,6 +11,7 @@ use serde::Deserialize;
 use super::replace_block;
 
 const RECEIPT_PATH: &str = "target/dap_scorecard_receipt.json";
+const SCORECARD_FIXTURES: &[&str] = &["hello.pl", "loops.pl", "eval.pl", "args.pl", "breakpoints_begin_end.pl"];
 
 /// Counts of DAP tests discovered from source files.
 pub(super) struct DapTestCounts {
@@ -54,24 +55,10 @@ pub(super) fn count_dap_tests(root: &Path) -> DapTestCounts {
         .unwrap_or(0);
 
     let fixture_dir = root.join("crates/perl-dap/tests/fixtures");
-    let scorecard_fixtures = fs::read_dir(&fixture_dir)
-        .map(|entries| {
-            entries
-                .filter_map(|e| e.ok())
-                .filter(|e| {
-                    e.path().extension().and_then(|s| s.to_str()) == Some("pl")
-                        && !e
-                            .file_name()
-                            .to_string_lossy()
-                            .starts_with("breakpoints_file_boundaries")
-                        && !e.file_name().to_string_lossy().starts_with("breakpoints_comments")
-                        && !e.file_name().to_string_lossy().starts_with("breakpoints_heredocs")
-                        && !e.file_name().to_string_lossy().starts_with("breakpoints_multiline")
-                        && !e.file_name().to_string_lossy().starts_with("breakpoints_pod")
-                })
-                .count()
-        })
-        .unwrap_or(0);
+    let scorecard_fixtures = SCORECARD_FIXTURES
+        .iter()
+        .filter(|name| fixture_dir.join(name).is_file())
+        .count();
 
     DapTestCounts { integration_test_targets, scorecard_fixtures }
 }
@@ -186,6 +173,11 @@ pub(super) fn generate_dap_status(
     );
 
     let receipt = read_receipt(root);
+    if std::env::var("PERL_LSP_REQUIRE_DAP_RECEIPT").ok().as_deref() == Some("1") && receipt.is_none() {
+        color_eyre::eyre::bail!(
+            "missing {RECEIPT_PATH}; run `cargo test -p perl-dap --test dap_scorecard_harness -- --nocapture` before `cargo xtask update-status --only dap`"
+        );
+    }
     let launch_table = launch_table_from_receipt(receipt.as_ref());
     let session_table = session_table_from_receipt(receipt.as_ref());
 
