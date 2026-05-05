@@ -45,6 +45,9 @@ pub struct UxRegressionReceipt {
     friendly_repro: Option<String>,
     first_failing_line: Option<String>,
     route: UxRoute,
+    blocking: bool,
+    merge_action: String,
+    human_summary: String,
     component: Option<UxComponent>,
     run_id: Option<String>,
     attempt: Option<u32>,
@@ -83,6 +86,7 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
     let workflow = first_failing_test.as_ref().and_then(|name| workflow_from_test_name(name));
 
     let failure_class = infer_failure_class(raw);
+    let result = if raw.contains("test result: ok") { "pass" } else { "fail" }.to_string();
 
     let canonical_repro = first_failing_test.as_ref().map(|name| {
         format!("cargo test -p perl-lsp-ux-tests {name} -- --test-threads=1 --nocapture")
@@ -95,6 +99,30 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
     });
 
     let route = route_for_failure_class(failure_class);
+    let blocking = result != "pass";
+    let merge_action = match failure_class {
+        UxFailureClass::TestRace => "quarantine_or_fix_test",
+        UxFailureClass::ProviderRegression => "fix_provider",
+        UxFailureClass::MatrixDrift => "update_fixture_matrix",
+        UxFailureClass::BaselineDrift => "update_baseline",
+        UxFailureClass::Timeout => "triage_timeout",
+        UxFailureClass::Infra => "fix_ci_infra",
+        UxFailureClass::ServerCrash => "fix_crash",
+        UxFailureClass::NewTestBug => "fix_test",
+        UxFailureClass::Unknown => "triage",
+    }
+    .to_string();
+    let merge_action = if result == "pass" { "merge_allowed".to_string() } else { merge_action };
+    let human_summary = if result == "pass" {
+        "UX regression lane passed; merge allowed.".to_string()
+    } else {
+        let test = first_failing_test.as_deref().unwrap_or("unknown_test");
+        let repro = canonical_repro.as_deref().unwrap_or("receipt did not include canonical repro");
+        format!(
+            "UX regression failed in {test}; classified as {}; repro: {repro}",
+            failure_class.as_str()
+        )
+    };
 
     UxRegressionReceipt {
         kind: "ux_regression_receipt",
@@ -105,13 +133,16 @@ fn classify(raw: &str, sha: Option<String>) -> UxRegressionReceipt {
         scenario_file: scenario.clone(),
         scenario,
         first_failing_test,
-        result: if raw.contains("test result: ok") { "pass" } else { "fail" }.to_string(),
+        result,
         failure_class,
         panic_location,
         canonical_repro,
         friendly_repro,
         first_failing_line: first_fail_line,
         route,
+        blocking,
+        merge_action,
+        human_summary,
         component: None,
         run_id: None,
         attempt: None,
@@ -126,7 +157,11 @@ fn scenario_from_test_name(test: &str) -> Option<String> {
 
 fn infer_failure_class(raw: &str) -> UxFailureClass {
     let lower = raw.to_ascii_lowercase();
-    if lower.contains("fixture matrix") || lower.contains("matrix drift") {
+    if looks_like_scenario_19_race(&lower) {
+        UxFailureClass::TestRace
+    } else if looks_like_scenario_14_provider_regression(&lower) {
+        UxFailureClass::ProviderRegression
+    } else if lower.contains("fixture matrix") || lower.contains("matrix drift") {
         UxFailureClass::MatrixDrift
     } else if lower.contains("baseline") || lower.contains("snapshot") {
         UxFailureClass::BaselineDrift
@@ -150,6 +185,26 @@ fn infer_failure_class(raw: &str) -> UxFailureClass {
     } else {
         UxFailureClass::Unknown
     }
+}
+
+fn looks_like_scenario_19_race(lower: &str) -> bool {
+    lower.contains("scenario_19_diagnostics_clear_after_fix")
+        && (lower.contains("pre-fix")
+            || lower.contains("post-fix")
+            || lower.contains("diagnostics race")
+            || lower.contains("events:")
+            || lower.contains("expected diagnostics to clear"))
+}
+
+fn looks_like_scenario_14_provider_regression(lower: &str) -> bool {
+    lower.contains("ux_scenario_14_inc_conformance")
+        && (lower.contains("goto-definition")
+            || lower.contains("include path")
+            || lower.contains("include_paths")
+            || lower.contains("includepaths")
+            || lower.contains("perl5lib")
+            || lower.contains("usesysteminc")
+            || lower.contains("@inc"))
 }
 
 fn workflow_from_test_name(test: &str) -> Option<String> {
@@ -184,8 +239,8 @@ mod tests {
             "test name should be extracted from log"
         );
         assert!(
-            matches!(receipt.failure_class, UxFailureClass::NewTestBug),
-            "failure_class should be NewTestBug for panicked test in ux_scenario"
+            matches!(receipt.failure_class, UxFailureClass::TestRace),
+            "failure_class should be TestRace for scenario_19 diagnostics clear failures"
         );
         assert_eq!(
             receipt.panic_location.as_deref(),
@@ -193,6 +248,8 @@ mod tests {
             "panic_location should be extracted from panic line (Rust 1.73+ format)"
         );
         assert_eq!(receipt.route, UxRoute::TestFix, "race/new test bug routes to test fix");
+        assert!(receipt.blocking);
+        assert_eq!(receipt.merge_action, "quarantine_or_fix_test");
     }
 
     #[test]
@@ -245,6 +302,7 @@ mod tests {
             "fixture matrix log should classify as MatrixDrift"
         );
         assert_eq!(receipt.route, UxRoute::FixtureUpdate, "MatrixDrift routes to FixtureUpdate");
+        assert_eq!(receipt.merge_action, "update_fixture_matrix");
     }
 
     #[test]
@@ -260,6 +318,7 @@ mod tests {
             UxRoute::BaselineUpdate,
             "BaselineDrift routes to BaselineUpdate"
         );
+        assert_eq!(receipt.merge_action, "update_baseline");
     }
 
     #[test]
@@ -274,6 +333,8 @@ mod tests {
             receipt.failure_class
         );
         assert_eq!(receipt.route, UxRoute::ProviderFix, "ProviderRegression routes to ProviderFix");
+        assert!(receipt.blocking);
+        assert_eq!(receipt.merge_action, "fix_provider");
     }
 
     #[test]
@@ -299,6 +360,8 @@ mod tests {
         let log = "running 5 tests\ntest result: ok. 5 passed; 0 failed";
         let receipt = classify(log, Some("sha7".to_string()));
         assert_eq!(receipt.result, "pass", "log with 'test result: ok' should produce result=pass");
+        assert!(!receipt.blocking);
+        assert_eq!(receipt.merge_action, "merge_allowed");
     }
 
     #[test]

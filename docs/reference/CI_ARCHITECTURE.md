@@ -599,3 +599,25 @@ differing only in `metadata.environment.type` ("local" vs "ci").
 - `xtask/src/tasks/gates.rs` — gate runner with receipt emission
 - `xtask/src/tasks/queue_reconciler.rs` — reconciler that grounds `ci-green` in live state (planned; tracked in #7085)
 - Issue #7072 — merge queue implementation (enables `merge_group` trigger)
+
+## UX Regression pre-merge behavior
+
+The `UX Regression Tests` lane is merge-blocking. It always emits:
+
+- `target/receipts/ux-regression.log`
+- `target/receipts/ux-regression.json`
+
+The JSON receipt classifies the first observed failure and provides repro commands.
+Classification improves routing and triage only; it does not convert failing UX runs into a pass.
+
+| Failure class | Route | Expected action |
+| --- | --- | --- |
+| `provider_regression` | `provider_fix` | Fix LSP/provider behavior before merge |
+| `test_race` | `test_fix` | Stabilize or quarantine with tracked issue |
+| `matrix_drift` | `fixture_update` | Update fixture matrix |
+| `baseline_drift` | `baseline_update` | Regenerate accepted baseline |
+| `timeout` | `timeout_triage` | Separate CI slowness from product regression |
+| `infra` | `ci_investigation` | Fix CI/harness infra |
+| `server_crash` | `crash_fix` | Fix server crash before merge |
+| `new_test_bug` | `test_fix` | Fix test logic and keep lane blocking |
+| `unknown` | `triage` | Inspect log and add classifier coverage |
