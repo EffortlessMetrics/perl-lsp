@@ -108,3 +108,46 @@ my ($lhs, $rhs) = ('left', 'right') =~ /(left).*(right)/;
     fs::remove_dir_all(&dir)?;
     Ok(())
 }
+
+#[test]
+fn bdd_given_mixed_visible_and_hidden_files_when_parse_dir_then_only_visible_sections_are_sorted()
+-> Result<(), Box<dyn Error>> {
+    // Given: one visible corpus file plus hidden/private files in the same tree.
+    let dir = scenario_temp_dir("perl_corpus_bdd_visibility");
+    let visible = r#"==========================================
+Visible section
+==========================================
+# @id: b.visible
+# @tags: regex
+my $line = "visible";
+"#;
+    let hidden = r#"==========================================
+Hidden section
+==========================================
+# @id: a.hidden
+# @tags: regex
+my $line = "hidden";
+"#;
+    let private = r#"==========================================
+Private section
+==========================================
+# @id: c.private
+# @tags: regex
+my $line = "private";
+"#;
+
+    must(write_corpus_file(&dir, "z_visible.txt", visible));
+    must(write_corpus_file(&dir, ".hidden.txt", hidden));
+    must(write_corpus_file(&dir, "_private.txt", private));
+
+    // When: parsing the directory.
+    let sections = must(parse_dir(&dir));
+
+    // Then: only the visible file contributes sections and results remain sorted.
+    assert_eq!(sections.len(), 1);
+    assert_eq!(sections[0].id, "b.visible");
+    assert!(sections[0].file.ends_with("z_visible.txt"));
+
+    fs::remove_dir_all(&dir)?;
+    Ok(())
+}
