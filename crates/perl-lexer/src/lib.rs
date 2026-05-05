@@ -2868,7 +2868,8 @@ impl<'a> PerlLexer<'a> {
         start: usize,
         delimiter: char,
     ) -> Option<Token> {
-        self.read_delimited_body(delimiter);
+        let (_pattern, pattern_closed) = self.read_delimited_body(delimiter);
+        let mut replacement_closed = true;
 
         let pattern_is_paired = quote_handler::paired_close(delimiter).is_some();
         if pattern_is_paired {
@@ -2880,10 +2881,12 @@ impl<'a> PerlLexer<'a> {
                 && Self::is_quote_delim(repl_delim)
             {
                 self.advance();
-                self.read_delimited_body(repl_delim);
+                let (_, closed) = self.read_delimited_body(repl_delim);
+                replacement_closed = closed;
             }
         } else {
-            self.read_delimited_body(delimiter);
+            let (_, closed) = self.read_delimited_body(delimiter);
+            replacement_closed = closed;
         }
 
         // Parse modifiers - include all alphanumeric for proper validation in parser (MUT_005 fix)
@@ -2897,6 +2900,18 @@ impl<'a> PerlLexer<'a> {
 
         let text = &self.input[start..self.position];
         self.mode = LexerMode::ExpectOperator;
+
+        if !pattern_closed || !replacement_closed {
+            return Some(Token {
+                token_type: TokenType::Error(Arc::from(format!(
+                    "unclosed substitution delimiter '{}'",
+                    delimiter
+                ))),
+                text: Arc::from(text),
+                start,
+                end: self.position,
+            });
+        }
 
         Some(Token {
             token_type: TokenType::Substitution,
@@ -2922,7 +2937,8 @@ impl<'a> PerlLexer<'a> {
         start: usize,
         delimiter: char,
     ) -> Option<Token> {
-        self.read_delimited_body(delimiter);
+        let (_search, search_closed) = self.read_delimited_body(delimiter);
+        let mut replacement_closed = true;
 
         let search_is_paired = quote_handler::paired_close(delimiter).is_some();
         if search_is_paired {
@@ -2934,10 +2950,12 @@ impl<'a> PerlLexer<'a> {
                 && Self::is_quote_delim(repl_delim)
             {
                 self.advance();
-                self.read_delimited_body(repl_delim);
+                let (_, closed) = self.read_delimited_body(repl_delim);
+                replacement_closed = closed;
             }
         } else {
-            self.read_delimited_body(delimiter);
+            let (_, closed) = self.read_delimited_body(delimiter);
+            replacement_closed = closed;
         }
 
         // Parse modifiers - include all alphanumeric for proper validation in parser (MUT_005 fix)
@@ -2951,6 +2969,18 @@ impl<'a> PerlLexer<'a> {
 
         let text = &self.input[start..self.position];
         self.mode = LexerMode::ExpectOperator;
+
+        if !search_closed || !replacement_closed {
+            return Some(Token {
+                token_type: TokenType::Error(Arc::from(format!(
+                    "unclosed transliteration delimiter '{}'",
+                    delimiter
+                ))),
+                text: Arc::from(text),
+                start,
+                end: self.position,
+            });
+        }
 
         Some(Token {
             token_type: TokenType::Transliteration,

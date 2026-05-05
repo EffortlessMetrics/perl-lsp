@@ -32,6 +32,10 @@ fn first_significant(input: &str) -> Option<perl_lexer::Token> {
     significant(input).into_iter().next()
 }
 
+fn first_error(input: &str) -> Option<perl_lexer::Token> {
+    tokens(input).into_iter().find(|token| matches!(token.token_type, TokenType::Error(_)))
+}
+
 /// Assert that every token span is within the input and the lexer terminates.
 fn assert_terminates(input: &str) {
     let toks = tokens(input);
@@ -717,6 +721,40 @@ fn malformed_quote_like_constructs_do_not_panic() -> R {
     for case in cases {
         assert_terminates(case);
     }
+    Ok(())
+}
+
+#[test]
+fn malformed_quote_like_constructs_report_unclosed_diagnostic() -> R {
+    let cases = [
+        "qq{hello;",
+        "q{hello;",
+        "qx{cmd;",
+        "qr{pat;",
+        "s{a}{",
+        "tr{a}{",
+        "q/hello;",
+        "qq[hello;",
+        "qx(hello;",
+        "qr<hello;",
+        "q#hello;",
+    ];
+
+    for case in cases {
+        let Some(token) = first_error(case) else {
+            return Err(format!("expected error token for malformed quote-like input: {case}").into());
+        };
+        match token.token_type {
+            TokenType::Error(message) => {
+                assert!(
+                    message.contains("unclosed"),
+                    "expected unclosed diagnostic for {case}, got: {message}"
+                );
+            }
+            _ => unreachable!(),
+        }
+    }
+
     Ok(())
 }
 
