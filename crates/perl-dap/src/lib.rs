@@ -17,7 +17,7 @@
 //!
 //! # Quick Start
 //!
-//! ## Bridge Mode (Phase 1 - Implemented)
+//! ## Bridge Mode (Legacy Compatibility Layer)
 //!
 //! The bridge adapter proxies DAP messages to Perl::LanguageServer:
 //!
@@ -103,45 +103,31 @@
 //!
 //! # Architecture
 //!
-//! The DAP adapter follows a phased implementation approach:
+//! The DAP adapter uses a native-first architecture with an optional legacy bridge path:
 //!
-//! ## Phase 1: Bridge Adapter (Implemented)
+//! ## Native Adapter (Current Default)
 //!
-//! **Acceptance Criteria: AC1-AC4**
+//! The native adapter is production-ready and is the default runtime path. It
+//! provides launch/attach, breakpoint management, stepping, stack traces,
+//! scopes/variables, evaluate, and exception breakpoint support through
+//! [`DapServer`], [`DapDispatcher`], and [`DebugAdapter`].
 //!
-//! - **[`BridgeAdapter`]**: Message proxy between VSCode and Perl::LanguageServer
-//! - **[`LaunchConfiguration`]**: Launch debugging configuration and validation
-//! - **[`AttachConfiguration`]**: Attach debugging configuration for TCP connections
-//! - **[`platform`]**: Cross-platform path resolution and environment setup
+//! ## TCP Attach
 //!
-//! Phase 1 provides immediate debugging support by bridging to the mature
-//! Perl::LanguageServer implementation while the native adapter is developed.
+//! Attach sessions connect the native adapter to a debugger endpoint over TCP.
+//! This supports local loopback and remote-style topologies where the editor
+//! talks to `perl-dap`, and `perl-dap` attaches to a debugger socket.
 //!
-//! ## Phase 2: Native Adapter (Planned)
+//! ## Bridge Adapter (Migration/Compatibility)
 //!
-//! **Acceptance Criteria: AC5-AC12**
+//! [`BridgeAdapter`] remains available as a compatibility and migration path
+//! for environments that still rely on `Perl::LanguageServer`.
 //!
-//! - **[`protocol`]**: DAP protocol types and message definitions
-//! - **[`dispatcher`]**: Request routing and method dispatch
-//! - **[`breakpoints`]**: Breakpoint management with AST validation
-//! - **Session Management**: Debug session lifecycle and state tracking
-//! - **Variable Renderer**: Lazy variable expansion for complex data structures
-//! - **Stack Trace Provider**: Call stack navigation with source mapping
-//! - **Control Flow**: Step, continue, pause, and breakpoint control
-//! - **Safe Evaluation**: Expression evaluation in debug context
+//! ## Platform + Validation Layers
 //!
-//! Phase 2 will provide a native Rust DAP implementation with tighter integration
-//! to `perl_parser` for enhanced validation and performance.
-//!
-//! ## Phase 3: Production Hardening (Planned)
-//!
-//! **Acceptance Criteria: AC13-AC19**
-//!
-//! - **Security Validation**: Input sanitization and command injection prevention
-//! - **Performance Optimization**: Efficient variable inspection and stepping
-//! - **Packaging**: Distribution via cargo, VSCode marketplace, and package managers
-//! - **Documentation**: Comprehensive usage guides and troubleshooting
-//! - **Testing**: End-to-end integration tests with real debugging scenarios
+//! - **[`platform`]** handles Perl discovery and cross-platform path behavior
+//! - **[`breakpoints`]** validates source breakpoint placement against parsed code
+//! - **Configuration helpers** generate launch/attach snippets for editors
 //!
 //! # Protocol Support
 //!

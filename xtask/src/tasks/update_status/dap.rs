@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::Path;
 
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, eyre};
 use serde::Deserialize;
 
 use super::replace_block;
@@ -74,6 +74,12 @@ pub(super) fn count_dap_tests(root: &Path) -> DapTestCounts {
         .unwrap_or(0);
 
     DapTestCounts { integration_test_targets, scorecard_fixtures }
+}
+
+fn require_receipt_for_release() -> bool {
+    std::env::var("PERL_LSP_DAP_RECEIPT_REQUIRED")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
 }
 
 fn read_receipt(root: &Path) -> Option<ScorecardReceipt> {
@@ -186,6 +192,11 @@ pub(super) fn generate_dap_status(
     );
 
     let receipt = read_receipt(root);
+    if receipt.is_none() && require_receipt_for_release() {
+        return Err(eyre!(
+            "missing DAP scorecard receipt at {RECEIPT_PATH}; run `cargo test -p perl-dap --test dap_scorecard_harness -- --nocapture` before `cargo xtask update-status --only dap`"
+        ));
+    }
     let launch_table = launch_table_from_receipt(receipt.as_ref());
     let session_table = session_table_from_receipt(receipt.as_ref());
 
@@ -226,8 +237,8 @@ mod tests {
             counts.integration_test_targets
         );
         assert_eq!(
-            counts.scorecard_fixtures, 5,
-            "expected 5 scorecard fixtures (hello, loops, eval, args, breakpoints_begin_end), got {}",
+            counts.scorecard_fixtures, 6,
+            "expected 6 scorecard fixtures in crates/perl-dap/tests/fixtures, got {}",
             counts.scorecard_fixtures
         );
         Ok(())
