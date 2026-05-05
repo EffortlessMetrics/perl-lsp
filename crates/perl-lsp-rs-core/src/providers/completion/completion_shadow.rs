@@ -1217,9 +1217,40 @@ mod tests {
     }
 
     #[test]
+    fn rank_external_high_confidence_is_medium() -> Result<(), Box<dyn std::error::Error>> {
+        let sym = make_visible("external", VisibleSymbolSource::External, Confidence::High);
+        let ranked = rank_visible_symbol(sym);
+        assert_eq!(ranked.tier, CompletionRankTier::Medium);
+        Ok(())
+    }
+
+    #[test]
     fn rank_tier_ordering() -> Result<(), Box<dyn std::error::Error>> {
         assert!(CompletionRankTier::High < CompletionRankTier::Medium);
         assert!(CompletionRankTier::Medium < CompletionRankTier::Low);
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_sorts_symbols_by_tier_source_confidence_then_name()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let queries = StubSemanticQueries {
+            visible_result: vec![
+                make_visible("zlex", VisibleSymbolSource::LocalLexical, Confidence::Medium),
+                make_visible("bext", VisibleSymbolSource::External, Confidence::High),
+                make_visible("adyn", VisibleSymbolSource::DynamicUnknown, Confidence::High),
+                make_visible("alex", VisibleSymbolSource::LocalLexical, Confidence::High),
+                make_visible("aext", VisibleSymbolSource::External, Confidence::High),
+            ],
+        };
+
+        let outcome = completion_visibility_cutover(vec![], &queries, FileId(1), 10, None, "test");
+        let CompletionCutoverResult::Semantic(ranked) = outcome.result else {
+            return Err("expected semantic completion result".into());
+        };
+
+        let ordered_names: Vec<&str> = ranked.iter().map(|r| r.symbol.name.as_str()).collect();
+        assert_eq!(ordered_names, vec!["alex", "zlex", "aext", "bext", "adyn"]);
         Ok(())
     }
 
