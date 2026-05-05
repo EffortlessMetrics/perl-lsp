@@ -1,4 +1,4 @@
-use crate::metadata::Section;
+use crate::metadata::{ExpectedBlock, ExpectedFormat, IdSource, Section};
 use crate::metadata::ids::{make_section_id, slugify_title};
 use regex::Regex;
 use std::collections::HashMap;
@@ -82,13 +82,16 @@ pub fn parse_sections(text: &str, path: &Path) -> Vec<Section> {
             }
         }
 
+        let explicit_id = meta.get("id").cloned().filter(|id| !id.trim().is_empty());
         let id = make_section_id(
-            &meta.get("id").cloned().unwrap_or_default(),
+            &explicit_id.clone().unwrap_or_default(),
             &file_stem,
             &title,
             section_index,
             &mut auto_ids,
         );
+        let id_source = if explicit_id.is_some() { IdSource::Explicit } else { IdSource::Generated };
+        let generated_id = (id_source == IdSource::Generated).then(|| id.clone());
         let tags = meta
             .get("tags")
             .map(|s| {
@@ -107,20 +110,70 @@ pub fn parse_sections(text: &str, path: &Path) -> Vec<Section> {
         let body_end =
             body_lines.iter().position(|line| line.trim() == "---").unwrap_or(body_lines.len());
         let body = body_lines[..body_end].join("\n").trim().to_string();
+        let expected = if body_end < body_lines.len() {
+            let raw = body_lines[body_end + 1..].join("\n").trim().to_string();
+            (!raw.is_empty()).then(|| ExpectedBlock { format: detect_expected_format(&raw), raw })
+        } else {
+            None
+        };
         let line_num = text[..start].lines().count() + 1;
         let file_name = path.file_name().unwrap_or_default();
 
         sections.push(Section {
             id,
+            id_source,
+            explicit_id,
+            generated_id,
             title,
             file: file_name.to_string_lossy().into(),
             tags,
             perl,
             flags,
             body,
+            expected,
             line: Some(line_num),
         });
     }
 
     sections
+}
+
+fn detect_expected_format(raw: &str) -> ExpectedFormat {
+    let trimmed = raw.trim();
+    if trimmed.starts_with('(') {
+        return ExpectedFormat::TreeSitterSexp;
+    }
+    if trimmed.starts_with('{') || trimmed.starts_with('[') {
+        if trimmed.contains("\"diagnostic") || trimmed.contains("\"severity\"") {
+            return ExpectedFormat::DiagnosticsJson;
+        }
+        return ExpectedFormat::AstJson;
+    }
+    if trimmed.is_empty() {
+        return ExpectedFormat::Unknown;
+    }
+    ExpectedFormat::PlainText
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn parse_sections_tracks_generated_id_and_expected_block() {
+        let text = "=====\nSample\n=====\nmy $x = 1;\n---\n{\"diagnostics\":[]}\n";
+        let sections = parse_sections(text, Path::new("sample.txt"));
+        assert_eq!(sections.len(), 1);
+        let section = &sections[0];
+        assert_eq!(section.id_source, IdSource::Generated);
+        assert!(section.explicit_id.is_none());
+        assert!(section.generated_id.is_some());
+        assert_eq!(section.body, "my $x = 1;");
+        assert_eq!(section.expected.as_ref().map(|e| e.raw.as_str()), Some("{\"diagnostics\":[]}"));
+        assert_eq!(
+            section.expected.as_ref().map(|e| e.format),
+            Some(ExpectedFormat::DiagnosticsJson)
+        );
+    }
 }
