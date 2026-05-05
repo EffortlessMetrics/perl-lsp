@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "crate_group": "parser",
+  "line_coverage_floor": 0.58,
+  "branch_coverage_floor": 0.40,
+  "tolerance_pct": 0.50,
+  "critical_files": {
+    "crates/perl-parser-core/src/engine/parser/statements.rs": {
+      "branch_coverage_floor": 0.70
+    },
+    "crates/perl-parser-core/src/syntax/heredoc.rs": {
+      "branch_coverage_floor": 0.75
+    }
+  }
+}

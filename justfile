@@ -1863,6 +1863,17 @@ coverage-lcov:
         --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-c/'
     @echo "✅ Coverage: lcov.info"
 
+
+# Parser-focused branch coverage snapshot (perl-parser + perl-parser-core).
+# Writes target/coverage/parser.lcov when cargo-llvm-cov is available.
+# CI-safe: exits successfully with guidance when cargo-llvm-cov is not installed.
+coverage-parser:
+    @echo "📊 Generating parser coverage snapshot (branch + lcov)..."
+    @if [[ ! -x "$HOME/.cargo/bin/cargo-llvm-cov" ]]; then         echo "⚠️  cargo-llvm-cov is not installed; skipping execution.";         echo "   Install with: rustup run nightly cargo install cargo-llvm-cov --locked";         echo "   Then run: just coverage-parser";         exit 0;     fi
+    @mkdir -p target/coverage
+    @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov         -p perl-parser         -p perl-parser-core         --all-features         --locked         --branch         --lcov         --output-path target/coverage/parser.lcov
+    @echo "✅ Parser coverage: target/coverage/parser.lcov"
+
 # Show coverage summary (terminal)
 coverage-summary:
     @echo "📊 Coverage Summary"
