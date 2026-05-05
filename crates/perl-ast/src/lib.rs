@@ -8,7 +8,7 @@
 //! # Modules
 //!
 //! - [`ast`] -- The primary AST used by the current recursive-descent parser.
-//! - [`v2`] -- Experimental second-generation AST with full position tracking
+//! - [`v2`] -- Experimental second-generation AST re-exported from `perl-ast-v2`
 //!   for incremental parsing.
 //!
 //! # Quick start
