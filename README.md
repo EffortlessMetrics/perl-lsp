@@ -87,7 +87,7 @@ The v0.13 architecture collapsed the old microcrate graph into a smaller publish
 | Parser engine | `perl-parser-core` |
 | Lexer | `perl-lexer` |
 | Semantic analysis | `perl-semantic-analyzer` |
-| Workspace index | `perl-workspace-index` |
+| Workspace index | `perl-workspace` |
 | Diagnostics catalog | `perl-diagnostics` |
 | Debug adapter | `perl-dap` |
 | Tree-sitter integration | `tree-sitter-perl-rs`, `tree-sitter-perl-c` |

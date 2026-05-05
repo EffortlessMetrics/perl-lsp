@@ -1374,6 +1374,12 @@ ci-docs-check:
     @echo "📝 Checking missing docs baseline..."
     @cargo xtask ci-hygiene check-missing-docs
     @echo "✅ Missing docs check passed"
+    @echo "🧹 Checking stale crate-name references in public docs..."
+    @if rg -n "`perl-workspace-index`" README.md crates/perl-workspace/README.md docs/project/status/workspace.md; then \
+        echo "❌ Found stale perl-workspace-index references in public docs"; \
+        exit 1; \
+    fi
+    @echo "✅ Public crate-name docs check passed"
 
 # Policy and governance checks
 ci-policy:
