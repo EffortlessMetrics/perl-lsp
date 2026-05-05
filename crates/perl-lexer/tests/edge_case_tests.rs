@@ -720,6 +720,43 @@ fn malformed_quote_like_constructs_do_not_panic() -> R {
     Ok(())
 }
 
+#[test]
+fn malformed_quote_like_reports_unclosed_error() -> R {
+    let cases = [
+        "qq{hello;",
+        "q{hello;",
+        "qx{cmd;",
+        "qr{pat;",
+        "s{a}{",
+        "tr{a}{",
+        "qq/hello;",
+        "qq[hello;",
+        "qq(hello;",
+        "qq<hello;",
+        "qq#hello;",
+    ];
+
+    for input in cases {
+        let first = first_significant(input).ok_or("no token")?;
+        match &first.token_type {
+            TokenType::Error(message) => {
+                assert!(
+                    message.contains("unclosed"),
+                    "Expected unclosed diagnostic for {input:?}, got {message:?}"
+                );
+            }
+            other => {
+                return Err(format!(
+                    "Expected TokenType::Error for malformed quote-like {input:?}, got {other:?}"
+                )
+                .into());
+            }
+        }
+    }
+
+    Ok(())
+}
+
 // ===========================================================================
 // 4. Special variables
 // ===========================================================================
