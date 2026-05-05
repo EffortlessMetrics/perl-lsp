@@ -93,6 +93,43 @@ fn when_hash_uses_fat_comma_pairs_then_parser_keeps_hash_assignment_structure() 
 }
 
 #[test]
+fn when_hash_uses_mixed_fat_comma_key_forms_then_assignment_shape_is_preserved() {
+    let sexp = parse_to_sexp("%hash = ('a' => 1, b => 2, \"c\" => 3);");
+
+    assert!(
+        sexp.contains("(assignment (hash_variable %hash) (=)")
+            && sexp.contains("(string_literal 'a')")
+            && sexp.contains("(identifier b )")
+            && sexp.contains("(string_literal c)"),
+        "expected mixed fat-comma key forms to remain in assignment shape; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_hash_assignment_contains_trailing_comma_then_parse_stays_successful() {
+    let sexp = parse_to_sexp("%hash = (a => 1, b => 2,);");
+
+    assert!(
+        sexp.contains("(assignment (hash_variable %hash) (=)")
+            && sexp.contains("(identifier a )")
+            && sexp.contains("(identifier b )"),
+        "expected trailing-comma hash assignment to parse; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_percent_scalar_is_assigned_percent_string_then_assignment_stays_distinct() {
+    let sexp = parse_to_sexp("my $fmt = \"%\";");
+
+    assert!(
+        sexp.contains("(variable_declaration")
+            && sexp.contains("$fmt")
+            && sexp.contains("(string_literal %)"),
+        "expected percent string assignment to remain a string literal; got: {sexp}"
+    );
+}
+
+#[test]
 fn when_given_when_has_default_clause_then_parser_emits_given_shape() {
     let sexp = parse_to_sexp(
         r#"
