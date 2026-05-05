@@ -859,6 +859,15 @@ mod tests {
     }
 
     #[test]
+    fn source_path_from_uri_accepts_local_file_uris() {
+        let from_file_uri = source_path_from_uri("file:///tmp/from-uri.pl");
+        assert!(from_file_uri.is_some_and(|path| path.ends_with("from-uri.pl")));
+
+        let from_localhost_uri = source_path_from_uri("file://localhost/tmp/localhost.pl");
+        assert!(from_localhost_uri.is_some_and(|path| path.ends_with("localhost.pl")));
+    }
+
+    #[test]
     fn source_path_from_uri_rejects_relative_filesystem_paths() {
         assert_eq!(source_path_from_uri("lib/Foo.pm"), None);
     }

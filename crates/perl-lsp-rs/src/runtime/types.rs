@@ -1,28 +1,9 @@
 use super::workspace_folder::WorkspaceFolderState;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
-use url::Url;
 
 pub(super) fn source_path_from_uri(uri: &str) -> Option<PathBuf> {
-    // On Windows, filesystem paths like `C:\file` can be misparsed by Url::parse()
-    // as having scheme `C`. Check for Windows drive letters first.
-    // Drive letter pattern: exactly one letter, followed by `:`, not followed by `//` (which would be a URL).
-    if uri.len() > 2 && uri.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
-        if uri.chars().nth(1) == Some(':') && !uri.starts_with("file://") {
-            // Looks like a Windows path (e.g., `C:\...`). Try to parse as path, not URL.
-            let path = Path::new(uri);
-            if path.is_absolute() {
-                return Some(path.to_path_buf());
-            }
-        }
-    }
-
-    if let Ok(value) = Url::parse(uri) {
-        return if value.scheme() == "file" { value.to_file_path().ok() } else { None };
-    }
-
-    let path = Path::new(uri);
-    if path.is_absolute() { Some(path.to_path_buf()) } else { None }
+    perl_uri::source_path_from_uri_or_path(uri)
 }
 
 pub(super) fn workspace_folder_path(folder: &WorkspaceFolderState) -> Option<PathBuf> {
