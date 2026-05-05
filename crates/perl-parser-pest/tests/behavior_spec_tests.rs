@@ -93,6 +93,42 @@ fn when_hash_uses_fat_comma_pairs_then_parser_keeps_hash_assignment_structure() 
 }
 
 #[test]
+fn when_hash_uses_quoted_fat_comma_keys_then_parser_preserves_key_shape() {
+    let sexp = parse_to_sexp(r#"%hash = ("alpha" => 1, "beta" => 2);"#);
+
+    assert!(
+        sexp.contains("(assignment (hash_variable %hash) (=)")
+            && sexp.contains("(string_literal alpha)")
+            && sexp.contains("(string_literal beta)"),
+        "expected quoted fat-comma key assignment; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_hash_uses_bareword_and_string_mix_then_parser_accepts_assignment() {
+    let sexp = parse_to_sexp(r#"%hash = (kind => "x", "mode" => "y");"#);
+
+    assert!(
+        sexp.contains("(assignment (hash_variable %hash) (=)")
+            && sexp.contains("(identifier kind )")
+            && sexp.contains("(string_literal mode)"),
+        "expected mixed key styles in hash fat-comma assignment; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_percent_scalar_string_assignment_is_reassigned_then_parser_keeps_assignment_shape() {
+    let sexp = parse_to_sexp(r#"my $v = "%"; $v = "%";"#);
+
+    assert!(
+        sexp.contains("(variable_declaration")
+            && sexp.contains("(assignment")
+            && sexp.contains("(string_literal %)"),
+        "expected percent-string assignment and reassignment to parse; got: {sexp}"
+    );
+}
+
+#[test]
 fn when_given_when_has_default_clause_then_parser_emits_given_shape() {
     let sexp = parse_to_sexp(
         r#"
