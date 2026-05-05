@@ -85,14 +85,44 @@ pub struct DeadCodeStats {
     pub unreachable_statements: usize,
     /// Number of dead conditional branches
     pub dead_branches: usize,
+    /// Number of unused imports detected
+    pub unused_imports: usize,
+    /// Number of unused exports detected
+    pub unused_exports: usize,
     /// Total lines of dead code identified
     pub total_dead_lines: usize,
+}
+
+/// Dead code detector
+pub struct DeadCodeConfig {
+    pub min_confidence: f32,
+    pub include_unreachable: bool,
+    pub include_unused_symbols: bool,
+    pub include_unused_imports: bool,
+    pub include_unused_exports: bool,
+    pub entry_points: Vec<PathBuf>,
+    pub public_api_patterns: Vec<String>,
+}
+
+impl Default for DeadCodeConfig {
+    fn default() -> Self {
+        Self {
+            min_confidence: 0.0,
+            include_unreachable: true,
+            include_unused_symbols: true,
+            include_unused_imports: true,
+            include_unused_exports: true,
+            entry_points: Vec::new(),
+            public_api_patterns: Vec::new(),
+        }
+    }
 }
 
 /// Dead code detector
 pub struct DeadCodeDetector {
     workspace_index: WorkspaceIndex,
     entry_points: HashSet<PathBuf>,
+    config: DeadCodeConfig,
 }
 
 impl DeadCodeDetector {
@@ -101,12 +131,22 @@ impl DeadCodeDetector {
     /// # Arguments
     /// * `workspace_index` - Indexed workspace containing symbol definitions and references
     pub fn new(workspace_index: WorkspaceIndex) -> Self {
-        Self { workspace_index, entry_points: HashSet::new() }
+        Self::with_config(workspace_index, DeadCodeConfig::default())
+    }
+
+    /// Create a dead code detector with explicit configuration.
+    pub fn with_config(workspace_index: WorkspaceIndex, config: DeadCodeConfig) -> Self {
+        let mut entry_points = HashSet::new();
+        for entry in &config.entry_points {
+            entry_points.insert(entry.clone());
+        }
+        Self { workspace_index, entry_points, config }
     }
 
     /// Add an entry point (main script)
     pub fn add_entry_point(&mut self, path: PathBuf) {
-        self.entry_points.insert(path);
+        self.entry_points.insert(path.clone());
+        self.config.entry_points.push(path);
     }
 
     /// Analyze a single file for dead code
@@ -119,34 +159,62 @@ impl DeadCodeDetector {
             .ok_or_else(|| "file not indexed".to_string())?;
 
         let mut dead = Vec::new();
-        let mut terminator: Option<(usize, String)> = None;
+        let mut brace_depth: usize = 0;
+        let mut block_terminator: Option<(usize, String, usize)> = None;
 
         for (i, line) in text.lines().enumerate() {
+            let line_no = i + 1;
             let trimmed = line.trim();
-            if let Some((term_line, term_kw)) = &terminator {
-                if !trimmed.is_empty() {
+
+            if let Some((term_line, term_kw, term_depth)) = &block_terminator {
+                if brace_depth == *term_depth
+                    && !trimmed.is_empty()
+                    && trimmed != "}"
+                    && !trimmed.starts_with('#')
+                {
+                    let start_line = line_no;
+                    let mut end_line = line_no;
+                    for (j, next_line) in text.lines().enumerate().skip(i + 1) {
+                        let next_trimmed = next_line.trim();
+                        if next_trimmed == "}" {
+                            end_line = j;
+                            break;
+                        }
+                        if !next_trimmed.is_empty() && !next_trimmed.starts_with('#') {
+                            end_line = j + 1;
+                        }
+                    }
                     dead.push(DeadCode {
                         code_type: DeadCodeType::UnreachableCode,
                         name: None,
                         file_path: file_path.to_path_buf(),
-                        start_line: i + 1,
-                        end_line: i + 1,
+                        start_line,
+                        end_line,
                         reason: format!(
                             "Code is unreachable after `{}` on line {}",
                             term_kw, term_line
                         ),
-                        confidence: 0.5,
+                        confidence: 0.9,
                         suggestion: Some("Remove or restructure this code".to_string()),
                     });
                     break;
                 }
-            }
-
-            if ["return", "die", "exit"].iter().any(|kw| trimmed.starts_with(kw)) {
-                if let Some(first_word) = trimmed.split_whitespace().next() {
-                    terminator = Some((i + 1, first_word.to_string()));
+                if brace_depth < *term_depth {
+                    block_terminator = None;
                 }
             }
+
+            if ["return", "die", "exit", "goto", "last", "next", "redo"]
+                .iter()
+                .any(|kw| trimmed.starts_with(kw))
+            {
+                if let Some(first_word) = trimmed.split_whitespace().next() {
+                    block_terminator = Some((line_no, first_word.to_string(), brace_depth));
+                }
+            }
+
+            brace_depth += line.chars().filter(|&c| c == '{').count();
+            brace_depth = brace_depth.saturating_sub(line.chars().filter(|&c| c == '}').count());
         }
 
         // Dead branch detection: scan for constant-condition patterns.
@@ -166,34 +234,51 @@ impl DeadCodeDetector {
             total_lines += doc.text.lines().count();
             if let Some(path) = uri_to_fs_path(&doc.uri) {
                 if let Ok(mut file_dead) = self.analyze_file(&path) {
-                    dead_code.append(&mut file_dead);
+                    if self.config.include_unreachable {
+                        dead_code.append(&mut file_dead);
+                    }
                 }
             }
         }
 
         // Unused symbols across workspace
-        for sym in self.workspace_index.find_unused_symbols() {
-            let code_type = match sym.kind {
-                SymbolKind::Subroutine => DeadCodeType::UnusedSubroutine,
-                SymbolKind::Variable(_) => DeadCodeType::UnusedVariable,
-                SymbolKind::Constant => DeadCodeType::UnusedConstant,
-                SymbolKind::Package => DeadCodeType::UnusedPackage,
-                _ => continue,
-            };
+        if self.config.include_unused_symbols {
+            for sym in self.workspace_index.find_unused_symbols() {
+                let code_type = match sym.kind {
+                    SymbolKind::Subroutine => DeadCodeType::UnusedSubroutine,
+                    SymbolKind::Variable(_) => DeadCodeType::UnusedVariable,
+                    SymbolKind::Constant => DeadCodeType::UnusedConstant,
+                    SymbolKind::Package => DeadCodeType::UnusedPackage,
+                    _ => continue,
+                };
 
-            let file_path = uri_to_fs_path(&sym.uri).unwrap_or_else(|| PathBuf::from(&sym.uri));
+                let file_path = uri_to_fs_path(&sym.uri).unwrap_or_else(|| PathBuf::from(&sym.uri));
 
-            dead_code.push(DeadCode {
-                code_type,
-                name: Some(sym.name.clone()),
-                file_path,
-                start_line: sym.range.start.line as usize + 1,
-                end_line: sym.range.end.line as usize + 1,
-                reason: "Symbol is never used".to_string(),
-                confidence: 0.9,
-                suggestion: Some("Remove or use this symbol".to_string()),
-            });
+                dead_code.push(DeadCode {
+                    code_type,
+                    name: Some(sym.name.clone()),
+                    file_path,
+                    start_line: sym.range.start.line as usize + 1,
+                    end_line: sym.range.end.line as usize + 1,
+                    reason: "Symbol is never used".to_string(),
+                    confidence: 0.9,
+                    suggestion: Some("Remove or use this symbol".to_string()),
+                });
+            }
         }
+
+        dead_code.retain(|item| item.confidence >= self.config.min_confidence);
+        dead_code.sort_by(|a, b| {
+            a.file_path
+                .cmp(&b.file_path)
+                .then(a.start_line.cmp(&b.start_line))
+                .then_with(|| {
+                    let ak = format!("{:?}", a.code_type);
+                    let bk = format!("{:?}", b.code_type);
+                    ak.cmp(&bk)
+                })
+                .then_with(|| a.name.as_deref().unwrap_or("").cmp(b.name.as_deref().unwrap_or("")))
+        });
 
         // Compute stats
         let mut stats = DeadCodeStats::default();
