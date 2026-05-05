@@ -5,7 +5,7 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PragmaQueryCursor, PragmaState, PragmaTracker};
+use perl_pragma::{CompileTimePragmaEnvironment, PragmaQueryCursor, PragmaState, PragmaTracker};
 
 fn loc(start: usize, end: usize) -> SourceLocation {
     SourceLocation { start, end }
@@ -373,6 +373,29 @@ fn given_monotonic_lookups_when_using_cursor_then_states_match_offset_queries() 
     assert_eq!(s3, PragmaTracker::state_for_offset(&map, 50));
 }
 
+#[test]
+fn given_explicit_pragma_map_when_using_cursor_then_states_match_map_queries() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &["refs"], 20, 36)], 18, 40),
+        use_node("warnings", &[], 42, 57),
+    ]);
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let map = environment.map();
+
+    let mut cursor = map.cursor();
+    let s1 = cursor.state_at(map, 8);
+    let s2 = cursor.state_at(map, 30);
+    let s3 = cursor.state_at(map, 50);
+
+    assert_eq!(s1, map.state_at(8));
+    assert_eq!(s2, map.state_at(30));
+    assert_eq!(s3, map.state_at(50));
+
+    let backward = cursor.snapshot_at(map, 8);
+    assert_eq!(backward, environment.snapshot_at(8));
+}
+
 /// The cursor's fallback to binary search must produce the same result as the
 /// static `state_for_offset` when called with a backward (decreasing) offset.
 /// This is important when a caller (e.g., a diagnostic pass) queries nodes out
@@ -463,4 +486,24 @@ fn given_sub_last_in_file_when_querying_final_state_then_outer_state_is_returned
         final_state.strict_subs,
         "final_state must reflect outer (restored) strict=true after a scoped block"
     );
+}
+
+#[test]
+fn given_scoped_block_when_building_explicit_map_then_restore_point_is_zero_length() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &[], 14, 24)], 13, 25),
+    ]);
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let map = environment.map();
+
+    assert!(
+        map.entries().iter().any(|entry| entry.range.start == 25 && entry.range.end == 25),
+        "lexical scope restore should be recorded as a zero-length transition"
+    );
+
+    let final_state = map.final_state();
+    assert!(final_state.strict_vars);
+    assert!(final_state.strict_subs);
+    assert!(final_state.strict_refs);
 }
