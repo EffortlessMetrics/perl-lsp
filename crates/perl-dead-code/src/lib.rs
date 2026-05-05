@@ -5,6 +5,7 @@
 
 use perl_workspace::workspace_index::{SymbolKind, WorkspaceIndex, fs_path_to_uri, uri_to_fs_path};
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -81,6 +82,10 @@ pub struct DeadCodeStats {
     pub unused_constants: usize,
     /// Number of unused packages detected
     pub unused_packages: usize,
+    /// Number of unused imports detected
+    pub unused_imports: usize,
+    /// Number of unused exports detected
+    pub unused_exports: usize,
     /// Number of unreachable code statements
     pub unreachable_statements: usize,
     /// Number of dead conditional branches
@@ -89,10 +94,36 @@ pub struct DeadCodeStats {
     pub total_dead_lines: usize,
 }
 
+#[derive(Debug, Clone)]
+pub struct DeadCodeConfig {
+    pub min_confidence: f32,
+    pub include_unreachable: bool,
+    pub include_unused_symbols: bool,
+    pub include_unused_imports: bool,
+    pub include_unused_exports: bool,
+    pub entry_points: Vec<PathBuf>,
+    pub public_api_patterns: Vec<String>,
+}
+
+impl Default for DeadCodeConfig {
+    fn default() -> Self {
+        Self {
+            min_confidence: 0.0,
+            include_unreachable: true,
+            include_unused_symbols: true,
+            include_unused_imports: true,
+            include_unused_exports: true,
+            entry_points: Vec::new(),
+            public_api_patterns: Vec::new(),
+        }
+    }
+}
+
 /// Dead code detector
 pub struct DeadCodeDetector {
     workspace_index: WorkspaceIndex,
     entry_points: HashSet<PathBuf>,
+    config: DeadCodeConfig,
 }
 
 impl DeadCodeDetector {
@@ -101,12 +132,21 @@ impl DeadCodeDetector {
     /// # Arguments
     /// * `workspace_index` - Indexed workspace containing symbol definitions and references
     pub fn new(workspace_index: WorkspaceIndex) -> Self {
-        Self { workspace_index, entry_points: HashSet::new() }
+        Self { workspace_index, entry_points: HashSet::new(), config: DeadCodeConfig::default() }
+    }
+
+    /// Create a detector with explicit configuration
+    pub fn with_config(workspace_index: WorkspaceIndex, config: DeadCodeConfig) -> Self {
+        let entry_points = config.entry_points.iter().cloned().collect();
+        Self { workspace_index, entry_points, config }
     }
 
     /// Add an entry point (main script)
     pub fn add_entry_point(&mut self, path: PathBuf) {
-        self.entry_points.insert(path);
+        self.entry_points.insert(path.clone());
+        if !self.config.entry_points.contains(&path) {
+            self.config.entry_points.push(path);
+        }
     }
 
     /// Analyze a single file for dead code
@@ -125,6 +165,7 @@ impl DeadCodeDetector {
             let trimmed = line.trim();
             if let Some((term_line, term_kw)) = &terminator {
                 if !trimmed.is_empty() {
+                    if self.config.include_unreachable {
                     dead.push(DeadCode {
                         code_type: DeadCodeType::UnreachableCode,
                         name: None,
@@ -138,6 +179,7 @@ impl DeadCodeDetector {
                         confidence: 0.5,
                         suggestion: Some("Remove or restructure this code".to_string()),
                     });
+                    }
                     break;
                 }
             }
@@ -172,6 +214,7 @@ impl DeadCodeDetector {
         }
 
         // Unused symbols across workspace
+        if self.config.include_unused_symbols {
         for sym in self.workspace_index.find_unused_symbols() {
             let code_type = match sym.kind {
                 SymbolKind::Subroutine => DeadCodeType::UnusedSubroutine,
@@ -194,6 +237,10 @@ impl DeadCodeDetector {
                 suggestion: Some("Remove or use this symbol".to_string()),
             });
         }
+        }
+
+        dead_code.retain(|item| item.confidence >= self.config.min_confidence);
+        dead_code.sort_by(|a, b| compare_dead_code(a, b));
 
         // Compute stats
         let mut stats = DeadCodeStats::default();
@@ -205,12 +252,21 @@ impl DeadCodeDetector {
                 DeadCodeType::UnusedVariable => stats.unused_variables += 1,
                 DeadCodeType::UnusedConstant => stats.unused_constants += 1,
                 DeadCodeType::UnusedPackage => stats.unused_packages += 1,
+                DeadCodeType::UnusedImport => stats.unused_imports += 1,
+                DeadCodeType::UnusedExport => stats.unused_exports += 1,
                 DeadCodeType::UnreachableCode => stats.unreachable_statements += 1,
                 DeadCodeType::DeadBranch => stats.dead_branches += 1,
-                _ => {}
             }
         }
 
         DeadCodeAnalysis { dead_code, stats, files_analyzed: docs.len(), total_lines }
     }
+}
+
+fn compare_dead_code(a: &DeadCode, b: &DeadCode) -> Ordering {
+    a.file_path
+        .cmp(&b.file_path)
+        .then_with(|| a.start_line.cmp(&b.start_line))
+        .then_with(|| (a.code_type as u8).cmp(&(b.code_type as u8)))
+        .then_with(|| a.name.cmp(&b.name))
 }

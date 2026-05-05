@@ -28,6 +28,7 @@ perl-lexer = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace = { workspace = true }
+perl-dead-code = { workspace = true }
 perl-module = { workspace = true }
 serde = { workspace = true }
 # Dependencies needed for absorbed incremental module

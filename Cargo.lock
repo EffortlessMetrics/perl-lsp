@@ -1741,6 +1741,7 @@ dependencies = [
  "lsp-types",
  "perl-ast",
  "perl-corpus",
+ "perl-dead-code",
  "perl-lexer",
  "perl-line-index",
  "perl-lsp-rs-core",
