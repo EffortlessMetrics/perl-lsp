@@ -16,6 +16,13 @@ use chrono::Utc;
 use color_eyre::eyre::{Context, Result, bail, eyre};
 use perl_lsp_rs_core::providers::completion::CompletionProvider;
 use perl_lsp_rs_core::providers::diagnostics::{Diagnostic, DiagnosticsProvider};
+use perl_lsp_rs_core::providers::navigation::definition_shadow::{
+    DefinitionCutoverResult, goto_definition_cutover,
+};
+use perl_lsp_rs_core::providers::navigation::hover_shadow::{HoverCutoverResult, hover_cutover};
+use perl_lsp_rs_core::providers::navigation::references_shadow::{
+    ReferencesCutoverResult, find_references_cutover,
+};
 use perl_parser::apply_edits;
 use perl_parser::edit::Edit as CoreEdit;
 use perl_parser::incremental_v2::IncrementalParserV2;
@@ -25,6 +32,8 @@ use perl_parser::{
     TokenKind, TokenStream,
 };
 use perl_semantic_facts::{AnchorId, EntityId};
+use perl_workspace::position::Range;
+use perl_workspace::semantic::queries::QueryContext;
 use perl_workspace::workspace::workspace_index::{FileFactShard, WorkspaceIndex};
 use serde::{Deserialize, Serialize};
 
@@ -140,6 +149,8 @@ struct ProviderExpectations {
     method_completion: Vec<MethodCompletionProviderExpectation>,
     #[serde(default)]
     diagnostics: Vec<DiagnosticProviderExpectation>,
+    #[serde(default)]
+    navigation: Vec<NavigationProviderExpectation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -162,6 +173,26 @@ struct DiagnosticProviderExpectation {
     expected_present: bool,
     #[serde(default)]
     dynamic_boundary: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct NavigationProviderExpectation {
+    id: String,
+    symbol: String,
+    #[serde(default)]
+    cursor_marker: Option<String>,
+    #[serde(default)]
+    cursor_symbol: Option<String>,
+    #[serde(default)]
+    expected_document_symbols: Vec<String>,
+    #[serde(default)]
+    expected_definition_span: Option<String>,
+    #[serde(default)]
+    expected_references: Vec<String>,
+    #[serde(default)]
+    unexpected_references: Vec<String>,
+    #[serde(default)]
+    hover_contains: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -786,6 +817,23 @@ struct DiagnosticProviderScore {
     undefined_false_negative_count: u64,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct NavigationProviderScore {
+    document_symbol_expected_count: u64,
+    document_symbol_span_exact_count: u64,
+    goto_definition_expected_count: u64,
+    goto_definition_hit_count: u64,
+    goto_definition_span_exact_count: u64,
+    goto_definition_false_target_count: u64,
+    references_expected_count: u64,
+    references_hit_count: u64,
+    references_returned_count: u64,
+    references_false_positive_count: u64,
+    references_absent_assertion_count: u64,
+    hover_expected_count: u64,
+    hover_origin_correct_count: u64,
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 struct ScaleCostScore {
     fixture_count: u64,
@@ -901,6 +949,7 @@ fn build_artifact(
     let method_completion_provider_score =
         score_method_completion_provider_expectations(root, manifest)?;
     let diagnostic_provider_score = score_diagnostic_provider_expectations(root, manifest)?;
+    let navigation_provider_score = score_navigation_provider_expectations(root, manifest)?;
     let scale_cost_score = score_manifest_scale_cost(root, manifest)?;
     let determinism_score = score_manifest_determinism(root, manifest)?;
     let gold_drift = audit_gold_drift(root, manifest)?;
@@ -922,6 +971,7 @@ fn build_artifact(
     metrics.extend(provider_impact_metrics(
         &method_completion_provider_score,
         &diagnostic_provider_score,
+        &navigation_provider_score,
         cadence,
     ));
     metrics.extend(scale_metrics(&scale_cost_score, cadence));
@@ -1911,6 +1961,332 @@ fn score_diagnostic_expectation(
             score.undefined_false_positive_count += 1;
         }
     }
+}
+
+fn score_navigation_provider_expectations(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+) -> Result<NavigationProviderScore> {
+    let mut score = NavigationProviderScore::default();
+
+    for fixture in &manifest.fixtures {
+        if fixture.provider_expectations.navigation.is_empty() {
+            continue;
+        }
+
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy navigation provider fixture {}", source_path.display())
+        })?;
+        let provider_source = provider_navigation_source(&source)?;
+        let index_source = provider_navigation_index_source(&source)?;
+
+        let index = WorkspaceIndex::new();
+        let source_path_text = source_path.to_string_lossy();
+        index.index_file_str(&source_path_text, &index_source).map_err(|err| {
+            eyre!("indexing parser accuracy navigation fixture {}: {err}", source_path.display())
+        })?;
+        let shard = index.file_fact_shard(&source_path_text).ok_or_else(|| {
+            eyre!(
+                "missing semantic fact shard for parser accuracy navigation fixture {}",
+                source_path.display()
+            )
+        })?;
+        let document_symbol_spans = navigation_document_symbol_spans(
+            &provider_source,
+            &index.file_symbols(&source_path_text),
+        );
+        let anchors_by_id =
+            shard.anchors.iter().map(|anchor| (anchor.id, anchor)).collect::<BTreeMap<_, _>>();
+
+        for expectation in &fixture.provider_expectations.navigation {
+            score_navigation_document_symbols(expectation, &document_symbol_spans, &mut score);
+            score_navigation_goto_definition(
+                expectation,
+                &source,
+                &index_source,
+                &index,
+                &source_path_text,
+                &anchors_by_id,
+                &mut score,
+            )?;
+            score_navigation_references(
+                expectation,
+                &index_source,
+                &index,
+                &source_path_text,
+                &shard,
+                &anchors_by_id,
+                &mut score,
+            )?;
+            score_navigation_hover(expectation, &source, &index, &source_path_text, &mut score)?;
+        }
+    }
+
+    Ok(score)
+}
+
+fn navigation_document_symbol_spans(
+    source: &str,
+    symbols: &[perl_workspace::workspace::workspace_index::WorkspaceSymbol],
+) -> BTreeSet<String> {
+    symbols
+        .iter()
+        .filter_map(|symbol| range_span_text(source, &symbol.range))
+        .filter(|span| !span.trim().is_empty())
+        .collect()
+}
+
+fn score_navigation_document_symbols(
+    expectation: &NavigationProviderExpectation,
+    document_symbol_spans: &BTreeSet<String>,
+    score: &mut NavigationProviderScore,
+) {
+    for expected_span in &expectation.expected_document_symbols {
+        score.document_symbol_expected_count += 1;
+        if document_symbol_spans.contains(expected_span) {
+            score.document_symbol_span_exact_count += 1;
+        }
+    }
+}
+
+fn score_navigation_goto_definition(
+    expectation: &NavigationProviderExpectation,
+    source: &str,
+    index_source: &str,
+    index: &WorkspaceIndex,
+    source_path_text: &str,
+    anchors_by_id: &BTreeMap<AnchorId, &perl_semantic_facts::AnchorFact>,
+    score: &mut NavigationProviderScore,
+) -> Result<()> {
+    let Some(expected_span) = expectation.expected_definition_span.as_ref() else {
+        return Ok(());
+    };
+    score.goto_definition_expected_count += 1;
+
+    let cursor_offset = navigation_cursor_offset(source, expectation)?;
+    let actual_spans = index
+        .with_semantic_queries_for_uri(source_path_text, |file_id, semantic_queries| {
+            let context = QueryContext::new(file_id, None, cursor_offset);
+            let outcome =
+                goto_definition_cutover(index, &semantic_queries, &expectation.symbol, &context);
+            definition_result_spans(index_source, &outcome.result, anchors_by_id)
+        })
+        .ok_or_else(|| eyre!("missing semantic queries for navigation fixture"))?;
+
+    if actual_spans.is_empty() {
+        return Ok(());
+    }
+
+    score.goto_definition_hit_count += 1;
+    if actual_spans.contains(expected_span) {
+        score.goto_definition_span_exact_count += 1;
+    } else {
+        score.goto_definition_false_target_count += 1;
+    }
+    Ok(())
+}
+
+fn score_navigation_references(
+    expectation: &NavigationProviderExpectation,
+    index_source: &str,
+    index: &WorkspaceIndex,
+    source_path_text: &str,
+    shard: &FileFactShard,
+    anchors_by_id: &BTreeMap<AnchorId, &perl_semantic_facts::AnchorFact>,
+    score: &mut NavigationProviderScore,
+) -> Result<()> {
+    if expectation.expected_references.is_empty() && expectation.unexpected_references.is_empty() {
+        return Ok(());
+    }
+
+    let entity_id = resolve_navigation_entity_id(shard, &expectation.symbol)
+        .with_context(|| format!("resolving navigation entity for {}", expectation.id))?;
+    let actual_spans = index
+        .with_semantic_queries_for_uri(source_path_text, |_file_id, semantic_queries| {
+            let outcome =
+                find_references_cutover(index, &semantic_queries, &expectation.symbol, entity_id);
+            reference_result_spans(index_source, &outcome.result, anchors_by_id)
+        })
+        .ok_or_else(|| eyre!("missing semantic queries for navigation fixture"))?;
+
+    let expected_spans = expectation.expected_references.iter().cloned().collect::<BTreeSet<_>>();
+    let unexpected_spans =
+        expectation.unexpected_references.iter().cloned().collect::<BTreeSet<_>>();
+    let true_positive_count = actual_spans.intersection(&expected_spans).count() as u64;
+    let unexpected_hit_count = actual_spans.intersection(&unexpected_spans).count() as u64;
+    let extra_count = actual_spans
+        .difference(&expected_spans)
+        .filter(|span| !unexpected_spans.contains(*span))
+        .count() as u64;
+
+    score.references_expected_count += expected_spans.len() as u64;
+    score.references_hit_count += true_positive_count;
+    score.references_returned_count += actual_spans.len() as u64;
+    score.references_absent_assertion_count += unexpected_spans.len() as u64;
+    score.references_false_positive_count += unexpected_hit_count + extra_count;
+    Ok(())
+}
+
+fn score_navigation_hover(
+    expectation: &NavigationProviderExpectation,
+    source: &str,
+    index: &WorkspaceIndex,
+    source_path_text: &str,
+    score: &mut NavigationProviderScore,
+) -> Result<()> {
+    if expectation.hover_contains.is_empty() {
+        return Ok(());
+    }
+    score.hover_expected_count += 1;
+
+    let cursor_offset = navigation_cursor_offset(source, expectation)?;
+    let hover_symbol = expectation
+        .cursor_symbol
+        .as_deref()
+        .unwrap_or_else(|| bare_symbol_name(&expectation.symbol));
+    let markdown = index
+        .with_semantic_queries_for_uri(source_path_text, |file_id, semantic_queries| {
+            let byte_offset = cursor_offset?;
+            let outcome =
+                hover_cutover(None, &semantic_queries, hover_symbol, file_id, byte_offset, None);
+            hover_result_markdown(&outcome.result)
+        })
+        .ok_or_else(|| eyre!("missing semantic queries for navigation fixture"))?;
+
+    if let Some(markdown) = markdown
+        && expectation.hover_contains.iter().all(|expected| markdown.contains(expected))
+    {
+        score.hover_origin_correct_count += 1;
+    }
+    Ok(())
+}
+
+fn definition_result_spans(
+    source: &str,
+    result: &DefinitionCutoverResult,
+    anchors_by_id: &BTreeMap<AnchorId, &perl_semantic_facts::AnchorFact>,
+) -> BTreeSet<String> {
+    match result {
+        DefinitionCutoverResult::Exact(candidate) => anchors_by_id
+            .get(&candidate.anchor_id)
+            .map(|anchor| BTreeSet::from([anchor_text(source, anchor)]))
+            .unwrap_or_default(),
+        DefinitionCutoverResult::Ambiguous(candidates) => candidates
+            .iter()
+            .filter_map(|candidate| anchors_by_id.get(&candidate.anchor_id))
+            .map(|anchor| anchor_text(source, anchor))
+            .collect(),
+        DefinitionCutoverResult::LegacyFallback(location) => location
+            .as_ref()
+            .and_then(|location| range_span_text(source, &location.range))
+            .map(|span| BTreeSet::from([span]))
+            .unwrap_or_default(),
+    }
+}
+
+fn reference_result_spans(
+    source: &str,
+    result: &ReferencesCutoverResult,
+    anchors_by_id: &BTreeMap<AnchorId, &perl_semantic_facts::AnchorFact>,
+) -> BTreeSet<String> {
+    match result {
+        ReferencesCutoverResult::Exact(occurrences)
+        | ReferencesCutoverResult::Ambiguous(occurrences) => occurrences
+            .iter()
+            .filter_map(|occurrence| anchors_by_id.get(&occurrence.anchor_id))
+            .map(|anchor| anchor_text(source, anchor))
+            .collect(),
+        ReferencesCutoverResult::LegacyFallback(locations) => locations
+            .iter()
+            .filter_map(|location| range_span_text(source, &location.range))
+            .collect(),
+    }
+}
+
+fn hover_result_markdown(result: &HoverCutoverResult) -> Option<String> {
+    match result {
+        HoverCutoverResult::Exact(explanation)
+        | HoverCutoverResult::Ambiguous(explanation)
+        | HoverCutoverResult::DynamicBoundary(explanation) => Some(explanation.markdown.clone()),
+        HoverCutoverResult::LegacyFallback(markdown) => markdown.clone(),
+    }
+}
+
+fn navigation_cursor_offset(
+    source: &str,
+    expectation: &NavigationProviderExpectation,
+) -> Result<Option<u32>> {
+    let Some(marker) = expectation.cursor_marker.as_deref() else {
+        return Ok(None);
+    };
+    let cursor_symbol = expectation
+        .cursor_symbol
+        .as_deref()
+        .unwrap_or_else(|| bare_symbol_name(&expectation.symbol));
+    let offset = locate_navigation_cursor_marker(source, marker, cursor_symbol)
+        .with_context(|| format!("locating navigation cursor marker for {}", expectation.id))?;
+    Ok(Some(
+        u32::try_from(offset).with_context(|| {
+            format!("navigation cursor offset for {} exceeds u32", expectation.id)
+        })?,
+    ))
+}
+
+fn locate_navigation_cursor_marker(source: &str, marker: &str, symbol: &str) -> Result<usize> {
+    let marker_offset =
+        source.find(marker).ok_or_else(|| eyre!("cursor marker '{marker}' was not found"))?;
+    let line_start = source[..marker_offset].rfind('\n').map(|idx| idx + 1).unwrap_or(0);
+    let comment_offset =
+        source[line_start..marker_offset]
+            .rfind('#')
+            .map(|idx| line_start + idx)
+            .ok_or_else(|| eyre!("cursor marker '{marker}' is not inside a line comment"))?;
+    let line_prefix = &source[line_start..comment_offset];
+    let symbol_offset = line_prefix
+        .rfind(symbol)
+        .ok_or_else(|| eyre!("cursor symbol '{symbol}' was not found before marker '{marker}'"))?;
+    Ok(line_start + symbol_offset)
+}
+
+fn resolve_navigation_entity_id(shard: &FileFactShard, symbol: &str) -> Result<EntityId> {
+    if let Some(entity) = shard.entities.iter().find(|entity| entity.canonical_name == symbol) {
+        return Ok(entity.id);
+    }
+
+    let suffix = format!("::{symbol}");
+    let mut candidates = shard
+        .entities
+        .iter()
+        .filter(|entity| entity.canonical_name.ends_with(&suffix))
+        .map(|entity| entity.id);
+    let Some(first) = candidates.next() else {
+        return Err(eyre!("symbol '{symbol}' was not found in navigation fact shard"));
+    };
+    if candidates.next().is_some() {
+        return Err(eyre!("symbol '{symbol}' is ambiguous in navigation fact shard"));
+    }
+    Ok(first)
+}
+
+fn bare_symbol_name(symbol: &str) -> &str {
+    match symbol.rsplit_once("::") {
+        Some((_, bare)) => bare,
+        None => symbol,
+    }
+}
+
+fn range_span_text(source: &str, range: &Range) -> Option<String> {
+    source.get(range.start.byte..range.end.byte).map(ToString::to_string)
+}
+
+fn provider_navigation_source(source: &str) -> Result<String> {
+    let masked_support = mask_provider_index_support_blocks(source)?;
+    mask_cursor_marker_comments(&masked_support)
+}
+
+fn provider_navigation_index_source(source: &str) -> Result<String> {
+    mask_cursor_marker_comments(source)
 }
 
 fn provider_diagnostic_source(source: &str) -> Result<String> {
@@ -3639,6 +4015,7 @@ fn unsupported_metrics(score: &UnsupportedScore, cadence: Cadence) -> Vec<Metric
 fn provider_impact_metrics(
     method_completion_score: &MethodCompletionProviderScore,
     diagnostic_score: &DiagnosticProviderScore,
+    navigation_score: &NavigationProviderScore,
     cadence: Cadence,
 ) -> Vec<MetricRow> {
     const PROVIDER_METRICS: &[&str] = &[
@@ -3710,6 +4087,82 @@ fn provider_impact_metrics(
             diagnostic_score.undefined_false_negative_count,
             diagnostic_score.undefined_expected_present_count,
             "no diagnostic undefined-symbol false-negative expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "document_symbol_span_exact_rate",
+            ratio(
+                navigation_score.document_symbol_span_exact_count,
+                navigation_score.document_symbol_expected_count,
+            ),
+            navigation_score.document_symbol_expected_count,
+            "no navigation document-symbol expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "goto_definition_hit_rate",
+            ratio(
+                navigation_score.goto_definition_hit_count,
+                navigation_score.goto_definition_expected_count,
+            ),
+            navigation_score.goto_definition_expected_count,
+            "no navigation goto-definition expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "goto_definition_span_exact_rate",
+            ratio(
+                navigation_score.goto_definition_span_exact_count,
+                navigation_score.goto_definition_expected_count,
+            ),
+            navigation_score.goto_definition_expected_count,
+            "no navigation goto-definition span expectations are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "goto_definition_false_target_count",
+            navigation_score.goto_definition_false_target_count,
+            navigation_score.goto_definition_expected_count,
+            "no navigation goto-definition expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "references_precision",
+            ratio(
+                navigation_score.references_hit_count,
+                navigation_score.references_returned_count,
+            ),
+            navigation_score.references_returned_count,
+            "no navigation reference results are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "references_recall",
+            ratio(
+                navigation_score.references_hit_count,
+                navigation_score.references_expected_count,
+            ),
+            navigation_score.references_expected_count,
+            "no navigation reference expectations are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "references_false_positive_count",
+            navigation_score.references_false_positive_count,
+            navigation_score
+                .references_expected_count
+                .saturating_add(navigation_score.references_absent_assertion_count),
+            "no navigation reference expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "hover_origin_accuracy",
+            ratio(
+                navigation_score.hover_origin_correct_count,
+                navigation_score.hover_expected_count,
+            ),
+            navigation_score.hover_expected_count,
+            "no navigation hover expectations are available",
             cadence,
         ),
     ];
@@ -4448,6 +4901,64 @@ sub package_local_symbol_case {
         Ok(())
     }
 
+    fn write_navigation_provider_fixture(root: &Path) -> Result<()> {
+        fs::write(
+            root.join("navigation_provider.pl"),
+            r#"# provider-index-support:start
+package Accuracy::Navigation::Exporter;
+use Exporter 'import';
+our @EXPORT_OK = qw(imported_nav);
+sub imported_nav { 1 }
+
+package Accuracy::Navigation::Parent;
+sub inherited_method { 1 }
+
+package Accuracy::Navigation::Generated;
+sub generated_accessor { 1 }
+# provider-index-support:end
+
+package Accuracy::Navigation::UseCases;
+use strict;
+use warnings;
+use parent 'Accuracy::Navigation::Parent';
+use Accuracy::Navigation::Exporter qw(imported_nav);
+
+sub own_sub { 1 }
+sub own_method { 1 }
+
+sub bare_call_case {
+    own_sub(); # cursor:bare_call
+}
+
+sub qualified_call_case {
+    Accuracy::Navigation::UseCases::own_sub(); # cursor:qualified_call
+}
+
+sub imported_symbol_case {
+    imported_nav(); # cursor:imported_nav
+}
+
+sub method_receiver_case {
+    my $self = shift;
+    $self->inherited_method(); # cursor:inherited_method
+}
+
+sub generated_accessor_case {
+    Accuracy::Navigation::Generated::generated_accessor(); # cursor:generated_accessor
+}
+
+sub dynamic_boundary_case {
+    my $name = "own_sub";
+    no strict 'refs';
+    &$name(); # cursor:dynamic_ref
+}
+
+1;
+"#,
+        )?;
+        Ok(())
+    }
+
     fn fixture_manifest() -> ParserAccuracyManifest {
         ParserAccuracyManifest {
             schema_version: 1,
@@ -4650,6 +5161,7 @@ sub package_local_symbol_case {
                         },
                     ],
                     diagnostics: vec![],
+                    navigation: vec![],
                 },
             }],
         }
@@ -4740,6 +5252,105 @@ sub package_local_symbol_case {
                             dynamic_boundary: false,
                         },
                     ],
+                    navigation: vec![],
+                },
+            }],
+        }
+    }
+
+    fn navigation_provider_manifest() -> ParserAccuracyManifest {
+        ParserAccuracyManifest {
+            schema_version: 1,
+            fixtures: vec![FixtureMetadata {
+                id: "navigation_provider".to_string(),
+                family: "provider_navigation".to_string(),
+                label_mode: LabelMode::Partial,
+                source_path: "navigation_provider.pl".to_string(),
+                scored_lines: 0,
+                scored_symbols: 0,
+                fully_labeled_regions: 0,
+                partial_labeled_regions: 1,
+                unknown_regions: 0,
+                negative_regions: 0,
+                dynamic_boundaries: 1,
+                unsupported_constructs: 0,
+                real_project_file: false,
+                generated: false,
+                line_expectations: vec![],
+                ast_expectations: vec![],
+                symbol_expectations: SymbolExpectations::default(),
+                symbol_safety_regions: vec![],
+                recovery_expectations: vec![],
+                incremental_expectations: vec![],
+                span_expectations: vec![],
+                provider_expectations: ProviderExpectations {
+                    method_completion: vec![],
+                    diagnostics: vec![],
+                    navigation: vec![
+                        NavigationProviderExpectation {
+                            id: "document_symbol_spans".to_string(),
+                            symbol: "own_sub".to_string(),
+                            cursor_marker: None,
+                            cursor_symbol: None,
+                            expected_document_symbols: vec![
+                                "sub own_sub { 1 }".to_string(),
+                                "sub own_method { 1 }".to_string(),
+                            ],
+                            expected_definition_span: None,
+                            expected_references: vec![],
+                            unexpected_references: vec![],
+                            hover_contains: vec![],
+                        },
+                        NavigationProviderExpectation {
+                            id: "bare_call_goto".to_string(),
+                            symbol: "own_sub".to_string(),
+                            cursor_marker: Some("cursor:bare_call".to_string()),
+                            cursor_symbol: Some("own_sub".to_string()),
+                            expected_document_symbols: vec![],
+                            expected_definition_span: Some("own_sub".to_string()),
+                            expected_references: vec![],
+                            unexpected_references: vec![],
+                            hover_contains: vec![],
+                        },
+                        NavigationProviderExpectation {
+                            id: "qualified_call_goto".to_string(),
+                            symbol: "Accuracy::Navigation::UseCases::own_sub".to_string(),
+                            cursor_marker: Some("cursor:qualified_call".to_string()),
+                            cursor_symbol: Some("own_sub".to_string()),
+                            expected_document_symbols: vec![],
+                            expected_definition_span: Some("own_sub".to_string()),
+                            expected_references: vec![],
+                            unexpected_references: vec![],
+                            hover_contains: vec![
+                                "Accuracy::Navigation::UseCases::own_sub".to_string(),
+                                "Subroutine".to_string(),
+                            ],
+                        },
+                        NavigationProviderExpectation {
+                            id: "imported_symbol_goto_and_hover".to_string(),
+                            symbol: "imported_nav".to_string(),
+                            cursor_marker: Some("cursor:imported_nav".to_string()),
+                            cursor_symbol: Some("imported_nav".to_string()),
+                            expected_document_symbols: vec![],
+                            expected_definition_span: Some("imported_nav".to_string()),
+                            expected_references: vec![],
+                            unexpected_references: vec![],
+                            hover_contains: vec![],
+                        },
+                        NavigationProviderExpectation {
+                            id: "own_sub_references".to_string(),
+                            symbol: "Accuracy::Navigation::UseCases::own_sub".to_string(),
+                            cursor_marker: None,
+                            cursor_symbol: None,
+                            expected_document_symbols: vec![],
+                            expected_definition_span: None,
+                            expected_references: vec![
+                                "Accuracy::Navigation::UseCases::own_sub()".to_string(),
+                            ],
+                            unexpected_references: vec!["&$name()".to_string()],
+                            hover_contains: vec![],
+                        },
+                    ],
                 },
             }],
         }
@@ -4790,8 +5401,12 @@ sub package_local_symbol_case {
         assert_eq!(score.relevance_assertion_count, 6);
         assert_eq!(score.relevance_assertion_correct_count, 6);
 
-        let metrics =
-            provider_impact_metrics(&score, &DiagnosticProviderScore::default(), Cadence::Pr);
+        let metrics = provider_impact_metrics(
+            &score,
+            &DiagnosticProviderScore::default(),
+            &NavigationProviderScore::default(),
+            Cadence::Pr,
+        );
         let false_receiver = metrics
             .iter()
             .find(|metric| {
@@ -4825,8 +5440,12 @@ sub package_local_symbol_case {
         assert_eq!(score.undefined_expected_present_count, 2);
         assert_eq!(score.undefined_false_negative_count, 0);
 
-        let metrics =
-            provider_impact_metrics(&MethodCompletionProviderScore::default(), &score, Cadence::Pr);
+        let metrics = provider_impact_metrics(
+            &MethodCompletionProviderScore::default(),
+            &score,
+            &NavigationProviderScore::default(),
+            Cadence::Pr,
+        );
         let dynamic_false_positive = metrics
             .iter()
             .find(|metric| {
@@ -4841,6 +5460,49 @@ sub package_local_symbol_case {
             dynamic_false_positive,
             MetricRow::Measured { value, sample_count: 4, .. }
                 if (*value - 0.0).abs() < f64::EPSILON
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn navigation_provider_scorer_measures_provider_rows() -> Result<()> {
+        let tmp = tempfile::tempdir()?;
+        write_navigation_provider_fixture(tmp.path())?;
+
+        let score =
+            score_navigation_provider_expectations(tmp.path(), &navigation_provider_manifest())?;
+
+        assert_eq!(score.document_symbol_expected_count, 2);
+        assert_eq!(score.document_symbol_span_exact_count, 2);
+        assert_eq!(score.goto_definition_expected_count, 3);
+        assert_eq!(score.goto_definition_hit_count, 3);
+        assert_eq!(score.goto_definition_span_exact_count, 3);
+        assert_eq!(score.goto_definition_false_target_count, 0);
+        assert_eq!(score.references_expected_count, 1);
+        assert_eq!(score.references_hit_count, 1);
+        assert_eq!(score.references_false_positive_count, 0);
+        assert_eq!(score.hover_expected_count, 1);
+        assert_eq!(score.hover_origin_correct_count, 1);
+
+        let metrics = provider_impact_metrics(
+            &MethodCompletionProviderScore::default(),
+            &DiagnosticProviderScore::default(),
+            &score,
+            Cadence::Pr,
+        );
+        let goto_hit_rate = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. } if metric == "goto_definition_hit_rate"
+                )
+            })
+            .ok_or_else(|| eyre!("navigation goto-definition row should exist"))?;
+        assert!(matches!(
+            goto_hit_rate,
+            MetricRow::Measured { value, sample_count: 3, .. }
+                if (*value - 1.0).abs() < f64::EPSILON
         ));
         Ok(())
     }
@@ -5544,6 +6206,7 @@ sub package_local_symbol_case {
         let metrics = provider_impact_metrics(
             &MethodCompletionProviderScore::default(),
             &DiagnosticProviderScore::default(),
+            &NavigationProviderScore::default(),
             Cadence::Pr,
         );
 
