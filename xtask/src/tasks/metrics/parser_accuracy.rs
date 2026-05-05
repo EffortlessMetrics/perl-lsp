@@ -9,10 +9,12 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
 use color_eyre::eyre::{Context, Result, bail, eyre};
+use perl_lsp_rs_core::providers::completion::CompletionProvider;
 use perl_parser::apply_edits;
 use perl_parser::edit::Edit as CoreEdit;
 use perl_parser::incremental_v2::IncrementalParserV2;
@@ -89,6 +91,8 @@ struct FixtureMetadata {
     incremental_expectations: Vec<IncrementalExpectation>,
     #[serde(default)]
     span_expectations: Vec<SpanExpectation>,
+    #[serde(default)]
+    provider_expectations: ProviderExpectations,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -127,6 +131,24 @@ struct AstPrediction {
     depth: u64,
     operator: Option<String>,
     parent_operator: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+struct ProviderExpectations {
+    #[serde(default)]
+    method_completion: Vec<MethodCompletionProviderExpectation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct MethodCompletionProviderExpectation {
+    id: String,
+    cursor_marker: String,
+    expected_receiver_package: Option<String>,
+    #[serde(default)]
+    expected_present: Vec<String>,
+    #[serde(default)]
+    expected_absent: Vec<String>,
+    expected_fallback: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -730,6 +752,17 @@ struct UnsupportedScore {
     false_exact_sample_count: u64,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct MethodCompletionProviderScore {
+    receiver_expected_count: u64,
+    receiver_hit_count: u64,
+    fallback_expected_count: u64,
+    fallback_correct_count: u64,
+    false_receiver_count: u64,
+    relevance_assertion_count: u64,
+    relevance_assertion_correct_count: u64,
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 struct ScaleCostScore {
     fixture_count: u64,
@@ -842,6 +875,8 @@ fn build_artifact(
     let incremental_score = score_manifest_incremental(root, manifest)?;
     let span_score = score_manifest_spans(root, manifest)?;
     let unsupported_score = score_manifest_unsupported(root, manifest, &line_score)?;
+    let method_completion_provider_score =
+        score_method_completion_provider_expectations(root, manifest)?;
     let scale_cost_score = score_manifest_scale_cost(root, manifest)?;
     let determinism_score = score_manifest_determinism(root, manifest)?;
     let gold_drift = audit_gold_drift(root, manifest)?;
@@ -860,7 +895,7 @@ fn build_artifact(
     metrics.extend(span_metrics(&span_score, cadence));
     metrics.extend(confidence_metrics(&symbol_score, cadence));
     metrics.extend(unsupported_metrics(&unsupported_score, cadence));
-    metrics.extend(provider_impact_metrics());
+    metrics.extend(provider_impact_metrics(&method_completion_provider_score, cadence));
     metrics.extend(scale_metrics(&scale_cost_score, cadence));
     metrics.extend(cost_metrics(&scale_cost_score, cadence));
     metrics.extend(cache_reuse_metrics(&incremental_score, cadence));
@@ -1684,6 +1719,196 @@ fn is_conservative_symbol_occurrence(occurrence: &SymbolOccurrenceKey) -> bool {
 
 fn is_conservative_symbol_edge(edge: &SymbolEdgeKey) -> bool {
     edge.provenance != "ExactAst" || edge.confidence != "High"
+}
+
+fn score_method_completion_provider_expectations(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+) -> Result<MethodCompletionProviderScore> {
+    let mut score = MethodCompletionProviderScore::default();
+
+    for fixture in &manifest.fixtures {
+        if fixture.provider_expectations.method_completion.is_empty() {
+            continue;
+        }
+
+        let source_path = root.join(&fixture.source_path);
+        let source = fs::read_to_string(&source_path).with_context(|| {
+            format!("reading parser accuracy provider fixture source {}", source_path.display())
+        })?;
+        let provider_source = provider_completion_source(&source)?;
+        let index_source = provider_completion_index_source(&source)?;
+
+        let index = Arc::new(WorkspaceIndex::new());
+        let source_path_text = source_path.to_string_lossy();
+        index.index_file_str(&source_path_text, &index_source).map_err(|err| {
+            eyre!("indexing parser accuracy provider fixture {}: {err}", source_path.display())
+        })?;
+
+        let mut parser = Parser::new(&provider_source);
+        let output = parser.parse_with_recovery();
+        let provider = CompletionProvider::new_with_index_and_source(
+            &output.ast,
+            &provider_source,
+            Some(index),
+        );
+
+        for expectation in &fixture.provider_expectations.method_completion {
+            let cursor = locate_cursor_marker(&source, &expectation.cursor_marker)
+                .with_context(|| format!("locating cursor marker for {}", expectation.id))?;
+            let completions = provider.get_completions(&provider_source, cursor);
+            let labels = completions.iter().map(|item| item.label.clone()).collect::<BTreeSet<_>>();
+            score_method_completion_expectation(expectation, &labels, &mut score);
+        }
+    }
+
+    Ok(score)
+}
+
+fn score_method_completion_expectation(
+    expectation: &MethodCompletionProviderExpectation,
+    labels: &BTreeSet<String>,
+    score: &mut MethodCompletionProviderScore,
+) {
+    let expects_fallback =
+        expectation.expected_fallback || expectation.expected_receiver_package.is_none();
+
+    if expects_fallback {
+        score.fallback_expected_count += 1;
+        if expectation.expected_absent.iter().any(|label| labels.contains(label)) {
+            score.false_receiver_count += 1;
+        } else {
+            score.fallback_correct_count += 1;
+        }
+    } else {
+        score.receiver_expected_count += 1;
+        if expectation.expected_present.iter().any(|label| labels.contains(label)) {
+            score.receiver_hit_count += 1;
+        }
+    }
+
+    for label in &expectation.expected_present {
+        score.relevance_assertion_count += 1;
+        if labels.contains(label) {
+            score.relevance_assertion_correct_count += 1;
+        }
+    }
+    for label in &expectation.expected_absent {
+        score.relevance_assertion_count += 1;
+        if !labels.contains(label) {
+            score.relevance_assertion_correct_count += 1;
+        }
+    }
+}
+
+fn provider_completion_source(source: &str) -> Result<String> {
+    let masked_support = mask_provider_index_support_blocks(source)?;
+    mask_cursor_marker_comments(&masked_support)
+}
+
+fn provider_completion_index_source(source: &str) -> Result<String> {
+    let support_source = source_from_provider_index_support_blocks(source)?;
+    mask_cursor_marker_comments(&support_source)
+}
+
+fn locate_cursor_marker(source: &str, marker: &str) -> Result<usize> {
+    let marker_offset =
+        source.find(marker).ok_or_else(|| eyre!("cursor marker '{marker}' was not found"))?;
+    let line_start = source[..marker_offset].rfind('\n').map(|idx| idx + 1).unwrap_or(0);
+    let comment_offset =
+        source[line_start..marker_offset]
+            .rfind('#')
+            .map(|idx| line_start + idx)
+            .ok_or_else(|| eyre!("cursor marker '{marker}' is not inside a line comment"))?;
+
+    let mut cursor = comment_offset;
+    let bytes = source.as_bytes();
+    while cursor > line_start && matches!(bytes[cursor - 1], b' ' | b'\t') {
+        cursor -= 1;
+    }
+    Ok(cursor)
+}
+
+fn mask_cursor_marker_comments(source: &str) -> Result<String> {
+    let mut ranges = Vec::new();
+    let mut search_start = 0usize;
+    while let Some(relative_marker) = source[search_start..].find("cursor:") {
+        let marker_offset = search_start + relative_marker;
+        let line_start = source[..marker_offset].rfind('\n').map(|idx| idx + 1).unwrap_or(0);
+        let Some(comment_offset) = source[line_start..marker_offset].rfind('#') else {
+            search_start = marker_offset + "cursor:".len();
+            continue;
+        };
+        let comment_offset = line_start + comment_offset;
+        let line_end = source[marker_offset..]
+            .find('\n')
+            .map(|idx| marker_offset + idx)
+            .unwrap_or(source.len());
+        ranges.push(comment_offset..line_end);
+        search_start = line_end;
+    }
+    mask_ranges_preserving_newlines(source, &ranges)
+}
+
+fn mask_provider_index_support_blocks(source: &str) -> Result<String> {
+    mask_ranges_preserving_newlines(source, &provider_index_support_ranges(source)?)
+}
+
+fn source_from_provider_index_support_blocks(source: &str) -> Result<String> {
+    let ranges = provider_index_support_ranges(source)?;
+    if ranges.is_empty() {
+        return Ok(source.to_string());
+    }
+
+    let mut bytes = source.as_bytes().to_vec();
+    for byte in &mut bytes {
+        if !matches!(*byte, b'\n' | b'\r') {
+            *byte = b' ';
+        }
+    }
+    for range in ranges {
+        bytes[range.clone()].copy_from_slice(&source.as_bytes()[range]);
+    }
+    String::from_utf8(bytes).context("provider index support source must remain utf-8")
+}
+
+fn provider_index_support_ranges(source: &str) -> Result<Vec<std::ops::Range<usize>>> {
+    const START: &str = "# provider-index-support:start";
+    const END: &str = "# provider-index-support:end";
+
+    let mut ranges = Vec::new();
+    let mut search_start = 0usize;
+    while let Some(relative_start) = source[search_start..].find(START) {
+        let start = search_start + relative_start;
+        let after_start = start + START.len();
+        let relative_end = source[after_start..]
+            .find(END)
+            .ok_or_else(|| eyre!("provider index support block is missing end marker"))?;
+        let end_marker = after_start + relative_end;
+        let end =
+            source[end_marker..].find('\n').map(|idx| end_marker + idx + 1).unwrap_or(source.len());
+        ranges.push(start..end);
+        search_start = end;
+    }
+    Ok(ranges)
+}
+
+fn mask_ranges_preserving_newlines(
+    source: &str,
+    ranges: &[std::ops::Range<usize>],
+) -> Result<String> {
+    let mut bytes = source.as_bytes().to_vec();
+    for range in ranges {
+        if range.end > bytes.len() {
+            bail!("mask range extends beyond source length");
+        }
+        for byte in &mut bytes[range.clone()] {
+            if !matches!(*byte, b'\n' | b'\r') {
+                *byte = b' ';
+            }
+        }
+    }
+    String::from_utf8(bytes).context("masked provider source must remain utf-8")
 }
 
 fn score_manifest_scale_cost(
@@ -3290,7 +3515,10 @@ fn unsupported_metrics(score: &UnsupportedScore, cadence: Cadence) -> Vec<Metric
     ]
 }
 
-fn provider_impact_metrics() -> Vec<MetricRow> {
+fn provider_impact_metrics(
+    method_completion_score: &MethodCompletionProviderScore,
+    cadence: Cadence,
+) -> Vec<MetricRow> {
     const PROVIDER_METRICS: &[&str] = &[
         "provider_document_symbol_precision",
         "provider_document_symbol_recall",
@@ -3306,10 +3534,50 @@ fn provider_impact_metrics() -> Vec<MetricRow> {
         "provider_diagnostic_false_negative_rate",
     ];
 
-    PROVIDER_METRICS
-        .iter()
-        .map(|metric| insufficient(metric, "provider gold fixtures are not wired yet"))
-        .collect()
+    let mut rows = vec![
+        optional_measured_rate(
+            "method_completion_receiver_hit_rate",
+            ratio(
+                method_completion_score.receiver_hit_count,
+                method_completion_score.receiver_expected_count,
+            ),
+            method_completion_score.receiver_expected_count,
+            "no method-completion receiver expectations are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "method_completion_false_receiver_count",
+            method_completion_score.false_receiver_count,
+            method_completion_score.fallback_expected_count,
+            "no method-completion fallback expectations are available",
+            cadence,
+        ),
+        optional_measured_count(
+            "method_completion_dynamic_receiver_fallback_count",
+            method_completion_score.fallback_correct_count,
+            method_completion_score.fallback_expected_count,
+            "no method-completion fallback expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "method_completion_visible_symbol_relevance",
+            ratio(
+                method_completion_score.relevance_assertion_correct_count,
+                method_completion_score.relevance_assertion_count,
+            ),
+            method_completion_score.relevance_assertion_count,
+            "no method-completion visible-symbol assertions are available",
+            cadence,
+        ),
+    ];
+
+    rows.extend(
+        PROVIDER_METRICS
+            .iter()
+            .map(|metric| insufficient(metric, "provider gold fixtures are not wired yet"))
+            .collect::<Vec<_>>(),
+    );
+    rows
 }
 
 fn scale_metrics(score: &ScaleCostScore, cadence: Cadence) -> Vec<MetricRow> {
@@ -3942,6 +4210,39 @@ mod tests {
         Ok(())
     }
 
+    fn write_method_completion_provider_fixture(root: &Path) -> Result<()> {
+        fs::write(
+            root.join("method_completion_provider.pl"),
+            r#"# provider-index-support:start
+package Accuracy::Provider::Foo;
+sub own_method { 1 }
+sub shared_name { 1 }
+
+package Accuracy::Provider::Bar;
+sub unrelated_method { 1 }
+# provider-index-support:end
+
+package Accuracy::Provider::Foo;
+
+sub self_case {
+    my $self = shift;
+    $self-> # cursor:self
+}
+
+package Accuracy::Provider::UseCases;
+
+sub dynamic_bless_case {
+    my $class = "Accuracy::Provider::Foo";
+    my $x = bless {}, $class;
+    $x-> # cursor:dynamic_bless
+}
+
+1;
+"#,
+        )?;
+        Ok(())
+    }
+
     fn fixture_manifest() -> ParserAccuracyManifest {
         ParserAccuracyManifest {
             schema_version: 1,
@@ -4024,6 +4325,7 @@ mod tests {
                     recovery_expectations: vec![],
                     incremental_expectations: vec![],
                     span_expectations: vec![],
+                    provider_expectations: ProviderExpectations::default(),
                 },
                 FixtureMetadata {
                     id: "dynamic_require_boundary".to_string(),
@@ -4085,8 +4387,65 @@ mod tests {
                     recovery_expectations: vec![],
                     incremental_expectations: vec![],
                     span_expectations: vec![],
+                    provider_expectations: ProviderExpectations::default(),
                 },
             ],
+        }
+    }
+
+    fn method_completion_provider_manifest() -> ParserAccuracyManifest {
+        ParserAccuracyManifest {
+            schema_version: 1,
+            fixtures: vec![FixtureMetadata {
+                id: "method_completion_provider".to_string(),
+                family: "provider_method_completion".to_string(),
+                label_mode: LabelMode::Partial,
+                source_path: "method_completion_provider.pl".to_string(),
+                scored_lines: 0,
+                scored_symbols: 0,
+                fully_labeled_regions: 0,
+                partial_labeled_regions: 1,
+                unknown_regions: 0,
+                negative_regions: 0,
+                dynamic_boundaries: 1,
+                unsupported_constructs: 0,
+                real_project_file: false,
+                generated: false,
+                line_expectations: vec![],
+                ast_expectations: vec![],
+                symbol_expectations: SymbolExpectations::default(),
+                symbol_safety_regions: vec![],
+                recovery_expectations: vec![],
+                incremental_expectations: vec![],
+                span_expectations: vec![],
+                provider_expectations: ProviderExpectations {
+                    method_completion: vec![
+                        MethodCompletionProviderExpectation {
+                            id: "self_receiver_methods".to_string(),
+                            cursor_marker: "cursor:self".to_string(),
+                            expected_receiver_package: Some("Accuracy::Provider::Foo".to_string()),
+                            expected_present: vec![
+                                "own_method".to_string(),
+                                "shared_name".to_string(),
+                            ],
+                            expected_absent: vec!["unrelated_method".to_string()],
+                            expected_fallback: false,
+                        },
+                        MethodCompletionProviderExpectation {
+                            id: "dynamic_bless_does_not_infer_exact_receiver".to_string(),
+                            cursor_marker: "cursor:dynamic_bless".to_string(),
+                            expected_receiver_package: None,
+                            expected_present: vec![],
+                            expected_absent: vec![
+                                "own_method".to_string(),
+                                "shared_name".to_string(),
+                                "unrelated_method".to_string(),
+                            ],
+                            expected_fallback: true,
+                        },
+                    ],
+                },
+            }],
         }
     }
 
@@ -4114,6 +4473,43 @@ mod tests {
         assert_eq!(dynamic.fixture_count, 1);
         assert_eq!(dynamic.label_modes, vec![LabelMode::Partial]);
         assert_eq!(dynamic.dynamic_boundary_case_count, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn method_completion_provider_scorer_measures_receiver_and_fallback() -> Result<()> {
+        let tmp = tempfile::tempdir()?;
+        write_method_completion_provider_fixture(tmp.path())?;
+
+        let score = score_method_completion_provider_expectations(
+            tmp.path(),
+            &method_completion_provider_manifest(),
+        )?;
+
+        assert_eq!(score.receiver_expected_count, 1);
+        assert_eq!(score.receiver_hit_count, 1);
+        assert_eq!(score.fallback_expected_count, 1);
+        assert_eq!(score.fallback_correct_count, 1);
+        assert_eq!(score.false_receiver_count, 0);
+        assert_eq!(score.relevance_assertion_count, 6);
+        assert_eq!(score.relevance_assertion_correct_count, 6);
+
+        let metrics = provider_impact_metrics(&score, Cadence::Pr);
+        let false_receiver = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "method_completion_false_receiver_count"
+                )
+            })
+            .ok_or_else(|| eyre!("method completion false receiver row should be measured"))?;
+        assert!(matches!(
+            false_receiver,
+            MetricRow::Measured { value, sample_count: 1, .. }
+                if (*value - 0.0).abs() < f64::EPSILON
+        ));
         Ok(())
     }
 
@@ -4813,7 +5209,8 @@ mod tests {
 
     #[test]
     fn provider_impact_metrics_remain_insufficient_until_gold_exists() {
-        let metrics = provider_impact_metrics();
+        let metrics =
+            provider_impact_metrics(&MethodCompletionProviderScore::default(), Cadence::Pr);
 
         assert!(metrics.iter().any(|metric| {
             matches!(
