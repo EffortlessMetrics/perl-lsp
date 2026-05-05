@@ -7,7 +7,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use tree_sitter_perl_c::{parse_perl_bytes, parse_perl_code, parse_perl_file};
+use tree_sitter_perl_c::{
+    ParsePerlError, parse_perl_bytes, parse_perl_code, parse_perl_file, try_parse_perl_file,
+};
 
 fn unique_temp_file(name: &str) -> PathBuf {
     let nanos =
@@ -127,5 +129,29 @@ fn regression_file_parse_with_unclosed_construct_is_recoverable() -> Result<(), 
     assert_eq!(tree.root_node().kind(), "source_file");
     assert!(tree.root_node().has_error(), "unclosed block should still return a partial tree");
 
+    Ok(())
+}
+
+#[test]
+fn regression_typed_file_parse_surfaces_io_errors() {
+    let file = unique_temp_file("missing_file");
+
+    let result = try_parse_perl_file(&file);
+
+    assert!(matches!(result, Err(ParsePerlError::Io(_))));
+}
+
+#[test]
+fn regression_typed_file_parse_accepts_crlf_content() -> Result<(), Box<dyn Error>> {
+    let file = unique_temp_file("crlf_content");
+    let source = "my $x = 1;\r\nmy $y = 2;\r\nprint $x + $y;\r\n";
+
+    fs::write(&file, source)?;
+    let tree = try_parse_perl_file(&file)?;
+
+    let _ = fs::remove_file(&file);
+
+    assert_eq!(tree.root_node().kind(), "source_file");
+    assert!(!tree.root_node().has_error());
     Ok(())
 }
