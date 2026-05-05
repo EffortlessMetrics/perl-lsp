@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "commit": "01b8bdc8d",
-  "generated_by": "cargo xtask update-status --only parser --write",
+  "commit": "d146f9c1d",
+  "generated_by": "cargo xtask metrics parser-accuracy --export-status-receipts",
   "fixture_count": 46,
   "family_count": 28,
   "scored_lines": 123,
