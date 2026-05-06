@@ -51,6 +51,25 @@ decision as a CI artifact. Use `--settle-seconds` to control how long the
 harness waits after the last `didClose` or watched-file delete before taking
 the final RSS sample.
 
+Convert a plateau summary into a registered receipt:
+
+```bash
+cargo xtask metrics memory \
+  --workload-json target/memory/doc_churn.json \
+  --plateau-json target/memory/doc_churn.plateau.json \
+  --scenario lsp_doc_churn_delete \
+  --receipt target/memory/receipts/doc_churn.receipt.json \
+  --commit "$(git rev-parse HEAD)" \
+  --event local \
+  --markdown
+```
+
+Validate it against the receipt registry:
+
+```bash
+cargo xtask gate-receipts validate target/memory/receipts/doc_churn.receipt.json
+```
+
 CI runs this in two tiers:
 
 - PR smoke: `75` files, `5` changes, document churn only, loose plateau gate,

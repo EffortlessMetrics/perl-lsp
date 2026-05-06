@@ -23,6 +23,13 @@ producer = "cargo xtask merge-ready emit"
 required_fields = ["head_sha", "base_sha", "gate_graph_version", "verdict"]
 
 [[receipt]]
+check = "memory-plateau"
+schema = ".ci/receipts/schemas/memory-plateau.schema.json"
+description = "Captures LSP memory plateau workload summaries for trend comparison."
+producer = "cargo xtask metrics memory"
+required_fields = ["kind", "scenario", "files", "changes_per_file", "tail_growth_kb", "median_tail_slope_kb_per_file", "passed", "commit"]
+
+[[receipt]]
 check = "fmt"
 schema = ".ci/receipts/schemas/fmt.schema.json"
 description = "Rustfmt gate receipt for explicit formatting outcomes."

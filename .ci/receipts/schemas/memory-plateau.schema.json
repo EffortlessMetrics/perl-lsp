@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/memory-plateau.schema.json",
+  "title": "Memory Plateau Receipt",
+  "allOf": [
+    { "$ref": "./common-gate-receipt.schema.json" },
+    {
+      "type": "object",
+      "required": [
+        "check",
+        "kind",
+        "scenario",
+        "files",
+        "changes_per_file",
+        "tail_growth_kb",
+        "median_tail_slope_kb_per_file",
+        "passed",
+        "commit"
+      ],
+      "properties": {
+        "check": { "const": "memory-plateau" },
+        "kind": { "const": "memory_plateau" },
+        "scenario": { "type": "string", "minLength": 1 },
+        "files": { "type": "integer", "minimum": 1 },
+        "changes_per_file": { "type": "integer", "minimum": 0 },
+        "workspace_symbol": { "type": "boolean" },
+        "delete_after_close": { "type": "boolean" },
+        "settle_seconds": { "type": "number", "minimum": 0 },
+        "tail_growth_kb": { "type": "integer" },
+        "tail_growth_pct": { "type": "number" },
+        "median_tail_slope_kb_per_file": { "type": "number" },
+        "samples": { "type": "integer", "minimum": 0 },
+        "passed": { "type": "boolean" },
+        "commit": { "type": ["string", "null"] },
+        "generated_at": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  ]
+}

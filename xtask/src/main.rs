@@ -1675,8 +1675,30 @@ enum MetricsCommand {
     WorkspaceStats,
     /// [stub] Diagnostics accuracy and latency statistics.
     DiagnosticsStats,
-    /// [stub] Hierarchical memory breakdown across LSP subsystems.
-    Memory,
+    /// Render memory plateau summaries and optional receipt JSON.
+    Memory {
+        /// Workload JSON emitted by scripts/repro_lsp_storm.py.
+        #[arg(long)]
+        workload_json: PathBuf,
+        /// Plateau summary JSON emitted by scripts/assert_rss_plateau.py.
+        #[arg(long)]
+        plateau_json: PathBuf,
+        /// Scenario id for the memory receipt.
+        #[arg(long)]
+        scenario: Option<String>,
+        /// Optional output path for the generated receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+        /// Git commit SHA attached to the receipt.
+        #[arg(long)]
+        commit: Option<String>,
+        /// Receipt event: pull_request, merge_group, push, or local.
+        #[arg(long, default_value = "local")]
+        event: String,
+        /// Render a markdown table instead of JSON to stdout.
+        #[arg(long)]
+        markdown: bool,
+    },
     /// Release-health dashboard — debt ledger + merge-gate baseline summary.
     ReleaseHealth {
         /// Number of days of history reported in the receipt window field.
@@ -2223,7 +2245,30 @@ fn main() -> Result<()> {
             }
             MetricsCommand::WorkspaceStats => metrics::workspace_stats::run(),
             MetricsCommand::DiagnosticsStats => metrics::diagnostics_stats::run(),
-            MetricsCommand::Memory => metrics::memory::run(),
+            MetricsCommand::Memory {
+                workload_json,
+                plateau_json,
+                scenario,
+                receipt,
+                commit,
+                event,
+                markdown,
+            } => {
+                let scenario = match scenario {
+                    Some(scenario) => scenario,
+                    None => metrics::memory::infer_scenario(&workload_json)
+                        .map_err(|error| eyre!(error.to_string()))?,
+                };
+                metrics::memory::run(metrics::memory::MemoryMetricsConfig {
+                    scenario,
+                    workload_json,
+                    plateau_json,
+                    receipt,
+                    commit,
+                    event,
+                    markdown,
+                })
+            }
             MetricsCommand::ReleaseHealth { days, json } => {
                 metrics::release_health::run(days, json)
             }
