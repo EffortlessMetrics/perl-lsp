@@ -4120,7 +4120,6 @@ fn provider_impact_metrics(
     cadence: Cadence,
 ) -> Vec<MetricRow> {
     const PROVIDER_METRICS: &[&str] = &[
-        "provider_goto_definition_hit_rate",
         "provider_references_precision",
         "provider_references_recall",
         "provider_hover_symbol_origin_accuracy",
@@ -4266,6 +4265,16 @@ fn provider_impact_metrics(
             ),
             navigation_score.goto_definition_expected_count,
             "no navigation goto-definition expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "provider_goto_definition_hit_rate",
+            ratio(
+                navigation_score.goto_definition_hit_count,
+                navigation_score.goto_definition_expected_count,
+            ),
+            navigation_score.goto_definition_expected_count,
+            "no provider goto-definition expectations are available",
             cadence,
         ),
         optional_measured_rate(
@@ -6230,6 +6239,21 @@ sub dynamic_boundary_case {
         assert!(matches!(
             document_symbol_recall,
             MetricRow::Measured { value, sample_count: 11, .. }
+                if (*value - 1.0).abs() < f64::EPSILON
+        ));
+        let goto_hit_rate = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "provider_goto_definition_hit_rate"
+                )
+            })
+            .ok_or_else(|| eyre!("provider goto-definition hit-rate row should exist"))?;
+        assert!(matches!(
+            goto_hit_rate,
+            MetricRow::Measured { value, sample_count: 3, .. }
                 if (*value - 1.0).abs() < f64::EPSILON
         ));
         Ok(())
