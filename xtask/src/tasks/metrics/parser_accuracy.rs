@@ -4122,7 +4122,6 @@ fn provider_impact_metrics(
     const PROVIDER_METRICS: &[&str] = &[
         "provider_references_precision",
         "provider_references_recall",
-        "provider_hover_symbol_origin_accuracy",
         "provider_rename_safe_edit_accuracy",
         "provider_safe_delete_blocker_accuracy",
     ];
@@ -4331,6 +4330,16 @@ fn provider_impact_metrics(
             ),
             navigation_score.hover_expected_count,
             "no navigation hover expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "provider_hover_symbol_origin_accuracy",
+            ratio(
+                navigation_score.hover_origin_correct_count,
+                navigation_score.hover_expected_count,
+            ),
+            navigation_score.hover_expected_count,
+            "no provider hover symbol-origin expectations are available",
             cadence,
         ),
     ];
@@ -6254,6 +6263,21 @@ sub dynamic_boundary_case {
         assert!(matches!(
             goto_hit_rate,
             MetricRow::Measured { value, sample_count: 3, .. }
+                if (*value - 1.0).abs() < f64::EPSILON
+        ));
+        let hover_origin_accuracy = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "provider_hover_symbol_origin_accuracy"
+                )
+            })
+            .ok_or_else(|| eyre!("provider hover symbol-origin row should exist"))?;
+        assert!(matches!(
+            hover_origin_accuracy,
+            MetricRow::Measured { value, sample_count: 1, .. }
                 if (*value - 1.0).abs() < f64::EPSILON
         ));
         Ok(())
