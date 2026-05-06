@@ -767,6 +767,7 @@ struct RecoveryScore {
     error_region_false_positive_count: u64,
     error_region_false_negative_count: u64,
     spillover_lines: Vec<u64>,
+    recovery_parse_micros: Vec<u64>,
     post_error_line_score: LineScore,
     post_error_symbol_expected_count: u64,
     post_error_symbol_found_count: u64,
@@ -1036,6 +1037,7 @@ fn build_artifact(
     metrics.extend(scale_metrics(&scale_cost_score, cadence));
     metrics.extend(cost_metrics(
         &scale_cost_score,
+        &recovery_score,
         &method_completion_provider_score,
         &navigation_provider_score,
         cadence,
@@ -1373,7 +1375,8 @@ fn score_manifest_recovery(
         let source = fs::read_to_string(&source_path).with_context(|| {
             format!("reading parser accuracy recovery fixture source {}", source_path.display())
         })?;
-        let prediction = extract_recovery_prediction(&source_path, &source);
+        let (prediction, recovery_micros) = extract_recovery_prediction(&source_path, &source);
+        score.recovery_parse_micros.push(recovery_micros);
         for expectation in &fixture.recovery_expectations {
             score_recovery_expectation(expectation, &prediction, &mut score);
         }
@@ -1389,9 +1392,11 @@ struct RecoveryPrediction {
     symbol_spans: BTreeSet<SymbolSpanLocation>,
 }
 
-fn extract_recovery_prediction(source_path: &Path, source: &str) -> RecoveryPrediction {
+fn extract_recovery_prediction(source_path: &Path, source: &str) -> (RecoveryPrediction, u64) {
     let mut parser = Parser::new(source);
+    let recovery_start = Instant::now();
     let output = parser.parse_with_recovery();
+    let recovery_micros = recovery_start.elapsed().as_micros() as u64;
     let line_starts = line_starts(source);
     let mut error_lines = BTreeSet::new();
     for diagnostic in &output.diagnostics {
@@ -1407,12 +1412,15 @@ fn extract_recovery_prediction(source_path: &Path, source: &str) -> RecoveryPred
         .map(|predictions| predictions.safety_spans)
         .unwrap_or_default();
 
-    RecoveryPrediction {
-        first_error_line: error_lines.first().copied(),
-        error_region_lines: error_lines,
-        actual_by_line,
-        symbol_spans,
-    }
+    (
+        RecoveryPrediction {
+            first_error_line: error_lines.first().copied(),
+            error_region_lines: error_lines,
+            actual_by_line,
+            symbol_spans,
+        },
+        recovery_micros,
+    )
 }
 
 fn parse_error_location(error: &ParseError) -> Option<usize> {
@@ -4573,6 +4581,7 @@ fn scale_metrics(score: &ScaleCostScore, cadence: Cadence) -> Vec<MetricRow> {
 
 fn cost_metrics(
     score: &ScaleCostScore,
+    recovery_score: &RecoveryScore,
     method_completion_score: &MethodCompletionProviderScore,
     navigation_score: &NavigationProviderScore,
     cadence: Cadence,
@@ -4599,7 +4608,13 @@ fn cost_metrics(
             "AST projection timing samples are not available",
             cadence,
         ),
-        insufficient("recovery_ms_p95", "recovery timing is not instrumented separately yet"),
+        optional_measured_value(
+            "recovery_ms_p95",
+            p95_micros_as_ms(&recovery_score.recovery_parse_micros),
+            recovery_score.recovery_parse_micros.len() as u64,
+            "recovery timing samples are not available",
+            cadence,
+        ),
         optional_measured_value(
             "semantic_extraction_ms_p95",
             p95_f64(&score.semantic_extraction_ms),
@@ -6349,6 +6364,7 @@ sub dynamic_boundary_case {
         ));
         let cost_metrics = cost_metrics(
             &ScaleCostScore::default(),
+            &RecoveryScore::default(),
             &score,
             &NavigationProviderScore::default(),
             Cadence::Pr,
@@ -6607,6 +6623,7 @@ sub dynamic_boundary_case {
         ));
         let cost_metrics = cost_metrics(
             &ScaleCostScore::default(),
+            &RecoveryScore::default(),
             &MethodCompletionProviderScore::default(),
             &score,
             Cadence::Pr,
@@ -7245,6 +7262,7 @@ sub dynamic_boundary_case {
             first_error_line_correct_count: 1,
             error_region_true_positive_count: 1,
             spillover_lines: vec![0, 2],
+            recovery_parse_micros: vec![1_000, 2_000],
             post_error_line_score: LineScore {
                 line_count: 1,
                 true_positive_count: 1,
@@ -7272,6 +7290,21 @@ sub dynamic_boundary_case {
                 MetricRow::Measured { metric, value, sample_count: 1, .. }
                     if metric == "recovery_post_error_symbol_recall"
                         && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+        let cost_metrics = cost_metrics(
+            &ScaleCostScore::default(),
+            &score,
+            &MethodCompletionProviderScore::default(),
+            &NavigationProviderScore::default(),
+            Cadence::Pr,
+        );
+        assert!(cost_metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "recovery_ms_p95"
+                        && (*value - 2.0).abs() < f64::EPSILON
             )
         }));
     }
@@ -7543,6 +7576,7 @@ sub dynamic_boundary_case {
         let mut metrics = scale_metrics(&score, Cadence::Pr);
         metrics.extend(cost_metrics(
             &score,
+            &RecoveryScore::default(),
             &MethodCompletionProviderScore::default(),
             &NavigationProviderScore::default(),
             Cadence::Pr,
