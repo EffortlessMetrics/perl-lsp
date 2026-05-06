@@ -4120,7 +4120,6 @@ fn provider_impact_metrics(
     cadence: Cadence,
 ) -> Vec<MetricRow> {
     const PROVIDER_METRICS: &[&str] = &[
-        "provider_document_symbol_recall",
         "provider_goto_definition_hit_rate",
         "provider_references_precision",
         "provider_references_recall",
@@ -4237,6 +4236,16 @@ fn provider_impact_metrics(
             ),
             navigation_score.document_symbol_expected_count,
             "no navigation document-symbol expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "provider_document_symbol_recall",
+            ratio(
+                navigation_score.document_symbol_span_exact_count,
+                navigation_score.document_symbol_expected_count,
+            ),
+            navigation_score.document_symbol_expected_count,
+            "no provider document-symbol recall expectations are available",
             cadence,
         ),
         optional_measured_rate(
@@ -6205,6 +6214,21 @@ sub dynamic_boundary_case {
             .ok_or_else(|| eyre!("provider document-symbol precision row should exist"))?;
         assert!(matches!(
             document_symbol_precision,
+            MetricRow::Measured { value, sample_count: 11, .. }
+                if (*value - 1.0).abs() < f64::EPSILON
+        ));
+        let document_symbol_recall = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "provider_document_symbol_recall"
+                )
+            })
+            .ok_or_else(|| eyre!("provider document-symbol recall row should exist"))?;
+        assert!(matches!(
+            document_symbol_recall,
             MetricRow::Measured { value, sample_count: 11, .. }
                 if (*value - 1.0).abs() < f64::EPSILON
         ));
