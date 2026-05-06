@@ -889,13 +889,8 @@ pub fn run(
     let cadence = Cadence::parse(cadence)?;
     let manifest_path = manifest.unwrap_or_else(|| root.join(DEFAULT_MANIFEST));
     let output_path = output.unwrap_or_else(|| root.join(DEFAULT_OUTPUT));
-    let start = Instant::now();
 
-    let manifest = read_manifest(&root, &manifest_path)?;
-    let mut artifact = build_artifact(&root, &manifest, cadence)?;
-    artifact.metric_runtime.runtime_ms = start.elapsed().as_secs_f64() * 1000.0;
-    settle_artifact_size(&mut artifact)?;
-    sync_runtime_metric_rows(&mut artifact, cadence);
+    let (manifest, artifact) = build_status_artifact(&root, &manifest_path, cadence)?;
 
     if check {
         validate_artifact_contract(&artifact)?;
@@ -921,6 +916,31 @@ pub fn run(
     }
 
     Ok(())
+}
+
+pub fn refresh_default_artifact_for_status(root: &Path) -> Result<()> {
+    let manifest_path = root.join(DEFAULT_MANIFEST);
+    let output_path = root.join(DEFAULT_OUTPUT);
+    let (_manifest, artifact) = build_status_artifact(root, &manifest_path, Cadence::Pr)?;
+    validate_artifact_contract(&artifact)?;
+    write_artifact(&output_path, &artifact)?;
+    write_ratchet_receipt(root, &artifact)?;
+    println!("parser accuracy artifact written: {}", output_path.display());
+    Ok(())
+}
+
+fn build_status_artifact(
+    root: &Path,
+    manifest_path: &Path,
+    cadence: Cadence,
+) -> Result<(ParserAccuracyManifest, ParserAccuracyArtifact)> {
+    let start = Instant::now();
+    let manifest = read_manifest(root, manifest_path)?;
+    let mut artifact = build_artifact(root, &manifest, cadence)?;
+    artifact.metric_runtime.runtime_ms = start.elapsed().as_secs_f64() * 1000.0;
+    settle_artifact_size(&mut artifact)?;
+    sync_runtime_metric_rows(&mut artifact, cadence);
+    Ok((manifest, artifact))
 }
 
 fn read_manifest(root: &Path, path: &Path) -> Result<ParserAccuracyManifest> {
