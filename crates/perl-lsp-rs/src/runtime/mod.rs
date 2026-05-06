@@ -451,7 +451,7 @@ impl LspServer {
         &self.stream_session_manager
     }
 
-    fn uri_key_variants(&self, uri: &str) -> Vec<String> {
+    pub(crate) fn uri_key_variants(&self, uri: &str) -> Vec<String> {
         fn push_unique(keys: &mut Vec<String>, key: String) {
             if !keys.iter().any(|existing| existing == &key) {
                 keys.push(key);

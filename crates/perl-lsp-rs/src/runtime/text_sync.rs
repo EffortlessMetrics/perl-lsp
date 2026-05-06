@@ -444,10 +444,12 @@ impl LspServer {
 
             // Cancel any active streaming inline completion sessions for this URI
             // that are older than the new document version.
-            if let Some(version) = incoming_version_i64 {
-                self.stream_sessions().cancel_for_uri_version(uri, version);
-            } else {
-                self.stream_sessions().cancel_for_uri(uri);
+            for key in self.uri_key_variants(uri) {
+                if let Some(version) = incoming_version_i64 {
+                    self.stream_sessions().cancel_for_uri_version(&key, version);
+                } else {
+                    self.stream_sessions().cancel_for_uri(&key);
+                }
             }
 
             if let Some(changes) = params["contentChanges"].as_array() {
@@ -1971,6 +1973,59 @@ mod tests {
 
             Ok::<(), Box<dyn std::error::Error>>(())
         })?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_did_change_cancels_stream_sessions_for_uri_variants()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("stream_variant.pl");
+        let source = "package Stream::Variant;\nsub target { 1 }\n1;\n";
+        std::fs::write(&path, source)?;
+
+        let canonical_uri =
+            url::Url::from_file_path(&path).map_err(|()| "failed to build file URI")?.to_string();
+        let raw_path = canonical_uri
+            .strip_prefix("file://")
+            .ok_or("expected file URI for stream variant test")?;
+        let localhost_uri = format!("file://localhost{raw_path}");
+        assert_ne!(canonical_uri, localhost_uri);
+        assert_eq!(
+            server.normalize_uri_key(&canonical_uri),
+            server.normalize_uri_key(&localhost_uri)
+        );
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": canonical_uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": source
+            }
+        }))?;
+        server.stream_sessions().start_session(crate::runtime::stream_session::SessionKey {
+            uri: canonical_uri.clone(),
+            document_version: 1,
+            line: 0,
+            character: 0,
+        });
+        assert_eq!(server.memory_state_snapshot().stream_sessions, 1);
+
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": localhost_uri, "version": 2 },
+            "contentChanges": [{
+                "text": "package Stream::Variant;\nsub target { 2 }\n1;\n"
+            }]
+        })))?;
+
+        assert_eq!(
+            server.memory_state_snapshot().stream_sessions,
+            0,
+            "didChange must cancel stale stream sessions across normalized URI variants"
+        );
 
         Ok(())
     }
