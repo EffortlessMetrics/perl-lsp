@@ -451,6 +451,9 @@ enum Commands {
     /// Check for disallowed direct `ExitStatus::from_raw()` usage.
     CheckFromRaw,
 
+    /// Enforce retained-state lifecycle and memory receipt invariants.
+    CheckMemoryLifecyclePolicy,
+
     /// Run production security hardening checks.
     SecurityHardening,
 
@@ -2008,6 +2011,7 @@ fn main() -> Result<()> {
         }
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
+        Commands::CheckMemoryLifecyclePolicy => ci_policy::check_memory_lifecycle(),
         Commands::SecurityHardening => hardening::security_hardening(),
         Commands::PerformanceHardening => hardening::performance_hardening(),
         Commands::ProductionGatesValidation => hardening::production_gates_validation(),

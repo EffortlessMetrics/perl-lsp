@@ -1380,6 +1380,7 @@ ci-policy:
     @echo "⚖️  Checking project policies..."
     just ci-check-todos
     @cargo xtask check-from-raw
+    @cargo xtask check-memory-lifecycle-policy
     just version-check
     just ci-doc-claims
 
