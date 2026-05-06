@@ -859,6 +859,7 @@ struct NavigationProviderScore {
     references_returned_count: u64,
     references_false_positive_count: u64,
     references_absent_assertion_count: u64,
+    reference_query_micros: Vec<u64>,
     hover_expected_count: u64,
     hover_origin_correct_count: u64,
     rename_safe_edit_expected_count: u64,
@@ -2215,8 +2216,10 @@ fn score_navigation_references(
         .with_context(|| format!("resolving navigation entity for {}", expectation.id))?;
     let actual_spans = index
         .with_semantic_queries_for_uri(source_path_text, |_file_id, semantic_queries| {
+            let query_start = Instant::now();
             let outcome =
                 find_references_cutover(index, &semantic_queries, &expectation.symbol, entity_id);
+            score.reference_query_micros.push(query_start.elapsed().as_micros() as u64);
             reference_result_spans(index_source, &outcome.result, anchors_by_id)
         })
         .ok_or_else(|| eyre!("missing semantic queries for navigation fixture"))?;
@@ -4630,7 +4633,13 @@ fn cost_metrics(
             "provider definition query timing samples are not available",
             cadence,
         ),
-        insufficient("reference_query_ms_p95", "provider query timing is not wired yet"),
+        optional_measured_value(
+            "reference_query_ms_p95",
+            p95_micros_as_ms(&navigation_score.reference_query_micros),
+            navigation_score.reference_query_micros.len() as u64,
+            "provider reference query timing samples are not available",
+            cadence,
+        ),
         optional_measured_value(
             "completion_query_ms_p95",
             p95_micros_as_ms(&method_completion_score.completion_query_micros),
@@ -6474,6 +6483,7 @@ sub dynamic_boundary_case {
         assert_eq!(score.references_hit_count, 1);
         assert_eq!(score.references_returned_count, 1);
         assert_eq!(score.references_false_positive_count, 0);
+        assert_eq!(score.reference_query_micros.len(), 1);
         assert_eq!(score.hover_expected_count, 1);
         assert_eq!(score.hover_origin_correct_count, 1);
         assert_eq!(score.rename_safe_edit_expected_count, 1);
@@ -6640,6 +6650,19 @@ sub dynamic_boundary_case {
         assert!(matches!(
             definition_query_ms,
             MetricRow::Measured { value, sample_count: 3, .. } if *value >= 0.0
+        ));
+        let reference_query_ms = cost_metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. } if metric == "reference_query_ms_p95"
+                )
+            })
+            .ok_or_else(|| eyre!("reference query timing row should be measured"))?;
+        assert!(matches!(
+            reference_query_ms,
+            MetricRow::Measured { value, sample_count: 1, .. } if *value >= 0.0
         ));
         Ok(())
     }
