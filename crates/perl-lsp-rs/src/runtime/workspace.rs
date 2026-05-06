@@ -788,10 +788,46 @@ impl LspServer {
                         coordinator.index().remove_file(&uri);
                     }
 
-                    // Remove from document store
+                    // Remove from document store under both raw and normalized
+                    // URI keys. didOpen stores documents under
+                    // `normalize_uri_key(uri)`, but the watcher payload may use
+                    // a non-canonical form (`file://localhost/...`, Windows
+                    // drive-letter casing, percent-encoding variants). Without
+                    // the normalized lookup the document leaks into the
+                    // session's open-doc map indefinitely.
+                    let normalized_uri = self.normalize_uri_key(&uri);
                     {
                         let mut documents = self.documents.lock();
                         documents.remove(&uri);
+                        if normalized_uri != uri {
+                            documents.remove(&normalized_uri);
+                        }
+                    }
+
+                    // Cancel stream sessions and clear parse-cancel flags for
+                    // both URI forms so per-file state does not survive the
+                    // delete event.
+                    self.stream_sessions().cancel_for_uri(&uri);
+                    if normalized_uri != uri {
+                        self.stream_sessions().cancel_for_uri(&normalized_uri);
+                    }
+                    {
+                        use std::sync::atomic::Ordering;
+                        let mut flags = self.parse_cancel_flags.lock();
+                        if let Some(flag) = flags.remove(&uri) {
+                            flag.store(true, Ordering::Release);
+                        }
+                        if normalized_uri != uri {
+                            if let Some(flag) = flags.remove(&normalized_uri) {
+                                flag.store(true, Ordering::Release);
+                            }
+                        }
+                    }
+
+                    // Evict the cached AST under both URI forms.
+                    self.ast_cache.remove(&uri);
+                    if normalized_uri != uri {
+                        self.ast_cache.remove(&normalized_uri);
                     }
 
                     tracing::debug!(uri, "Removed deleted file from index");

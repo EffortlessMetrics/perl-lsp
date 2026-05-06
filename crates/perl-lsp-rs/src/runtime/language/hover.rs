@@ -1233,11 +1233,33 @@ impl LspServer {
     /// Uses a per-path cache to avoid re-parsing on every hover request.
     /// Returns an empty string if no POD is found or the file cannot be read.
     fn format_pod_for_hover(&self, path: &Path) -> String {
+        // Soft cap on pod_cache size. The cache is keyed by filesystem path
+        // (not the open document), so it accumulates entries for every module
+        // ever hovered during the session — the open/close lifecycle does not
+        // shrink it. Without this cap a session that hovers many modules grows
+        // unboundedly. When the cap is reached we drain to half capacity using
+        // an arbitrary-victim policy (HashMap iteration order); precision is
+        // unimportant — re-extracting POD is cheap.
+        const POD_CACHE_SOFT_CAP: usize = 1024;
+        const POD_CACHE_PRUNE_TARGET: usize = 512;
+
         let pod = {
             let mut cache = self.pod_cache.lock();
             if let Some(cached) = cache.get(path) {
                 cached.clone()
             } else {
+                if cache.len() >= POD_CACHE_SOFT_CAP {
+                    let drop_count = cache.len().saturating_sub(POD_CACHE_PRUNE_TARGET);
+                    let mut dropped = 0usize;
+                    cache.retain(|_, _| {
+                        if dropped < drop_count {
+                            dropped += 1;
+                            false
+                        } else {
+                            true
+                        }
+                    });
+                }
                 let doc = perl_pod::extract_pod_from_file(path).unwrap_or_default();
                 cache.insert(path.to_path_buf(), doc.clone());
                 doc

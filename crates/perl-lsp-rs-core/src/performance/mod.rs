@@ -68,6 +68,16 @@ impl AstCache {
         self.cache.insert(uri, CachedAst { ast, content_hash });
     }
 
+    /// Evict the cached AST for a single URI.
+    ///
+    /// Called on `textDocument/didClose` so the (potentially large) `Arc<Node>`
+    /// is dropped immediately rather than surviving until the TTL fires. With
+    /// rapid open/close churn over a session the TTL alone is not sufficient
+    /// to bound peak memory.
+    pub fn remove(&self, uri: &str) {
+        self.cache.remove(uri);
+    }
+
     /// Clear expired entries.
     ///
     /// Moka handles expiration automatically, but this method is kept for API compatibility.
@@ -275,8 +285,43 @@ pub mod parallel {
 
 #[cfg(test)]
 mod tests {
+    use super::AstCache;
     use super::IncrementalParser;
     use super::parallel::process_files_parallel;
+    use perl_parser_core::{Node, NodeKind, SourceLocation};
+    use std::sync::Arc;
+
+    fn dummy_ast() -> Arc<Node> {
+        Arc::new(Node::new(
+            NodeKind::Number { value: "0".to_string() },
+            SourceLocation { start: 0, end: 1 },
+        ))
+    }
+
+    #[test]
+    fn ast_cache_remove_evicts_entry_immediately() {
+        let cache = AstCache::new(16, 3600);
+        let uri = "file:///mem/leak.pl".to_string();
+        let content = "0";
+
+        cache.put(uri.clone(), content, dummy_ast());
+        assert!(cache.get(&uri, content).is_some(), "put then get must hit");
+
+        cache.remove(&uri);
+        cache.cleanup(); // flush moka pending tasks so entry_count is exact
+
+        assert!(
+            cache.get(&uri, content).is_none(),
+            "after remove, get must miss (regression: didClose left ASTs alive until TTL)"
+        );
+    }
+
+    #[test]
+    fn ast_cache_remove_unknown_uri_is_noop() {
+        let cache = AstCache::new(4, 60);
+        cache.remove("file:///never-cached.pl");
+        // Must not panic; nothing else to assert.
+    }
 
     #[test]
     fn process_files_parallel_preserves_input_order() {
