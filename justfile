@@ -1902,9 +1902,9 @@ coverage-parser:
           'cargo llvm-cov -p perl-parser -p perl-parser-core --all-features --branch --lcov --output-path target/coverage/parser.lcov' \
           > target/coverage/parser.command.txt; \
         echo "📝 Wrote target/coverage/parser.command.txt"; \
-        exit 0; \
+    else \
+        "$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser -p perl-parser-core --all-features --branch --lcov --output-path target/coverage/parser.lcov; \
     fi
-    @"$HOME/.cargo/bin/rustup" run nightly cargo llvm-cov -p perl-parser -p perl-parser-core --all-features --branch --lcov --output-path target/coverage/parser.lcov
     @echo "✅ Parser coverage: target/coverage/parser.lcov"
 
 # ============================================================================
