@@ -1,0 +1,8 @@
+schema = 1
+
+[[debt]]
+lint = "clippy::unwrap_used"
+path = "clippy.toml"
+owner = "lint-policy"
+reason = "Existing test suite still contains unwrap/expect-style fixture setup; remove this broad carveout after panic-free test helper migration."
+expires = "2026-07-01"

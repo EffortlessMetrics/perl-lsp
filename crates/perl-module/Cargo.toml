@@ -16,3 +16,6 @@ perl-workspace = { workspace = true }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 perl-tdd-support = { workspace = true }
+
+[lints]
+workspace = true

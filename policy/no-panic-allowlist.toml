@@ -1,0 +1,4 @@
+schema_version = "0.3"
+
+# No panic-family exceptions are approved by default.
+# Entries use path + family + selector as identity; last_seen is advisory only.

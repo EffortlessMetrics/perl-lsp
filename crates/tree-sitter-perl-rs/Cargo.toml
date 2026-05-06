@@ -45,3 +45,6 @@ perl-semantic-analyzer = { workspace = true }
 perl-tdd-support = { workspace = true }
 insta = { version = "1.47.2" }
 perl-position-tracking = { workspace = true }
+
+[lints]
+workspace = true

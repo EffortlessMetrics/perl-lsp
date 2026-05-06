@@ -1,0 +1,148 @@
+schema = 1
+msrv = "1.93"
+
+[policy]
+panic_free_tests = true
+allow_test_carveouts = false
+suppression_style = "expect-with-reason"
+blanket_categories = false
+
+# Active lints mirrored from Cargo.toml for this first policy PR.
+
+[[lint]]
+name = "rust::unexpected_cfgs"
+level = "warn"
+status = "active"
+class = "rust-baseline"
+reason = "Workspace Rust lint baseline: unexpected_cfgs must stay governed."
+
+[[lint]]
+name = "clippy::collapsible_if"
+level = "allow"
+status = "active"
+class = "compatibility"
+reason = "Current workspace lint baseline for collapsible_if; stricter planned flips are tracked in follow-up debt."
+
+[[lint]]
+name = "clippy::unwrap_used"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "Current workspace lint baseline for unwrap_used; stricter planned flips are tracked in follow-up debt."
+
+[[lint]]
+name = "clippy::expect_used"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "Current workspace lint baseline for expect_used; stricter planned flips are tracked in follow-up debt."
+
+[[lint]]
+name = "clippy::panic"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "Current workspace lint baseline for panic; stricter planned flips are tracked in follow-up debt."
+
+[[lint]]
+name = "clippy::todo"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "Current workspace lint baseline for todo; stricter planned flips are tracked in follow-up debt."
+
+[[lint]]
+name = "clippy::unimplemented"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "Current workspace lint baseline for unimplemented; stricter planned flips are tracked in follow-up debt."
+
+[[lint]]
+name = "clippy::dbg_macro"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "Current workspace lint baseline for dbg_macro; stricter planned flips are tracked in follow-up debt."
+
+# Planned Rust-version ratchets. These must remain planned until the workspace MSRV reaches activate_when_msrv.
+
+[[lint]]
+name = "clippy::same_length_and_capacity"
+level = "deny"
+status = "planned"
+activate_when_msrv = "1.94"
+class = "upgrade-ratchet"
+reason = "Catch raw-parts reconstruction mistakes."
+
+[[lint]]
+name = "clippy::manual_ilog2"
+level = "warn"
+status = "planned"
+activate_when_msrv = "1.94"
+class = "upgrade-ratchet"
+reason = "Prefer the standard integer log helper."
+
+[[lint]]
+name = "clippy::decimal_bitwise_operands"
+level = "warn"
+status = "planned"
+activate_when_msrv = "1.94"
+class = "upgrade-ratchet"
+reason = "Make bit masks visually inspectable."
+
+[[lint]]
+name = "clippy::needless_type_cast"
+level = "warn"
+status = "planned"
+activate_when_msrv = "1.94"
+class = "upgrade-ratchet"
+reason = "Avoid stale numeric type drift."
+
+[[lint]]
+name = "clippy::disallowed_fields"
+level = "deny"
+status = "planned"
+activate_when_msrv = "1.95"
+class = "upgrade-ratchet"
+reason = "Allow architecture policy to ban direct field access across protected seams."
+
+[[lint]]
+name = "clippy::manual_checked_ops"
+level = "warn"
+status = "planned"
+activate_when_msrv = "1.95"
+class = "upgrade-ratchet"
+reason = "Prefer checked arithmetic over manual divide-by-zero guards."
+
+[[lint]]
+name = "clippy::manual_take"
+level = "warn"
+status = "planned"
+activate_when_msrv = "1.95"
+class = "upgrade-ratchet"
+reason = "Use standard ownership helper instead of local reimplementation."
+
+[[lint]]
+name = "clippy::manual_pop_if"
+level = "warn"
+status = "planned"
+activate_when_msrv = "1.95"
+class = "upgrade-ratchet"
+reason = "Use collection APIs that encode predicate-and-pop intent directly."
+
+[[lint]]
+name = "clippy::duration_suboptimal_units"
+level = "warn"
+status = "planned"
+activate_when_msrv = "1.95"
+class = "upgrade-ratchet"
+reason = "Make durations legible without mental unit conversion."
+
+[[lint]]
+name = "clippy::unnecessary_trailing_comma"
+level = "warn"
+status = "planned"
+activate_when_msrv = "1.95"
+class = "upgrade-ratchet"
+reason = "Keep generated and hand-written format macro calls clean."

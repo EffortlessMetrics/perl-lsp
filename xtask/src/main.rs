@@ -48,6 +48,10 @@ enum Commands {
     /// Run format and clippy checks only (no tests)
     CheckOnly,
 
+    /// Validate workspace Clippy lint policy ledgers and inheritance.
+    #[command(name = "check-lint-policy")]
+    CheckLintPolicy,
+
     /// Verify local Rust toolchain meets the pinned MSRV in rust-toolchain.toml.
     CheckToolchain {
         /// Show a warning when rustc satisfies the minimum MSRV but differs
@@ -1820,6 +1824,7 @@ fn main() -> Result<()> {
         }
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
+        Commands::CheckLintPolicy => lint_policy::run(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
