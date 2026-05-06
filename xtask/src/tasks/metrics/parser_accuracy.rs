@@ -4119,7 +4119,6 @@ fn provider_impact_metrics(
         "provider_rename_safe_edit_accuracy",
         "provider_safe_delete_blocker_accuracy",
         "provider_diagnostic_false_positive_rate",
-        "provider_diagnostic_false_negative_rate",
     ];
 
     let mut rows = vec![
@@ -4196,6 +4195,16 @@ fn provider_impact_metrics(
             diagnostic_score.undefined_false_negative_count,
             diagnostic_score.undefined_expected_present_count,
             "no diagnostic undefined-symbol false-negative expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "provider_diagnostic_false_negative_rate",
+            ratio(
+                diagnostic_score.undefined_false_negative_count,
+                diagnostic_score.undefined_expected_present_count,
+            ),
+            diagnostic_score.undefined_expected_present_count,
+            "no provider diagnostic false-negative expectations are available",
             cadence,
         ),
         optional_measured_rate(
@@ -6061,6 +6070,21 @@ sub dynamic_boundary_case {
         assert!(matches!(
             dynamic_false_positive,
             MetricRow::Measured { value, sample_count: 4, .. }
+                if (*value - 0.0).abs() < f64::EPSILON
+        ));
+        let false_negative_rate = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "provider_diagnostic_false_negative_rate"
+                )
+            })
+            .ok_or_else(|| eyre!("provider diagnostic false-negative row should be measured"))?;
+        assert!(matches!(
+            false_negative_rate,
+            MetricRow::Measured { value, sample_count: 2, .. }
                 if (*value - 0.0).abs() < f64::EPSILON
         ));
         Ok(())
