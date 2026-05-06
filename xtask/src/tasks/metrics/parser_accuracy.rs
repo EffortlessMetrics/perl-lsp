@@ -830,6 +830,7 @@ struct MethodCompletionProviderScore {
     relevance_assertion_correct_count: u64,
     import_visibility_expected_count: u64,
     import_visibility_correct_count: u64,
+    completion_query_micros: Vec<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -1032,7 +1033,7 @@ fn build_artifact(
         cadence,
     ));
     metrics.extend(scale_metrics(&scale_cost_score, cadence));
-    metrics.extend(cost_metrics(&scale_cost_score, cadence));
+    metrics.extend(cost_metrics(&scale_cost_score, &method_completion_provider_score, cadence));
     metrics.extend(cache_reuse_metrics(&incremental_score, cadence));
     metrics.extend(determinism_metrics(&determinism_score, cadence));
     metrics.extend(gold_drift_metrics(&gold_drift, denominator.fixture_count, cadence));
@@ -1892,7 +1893,9 @@ fn score_method_completion_provider_expectations(
         for expectation in &fixture.provider_expectations.method_completion {
             let cursor = locate_cursor_marker(&source, &expectation.cursor_marker)
                 .with_context(|| format!("locating cursor marker for {}", expectation.id))?;
+            let query_start = Instant::now();
             let completions = provider.get_completions(&provider_source, cursor);
+            score.completion_query_micros.push(query_start.elapsed().as_micros() as u64);
             let labels = completions.iter().map(|item| item.label.clone()).collect::<BTreeSet<_>>();
             score_method_completion_expectation(expectation, &labels, &mut score);
         }
@@ -4560,7 +4563,11 @@ fn scale_metrics(score: &ScaleCostScore, cadence: Cadence) -> Vec<MetricRow> {
     ]
 }
 
-fn cost_metrics(score: &ScaleCostScore, cadence: Cadence) -> Vec<MetricRow> {
+fn cost_metrics(
+    score: &ScaleCostScore,
+    method_completion_score: &MethodCompletionProviderScore,
+    cadence: Cadence,
+) -> Vec<MetricRow> {
     vec![
         optional_measured_value(
             "lex_ms_p95",
@@ -4594,7 +4601,13 @@ fn cost_metrics(score: &ScaleCostScore, cadence: Cadence) -> Vec<MetricRow> {
         insufficient("workspace_insert_ms_p95", "workspace insert timing is not isolated yet"),
         insufficient("definition_query_ms_p95", "provider query timing is not wired yet"),
         insufficient("reference_query_ms_p95", "provider query timing is not wired yet"),
-        insufficient("completion_query_ms_p95", "provider query timing is not wired yet"),
+        optional_measured_value(
+            "completion_query_ms_p95",
+            p95_micros_as_ms(&method_completion_score.completion_query_micros),
+            method_completion_score.completion_query_micros.len() as u64,
+            "provider completion query timing samples are not available",
+            cadence,
+        ),
         insufficient("peak_rss_mb", "memory telemetry is not wired yet"),
         insufficient("allocated_bytes", "allocation telemetry is not wired yet"),
         insufficient("allocation_count", "allocation telemetry is not wired yet"),
@@ -4958,6 +4971,10 @@ fn p95_f64(values: &[f64]) -> Option<f64> {
     let rank = ((sorted.len() as f64) * 0.95).ceil() as usize;
     let index = rank.saturating_sub(1).min(sorted.len() - 1);
     Some(sorted[index])
+}
+
+fn p95_micros_as_ms(values: &[u64]) -> Option<f64> {
+    p95_u64(values).map(|micros| micros / 1000.0)
 }
 
 fn insufficient(metric: &str, reason: &str) -> MetricRow {
@@ -6262,6 +6279,7 @@ sub dynamic_boundary_case {
         assert_eq!(score.relevance_assertion_correct_count, 9);
         assert_eq!(score.import_visibility_expected_count, 1);
         assert_eq!(score.import_visibility_correct_count, 1);
+        assert_eq!(score.completion_query_micros.len(), 3);
 
         let metrics = provider_impact_metrics(
             &score,
@@ -6313,6 +6331,20 @@ sub dynamic_boundary_case {
             import_visibility,
             MetricRow::Measured { value, sample_count: 1, .. }
                 if (*value - 1.0).abs() < f64::EPSILON
+        ));
+        let cost_metrics = cost_metrics(&ScaleCostScore::default(), &score, Cadence::Pr);
+        let completion_query_ms = cost_metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. } if metric == "completion_query_ms_p95"
+                )
+            })
+            .ok_or_else(|| eyre!("completion query timing row should be measured"))?;
+        assert!(matches!(
+            completion_query_ms,
+            MetricRow::Measured { value, sample_count: 3, .. } if *value >= 0.0
         ));
         Ok(())
     }
@@ -7469,7 +7501,11 @@ sub dynamic_boundary_case {
         };
 
         let mut metrics = scale_metrics(&score, Cadence::Pr);
-        metrics.extend(cost_metrics(&score, Cadence::Pr));
+        metrics.extend(cost_metrics(
+            &score,
+            &MethodCompletionProviderScore::default(),
+            Cadence::Pr,
+        ));
 
         assert!(metrics.iter().any(|metric| {
             matches!(
