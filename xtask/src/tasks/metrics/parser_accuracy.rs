@@ -831,6 +831,7 @@ struct DiagnosticProviderScore {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct NavigationProviderScore {
     document_symbol_expected_count: u64,
+    document_symbol_returned_count: u64,
     document_symbol_span_exact_count: u64,
     goto_definition_expected_count: u64,
     goto_definition_hit_count: u64,
@@ -2092,8 +2093,17 @@ fn score_navigation_document_symbols(
     document_symbol_spans: &BTreeSet<String>,
     score: &mut NavigationProviderScore,
 ) {
-    for expected_span in &expectation.expected_document_symbols {
-        score.document_symbol_expected_count += 1;
+    if expectation.expected_document_symbols.is_empty() {
+        return;
+    }
+
+    let expected_spans =
+        expectation.expected_document_symbols.iter().cloned().collect::<BTreeSet<_>>();
+
+    score.document_symbol_expected_count += expected_spans.len() as u64;
+    score.document_symbol_returned_count += document_symbol_spans.len() as u64;
+
+    for expected_span in &expected_spans {
         if document_symbol_spans.contains(expected_span) {
             score.document_symbol_span_exact_count += 1;
         }
@@ -4110,7 +4120,6 @@ fn provider_impact_metrics(
     cadence: Cadence,
 ) -> Vec<MetricRow> {
     const PROVIDER_METRICS: &[&str] = &[
-        "provider_document_symbol_precision",
         "provider_document_symbol_recall",
         "provider_goto_definition_hit_rate",
         "provider_references_precision",
@@ -4228,6 +4237,16 @@ fn provider_impact_metrics(
             ),
             navigation_score.document_symbol_expected_count,
             "no navigation document-symbol expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "provider_document_symbol_precision",
+            ratio(
+                navigation_score.document_symbol_span_exact_count,
+                navigation_score.document_symbol_returned_count,
+            ),
+            navigation_score.document_symbol_returned_count,
+            "no provider document-symbol precision expectations are available",
             cadence,
         ),
         optional_measured_rate(
@@ -5885,8 +5904,23 @@ sub dynamic_boundary_case {
                             cursor_marker: None,
                             cursor_symbol: None,
                             expected_document_symbols: vec![
-                                "sub own_sub { 1 }".to_string(),
+                                "$name".to_string(),
+                                "$self".to_string(),
+                                "package Accuracy::Navigation::UseCases".to_string(),
+                                "sub bare_call_case {\n    own_sub();                   \n}"
+                                    .to_string(),
+                                "sub dynamic_boundary_case {\n    my $name = \"own_sub\";\n    no strict 'refs';\n    &$name();                     \n}"
+                                    .to_string(),
+                                "sub generated_accessor_case {\n    Accuracy::Navigation::Generated::generated_accessor();                            \n}"
+                                    .to_string(),
+                                "sub imported_symbol_case {\n    imported_nav();                      \n}"
+                                    .to_string(),
+                                "sub method_receiver_case {\n    my $self = shift;\n    $self->inherited_method();                          \n}"
+                                    .to_string(),
                                 "sub own_method { 1 }".to_string(),
+                                "sub own_sub { 1 }".to_string(),
+                                "sub qualified_call_case {\n    Accuracy::Navigation::UseCases::own_sub();                        \n}"
+                                    .to_string(),
                             ],
                             expected_definition_span: None,
                             expected_references: vec![],
@@ -6126,8 +6160,9 @@ sub dynamic_boundary_case {
         let score =
             score_navigation_provider_expectations(tmp.path(), &navigation_provider_manifest())?;
 
-        assert_eq!(score.document_symbol_expected_count, 2);
-        assert_eq!(score.document_symbol_span_exact_count, 2);
+        assert_eq!(score.document_symbol_expected_count, 11);
+        assert_eq!(score.document_symbol_returned_count, 11);
+        assert_eq!(score.document_symbol_span_exact_count, 11);
         assert_eq!(score.goto_definition_expected_count, 3);
         assert_eq!(score.goto_definition_hit_count, 3);
         assert_eq!(score.goto_definition_span_exact_count, 3);
@@ -6156,6 +6191,21 @@ sub dynamic_boundary_case {
         assert!(matches!(
             goto_hit_rate,
             MetricRow::Measured { value, sample_count: 3, .. }
+                if (*value - 1.0).abs() < f64::EPSILON
+        ));
+        let document_symbol_precision = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "provider_document_symbol_precision"
+                )
+            })
+            .ok_or_else(|| eyre!("provider document-symbol precision row should exist"))?;
+        assert!(matches!(
+            document_symbol_precision,
+            MetricRow::Measured { value, sample_count: 11, .. }
                 if (*value - 1.0).abs() < f64::EPSILON
         ));
         Ok(())
