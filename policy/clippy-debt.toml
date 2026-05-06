@@ -1,0 +1,8 @@
+schema = 1
+
+[[debt]]
+lint = "clippy::collapsible_if"
+path = "crates/**"
+owner = "parser"
+reason = "Existing parser and LSP control-flow paths contain intentional nested guards; collapse opportunistically after coverage-backed refactors."
+expires = "2026-07-01"

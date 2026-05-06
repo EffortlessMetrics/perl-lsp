@@ -1527,14 +1527,6 @@ fn run_single_gate(
     let start = Instant::now();
     let log_path = log_dir.join(format!("{}.log", gate.name));
 
-    // Apply global environment variables
-    for (key, value) in &policy.global.environment {
-        // SAFETY: Single-threaded xtask binary
-        unsafe {
-            std::env::set_var(key, value);
-        }
-    }
-
     // Determine timeout
     let timeout_secs = gate.timeout_seconds;
     // Note: timeout enforcement could be added using process timeout
@@ -1600,7 +1592,12 @@ fn run_single_gate(
         });
     }
 
-    let execution = run_shell_command_with_timeout(command, &log_path, timeout_secs);
+    let execution = run_shell_command_with_timeout(
+        command,
+        &log_path,
+        timeout_secs,
+        &policy.global.environment,
+    );
     let duration_ms = start.elapsed().as_millis() as u64;
 
     match execution {
@@ -1681,6 +1678,7 @@ fn run_shell_command_with_timeout(
     command: &str,
     log_path: &Path,
     timeout_secs: u64,
+    environment: &HashMap<String, String>,
 ) -> Result<ShellExecutionResult> {
     let log_file = fs::File::create(log_path)
         .with_context(|| format!("Failed to create log file: {}", log_path.display()))?;
@@ -1688,7 +1686,9 @@ fn run_shell_command_with_timeout(
         .try_clone()
         .with_context(|| format!("Failed to clone log file handle: {}", log_path.display()))?;
 
-    let mut child = shell_command_process(command, timeout_secs)
+    let mut process = shell_command_process(command, timeout_secs);
+    process.envs(environment);
+    let mut child = process
         .stdout(Stdio::from(log_file))
         .stderr(Stdio::from(log_file_err))
         .spawn()
@@ -3061,7 +3061,7 @@ mod tests {
         // as a portable delay that works through cmd.exe without quote issues.
         let command = if cfg!(windows) { "ping -n 4 127.0.0.1" } else { "sleep 3" };
 
-        let execution = run_shell_command_with_timeout(command, &log_path, 1)?;
+        let execution = run_shell_command_with_timeout(command, &log_path, 1, &HashMap::new())?;
 
         assert!(execution.timed_out, "execution should time out");
         assert_eq!(execution.exit_code, 124, "timed out commands map to synthetic 124");
@@ -3077,7 +3077,7 @@ mod tests {
         // On Windows `cmd /C exit 42` is reliable; on Unix `bash -lc "exit 42"`.
         let command = if cfg!(windows) { "exit 42" } else { "exit 42" };
 
-        let execution = run_shell_command_with_timeout(command, &log_path, 30)?;
+        let execution = run_shell_command_with_timeout(command, &log_path, 30, &HashMap::new())?;
 
         assert!(!execution.timed_out, "process that exits naturally must not be marked timed_out");
         assert_eq!(

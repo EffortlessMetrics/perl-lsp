@@ -204,7 +204,7 @@ allow = [
 [workspace.package]
 version = "0.13.3"
 edition = "2024"
-rust-version = "1.92"
+rust-version = "1.93"
 authors = ["Steven Zimmerman, CPA <git@effortlesssteven.com>"]
 description = "Perl parser, LSP, and DAP ecosystem in Rust"
 license = "MIT OR Apache-2.0"
@@ -360,14 +360,23 @@ inherits = "release"
 lto = "thin"
 
 # Workspace lints
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)', 'cfg(feature, values("slow_tests"))'] }
+
 [workspace.lints.clippy]
+# Existing parser-path debt; tracked in policy/clippy-debt.toml.
 collapsible_if = "allow"
-unwrap_used = "deny"
-expect_used = "deny"
-panic = "deny"
+
+# Panic-free production and tests
+dbg_macro = "deny"
 todo = "deny"
 unimplemented = "deny"
-dbg_macro = "deny"
-
-[workspace.lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)', 'cfg(feature, values("slow_tests"))'] }
+panic = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+get_unwrap = "deny"
+unwrap_in_result = "deny"
+panic_in_result_fn = "deny"

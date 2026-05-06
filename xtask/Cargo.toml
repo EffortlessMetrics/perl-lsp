@@ -64,3 +64,6 @@ legacy = ["perl-parser-pest"]
 # Building this feature requires a C toolchain and libclang to compile
 # `tree-sitter-perl-c`.
 parser-tasks = ["legacy", "tree-sitter-perl-c"]
+
+[lints]
+workspace = true

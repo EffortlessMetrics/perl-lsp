@@ -56,6 +56,9 @@ enum Commands {
         doctor: bool,
     },
 
+    /// Validate the governed workspace Clippy policy ledger.
+    CheckLintPolicy,
+
     /// Capture a GitHub PR queue snapshot for disconnected maintainership.
     Queue {
         #[command(subcommand)]
@@ -1821,6 +1824,7 @@ fn main() -> Result<()> {
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
+        Commands::CheckLintPolicy => check_lint_policy::run(),
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
             QueueCommand::Health { receipt, fixture } => {

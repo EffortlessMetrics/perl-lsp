@@ -1,0 +1,688 @@
+schema = 1
+msrv = "1.93"
+
+[policy]
+panic_free_tests = true
+allow_test_carveouts = false
+suppression_style = "expect-with-reason"
+blanket_categories = false
+
+[[lint]]
+name = "rust::unsafe_code"
+level = "forbid"
+status = "active"
+class = "unsafe-memory"
+reason = "No unsafe Rust is allowed in this workspace."
+
+[[lint]]
+name = "rust::unsafe_op_in_unsafe_fn"
+level = "deny"
+status = "active"
+class = "unsafe-memory"
+reason = "Unsafe operations must remain explicit if unsafe code is ever reviewed."
+
+[[lint]]
+name = "rust::unused_must_use"
+level = "deny"
+status = "active"
+class = "silent-failure"
+reason = "Must-use results represent work that cannot be silently discarded."
+
+[[lint]]
+name = "rust::unexpected_cfgs"
+level = "warn"
+status = "active"
+class = "cfg-hygiene"
+reason = "Unexpected cfg names should be visible without blocking local platform differences."
+
+[[lint]]
+name = "clippy::dbg_macro"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "No debug macro output in production or tests."
+
+[[lint]]
+name = "clippy::todo"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "No placeholder panic paths in production or tests."
+
+[[lint]]
+name = "clippy::unimplemented"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "No placeholder unimplemented paths in production or tests."
+
+[[lint]]
+name = "clippy::panic"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "No direct panic paths in production or tests."
+
+[[lint]]
+name = "clippy::unwrap_used"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "No unchecked Result/Option collapse in production or tests."
+
+[[lint]]
+name = "clippy::expect_used"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "No unchecked Result/Option collapse with local messages in production or tests."
+
+[[lint]]
+name = "clippy::get_unwrap"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "No indexed get followed by unchecked unwrap."
+
+[[lint]]
+name = "clippy::unwrap_in_result"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "No unwrap inside Result-returning functions."
+
+[[lint]]
+name = "clippy::panic_in_result_fn"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "Result-returning functions should report errors, not panic."
+
+
+[[planned]]
+name = "clippy::unreachable"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Replace existing infallible-construction sentinels before enforcing unreachable-free code."
+
+[[planned]]
+name = "rust::const_item_interior_mutations"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Block hidden interior mutation in const items once existing code has been audited."
+
+[[planned]]
+name = "rust::function_casts_as_integer"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Block function pointer integer casts once supported by the pinned toolchain."
+
+[[planned]]
+name = "clippy::string_slice"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Parser-safe UTF-8 slicing should use checked boundary helpers."
+
+[[planned]]
+name = "clippy::indexing_slicing"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Parser-safe indexing should use checked accessors."
+
+[[planned]]
+name = "clippy::out_of_bounds_indexing"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Reject indexing forms known to be out of bounds."
+
+[[planned]]
+name = "clippy::unchecked_time_subtraction"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Time arithmetic should use checked duration APIs."
+
+[[planned]]
+name = "clippy::char_indices_as_byte_indices"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Keep character and byte offsets distinct in parser code."
+
+[[planned]]
+name = "clippy::sliced_string_as_bytes"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid slicing strings before byte conversion."
+
+[[planned]]
+name = "clippy::index_refutable_slice"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid slice patterns that can panic at parser boundaries."
+
+[[planned]]
+name = "clippy::let_underscore_future"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Do not silently drop futures."
+
+[[planned]]
+name = "clippy::let_underscore_must_use"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Do not silently drop must-use values."
+
+[[planned]]
+name = "clippy::let_underscore_lock"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Do not immediately drop lock guards via underscore bindings."
+
+[[planned]]
+name = "clippy::unused_result_ok"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Do not erase errors by calling ok() and ignoring the result."
+
+[[planned]]
+name = "clippy::map_err_ignore"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Do not erase original errors with ignored map_err closures."
+
+[[planned]]
+name = "clippy::assertions_on_result_states"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Tests should observe Result values without panic-state assertions."
+
+[[planned]]
+name = "clippy::lines_filter_map_ok"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid infinite iterator behavior on repeated line-read errors."
+
+[[planned]]
+name = "clippy::await_holding_lock"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Do not hold locks across await points."
+
+[[planned]]
+name = "clippy::await_holding_refcell_ref"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Do not hold RefCell borrows across await points."
+
+[[planned]]
+name = "clippy::await_holding_invalid_type"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Do not hold configured invalid guard types across await points."
+
+[[planned]]
+name = "clippy::future_not_send"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Surface non-Send futures at async boundaries."
+
+[[planned]]
+name = "clippy::large_futures"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Surface futures with excessive stack footprint."
+
+[[planned]]
+name = "clippy::arc_with_non_send_sync"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid Arc around types that cannot cross thread boundaries safely."
+
+[[planned]]
+name = "clippy::rc_mutex"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid Rc<Mutex<_>> concurrency confusion."
+
+[[planned]]
+name = "clippy::mut_mutex_lock"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid needless mutex locking through mutable access."
+
+[[planned]]
+name = "clippy::readonly_write_lock"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid write locks when read locks are sufficient."
+
+[[planned]]
+name = "clippy::mem_forget"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid intentional destructor leaks."
+
+[[planned]]
+name = "clippy::forget_non_drop"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid forgetting types that do not implement Drop."
+
+[[planned]]
+name = "clippy::drop_non_drop"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid explicit drops of non-Drop types."
+
+[[planned]]
+name = "clippy::undocumented_unsafe_blocks"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Unsafe blocks require documented safety rationale if any are introduced."
+
+[[planned]]
+name = "clippy::multiple_unsafe_ops_per_block"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Unsafe operations should be reviewable one operation at a time."
+
+[[planned]]
+name = "clippy::repr_packed_without_abi"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Packed layouts must state ABI explicitly."
+
+[[planned]]
+name = "clippy::float_cmp"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid exact floating-point comparison."
+
+[[planned]]
+name = "clippy::float_cmp_const"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid exact floating-point comparison to constants."
+
+[[planned]]
+name = "clippy::float_equality_without_abs"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Floating equality checks need an absolute tolerance."
+
+[[planned]]
+name = "clippy::lossy_float_literal"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid literals that lose float precision silently."
+
+[[planned]]
+name = "clippy::cast_sign_loss"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid casts that silently lose sign."
+
+[[planned]]
+name = "clippy::cast_possible_wrap"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Surface casts that can wrap."
+
+[[planned]]
+name = "clippy::cast_possible_truncation"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Surface casts that can truncate."
+
+[[planned]]
+name = "clippy::cast_precision_loss"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Surface casts that can lose precision."
+
+[[planned]]
+name = "clippy::invalid_upcast_comparisons"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid comparisons made invalid by upcasts."
+
+[[planned]]
+name = "clippy::cast_abs_to_unsigned"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Use unsigned_abs instead of casting abs results."
+
+[[planned]]
+name = "clippy::cast_enum_truncation"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid enum discriminant truncation."
+
+[[planned]]
+name = "clippy::cast_nan_to_int"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid NaN-to-int casts."
+
+[[planned]]
+name = "clippy::manual_midpoint"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Use midpoint helpers where available."
+
+[[planned]]
+name = "clippy::manual_is_multiple_of"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Use standard multiple checks where available."
+
+[[planned]]
+name = "clippy::manual_div_ceil"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Use standard div_ceil helpers."
+
+[[planned]]
+name = "clippy::arithmetic_side_effects"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Surface arithmetic requiring checked/wrapping/saturating policy."
+
+[[planned]]
+name = "clippy::suspicious_open_options"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "OpenOptions must state truncation/append semantics clearly."
+
+[[planned]]
+name = "clippy::nonsensical_open_options"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Reject contradictory OpenOptions."
+
+[[planned]]
+name = "clippy::ineffective_open_options"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Reject ineffective OpenOptions combinations."
+
+[[planned]]
+name = "clippy::path_buf_push_overwrite"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid absolute pushes that overwrite PathBuf contents."
+
+[[planned]]
+name = "clippy::join_absolute_paths"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid joining absolute paths that discard prefixes."
+
+[[planned]]
+name = "clippy::read_line_without_trim"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Make newline handling explicit after read_line."
+
+[[planned]]
+name = "clippy::exit"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Keep process exits at reviewed CLI boundaries."
+
+[[planned]]
+name = "clippy::iter_not_returning_iterator"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Iterator-named APIs should return iterators."
+
+[[planned]]
+name = "clippy::expl_impl_clone_on_copy"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Copy types should not hand-roll Clone."
+
+[[planned]]
+name = "clippy::infallible_try_from"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Use From for infallible conversions."
+
+[[planned]]
+name = "clippy::fallible_impl_from"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Use TryFrom for fallible conversions."
+
+[[planned]]
+name = "clippy::error_impl_error"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Error-like types should implement std::error::Error correctly."
+
+[[planned]]
+name = "clippy::result_unit_err"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Avoid unit error types in public APIs."
+
+[[planned]]
+name = "clippy::result_large_err"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Avoid large Err variants that bloat Result."
+
+[[planned]]
+name = "clippy::format_in_format_args"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid nested format! in formatting macros."
+
+[[planned]]
+name = "clippy::to_string_in_format_args"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Avoid to_string in formatting macros."
+
+[[planned]]
+name = "clippy::unused_format_specs"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Reject formatting specs that do not apply."
+
+[[planned]]
+name = "clippy::unnecessary_debug_formatting"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Avoid debug formatting where display is clearer."
+
+[[planned]]
+name = "clippy::uninlined_format_args"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Prefer captured format arguments."
+
+[[planned]]
+name = "clippy::manual_let_else"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Prefer let-else for early-return destructuring."
+
+[[planned]]
+name = "clippy::manual_ok_or"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Prefer ok_or/ok_or_else over manual conversions."
+
+[[planned]]
+name = "clippy::manual_strip"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Prefer strip_prefix/strip_suffix."
+
+[[planned]]
+name = "clippy::manual_split_once"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Prefer split_once."
+
+[[planned]]
+name = "clippy::manual_is_variant_and"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Prefer is_some_and/is_ok_and-style helpers where available."
+
+[[planned]]
+name = "clippy::filter_map_next"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Prefer find_map."
+
+[[planned]]
+name = "clippy::flat_map_option"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Prefer filter_map for Option-producing closures."
+
+[[planned]]
+name = "clippy::match_result_ok"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Match Result directly instead of converting to Option."
+
+[[planned]]
+name = "clippy::cloned_instead_of_copied"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Prefer copied for Copy types."
+
+[[planned]]
+name = "clippy::iter_cloned_collect"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Prefer to_vec for cloned collection from slices."
+
+[[planned]]
+name = "clippy::iter_overeager_cloned"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Clone after filtering where possible."
+
+[[planned]]
+name = "clippy::needless_collect"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Avoid intermediate collections unless needed."
+
+[[planned]]
+name = "clippy::redundant_closure"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Remove redundant closures."
+
+[[planned]]
+name = "clippy::redundant_closure_for_method_calls"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Use method references where clearer."
+
+[[planned]]
+name = "clippy::missing_panics_doc"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Public panic behavior must be documented or removed."
+
+[[planned]]
+name = "clippy::missing_errors_doc"
+level = "warn"
+activate_when_msrv = "1.93"
+reason = "Public error behavior should be documented."
+
+[[planned]]
+name = "clippy::allow_attributes"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Use expect with reason instead of allow."
+
+[[planned]]
+name = "clippy::allow_attributes_without_reason"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Suppression attributes need reasons."
+
+[[planned]]
+name = "clippy::blanket_clippy_restriction_lints"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Do not enable blanket restriction groups."
+
+[[planned]]
+name = "clippy::ignore_without_reason"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Ignored tests need reasons."
+
+[[planned]]
+name = "clippy::should_panic_without_expect"
+level = "deny"
+activate_when_msrv = "1.93"
+reason = "Panic-expected tests need explicit expected panic text."
+
+[[planned]]
+name = "clippy::same_length_and_capacity"
+level = "deny"
+activate_when_msrv = "1.94"
+reason = "Catch raw-parts reconstruction mistakes."
+
+[[planned]]
+name = "clippy::manual_ilog2"
+level = "warn"
+activate_when_msrv = "1.94"
+reason = "Prefer the standard integer log helper."
+
+[[planned]]
+name = "clippy::decimal_bitwise_operands"
+level = "warn"
+activate_when_msrv = "1.94"
+reason = "Make bit masks visually inspectable."
+
+[[planned]]
+name = "clippy::needless_type_cast"
+level = "warn"
+activate_when_msrv = "1.94"
+reason = "Avoid stale numeric type drift."
+
+[[planned]]
+name = "clippy::disallowed_fields"
+level = "deny"
+activate_when_msrv = "1.95"
+reason = "Allow architecture policy to ban direct field access across protected seams."
+
+[[planned]]
+name = "clippy::manual_checked_ops"
+level = "warn"
+activate_when_msrv = "1.95"
+reason = "Prefer checked arithmetic over manual divide-by-zero guards."
+
+[[planned]]
+name = "clippy::manual_take"
+level = "warn"
+activate_when_msrv = "1.95"
+reason = "Use standard ownership helper instead of local reimplementation."
+
+[[planned]]
+name = "clippy::manual_pop_if"
+level = "warn"
+activate_when_msrv = "1.95"
+reason = "Use collection APIs that encode predicate-and-pop intent directly."
+
+[[planned]]
+name = "clippy::duration_suboptimal_units"
+level = "warn"
+activate_when_msrv = "1.95"
+reason = "Make durations legible without mental unit conversion."
+
+[[planned]]
+name = "clippy::unnecessary_trailing_comma"
+level = "warn"
+activate_when_msrv = "1.95"
+reason = "Keep generated and hand-written format macro calls clean."
