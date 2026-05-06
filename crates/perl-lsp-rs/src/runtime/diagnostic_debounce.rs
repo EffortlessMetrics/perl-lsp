@@ -4,6 +4,8 @@
 //! after a configurable quiet period (default 250ms).
 
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -16,6 +18,8 @@ enum DebounceMsg {
 
 pub(crate) struct DiagnosticDebouncer {
     tx: std::sync::mpsc::Sender<DebounceMsg>,
+    #[allow(dead_code)] // Read by test/debug runtime pressure snapshots.
+    pending_count: Arc<AtomicUsize>,
 }
 
 impl DiagnosticDebouncer {
@@ -31,19 +35,26 @@ impl DiagnosticDebouncer {
         F: Fn(&str) + Send + 'static,
     {
         let (tx, rx) = std::sync::mpsc::channel();
+        let pending_count = Arc::new(AtomicUsize::new(0));
+        let worker_pending_count = Arc::clone(&pending_count);
         if let Err(e) = thread::Builder::new()
             .name("diag-debounce".into())
-            .spawn(move || worker_loop(rx, interval, publish_fn))
+            .spawn(move || worker_loop(rx, interval, publish_fn, worker_pending_count))
         {
             tracing::error!(error = %e, "diagnostic debounce thread spawn failed");
         }
-        Self { tx }
+        Self { tx, pending_count }
     }
 
     pub(crate) fn schedule(&self, uri: &str) {
         if let Err(e) = self.tx.send(DebounceMsg::Schedule(uri.to_string())) {
             tracing::debug!(error = %e, "diagnostic debounce: channel closed on schedule");
         }
+    }
+
+    #[allow(dead_code)] // Read by test/debug runtime pressure snapshots.
+    pub(crate) fn pending_uris(&self) -> usize {
+        self.pending_count.load(Ordering::SeqCst)
     }
 }
 
@@ -55,8 +66,12 @@ impl Drop for DiagnosticDebouncer {
     }
 }
 
-fn worker_loop<F>(rx: std::sync::mpsc::Receiver<DebounceMsg>, interval: Duration, publish_fn: F)
-where
+fn worker_loop<F>(
+    rx: std::sync::mpsc::Receiver<DebounceMsg>,
+    interval: Duration,
+    publish_fn: F,
+    pending_count: Arc<AtomicUsize>,
+) where
     F: Fn(&str) + Send + 'static,
 {
     let mut pending: HashMap<String, Instant> = HashMap::new();
@@ -64,7 +79,7 @@ where
         let timeout = earliest_timeout(&pending);
         let msg = match timeout {
             Some(dur) if dur.is_zero() => {
-                fire_expired(&mut pending, &publish_fn);
+                fire_expired(&mut pending, &publish_fn, &pending_count);
                 match rx.try_recv() {
                     Ok(m) => Some(m),
                     Err(std::sync::mpsc::TryRecvError::Empty) => continue,
@@ -74,7 +89,7 @@ where
             Some(dur) => match rx.recv_timeout(dur) {
                 Ok(m) => Some(m),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    fire_expired(&mut pending, &publish_fn);
+                    fire_expired(&mut pending, &publish_fn, &pending_count);
                     continue;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
@@ -87,11 +102,13 @@ where
         match msg {
             Some(DebounceMsg::Schedule(uri)) => {
                 pending.insert(uri, Instant::now() + interval);
+                pending_count.store(pending.len(), Ordering::SeqCst);
             }
             Some(DebounceMsg::Shutdown) => {
                 for (uri, _) in pending.drain() {
                     publish_fn(&uri);
                 }
+                pending_count.store(0, Ordering::SeqCst);
                 break;
             }
             None => {}
@@ -108,8 +125,11 @@ fn earliest_timeout(pending: &HashMap<String, Instant>) -> Option<Duration> {
     Some(earliest.saturating_duration_since(now))
 }
 
-fn fire_expired<F>(pending: &mut HashMap<String, Instant>, publish_fn: &F)
-where
+fn fire_expired<F>(
+    pending: &mut HashMap<String, Instant>,
+    publish_fn: &F,
+    pending_count: &AtomicUsize,
+) where
     F: Fn(&str),
 {
     let now = Instant::now();
@@ -120,6 +140,7 @@ where
         .collect();
     for uri in expired {
         pending.remove(&uri);
+        pending_count.store(pending.len(), Ordering::SeqCst);
         publish_fn(&uri);
     }
 }
@@ -163,6 +184,23 @@ mod tests {
         assert_eq!(count.load(Ordering::SeqCst), 0);
         thread::sleep(Duration::from_millis(80));
         assert_eq!(count.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn debouncer_reports_pending_uri_pressure() {
+        let debouncer = DiagnosticDebouncer::with_interval(Duration::from_millis(80), move |_| {});
+
+        debouncer.schedule("file:///pending.pl");
+        for _ in 0..20 {
+            if debouncer.pending_uris() == 1 {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(debouncer.pending_uris(), 1);
+
+        thread::sleep(Duration::from_millis(150));
+        assert_eq!(debouncer.pending_uris(), 0);
     }
 
     #[test]

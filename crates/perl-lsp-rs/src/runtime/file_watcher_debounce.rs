@@ -13,6 +13,8 @@
 //! a window are deduplicated (last-write wins on the deadline).
 
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -29,6 +31,7 @@ enum WatcherMsg {
 /// and delivers them as a single batch to the callback after a quiet period.
 pub struct FileWatcherDebouncer {
     tx: std::sync::mpsc::Sender<WatcherMsg>,
+    pending_count: Arc<AtomicUsize>,
 }
 
 impl FileWatcherDebouncer {
@@ -46,13 +49,15 @@ impl FileWatcherDebouncer {
         F: Fn(Vec<String>) + Send + 'static,
     {
         let (tx, rx) = std::sync::mpsc::channel();
+        let pending_count = Arc::new(AtomicUsize::new(0));
+        let worker_pending_count = Arc::clone(&pending_count);
         if let Err(e) = thread::Builder::new()
             .name("file-watcher-debounce".into())
-            .spawn(move || worker_loop(rx, interval, publish_fn))
+            .spawn(move || worker_loop(rx, interval, publish_fn, worker_pending_count))
         {
             tracing::error!(error = %e, "file watcher debounce thread spawn failed");
         }
-        Self { tx }
+        Self { tx, pending_count }
     }
 
     /// Schedule a URI for debounced batch delivery.
@@ -62,6 +67,11 @@ impl FileWatcherDebouncer {
         if let Err(e) = self.tx.send(WatcherMsg::Schedule(uri.to_string())) {
             tracing::debug!(error = %e, "file watcher debounce: channel closed on schedule");
         }
+    }
+
+    /// Number of unique URIs currently waiting in the debounce window.
+    pub fn pending_uris(&self) -> usize {
+        self.pending_count.load(Ordering::SeqCst)
     }
 }
 
@@ -73,8 +83,12 @@ impl Drop for FileWatcherDebouncer {
     }
 }
 
-fn worker_loop<F>(rx: std::sync::mpsc::Receiver<WatcherMsg>, interval: Duration, publish_fn: F)
-where
+fn worker_loop<F>(
+    rx: std::sync::mpsc::Receiver<WatcherMsg>,
+    interval: Duration,
+    publish_fn: F,
+    pending_count: Arc<AtomicUsize>,
+) where
     F: Fn(Vec<String>) + Send + 'static,
 {
     // pending maps uri -> deadline (last scheduled deadline wins)
@@ -83,7 +97,7 @@ where
         let timeout = earliest_timeout(&pending);
         let msg = match timeout {
             Some(dur) if dur.is_zero() => {
-                fire_expired(&mut pending, &publish_fn);
+                fire_expired(&mut pending, &publish_fn, &pending_count);
                 match rx.try_recv() {
                     Ok(m) => Some(m),
                     Err(std::sync::mpsc::TryRecvError::Empty) => continue,
@@ -93,7 +107,7 @@ where
             Some(dur) => match rx.recv_timeout(dur) {
                 Ok(m) => Some(m),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    fire_expired(&mut pending, &publish_fn);
+                    fire_expired(&mut pending, &publish_fn, &pending_count);
                     continue;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
@@ -107,6 +121,7 @@ where
             Some(WatcherMsg::Schedule(uri)) => {
                 // Reset deadline on repeated schedules (last one wins)
                 pending.insert(uri, Instant::now() + interval);
+                pending_count.store(pending.len(), Ordering::SeqCst);
             }
             Some(WatcherMsg::Shutdown) => {
                 // Flush all pending URIs before exiting
@@ -114,6 +129,8 @@ where
                 if !uris.is_empty() {
                     publish_fn(uris);
                 }
+                pending.clear();
+                pending_count.store(0, Ordering::SeqCst);
                 break;
             }
             None => {}
@@ -130,8 +147,11 @@ fn earliest_timeout(pending: &HashMap<String, Instant>) -> Option<Duration> {
     Some(earliest.saturating_duration_since(now))
 }
 
-fn fire_expired<F>(pending: &mut HashMap<String, Instant>, publish_fn: &F)
-where
+fn fire_expired<F>(
+    pending: &mut HashMap<String, Instant>,
+    publish_fn: &F,
+    pending_count: &AtomicUsize,
+) where
     F: Fn(Vec<String>),
 {
     let now = Instant::now();
@@ -144,6 +164,7 @@ where
         for uri in &expired {
             pending.remove(uri);
         }
+        pending_count.store(pending.len(), Ordering::SeqCst);
         publish_fn(expired);
     }
 }
@@ -194,6 +215,24 @@ mod tests {
         // Should coalesce into a single batch call with 1 URI
         assert_eq!(call_count.load(Ordering::SeqCst), 1);
         assert_eq!(uri_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn file_watcher_debouncer_reports_pending_uri_pressure() {
+        let debouncer =
+            FileWatcherDebouncer::with_interval(Duration::from_millis(80), move |_uris| {});
+
+        debouncer.schedule("file:///pending.pl");
+        for _ in 0..20 {
+            if debouncer.pending_uris() == 1 {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(debouncer.pending_uris(), 1);
+
+        thread::sleep(Duration::from_millis(150));
+        assert_eq!(debouncer.pending_uris(), 0);
     }
 
     #[test]
