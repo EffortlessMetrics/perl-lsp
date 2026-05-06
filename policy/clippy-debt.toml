@@ -1,0 +1,57 @@
+schema = 1
+
+[[debt]]
+lint = "rust::unsafe_code"
+path = "crates/perl-lsp-rs-core/src/platform.rs"
+owner = "lsp/runtime"
+reason = "Windows PATH/environment boundary still uses Rust 2024 unsafe environment mutation; migrate to command-scoped environment handling before promoting unsafe_code to forbid."
+expires = "2026-07-01"
+
+[[debt]]
+lint = "rust::unsafe_code"
+path = "crates/perl-lsp-rs-core/src/runtime/launcher/mod.rs"
+owner = "lsp/runtime"
+reason = "Launcher tests and guards still mutate process environment; replace with scoped helpers or child-process env injection before promoting unsafe_code to forbid."
+expires = "2026-07-01"
+
+[[debt]]
+lint = "rust::unsafe_code"
+path = "crates/perl-corpus/src/files.rs"
+owner = "corpus"
+reason = "Corpus environment guard uses Rust 2024 unsafe environment mutation; replace with command-scoped environment handling before promoting unsafe_code to forbid."
+expires = "2026-07-01"
+
+[[debt]]
+lint = "rust::unsafe_code"
+path = "crates/tree-sitter-perl-c/src/lib.rs"
+owner = "parser/tree-sitter"
+reason = "Tree-sitter FFI boundary requires a reviewed unsafe carveout policy before the shared unsafe_code lint can become forbid."
+expires = "2026-07-01"
+
+[[debt]]
+lint = "rust::unsafe_code"
+path = "xtask/src/tasks/ci/context.rs"
+owner = "ci/xtask"
+reason = "CI xtask environment setup mutates process environment; replace with command-scoped environment propagation before promoting unsafe_code to forbid."
+expires = "2026-07-01"
+
+[[debt]]
+lint = "rust::unsafe_code"
+path = "xtask/src/tasks/gates.rs"
+owner = "ci/xtask"
+reason = "Gate runner mutates process environment for global policy variables; replace with child-command environment injection before promoting unsafe_code to forbid."
+expires = "2026-07-01"
+
+[[debt]]
+lint = "clippy::allow_attributes"
+path = "crates/**/*.rs"
+owner = "quality"
+reason = "Existing tests and generated-style helpers still use allow attributes; migrate to expect-with-reason receipts in follow-up PRs."
+expires = "2026-07-01"
+
+[[debt]]
+lint = "clippy::allow_attributes"
+path = "xtask/src/**/*.rs"
+owner = "quality"
+reason = "Existing xtask metrics and fixture structs still use allow attributes; migrate to expect-with-reason receipts in follow-up PRs."
+expires = "2026-07-01"

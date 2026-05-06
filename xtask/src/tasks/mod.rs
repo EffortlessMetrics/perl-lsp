@@ -11,6 +11,7 @@ pub mod build;
 pub mod build_timing;
 pub mod bump_version;
 pub mod check;
+pub mod check_lint_policy;
 pub mod check_test_wiring;
 pub mod check_toolchain;
 pub mod check_version_sync;

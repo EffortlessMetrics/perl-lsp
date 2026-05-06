@@ -1,0 +1,211 @@
+schema = 1
+msrv = "1.93"
+
+[policy]
+panic_free_tests = true
+allow_test_carveouts = false
+suppression_style = "expect-with-reason"
+blanket_categories = false
+
+[[lint]]
+name = "clippy::unwrap_used"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "No unchecked Result/Option collapse in production or tests."
+
+[[lint]]
+name = "clippy::expect_used"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "No message-only unchecked Result/Option collapse in production or tests."
+
+[[lint]]
+name = "clippy::panic"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "Use Result, Option, or test helpers instead of panic-driven control flow."
+
+[[lint]]
+name = "clippy::todo"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "Do not leave runtime TODO traps in production or test code."
+
+[[lint]]
+name = "clippy::unimplemented"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "Do not leave runtime unimplemented traps in production or test code."
+
+[[lint]]
+name = "clippy::dbg_macro"
+level = "deny"
+status = "active"
+class = "panic"
+reason = "Do not commit debug-print macros."
+
+[[lint]]
+name = "rust::unexpected_cfgs"
+level = "warn"
+status = "active"
+class = "configuration"
+reason = "Surface misspelled or undeclared conditional compilation flags."
+
+[[lint]]
+name = "rust::unsafe_code"
+level = "forbid"
+status = "staged"
+class = "unsafe-memory"
+reason = "Target shared platform policy; existing unsafe environment and FFI debt is tracked before activation."
+
+[[lint]]
+name = "rust::unsafe_op_in_unsafe_fn"
+level = "deny"
+status = "staged"
+class = "unsafe-memory"
+reason = "Require explicit unsafe blocks inside any future unsafe function body once unsafe debt is retired."
+
+[[lint]]
+name = "rust::unused_must_use"
+level = "deny"
+status = "staged"
+class = "silent-failure"
+reason = "Reject silently ignored must-use results after existing debt is inventoried."
+
+[[lint]]
+name = "clippy::let_underscore_future"
+level = "deny"
+status = "staged"
+class = "silent-failure"
+reason = "Do not silently detach futures."
+
+[[lint]]
+name = "clippy::let_underscore_must_use"
+level = "deny"
+status = "staged"
+class = "silent-failure"
+reason = "Do not silently discard must-use values."
+
+[[lint]]
+name = "clippy::let_underscore_lock"
+level = "deny"
+status = "staged"
+class = "silent-failure"
+reason = "Do not immediately drop synchronization guards."
+
+[[lint]]
+name = "clippy::unused_result_ok"
+level = "deny"
+status = "staged"
+class = "silent-failure"
+reason = "Do not hide errors by calling Result::ok without observing the value."
+
+[[lint]]
+name = "clippy::map_err_ignore"
+level = "deny"
+status = "staged"
+class = "silent-failure"
+reason = "Do not erase error values during mapping."
+
+[[lint]]
+name = "clippy::allow_attributes"
+level = "deny"
+status = "staged"
+class = "suppression-governance"
+reason = "Move broad allow attributes to narrow expect-with-reason receipts."
+
+[[lint]]
+name = "clippy::allow_attributes_without_reason"
+level = "deny"
+status = "staged"
+class = "suppression-governance"
+reason = "Require explicit reasons for suppression receipts."
+
+[[lint]]
+name = "clippy::string_slice"
+level = "deny"
+status = "staged"
+class = "parser-safety"
+reason = "Parser and LSP offsets must not assume UTF-8 byte boundaries without checked helpers."
+
+[[lint]]
+name = "clippy::indexing_slicing"
+level = "deny"
+status = "staged"
+class = "parser-safety"
+reason = "Parser and protocol code should prefer checked access or reviewed table abstractions."
+
+[[planned]]
+name = "clippy::same_length_and_capacity"
+level = "deny"
+activate_when_msrv = "1.94"
+class = "unsafe-memory"
+reason = "Catch raw-parts reconstruction mistakes."
+
+[[planned]]
+name = "clippy::manual_ilog2"
+level = "warn"
+activate_when_msrv = "1.94"
+class = "numeric"
+reason = "Prefer the standard integer log helper."
+
+[[planned]]
+name = "clippy::decimal_bitwise_operands"
+level = "warn"
+activate_when_msrv = "1.94"
+class = "numeric"
+reason = "Make bit masks visually inspectable."
+
+[[planned]]
+name = "clippy::needless_type_cast"
+level = "warn"
+activate_when_msrv = "1.94"
+class = "numeric"
+reason = "Avoid stale numeric type drift."
+
+[[planned]]
+name = "clippy::disallowed_fields"
+level = "deny"
+activate_when_msrv = "1.95"
+class = "architecture"
+reason = "Allow architecture policy to ban direct field access across protected seams."
+
+[[planned]]
+name = "clippy::manual_checked_ops"
+level = "warn"
+activate_when_msrv = "1.95"
+class = "numeric"
+reason = "Prefer checked arithmetic over manual divide-by-zero guards."
+
+[[planned]]
+name = "clippy::manual_take"
+level = "warn"
+activate_when_msrv = "1.95"
+class = "reviewability"
+reason = "Use standard ownership helper instead of local reimplementation."
+
+[[planned]]
+name = "clippy::manual_pop_if"
+level = "warn"
+activate_when_msrv = "1.95"
+class = "reviewability"
+reason = "Use collection APIs that encode predicate-and-pop intent directly."
+
+[[planned]]
+name = "clippy::duration_suboptimal_units"
+level = "warn"
+activate_when_msrv = "1.95"
+class = "time"
+reason = "Make durations legible without mental unit conversion."
+
+[[planned]]
+name = "clippy::unnecessary_trailing_comma"
+level = "warn"
+activate_when_msrv = "1.95"
+class = "reviewability"
+reason = "Keep generated and hand-written format macro calls clean."

@@ -1,0 +1,6 @@
+schema_version = "0.3"
+
+# Panic-family exceptions belong here using path + family + selector identity.
+# last_seen locations are advisory only. This workspace is moving toward an
+# empty allowlist; any future entry must include owner, classification,
+# explanation, and optional expires metadata.

@@ -1,0 +1,5 @@
+schema_version = "1.0"
+
+# Non-Rust programming/configuration surfaces are tracked here when a policy
+# checker needs structured ownership. Entries use path or glob plus kind,
+# owner, reason, surface, classification, covered_by, and optional expires.

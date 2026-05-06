@@ -1070,6 +1070,9 @@ enum Commands {
     /// Check that test-bearing Rust files are reachable from their module tree.
     CheckTestWiring,
 
+    /// Verify workspace Clippy lint policy, ledger, and debt invariants.
+    CheckLintPolicy,
+
     /// Emit per-subsystem engineering-health metrics.
     Metrics {
         #[command(subcommand)]
@@ -2197,6 +2200,7 @@ fn main() -> Result<()> {
             check: args.check,
         }),
         Commands::CheckTestWiring => check_test_wiring::run(),
+        Commands::CheckLintPolicy => check_lint_policy::run(),
         Commands::Metrics { command } => match command {
             MetricsCommand::ParserStats { input, json } => metrics::parser_stats::run(input, json),
             MetricsCommand::ParserAccuracy {
