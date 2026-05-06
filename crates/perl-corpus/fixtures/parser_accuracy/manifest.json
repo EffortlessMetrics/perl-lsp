@@ -2557,8 +2557,17 @@
             "id": "document_symbol_spans",
             "symbol": "own_sub",
             "expected_document_symbols": [
+              "$name",
+              "$self",
+              "package Accuracy::Navigation::UseCases",
+              "sub bare_call_case {\n    own_sub();                   \n}",
+              "sub dynamic_boundary_case {\n    my $name = \"own_sub\";\n    no strict 'refs';\n    &$name();                     \n}",
+              "sub generated_accessor_case {\n    Accuracy::Navigation::Generated::generated_accessor();                            \n}",
+              "sub imported_symbol_case {\n    imported_nav();                      \n}",
+              "sub method_receiver_case {\n    my $self = shift;\n    $self->inherited_method();                          \n}",
               "sub own_sub { 1 }",
-              "sub own_method { 1 }"
+              "sub own_method { 1 }",
+              "sub qualified_call_case {\n    Accuracy::Navigation::UseCases::own_sub();                        \n}"
             ]
           },
           {
