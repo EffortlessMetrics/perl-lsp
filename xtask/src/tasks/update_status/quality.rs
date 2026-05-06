@@ -20,10 +20,8 @@ use super::flaky::{collect_flaky_test_summary, format_flaky_tests_section};
 use super::{replace_block, run_cmd_merged};
 
 static RUNNING_TEST_BINARY_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+(?:\.exe)?\)",
-    )
-    .expect("running-test regex is valid")
+    Regex::new(r"Running unittests[^\(]*\([^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+(?:\.exe)?\)")
+        .expect("running-test regex is valid")
 });
 
 static TEST_LIST_LINE_RE: LazyLock<Regex> =
@@ -275,6 +273,19 @@ mod tests {
         let counts = parse_per_crate_test_counts(output);
         assert_eq!(counts.get("perl-parser-core"), Some(&2));
         assert_eq!(counts.get("perl-workspace"), Some(&1));
+    }
+
+    #[test]
+    fn test_parse_per_crate_test_counts_parses_absolute_external_target_paths() {
+        let output = "Running unittests src/lib.rs \
+            (C:\\Users\\steven\\AppData\\Local\\Temp\\cargo-out\\debug\\deps\\perl_lsp_rs-cafe123.exe)\n\
+            lsp_smoke: test\n\
+            Running unittests src/lib.rs \
+            (/tmp/cargo-out/debug/deps/perl_workspace_index-feed456)\n\
+            workspace_indexes: test\n";
+        let counts = parse_per_crate_test_counts(output);
+        assert_eq!(counts.get("perl-lsp-rs"), Some(&1));
+        assert_eq!(counts.get("perl-workspace-index"), Some(&1));
     }
 
     #[test]
