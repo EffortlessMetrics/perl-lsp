@@ -1,0 +1,5 @@
+---
+source: crates/tree-sitter-perl-c/tests/snapshots.rs
+expression: "sexp(\"my $x = 42;\")"
+---
+(source_file (expression_statement (assignment_expression left: (variable_declaration variable: (scalar (varname))) right: (number))))
