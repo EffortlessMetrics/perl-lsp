@@ -12,10 +12,10 @@ Pointer: no active failure packets.
 
 | Metric | Reason | Suggested PR |
 |---|---|---|
-| `provider_safe_delete_blocker_accuracy` | provider gold fixtures are not wired yet | `test(parser-accuracy): wire provider gold fixture for provider_safe_delete_blocker_accuracy` |
 | `completion_query_ms_p95` | provider query timing is not wired yet | `feat(metrics): wire parser-accuracy timing for completion_query_ms_p95` |
 | `definition_query_ms_p95` | provider query timing is not wired yet | `feat(metrics): wire parser-accuracy timing for definition_query_ms_p95` |
 | `recovery_ms_p95` | recovery timing is not instrumented separately yet | `feat(metrics): wire parser-accuracy timing for recovery_ms_p95` |
 | `reference_query_ms_p95` | provider query timing is not wired yet | `feat(metrics): wire parser-accuracy timing for reference_query_ms_p95` |
+| `workspace_insert_ms_p95` | workspace insert timing is not isolated yet | `feat(metrics): wire parser-accuracy timing for workspace_insert_ms_p95` |
 
 Use this section only when there are no active failure packets. Keep each measurement gap in its own PR and regenerate this file after a lane lands.
