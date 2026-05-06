@@ -4119,11 +4119,8 @@ fn provider_impact_metrics(
     navigation_score: &NavigationProviderScore,
     cadence: Cadence,
 ) -> Vec<MetricRow> {
-    const PROVIDER_METRICS: &[&str] = &[
-        "provider_references_recall",
-        "provider_rename_safe_edit_accuracy",
-        "provider_safe_delete_blocker_accuracy",
-    ];
+    const PROVIDER_METRICS: &[&str] =
+        &["provider_rename_safe_edit_accuracy", "provider_safe_delete_blocker_accuracy"];
 
     let diagnostic_false_positive_count = diagnostic_score
         .dynamic_boundary_false_positive_count
@@ -4320,6 +4317,16 @@ fn provider_impact_metrics(
             ),
             navigation_score.references_expected_count,
             "no navigation reference expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "provider_references_recall",
+            ratio(
+                navigation_score.references_hit_count,
+                navigation_score.references_expected_count,
+            ),
+            navigation_score.references_expected_count,
+            "no provider reference expectations are available",
             cadence,
         ),
         optional_measured_count(
@@ -6302,6 +6309,21 @@ sub dynamic_boundary_case {
             .ok_or_else(|| eyre!("provider references precision row should exist"))?;
         assert!(matches!(
             references_precision,
+            MetricRow::Measured { value, sample_count: 1, .. }
+                if (*value - 1.0).abs() < f64::EPSILON
+        ));
+        let references_recall = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "provider_references_recall"
+                )
+            })
+            .ok_or_else(|| eyre!("provider references recall row should exist"))?;
+        assert!(matches!(
+            references_recall,
             MetricRow::Measured { value, sample_count: 1, .. }
                 if (*value - 1.0).abs() < f64::EPSILON
         ));
