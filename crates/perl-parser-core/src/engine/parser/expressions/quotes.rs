@@ -209,20 +209,7 @@ impl<'a> Parser<'a> {
             }
             "qr" => {
                 // Regular expression
-                // Validate regex complexity and check for embedded code
-                let validator = crate::engine::regex_validator::RegexValidator::new();
-                validator.validate(&content, start).map_err(|e| match e {
-                    crate::engine::regex_validator::RegexError::Syntax { message, offset } => {
-                        ParseError::syntax(message, offset)
-                    }
-                })?;
-                if validator.detect_nested_quantifiers(&content) {
-                    self.record_error(ParseError::syntax(
-                        "Nested quantifiers detected (possible backtracking risk)",
-                        start,
-                    ));
-                }
-                let has_embedded_code = validator.detects_code_execution(&content);
+                let has_embedded_code = self.analyze_regex_body_for_ast(&content, start)?;
 
                 Ok(Node::new(
                     NodeKind::Regex {
@@ -243,20 +230,7 @@ impl<'a> Parser<'a> {
             }
             "m" => {
                 // Match operator with pattern
-                // Validate regex complexity and check for embedded code
-                let validator = crate::engine::regex_validator::RegexValidator::new();
-                validator.validate(&content, start).map_err(|e| match e {
-                    crate::engine::regex_validator::RegexError::Syntax { message, offset } => {
-                        ParseError::syntax(message, offset)
-                    }
-                })?;
-                if validator.detect_nested_quantifiers(&content) {
-                    self.record_error(ParseError::syntax(
-                        "Nested quantifiers detected (possible backtracking risk)",
-                        start,
-                    ));
-                }
-                let has_embedded_code = validator.detects_code_execution(&content);
+                let has_embedded_code = self.analyze_regex_body_for_ast(&content, start)?;
 
                 let mut modifiers = String::new();
                 while let Ok(token) = self.tokens.peek() {
