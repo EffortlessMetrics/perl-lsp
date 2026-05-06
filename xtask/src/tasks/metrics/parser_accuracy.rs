@@ -4118,8 +4118,14 @@ fn provider_impact_metrics(
         "provider_hover_symbol_origin_accuracy",
         "provider_rename_safe_edit_accuracy",
         "provider_safe_delete_blocker_accuracy",
-        "provider_diagnostic_false_positive_rate",
     ];
+
+    let diagnostic_false_positive_count = diagnostic_score
+        .dynamic_boundary_false_positive_count
+        .saturating_add(diagnostic_score.undefined_false_positive_count);
+    let diagnostic_expected_absent_count = diagnostic_score
+        .dynamic_boundary_expected_absent_count
+        .saturating_add(diagnostic_score.undefined_expected_absent_count);
 
     let mut rows = vec![
         optional_measured_rate(
@@ -4205,6 +4211,13 @@ fn provider_impact_metrics(
             ),
             diagnostic_score.undefined_expected_present_count,
             "no provider diagnostic false-negative expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "provider_diagnostic_false_positive_rate",
+            ratio(diagnostic_false_positive_count, diagnostic_expected_absent_count),
+            diagnostic_expected_absent_count,
+            "no provider diagnostic false-positive expectations are available",
             cadence,
         ),
         optional_measured_rate(
@@ -6085,6 +6098,21 @@ sub dynamic_boundary_case {
         assert!(matches!(
             false_negative_rate,
             MetricRow::Measured { value, sample_count: 2, .. }
+                if (*value - 0.0).abs() < f64::EPSILON
+        ));
+        let false_positive_rate = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "provider_diagnostic_false_positive_rate"
+                )
+            })
+            .ok_or_else(|| eyre!("provider diagnostic false-positive row should be measured"))?;
+        assert!(matches!(
+            false_positive_rate,
+            MetricRow::Measured { value, sample_count: 6, .. }
                 if (*value - 0.0).abs() < f64::EPSILON
         ));
         Ok(())
