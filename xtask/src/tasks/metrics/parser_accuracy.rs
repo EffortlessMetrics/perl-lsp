@@ -4120,7 +4120,6 @@ fn provider_impact_metrics(
     cadence: Cadence,
 ) -> Vec<MetricRow> {
     const PROVIDER_METRICS: &[&str] = &[
-        "provider_references_precision",
         "provider_references_recall",
         "provider_rename_safe_edit_accuracy",
         "provider_safe_delete_blocker_accuracy",
@@ -4301,6 +4300,16 @@ fn provider_impact_metrics(
             ),
             navigation_score.references_returned_count,
             "no navigation reference results are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "provider_references_precision",
+            ratio(
+                navigation_score.references_hit_count,
+                navigation_score.references_returned_count,
+            ),
+            navigation_score.references_returned_count,
+            "no provider reference results are available",
             cadence,
         ),
         optional_measured_rate(
@@ -6196,6 +6205,7 @@ sub dynamic_boundary_case {
         assert_eq!(score.goto_definition_false_target_count, 0);
         assert_eq!(score.references_expected_count, 1);
         assert_eq!(score.references_hit_count, 1);
+        assert_eq!(score.references_returned_count, 1);
         assert_eq!(score.references_false_positive_count, 0);
         assert_eq!(score.hover_expected_count, 1);
         assert_eq!(score.hover_origin_correct_count, 1);
@@ -6277,6 +6287,21 @@ sub dynamic_boundary_case {
             .ok_or_else(|| eyre!("provider hover symbol-origin row should exist"))?;
         assert!(matches!(
             hover_origin_accuracy,
+            MetricRow::Measured { value, sample_count: 1, .. }
+                if (*value - 1.0).abs() < f64::EPSILON
+        ));
+        let references_precision = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "provider_references_precision"
+                )
+            })
+            .ok_or_else(|| eyre!("provider references precision row should exist"))?;
+        assert!(matches!(
+            references_precision,
             MetricRow::Measured { value, sample_count: 1, .. }
                 if (*value - 1.0).abs() < f64::EPSILON
         ));
