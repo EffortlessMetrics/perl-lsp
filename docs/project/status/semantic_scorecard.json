@@ -43,7 +43,7 @@
   "fact_rows": {
     "declaration_facts": {
       "status": "available",
-      "total_facts": 41,
+      "total_facts": 42,
       "fixture_coverage": {
         "covered_fixture_count": 16,
         "total_fixture_count": 16,
@@ -75,7 +75,7 @@
     },
     "definition_candidates": {
       "status": "available",
-      "total_facts": 41,
+      "total_facts": 42,
       "fixture_coverage": {
         "covered_fixture_count": 16,
         "total_fixture_count": 16,
@@ -387,7 +387,7 @@
     },
     "semantic_fact_counts_nonzero": {
       "status": "pass",
-      "value": "84",
+      "value": "85",
       "threshold": "> 0",
       "evidence": "semantic fixture indexing"
     },
