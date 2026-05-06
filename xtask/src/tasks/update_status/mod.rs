@@ -21,7 +21,8 @@ use color_eyre::eyre::{Context, Result, eyre};
 use regex::Regex;
 
 use crate::tasks::metrics::parser_accuracy::{
-    status_receipt_equivalent_ignoring_commit, status_receipt_files_from_target,
+    refresh_default_artifact_for_status, status_receipt_equivalent_ignoring_commit,
+    status_receipt_files_from_target,
 };
 use crate::utils::project_root;
 
@@ -183,6 +184,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
     // --- Parser subsystem ---
     if need_parser {
         run_subsystem("parser", "cargo xtask update-status --write --only parser", || {
+            refresh_default_artifact_for_status(&root)?;
             let parser_metrics = parser::collect_parser_metrics(&root);
 
             let parser_path = root.join("docs/project/status/parser.md");
@@ -332,6 +334,25 @@ mod mod_tests {
                 "repro command should be a directly runnable write-only subsystem command: {repro}"
             );
         }
+    }
+
+    #[test]
+    fn test_parser_status_refreshes_accuracy_artifact_before_rendering() -> Result<()> {
+        let root = project_root()?;
+        let path = root.join("xtask/src/tasks/update_status/mod.rs");
+        let content =
+            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+        let refresh_index = content
+            .find("refresh_default_artifact_for_status(&root)?")
+            .ok_or_else(|| eyre!("parser subsystem does not refresh accuracy artifact"))?;
+        let collect_index = content
+            .find("let parser_metrics = parser::collect_parser_metrics(&root);")
+            .ok_or_else(|| eyre!("parser subsystem does not collect parser metrics"))?;
+        assert!(
+            refresh_index < collect_index,
+            "parser status must refresh target/metrics/parser_accuracy.json before rendering"
+        );
+        Ok(())
     }
 
     /// The subsystem status files, UX planning scaffold, DAP scorecard, and workspace scorecard must exist.
