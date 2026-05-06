@@ -531,3 +531,77 @@ fn test_completion_inherited_method_from_parent() -> Result<(), Box<dyn std::err
 
     Ok(())
 }
+
+/// Test that method completion detail includes medium-confidence receiver labels.
+///
+/// Integration counterpart for the receiver-evidence detail format covered in
+/// provider unit tests: when receiver inference comes from literal `bless`,
+/// completion detail should advertise that medium-confidence provenance.
+#[test]
+fn test_completion_detail_includes_literal_bless_confidence_label()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let module_uri = "file:///workspace/BlessedGreeter.pm";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": module_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "package BlessedGreeter;\n\nsub greet {\n    my ($self) = @_;\n    return 'hi';\n}\n\n1;\n"
+                }
+            }
+        }),
+    );
+    await_open_processing(&server);
+
+    let script_uri = "file:///workspace/bless_usage.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": script_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $obj = bless {}, 'BlessedGreeter';\n$obj->\n"
+                }
+            }
+        }),
+    );
+    await_open_processing(&server);
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": script_uri },
+                "position": { "line": 1, "character": 6 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    let greet = items
+        .iter()
+        .find(|item| item["label"].as_str() == Some("greet"))
+        .ok_or_else(|| format!("greet completion should be present. Got: {items:#?}"))?;
+
+    let detail = greet["detail"].as_str().ok_or("greet should include detail")?;
+    assert!(
+        detail.contains("receiver: literal bless, medium confidence"),
+        "literal bless completion detail should expose medium-confidence receiver evidence. Got: {detail:?}"
+    );
+
+    Ok(())
+}
