@@ -2474,7 +2474,8 @@
               "own_method",
               "shared_name",
               "inherited_method",
-              "unrelated_method"
+              "unrelated_method",
+              "imported_method"
             ],
             "expected_fallback": true
           },
@@ -2487,7 +2488,8 @@
               "own_method",
               "shared_name",
               "inherited_method",
-              "unrelated_method"
+              "unrelated_method",
+              "imported_method"
             ],
             "expected_fallback": true
           },
@@ -2500,7 +2502,8 @@
               "own_method",
               "shared_name",
               "inherited_method",
-              "unrelated_method"
+              "unrelated_method",
+              "imported_method"
             ],
             "expected_fallback": true
           },
@@ -2516,6 +2519,19 @@
               "unrelated_method"
             ],
             "expected_fallback": true
+          },
+          {
+            "id": "imported_unknown_receiver_uses_bounded_import_fallback",
+            "cursor_marker": "cursor:imported_unknown",
+            "expected_receiver_package": null,
+            "expected_present": [
+              "imported_method"
+            ],
+            "expected_absent": [
+              "unrelated_method"
+            ],
+            "expected_fallback": true,
+            "import_visibility": true
           }
         ]
       }

@@ -12,6 +12,10 @@ sub shared_name { 1 }
 package Accuracy::Provider::Bar;
 
 sub unrelated_method { 1 }
+
+package Accuracy::Provider::Imported;
+
+sub imported_method { 1 }
 # provider-index-support:end
 
 package Accuracy::Provider::Foo;
@@ -22,6 +26,7 @@ sub self_case {
 }
 
 package Accuracy::Provider::UseCases;
+use Accuracy::Provider::Imported;
 
 sub constructor_case {
     my $ctor = Accuracy::Provider::Foo->new;
@@ -57,6 +62,11 @@ sub nested_bless_case {
 sub unknown_case {
     my $unknown = get_object();
     $unknown-> # cursor:unknown
+}
+
+sub imported_unknown_case {
+    my $imported_unknown = get_object();
+    $imported_unknown-> # cursor:imported_unknown
 }
 
 1;

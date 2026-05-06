@@ -170,6 +170,8 @@ struct MethodCompletionProviderExpectation {
     #[serde(default)]
     expected_absent: Vec<String>,
     expected_fallback: bool,
+    #[serde(default)]
+    import_visibility: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -812,6 +814,8 @@ struct MethodCompletionProviderScore {
     false_receiver_count: u64,
     relevance_assertion_count: u64,
     relevance_assertion_correct_count: u64,
+    import_visibility_expected_count: u64,
+    import_visibility_correct_count: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -1910,6 +1914,17 @@ fn score_method_completion_expectation(
         score.relevance_assertion_count += 1;
         if !labels.contains(label) {
             score.relevance_assertion_correct_count += 1;
+        }
+    }
+
+    if expectation.import_visibility {
+        score.import_visibility_expected_count += 1;
+        let present_labels_match =
+            expectation.expected_present.iter().all(|label| labels.contains(label));
+        let absent_labels_match =
+            expectation.expected_absent.iter().all(|label| !labels.contains(label));
+        if present_labels_match && absent_labels_match {
+            score.import_visibility_correct_count += 1;
         }
     }
 }
@@ -4102,7 +4117,6 @@ fn provider_impact_metrics(
         "provider_references_recall",
         "provider_hover_symbol_origin_accuracy",
         "provider_completion_visible_symbol_relevance",
-        "provider_completion_import_visibility_accuracy",
         "provider_rename_safe_edit_accuracy",
         "provider_safe_delete_blocker_accuracy",
         "provider_diagnostic_false_positive_rate",
@@ -4142,6 +4156,16 @@ fn provider_impact_metrics(
             ),
             method_completion_score.relevance_assertion_count,
             "no method-completion visible-symbol assertions are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "provider_completion_import_visibility_accuracy",
+            ratio(
+                method_completion_score.import_visibility_correct_count,
+                method_completion_score.import_visibility_expected_count,
+            ),
+            method_completion_score.import_visibility_expected_count,
+            "no provider completion import-visibility expectations are available",
             cadence,
         ),
         optional_measured_count(
@@ -5331,6 +5355,9 @@ sub shared_name { 1 }
 
 package Accuracy::Provider::Bar;
 sub unrelated_method { 1 }
+
+package Accuracy::Provider::Imported;
+sub imported_method { 1 }
 # provider-index-support:end
 
 package Accuracy::Provider::Foo;
@@ -5341,11 +5368,17 @@ sub self_case {
 }
 
 package Accuracy::Provider::UseCases;
+use Accuracy::Provider::Imported;
 
 sub dynamic_bless_case {
     my $class = "Accuracy::Provider::Foo";
     my $x = bless {}, $class;
     $x-> # cursor:dynamic_bless
+}
+
+sub imported_unknown_case {
+    my $imported_unknown = get_object();
+    $imported_unknown-> # cursor:imported_unknown
 }
 
 1;
@@ -5661,6 +5694,7 @@ sub dynamic_boundary_case {
                             ],
                             expected_absent: vec!["unrelated_method".to_string()],
                             expected_fallback: false,
+                            import_visibility: false,
                         },
                         MethodCompletionProviderExpectation {
                             id: "dynamic_bless_does_not_infer_exact_receiver".to_string(),
@@ -5671,8 +5705,20 @@ sub dynamic_boundary_case {
                                 "own_method".to_string(),
                                 "shared_name".to_string(),
                                 "unrelated_method".to_string(),
+                                "imported_method".to_string(),
                             ],
                             expected_fallback: true,
+                            import_visibility: false,
+                        },
+                        MethodCompletionProviderExpectation {
+                            id: "imported_unknown_receiver_uses_bounded_import_fallback"
+                                .to_string(),
+                            cursor_marker: "cursor:imported_unknown".to_string(),
+                            expected_receiver_package: None,
+                            expected_present: vec!["imported_method".to_string()],
+                            expected_absent: vec!["unrelated_method".to_string()],
+                            expected_fallback: true,
+                            import_visibility: true,
                         },
                     ],
                     diagnostics: vec![],
@@ -5910,11 +5956,13 @@ sub dynamic_boundary_case {
 
         assert_eq!(score.receiver_expected_count, 1);
         assert_eq!(score.receiver_hit_count, 1);
-        assert_eq!(score.fallback_expected_count, 1);
-        assert_eq!(score.fallback_correct_count, 1);
+        assert_eq!(score.fallback_expected_count, 2);
+        assert_eq!(score.fallback_correct_count, 2);
         assert_eq!(score.false_receiver_count, 0);
-        assert_eq!(score.relevance_assertion_count, 6);
-        assert_eq!(score.relevance_assertion_correct_count, 6);
+        assert_eq!(score.relevance_assertion_count, 9);
+        assert_eq!(score.relevance_assertion_correct_count, 9);
+        assert_eq!(score.import_visibility_expected_count, 1);
+        assert_eq!(score.import_visibility_correct_count, 1);
 
         let metrics = provider_impact_metrics(
             &score,
@@ -5934,8 +5982,23 @@ sub dynamic_boundary_case {
             .ok_or_else(|| eyre!("method completion false receiver row should be measured"))?;
         assert!(matches!(
             false_receiver,
-            MetricRow::Measured { value, sample_count: 1, .. }
+            MetricRow::Measured { value, sample_count: 2, .. }
                 if (*value - 0.0).abs() < f64::EPSILON
+        ));
+        let import_visibility = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "provider_completion_import_visibility_accuracy"
+                )
+            })
+            .ok_or_else(|| eyre!("provider completion import visibility row should be measured"))?;
+        assert!(matches!(
+            import_visibility,
+            MetricRow::Measured { value, sample_count: 1, .. }
+                if (*value - 1.0).abs() < f64::EPSILON
         ));
         Ok(())
     }
