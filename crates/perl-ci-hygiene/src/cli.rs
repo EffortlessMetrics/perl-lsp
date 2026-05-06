@@ -75,8 +75,11 @@ pub(crate) enum CliCommand {
     QuickReceipts,
     /// Run LSP cancellation tests via pre-built test binary.
     TestLspCancellation,
-    /// Generate `badges.md` from canonical badge links.
-    GenerateBadges,
+    /// Generate badges from publication facts and update README files.
+    GenerateBadges {
+        #[arg(long)]
+        check: bool,
+    },
     /// Install local development git hooks.
     InstallGithooks,
     /// Check docs for machine-specific paths.

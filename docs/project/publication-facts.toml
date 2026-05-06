@@ -1,0 +1,21 @@
+# Publication Facts — machine-readable checked-in metrics
+#
+# This file serves as the canonical source for manually-maintained metrics
+# used in public documentation, articles, and UI badges.
+#
+# Tier system: See PUBLICATION_FACTS_LEDGER.md for the full definition.
+# - Tier D: External sources (marketplaces, surveys, third-party APIs)
+# - Tier C: Estimated
+# - Tier B: Measured
+# - Tier A: Computed/auto-verifiable
+
+[external]
+
+[external.vscode_marketplace_installs]
+label = "VS Marketplace installs"
+value = 287
+unit = "installs"
+tier = "D"
+verified_at = "2026-05-06"
+source = "https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs"
+description = "Manual count from VS Marketplace; refresh periodically"

@@ -1,6 +1,8 @@
 # Perl Language Server
 
-[![VS Marketplace Installs (manual)](https://img.shields.io/badge/VS%20Marketplace-277%20installs-0078D4)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
+<!-- perl-lsp:vs-marketplace-installs-badge:start -->
+[![VS Marketplace Installs (manual)](https://img.shields.io/badge/VS%20Marketplace-287%20installs-0078D4)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
+<!-- perl-lsp:vs-marketplace-installs-badge:end -->
 [![Open VSX Version](https://img.shields.io/open-vsx/v/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 
