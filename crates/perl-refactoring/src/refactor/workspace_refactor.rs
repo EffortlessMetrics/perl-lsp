@@ -51,6 +51,10 @@
 //! ```
 
 use crate::import_optimizer::ImportOptimizer;
+use crate::refactor::refactor_plan::{
+    RefactorConfidence, RefactorOperationKind, RefactorPlan, RefactorSafety, RefactorStats,
+};
+use crate::refactor::refactor_validation::validate_plan;
 use crate::workspace_index::{
     SymKind, SymbolKey, WorkspaceIndex, fs_path_to_uri, normalize_var, uri_to_fs_path,
 };
@@ -485,6 +489,20 @@ impl WorkspaceRefactor {
     /// * `Ok(RefactorResult)` - Contains all file edits to optimize imports
     /// * `Err(String)` - If import analysis encounters issues
     pub fn optimize_imports(&self) -> Result<RefactorResult, String> {
+        let plan = self.plan_optimize_imports()?;
+        let diagnostics = validate_plan(&plan);
+        if let Some(diagnostic) = diagnostics.first() {
+            return Err(format!("Invalid refactor plan: {}", diagnostic.message));
+        }
+
+        Ok(RefactorResult {
+            file_edits: plan.edits,
+            description: "Optimize imports across workspace".to_string(),
+            warnings: plan.diagnostics.into_iter().map(|d| d.message).collect(),
+        })
+    }
+
+    fn plan_optimize_imports(&self) -> Result<RefactorPlan, String> {
         let optimizer = ImportOptimizer::new();
         let mut file_edits = Vec::new();
 
@@ -517,10 +535,15 @@ impl WorkspaceRefactor {
             });
         }
 
-        Ok(RefactorResult {
-            file_edits,
-            description: "Optimize imports across workspace".to_string(),
-            warnings: vec![],
+        let edits_count = file_edits.iter().map(|file_edit| file_edit.edits.len()).sum();
+        let files_changed = file_edits.len();
+        Ok(RefactorPlan {
+            operation: RefactorOperationKind::OptimizeImports,
+            edits: file_edits,
+            diagnostics: vec![],
+            confidence: RefactorConfidence::ScopeAware,
+            safety: RefactorSafety::Safe,
+            stats: RefactorStats { files_changed, edits_count },
         })
     }
 
