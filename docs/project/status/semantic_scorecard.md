@@ -8,8 +8,8 @@ Fixtures loaded: `16`
 
 | Row | Status | Facts | Coverage | Exact | High | Heuristic | Dynamic boundary |
 |---|---|---:|---:|---:|---:|---:|---:|
-| declaration_facts | available | 41 | 16/16 | 154 | 152 | 1 | 5 |
-| definition_candidates | available | 41 | 16/16 | 154 | 152 | 1 | 5 |
+| declaration_facts | available | 42 | 16/16 | 154 | 152 | 1 | 5 |
+| definition_candidates | available | 42 | 16/16 | 154 | 152 | 1 | 5 |
 | export_facts | available | 3 | 16/16 | 154 | 152 | 1 | 5 |
 | import_specs | available | 11 | 16/16 | 154 | 152 | 1 | 5 |
 | inheritance_edges | available | 1 | 16/16 | 154 | 152 | 1 | 5 |
@@ -31,7 +31,7 @@ Fixtures loaded: `16`
 | rename_unsafe_edit_count | pass | 0 | 0 | rename plan query fixtures |
 | safe_delete_blocker_fixture_pass_rate | pass | 100% | 100% | safe-delete plan query fixtures |
 | safe_delete_plan | pass | 100% | 100% | safe-delete plan query fixtures |
-| semantic_fact_counts_nonzero | pass | 84 | > 0 | semantic fixture indexing |
+| semantic_fact_counts_nonzero | pass | 85 | > 0 | semantic fixture indexing |
 | undefined_symbol_false_positive_fixture_rate | pass | 0% | 0% | diagnostics fixture receipts |
 | visible_symbols_fixture_pass_rate | pass | 100% | 100% | workspace scorecard fixtures |
 

@@ -27,14 +27,14 @@
 | perl-diagnostics | — | 4 |
 | perl-lexer | — | 93 |
 | perl-line-index | — | 7 |
-| perl-lsp | — | 518 |
+| perl-lsp | — | 522 |
 | perl-lsp-rs-core | — | 1292 |
 | perl-lsp-ux-tests | — | 67 |
 | perl-parser | — | 231 |
 | perl-parser-core | — | 593 |
 | perl-parser-pest | — | 10 |
 | perl-position-tracking | — | 33 |
-| perl-refactoring | — | 113 |
+| perl-refactoring | — | 115 |
 | perl-regex | — | 37 |
 | perl-semantic-analyzer | — | 246 |
 | perl-semantic-facts | — | 42 |

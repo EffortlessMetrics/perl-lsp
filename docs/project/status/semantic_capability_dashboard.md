@@ -23,7 +23,9 @@ PR #7880, both push (`textDocument/publishDiagnostics`) and pull
 suppress `PL109 UnquotedBareword` false positives across the supported dynamic
 boundaries — see [Live Semantic Diagnostics](#live-semantic-diagnostics) below.
 When semantic data is unavailable (workspace feature disabled, file not yet
-indexed), diagnostics fall back to the legacy path unchanged.
+indexed), diagnostics fall back to the legacy path unchanged. Unsupported or
+ambiguous dynamic forms fail closed: they do not suppress diagnostics unless
+indexed evidence proves the specific bareword may be visible at that point.
 
 The current proof is still intentionally conservative. Dynamic Perl boundaries
 are represented instead of guessed, semantic method completion only cuts over
@@ -51,6 +53,7 @@ dynamic-diagnostics chain landed across three PRs:
 | Bareword *before* `Foo->import(@names);` | Still diagnoses — order-aware via `ImportSpec.span_start_byte`. Dynamic evidence does not become a file-global silence switch. | #7873, #7880 |
 | `eval "sub generated_from_string { 1 }"; truly_undefined_sub();` | Only `generated_from_string` suppressed; `truly_undefined_sub` still diagnoses (different name, no evidence). | #7873, #7880 |
 | No semantic index available | Legacy `PL109` behavior is preserved exactly. The diagnostics call site falls back to the original `get_diagnostics_with_path` when `WorkspaceIndex::with_semantic_queries_for_uri` returns `None`. | #7880 |
+| Unknown ordering, non-literal `eval $code`, cross-file `AUTOLOAD`, symbolic dereference, or other truly dynamic sources | Fail closed: no suppression is applied unless indexed semantic evidence proves the same bareword may be visible before the diagnostic point. | #7948, #7949 follow-up proof |
 
 **Conservative policy.** Dynamic evidence suppresses *false precision*; it does
 not claim exact symbol resolution. The query layer returns
@@ -63,9 +66,10 @@ under `use strict 'subs'`. Tests use `print bar;` (bare identifier) rather
 than `bar()` (parsed as `FunctionCall`, which doesn't currently emit `PL109`).
 
 **Known limits.** Cross-file `AUTOLOAD` propagation, non-literal `eval $code`,
-and other dynamic constructs remain conservative — they don't suppress, but
-they also don't falsely diagnose. Broader dynamic surface coverage is future
-work.
+unknown ordering, symbolic dereference, and other dynamic constructs remain
+conservative. They do not suppress diagnostics without indexed evidence for the
+specific bareword and point in the file. Broader dynamic surface coverage is
+future work tracked by #7948 fixtures and #7949 real-workspace baselines.
 
 ## Dashboard
 
@@ -105,8 +109,8 @@ work.
 - Receiver-shape-driven method ranking is not yet the completion ranking proof.
 - Dynamic-boundary diagnostics cover `eval "sub NAME"` and `Foo->import(@names)`
   in production; broader dynamic surface (cross-file `AUTOLOAD` propagation,
-  non-literal `eval $code`, symbolic dereference) remains conservative —
-  no false suppression, no false diagnostic.
+  non-literal `eval $code`, symbolic dereference, unknown ordering) remains
+  conservative — no false suppression without indexed evidence.
 - Real-workspace semantic proof currently covers one small CPAN-style family,
   not the planned Mojolicious, DBIx::Class, test-heavy, or template-heavy set.
 - Semantic latency is not yet reported as `symbol_at_p95`,
