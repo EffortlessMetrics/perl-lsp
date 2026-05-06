@@ -165,6 +165,23 @@ fn analyze_file_detects_unreachable_after_return() -> Result<(), String> {
 }
 
 #[test]
+fn analyze_file_detects_unreachable_after_parenthesized_terminator() -> Result<(), String> {
+    let code = "sub foo {
+    return(1);
+    my $x = 2;
+}
+";
+    let index = index_with_file("file:///test_return_paren.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_return_paren.pl"))?;
+    assert!(!results.is_empty(), "should detect unreachable code after return(...)");
+    assert_eq!(results[0].code_type, DeadCodeType::UnreachableCode);
+    assert!(results[0].reason.contains("return"));
+    Ok(())
+}
+
+#[test]
 fn analyze_file_detects_unreachable_after_die() -> Result<(), String> {
     let code = "die \"fatal\";\nprint \"never\";\n";
     let index = index_with_file("file:///test_die.pl", code)?;

@@ -209,11 +209,18 @@ impl DeadCodeDetector {
     fn is_terminator(trimmed: &str) -> bool {
         ["return", "die", "exit", "goto", "last", "next", "redo"]
             .iter()
-            .any(|kw| {
-                trimmed == *kw
-                    || trimmed.starts_with(&format!("{kw} "))
-                    || trimmed.starts_with(&format!("{kw};"))
-            })
+            .any(|kw| Self::matches_terminator_keyword(trimmed, kw))
+    }
+
+    fn matches_terminator_keyword(trimmed: &str, keyword: &str) -> bool {
+        if !trimmed.starts_with(keyword) {
+            return false;
+        }
+
+        match trimmed.as_bytes().get(keyword.len()) {
+            None => true,
+            Some(next) => !next.is_ascii_alphanumeric() && *next != b'_',
+        }
     }
 
     /// Analyze entire workspace for dead code
