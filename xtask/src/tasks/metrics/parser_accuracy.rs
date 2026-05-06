@@ -890,6 +890,7 @@ struct ScaleCostScore {
     parse_ms: Vec<f64>,
     ast_projection_ms: Vec<f64>,
     semantic_extraction_ms: Vec<f64>,
+    workspace_insert_ms: Vec<f64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -2637,8 +2638,10 @@ fn score_manifest_scale_cost(
         score.ast_projection_ms.push(ast_start.elapsed().as_secs_f64() * 1000.0);
 
         let semantic_start = Instant::now();
-        let predictions = extract_symbol_predictions(&source_path, &source)?;
+        let (predictions, workspace_insert_ms) =
+            extract_symbol_predictions_with_insert_timing(&source_path, &source)?;
         score.semantic_extraction_ms.push(semantic_start.elapsed().as_secs_f64() * 1000.0);
+        score.workspace_insert_ms.push(workspace_insert_ms);
         score.symbol_count += (predictions.entities.len()
             + predictions.occurrences.len()
             + predictions.edges.len()) as u64;
@@ -3233,15 +3236,25 @@ fn score_manifest_symbols(root: &Path, manifest: &ParserAccuracyManifest) -> Res
 }
 
 fn extract_symbol_predictions(source_path: &Path, source: &str) -> Result<SymbolPredictions> {
+    let (predictions, _) = extract_symbol_predictions_with_insert_timing(source_path, source)?;
+    Ok(predictions)
+}
+
+fn extract_symbol_predictions_with_insert_timing(
+    source_path: &Path,
+    source: &str,
+) -> Result<(SymbolPredictions, f64)> {
     let index = WorkspaceIndex::new();
     let source_path_text = source_path.to_string_lossy();
+    let insert_start = Instant::now();
     index.index_file_str(&source_path_text, source).map_err(|err| {
         eyre!("indexing parser accuracy fixture {}: {err}", source_path.display())
     })?;
+    let workspace_insert_ms = insert_start.elapsed().as_secs_f64() * 1000.0;
     let shard = index.file_fact_shard(&source_path_text).ok_or_else(|| {
         eyre!("missing canonical fact shard for parser accuracy fixture {}", source_path.display())
     })?;
-    Ok(symbol_predictions_from_shard(source, &shard))
+    Ok((symbol_predictions_from_shard(source, &shard), workspace_insert_ms))
 }
 
 fn symbol_predictions_from_shard(source: &str, shard: &FileFactShard) -> SymbolPredictions {
@@ -4625,7 +4638,13 @@ fn cost_metrics(
             "semantic extraction timing samples are not available",
             cadence,
         ),
-        insufficient("workspace_insert_ms_p95", "workspace insert timing is not isolated yet"),
+        optional_measured_value(
+            "workspace_insert_ms_p95",
+            p95_f64(&score.workspace_insert_ms),
+            score.workspace_insert_ms.len() as u64,
+            "workspace insert timing samples are not available",
+            cadence,
+        ),
         optional_measured_value(
             "definition_query_ms_p95",
             p95_micros_as_ms(&navigation_score.definition_query_micros),
@@ -7594,6 +7613,7 @@ sub dynamic_boundary_case {
             parse_ms: vec![0.3, 0.4],
             ast_projection_ms: vec![0.01, 0.02],
             semantic_extraction_ms: vec![0.5, 0.7],
+            workspace_insert_ms: vec![0.8, 1.2],
         };
 
         let mut metrics = scale_metrics(&score, Cadence::Pr);
@@ -7619,6 +7639,14 @@ sub dynamic_boundary_case {
                 MetricRow::Measured { metric, value, sample_count: 2, .. }
                     if metric == "parse_ms_p95"
                         && (*value - 0.4).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "workspace_insert_ms_p95"
+                        && (*value - 1.2).abs() < f64::EPSILON
             )
         }));
         assert!(metrics.iter().any(|metric| {
