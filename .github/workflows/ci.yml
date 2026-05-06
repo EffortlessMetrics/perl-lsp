@@ -642,10 +642,27 @@ jobs:
             --csv-out target/memory/pr-smoke-doc-churn.csv \
             --settle-seconds 1 \
             --server-stderr target/memory/pr-smoke-doc-churn.server.log
+          set +e
           python3 scripts/assert_rss_plateau.py \
             target/memory/pr-smoke-doc-churn.json \
             --summary-out target/memory/pr-smoke-doc-churn.plateau.json \
             --loose
+          PLATEAU_STATUS=$?
+          set -e
+          case "$GITHUB_EVENT_NAME" in
+            pull_request) RECEIPT_EVENT=pull_request ;;
+            merge_group) RECEIPT_EVENT=merge_group ;;
+            *) RECEIPT_EVENT=push ;;
+          esac
+          cargo xtask metrics memory \
+            --workload-json target/memory/pr-smoke-doc-churn.json \
+            --plateau-json target/memory/pr-smoke-doc-churn.plateau.json \
+            --scenario lsp_doc_churn_delete_smoke \
+            --receipt target/memory/receipts/pr-smoke-doc-churn.receipt.json \
+            --commit "$GITHUB_SHA" \
+            --event "$RECEIPT_EVENT" \
+            --markdown >> "$GITHUB_STEP_SUMMARY"
+          cargo xtask gate-receipts validate target/memory/receipts/pr-smoke-doc-churn.receipt.json
           python3 - <<'PY'
           import json
           import os
@@ -671,6 +688,7 @@ jobs:
                   f"| {result} |\n"
               )
           PY
+          exit "$PLATEAU_STATUS"
 
       - name: Upload memory smoke artifacts
         if: always()
@@ -682,6 +700,7 @@ jobs:
             target/memory/pr-smoke-doc-churn.csv
             target/memory/pr-smoke-doc-churn.plateau.json
             target/memory/pr-smoke-doc-churn.server.log
+            target/memory/receipts/pr-smoke-doc-churn.receipt.json
           if-no-files-found: warn
           retention-days: 14
 

@@ -300,9 +300,27 @@ jobs:
             --csv-out target/memory/nightly-doc-churn.csv \
             --settle-seconds 3 \
             --server-stderr target/memory/nightly-doc-churn.server.log
+          set +e
           python3 scripts/assert_rss_plateau.py \
             target/memory/nightly-doc-churn.json \
             --summary-out target/memory/nightly-doc-churn.plateau.json
+          PLATEAU_STATUS=$?
+          set -e
+          case "$GITHUB_EVENT_NAME" in
+            pull_request) RECEIPT_EVENT=pull_request ;;
+            merge_group) RECEIPT_EVENT=merge_group ;;
+            *) RECEIPT_EVENT=push ;;
+          esac
+          cargo xtask metrics memory \
+            --workload-json target/memory/nightly-doc-churn.json \
+            --plateau-json target/memory/nightly-doc-churn.plateau.json \
+            --scenario lsp_doc_churn_delete \
+            --receipt target/memory/receipts/nightly-doc-churn.receipt.json \
+            --commit "$GITHUB_SHA" \
+            --event "$RECEIPT_EVENT" \
+            --markdown >> "$GITHUB_STEP_SUMMARY"
+          cargo xtask gate-receipts validate target/memory/receipts/nightly-doc-churn.receipt.json
+          exit "$PLATEAU_STATUS"
 
       - name: Run workspace-symbol plateau workload
         run: |
@@ -316,9 +334,26 @@ jobs:
             --csv-out target/memory/nightly-workspace-symbol.csv \
             --settle-seconds 3 \
             --server-stderr target/memory/nightly-workspace-symbol.server.log
+          set +e
           python3 scripts/assert_rss_plateau.py \
             target/memory/nightly-workspace-symbol.json \
             --summary-out target/memory/nightly-workspace-symbol.plateau.json
+          PLATEAU_STATUS=$?
+          set -e
+          case "$GITHUB_EVENT_NAME" in
+            pull_request) RECEIPT_EVENT=pull_request ;;
+            merge_group) RECEIPT_EVENT=merge_group ;;
+            *) RECEIPT_EVENT=push ;;
+          esac
+          cargo xtask metrics memory \
+            --workload-json target/memory/nightly-workspace-symbol.json \
+            --plateau-json target/memory/nightly-workspace-symbol.plateau.json \
+            --scenario lsp_workspace_symbol_churn_delete \
+            --receipt target/memory/receipts/nightly-workspace-symbol.receipt.json \
+            --commit "$GITHUB_SHA" \
+            --event "$RECEIPT_EVENT" \
+            --markdown >> "$GITHUB_STEP_SUMMARY"
+          cargo xtask gate-receipts validate target/memory/receipts/nightly-workspace-symbol.receipt.json
           python3 - <<'PY'
           import json
           import os
@@ -357,6 +392,7 @@ jobs:
                       f"| {result} |\n"
                   )
           PY
+          exit "$PLATEAU_STATUS"
 
       - name: Upload memory plateau artifacts
         if: always()
@@ -368,10 +404,12 @@ jobs:
             target/memory/nightly-doc-churn.csv
             target/memory/nightly-doc-churn.plateau.json
             target/memory/nightly-doc-churn.server.log
+            target/memory/receipts/nightly-doc-churn.receipt.json
             target/memory/nightly-workspace-symbol.json
             target/memory/nightly-workspace-symbol.csv
             target/memory/nightly-workspace-symbol.plateau.json
             target/memory/nightly-workspace-symbol.server.log
+            target/memory/receipts/nightly-workspace-symbol.receipt.json
           if-no-files-found: warn
           retention-days: 30
 

@@ -196,6 +196,9 @@ fn validate_receipt(path: &Path, registry: &Registry) -> Result<ValidationResult
     if let Some(schema_path) = &schema {
         validate_schema_required_fields(&receipt, schema_path, &mut errors)?;
     }
+    if check.as_deref() == Some("memory-plateau") {
+        validate_memory_plateau_semantics(&receipt, &mut errors);
+    }
 
     Ok(ValidationResult {
         path: path.display().to_string(),
@@ -282,6 +285,76 @@ fn collect_required_fields(schema_value: &Value, required: &mut HashSet<String>)
     }
 }
 
+fn validate_memory_plateau_semantics(receipt: &Value, errors: &mut Vec<String>) {
+    require_string_eq(receipt, "kind", "memory_plateau", errors);
+    require_nonempty_string(receipt, "scenario", errors);
+    require_integer_min(receipt, "files", 1, errors);
+    require_integer_min(receipt, "changes_per_file", 0, errors);
+    require_integer(receipt, "tail_growth_kb", errors);
+    require_number(receipt, "median_tail_slope_kb_per_file", errors);
+    require_bool(receipt, "passed", errors);
+
+    if let Some(commit) = receipt.get("commit")
+        && !commit.is_string()
+        && !commit.is_null()
+    {
+        errors.push("field 'commit' must be a string or null".to_string());
+    }
+
+    if let Some(passed) = receipt.get("passed").and_then(Value::as_bool)
+        && let Some(verdict) = receipt.get("verdict").and_then(Value::as_str)
+    {
+        let expected = if passed { "pass" } else { "fail" };
+        if verdict != expected {
+            errors.push(format!("field 'verdict' must be '{expected}' when passed is {passed}"));
+        }
+    }
+}
+
+fn require_string_eq(receipt: &Value, field: &str, expected: &str, errors: &mut Vec<String>) {
+    match receipt.get(field).and_then(Value::as_str) {
+        Some(actual) if actual == expected => {}
+        Some(actual) => {
+            errors.push(format!("field '{field}' must be '{expected}', got '{actual}'"))
+        }
+        None => errors.push(format!("field '{field}' must be a string")),
+    }
+}
+
+fn require_nonempty_string(receipt: &Value, field: &str, errors: &mut Vec<String>) {
+    match receipt.get(field).and_then(Value::as_str) {
+        Some(value) if !value.is_empty() => {}
+        Some(_) => errors.push(format!("field '{field}' must not be empty")),
+        None => errors.push(format!("field '{field}' must be a string")),
+    }
+}
+
+fn require_integer(receipt: &Value, field: &str, errors: &mut Vec<String>) {
+    if receipt.get(field).and_then(Value::as_i64).is_none() {
+        errors.push(format!("field '{field}' must be an integer"));
+    }
+}
+
+fn require_integer_min(receipt: &Value, field: &str, min: i64, errors: &mut Vec<String>) {
+    match receipt.get(field).and_then(Value::as_i64) {
+        Some(value) if value >= min => {}
+        Some(value) => errors.push(format!("field '{field}' must be >= {min}, got {value}")),
+        None => errors.push(format!("field '{field}' must be an integer")),
+    }
+}
+
+fn require_number(receipt: &Value, field: &str, errors: &mut Vec<String>) {
+    if receipt.get(field).and_then(Value::as_f64).is_none() {
+        errors.push(format!("field '{field}' must be a number"));
+    }
+}
+
+fn require_bool(receipt: &Value, field: &str, errors: &mut Vec<String>) {
+    if receipt.get(field).and_then(Value::as_bool).is_none() {
+        errors.push(format!("field '{field}' must be a boolean"));
+    }
+}
+
 fn load_registry() -> Result<Registry> {
     let content = fs::read_to_string(REGISTRY_PATH)
         .with_context(|| format!("failed to read registry at {REGISTRY_PATH}"))?;
@@ -302,4 +375,64 @@ fn registry_map(registry: &Registry) -> Result<BTreeMap<String, String>> {
         }
     }
     Ok(map)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn valid_memory_receipt() -> Value {
+        json!({
+            "check": "memory-plateau",
+            "kind": "memory_plateau",
+            "schema_version": "1",
+            "event": "local",
+            "verdict": "pass",
+            "scenario": "lsp_doc_churn_delete",
+            "files": 500,
+            "changes_per_file": 10,
+            "tail_growth_kb": 152,
+            "median_tail_slope_kb_per_file": 0.69,
+            "passed": true,
+            "commit": "abc123"
+        })
+    }
+
+    #[test]
+    fn memory_plateau_semantics_accept_valid_receipt() {
+        let receipt = valid_memory_receipt();
+        let mut errors = Vec::new();
+
+        validate_memory_plateau_semantics(&receipt, &mut errors);
+
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+
+    #[test]
+    fn memory_plateau_semantics_reject_malformed_receipt() {
+        let mut receipt = valid_memory_receipt();
+        receipt["kind"] = json!("wrong");
+        receipt["files"] = json!("500");
+        receipt["passed"] = json!("yes");
+        receipt["verdict"] = json!("pass");
+
+        let mut errors = Vec::new();
+        validate_memory_plateau_semantics(&receipt, &mut errors);
+
+        assert!(errors.iter().any(|error| error.contains("field 'kind'")));
+        assert!(errors.iter().any(|error| error.contains("field 'files'")));
+        assert!(errors.iter().any(|error| error.contains("field 'passed'")));
+    }
+
+    #[test]
+    fn memory_plateau_semantics_reject_verdict_mismatch() {
+        let mut receipt = valid_memory_receipt();
+        receipt["passed"] = json!(false);
+        receipt["verdict"] = json!("pass");
+
+        let mut errors = Vec::new();
+        validate_memory_plateau_semantics(&receipt, &mut errors);
+
+        assert!(errors.iter().any(|error| error.contains("verdict")));
+    }
 }

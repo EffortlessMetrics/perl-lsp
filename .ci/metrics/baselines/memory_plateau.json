@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "kind": "memory_plateau_baseline",
+  "source": {
+    "workflow": "CI (Nightly)",
+    "run_id": "25444427692",
+    "commit": "e58ab60848bae119c182740c482948de0fd357c4",
+    "captured_at": "2026-05-06T15:24:03Z"
+  },
+  "scenarios": [
+    {
+      "scenario": "lsp_doc_churn_delete",
+      "files": 500,
+      "changes_per_file": 10,
+      "workspace_symbol": false,
+      "delete_after_close": true,
+      "tail_growth_kb": 152,
+      "tail_growth_pct": 0.995,
+      "median_tail_slope_kb_per_file": 0.69,
+      "samples": 52,
+      "passed": true
+    },
+    {
+      "scenario": "lsp_workspace_symbol_churn_delete",
+      "files": 300,
+      "changes_per_file": 10,
+      "workspace_symbol": true,
+      "delete_after_close": true,
+      "tail_growth_kb": 872,
+      "tail_growth_pct": 5.951,
+      "median_tail_slope_kb_per_file": 4.764,
+      "samples": 32,
+      "passed": true
+    },
+    {
+      "scenario": "workspace_index_remove_reindex_cycle",
+      "source": "cargo test -p perl-workspace --features memory-profiling --test memory_leak_regression",
+      "tracked_tests": [
+        "remove_all_returns_index_to_empty_baseline",
+        "repeated_index_remove_cycles_do_not_accumulate",
+        "cycle_footprint_matches_single_shot_footprint",
+        "find_definition_does_not_grow_symbols_on_miss",
+        "bytes_per_symbol_stays_under_threshold_at_500_files"
+      ],
+      "passed": true
+    }
+  ]
+}
