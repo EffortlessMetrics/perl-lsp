@@ -1,5 +1,5 @@
 schema = 1
-msrv = "1.92"
+msrv = "1.93"
 
 [policy]
 panic_free_tests = true
