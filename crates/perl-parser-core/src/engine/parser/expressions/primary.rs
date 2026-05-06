@@ -549,6 +549,19 @@ impl<'a> Parser<'a> {
                 }
             }
 
+            TokenKind::Defer => {
+                // Check for autoquoting: `defer => value` (e.g. in feature.pm hash)
+                if self.is_keyword_before_fat_arrow() {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.to_string() },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_defer()
+                }
+            }
+
             TokenKind::Less => {
                 // Could be diamond operator <> or <FILEHANDLE>
                 let start = self.consume_token()?.start; // consume <

@@ -341,6 +341,8 @@ impl<'a> Parser<'a> {
                 | TokenKind::Finally
                 | TokenKind::When
                 | TokenKind::Undef
+                // defer - Perl 5.36+ experimental block; can also be a hash key
+                | TokenKind::Defer
                 // else/elsif — handled in parse_statement_inner for orphan recovery
                 | TokenKind::Else
                 | TokenKind::Elsif
