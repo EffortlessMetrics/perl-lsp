@@ -8,6 +8,7 @@ Perl workspaces (5 000–10 000+ files).
 | [TESTING_GUIDE.md](TESTING_GUIDE.md) | Generating test workspaces, writing large-workspace tests, performance baselines |
 | [PROFILING_GUIDE.md](PROFILING_GUIDE.md) | CPU flamegraphs, heap profiling, criterion benchmarks |
 | [MEMORY_PATTERNS.md](MEMORY_PATTERNS.md) | How memory scales, cache behavior, common anti-patterns |
+| [RETAINED_STATE_INVENTORY.md](RETAINED_STATE_INVENTORY.md) | Long-lived maps, caches, queues, cleanup events, and regression coverage |
 | [LSP_CHURN_REPRO.md](LSP_CHURN_REPRO.md) | Reproducing open/change/close RSS churn and checking plateau behavior |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Diagnosing slowdowns, stale symbols, index degradation |
 

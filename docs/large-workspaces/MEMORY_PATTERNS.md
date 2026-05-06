@@ -237,6 +237,7 @@ perllsp --health
 
 ## See Also
 
+- `RETAINED_STATE_INVENTORY.md` — long-lived state owners, eviction events, and regression surfaces
 - `TESTING_GUIDE.md` — generating workspaces to trigger these patterns
 - `PROFILING_GUIDE.md` — measuring actual allocation with heaptrack
 - `TROUBLESHOOTING.md` — diagnosing memory growth in a running server
