@@ -23,6 +23,14 @@ like (#0000) or (#9999) will fail CI.
 - [ ] `cargo test -p <crate>` — pass
 - [ ] This PR introduces UX-visible changes. I have verified that error messages are actionable and the UX test harness still passes.
 
+## Retained State
+<!-- Complete this when the PR adds or changes a long-lived map, cache, queue, background task, session holder, or subprocess lifecycle. Otherwise write "N/A". -->
+- [ ] Owner, key type, bound, and cleanup event are documented.
+- [ ] Key normalization is handled.
+- [ ] Close-only behavior is distinct from delete/folder-removal behavior.
+- [ ] Delayed background work cannot repopulate stale state.
+- [ ] A regression test, receipt, snapshot counter, or debug counter covers the state.
+
 ## What I considered but didn't do
 <!-- Alternative approaches, related issues found, scope decisions -->
 
