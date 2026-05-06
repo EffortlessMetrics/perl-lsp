@@ -2604,6 +2604,13 @@
             "unexpected_references": [
               "&$name()"
             ]
+          },
+          {
+            "id": "own_sub_rename_safe_edits",
+            "symbol": "Accuracy::Navigation::UseCases::own_sub",
+            "rename_new_name": "renamed_sub",
+            "expected_rename_safe_edit": true,
+            "expected_rename_edit_count": 3
           }
         ]
       }

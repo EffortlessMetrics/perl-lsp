@@ -23,6 +23,7 @@ use perl_lsp_rs_core::providers::navigation::hover_shadow::{HoverCutoverResult, 
 use perl_lsp_rs_core::providers::navigation::references_shadow::{
     ReferencesCutoverResult, find_references_cutover,
 };
+use perl_lsp_rs_core::providers::navigation::rename_shadow::{RenameCutoverResult, rename_cutover};
 use perl_parser::apply_edits;
 use perl_parser::edit::Edit as CoreEdit;
 use perl_parser::incremental_v2::IncrementalParserV2;
@@ -202,6 +203,12 @@ struct NavigationProviderExpectation {
     unexpected_references: Vec<String>,
     #[serde(default)]
     hover_contains: Vec<String>,
+    #[serde(default)]
+    rename_new_name: Option<String>,
+    #[serde(default)]
+    expected_rename_safe_edit: Option<bool>,
+    #[serde(default)]
+    expected_rename_edit_count: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -844,6 +851,8 @@ struct NavigationProviderScore {
     references_absent_assertion_count: u64,
     hover_expected_count: u64,
     hover_origin_correct_count: u64,
+    rename_safe_edit_expected_count: u64,
+    rename_safe_edit_correct_count: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -2071,6 +2080,13 @@ fn score_navigation_provider_expectations(
                 &mut score,
             )?;
             score_navigation_hover(expectation, &source, &index, &source_path_text, &mut score)?;
+            score_navigation_rename_safe_edit(
+                expectation,
+                &index,
+                &source_path_text,
+                &shard,
+                &mut score,
+            )?;
         }
     }
 
@@ -2218,6 +2234,52 @@ fn score_navigation_hover(
         && expectation.hover_contains.iter().all(|expected| markdown.contains(expected))
     {
         score.hover_origin_correct_count += 1;
+    }
+    Ok(())
+}
+
+fn score_navigation_rename_safe_edit(
+    expectation: &NavigationProviderExpectation,
+    index: &WorkspaceIndex,
+    source_path_text: &str,
+    shard: &FileFactShard,
+    score: &mut NavigationProviderScore,
+) -> Result<()> {
+    let Some(expected_safe_edit) = expectation.expected_rename_safe_edit else {
+        return Ok(());
+    };
+    let new_name = expectation
+        .rename_new_name
+        .as_deref()
+        .ok_or_else(|| eyre!("rename expectation {} is missing rename_new_name", expectation.id))?;
+
+    score.rename_safe_edit_expected_count += 1;
+
+    let entity_id = resolve_navigation_entity_id(shard, &expectation.symbol)
+        .with_context(|| format!("resolving rename entity for {}", expectation.id))?;
+    let bare_old_name = bare_symbol_name(&expectation.symbol);
+    let outcome = index
+        .with_semantic_queries_for_uri(source_path_text, |_file_id, semantic_queries| {
+            rename_cutover(true, &semantic_queries, entity_id, new_name)
+        })
+        .ok_or_else(|| eyre!("missing semantic queries for navigation rename fixture"))?;
+
+    let allowed = matches!(&outcome.result, RenameCutoverResult::Allowed { .. });
+    let edits: &[perl_semantic_facts::PlannedEdit] = match &outcome.result {
+        RenameCutoverResult::Allowed { edits } => edits.as_slice(),
+        RenameCutoverResult::Blocked { .. } => &[],
+    };
+    let edit_count_matches = match expectation.expected_rename_edit_count {
+        Some(expected_count) => edits.len() as u64 == expected_count,
+        None => true,
+    };
+    let actual_safe_edit = allowed
+        && !edits.is_empty()
+        && edit_count_matches
+        && edits.iter().all(|edit| edit.old_text == bare_old_name && edit.new_text == new_name);
+
+    if actual_safe_edit == expected_safe_edit {
+        score.rename_safe_edit_correct_count += 1;
     }
     Ok(())
 }
@@ -4119,8 +4181,7 @@ fn provider_impact_metrics(
     navigation_score: &NavigationProviderScore,
     cadence: Cadence,
 ) -> Vec<MetricRow> {
-    const PROVIDER_METRICS: &[&str] =
-        &["provider_rename_safe_edit_accuracy", "provider_safe_delete_blocker_accuracy"];
+    const PROVIDER_METRICS: &[&str] = &["provider_safe_delete_blocker_accuracy"];
 
     let diagnostic_false_positive_count = diagnostic_score
         .dynamic_boundary_false_positive_count
@@ -4327,6 +4388,16 @@ fn provider_impact_metrics(
             ),
             navigation_score.references_expected_count,
             "no provider reference expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "provider_rename_safe_edit_accuracy",
+            ratio(
+                navigation_score.rename_safe_edit_correct_count,
+                navigation_score.rename_safe_edit_expected_count,
+            ),
+            navigation_score.rename_safe_edit_expected_count,
+            "no provider rename safe-edit expectations are available",
             cadence,
         ),
         optional_measured_count(
@@ -5969,6 +6040,9 @@ sub dynamic_boundary_case {
                             expected_references: vec![],
                             unexpected_references: vec![],
                             hover_contains: vec![],
+                            rename_new_name: None,
+                            expected_rename_safe_edit: None,
+                            expected_rename_edit_count: None,
                         },
                         NavigationProviderExpectation {
                             id: "bare_call_goto".to_string(),
@@ -5980,6 +6054,9 @@ sub dynamic_boundary_case {
                             expected_references: vec![],
                             unexpected_references: vec![],
                             hover_contains: vec![],
+                            rename_new_name: None,
+                            expected_rename_safe_edit: None,
+                            expected_rename_edit_count: None,
                         },
                         NavigationProviderExpectation {
                             id: "qualified_call_goto".to_string(),
@@ -5994,6 +6071,9 @@ sub dynamic_boundary_case {
                                 "Accuracy::Navigation::UseCases::own_sub".to_string(),
                                 "Subroutine".to_string(),
                             ],
+                            rename_new_name: None,
+                            expected_rename_safe_edit: None,
+                            expected_rename_edit_count: None,
                         },
                         NavigationProviderExpectation {
                             id: "imported_symbol_goto_and_hover".to_string(),
@@ -6005,6 +6085,9 @@ sub dynamic_boundary_case {
                             expected_references: vec![],
                             unexpected_references: vec![],
                             hover_contains: vec![],
+                            rename_new_name: None,
+                            expected_rename_safe_edit: None,
+                            expected_rename_edit_count: None,
                         },
                         NavigationProviderExpectation {
                             id: "own_sub_references".to_string(),
@@ -6018,6 +6101,23 @@ sub dynamic_boundary_case {
                             ],
                             unexpected_references: vec!["&$name()".to_string()],
                             hover_contains: vec![],
+                            rename_new_name: None,
+                            expected_rename_safe_edit: None,
+                            expected_rename_edit_count: None,
+                        },
+                        NavigationProviderExpectation {
+                            id: "own_sub_rename_safe_edits".to_string(),
+                            symbol: "Accuracy::Navigation::UseCases::own_sub".to_string(),
+                            cursor_marker: None,
+                            cursor_symbol: None,
+                            expected_document_symbols: vec![],
+                            expected_definition_span: None,
+                            expected_references: vec![],
+                            unexpected_references: vec![],
+                            hover_contains: vec![],
+                            rename_new_name: Some("renamed_sub".to_string()),
+                            expected_rename_safe_edit: Some(true),
+                            expected_rename_edit_count: Some(3),
                         },
                     ],
                 },
@@ -6216,6 +6316,8 @@ sub dynamic_boundary_case {
         assert_eq!(score.references_false_positive_count, 0);
         assert_eq!(score.hover_expected_count, 1);
         assert_eq!(score.hover_origin_correct_count, 1);
+        assert_eq!(score.rename_safe_edit_expected_count, 1);
+        assert_eq!(score.rename_safe_edit_correct_count, 0);
 
         let metrics = provider_impact_metrics(
             &MethodCompletionProviderScore::default(),
@@ -6326,6 +6428,21 @@ sub dynamic_boundary_case {
             references_recall,
             MetricRow::Measured { value, sample_count: 1, .. }
                 if (*value - 1.0).abs() < f64::EPSILON
+        ));
+        let rename_safe_edit_accuracy = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "provider_rename_safe_edit_accuracy"
+                )
+            })
+            .ok_or_else(|| eyre!("provider rename safe-edit row should exist"))?;
+        assert!(matches!(
+            rename_safe_edit_accuracy,
+            MetricRow::Measured { value, sample_count: 1, .. }
+                if (*value - 0.0).abs() < f64::EPSILON
         ));
         Ok(())
     }
