@@ -3,7 +3,7 @@
 //! This module identifies unused code including unreachable code and unused symbols.
 //! Currently a stub implementation to demonstrate the architecture.
 
-use perl_workspace::workspace_index::{SymbolKind, WorkspaceIndex, fs_path_to_uri, uri_to_fs_path};
+use perl_workspace::workspace_index::{fs_path_to_uri, uri_to_fs_path, SymbolKind, WorkspaceIndex};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -14,6 +14,22 @@ mod report;
 pub use report::generate_report;
 
 use crate::dead_branches::detect_dead_branches;
+
+fn has_statement_modifier(line: &str) -> bool {
+    // Perl statement modifiers keep flow-control statements conditional,
+    // e.g. `next if $skip;` should not terminate all subsequent flow.
+    [" if ", " unless ", " while ", " until ", " for ", " foreach ", " when "]
+        .iter()
+        .any(|modifier| line.contains(modifier))
+}
+
+fn detect_terminator_keyword(line: &str) -> Option<&'static str> {
+    ["return", "die", "exit", "goto", "last", "next", "redo"]
+        .iter()
+        .find(|kw| line.starts_with(**kw))
+        .copied()
+        .filter(|_| !has_statement_modifier(line))
+}
 
 /// Types of dead code detected during Perl script analysis
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -204,13 +220,8 @@ impl DeadCodeDetector {
                 }
             }
 
-            if ["return", "die", "exit", "goto", "last", "next", "redo"]
-                .iter()
-                .any(|kw| trimmed.starts_with(kw))
-            {
-                if let Some(first_word) = trimmed.split_whitespace().next() {
-                    block_terminator = Some((line_no, first_word.to_string(), brace_depth));
-                }
+            if let Some(terminator) = detect_terminator_keyword(trimmed) {
+                block_terminator = Some((line_no, terminator.to_string(), brace_depth));
             }
 
             brace_depth += line.chars().filter(|&c| c == '{').count();
@@ -297,5 +308,26 @@ impl DeadCodeDetector {
         }
 
         DeadCodeAnalysis { dead_code, stats, files_analyzed: docs.len(), total_lines }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{detect_terminator_keyword, has_statement_modifier};
+
+    #[test]
+    fn statement_modifiers_are_detected() {
+        assert!(has_statement_modifier("next if $skip;"));
+        assert!(has_statement_modifier("last unless $ok;"));
+        assert!(!has_statement_modifier("next;"));
+    }
+
+    #[test]
+    fn conditional_flow_control_is_not_treated_as_terminator() {
+        assert_eq!(detect_terminator_keyword("next if $skip;"), None);
+        assert_eq!(detect_terminator_keyword("last unless $done;"), None);
+        assert_eq!(detect_terminator_keyword("redo while $retry;"), None);
+        assert_eq!(detect_terminator_keyword("next;"), Some("next"));
+        assert_eq!(detect_terminator_keyword("return $value;"), Some("return"));
     }
 }
