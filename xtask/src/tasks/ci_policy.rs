@@ -191,6 +191,33 @@ fn memory_lifecycle_violations(inputs: &MemoryLifecycleInputs) -> Vec<String> {
         }
     }
 
+    let stale_index_guard_count =
+        inputs.text_sync.matches("Skipping stale background index task").count();
+    if stale_index_guard_count < 2 {
+        violations.push(
+            "didOpen and didChange background index tasks must keep stale-generation guards"
+                .to_string(),
+        );
+    }
+    if !inputs.text_sync.contains("generation.load(Ordering::Acquire) != 0") {
+        violations.push(
+            "didOpen background index task must validate the document generation before indexing"
+                .to_string(),
+        );
+    }
+    if !inputs.text_sync.contains("generation.load(Ordering::Acquire) != expected_generation") {
+        violations.push(
+            "didChange background index task must validate the expected document generation before indexing"
+                .to_string(),
+        );
+    }
+    if !inputs.text_sync.contains("test_did_close_after_change_storm_drains_background_index_tasks")
+    {
+        violations.push(
+            "close-after-change-storm background index regression must stay present".to_string(),
+        );
+    }
+
     if !inputs.workspace.contains("FileChangeType::DELETED") {
         violations.push("watched-file delete branch must stay explicit".to_string());
     }
@@ -335,6 +362,17 @@ mod tests {
                 fn handle_did_close(&self) {
                     self.evict_open_document_session_state(uri);
                 }
+                fn background_index_open() {
+                    if generation.load(Ordering::Acquire) != 0 {
+                        tracing::debug!("Skipping stale background index task");
+                    }
+                }
+                fn background_index_change() {
+                    if generation.load(Ordering::Acquire) != expected_generation {
+                        tracing::debug!("Skipping stale background index task");
+                    }
+                }
+                fn test_did_close_after_change_storm_drains_background_index_tasks() {}
             "#
             .to_string(),
             workspace: r#"
@@ -411,5 +449,38 @@ mod tests {
         let violations = memory_lifecycle_violations(&inputs);
         assert!(violations.iter().any(|v| v.contains("didClose must not call")));
         assert!(violations.iter().any(|v| v.contains("raw URI")));
+    }
+
+    #[test]
+    fn memory_lifecycle_policy_flags_missing_background_index_generation_guard() {
+        let inputs = MemoryLifecycleInputs {
+            text_sync: r#"
+                fn handle_did_change_with_cancellation(&self) {
+                    for key in self.uri_key_variants(uri) {
+                        self.stream_sessions().cancel_for_uri_version(&key, version);
+                    }
+                }
+                fn handle_did_close(&self) {
+                    self.evict_open_document_session_state(uri);
+                }
+            "#
+            .to_string(),
+            workspace: String::new(),
+            runtime_mod: String::new(),
+            streaming_tests: String::new(),
+            memory_status: String::new(),
+            receipt_registry: String::new(),
+            memory_receipt_schema: String::new(),
+        };
+
+        let violations = memory_lifecycle_violations(&inputs);
+        assert!(
+            violations.iter().any(|v| v.contains("stale-generation guards")),
+            "expected stale-generation guard violation, got {violations:?}"
+        );
+        assert!(
+            violations.iter().any(|v| v.contains("change-storm background index regression")),
+            "expected regression-test presence violation, got {violations:?}"
+        );
     }
 }
