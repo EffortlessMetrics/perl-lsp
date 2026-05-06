@@ -852,6 +852,7 @@ struct NavigationProviderScore {
     goto_definition_hit_count: u64,
     goto_definition_span_exact_count: u64,
     goto_definition_false_target_count: u64,
+    definition_query_micros: Vec<u64>,
     references_expected_count: u64,
     references_hit_count: u64,
     references_returned_count: u64,
@@ -1033,7 +1034,12 @@ fn build_artifact(
         cadence,
     ));
     metrics.extend(scale_metrics(&scale_cost_score, cadence));
-    metrics.extend(cost_metrics(&scale_cost_score, &method_completion_provider_score, cadence));
+    metrics.extend(cost_metrics(
+        &scale_cost_score,
+        &method_completion_provider_score,
+        &navigation_provider_score,
+        cadence,
+    ));
     metrics.extend(cache_reuse_metrics(&incremental_score, cadence));
     metrics.extend(determinism_metrics(&determinism_score, cadence));
     metrics.extend(gold_drift_metrics(&gold_drift, denominator.fixture_count, cadence));
@@ -2163,8 +2169,10 @@ fn score_navigation_goto_definition(
     let actual_spans = index
         .with_semantic_queries_for_uri(source_path_text, |file_id, semantic_queries| {
             let context = QueryContext::new(file_id, None, cursor_offset);
+            let query_start = Instant::now();
             let outcome =
                 goto_definition_cutover(index, &semantic_queries, &expectation.symbol, &context);
+            score.definition_query_micros.push(query_start.elapsed().as_micros() as u64);
             definition_result_spans(index_source, &outcome.result, anchors_by_id)
         })
         .ok_or_else(|| eyre!("missing semantic queries for navigation fixture"))?;
@@ -4566,6 +4574,7 @@ fn scale_metrics(score: &ScaleCostScore, cadence: Cadence) -> Vec<MetricRow> {
 fn cost_metrics(
     score: &ScaleCostScore,
     method_completion_score: &MethodCompletionProviderScore,
+    navigation_score: &NavigationProviderScore,
     cadence: Cadence,
 ) -> Vec<MetricRow> {
     vec![
@@ -4599,7 +4608,13 @@ fn cost_metrics(
             cadence,
         ),
         insufficient("workspace_insert_ms_p95", "workspace insert timing is not isolated yet"),
-        insufficient("definition_query_ms_p95", "provider query timing is not wired yet"),
+        optional_measured_value(
+            "definition_query_ms_p95",
+            p95_micros_as_ms(&navigation_score.definition_query_micros),
+            navigation_score.definition_query_micros.len() as u64,
+            "provider definition query timing samples are not available",
+            cadence,
+        ),
         insufficient("reference_query_ms_p95", "provider query timing is not wired yet"),
         optional_measured_value(
             "completion_query_ms_p95",
@@ -6332,7 +6347,12 @@ sub dynamic_boundary_case {
             MetricRow::Measured { value, sample_count: 1, .. }
                 if (*value - 1.0).abs() < f64::EPSILON
         ));
-        let cost_metrics = cost_metrics(&ScaleCostScore::default(), &score, Cadence::Pr);
+        let cost_metrics = cost_metrics(
+            &ScaleCostScore::default(),
+            &score,
+            &NavigationProviderScore::default(),
+            Cadence::Pr,
+        );
         let completion_query_ms = cost_metrics
             .iter()
             .find(|metric| {
@@ -6433,6 +6453,7 @@ sub dynamic_boundary_case {
         assert_eq!(score.goto_definition_hit_count, 3);
         assert_eq!(score.goto_definition_span_exact_count, 3);
         assert_eq!(score.goto_definition_false_target_count, 0);
+        assert_eq!(score.definition_query_micros.len(), 3);
         assert_eq!(score.references_expected_count, 1);
         assert_eq!(score.references_hit_count, 1);
         assert_eq!(score.references_returned_count, 1);
@@ -6583,6 +6604,25 @@ sub dynamic_boundary_case {
             safe_delete_blocker_accuracy,
             MetricRow::Measured { value, sample_count: 1, .. }
                 if (*value - 1.0).abs() < f64::EPSILON
+        ));
+        let cost_metrics = cost_metrics(
+            &ScaleCostScore::default(),
+            &MethodCompletionProviderScore::default(),
+            &score,
+            Cadence::Pr,
+        );
+        let definition_query_ms = cost_metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. } if metric == "definition_query_ms_p95"
+                )
+            })
+            .ok_or_else(|| eyre!("definition query timing row should be measured"))?;
+        assert!(matches!(
+            definition_query_ms,
+            MetricRow::Measured { value, sample_count: 3, .. } if *value >= 0.0
         ));
         Ok(())
     }
@@ -7504,6 +7544,7 @@ sub dynamic_boundary_case {
         metrics.extend(cost_metrics(
             &score,
             &MethodCompletionProviderScore::default(),
+            &NavigationProviderScore::default(),
             Cadence::Pr,
         ));
 
