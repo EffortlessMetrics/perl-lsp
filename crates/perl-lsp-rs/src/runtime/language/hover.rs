@@ -358,20 +358,8 @@ impl LspServer {
                     // Resolve receiver to a package name.
                     // `$self`, `$this`, `$class` map to current_package; bare identifiers
                     // starting with uppercase are treated as package names.
-                    let bare_receiver =
-                        raw_receiver.trim_start_matches(['$', '@', '%']).to_string();
-                    let receiver_pkg = if bare_receiver == "self"
-                        || bare_receiver == "this"
-                        || bare_receiver == "class"
-                    {
-                        crate::declaration::current_package_at(ast, offset).to_string()
-                    } else if bare_receiver.starts_with(|c: char| c.is_uppercase()) {
-                        bare_receiver
-                    } else {
-                        // Variable receiver whose type we cannot statically resolve here.
-                        // Phase 2 will not be called; fall through to token hover.
-                        String::new()
-                    };
+                    let receiver_pkg =
+                        Self::resolve_receiver_package_name(ast, offset, &raw_receiver);
 
                     if !receiver_pkg.is_empty() {
                         // Try in-file ancestors first (no workspace lock needed)
@@ -529,6 +517,21 @@ impl LspServer {
         }
 
         HoverExtracted::None
+    }
+
+    fn resolve_receiver_package_name(ast: &Node, offset: usize, raw_receiver: &str) -> String {
+        let bare_receiver = raw_receiver.trim_start_matches(['$', '@', '%']);
+        if bare_receiver == "self" || bare_receiver == "this" || bare_receiver == "class" {
+            return crate::declaration::current_package_at(ast, offset).to_string();
+        }
+
+        if bare_receiver.starts_with(|ch: char| ch.is_uppercase()) {
+            return bare_receiver.to_string();
+        }
+
+        // Variable receiver whose type we cannot statically resolve here.
+        // Phase 2 will not be called; fall through to token hover.
+        String::new()
     }
 
     /// Build a scope context string for a variable hover card.
