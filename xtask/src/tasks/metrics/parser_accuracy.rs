@@ -24,6 +24,9 @@ use perl_lsp_rs_core::providers::navigation::references_shadow::{
     ReferencesCutoverResult, find_references_cutover,
 };
 use perl_lsp_rs_core::providers::navigation::rename_shadow::{RenameCutoverResult, rename_cutover};
+use perl_lsp_rs_core::providers::navigation::safe_delete_shadow::{
+    SafeDeleteCutoverResult, safe_delete_cutover,
+};
 use perl_parser::apply_edits;
 use perl_parser::edit::Edit as CoreEdit;
 use perl_parser::incremental_v2::IncrementalParserV2;
@@ -209,6 +212,10 @@ struct NavigationProviderExpectation {
     expected_rename_safe_edit: Option<bool>,
     #[serde(default)]
     expected_rename_edit_count: Option<u64>,
+    #[serde(default)]
+    expected_safe_delete_blocked: Option<bool>,
+    #[serde(default)]
+    expected_safe_delete_blocker_count: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -853,6 +860,8 @@ struct NavigationProviderScore {
     hover_origin_correct_count: u64,
     rename_safe_edit_expected_count: u64,
     rename_safe_edit_correct_count: u64,
+    safe_delete_blocker_expected_count: u64,
+    safe_delete_blocker_correct_count: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -2087,6 +2096,13 @@ fn score_navigation_provider_expectations(
                 &shard,
                 &mut score,
             )?;
+            score_navigation_safe_delete_blocker(
+                expectation,
+                &index,
+                &source_path_text,
+                &shard,
+                &mut score,
+            )?;
         }
     }
 
@@ -2280,6 +2296,43 @@ fn score_navigation_rename_safe_edit(
 
     if actual_safe_edit == expected_safe_edit {
         score.rename_safe_edit_correct_count += 1;
+    }
+    Ok(())
+}
+
+fn score_navigation_safe_delete_blocker(
+    expectation: &NavigationProviderExpectation,
+    index: &WorkspaceIndex,
+    source_path_text: &str,
+    shard: &FileFactShard,
+    score: &mut NavigationProviderScore,
+) -> Result<()> {
+    let Some(expected_blocked) = expectation.expected_safe_delete_blocked else {
+        return Ok(());
+    };
+
+    score.safe_delete_blocker_expected_count += 1;
+
+    let entity_id = resolve_navigation_entity_id(shard, &expectation.symbol)
+        .with_context(|| format!("resolving safe-delete entity for {}", expectation.id))?;
+    let outcome = index
+        .with_semantic_queries_for_uri(source_path_text, |_file_id, semantic_queries| {
+            safe_delete_cutover(true, &semantic_queries, entity_id, &expectation.symbol)
+        })
+        .ok_or_else(|| eyre!("missing semantic queries for navigation safe-delete fixture"))?;
+
+    let actual_blocker_count = match &outcome.result {
+        SafeDeleteCutoverResult::Allowed => 0,
+        SafeDeleteCutoverResult::Blocked { blockers } => blockers.len() as u64,
+    };
+    let actual_blocked = actual_blocker_count > 0;
+    let blocker_count_matches = match expectation.expected_safe_delete_blocker_count {
+        Some(expected_count) => actual_blocker_count == expected_count,
+        None => true,
+    };
+
+    if actual_blocked == expected_blocked && blocker_count_matches {
+        score.safe_delete_blocker_correct_count += 1;
     }
     Ok(())
 }
@@ -4181,7 +4234,7 @@ fn provider_impact_metrics(
     navigation_score: &NavigationProviderScore,
     cadence: Cadence,
 ) -> Vec<MetricRow> {
-    const PROVIDER_METRICS: &[&str] = &["provider_safe_delete_blocker_accuracy"];
+    const PROVIDER_METRICS: &[&str] = &[];
 
     let diagnostic_false_positive_count = diagnostic_score
         .dynamic_boundary_false_positive_count
@@ -4398,6 +4451,16 @@ fn provider_impact_metrics(
             ),
             navigation_score.rename_safe_edit_expected_count,
             "no provider rename safe-edit expectations are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "provider_safe_delete_blocker_accuracy",
+            ratio(
+                navigation_score.safe_delete_blocker_correct_count,
+                navigation_score.safe_delete_blocker_expected_count,
+            ),
+            navigation_score.safe_delete_blocker_expected_count,
+            "no provider safe-delete blocker expectations are available",
             cadence,
         ),
         optional_measured_count(
@@ -6043,6 +6106,8 @@ sub dynamic_boundary_case {
                             rename_new_name: None,
                             expected_rename_safe_edit: None,
                             expected_rename_edit_count: None,
+                            expected_safe_delete_blocked: None,
+                            expected_safe_delete_blocker_count: None,
                         },
                         NavigationProviderExpectation {
                             id: "bare_call_goto".to_string(),
@@ -6057,6 +6122,8 @@ sub dynamic_boundary_case {
                             rename_new_name: None,
                             expected_rename_safe_edit: None,
                             expected_rename_edit_count: None,
+                            expected_safe_delete_blocked: None,
+                            expected_safe_delete_blocker_count: None,
                         },
                         NavigationProviderExpectation {
                             id: "qualified_call_goto".to_string(),
@@ -6074,6 +6141,8 @@ sub dynamic_boundary_case {
                             rename_new_name: None,
                             expected_rename_safe_edit: None,
                             expected_rename_edit_count: None,
+                            expected_safe_delete_blocked: None,
+                            expected_safe_delete_blocker_count: None,
                         },
                         NavigationProviderExpectation {
                             id: "imported_symbol_goto_and_hover".to_string(),
@@ -6088,6 +6157,8 @@ sub dynamic_boundary_case {
                             rename_new_name: None,
                             expected_rename_safe_edit: None,
                             expected_rename_edit_count: None,
+                            expected_safe_delete_blocked: None,
+                            expected_safe_delete_blocker_count: None,
                         },
                         NavigationProviderExpectation {
                             id: "own_sub_references".to_string(),
@@ -6104,6 +6175,8 @@ sub dynamic_boundary_case {
                             rename_new_name: None,
                             expected_rename_safe_edit: None,
                             expected_rename_edit_count: None,
+                            expected_safe_delete_blocked: None,
+                            expected_safe_delete_blocker_count: None,
                         },
                         NavigationProviderExpectation {
                             id: "own_sub_rename_safe_edits".to_string(),
@@ -6118,6 +6191,24 @@ sub dynamic_boundary_case {
                             rename_new_name: Some("renamed_sub".to_string()),
                             expected_rename_safe_edit: Some(true),
                             expected_rename_edit_count: Some(3),
+                            expected_safe_delete_blocked: None,
+                            expected_safe_delete_blocker_count: None,
+                        },
+                        NavigationProviderExpectation {
+                            id: "own_sub_safe_delete_blocked".to_string(),
+                            symbol: "Accuracy::Navigation::UseCases::own_sub".to_string(),
+                            cursor_marker: None,
+                            cursor_symbol: None,
+                            expected_document_symbols: vec![],
+                            expected_definition_span: None,
+                            expected_references: vec![],
+                            unexpected_references: vec![],
+                            hover_contains: vec![],
+                            rename_new_name: None,
+                            expected_rename_safe_edit: None,
+                            expected_rename_edit_count: None,
+                            expected_safe_delete_blocked: Some(true),
+                            expected_safe_delete_blocker_count: Some(1),
                         },
                     ],
                 },
@@ -6318,6 +6409,8 @@ sub dynamic_boundary_case {
         assert_eq!(score.hover_origin_correct_count, 1);
         assert_eq!(score.rename_safe_edit_expected_count, 1);
         assert_eq!(score.rename_safe_edit_correct_count, 0);
+        assert_eq!(score.safe_delete_blocker_expected_count, 1);
+        assert_eq!(score.safe_delete_blocker_correct_count, 1);
 
         let metrics = provider_impact_metrics(
             &MethodCompletionProviderScore::default(),
@@ -6443,6 +6536,21 @@ sub dynamic_boundary_case {
             rename_safe_edit_accuracy,
             MetricRow::Measured { value, sample_count: 1, .. }
                 if (*value - 0.0).abs() < f64::EPSILON
+        ));
+        let safe_delete_blocker_accuracy = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "provider_safe_delete_blocker_accuracy"
+                )
+            })
+            .ok_or_else(|| eyre!("provider safe-delete blocker row should exist"))?;
+        assert!(matches!(
+            safe_delete_blocker_accuracy,
+            MetricRow::Measured { value, sample_count: 1, .. }
+                if (*value - 1.0).abs() < f64::EPSILON
         ));
         Ok(())
     }

@@ -2611,6 +2611,12 @@
             "rename_new_name": "renamed_sub",
             "expected_rename_safe_edit": true,
             "expected_rename_edit_count": 3
+          },
+          {
+            "id": "own_sub_safe_delete_blocked",
+            "symbol": "Accuracy::Navigation::UseCases::own_sub",
+            "expected_safe_delete_blocked": true,
+            "expected_safe_delete_blocker_count": 1
           }
         ]
       }
