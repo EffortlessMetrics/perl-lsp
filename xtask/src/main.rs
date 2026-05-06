@@ -8,6 +8,7 @@ use cli::srp::{SrpCommand, SrpMicrocratesArgs, UnwiredScanArgs};
 use color_eyre::eyre::{Result, eyre};
 use std::path::PathBuf;
 
+mod allocation_tracker;
 mod cli;
 mod tasks;
 mod types;

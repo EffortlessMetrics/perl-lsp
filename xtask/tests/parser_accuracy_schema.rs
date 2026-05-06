@@ -205,5 +205,11 @@ fn validate_metric_runtime(value: &Value) -> TestResult {
             "metric_runtime.{field} must be a non-negative integer"
         );
     }
+    if !value["allocated_bytes"].is_null() {
+        assert!(
+            value["allocated_bytes"].as_u64().is_some(),
+            "metric_runtime.allocated_bytes must be a non-negative integer when present"
+        );
+    }
     Ok(())
 }
