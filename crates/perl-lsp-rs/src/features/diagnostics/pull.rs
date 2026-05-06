@@ -671,7 +671,7 @@ impl PullDiagnosticsProvider {
             range,
             severity,
             code,
-            code_description: code_description_from_lsp_code(code.as_ref()),
+            code_description: code_description_for_code_str(code_str),
             source: Some("perl-lsp".to_string()),
             message,
             related_information,
@@ -754,7 +754,7 @@ impl PullDiagnosticsProvider {
             range,
             severity,
             code,
-            code_description: code_description_from_lsp_code(code.as_ref()),
+            code_description: code_description_for_code_str(code_str),
             source: diagnostic_source(code_for_source.as_ref()),
             message,
             related_information,
@@ -831,7 +831,7 @@ impl PullDiagnosticsProvider {
             range,
             severity,
             code,
-            code_description: code_description_from_lsp_code(code.as_ref()),
+            code_description: code_description_for_code_str(code_str),
             source: diagnostic_source(code_for_source.as_ref()),
             message,
             related_information: None,
@@ -908,20 +908,13 @@ impl PullDiagnosticsProvider {
             range,
             severity: Some(to_lsp_severity(parse_error_severity(error))),
             code: Some(NumberOrString::String(code_str.to_string())),
-            code_description: code_description_from_lsp_code(code.as_ref()),
+            code_description: code_description_for_code_str(code_str),
             source: Some("perl-lsp".to_string()),
             message,
             related_information: to_lsp_related_information(uri, text, &[]),
             tags: None,
             data,
         }
-    }
-}
-
-fn code_description_from_lsp_code(code: Option<&NumberOrString>) -> Option<CodeDescription> {
-    match code {
-        Some(NumberOrString::String(code_str)) => code_description_for_code_str(code_str),
-        _ => None,
     }
 }
 
