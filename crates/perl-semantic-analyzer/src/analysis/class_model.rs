@@ -1800,6 +1800,32 @@ has [qw(first_name last_name)] => (is => 'ro');
     }
 
     #[test]
+    fn has_framework_false_for_none() {
+        let model = ClassModel {
+            name: "No::Framework".to_string(),
+            framework: Framework::None,
+            attributes: Vec::new(),
+            fields: Vec::new(),
+            methods: Vec::new(),
+            adjusts: Vec::new(),
+            parents: Vec::new(),
+            mro: MethodResolutionOrder::Dfs,
+            roles: Vec::new(),
+            modifiers: Vec::new(),
+            exports: Vec::new(),
+            export_ok: Vec::new(),
+            exporter_metadata: None,
+        };
+
+        assert!(!model.has_framework());
+    }
+
+    #[test]
+    fn expand_symbol_list_supports_qw_angle_delimiters() {
+        assert_eq!(expand_symbol_list("qw<alpha beta gamma>"), vec!["alpha", "beta", "gamma"]);
+    }
+
+    #[test]
     fn has_framework_helper() {
         let models = build_models(
             r#"
