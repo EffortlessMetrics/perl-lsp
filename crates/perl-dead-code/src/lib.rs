@@ -133,6 +133,25 @@ impl DeadCodeDetector {
 
             if let Some((_, _, term_depth)) = terminator {
                 if block_depth < term_depth {
+                    if let (Some((term_line, term_kw, _)), Some(start_line), Some(end_line)) =
+                        (terminator, unreachable_start, unreachable_end)
+                    {
+                        dead.push(DeadCode {
+                            code_type: DeadCodeType::UnreachableCode,
+                            name: None,
+                            file_path: file_path.to_path_buf(),
+                            start_line,
+                            end_line,
+                            reason: format!(
+                                "Code is unreachable after `{}` on line {} in the same block",
+                                term_kw, term_line
+                            ),
+                            confidence: 0.8,
+                            suggestion: Some("Remove or restructure this code".to_string()),
+                        });
+                    }
+                    unreachable_start = None;
+                    unreachable_end = None;
                     terminator = None;
                 } else if block_depth == term_depth && is_effective_code {
                     unreachable_start = Some(unreachable_start.unwrap_or(line_no));
@@ -145,6 +164,25 @@ impl DeadCodeDetector {
                 && ["return", "die", "exit"].iter().any(|kw| trimmed.starts_with(kw))
                 && let Some(first_word) = trimmed.split_whitespace().next()
             {
+                if let (Some((term_line, term_kw, _)), Some(start_line), Some(end_line)) =
+                    (terminator, unreachable_start, unreachable_end)
+                {
+                    dead.push(DeadCode {
+                        code_type: DeadCodeType::UnreachableCode,
+                        name: None,
+                        file_path: file_path.to_path_buf(),
+                        start_line,
+                        end_line,
+                        reason: format!(
+                            "Code is unreachable after `{}` on line {} in the same block",
+                            term_kw, term_line
+                        ),
+                        confidence: 0.8,
+                        suggestion: Some("Remove or restructure this code".to_string()),
+                    });
+                }
+                unreachable_start = None;
+                unreachable_end = None;
                 terminator = Some((line_no, first_word.to_string(), block_depth));
             }
 
@@ -174,6 +212,7 @@ impl DeadCodeDetector {
                 suggestion: Some("Remove or restructure this code".to_string()),
             });
         }
+
 
         // Dead branch detection: scan for constant-condition patterns.
         detect_dead_branches(file_path, &text, &mut dead);
