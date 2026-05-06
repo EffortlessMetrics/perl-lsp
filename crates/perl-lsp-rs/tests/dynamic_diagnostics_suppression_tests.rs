@@ -1,6 +1,6 @@
 //! Runtime tests for dynamic-diagnostics suppression (issue #7878).
 //!
-//! Validates the 5 cases from the issue.
+//! Validates the live dynamic-diagnostics suppression cases.
 //!
 //! # Test form: bare identifier vs. function call
 //!
@@ -20,6 +20,8 @@
 //! 4. `eval "sub generated_from_string { 1 }"; print truly_undefined;` — only `generated` suppressed
 //! 5. No workspace semantics available — legacy PL109 still fires
 //! 6. Push-path (publishDiagnostics via `didOpen`): eval-sub suppression live
+//! 7. Non-literal `eval $code` remains fail-closed
+//! 8. Dynamic import receiver `$class->import(@names)` remains fail-closed
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use std::sync::Arc;
@@ -42,6 +44,10 @@ fn items_from_report(
             Err("expected Full report, got Unchanged".into())
         }
     }
+}
+
+fn has_pl109_for(items: &[lsp_types::Diagnostic], name: &str) -> bool {
+    items.iter().any(|d| has_code(d, "PL109") && d.message.contains(name))
 }
 
 // ── Cases 1 & 2: dynamic import order-awareness via real index_file path ────
@@ -252,6 +258,91 @@ fn case5_no_semantics_legacy_pl109_still_fires() -> Result<(), Box<dyn std::erro
         return Err(format!(
             "Case 5: PL109 must still fire when no workspace semantics are \
              available (legacy fallback).\nDiagnostics: {items:#?}"
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
+// ── Cases 7 & 8: unsupported dynamic sources fail closed ───────────────────
+
+/// Case 7: `eval $code; print runtime_generated;`
+///
+/// Non-literal eval is deliberately not treated as evidence for a generated
+/// callable. PL109 must still fire for the later bareword.
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+#[test]
+fn case7_non_literal_eval_does_not_suppress_bareword_pl109()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_lsp::features::diagnostics::PullDiagnosticsContext;
+    use perl_workspace::workspace_index::WorkspaceIndex;
+
+    let uri_str = "file:///test_eval_non_literal_fail_closed.pl";
+    let uri: Uri = uri_str.parse()?;
+
+    let content = "use strict 'subs';\n\
+        my $code = $ENV{GENERATED_CODE};\n\
+        eval $code;\n\
+        print runtime_generated;\n";
+
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(uri_str.parse()?, content.to_string())?;
+
+    let mut context = PullDiagnosticsContext::new();
+    context.workspace_index = Some(Arc::clone(&index));
+
+    let provider = PullDiagnosticsProvider::new();
+    let items = items_from_report(
+        provider.get_document_diagnostics_with_context(&uri, content, None, &context, None),
+    )?;
+
+    if !has_pl109_for(&items, "runtime_generated") {
+        return Err(format!(
+            "Case 7: PL109 MUST fire for `runtime_generated` because non-literal \
+             eval does not provide indexed callable evidence.\nDiagnostics: {items:#?}"
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
+/// Case 8: `$class->import(@names); print runtime_imported;`
+///
+/// Variable receivers are too dynamic to prove which package supplied the
+/// import. PL109 must still fire even when the argument list contains the name.
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+#[test]
+fn case8_dynamic_import_receiver_does_not_suppress_bareword_pl109()
+-> Result<(), Box<dyn std::error::Error>> {
+    use perl_lsp::features::diagnostics::PullDiagnosticsContext;
+    use perl_workspace::workspace_index::WorkspaceIndex;
+
+    let uri_str = "file:///test_dynamic_import_receiver_fail_closed.pl";
+    let uri: Uri = uri_str.parse()?;
+
+    let content = "use strict 'subs';\n\
+        my $class = 'Foo';\n\
+        my @names = ('runtime_imported');\n\
+        $class->import(@names);\n\
+        print runtime_imported;\n";
+
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(uri_str.parse()?, content.to_string())?;
+
+    let mut context = PullDiagnosticsContext::new();
+    context.workspace_index = Some(Arc::clone(&index));
+
+    let provider = PullDiagnosticsProvider::new();
+    let items = items_from_report(
+        provider.get_document_diagnostics_with_context(&uri, content, None, &context, None),
+    )?;
+
+    if !has_pl109_for(&items, "runtime_imported") {
+        return Err(format!(
+            "Case 8: PL109 MUST fire for `runtime_imported` because a variable \
+             import receiver is not trusted as indexed callable evidence.\nDiagnostics: {items:#?}"
         )
         .into());
     }
