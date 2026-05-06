@@ -629,6 +629,7 @@ impl PullDiagnosticsProvider {
         let range = lsp_range_from_offsets(text, diagnostic.range.0, diagnostic.range.1);
         let severity = Some(to_lsp_severity(diagnostic.severity));
         let code = diagnostic.code.map(NumberOrString::String);
+        let code_description = code_description_for_code(code.as_ref());
         let related_information =
             to_lsp_related_information(uri, text, &diagnostic.related_information);
 
@@ -671,7 +672,7 @@ impl PullDiagnosticsProvider {
             range,
             severity,
             code,
-            code_description: code_description_for_code(code.as_ref()),
+            code_description,
             source: Some("perl-lsp".to_string()),
             message,
             related_information,
@@ -691,6 +692,7 @@ impl PullDiagnosticsProvider {
         let range = lsp_range_from_offsets(text, diagnostic.range.0, diagnostic.range.1);
         let severity = Some(to_lsp_severity(diagnostic.severity));
         let code = diagnostic.code.map(NumberOrString::String);
+        let code_description = code_description_for_code(code.as_ref());
         let code_for_source = code.clone();
         let related_information =
             to_lsp_related_information(uri, text, &diagnostic.related_information);
@@ -754,7 +756,7 @@ impl PullDiagnosticsProvider {
             range,
             severity,
             code,
-            code_description: code_description_for_code(code.as_ref()),
+            code_description,
             source: diagnostic_source(code_for_source.as_ref()),
             message,
             related_information,
@@ -774,6 +776,7 @@ impl PullDiagnosticsProvider {
         let range = lsp_range_from_offsets(text, diagnostic.range.0, diagnostic.range.1);
         let severity = Some(to_lsp_severity(diagnostic.severity));
         let code = diagnostic.code.map(NumberOrString::String);
+        let code_description = code_description_for_code(code.as_ref());
         let code_for_source = code.clone();
         let tags = to_lsp_tags(&diagnostic.tags);
 
@@ -831,7 +834,7 @@ impl PullDiagnosticsProvider {
             range,
             severity,
             code,
-            code_description: code_description_for_code(code.as_ref()),
+            code_description,
             source: diagnostic_source(code_for_source.as_ref()),
             message,
             related_information: None,
@@ -882,6 +885,8 @@ impl PullDiagnosticsProvider {
 
         let code = parse_error_code(error);
         let code_str = code.as_str();
+        let lsp_code = NumberOrString::String(code_str.to_string());
+        let code_description = code_description_for_code(Some(&lsp_code));
 
         let data_obj = DiagnosticData {
             code: code_str.to_string(),
@@ -907,8 +912,8 @@ impl PullDiagnosticsProvider {
         LspDiagnostic {
             range,
             severity: Some(to_lsp_severity(parse_error_severity(error))),
-            code: Some(NumberOrString::String(code_str.to_string())),
-            code_description: code_description_for_code(code.as_ref()),
+            code: Some(lsp_code),
+            code_description,
             source: Some("perl-lsp".to_string()),
             message,
             related_information: to_lsp_related_information(uri, text, &[]),
