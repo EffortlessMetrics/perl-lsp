@@ -2029,6 +2029,57 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn test_did_close_preserves_workspace_index_for_existing_file()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_close_preserves_workspace_index.pl";
+        let source = "package Close::Only;\nsub still_indexed { 1 }\n1;\n";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": source
+            }
+        }))?;
+        if let Some(coordinator) = server.coordinator() {
+            coordinator.index().index_file(url::Url::parse(uri)?, source.to_string())?;
+            assert!(
+                !coordinator.index().file_symbols(uri).is_empty(),
+                "workspace index setup must hold symbols before close"
+            );
+            assert!(
+                coordinator.index().document_store().get(uri).is_some(),
+                "workspace document store setup must hold the file before close"
+            );
+        }
+
+        server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+
+        let after = server.memory_state_snapshot();
+        assert_eq!(after.documents, 0, "didClose must evict open-document state");
+        assert_eq!(after.open_text_bytes, 0, "didClose must drop open-buffer text");
+        assert!(
+            server.symbol_index.lock().search_prefix("still_").is_empty(),
+            "didClose must clear open-document symbol overlays"
+        );
+        if let Some(coordinator) = server.coordinator() {
+            assert!(
+                !coordinator.index().file_symbols(uri).is_empty(),
+                "didClose is not file deletion; workspace-backed symbols for existing files must remain"
+            );
+            assert!(
+                coordinator.index().document_store().get(uri).is_some(),
+                "didClose must not remove workspace-index document store entries for existing files"
+            );
+        }
+
+        Ok(())
+    }
+
     /// didClose must clear diagnostics using the client-provided URI string.
     ///
     /// This preserves exact URI identity for clients that key diagnostics by
