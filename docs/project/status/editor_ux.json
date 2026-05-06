@@ -4,13 +4,13 @@
       "name": "manual_editor_smoke",
       "owner": "perl-lsp-ux-tests",
       "state": "tracked",
-      "workflow_count": 26
+      "workflow_count": 29
     },
     {
       "name": "first_five_minutes_harness",
       "owner": "perl-lsp-ux-tests",
       "state": "tracked",
-      "workflow_count": 25
+      "workflow_count": 28
     },
     {
       "name": "issue_burndown_regression_guard",
@@ -21,7 +21,7 @@
   ],
   "harness": {
     "crate": "crates/perl-lsp-ux-tests",
-    "scenario_count": 27,
+    "scenario_count": 30,
     "scenario_files": [
       "crates/perl-lsp-ux-tests/tests/ux_scenario_01_simple_file.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_02_missing_perltidy.rs",
@@ -49,7 +49,10 @@
       "crates/perl-lsp-ux-tests/tests/ux_scenario_19_workspace_folder_addition.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_22_template_language_mode.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_23_rename_workflow.rs",
-      "crates/perl-lsp-ux-tests/tests/ux_scenario_24_live_edit_feedback.rs"
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_24_live_edit_feedback.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_25_signature_help.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_26_code_lens.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_27_folding_range.rs"
     ]
   },
   "integration_points": {
@@ -447,6 +450,33 @@
       "scenario": "ux_scenario_19_diagnostics_lifecycle.rs",
       "stability_rate_state": "insufficient_data",
       "subsystem_owner": "diagnostics"
+    },
+    {
+      "id": "signature_help_core",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_25_signature_help.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "editor_intelligence"
+    },
+    {
+      "id": "code_lens_core",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_26_code_lens.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "editor_intelligence"
+    },
+    {
+      "id": "folding_range_core",
+      "p95_time_to_first_useful_result_state": "insufficient_data",
+      "pass_rate_state": "insufficient_data",
+      "quarantine_age_days": null,
+      "scenario": "ux_scenario_27_folding_range.rs",
+      "stability_rate_state": "insufficient_data",
+      "subsystem_owner": "editor_intelligence"
     }
   ]
 }

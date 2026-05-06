@@ -721,6 +721,84 @@
         "manual_editor_smoke",
         "issue_burndown_regression_guard"
       ]
+    },
+    {
+      "id": "signature_help_core",
+      "scenario_file": "ux_scenario_25_signature_help.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "signature_help",
+      "instrumentation": {
+        "run_receipt": false,
+        "first_useful_result": false,
+        "protocol_goldens": false
+      },
+      "user_journey": "request signature help at Perl builtin call sites",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "builtin signatureHelp requests do not return JSON-RPC errors",
+        "non-null builtin signatureHelp responses have valid signature labels",
+        "repeated builtin signatureHelp requests do not crash the server"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke"
+      ]
+    },
+    {
+      "id": "code_lens_core",
+      "scenario_file": "ux_scenario_26_code_lens.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "code_lens",
+      "instrumentation": {
+        "run_receipt": false,
+        "first_useful_result": false,
+        "protocol_goldens": false
+      },
+      "user_journey": "request and resolve code lenses for Perl modules and test files",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "codeLens requests return arrays or null without JSON-RPC errors",
+        "returned lenses contain valid ranges",
+        "codeLens resolve requests do not crash the server"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke"
+      ]
+    },
+    {
+      "id": "folding_range_core",
+      "scenario_file": "ux_scenario_27_folding_range.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "folding_range",
+      "instrumentation": {
+        "run_receipt": false,
+        "first_useful_result": false,
+        "protocol_goldens": false
+      },
+      "user_journey": "request folding ranges for nested Perl blocks and small edge-case files",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "foldingRange requests do not return JSON-RPC errors",
+        "folding ranges include valid start and end line fields when present",
+        "multi-block files produce at least one fold"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke"
+      ]
     }
   ]
 }
