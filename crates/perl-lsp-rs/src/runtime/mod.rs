@@ -299,6 +299,26 @@ pub struct LspServer {
     >,
 }
 
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+/// Point-in-time counts for per-document memory pressure gauges.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryStateSnapshot {
+    /// Number of open documents in the LSP document store.
+    pub documents: usize,
+    /// Total bytes of source text held by open document state.
+    pub open_text_bytes: usize,
+    /// Number of cached semantic analyzer entries.
+    pub semantic_analyzer_cache: usize,
+    /// Number of per-document parse cancellation flags still retained.
+    pub parse_cancel_flags: usize,
+    /// Number of active inline-completion stream sessions.
+    pub stream_sessions: usize,
+    /// Number of background index tasks currently in flight.
+    pub pending_index_tasks: usize,
+    /// Number of cached POD documents.
+    pub pod_cache_entries: usize,
+}
+
 // SAFETY: LspServer is not auto-Send/Sync because DocumentState contains
 // ParentMap which has `*const Node` raw pointers. However, these pointers
 // are only accessed through the `documents: Arc<Mutex<...>>` field, which
@@ -429,6 +449,165 @@ impl LspServer {
     /// Access the stream session manager for progressive inline completion.
     pub(crate) fn stream_sessions(&self) -> &stream_session::StreamSessionManager {
         &self.stream_session_manager
+    }
+
+    fn uri_key_variants(&self, uri: &str) -> Vec<String> {
+        fn push_unique(keys: &mut Vec<String>, key: String) {
+            if !keys.iter().any(|existing| existing == &key) {
+                keys.push(key);
+            }
+        }
+
+        fn push_windows_drive_case_variant(keys: &mut Vec<String>, key: &str) {
+            for prefix in ["file:///", "file://localhost/"] {
+                let prefix_len = prefix.len();
+                let bytes = key.as_bytes();
+                if bytes.len() <= prefix_len + 2
+                    || !key.starts_with(prefix)
+                    || bytes[prefix_len + 1] != b':'
+                    || bytes[prefix_len + 2] != b'/'
+                    || !bytes[prefix_len].is_ascii_alphabetic()
+                {
+                    continue;
+                }
+
+                let current = char::from(bytes[prefix_len]);
+                let toggled = if current.is_ascii_lowercase() {
+                    current.to_ascii_uppercase()
+                } else {
+                    current.to_ascii_lowercase()
+                };
+                let mut variant = key.to_string();
+                variant.replace_range(prefix_len..=prefix_len, &toggled.to_string());
+                push_unique(keys, variant);
+            }
+        }
+
+        let mut uri_keys = Vec::new();
+        push_unique(&mut uri_keys, uri.to_string());
+        push_unique(&mut uri_keys, self.normalize_uri_key(uri));
+
+        if let Some(path) = source_path_from_uri(uri) {
+            if let Ok(file_url) = url::Url::from_file_path(&path) {
+                let file_uri = file_url.to_string();
+                push_unique(&mut uri_keys, file_uri.clone());
+                push_unique(&mut uri_keys, self.normalize_uri_key(&file_uri));
+            }
+        }
+
+        for key in uri_keys.clone() {
+            push_windows_drive_case_variant(&mut uri_keys, &key);
+        }
+
+        uri_keys
+    }
+
+    /// Evict open-document session state for a URI without deleting workspace
+    /// index entries for the file on disk.
+    ///
+    /// `textDocument/didClose` means the editor closed its buffer; it does not
+    /// mean the source file was deleted from the workspace. Sweep both raw and
+    /// normalized keys so URI spelling differences do not retain per-document
+    /// caches after close.
+    pub(crate) fn evict_open_document_session_state(&self, uri: &str) {
+        let uri_keys = self.uri_key_variants(uri);
+
+        for key in &uri_keys {
+            self.stream_sessions().cancel_for_uri(key);
+            self.ast_cache.remove(key);
+            self.clear_document_symbols(key);
+        }
+
+        {
+            let mut cache = self.semantic_analyzer_cache.lock();
+            cache.retain(|(cached_uri, _), _| !uri_keys.iter().any(|key| key == cached_uri));
+        }
+
+        {
+            let mut documents = self.documents.lock();
+            for key in &uri_keys {
+                if let Some(doc) = documents.remove(key) {
+                    doc.generation.store(u32::MAX, Ordering::Release);
+                }
+            }
+        }
+
+        {
+            let mut flags = self.parse_cancel_flags.lock();
+            for key in &uri_keys {
+                if let Some(flag) = flags.remove(key) {
+                    flag.store(true, Ordering::Release);
+                }
+            }
+        }
+
+        for key in &uri_keys {
+            if let Some(path) = source_path_from_uri(key) {
+                self.pod_cache.lock().remove(&path);
+
+                #[cfg(not(target_arch = "wasm32"))]
+                self.pull_diagnostics_orchestrator.invalidate_file_cache(&path);
+            }
+        }
+    }
+
+    /// Evict all state for a file that no longer exists in the workspace.
+    pub(crate) fn evict_deleted_file_state(&self, uri: &str) {
+        let uri_keys = self.uri_key_variants(uri);
+        #[cfg(feature = "workspace")]
+        if let Some(coordinator) = self.coordinator() {
+            for key in &uri_keys {
+                coordinator.index().remove_file(key);
+            }
+        }
+
+        self.evict_open_document_session_state(uri);
+    }
+
+    /// Evict open-document state and workspace index state for a removed folder.
+    pub(crate) fn evict_workspace_folder_state(&self, folder_uri: &str) {
+        let folder_keys = self.uri_key_variants(folder_uri);
+        let docs_to_evict = {
+            let documents = self.documents.lock();
+            documents
+                .keys()
+                .filter(|doc_uri| {
+                    folder_keys.iter().any(|folder_key| doc_uri.starts_with(folder_key))
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+
+        for doc_uri in docs_to_evict {
+            tracing::debug!(uri = %doc_uri, "Evicting document from removed workspace");
+            self.evict_open_document_session_state(&doc_uri);
+        }
+
+        #[cfg(feature = "workspace")]
+        if let Some(coordinator) = self.coordinator() {
+            for folder_key in &folder_keys {
+                coordinator.index().remove_folder(folder_key);
+            }
+        }
+    }
+
+    /// Capture test/debug counters for retained per-document state.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn memory_state_snapshot(&self) -> MemoryStateSnapshot {
+        let documents = self.documents.lock();
+        let open_text_bytes = documents.values().map(|doc| doc.text.len()).sum();
+        let document_count = documents.len();
+        drop(documents);
+
+        MemoryStateSnapshot {
+            documents: document_count,
+            open_text_bytes,
+            semantic_analyzer_cache: self.semantic_analyzer_cache.lock().len(),
+            parse_cancel_flags: self.parse_cancel_flags.lock().len(),
+            stream_sessions: self.stream_sessions().len(),
+            pending_index_tasks: self.pending_index_task_count.load(Ordering::SeqCst),
+            pod_cache_entries: self.pod_cache.lock().len(),
+        }
     }
 
     // =========================================================================

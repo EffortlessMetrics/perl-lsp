@@ -602,6 +602,89 @@ jobs:
       - name: Compile all targets (catches integration-test + bench bit-rot)
         run: just check-all-targets
 
+  lsp-memory-smoke:
+    name: LSP Memory Smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: [draft-pr-check, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.93.1
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ci-lsp-memory-${{ hashFiles('Cargo.lock') }}
+
+      - name: Build perl-lsp release binary
+        run: cargo build --release -p perl-lsp-rs --bin perl-lsp --locked
+
+      - name: Run document-churn memory smoke
+        run: |
+          mkdir -p target/memory
+          N_FILES=75 \
+          N_CHANGES=5 \
+          DO_WORKSPACE_SYMBOL=0 \
+          DELETE_AFTER_CLOSE=1 \
+          BINARY=./target/release/perl-lsp \
+          python3 scripts/repro_lsp_storm.py \
+            --json-out target/memory/pr-smoke-doc-churn.json \
+            --csv-out target/memory/pr-smoke-doc-churn.csv \
+            --settle-seconds 1 \
+            --server-stderr target/memory/pr-smoke-doc-churn.server.log
+          python3 scripts/assert_rss_plateau.py \
+            target/memory/pr-smoke-doc-churn.json \
+            --summary-out target/memory/pr-smoke-doc-churn.plateau.json \
+            --loose
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if not summary_path:
+              raise SystemExit(0)
+
+          plateau = json.loads(Path("target/memory/pr-smoke-doc-churn.plateau.json").read_text())
+          payload = json.loads(Path("target/memory/pr-smoke-doc-churn.json").read_text())
+          result = "passed" if plateau["passed"] else "failed"
+
+          with open(summary_path, "a", encoding="utf-8") as fh:
+              fh.write("## LSP memory smoke\n\n")
+              fh.write("| Workload | Files | Tail growth KB | Median tail slope KB/file | Result |\n")
+              fh.write("| --- | ---: | ---: | ---: | --- |\n")
+              fh.write(
+                  "| doc churn + delete "
+                  f"| {payload['n_files']} "
+                  f"| {plateau['tail_growth_kb']} "
+                  f"| {plateau['median_tail_slope_kb_per_file']} "
+                  f"| {result} |\n"
+              )
+          PY
+
+      - name: Upload memory smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lsp-memory-smoke-${{ github.sha }}
+          path: |
+            target/memory/pr-smoke-doc-churn.json
+            target/memory/pr-smoke-doc-churn.csv
+            target/memory/pr-smoke-doc-churn.plateau.json
+            target/memory/pr-smoke-doc-churn.server.log
+          if-no-files-found: warn
+          retention-days: 14
+
   # ── Windows Guardrails: proactive Windows regression catchers ─────────
   windows-guardrails:
     name: Windows Guardrails (${{ matrix.lane.name }})
