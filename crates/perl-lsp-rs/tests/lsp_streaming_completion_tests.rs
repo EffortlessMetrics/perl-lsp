@@ -772,6 +772,40 @@ mod mock_streaming_completion_tests {
     }
 
     #[test]
+    fn completion_stream_cancel_storm_keeps_one_live_session() {
+        let (server, _capture) = create_server();
+
+        let backend = MockChunkBackend {
+            chunks: vec!["fi", "find_", "find_user($id)"],
+            delays_ms: vec![20, 20, 20],
+        };
+        server.test_install_ai_backend(Some(Arc::new(backend)));
+
+        let uri = "file:///streaming-mock-cancel-storm.pl";
+        open_doc(&server, uri, "my $obj = Package->");
+
+        for request in 0..25 {
+            let result = request_streaming_completion(
+                &server,
+                uri,
+                &format!("stream-cancel-storm-{request}"),
+            );
+            assert!(result.is_null(), "streaming completion should respond with null");
+            assert_eq!(
+                server.memory_state_snapshot().stream_sessions,
+                1,
+                "same-key stream requests must replace the retained session instead of growing"
+            );
+        }
+
+        assert_eq!(
+            server.memory_state_snapshot().stream_sessions,
+            1,
+            "a same-key cancel storm should converge to the latest live session only"
+        );
+    }
+
+    #[test]
     fn streaming_completion_mock_backend_error_sends_final_progress() {
         let (server, capture) = create_server();
         server.test_install_ai_backend(Some(Arc::new(MockErrorChunkBackend)));
