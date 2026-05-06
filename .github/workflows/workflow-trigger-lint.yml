@@ -46,7 +46,7 @@ jobs:
 
       - name: Upload receipt
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: workflow-trigger-lint-receipt
           path: target/receipts/workflow-trigger-lint.json
