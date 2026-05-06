@@ -76,29 +76,59 @@ Despite all cleanup paths being verified, memory continues to grow. Possible cau
 4. **Async task retention** — Background tasks may hold Arc references to generations or documents
 5. **Parser cache or compilation artifacts** — Hidden state in parser infrastructure
 
+## Valgrind Analysis Results
+
+**Status**: No definite memory leaks detected
+- definitely lost: 0 bytes ✓
+- indirectly lost: 0 bytes ✓
+- possibly lost: 9.5 KB (interior pointer noise)
+- still reachable: 1.1 MB (cached state)
+
+**Interpretation**: The observed monotonic growth is NOT from classical memory leaks or reference cycles. Instead, it's from **unbounded state accumulation** where live references prevent garbage collection.
+
+## Root Cause Analysis
+
+Given all findings, the leak is NOT from:
+- ❌ Circular references (no definitely lost memory)
+- ❌ Dangling pointers (no indirectly lost memory)
+- ❌ Reference count bugs (Rust compiler ensures safety)
+- ✅ Unbounded cache/state growth (still reachable memory)
+
+The 75 KB/file growth likely comes from:
+1. **WorkspaceCacheManager** - Has eviction, bounded by max_items/max_bytes
+2. **Tokio spawned tasks** - Could accumulate if faster than completion
+3. **Background parsing queue** - Text clones passed to index_file()
+4. **Symbol/semantic analysis state** - Persisted across multiple handlers
+5. **Allocator fragmentation** - Common with many small String/Vec allocations
+
 ## Next Steps
 
 ### Immediate Actions
 
-1. **Add instrumentation** to document lifecycle:
-   - Log creation/destruction events for DocumentState
-   - Track Arc<AtomicU32> reference counts
-   - Monitor HashMap sizes before/after removal
+1. **Verify task accumulation**:
+   - Check `pending_index_task_count` to see if background tasks pile up
+   - Monitor task completion vs spawn rate
+   - Add timeout/cancellation for stale tasks
 
-2. **Search for Arc captures**:
-   - Find all places where DocumentState.generation is used
-   - Check for closures that might capture it
-   - Verify async task cancellation
+2. **Profile Tokio runtime**:
+   - Use `tokio-console` to monitor spawned tasks
+   - Check work queue depth during document churn
+   - Identify if tasks are blocking or pending
 
-3. **Run heaptrack/Valgrind**:
-   - Use `valgrind --tool=massif` to profile heap growth
-   - Identify top allocators during document churn
-   - Pinpoint which code path is allocating the 75 KB/file
+3. **Instrument document lifecycle**:
+   - Add trace logging to document open/close/remove
+   - Verify `documents.remove()` is actually removing entries
+   - Check if cloned text escapes into uncancelled tasks
 
-4. **Audit parser infrastructure**:
-   - Check perl-parser for global caches
-   - Verify symbol extraction cleanup
-   - Ensure no parse trees escape
+4. **Analyze symbol cache behavior**:
+   - Monitor symbol_index size during churn
+   - Verify remove_document() clears all symbol mappings
+   - Check for secondary indexes not being invalidated
+
+5. **Run with limited spawning**:
+   - Disable background indexing and re-test
+   - This will isolate server-only vs background-task leaks
+   - Single-threaded parsing might reveal Arc retention
 
 ### Test Scenarios
 
