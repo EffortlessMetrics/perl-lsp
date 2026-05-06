@@ -39,6 +39,11 @@ on:
         required: false
         type: boolean
         default: true
+      run_memory:
+        description: 'Run LSP memory plateau workloads'
+        required: false
+        type: boolean
+        default: true
 
 # Cancel in-flight runs on new pushes (saves minutes)
 concurrency:
@@ -254,6 +259,121 @@ jobs:
         path: |
           .ci/metrics/real_project_latency.json
         retention-days: 30
+
+  lsp-memory-plateau:
+    name: LSP Memory Plateau
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    if: |
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_memory != 'false') ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci:memory'))
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.93.1
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: nightly-lsp-memory-${{ hashFiles('Cargo.lock') }}
+
+      - name: Build perl-lsp release binary
+        run: cargo build --release -p perl-lsp-rs --bin perl-lsp --locked
+
+      - name: Run document-churn plateau workload
+        run: |
+          mkdir -p target/memory
+          N_FILES=500 \
+          N_CHANGES=10 \
+          DO_WORKSPACE_SYMBOL=0 \
+          DELETE_AFTER_CLOSE=1 \
+          BINARY=./target/release/perl-lsp \
+          python3 scripts/repro_lsp_storm.py \
+            --json-out target/memory/nightly-doc-churn.json \
+            --csv-out target/memory/nightly-doc-churn.csv \
+            --settle-seconds 3 \
+            --server-stderr target/memory/nightly-doc-churn.server.log
+          python3 scripts/assert_rss_plateau.py \
+            target/memory/nightly-doc-churn.json \
+            --summary-out target/memory/nightly-doc-churn.plateau.json
+
+      - name: Run workspace-symbol plateau workload
+        run: |
+          N_FILES=300 \
+          N_CHANGES=10 \
+          DO_WORKSPACE_SYMBOL=1 \
+          DELETE_AFTER_CLOSE=1 \
+          BINARY=./target/release/perl-lsp \
+          python3 scripts/repro_lsp_storm.py \
+            --json-out target/memory/nightly-workspace-symbol.json \
+            --csv-out target/memory/nightly-workspace-symbol.csv \
+            --settle-seconds 3 \
+            --server-stderr target/memory/nightly-workspace-symbol.server.log
+          python3 scripts/assert_rss_plateau.py \
+            target/memory/nightly-workspace-symbol.json \
+            --summary-out target/memory/nightly-workspace-symbol.plateau.json
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if not summary_path:
+              raise SystemExit(0)
+
+          rows = [
+              (
+                  "doc churn + delete",
+                  "target/memory/nightly-doc-churn.json",
+                  "target/memory/nightly-doc-churn.plateau.json",
+              ),
+              (
+                  "workspace-symbol churn + delete",
+                  "target/memory/nightly-workspace-symbol.json",
+                  "target/memory/nightly-workspace-symbol.plateau.json",
+              ),
+          ]
+
+          with open(summary_path, "a", encoding="utf-8") as fh:
+              fh.write("## LSP memory plateau\n\n")
+              fh.write("| Workload | Files | Tail growth KB | Median tail slope KB/file | Result |\n")
+              fh.write("| --- | ---: | ---: | ---: | --- |\n")
+              for label, payload_path, plateau_path in rows:
+                  payload = json.loads(Path(payload_path).read_text())
+                  plateau = json.loads(Path(plateau_path).read_text())
+                  result = "passed" if plateau["passed"] else "failed"
+                  fh.write(
+                      f"| {label} "
+                      f"| {payload['n_files']} "
+                      f"| {plateau['tail_growth_kb']} "
+                      f"| {plateau['median_tail_slope_kb_per_file']} "
+                      f"| {result} |\n"
+                  )
+          PY
+
+      - name: Upload memory plateau artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lsp-memory-plateau-${{ github.sha }}
+          path: |
+            target/memory/nightly-doc-churn.json
+            target/memory/nightly-doc-churn.csv
+            target/memory/nightly-doc-churn.plateau.json
+            target/memory/nightly-doc-churn.server.log
+            target/memory/nightly-workspace-symbol.json
+            target/memory/nightly-workspace-symbol.csv
+            target/memory/nightly-workspace-symbol.plateau.json
+            target/memory/nightly-workspace-symbol.server.log
+          if-no-files-found: warn
+          retention-days: 30
 
   test-coverage:
     name: Test Coverage

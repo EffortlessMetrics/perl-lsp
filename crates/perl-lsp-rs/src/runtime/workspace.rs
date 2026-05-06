@@ -782,53 +782,7 @@ impl LspServer {
                         coordinator.notify_change(&uri);
                     }
 
-                    // Remove from index
-                    #[cfg(feature = "workspace")]
-                    if let Some(coordinator) = self.coordinator() {
-                        coordinator.index().remove_file(&uri);
-                    }
-
-                    // Remove from document store under both raw and normalized
-                    // URI keys. didOpen stores documents under
-                    // `normalize_uri_key(uri)`, but the watcher payload may use
-                    // a non-canonical form (`file://localhost/...`, Windows
-                    // drive-letter casing, percent-encoding variants). Without
-                    // the normalized lookup the document leaks into the
-                    // session's open-doc map indefinitely.
-                    let normalized_uri = self.normalize_uri_key(&uri);
-                    {
-                        let mut documents = self.documents.lock();
-                        documents.remove(&uri);
-                        if normalized_uri != uri {
-                            documents.remove(&normalized_uri);
-                        }
-                    }
-
-                    // Cancel stream sessions and clear parse-cancel flags for
-                    // both URI forms so per-file state does not survive the
-                    // delete event.
-                    self.stream_sessions().cancel_for_uri(&uri);
-                    if normalized_uri != uri {
-                        self.stream_sessions().cancel_for_uri(&normalized_uri);
-                    }
-                    {
-                        use std::sync::atomic::Ordering;
-                        let mut flags = self.parse_cancel_flags.lock();
-                        if let Some(flag) = flags.remove(&uri) {
-                            flag.store(true, Ordering::Release);
-                        }
-                        if normalized_uri != uri {
-                            if let Some(flag) = flags.remove(&normalized_uri) {
-                                flag.store(true, Ordering::Release);
-                            }
-                        }
-                    }
-
-                    // Evict the cached AST under both URI forms.
-                    self.ast_cache.remove(&uri);
-                    if normalized_uri != uri {
-                        self.ast_cache.remove(&normalized_uri);
-                    }
+                    self.evict_deleted_file_state(&uri);
 
                     tracing::debug!(uri, "Removed deleted file from index");
 
@@ -1128,19 +1082,14 @@ impl LspServer {
 
                     tracing::debug!(uri, "File deleted");
 
-                    // Remove from workspace index
-                    // Note: Mutation operation - use coordinator with lifecycle tracking
                     #[cfg(feature = "workspace")]
                     if let Some(coordinator) = self.coordinator() {
                         coordinator.notify_change(uri);
-                        coordinator.index().remove_file(uri);
-                        coordinator.notify_parse_complete(uri);
                     }
-
-                    // Remove from document store
-                    {
-                        let mut documents = self.documents.lock();
-                        documents.remove(uri);
+                    self.evict_deleted_file_state(uri);
+                    #[cfg(feature = "workspace")]
+                    if let Some(coordinator) = self.coordinator() {
+                        coordinator.notify_parse_complete(uri);
                     }
                 }
 
@@ -1443,19 +1392,7 @@ impl LspServer {
 
                     for uri in &change.removed {
                         tracing::debug!(uri, "Removed workspace folder");
-
-                        // Also remove documents from the removed workspace
-                        let mut documents = self.documents.lock();
-                        let docs_to_remove: Vec<String> = documents
-                            .keys()
-                            .filter(|doc_uri| doc_uri.starts_with(uri))
-                            .cloned()
-                            .collect();
-
-                        for doc_uri in docs_to_remove {
-                            tracing::debug!(uri = %doc_uri, "Removing document from removed workspace");
-                            documents.remove(&doc_uri);
-                        }
+                        self.evict_workspace_folder_state(uri);
                     }
 
                     // Retain only folders that are not in the removed list
@@ -1476,10 +1413,8 @@ impl LspServer {
                     if let Some(coordinator) = self.coordinator() {
                         coordinator.index().set_workspace_folders(self.workspace_folder_uris());
 
-                        // Remove files from removed folders
-                        for removed_uri in &change.removed {
-                            coordinator.index().remove_folder(removed_uri);
-                        }
+                        // Removed folders were evicted above before folder
+                        // membership was updated.
                     }
                 }
 
@@ -2158,6 +2093,168 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(server.pending_workspace_configuration_requests.lock().is_empty());
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn watched_file_deleted_clears_raw_and_normalized_uri_state()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("delete_variant.pm");
+        let source = "package Delete::Variant;\nsub gone { 1 }\n1;\n";
+        std::fs::write(&path, source)?;
+        let normalized_uri = url::Url::from_file_path(&path).map_err(|_| "invalid file path")?;
+        let normalized_uri = normalized_uri.to_string();
+        let file_path_part = normalized_uri.strip_prefix("file:///").ok_or("expected file URI")?;
+        let raw_uri = format!("file://localhost/{file_path_part}");
+
+        assert_ne!(raw_uri, normalized_uri);
+        assert_eq!(server.normalize_uri_key(&raw_uri), server.normalize_uri_key(&normalized_uri));
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": normalized_uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": source
+            }
+        }))?;
+        let in_flight_token = server.new_parse_token(&normalized_uri);
+        server.stream_sessions().start_session(crate::runtime::stream_session::SessionKey {
+            uri: normalized_uri.clone(),
+            document_version: 1,
+            line: 0,
+            character: 0,
+        });
+        if let Some(coordinator) = server.coordinator() {
+            coordinator
+                .index()
+                .index_file(url::Url::parse(&normalized_uri)?, source.to_string())?;
+            assert!(!coordinator.index().file_symbols(&normalized_uri).is_empty());
+            assert!(coordinator.index().document_store().get(&normalized_uri).is_some());
+        }
+
+        server.handle_did_change_watched_files(Some(json!({
+            "changes": [
+                { "uri": raw_uri, "type": 3 }
+            ]
+        })))?;
+
+        assert!(in_flight_token.load(std::sync::atomic::Ordering::Relaxed));
+        let after = server.memory_state_snapshot();
+        assert_eq!(after.documents, 0);
+        assert_eq!(after.open_text_bytes, 0);
+        assert_eq!(after.parse_cancel_flags, 0);
+        assert_eq!(after.stream_sessions, 0);
+        if let Some(coordinator) = server.coordinator() {
+            assert!(coordinator.index().file_symbols(&normalized_uri).is_empty());
+            assert!(coordinator.index().file_symbols(&raw_uri).is_empty());
+            assert!(coordinator.index().document_store().get(&normalized_uri).is_none());
+            assert!(coordinator.index().document_store().get(&raw_uri).is_none());
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn workspace_folder_removal_evicts_open_docs_under_root()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let dir = tempfile::tempdir()?;
+        let removed_root = dir.path().join("removed");
+        let kept_root = dir.path().join("kept");
+        std::fs::create_dir_all(&removed_root)?;
+        std::fs::create_dir_all(&kept_root)?;
+
+        let removed_path = removed_root.join("inside.pm");
+        let kept_path = kept_root.join("outside.pm");
+        let removed_source = "package Removed::Inside;\nsub inside { 1 }\n1;\n";
+        let kept_source = "package Kept::Outside;\nsub outside { 1 }\n1;\n";
+        std::fs::write(&removed_path, removed_source)?;
+        std::fs::write(&kept_path, kept_source)?;
+
+        let removed_folder_uri =
+            url::Url::from_directory_path(&removed_root).map_err(|_| "invalid removed root")?;
+        let kept_folder_uri =
+            url::Url::from_directory_path(&kept_root).map_err(|_| "invalid kept root")?;
+        let removed_uri = url::Url::from_file_path(&removed_path)
+            .map_err(|_| "invalid removed path")?
+            .to_string();
+        let kept_uri =
+            url::Url::from_file_path(&kept_path).map_err(|_| "invalid kept path")?.to_string();
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(
+                removed_folder_uri.to_string(),
+            ),
+        );
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(
+                kept_folder_uri.to_string(),
+            ),
+        );
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": removed_uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": removed_source
+            }
+        }))?;
+        server.did_open(json!({
+            "textDocument": {
+                "uri": kept_uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": kept_source
+            }
+        }))?;
+        let removed_token = server.new_parse_token(&removed_uri);
+        let kept_token = server.new_parse_token(&kept_uri);
+        server.stream_sessions().start_session(crate::runtime::stream_session::SessionKey {
+            uri: removed_uri.clone(),
+            document_version: 1,
+            line: 0,
+            character: 0,
+        });
+        server.stream_sessions().start_session(crate::runtime::stream_session::SessionKey {
+            uri: kept_uri.clone(),
+            document_version: 1,
+            line: 0,
+            character: 0,
+        });
+
+        server.handle_did_change_workspace_folders(Some(json!({
+            "event": {
+                "added": [],
+                "removed": [
+                    { "uri": removed_folder_uri.to_string(), "name": "removed" }
+                ]
+            }
+        })))?;
+
+        assert!(removed_token.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(!kept_token.load(std::sync::atomic::Ordering::Relaxed));
+        {
+            let documents = server.documents.lock();
+            assert!(!documents.contains_key(&server.normalize_uri_key(&removed_uri)));
+            assert!(documents.contains_key(&server.normalize_uri_key(&kept_uri)));
+        }
+        assert!(!server.parse_cancel_flags.lock().contains_key(&removed_uri));
+        assert!(server.parse_cancel_flags.lock().contains_key(&kept_uri));
+        assert_eq!(server.stream_sessions().len(), 1);
+        assert!(
+            server
+                .workspace_folders
+                .lock()
+                .iter()
+                .all(|folder| { folder.uri != removed_folder_uri.to_string() })
+        );
+
+        Ok(())
     }
 
     #[cfg(feature = "workspace")]

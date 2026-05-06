@@ -130,7 +130,7 @@ impl StreamSessionManager {
     /// Number of sessions currently held by the manager.
     ///
     /// Test-only; production code observes manager state through cancellation.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub fn len(&self) -> usize {
         self.sessions.lock().unwrap_or_else(|e| e.into_inner()).len()
     }

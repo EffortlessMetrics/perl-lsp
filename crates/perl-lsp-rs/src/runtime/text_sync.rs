@@ -28,7 +28,7 @@ impl LspServer {
         self.symbol_index.lock().replace_document_symbols(uri, symbols);
     }
 
-    fn clear_document_symbols(&self, uri: &str) {
+    pub(crate) fn clear_document_symbols(&self, uri: &str) {
         self.symbol_index.lock().remove_document(uri);
     }
 
@@ -271,6 +271,7 @@ impl LspServer {
 
             // Store document state with normalized URI
             let normalized_uri = self.normalize_uri_key(uri);
+            let generation = Arc::new(AtomicU32::new(0));
 
             // Initialize incremental document from the already-parsed text (didOpen).
             // code_slice is applied here to match what the full parser sees.
@@ -311,7 +312,7 @@ impl LspServer {
                     parse_errors: errors,
                     parent_map,
                     line_starts,
-                    generation: Arc::new(AtomicU32::new(0)),
+                    generation: Arc::clone(&generation),
                     degradation_tier,
                     #[cfg(feature = "incremental")]
                     incremental_doc,
@@ -333,10 +334,20 @@ impl LspServer {
                         let coordinator_clone = Arc::clone(coordinator);
                         let text_owned = text.to_string();
                         let uri_owned = uri.to_string();
+                        let generation = Arc::clone(&generation);
                         let task_counter = Arc::clone(&self.pending_index_task_count);
                         task_counter.fetch_add(1, Ordering::SeqCst);
 
                         let task = move || {
+                            if generation.load(Ordering::Acquire) != 0 {
+                                tracing::debug!(
+                                    uri = %uri_owned,
+                                    "Skipping stale background index task after document close/change"
+                                );
+                                coordinator_clone.notify_parse_complete(&uri_owned);
+                                task_counter.fetch_sub(1, Ordering::SeqCst);
+                                return;
+                            }
                             match workspace_index.index_file(url, text_owned) {
                                 Ok(()) => {
                                     if matches!(
@@ -889,6 +900,7 @@ impl LspServer {
                     }
                 }
 
+                let generation_for_index_task = doc_state.generation.clone();
                 documents.insert(normalized_uri.clone(), doc_state);
 
                 // Must drop the lock before calling publish_diagnostics
@@ -911,10 +923,22 @@ impl LspServer {
                             let coordinator_clone = Arc::clone(coordinator);
                             let doc_content = text.clone();
                             let uri_owned = uri.to_string();
+                            let expected_generation = next_gen;
+                            let generation = Arc::clone(&generation_for_index_task);
                             let task_counter = Arc::clone(&self.pending_index_task_count);
                             task_counter.fetch_add(1, Ordering::SeqCst);
 
                             let task = move || {
+                                if generation.load(Ordering::Acquire) != expected_generation {
+                                    tracing::debug!(
+                                        uri = %uri_owned,
+                                        expected_generation,
+                                        "Skipping stale background index task after document close/change"
+                                    );
+                                    coordinator_clone.notify_parse_complete(&uri_owned);
+                                    task_counter.fetch_sub(1, Ordering::SeqCst);
+                                    return;
+                                }
                                 if let Err(e) = workspace_index.index_file(url, doc_content) {
                                     tracing::warn!("Failed to index file {}: {}", uri_owned, e);
                                 }
@@ -969,42 +993,8 @@ impl LspServer {
                 .pointer("/textDocument/uri")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
-            let normalized_uri = self.normalize_uri_key(uri);
 
             tracing::debug!("Document closed: {}", uri);
-
-            // Cancel any active streaming inline completion sessions for this URI.
-            self.stream_sessions().cancel_for_uri(uri);
-
-            // Invalidate the SemanticAnalyzer cache for this URI on close.
-            {
-                let mut cache = self.semantic_analyzer_cache.lock();
-                cache.retain(|(cached_uri, _), _| cached_uri != &normalized_uri);
-            }
-
-            // Evict the cached AST so the (potentially large) Arc<Node> drops
-            // immediately rather than surviving until the moka TTL fires. Cover
-            // both normalized and raw URI keys to handle any normalization
-            // mismatches with `put` callers.
-            self.ast_cache.remove(&normalized_uri);
-            if normalized_uri != uri {
-                self.ast_cache.remove(uri);
-            }
-
-            // Evict the per-path POD cache entry for the closing document so
-            // the parsed POD structure is freed alongside the document. The
-            // pod_cache is keyed by filesystem path (not URI) and otherwise
-            // grows monotonically across a session.
-            //
-            // The same path is reused to invalidate the pull-diagnostics cache
-            // entry below, avoiding a second URI-to-path conversion.
-            if let Some(path) = source_path_from_uri(uri) {
-                self.pod_cache.lock().remove(&path);
-
-                // Evict cached pull-diagnostic results for the closing document.
-                #[cfg(not(target_arch = "wasm32"))]
-                self.pull_diagnostics_orchestrator.invalidate_file_cache(&path);
-            }
 
             // Notify coordinator of pending change to track cleanup work
             #[cfg(feature = "workspace")]
@@ -1012,30 +1002,7 @@ impl LspServer {
                 coordinator.notify_change(uri);
             }
 
-            // Remove from documents
-            let mut documents = self.documents.lock();
-            documents.remove(&normalized_uri).or_else(|| documents.remove(uri));
-
-            // Cancel any in-progress parse and clean up the cancellation flag.
-            {
-                let mut flags = self.parse_cancel_flags.lock();
-                if let Some(flag) = flags.remove(&normalized_uri) {
-                    flag.store(true, Ordering::Release);
-                }
-                // Also try raw URI in case normalize produced a different key.
-                if let Some(flag) = flags.remove(uri) {
-                    flag.store(true, Ordering::Release);
-                }
-            }
-
-            // Clear from workspace index
-            // Note: Mutation operation - use coordinator.index() directly
-            #[cfg(feature = "workspace")]
-            if let Some(coordinator) = self.coordinator() {
-                coordinator.index().clear_file(uri);
-            }
-
-            self.clear_document_symbols(uri);
+            self.evict_open_document_session_state(uri);
 
             // Notify coordinator that cleanup is complete
             #[cfg(feature = "workspace")]
@@ -1893,6 +1860,117 @@ mod tests {
             !server.parse_cancel_flags.lock().contains_key(uri),
             "did_close must remove the URI entry from parse_cancel_flags"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_did_close_zeroes_memory_state_snapshot() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///test_close_memory_snapshot.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "package Close::Snapshot;\nsub target { 1 }\n1;\n"
+            }
+        }))?;
+        let _token = server.new_parse_token(uri);
+        server.stream_sessions().start_session(crate::runtime::stream_session::SessionKey {
+            uri: uri.to_string(),
+            document_version: 1,
+            line: 0,
+            character: 0,
+        });
+
+        let before = server.memory_state_snapshot();
+        assert_eq!(before.documents, 1);
+        assert!(before.open_text_bytes > 0);
+        assert_eq!(before.parse_cancel_flags, 1);
+        assert_eq!(before.stream_sessions, 1);
+
+        server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+
+        let after = server.memory_state_snapshot();
+        assert_eq!(after.documents, 0);
+        assert_eq!(after.open_text_bytes, 0);
+        assert_eq!(after.parse_cancel_flags, 0);
+        assert_eq!(after.stream_sessions, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_did_close_after_change_storm_drains_background_index_tasks()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = tokio::runtime::Runtime::new()?;
+        runtime.block_on(async {
+            let server = LspServer::new();
+            let uri = "file:///test_close_change_storm.pl";
+
+            server.did_open(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "package Close::Storm;\nsub target { 1 }\n1;\n"
+                }
+            }))?;
+
+            for version in 2..30 {
+                server.handle_did_change(Some(json!({
+                    "textDocument": { "uri": uri, "version": version },
+                    "contentChanges": [{
+                        "text": format!(
+                            "package Close::Storm;\nsub target {{ {} }}\n1;\n",
+                            version
+                        )
+                    }]
+                })))?;
+            }
+
+            let _token = server.new_parse_token(uri);
+            server.stream_sessions().start_session(crate::runtime::stream_session::SessionKey {
+                uri: uri.to_string(),
+                document_version: 29,
+                line: 0,
+                character: 0,
+            });
+            server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+            #[cfg(feature = "workspace")]
+            if let Some(workspace_index) = server.workspace_index() {
+                workspace_index.remove_file(uri);
+            }
+
+            for _ in 0..100 {
+                if server.pending_index_task_count.load(Ordering::SeqCst) == 0 {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+
+            let after = server.memory_state_snapshot();
+            assert_eq!(after.pending_index_tasks, 0, "background indexing tasks must drain");
+            assert_eq!(after.documents, 0, "didClose must remove open document state");
+            assert_eq!(after.open_text_bytes, 0, "didClose must drop open document text");
+            assert_eq!(after.parse_cancel_flags, 0, "didClose must remove parse-cancel flags");
+            assert_eq!(after.stream_sessions, 0, "didClose must remove stream sessions");
+            #[cfg(feature = "workspace")]
+            if let Some(workspace_index) = server.workspace_index() {
+                assert!(
+                    workspace_index.file_symbols(uri).is_empty(),
+                    "stale background indexing must not repopulate workspace symbols after close"
+                );
+                assert!(
+                    workspace_index.document_store().get(uri).is_none(),
+                    "stale background indexing must not repopulate document store after close"
+                );
+            }
+
+            Ok::<(), Box<dyn std::error::Error>>(())
+        })?;
 
         Ok(())
     }

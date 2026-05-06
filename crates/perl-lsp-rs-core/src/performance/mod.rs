@@ -76,6 +76,7 @@ impl AstCache {
     /// to bound peak memory.
     pub fn remove(&self, uri: &str) {
         self.cache.remove(uri);
+        self.cache.run_pending_tasks();
     }
 
     /// Clear expired entries.
