@@ -82,23 +82,6 @@ export function _setLastStartupDiagnosisForTest(diagnosis: StartupErrorDiagnosis
     lastStartupDiagnosis = diagnosis;
 }
 
-type PerlCriticSettings = {
-    enabled: boolean;
-    severity: number;
-    profile: string;
-    theme: string;
-};
-
-function getPerlCriticSettings(documentUri?: vscode.Uri): PerlCriticSettings {
-    const config = vscode.workspace.getConfiguration('perl-lsp', documentUri);
-    return {
-        enabled: config.get<boolean>('perlcritic.enabled', false),
-        severity: config.get<number>('perlcritic.severity', 3),
-        profile: config.get<string>('perlcritic.profile', ''),
-        theme: config.get<string>('perlcritic.theme', ''),
-    };
-}
-
 type PerlCriticSyncSettings = {
     enabled?: boolean;
     severity?: number;
@@ -203,7 +186,7 @@ export async function syncPerlCriticConfiguration(
 
     const payload = buildPerlCriticConfiguration(getPerlCriticSyncSettings(documentUri));
     if (payload) {
-        activeClient.sendNotification('workspace/didChangeConfiguration', payload);
+        await activeClient.sendNotification('workspace/didChangeConfiguration', payload);
     }
 }
 
@@ -319,7 +302,7 @@ export async function setPerlCriticSeverity(
     await config.update('perlcritic.severity', severity, target);
     const payload = buildPerlCriticConfiguration(getPerlCriticSyncSettings(resourceUri, severity));
     if (activeClient && payload) {
-        activeClient.sendNotification('workspace/didChangeConfiguration', payload);
+        await activeClient.sendNotification('workspace/didChangeConfiguration', payload);
     }
 
     vscode.window.showInformationMessage(`PerlCritic severity set to ${severity}.`);
