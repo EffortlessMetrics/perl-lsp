@@ -319,6 +319,24 @@ pub struct MemoryStateSnapshot {
     pub pod_cache_entries: usize,
 }
 
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+/// Point-in-time counts for async runtime pressure gauges.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimePressureSnapshot {
+    /// Number of background index tasks currently in flight.
+    pub pending_index_tasks: usize,
+    /// Number of unique file-watcher URIs waiting in the debounce window.
+    pub file_watcher_pending_uris: usize,
+    /// Number of unique diagnostic URIs waiting in the debounce window.
+    pub diagnostic_debounce_pending_uris: usize,
+    /// Number of workspace/configuration requests waiting for client replies.
+    pub pending_workspace_configuration_requests: usize,
+    /// Number of refresh timers currently inside their debounce window.
+    pub refresh_debounce_active: usize,
+    /// Number of active inline-completion stream sessions.
+    pub active_stream_sessions: usize,
+}
+
 // SAFETY: LspServer is not auto-Send/Sync because DocumentState contains
 // ParentMap which has `*const Node` raw pointers. However, these pointers
 // are only accessed through the `documents: Arc<Mutex<...>>` field, which
@@ -607,6 +625,33 @@ impl LspServer {
             stream_sessions: self.stream_sessions().len(),
             pending_index_tasks: self.pending_index_task_count.load(Ordering::SeqCst),
             pod_cache_entries: self.pod_cache.lock().len(),
+        }
+    }
+
+    /// Capture test/debug counters for async task and debounce pressure.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub fn runtime_pressure_snapshot(&self) -> RuntimePressureSnapshot {
+        let diagnostic_debounce_pending_uris = self
+            .diagnostic_debouncer
+            .lock()
+            .as_ref()
+            .map_or(0, diagnostic_debounce::DiagnosticDebouncer::pending_uris);
+        let file_watcher_pending_uris = self
+            .file_watcher_debouncer
+            .lock()
+            .as_ref()
+            .map_or(0, file_watcher_debounce::FileWatcherDebouncer::pending_uris);
+
+        RuntimePressureSnapshot {
+            pending_index_tasks: self.pending_index_task_count.load(Ordering::SeqCst),
+            file_watcher_pending_uris,
+            diagnostic_debounce_pending_uris,
+            pending_workspace_configuration_requests: self
+                .pending_workspace_configuration_requests
+                .lock()
+                .len(),
+            refresh_debounce_active: self.refresh_controller.debounce_active_count(),
+            active_stream_sessions: self.stream_sessions().len(),
         }
     }
 
@@ -1025,6 +1070,64 @@ mod tests {
             &folder,
             "vscode-remote://ssh-remote+dev/workspace-other/lib/Foo.pm"
         ));
+    }
+
+    #[test]
+    fn runtime_pressure_snapshot_reports_async_queues() {
+        use std::time::{Duration, Instant};
+
+        let server = LspServer::new();
+        let uri = "file:///runtime-pressure.pl";
+
+        server.install_diagnostic_debouncer(
+            diagnostic_debounce::DiagnosticDebouncer::with_interval(
+                Duration::from_secs(60),
+                |_| {},
+            ),
+        );
+        server.install_file_watcher_debouncer(
+            file_watcher_debounce::FileWatcherDebouncer::with_interval(
+                Duration::from_secs(60),
+                |_| {},
+            ),
+        );
+
+        server.publish_diagnostics_debounced(uri);
+        assert!(server.schedule_file_watcher_uri(uri));
+        server.stream_sessions().start_session(stream_session::SessionKey {
+            uri: uri.to_string(),
+            document_version: 1,
+            line: 0,
+            character: 0,
+        });
+        server.pending_workspace_configuration_requests.lock().insert(
+            1,
+            PendingWorkspaceConfigurationRequest {
+                folder_uris: vec!["file:///".to_string()],
+                includes_global_item: true,
+                created_at: Instant::now(),
+            },
+        );
+
+        let snapshot = (0..50)
+            .find_map(|_| {
+                let snapshot = server.runtime_pressure_snapshot();
+                if snapshot.diagnostic_debounce_pending_uris == 1
+                    && snapshot.file_watcher_pending_uris == 1
+                {
+                    Some(snapshot)
+                } else {
+                    std::thread::sleep(Duration::from_millis(10));
+                    None
+                }
+            })
+            .expect("debouncer workers should report pending URI pressure");
+
+        assert_eq!(snapshot.pending_index_tasks, 0);
+        assert_eq!(snapshot.diagnostic_debounce_pending_uris, 1);
+        assert_eq!(snapshot.file_watcher_pending_uris, 1);
+        assert_eq!(snapshot.pending_workspace_configuration_requests, 1);
+        assert_eq!(snapshot.active_stream_sessions, 1);
     }
 
     #[test]

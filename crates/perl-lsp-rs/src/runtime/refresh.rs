@@ -48,6 +48,11 @@ impl RefreshTimer {
     fn mark_refreshed(&mut self) {
         self.last_refresh = Some(Instant::now());
     }
+
+    #[allow(dead_code)] // Read by test/debug runtime pressure snapshots.
+    fn debounce_active(&self, debounce_duration: Duration) -> bool {
+        self.last_refresh.is_some_and(|last| last.elapsed() < debounce_duration)
+    }
 }
 
 /// Controller for debounced server→client refresh requests
@@ -268,6 +273,23 @@ impl RefreshController {
         // Trigger all refreshes
         self.refresh_all(server)
     }
+
+    /// Number of refresh timers currently inside the debounce window.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub(crate) fn debounce_active_count(&self) -> usize {
+        let mut count = 0usize;
+        for active in [
+            self.code_lens_timer.lock().debounce_active(self.debounce_duration),
+            self.semantic_tokens_timer.lock().debounce_active(self.debounce_duration),
+            self.inlay_hint_timer.lock().debounce_active(self.debounce_duration),
+            self.inline_value_timer.lock().debounce_active(self.debounce_duration),
+            self.diagnostic_timer.lock().debounce_active(self.debounce_duration),
+            self.folding_range_timer.lock().debounce_active(self.debounce_duration),
+        ] {
+            count += usize::from(active);
+        }
+        count
+    }
 }
 
 impl Default for RefreshController {
@@ -297,6 +319,18 @@ mod tests {
         // Wait for debounce window
         std::thread::sleep(Duration::from_millis(50));
         assert!(timer.should_refresh(Duration::from_millis(25)));
+    }
+
+    #[test]
+    fn timer_reports_active_debounce_window() {
+        let mut timer = RefreshTimer::new();
+        assert!(!timer.debounce_active(Duration::from_secs(1)));
+
+        timer.mark_refreshed();
+        assert!(timer.debounce_active(Duration::from_secs(1)));
+
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(!timer.debounce_active(Duration::from_millis(25)));
     }
 
     #[test]

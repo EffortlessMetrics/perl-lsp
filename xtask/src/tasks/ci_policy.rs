@@ -234,6 +234,17 @@ fn memory_lifecycle_violations(inputs: &MemoryLifecycleInputs) -> Vec<String> {
             violations.push(format!("MemoryStateSnapshot must retain {field} counter"));
         }
     }
+    for field in [
+        "file_watcher_pending_uris",
+        "diagnostic_debounce_pending_uris",
+        "pending_workspace_configuration_requests",
+        "refresh_debounce_active",
+        "active_stream_sessions",
+    ] {
+        if !inputs.runtime_mod.contains(&format!("pub {field}: usize")) {
+            violations.push(format!("RuntimePressureSnapshot must retain {field} counter"));
+        }
+    }
 
     if !inputs.streaming_tests.contains("completion_stream_cancel_storm_keeps_one_live_session") {
         violations.push(
@@ -388,6 +399,13 @@ mod tests {
                     pub stream_sessions: usize,
                     pub pending_index_tasks: usize,
                     pub parse_cancel_flags: usize,
+                }
+                pub struct RuntimePressureSnapshot {
+                    pub file_watcher_pending_uris: usize,
+                    pub diagnostic_debounce_pending_uris: usize,
+                    pub pending_workspace_configuration_requests: usize,
+                    pub refresh_debounce_active: usize,
+                    pub active_stream_sessions: usize,
                 }
             "#
             .to_string(),
