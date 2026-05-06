@@ -2785,6 +2785,24 @@ fn test_require_statement_skips_file_path() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
+fn test_require_statement_skips_double_quoted_file_path() -> Result<(), Box<dyn std::error::Error>>
+{
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
+    let code = r#"require "Utils.pm""#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index(&ast, Some(index));
+    let completions = provider.get_completions(code, code.len());
+    assert!(
+        !completions.iter().any(|c| c.kind == CompletionItemKind::Module),
+        r#"require "Utils.pm" should not trigger module-name completions; got: {:?}"#,
+        completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
 fn test_require_statement_skips_version_check() -> Result<(), Box<dyn std::error::Error>> {
     let index = Arc::new(WorkspaceIndex::new());
     index.index_file(Url::parse("file:///lib/Utils.pm")?, "package Utils;\n1;\n".to_string())?;
