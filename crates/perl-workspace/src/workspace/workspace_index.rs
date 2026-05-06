@@ -1823,22 +1823,42 @@ impl WorkspaceIndex {
 
             // Defensive sweep: purge any remaining cache entries whose value
             // points to this file's URI.  incremental_remove_symbols already
-            // handles known symbol names; this sweep catches any entries that
-            // were inserted via the find_definition fallback path using a key
-            // that differs from both sym.name and sym.qualified_name.
-            // Use the URI stored in the file_index itself (not the caller-supplied
-            // uri_str) so the comparison is always against the exact string that
-            // was stored during indexing.
-            if let Some(indexed_uri) = file_index.symbols.first().map(|s| s.uri.as_str()) {
-                symbols.retain(|_, candidates| {
-                    candidates.retain(|candidate| candidate.location.uri.as_str() != indexed_uri);
-                    !candidates.is_empty()
-                });
+            // handles known symbol names; this sweep guarantees no stale
+            // candidates survive even when:
+            //   * the file had zero symbols (nothing for incremental_remove
+            //     to walk), or
+            //   * a symbol's stored uri differs from the canonical normalize_uri
+            //     output (URI normalization edge cases).
+            // Match against every URI spelling observed in this file index plus
+            // the canonical uri_str so raw/normalized variants are all caught.
+            let mut removed_uris = vec![uri_str.as_str()];
+            for observed_uri in file_index.symbols.iter().map(|s| s.uri.as_str()).chain(
+                file_index.references.values().flat_map(|refs| refs.iter().map(|r| r.uri.as_str())),
+            ) {
+                if !removed_uris.contains(&observed_uri) {
+                    removed_uris.push(observed_uri);
+                }
             }
+            symbols.retain(|_, candidates| {
+                candidates.retain(|candidate| {
+                    let cand_uri = candidate.location.uri.as_str();
+                    !removed_uris.contains(&cand_uri)
+                });
+                !candidates.is_empty()
+            });
 
-            // Remove from global reference index
+            // Remove from global reference index. Two-phase cleanup: first
+            // remove names this file was known to reference (cheap path), then
+            // a defensive sweep over all remaining entries to catch any that
+            // were inserted under names not present in this file's
+            // FileIndex::references map (e.g. via aggregated/global insertion
+            // paths). Empty buckets are dropped.
             let mut global_refs = self.global_references.write();
             Self::remove_file_global_refs(&mut global_refs, &file_index, &uri_str);
+            global_refs.retain(|_, locs| {
+                locs.retain(|loc| !removed_uris.contains(&loc.uri.as_str()));
+                !locs.is_empty()
+            });
         }
     }
 
@@ -2325,27 +2345,17 @@ impl WorkspaceIndex {
             return Some(location);
         }
 
+        // Fall back to a full files scan for this query. The result is intentionally
+        // NOT written back to `self.symbols`: every indexed symbol is already
+        // inserted under both qualified and bare names by `incremental_add_symbols`,
+        // so any cache miss here is for a key that does not correspond to an
+        // indexed symbol (e.g. a typo or alias). Caching such queries is unsound
+        // (entries become stale on file edits and were never tracked for cleanup
+        // in `remove_file`/`incremental_remove_symbols`) and lets the cache grow
+        // unboundedly across long sessions. Returning the resolved location
+        // directly preserves correctness without retaining state.
         let files = self.files.read();
-        let resolved = Self::find_definition_in_files(&files, symbol_name, None);
-        drop(files);
-
-        if let Some((location, _uri)) = resolved {
-            let mut symbols = self.symbols.write();
-            symbols.entry(symbol_name.to_string()).or_default().push(DefinitionCandidate {
-                location: location.clone(),
-                kind: SymbolKind::Subroutine,
-            });
-            if let Some(candidates) = symbols.get_mut(symbol_name) {
-                candidates.sort_by(|left, right| {
-                    Self::definition_candidate_sort_key(left)
-                        .cmp(&Self::definition_candidate_sort_key(right))
-                });
-                candidates.dedup();
-            }
-            return Some(location);
-        }
-
-        None
+        Self::find_definition_in_files(&files, symbol_name, None).map(|(location, _uri)| location)
     }
 
     pub(crate) fn definition_candidates(&self, symbol_name: &str) -> Vec<Location> {

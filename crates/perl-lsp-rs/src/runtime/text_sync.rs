@@ -982,6 +982,30 @@ impl LspServer {
                 cache.retain(|(cached_uri, _), _| cached_uri != &normalized_uri);
             }
 
+            // Evict the cached AST so the (potentially large) Arc<Node> drops
+            // immediately rather than surviving until the moka TTL fires. Cover
+            // both normalized and raw URI keys to handle any normalization
+            // mismatches with `put` callers.
+            self.ast_cache.remove(&normalized_uri);
+            if normalized_uri != uri {
+                self.ast_cache.remove(uri);
+            }
+
+            // Evict the per-path POD cache entry for the closing document so
+            // the parsed POD structure is freed alongside the document. The
+            // pod_cache is keyed by filesystem path (not URI) and otherwise
+            // grows monotonically across a session.
+            //
+            // The same path is reused to invalidate the pull-diagnostics cache
+            // entry below, avoiding a second URI-to-path conversion.
+            if let Some(path) = source_path_from_uri(uri) {
+                self.pod_cache.lock().remove(&path);
+
+                // Evict cached pull-diagnostic results for the closing document.
+                #[cfg(not(target_arch = "wasm32"))]
+                self.pull_diagnostics_orchestrator.invalidate_file_cache(&path);
+            }
+
             // Notify coordinator of pending change to track cleanup work
             #[cfg(feature = "workspace")]
             if let Some(coordinator) = self.coordinator() {

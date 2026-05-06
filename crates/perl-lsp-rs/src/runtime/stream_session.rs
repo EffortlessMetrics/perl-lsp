@@ -95,25 +95,44 @@ impl StreamSessionManager {
         session
     }
 
-    /// Cancel all sessions for a given URI (on didChange/didClose).
+    /// Cancel and remove all sessions for a given URI (on didChange/didClose).
+    ///
+    /// Cancelled sessions are evicted from the manager immediately rather than
+    /// left behind for `cleanup()` — there is no production caller of cleanup,
+    /// so without eviction here the HashMap grows monotonically as the user
+    /// edits (one stale entry per request position/version).
     pub fn cancel_for_uri(&self, uri: &str) {
-        let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
-        for (key, session) in sessions.iter() {
+        let mut sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
+        sessions.retain(|key, session| {
             if key.uri == uri {
                 session.cancel();
+                false
+            } else {
+                true
             }
-        }
+        });
     }
 
-    /// Cancel all sessions for a given URI where the document version is older
-    /// than the supplied version (on document version change).
+    /// Cancel and remove all sessions for a given URI where the document
+    /// version is older than the supplied version (on document version change).
     pub fn cancel_for_uri_version(&self, uri: &str, version: i64) {
-        let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
-        for (key, session) in sessions.iter() {
+        let mut sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
+        sessions.retain(|key, session| {
             if key.uri == uri && key.document_version < version {
                 session.cancel();
+                false
+            } else {
+                true
             }
-        }
+        });
+    }
+
+    /// Number of sessions currently held by the manager.
+    ///
+    /// Test-only; production code observes manager state through cancellation.
+    #[cfg(test)]
+    pub fn len(&self) -> usize {
+        self.sessions.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     /// Remove completed/cancelled sessions (housekeeping).
@@ -172,6 +191,51 @@ mod tests {
         mgr.cancel_for_uri("file:///a.pl");
         assert!(s1.is_cancelled());
         assert!(!s2.is_cancelled());
+        // Cancelled sessions must also be evicted from the manager — this is
+        // the regression guard for the leak fixed alongside this test.
+        assert_eq!(mgr.len(), 1, "cancelled session for a.pl must be evicted");
+    }
+
+    #[test]
+    fn cancel_for_uri_evicts_many_stale_sessions() {
+        let mgr = StreamSessionManager::new();
+        for i in 0..200 {
+            mgr.start_session(SessionKey {
+                uri: "file:///hot.pl".into(),
+                document_version: i,
+                line: i as u64,
+                character: 0,
+            });
+        }
+        assert_eq!(mgr.len(), 200);
+        mgr.cancel_for_uri("file:///hot.pl");
+        assert_eq!(
+            mgr.len(),
+            0,
+            "cancel_for_uri must drain the manager for the matching URI \
+             (regression: cancellation flagged but never removed)"
+        );
+    }
+
+    #[test]
+    fn cancel_for_uri_version_evicts_older() {
+        let mgr = StreamSessionManager::new();
+        let s_old = mgr.start_session(SessionKey {
+            uri: "file:///v.pl".into(),
+            document_version: 1,
+            line: 0,
+            character: 0,
+        });
+        let s_new = mgr.start_session(SessionKey {
+            uri: "file:///v.pl".into(),
+            document_version: 5,
+            line: 1,
+            character: 0,
+        });
+        mgr.cancel_for_uri_version("file:///v.pl", 3);
+        assert!(s_old.is_cancelled());
+        assert!(!s_new.is_cancelled());
+        assert_eq!(mgr.len(), 1, "older session must be evicted, newer kept");
     }
 
     #[test]
