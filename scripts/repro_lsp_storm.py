@@ -65,7 +65,7 @@ def make_file(i: int) -> pathlib.Path:
     """Create a synthetic Perl module."""
     p = ROOT / f"file_{i}.pl"
     p.write_text(
-        "package Leak::Pkg::{i};\n"
+        "package Leak::Pkg::File{i};\n"
         "use strict;\nuse warnings;\n"
         "sub f_{i} {{ my ($x) = @_; return $x + 1; }}\n".format(i=i),
         encoding="utf-8",
@@ -77,11 +77,12 @@ print(f"[info] Workspace root: {ROOT}", file=sys.stderr)
 print(f"[info] Files: {N_FILES}, Changes per file: {N_CHANGES}, Workspace symbol: {DO_WORKSPACE_SYMBOL}", file=sys.stderr)
 
 # Start server
+stderr_file = tempfile.NamedTemporaryFile(prefix="perllsp.stderr-", suffix=".log", delete=False)
 proc = subprocess.Popen(
     [BINARY, "--stdio"],
     stdin=subprocess.PIPE,
     stdout=subprocess.PIPE,
-    stderr=open("/tmp/perllsp.stderr.log", "wb"),
+    stderr=stderr_file,
 )
 assert proc.stdin and proc.stdout
 pid = proc.pid

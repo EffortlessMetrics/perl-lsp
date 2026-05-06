@@ -4,8 +4,7 @@
 
 set -e
 
-WORKDIR="/tmp/doc_lifecycle_test"
-mkdir -p "$WORKDIR"
+WORKDIR=$(mktemp -d)
 
 echo "=== Testing Document Lifecycle Memory ===" >&2
 echo "Each iteration: open 50 files, change each 5 times, close all" >&2

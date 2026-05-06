@@ -1,5 +1,5 @@
 #!/bin/bash
-# Monitor process tree RSS/VmHWM during LSP server execution
+# Monitor process tree RSS/VmHWM during LSP server execution (Linux-only)
 # Usage: ./monitor_process_tree.sh <pid> <output_file> <interval_seconds>
 
 set -e
