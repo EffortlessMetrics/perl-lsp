@@ -4840,6 +4840,13 @@ struct FailureWorklistRow {
     suggested_pr: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MeasurementGapRow {
+    metric: String,
+    reason: String,
+    suggested_pr: String,
+}
+
 #[derive(Debug, Serialize)]
 struct ProviderExpectationCounts {
     method_completion: u64,
@@ -5052,10 +5059,85 @@ fn render_next_pointer_status_receipt(artifact: &ParserAccuracyArtifact) -> Stri
             "\nUse this pointer only after open measurement/tracking PRs are settled. If the pointed lane has already landed, regenerate this file and take the next row.\n",
         );
     } else {
-        output.push_str("Pointer: no active failure packets.\n");
+        output.push_str("Pointer: no active failure packets.\n\n");
+        output.push_str("## Next Measurement Gaps\n\n");
+        output.push_str("| Metric | Reason | Suggested PR |\n");
+        output.push_str("|---|---|---|\n");
+
+        let gaps = next_measurement_gap_rows(artifact);
+        if gaps.is_empty() {
+            output.push_str("| none | n/a | n/a |\n");
+        } else {
+            for gap in gaps {
+                output.push_str(&format!(
+                    "| `{}` | {} | `{}` |\n",
+                    markdown_table_cell(&gap.metric),
+                    markdown_table_cell(&gap.reason),
+                    markdown_table_cell(&gap.suggested_pr)
+                ));
+            }
+        }
+        output.push_str(
+            "\nUse this section only when there are no active failure packets. Keep each measurement gap in its own PR and regenerate this file after a lane lands.\n",
+        );
     }
 
     output
+}
+
+fn next_measurement_gap_rows(artifact: &ParserAccuracyArtifact) -> Vec<MeasurementGapRow> {
+    const MAX_NEXT_GAPS: usize = 5;
+
+    let mut rows: Vec<_> = artifact
+        .metrics
+        .iter()
+        .filter_map(|row| match row {
+            MetricRow::InsufficientData { metric, reason, sample_count, .. }
+                if *sample_count == 0 =>
+            {
+                Some(MeasurementGapRow {
+                    metric: metric.clone(),
+                    reason: reason.clone(),
+                    suggested_pr: suggested_next_pr_for_measurement_gap(metric),
+                })
+            }
+            MetricRow::Measured { .. } | MetricRow::InsufficientData { .. } => None,
+        })
+        .collect();
+
+    rows.sort_by(|left, right| {
+        measurement_gap_priority(&left.metric, &left.reason)
+            .cmp(&measurement_gap_priority(&right.metric, &right.reason))
+            .then_with(|| left.metric.cmp(&right.metric))
+    });
+    rows.truncate(MAX_NEXT_GAPS);
+    rows
+}
+
+fn measurement_gap_priority(metric: &str, reason: &str) -> u8 {
+    if metric.starts_with("provider_") {
+        0
+    } else if reason.contains("timing") || metric.ends_with("_ms_p95") {
+        1
+    } else if reason.contains("telemetry") {
+        2
+    } else {
+        3
+    }
+}
+
+fn suggested_next_pr_for_measurement_gap(metric: &str) -> String {
+    if metric.starts_with("provider_") {
+        format!("test(parser-accuracy): wire provider gold fixture for {metric}")
+    } else if metric.ends_with("_ms_p95") || metric.ends_with("_query_ms_p95") {
+        format!("feat(metrics): wire parser-accuracy timing for {metric}")
+    } else {
+        format!("feat(metrics): wire parser-accuracy measurement for {metric}")
+    }
+}
+
+fn markdown_table_cell(value: &str) -> String {
+    value.replace('|', "\\|").replace(['\r', '\n'], " ")
 }
 
 fn failure_worklist_rows(artifact: &ParserAccuracyArtifact) -> Vec<FailureWorklistRow> {
@@ -6465,6 +6547,48 @@ sub dynamic_boundary_case {
             "status export must include parser_accuracy_next.md"
         );
         Ok(())
+    }
+
+    #[test]
+    fn next_pointer_lists_measurement_gaps_when_failure_packets_are_empty() {
+        let manifest = fixture_manifest();
+        let artifact = ParserAccuracyArtifact {
+            schema_version: 1,
+            subsystem: "parser_accuracy".to_string(),
+            generated_at: "2026-05-05T00:00:00Z".to_string(),
+            commit: "test-commit".to_string(),
+            cadence: Cadence::Pr,
+            denominator: compute_denominator(&manifest),
+            families: summarize_families(&manifest),
+            metrics: vec![
+                insufficient("gold_changed_line_count", "gold drift baseline is not wired yet"),
+                insufficient("completion_query_ms_p95", "provider query timing is not wired yet"),
+                insufficient(
+                    "provider_goto_definition_hit_rate",
+                    "provider gold fixtures are not wired yet",
+                ),
+            ],
+            failure_packets: Vec::new(),
+            gold_drift: GoldDrift::default(),
+            metric_runtime: MetricRuntime::default(),
+        };
+
+        let pointer = render_next_pointer_status_receipt(&artifact);
+
+        assert!(pointer.contains("Pointer: no active failure packets."));
+        assert!(pointer.contains("## Next Measurement Gaps"));
+        assert!(pointer.contains("provider_goto_definition_hit_rate"));
+        assert!(pointer.contains(
+            "test(parser-accuracy): wire provider gold fixture for provider_goto_definition_hit_rate"
+        ));
+        assert!(pointer.contains("completion_query_ms_p95"));
+        assert!(matches!(
+            (
+                pointer.find("provider_goto_definition_hit_rate"),
+                pointer.find("completion_query_ms_p95")
+            ),
+            (Some(provider_index), Some(timing_index)) if provider_index < timing_index
+        ));
     }
 
     #[test]
