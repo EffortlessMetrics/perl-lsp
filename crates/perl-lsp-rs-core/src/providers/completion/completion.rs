@@ -285,13 +285,9 @@ impl CompletionProvider {
         system_inc_paths: Vec<PathBuf>,
         include_system_inc: bool,
     ) -> Self {
-        let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
-        let class_models = ClassModelBuilder::new().build(ast);
-        let type_engine = workspace_index.as_ref().map(|_| {
-            let mut type_engine = TypeInferenceEngine::new();
-            let _ = type_engine.infer(ast);
-            type_engine
-        });
+        let symbol_table = Self::extract_symbol_table(ast, source);
+        let class_models = Self::build_class_models(ast);
+        let type_engine = Self::build_type_engine(ast, workspace_index.is_some());
         let import_map = import_map::extract_import_map(ast);
         let used_modules = import_map::collect_used_module_names(ast);
 
@@ -306,6 +302,22 @@ impl CompletionProvider {
             system_inc_paths,
             include_system_inc,
         }
+    }
+
+    fn extract_symbol_table(ast: &Node, source: &str) -> SymbolTable {
+        SymbolExtractor::new_with_source(source).extract(ast)
+    }
+
+    fn build_class_models(ast: &Node) -> Vec<ClassModel> {
+        ClassModelBuilder::new().build(ast)
+    }
+
+    fn build_type_engine(ast: &Node, has_workspace_index: bool) -> Option<TypeInferenceEngine> {
+        has_workspace_index.then(|| {
+            let mut type_engine = TypeInferenceEngine::new();
+            let _ = type_engine.infer(ast);
+            type_engine
+        })
     }
 
     /// Create a new completion provider from parsed AST without workspace context
