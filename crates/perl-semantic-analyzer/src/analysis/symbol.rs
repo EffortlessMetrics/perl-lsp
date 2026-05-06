@@ -349,6 +349,8 @@ pub enum FrameworkKind {
     RoleTiny,
     /// `use Role::Tiny::With;` — the package consumes roles
     RoleTinyWith,
+    /// `use Class::Tiny;` or `use Class::Tiny::RW;`
+    ClassTiny,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -467,9 +469,10 @@ impl SymbolExtractor {
                 continue;
             };
             let new_kind = match kind {
-                FrameworkKind::Moo | FrameworkKind::Moose | FrameworkKind::RoleTinyWith => {
-                    SymbolKind::Class
-                }
+                FrameworkKind::Moo
+                | FrameworkKind::Moose
+                | FrameworkKind::RoleTinyWith
+                | FrameworkKind::ClassTiny => SymbolKind::Class,
                 FrameworkKind::MooRole | FrameworkKind::MooseRole | FrameworkKind::RoleTiny => {
                     SymbolKind::Role
                 }
@@ -834,6 +837,9 @@ impl SymbolExtractor {
                 if module == "constant" {
                     self.synthesize_use_constant_symbols(args, node.location);
                 }
+                if module == "Class::Tiny" || module == "Class::Tiny::RW" {
+                    self.synthesize_class_tiny_use_attrs(args, node.location);
+                }
             }
 
             NodeKind::No { module: _, args: _, .. } => {
@@ -1084,6 +1090,12 @@ impl SymbolExtractor {
     fn visit_statement_list(&mut self, statements: &[Node]) {
         let mut idx = 0;
         while idx < statements.len() {
+            if let Some(consumed) = self.try_visit_class_tiny_use_with_default_hash(statements, idx)
+            {
+                idx += consumed;
+                continue;
+            }
+
             if let Some(consumed) = self.try_extract_framework_declarations(statements, idx) {
                 idx += consumed;
                 continue;
@@ -1092,6 +1104,32 @@ impl SymbolExtractor {
             self.visit_node(&statements[idx]);
             idx += 1;
         }
+    }
+
+    fn try_visit_class_tiny_use_with_default_hash(
+        &mut self,
+        statements: &[Node],
+        idx: usize,
+    ) -> Option<usize> {
+        let NodeKind::Use { module, .. } = &statements[idx].kind else {
+            return None;
+        };
+        if !matches!(module.as_str(), "Class::Tiny" | "Class::Tiny::RW") {
+            return None;
+        }
+
+        self.visit_node(&statements[idx]);
+
+        let Some(next_statement) = statements.get(idx + 1) else {
+            return Some(1);
+        };
+        let names = Self::class_tiny_default_hash_names(next_statement);
+        if names.is_empty() {
+            return Some(1);
+        }
+
+        self.synthesize_moo_has_attrs_with_options(&names, &[], next_statement.location);
+        Some(2)
     }
 
     /// Detect and synthesize framework declarations from statement patterns.
@@ -1106,11 +1144,15 @@ impl SymbolExtractor {
         let flags = flags.as_ref();
 
         let is_moo = flags.is_some_and(|f| f.moo);
+        let is_class_tiny = flags.is_some_and(|f| f.kind == Some(FrameworkKind::ClassTiny));
 
-        if is_moo {
+        if is_moo || is_class_tiny {
             if let Some(consumed) = self.try_extract_moo_has_declaration(statements, idx) {
                 return Some(consumed);
             }
+        }
+
+        if is_moo {
             if let Some(consumed) = self.try_extract_method_modifier(statements, idx) {
                 return Some(consumed);
             }
@@ -1222,6 +1264,7 @@ impl SymbolExtractor {
 
         // Form C: FunctionCall { name: "has", args: [name_expr, HashLiteral { ... }] }
         // Produced when the parser recognises `has 'name' => (is => 'ro', ...)` as a bare call.
+        // Also handles bare `has 'name';` (no options).
         if let NodeKind::ExpressionStatement { expression } = &first.kind
             && let NodeKind::FunctionCall { name, args } = &expression.kind
             && name == "has"
@@ -1238,6 +1281,15 @@ impl SymbolExtractor {
                         self.visit_node(first);
                         return Some(1);
                     }
+                }
+            } else {
+                // No HashLiteral in args: bare `has 'name';` with no options.
+                // Generates a combined accessor (both getter and setter).
+                let names: Vec<String> = args.iter().flat_map(Self::collect_symbol_names).collect();
+                if !names.is_empty() {
+                    self.synthesize_moo_has_attrs_with_options(&names, &[], first.location);
+                    self.visit_node(first);
+                    return Some(1);
                 }
             }
         }
@@ -1587,6 +1639,46 @@ impl SymbolExtractor {
                 attributes: metadata.clone(),
             });
         }
+    }
+
+    /// Synthesize accessor symbols for `use Class::Tiny ...` and
+    /// `use Class::Tiny::RW ...` declarations.
+    ///
+    /// Name/qw-list import arguments and default-hash keys become read-write accessors,
+    /// emitted as `Subroutine` symbols the same way `has name => (is => 'rw')` would.
+    fn synthesize_class_tiny_use_attrs(&mut self, args: &[String], location: SourceLocation) {
+        let names = extract_class_tiny_attribute_names_from_use_args(args);
+        if names.is_empty() {
+            return;
+        }
+        self.synthesize_moo_has_attrs_with_options(&names, &[], location);
+    }
+
+    fn class_tiny_default_hash_names(statement: &Node) -> Vec<String> {
+        let expression = match &statement.kind {
+            NodeKind::ExpressionStatement { expression } => expression.as_ref(),
+            NodeKind::Block { statements } if statements.len() == 1 => {
+                let Some(Node { kind: NodeKind::ExpressionStatement { expression }, .. }) =
+                    statements.first()
+                else {
+                    return Vec::new();
+                };
+                expression.as_ref()
+            }
+            _ => return Vec::new(),
+        };
+        let NodeKind::HashLiteral { pairs } = &expression.kind else {
+            return Vec::new();
+        };
+
+        let mut names = Vec::new();
+        let mut seen = HashSet::new();
+        for (key_node, _) in pairs {
+            for raw_name in Self::collect_symbol_names(key_node) {
+                push_class_tiny_attribute_name(&raw_name, &mut names, &mut seen);
+            }
+        }
+        names
     }
 
     /// Resolve the attribute-expression node used in a parsed `has` declaration pair.
@@ -2174,6 +2266,14 @@ impl SymbolExtractor {
 
         if module == "Class::Accessor" {
             self.framework_flags.entry(pkg.clone()).or_default().class_accessor = true;
+            return;
+        }
+
+        // Keep Class::Tiny in the same has-declaration extractor without enabling
+        // Moo-only roles, modifiers, or inheritance keywords.
+        if matches!(module, "Class::Tiny" | "Class::Tiny::RW") {
+            let flags = self.framework_flags.entry(pkg.clone()).or_default();
+            flags.kind = Some(FrameworkKind::ClassTiny);
             return;
         }
 
@@ -3074,6 +3174,131 @@ fn split_variable_name(full_name: &str) -> (&str, &str) {
         .next()
         .map(|(idx, ch)| (&full_name[idx..idx + ch.len_utf8()], &full_name[idx + ch.len_utf8()..]))
         .unwrap_or(("", ""))
+}
+
+fn extract_class_tiny_attribute_names_from_use_args(args: &[String]) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut seen = HashSet::new();
+    let mut idx = 0;
+
+    while idx < args.len() {
+        let token = args[idx].trim();
+        match token {
+            "" | "," | "=>" | "}" => {
+                idx += 1;
+            }
+            "+" if args.get(idx + 1).map(String::as_str) == Some("{") => {
+                idx = collect_class_tiny_hash_keys(args, idx + 1, &mut names, &mut seen);
+            }
+            "+{" | "{" => {
+                idx = collect_class_tiny_hash_keys(args, idx, &mut names, &mut seen);
+            }
+            _ => {
+                for raw_name in expand_class_tiny_arg_to_names(token) {
+                    push_class_tiny_attribute_name(&raw_name, &mut names, &mut seen);
+                }
+                idx += 1;
+            }
+        }
+    }
+
+    names
+}
+
+fn collect_class_tiny_hash_keys(
+    args: &[String],
+    start_idx: usize,
+    names: &mut Vec<String>,
+    seen: &mut HashSet<String>,
+) -> usize {
+    let mut idx = start_idx;
+    let mut depth = 0usize;
+
+    while idx < args.len() {
+        let token = args[idx].trim();
+        match token {
+            "+{" | "{" => {
+                depth = depth.saturating_add(1);
+                idx += 1;
+            }
+            "}" => {
+                depth = depth.saturating_sub(1);
+                idx += 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            _ if depth == 1 && args.get(idx + 1).map(String::as_str) == Some("=>") => {
+                push_class_tiny_attribute_name(token, names, seen);
+                idx += 2;
+            }
+            _ => {
+                idx += 1;
+            }
+        }
+    }
+
+    idx
+}
+
+fn expand_class_tiny_arg_to_names(arg: &str) -> Vec<String> {
+    let arg = arg.trim();
+    if arg.starts_with("qw(") && arg.ends_with(')') {
+        let content = &arg[3..arg.len() - 1];
+        return content.split_whitespace().filter(|s| !s.is_empty()).map(str::to_string).collect();
+    }
+
+    if arg.starts_with("qw") && arg.len() > 2 {
+        let open = arg.chars().nth(2).unwrap_or(' ');
+        let close = match open {
+            '(' => ')',
+            '{' => '}',
+            '[' => ']',
+            '<' => '>',
+            c => c,
+        };
+        if let (Some(start), Some(end)) = (arg.find(open), arg.rfind(close))
+            && start < end
+        {
+            let content = &arg[start + 1..end];
+            return content
+                .split_whitespace()
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .collect();
+        }
+    }
+
+    normalize_class_tiny_attribute_name(arg).into_iter().collect()
+}
+
+fn push_class_tiny_attribute_name(
+    raw_name: &str,
+    names: &mut Vec<String>,
+    seen: &mut HashSet<String>,
+) {
+    let Some(name) = normalize_class_tiny_attribute_name(raw_name) else { return };
+    if !is_class_tiny_attribute_name(&name) || !seen.insert(name.clone()) {
+        return;
+    }
+    names.push(name);
+}
+
+fn normalize_class_tiny_attribute_name(raw: &str) -> Option<String> {
+    let trimmed = raw.trim().trim_matches('\'').trim_matches('"').trim();
+    let without_override_prefix = trimmed.strip_prefix('+').unwrap_or(trimmed);
+    if without_override_prefix.is_empty() {
+        None
+    } else {
+        Some(without_override_prefix.to_string())
+    }
+}
+
+fn is_class_tiny_attribute_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else { return false };
+    (first.is_ascii_alphabetic() || first == '_')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 /// Extract constant names from `NodeKind::Use { module: "constant", args, .. }`.

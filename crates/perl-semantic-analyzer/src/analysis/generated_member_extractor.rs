@@ -1,4 +1,4 @@
-//! Generated member extraction from Moo/Moose `has` declarations and
+//! Generated member extraction from Moo/Moose/Class::Tiny `has` declarations and
 //! `Class::Accessor` declarations.
 //!
 //! Leverages the existing [`ClassModelBuilder`] to parse `has` declarations,
@@ -71,7 +71,7 @@ impl GeneratedMemberExtractor {
 
 /// Returns `true` for frameworks that generate accessors from `has` declarations.
 fn is_accessor_framework(framework: Framework) -> bool {
-    matches!(framework, Framework::Moo | Framework::Moose | Framework::Mouse)
+    matches!(framework, Framework::Moo | Framework::Moose | Framework::Mouse | Framework::ClassTiny)
 }
 
 fn collect_has_members(model: &ClassModel, package: &str, members: &mut Vec<GeneratedMember>) {

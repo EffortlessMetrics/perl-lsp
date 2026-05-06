@@ -1,4 +1,4 @@
-//! Class model for Moose/Moo/Mouse/Class::Accessor intelligence.
+//! Class model for Moose/Moo/Mouse/Class::Accessor/Class::Tiny intelligence.
 //!
 //! Provides a structured representation of Perl OOP class declarations,
 //! including attributes, methods, inheritance, and role composition.
@@ -29,6 +29,8 @@ pub enum Framework {
     PlainOO,
     /// `use Role::Tiny;` (package is a role) or `use Role::Tiny::With;` (package consumes roles)
     RoleTiny,
+    /// `use Class::Tiny;` or `use Class::Tiny::RW;`
+    ClassTiny,
     /// No OO framework detected
     None,
 }
@@ -529,7 +531,10 @@ impl ClassModelBuilder {
             if let NodeKind::Use { module, args, .. } = &statements[idx].kind {
                 self.detect_mro(module, args);
                 self.detect_framework(module, args);
-                idx += 1;
+                self.extract_class_tiny_use_attrs(module, args, statements[idx].location);
+                let consumed_default_hash =
+                    self.extract_class_tiny_following_default_hash(module, statements.get(idx + 1));
+                idx += 1 + usize::from(consumed_default_hash);
                 continue;
             }
 
@@ -582,6 +587,7 @@ impl ClassModelBuilder {
             "Moo" | "Moo::Role" => Framework::Moo,
             "Mouse" | "Mouse::Role" => Framework::Mouse,
             "Role::Tiny" | "Role::Tiny::With" => Framework::RoleTiny,
+            "Class::Tiny" | "Class::Tiny::RW" => Framework::ClassTiny,
             "Class::Accessor" => Framework::ClassAccessor,
             "Object::Pad" => Framework::ObjectPad,
             "base" | "parent" => {
@@ -656,6 +662,87 @@ impl ClassModelBuilder {
                 _ => {}
             }
         }
+    }
+
+    /// Extract attributes declared inline in `use Class::Tiny ...` or `use Class::Tiny::RW ...`.
+    ///
+    /// Class::Tiny declares attributes through import arguments. Both plain
+    /// name/qw-list arguments and keys in the optional default hashref are valid
+    /// attributes, and all generate read-write accessors.
+    ///
+    /// The issue also asks for `has` compatibility. That flows through the
+    /// normal `try_extract_has` path once `ClassTiny` is set as the current framework.
+    fn extract_class_tiny_use_attrs(
+        &mut self,
+        module: &str,
+        args: &[String],
+        location: SourceLocation,
+    ) {
+        if !matches!(module, "Class::Tiny" | "Class::Tiny::RW") {
+            return;
+        }
+        let accessor_type = AccessorType::Rw;
+        for name in extract_class_tiny_attribute_names(args) {
+            self.current_attributes.push(Attribute {
+                name: name.clone(),
+                is: Some(accessor_type),
+                isa: None,
+                default: false,
+                required: false,
+                accessor_name: name,
+                location,
+                builder: None,
+                coerce: false,
+                predicate: None,
+                clearer: None,
+                trigger: false,
+            });
+        }
+    }
+
+    fn extract_class_tiny_following_default_hash(
+        &mut self,
+        module: &str,
+        statement: Option<&Node>,
+    ) -> bool {
+        if !matches!(module, "Class::Tiny" | "Class::Tiny::RW") {
+            return false;
+        }
+        let Some(statement) = statement else { return false };
+        let Some((pairs, location)) = class_tiny_default_hash_pairs(statement) else {
+            return false;
+        };
+
+        for (key_node, _) in pairs {
+            for raw_name in collect_symbol_names(key_node) {
+                let Some(attr_name) = normalize_attribute_name(&raw_name) else { continue };
+                if !is_class_tiny_attribute_name(&attr_name) {
+                    continue;
+                }
+                if let Some(existing) =
+                    self.current_attributes.iter_mut().find(|attr| attr.name == attr_name)
+                {
+                    existing.default = true;
+                    continue;
+                }
+                self.current_attributes.push(Attribute {
+                    name: attr_name.clone(),
+                    is: Some(AccessorType::Rw),
+                    isa: None,
+                    default: true,
+                    required: false,
+                    accessor_name: attr_name,
+                    location,
+                    builder: None,
+                    coerce: false,
+                    predicate: None,
+                    clearer: None,
+                    trigger: false,
+                });
+            }
+        }
+
+        true
     }
 
     /// Extract Moo/Moose `has` declarations.
@@ -1252,6 +1339,24 @@ impl ClassModelBuilder {
 
 // ---- Helper functions (parallel to SymbolExtractor's private helpers) ----
 
+fn class_tiny_default_hash_pairs(statement: &Node) -> Option<(&[(Node, Node)], SourceLocation)> {
+    let expression = match &statement.kind {
+        NodeKind::ExpressionStatement { expression } => expression.as_ref(),
+        NodeKind::Block { statements } if statements.len() == 1 => {
+            let NodeKind::ExpressionStatement { expression } = &statements.first()?.kind else {
+                return None;
+            };
+            expression.as_ref()
+        }
+        _ => return None,
+    };
+
+    let NodeKind::HashLiteral { pairs } = &expression.kind else {
+        return None;
+    };
+    Some((pairs.as_slice(), statement.location))
+}
+
 fn collect_symbol_names(node: &Node) -> Vec<String> {
     match &node.kind {
         NodeKind::String { value, .. } => normalize_symbol_name(value).into_iter().collect(),
@@ -1481,7 +1586,7 @@ fn expand_symbol_list(raw: &str) -> Vec<String> {
 /// Plain quoted strings like `"'Parent'"` return `["Parent"]`.
 fn expand_arg_to_names(arg: &str) -> Vec<String> {
     let arg = arg.trim();
-    // qw(...) — any delimiter variant that the parser normalised to qw(...)
+    // qw(...) - any delimiter variant that the parser normalised to qw(...)
     if arg.starts_with("qw(") && arg.ends_with(')') {
         let content = &arg[3..arg.len() - 1];
         return content
@@ -1515,6 +1620,90 @@ fn expand_arg_to_names(arg: &str) -> Vec<String> {
     normalize_symbol_name(arg).into_iter().collect()
 }
 
+fn extract_class_tiny_attribute_names(args: &[String]) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut seen = HashSet::new();
+    let mut idx = 0;
+
+    while idx < args.len() {
+        let token = args[idx].trim();
+        match token {
+            "" | "," | "=>" | "}" => {
+                idx += 1;
+            }
+            "+" if args.get(idx + 1).map(String::as_str) == Some("{") => {
+                idx = collect_class_tiny_hash_keys(args, idx + 1, &mut names, &mut seen);
+            }
+            "+{" | "{" => {
+                idx = collect_class_tiny_hash_keys(args, idx, &mut names, &mut seen);
+            }
+            _ => {
+                for raw_name in expand_arg_to_names(token) {
+                    push_class_tiny_attribute_name(&raw_name, &mut names, &mut seen);
+                }
+                idx += 1;
+            }
+        }
+    }
+
+    names
+}
+
+fn collect_class_tiny_hash_keys(
+    args: &[String],
+    start_idx: usize,
+    names: &mut Vec<String>,
+    seen: &mut HashSet<String>,
+) -> usize {
+    let mut idx = start_idx;
+    let mut depth = 0usize;
+
+    while idx < args.len() {
+        let token = args[idx].trim();
+        match token {
+            "+{" | "{" => {
+                depth = depth.saturating_add(1);
+                idx += 1;
+            }
+            "}" => {
+                depth = depth.saturating_sub(1);
+                idx += 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            _ if depth == 1 && args.get(idx + 1).map(String::as_str) == Some("=>") => {
+                push_class_tiny_attribute_name(token, names, seen);
+                idx += 2;
+            }
+            _ => {
+                idx += 1;
+            }
+        }
+    }
+
+    idx
+}
+
+fn push_class_tiny_attribute_name(
+    raw_name: &str,
+    names: &mut Vec<String>,
+    seen: &mut HashSet<String>,
+) {
+    let Some(name) = normalize_attribute_name(raw_name) else { return };
+    if !is_class_tiny_attribute_name(&name) || !seen.insert(name.clone()) {
+        return;
+    }
+    names.push(name);
+}
+
+fn is_class_tiny_attribute_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else { return false };
+    (first.is_ascii_alphabetic() || first == '_')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
 fn extract_hash_options(pairs: &[(Node, Node)]) -> HashMap<String, String> {
     let mut options = HashMap::new();
     for (key_node, value_node) in pairs {
@@ -1542,7 +1731,7 @@ fn value_summary(node: &Node) -> String {
 mod tests {
     use super::*;
     use crate::parser::Parser;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
     use std::collections::HashSet;
 
     fn build_models(code: &str) -> Vec<ClassModel> {
@@ -2573,5 +2762,177 @@ class Standalone {
             "Standalone class must have no parents, but got {:?}",
             standalone.parents
         );
+    }
+
+    // Class::Tiny tests.
+
+    #[test]
+    fn class_tiny_framework_detected() {
+        let models = build_models(
+            r#"
+package MyApp::Point;
+use Class::Tiny;
+"#,
+        );
+        let model = must_some(find_model(&models, "MyApp::Point"));
+        assert_eq!(model.framework, Framework::ClassTiny);
+    }
+
+    #[test]
+    fn class_tiny_rw_framework_detected() {
+        let models = build_models(
+            r#"
+package MyApp::Config;
+use Class::Tiny::RW;
+"#,
+        );
+        let model = must_some(find_model(&models, "MyApp::Config"));
+        assert_eq!(model.framework, Framework::ClassTiny);
+    }
+
+    #[test]
+    fn class_tiny_qw_use_attrs_extracted() {
+        let models = build_models(
+            r#"
+package MyApp::Person;
+use Class::Tiny qw(name age email);
+"#,
+        );
+        let model = must_some(find_model(&models, "MyApp::Person"));
+        assert_eq!(model.framework, Framework::ClassTiny);
+        assert_eq!(model.attributes.len(), 3, "expected 3 attributes from qw list");
+
+        let names: HashSet<_> = model.attributes.iter().map(|a| a.name.as_str()).collect();
+        assert!(names.contains("name"), "expected attribute 'name'");
+        assert!(names.contains("age"), "expected attribute 'age'");
+        assert!(names.contains("email"), "expected attribute 'email'");
+
+        // All qw-list attrs default to rw
+        for attr in &model.attributes {
+            assert_eq!(
+                attr.is,
+                Some(AccessorType::Rw),
+                "qw-list attribute '{}' should be rw",
+                attr.name
+            );
+        }
+    }
+
+    #[test]
+    fn class_tiny_use_attrs_include_hashref_defaults() {
+        let models = build_models(
+            r#"
+package MyApp::Employee;
+use Class::Tiny qw(name ssn), {
+    timestamp => sub { time },
+    title => 'Peon',
+};
+"#,
+        );
+        let model = must_some(find_model(&models, "MyApp::Employee"));
+        let names: HashSet<_> = model.attributes.iter().map(|attr| attr.name.as_str()).collect();
+        assert_eq!(model.attributes.len(), 4);
+        assert!(names.contains("name"));
+        assert!(names.contains("ssn"));
+        assert!(names.contains("timestamp"));
+        assert!(names.contains("title"));
+        assert!(!names.contains("time"));
+        assert!(!names.contains("Peon"));
+    }
+
+    #[test]
+    fn class_tiny_rw_qw_use_attrs_are_rw() {
+        let models = build_models(
+            r#"
+package MyApp::Widget;
+use Class::Tiny::RW qw(width height);
+"#,
+        );
+        let model = must_some(find_model(&models, "MyApp::Widget"));
+        assert_eq!(model.attributes.len(), 2);
+        for attr in &model.attributes {
+            assert_eq!(attr.is, Some(AccessorType::Rw));
+        }
+    }
+
+    #[test]
+    fn class_tiny_bare_has_declaration() {
+        // Bare `has 'name';` is kept as issue-compatible declaration syntax.
+        let models = build_models(
+            r#"
+package MyApp::Tag;
+use Class::Tiny;
+has 'label';
+has 'color';
+"#,
+        );
+        let model = must_some(find_model(&models, "MyApp::Tag"));
+        assert_eq!(model.attributes.len(), 2, "expected 2 attributes from bare has");
+
+        let label = must_some(model.attributes.iter().find(|a| a.name == "label"));
+        assert_eq!(label.accessor_name, "label");
+
+        let color = model.attributes.iter().find(|a| a.name == "color");
+        assert!(color.is_some(), "expected attribute 'color'");
+    }
+
+    #[test]
+    fn class_tiny_has_with_options() {
+        // `has 'name' => (is => 'ro')` should work the same as in Moo/Moose
+        let models = build_models(
+            r#"
+package MyApp::Readonly;
+use Class::Tiny;
+has 'id' => (is => 'ro');
+has 'value' => (is => 'rw');
+"#,
+        );
+        let model = must_some(find_model(&models, "MyApp::Readonly"));
+        assert_eq!(model.attributes.len(), 2);
+
+        let id_attr = must_some(model.attributes.iter().find(|a| a.name == "id"));
+        assert_eq!(id_attr.is, Some(AccessorType::Ro));
+
+        let value_attr = must_some(model.attributes.iter().find(|a| a.name == "value"));
+        assert_eq!(value_attr.is, Some(AccessorType::Rw));
+    }
+
+    #[test]
+    fn class_tiny_mixed_use_and_has_declarations() {
+        // Mix of qw-list and explicit has declarations
+        let models = build_models(
+            r#"
+package MyApp::Mixed;
+use Class::Tiny qw(name age);
+has 'role' => (is => 'ro');
+sub greet { }
+"#,
+        );
+        let model = must_some(find_model(&models, "MyApp::Mixed"));
+        assert_eq!(model.framework, Framework::ClassTiny);
+        // 2 from qw + 1 from has = 3
+        assert_eq!(model.attributes.len(), 3, "expected 3 total attributes");
+
+        let names: HashSet<_> = model.attributes.iter().map(|a| a.name.as_str()).collect();
+        assert!(names.contains("name"));
+        assert!(names.contains("age"));
+        assert!(names.contains("role"));
+
+        let role_attr = must_some(model.attributes.iter().find(|a| a.name == "role"));
+        assert_eq!(role_attr.is, Some(AccessorType::Ro), "explicit has ro should be preserved");
+
+        assert!(model.methods.iter().any(|m| m.name == "greet"), "sub greet should be tracked");
+    }
+
+    #[test]
+    fn class_tiny_has_framework_returns_true() {
+        let models = build_models(
+            r#"
+package MyApp::Tiny;
+use Class::Tiny qw(x y);
+"#,
+        );
+        let model = must_some(find_model(&models, "MyApp::Tiny"));
+        assert!(model.has_framework(), "Class::Tiny is a framework");
     }
 }
