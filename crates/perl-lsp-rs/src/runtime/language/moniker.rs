@@ -78,7 +78,7 @@ impl LspServer {
 
                         // For subroutines in packages with base/parent,
                         // add monikers pointing to potential parent definitions
-                        if key.kind == crate::workspace_index::SymKind::Sub {
+                        if key.kind == perl_parser::index::SymKind::Sub {
                             for parent_pkg in Self::find_base_parents(ast) {
                                 let parent_id =
                                     format!("{}.{}", parent_pkg.replace("::", "."), key.name);
@@ -105,7 +105,7 @@ impl LspServer {
         &self,
         ast: &crate::ast::Node,
         text: &str,
-        key: &crate::workspace_index::SymbolKey,
+        key: &perl_parser::index::SymbolKey,
     ) -> (&'static str, &'static str) {
         // Check if symbol is exported via @EXPORT or @EXPORT_OK (AST-first, regex fallback)
         let uses_exporter = Self::has_use_exporter(ast);
@@ -126,8 +126,8 @@ impl LspServer {
 
         // Determine uniqueness
         let unique = match key.kind {
-            crate::workspace_index::SymKind::Pack => "global",
-            crate::workspace_index::SymKind::Sub => {
+            perl_parser::index::SymKind::Pack => "global",
+            perl_parser::index::SymKind::Sub => {
                 if is_exported {
                     "global"
                 } else if uses_exporter && key.pkg.as_ref() != "main" {
@@ -139,8 +139,12 @@ impl LspServer {
                     "document"
                 }
             }
-            crate::workspace_index::SymKind::Var => {
-                if self.is_our_variable(ast, &key.name, key.sigil) { "project" } else { "document" }
+            perl_parser::index::SymKind::Var => {
+                if self.is_our_variable(ast, &key.name, key.sigil) {
+                    "project"
+                } else {
+                    "document"
+                }
             }
         };
 
