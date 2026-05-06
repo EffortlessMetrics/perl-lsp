@@ -267,6 +267,9 @@ impl<'a> Parser<'a> {
                     | "chroot"
                     | "utime"
                     | "umask"
+                    // `pos` is an lvalue-capable optional-arg builtin; `pos $s = value`
+                    // must not be treated as an indirect method call.
+                    | "pos"
             )
         {
             if let Ok(next) = self.tokens.peek_second() {
@@ -510,7 +513,19 @@ impl<'a> Parser<'a> {
             let mut variables = Vec::new();
 
             while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                let var = self.parse_variable()?;
+                // `undef` is valid as a throw-away placeholder in list
+                // destructuring: my ($a, undef, $b) = func();
+                // This also covers the nested form:
+                //   (my ($a, $b, undef), $c) = func();
+                let var = if self.peek_kind() == Some(TokenKind::Undef) {
+                    let undef_token = self.consume_token()?;
+                    Node::new(
+                        NodeKind::Undef,
+                        SourceLocation { start: undef_token.start, end: undef_token.end },
+                    )
+                } else {
+                    self.parse_variable()?
+                };
                 variables.push(var);
 
                 if self.peek_kind() == Some(TokenKind::Comma) {
