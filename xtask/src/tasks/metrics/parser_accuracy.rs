@@ -4116,7 +4116,6 @@ fn provider_impact_metrics(
         "provider_references_precision",
         "provider_references_recall",
         "provider_hover_symbol_origin_accuracy",
-        "provider_completion_visible_symbol_relevance",
         "provider_rename_safe_edit_accuracy",
         "provider_safe_delete_blocker_accuracy",
         "provider_diagnostic_false_positive_rate",
@@ -4156,6 +4155,16 @@ fn provider_impact_metrics(
             ),
             method_completion_score.relevance_assertion_count,
             "no method-completion visible-symbol assertions are available",
+            cadence,
+        ),
+        optional_measured_rate(
+            "provider_completion_visible_symbol_relevance",
+            ratio(
+                method_completion_score.relevance_assertion_correct_count,
+                method_completion_score.relevance_assertion_count,
+            ),
+            method_completion_score.relevance_assertion_count,
+            "no provider completion visible-symbol assertions are available",
             cadence,
         ),
         optional_measured_rate(
@@ -5984,6 +5993,21 @@ sub dynamic_boundary_case {
             false_receiver,
             MetricRow::Measured { value, sample_count: 2, .. }
                 if (*value - 0.0).abs() < f64::EPSILON
+        ));
+        let visible_symbol_relevance = metrics
+            .iter()
+            .find(|metric| {
+                matches!(
+                    metric,
+                    MetricRow::Measured { metric, .. }
+                        if metric == "provider_completion_visible_symbol_relevance"
+                )
+            })
+            .ok_or_else(|| eyre!("provider completion visible-symbol row should be measured"))?;
+        assert!(matches!(
+            visible_symbol_relevance,
+            MetricRow::Measured { value, sample_count: 9, .. }
+                if (*value - 1.0).abs() < f64::EPSILON
         ));
         let import_visibility = metrics
             .iter()
