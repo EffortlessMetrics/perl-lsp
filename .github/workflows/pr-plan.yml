@@ -19,7 +19,10 @@ on:
 
 concurrency:
   group: pr-plan-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Only cancel on synchronize so label add/remove events re-run the plan
+  # without cancelling an in-progress run. Required by workflow-policy-lint
+  # rule LABEL_EVENT_CANCELS_PR_RUN.
+  cancel-in-progress: ${{ github.event.action == 'synchronize' }}
 
 permissions:
   contents: read

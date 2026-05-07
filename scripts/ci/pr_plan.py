@@ -130,21 +130,14 @@ def select_lanes(
         if "docs_gate" in lanes:
             selected_ids.add("docs_gate")
     else:
-        # Default Rust gates always selected for non-docs PRs.
-        for lane_id in (
-            "draft_guard",
-            "preflight_latest",
-            "conflict_markers",
-            "pr_smoke",
-            "merge_gate_shards",
-            "merge_gate_aggregate",
-        ):
-            if lane_id in lanes:
+        # Drive default-PR lanes from policy/ci-lanes.toml's `default_pr = true`
+        # flag rather than hardcoding a list. This keeps the policy file as the
+        # single source of truth: any lane added to ci-lanes.toml with
+        # default_pr = true is automatically picked up.
+        # `docs_gate` is excluded because it is handled by the docs-only branch.
+        for lane_id, lane in lanes.items():
+            if lane.get("default_pr") and lane_id != "docs_gate":
                 selected_ids.add(lane_id)
-
-    # PR Plan itself always runs.
-    if "pr_plan" in lanes:
-        selected_ids.add("pr_plan")
 
     # Add lanes from selected risk packs.
     for pack_id in risk_pack_ids:
