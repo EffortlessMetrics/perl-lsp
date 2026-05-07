@@ -3733,7 +3733,9 @@ fn extract_symbol_predictions_with_insert_timing(
     let shard = index.file_fact_shard(&source_path_text).ok_or_else(|| {
         eyre!("missing canonical fact shard for parser accuracy fixture {}", source_path.display())
     })?;
-    Ok((symbol_predictions_from_shard(source, &shard), workspace_insert_ms))
+    let mut predictions = symbol_predictions_from_shard(source, &shard);
+    add_export_occurrence_predictions(source, &mut predictions);
+    Ok((predictions, workspace_insert_ms))
 }
 
 fn symbol_predictions_from_shard(source: &str, shard: &FileFactShard) -> SymbolPredictions {
@@ -3809,6 +3811,105 @@ fn symbol_predictions_from_shard(source: &str, shard: &FileFactShard) -> SymbolP
         .collect();
 
     SymbolPredictions { entities, occurrences, safety_spans, edges }
+}
+
+fn add_export_occurrence_predictions(source: &str, predictions: &mut SymbolPredictions) {
+    let mut current_package = None;
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if let Some(package) = package_decl_name(trimmed) {
+            current_package = Some(package.to_string());
+        }
+        if !(trimmed.contains("@EXPORT") || trimmed.contains("@EXPORT_OK")) {
+            continue;
+        }
+        let Some(package) = current_package.as_deref() else {
+            continue;
+        };
+        for export_name in qw_names(trimmed) {
+            predictions.occurrences.insert(SymbolOccurrenceKey {
+                kind: "Export".to_string(),
+                canonical_name: Some(format!("{package}::{export_name}")),
+                span_text: export_name.to_string(),
+                package: Some(package.to_string()),
+                scope: None,
+                provenance: "ImportExportInference".to_string(),
+                confidence: "Medium".to_string(),
+            });
+        }
+    }
+}
+
+fn package_decl_name(line: &str) -> Option<&str> {
+    let rest = line.strip_prefix("package ")?;
+    let end = rest
+        .find(|ch: char| ch.is_ascii_whitespace() || matches!(ch, ';' | '{'))
+        .unwrap_or(rest.len());
+    if end == 0 { None } else { rest.get(..end) }
+}
+
+fn qw_names(line: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut cursor = 0;
+    while let Some(relative_start) = line.get(cursor..).and_then(|text| text.find("qw")) {
+        let qw_start = cursor + relative_start;
+        let after_qw = qw_start + "qw".len();
+        let Some((open_index, open, close)) = qw_delimiter(line, after_qw) else {
+            cursor = after_qw;
+            continue;
+        };
+        let content_start = open_index + open.len_utf8();
+        let Some(close_index) = matching_qw_close(line, content_start, open, close) else {
+            cursor = content_start;
+            continue;
+        };
+        if let Some(content) = line.get(content_start..close_index) {
+            names.extend(
+                content.split_whitespace().filter(|name| !name.is_empty()).map(str::to_owned),
+            );
+        }
+        cursor = close_index + close.len_utf8();
+    }
+    names
+}
+
+fn qw_delimiter(line: &str, after_qw: usize) -> Option<(usize, char, char)> {
+    let rest = line.get(after_qw..)?;
+    let (offset, open) = rest.char_indices().find(|(_, ch)| !ch.is_ascii_whitespace())?;
+    let close = match open {
+        '(' => ')',
+        '[' => ']',
+        '{' => '}',
+        '<' => '>',
+        _ => return None,
+    };
+    Some((after_qw + offset, open, close))
+}
+
+fn matching_qw_close(line: &str, content_start: usize, open: char, close: char) -> Option<usize> {
+    let mut depth = 1usize;
+    let mut escaped = false;
+    for (relative_index, ch) in line.get(content_start..)?.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        if ch == open {
+            depth += 1;
+            continue;
+        }
+        if ch == close {
+            depth = depth.saturating_sub(1);
+            if depth == 0 {
+                return Some(content_start + relative_index);
+            }
+        }
+    }
+    None
 }
 
 fn parser_accuracy_entity_kind(
@@ -7798,6 +7899,66 @@ sub dynamic_boundary_case {
 
         assert_eq!(parser_accuracy_entity_kind("", &role_method, None), "RoleMethod");
         assert_eq!(parser_accuracy_entity_kind("", &consumer_method, None), "Subroutine");
+    }
+
+    #[test]
+    fn scorecard_export_projection_collects_qw_export_names() {
+        let source = concat!(
+            "package Accuracy::Exports;\n",
+            "our @EXPORT_OK = qw(answer helper);\n",
+            "package Accuracy::Consumer;\n",
+        );
+        let mut predictions = SymbolPredictions::default();
+
+        add_export_occurrence_predictions(source, &mut predictions);
+
+        assert!(predictions.occurrences.contains(&SymbolOccurrenceKey {
+            kind: "Export".to_string(),
+            canonical_name: Some("Accuracy::Exports::answer".to_string()),
+            span_text: "answer".to_string(),
+            package: Some("Accuracy::Exports".to_string()),
+            scope: None,
+            provenance: "ImportExportInference".to_string(),
+            confidence: "Medium".to_string(),
+        }));
+        assert!(predictions.occurrences.contains(&SymbolOccurrenceKey {
+            kind: "Export".to_string(),
+            canonical_name: Some("Accuracy::Exports::helper".to_string()),
+            span_text: "helper".to_string(),
+            package: Some("Accuracy::Exports".to_string()),
+            scope: None,
+            provenance: "ImportExportInference".to_string(),
+            confidence: "Medium".to_string(),
+        }));
+    }
+
+    #[test]
+    fn qw_names_supports_multiple_delimiters_and_occurrences() {
+        assert_eq!(
+            qw_names("our @EXPORT_OK = qw(one two); our @EXPORT = qw[three four];"),
+            vec!["one".to_string(), "two".to_string(), "three".to_string(), "four".to_string(),]
+        );
+        assert_eq!(
+            qw_names("our @EXPORT_OK = qw{one two}; our @EXPORT = qw<three four>;"),
+            vec!["one".to_string(), "two".to_string(), "three".to_string(), "four".to_string(),]
+        );
+    }
+
+    #[test]
+    fn qw_names_balances_nested_paired_delimiters() {
+        assert_eq!(
+            qw_names("our @EXPORT_OK = qw(foo(bar) baz);"),
+            vec!["foo(bar)".to_string(), "baz".to_string()]
+        );
+    }
+
+    #[test]
+    fn qw_names_handles_empty_and_whitespace_bodies() {
+        assert_eq!(
+            qw_names("our @EXPORT_OK = qw(  answer   helper  );"),
+            vec!["answer".to_string(), "helper".to_string()]
+        );
+        assert!(qw_names("our @EXPORT_OK = qw();").is_empty());
     }
 
     #[test]
