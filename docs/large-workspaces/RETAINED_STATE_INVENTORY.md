@@ -84,7 +84,7 @@ hard to interpret; focused scenarios make the owner obvious.
 | `hover_pod_many_modules` | POD cache cap and path eviction | Unit retained-state coverage |
 | `completion_stream_cancel_storm` | Stream-session cancellation and removal | Unit regression coverage |
 | `file_watcher_bulk_create_change_delete` | Watcher debouncer and delete lifecycle | Unit retained-state coverage |
-| `workspace_folder_add_remove_multi_root` | Folder-scoped cleanup without cross-root eviction | Unit coverage, add process scenario if needed |
+| `workspace_folder_add_remove_multi_root` | Folder-scoped cleanup without cross-root eviction | Unit coverage |
 | `dap_bridge_start_stop_loop` | Debug process/session lifecycle | Unit retained-process coverage |
 | `formatting_perltidy_loop` | Subprocess and output-buffer retention | Unit retained-state coverage |
 
