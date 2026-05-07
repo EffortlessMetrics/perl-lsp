@@ -24,7 +24,7 @@ replace the conveyor — it adds the missing economics layer.
 | 07 | PR Plan: `ripr` + LEM wiring | Make planner aware of `ripr` and risk packs. |
 | 08 | `ci-actuals` | Convert receipts into cost telemetry. |
 | 09 | LEM in gate policy | Cross-reference `.ci/gate-policy.yaml` with lane economics. |
-| 10 | Risk-pack routing metadata | Parser/LSP/workspace/DAP/security/memory risk packs. |
+| 10 | Risk-pack routing metadata | Parser/LSP/workspace/DAP/security/memory/policy/workflow risk packs. See [risk-packs.md](risk-packs.md). |
 | 11 | Workflow policy lint | Lint workflows against `policy/ci-lane-whitelist.toml`. |
 | 12 | `xtask ci plan` | Move PR Plan from Python to Rust. |
 | 13 | Soft LEM warnings | Warn above 35 / 75 LEM, hard guard above 125. |

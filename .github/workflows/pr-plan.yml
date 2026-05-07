@@ -45,6 +45,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Validate risk-pack policy
+        # Sub-second sanity check: policy/ci-risk-packs.toml parses, every
+        # referenced lane exists in policy/ci-lanes.toml, and pack ids are
+        # snake_case. Catches policy drift before the planner consumes the
+        # broken file. See docs/ci/risk-packs.md.
+        run: |
+          python3 scripts/ci/validate_risk_packs.py \
+            --risk-packs policy/ci-risk-packs.toml \
+            --lanes policy/ci-lanes.toml
+
       - name: Compute PR Plan
         # continue-on-error so the artifact upload step still runs even when
         # the budget guard returns exit 2 (over hard ceiling, no override).
