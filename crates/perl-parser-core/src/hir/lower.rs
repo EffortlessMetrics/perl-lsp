@@ -1,0 +1,167 @@
+//! AST-to-HIR lowering.
+
+use crate::{Node, NodeKind, SourceLocation};
+
+use super::model::{
+    AstAnchor, HirFile, HirId, HirItem, HirKind, MethodDecl, PackageDecl, RecoveryConfidence,
+    RequireDecl, SubDecl, UseDecl,
+};
+
+/// Lower a parser AST into first-slice HIR items.
+///
+/// This is intentionally conservative: it emits only package, subroutine,
+/// method, use, and require items, and it does not perform scope, stash, import,
+/// or provider behavior changes.
+pub fn lower_ast(ast: &Node) -> HirFile {
+    let mut lowerer = Lowerer::default();
+    lowerer.visit(ast, RecoveryConfidence::Parsed);
+    lowerer.finish()
+}
+
+#[derive(Default)]
+struct Lowerer {
+    items: Vec<HirItem>,
+    next_id: u32,
+    package_context: Option<String>,
+}
+
+impl Lowerer {
+    fn finish(self) -> HirFile {
+        HirFile { items: self.items }
+    }
+
+    fn visit(&mut self, node: &Node, confidence: RecoveryConfidence) {
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for statement in statements {
+                    self.visit(statement, confidence);
+                }
+            }
+            NodeKind::Package { name, name_span, block } => {
+                self.push_item(
+                    node,
+                    Some(*name_span),
+                    confidence,
+                    HirKind::PackageDecl(PackageDecl {
+                        name: name.clone(),
+                        name_range: *name_span,
+                        has_block: block.is_some(),
+                    }),
+                    Some(name.clone()),
+                );
+
+                if let Some(block) = block {
+                    let previous_package = self.package_context.replace(name.clone());
+                    self.visit(block, confidence);
+                    self.package_context = previous_package;
+                } else {
+                    self.package_context = Some(name.clone());
+                }
+            }
+            NodeKind::Subroutine { name, name_span, prototype, signature, attributes, .. } => {
+                self.push_item(
+                    node,
+                    *name_span,
+                    confidence,
+                    HirKind::SubDecl(SubDecl {
+                        name: name.clone(),
+                        name_range: *name_span,
+                        has_prototype: prototype.is_some(),
+                        has_signature: signature.is_some(),
+                        attribute_count: attributes.len(),
+                    }),
+                    self.package_context.clone(),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::Method { name, signature, attributes, .. } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::MethodDecl(MethodDecl {
+                        name: name.clone(),
+                        has_signature: signature.is_some(),
+                        attribute_count: attributes.len(),
+                    }),
+                    self.package_context.clone(),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::Use { module, args, has_filter_risk } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::UseDecl(UseDecl {
+                        module: module.clone(),
+                        args: args.clone(),
+                        has_filter_risk: *has_filter_risk,
+                    }),
+                    self.package_context.clone(),
+                );
+            }
+            NodeKind::FunctionCall { name, args } if name == "require" => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::RequireDecl(RequireDecl {
+                        target: require_target(args.first()),
+                        arg_count: args.len(),
+                    }),
+                    self.package_context.clone(),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::Error { partial: Some(partial), .. } => {
+                self.visit(partial, RecoveryConfidence::Recovered);
+            }
+            NodeKind::Error { partial: None, .. }
+            | NodeKind::MissingExpression
+            | NodeKind::MissingStatement
+            | NodeKind::MissingIdentifier
+            | NodeKind::MissingBlock
+            | NodeKind::UnknownRest => {}
+            _ => self.visit_children(node, confidence),
+        }
+    }
+
+    fn visit_children(&mut self, node: &Node, confidence: RecoveryConfidence) {
+        node.for_each_child(|child| self.visit(child, confidence));
+    }
+
+    fn push_item(
+        &mut self,
+        node: &Node,
+        name_range: Option<SourceLocation>,
+        recovery_confidence: RecoveryConfidence,
+        kind: HirKind,
+        package_context: Option<String>,
+    ) {
+        let id = HirId::from_index(self.next_id);
+        self.next_id += 1;
+        self.items.push(HirItem {
+            id,
+            kind,
+            range: node.location,
+            anchor: AstAnchor {
+                node_kind: node.kind.kind_name(),
+                range: node.location,
+                name_range,
+            },
+            recovery_confidence,
+            package_context,
+            scope_context: None,
+        });
+    }
+}
+
+fn require_target(argument: Option<&Node>) -> Option<String> {
+    match argument.map(|node| &node.kind) {
+        Some(NodeKind::Identifier { name })
+        | Some(NodeKind::String { value: name, .. })
+        | Some(NodeKind::Typeglob { name }) => Some(name.clone()),
+        _ => None,
+    }
+}

@@ -89,6 +89,8 @@
 pub use perl_lexer::builtins;
 /// Parser engine components and supporting utilities.
 pub mod engine;
+/// Normalized high-level constructs lowered from the parser AST.
+pub mod hir;
 /// Syntax-level types absorbed from Wave D satellite crates.
 pub mod syntax;
 /// Token stream and trivia utilities for the parser.
