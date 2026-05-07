@@ -60,7 +60,6 @@ CI hasn't broken since their last look).
 | `merge-gate` | 2 min | Aggregates shard results into the required merge-blocking status |
 | `ux-tests` | 15 min | UX regression suite against live binary |
 | `check-all-targets` | 10 min | `cargo check --workspace --all-targets` (bit-rot guard) |
-| `linux-windows-compile-shape` | 10 min | `cargo check --target x86_64-pc-windows-msvc --lib` for sandbox/module/workspace crates (cheap Windows cfg-shape check on Linux) |
 | `windows-scope` | 5 min | Diff classifier: decides whether the native Windows canary (and full guardrails) need to run for this PR |
 | `windows-canary` | 15 min | Native Windows runner that proves the Windows-only sandbox dispatch path is wired. Conditional on `windows-scope.required=true` |
 | `windows-required` | 2 min | Ubuntu aggregator consumed by `merge-gate` — succeeds when canary isn't required, fails when canary is required and didn't pass, fails closed if `windows-scope` errored |
@@ -549,26 +548,32 @@ Windows is treated as a scarce platform canary plus a periodic full-platform soa
 not a full proof lane on every PR. The merge-blocking path used to wait on the
 entire `windows-guardrails` matrix on `windows-latest`; the 2026-04-25 failure
 catalog showed the sandbox lane had only ~6% headroom over master runtime, so
-that arrangement was reorganized into five jobs.
+that arrangement was reorganized into four jobs.
+
+A Linux cross-target compile-shape check (`cargo check --target
+x86_64-pc-windows-msvc`) was considered but dropped: the workspace contains
+build scripts that invoke `cc` for the MSVC target, which require `lib.exe`
+and `cl.exe` and don't cross-compile cleanly from Linux. Generic compile
+bit-rot is covered by `check-all-targets`; Windows-specific compile coverage
+lives in `windows-canary` (small) and `windows-full-guardrails` (full).
 
 **Current shape:**
 
 | Job | Runner | Role | Merge-gate dependency? |
 |-----|--------|------|------------------------|
-| `linux-windows-compile-shape` | ubuntu-24.04 | `cargo check --target x86_64-pc-windows-msvc --lib` for `perl-module`, `perl-lsp-rs`, `perl-workspace`. Catches most `#[cfg(windows)]` type/compile mistakes cheaply. | Yes |
-| `windows-scope` | ubuntu-24.04 | Diff classifier. Sets `required=true` when the diff touches sandbox/module/workspace/URI code or generic path/uri/module names. Sets `full=true` on toolchain/lockfile/workflow changes or non-PR events. | (input to others) |
+| `windows-scope` | ubuntu-24.04 | Diff classifier. Sets `required=true` when the diff touches sandbox/module/workspace/URI code or basenames containing `path`, `uri`, `module`, `workspace-folder`, `file_uri`. Sets `full=true` on toolchain/lockfile/workflow changes or non-PR events. | (input to others) |
 | `windows-canary` | windows-latest | Tiny native dispatch canary — currently `test_windows_sandbox_fails_closed` via `cargo test --lib`. Runs only when `windows-scope.required=true`. | (covered via aggregator) |
-| `windows-required` | ubuntu-24.04 | Aggregator consumed by `merge-gate`. Always runs (never skipped); succeeds when the canary isn't needed; fails when the canary was required and didn't pass; fails closed if `windows-scope` itself errored. The "skipped required check" antipattern is avoided by `merge-gate` (which is the actual branch-protection target via the `ci/merge-gate` commit status). | Yes |
+| `windows-required` | ubuntu-24.04 | Aggregator consumed by `merge-gate`. Skipped together with the rest of CI on draft PRs / superseded SHAs; otherwise succeeds when the canary isn't needed; fails when the canary was required and didn't pass; fails closed if `windows-scope` itself errored. Branch protection points at `ci/merge-gate` (not at this job directly). | Yes |
 | `windows-full-guardrails` | windows-latest | Old broad Windows matrix (`compile`, `module-separator-regressions`, `sandbox-fail-closed`). Runs on push to master, manual dispatch, and PRs flagged `full=true`. (Nightly Windows soak runs are owned by `ci-nightly.yml`.) | No (advisory / risk-triggered) |
 
 **Why this shape:**
 
-- The merge-blocking path now pays for a Linux cross-target compile check on every
-  PR plus a tiny native canary on Windows-relevant PRs, instead of the full broad
-  Windows matrix on every PR.
-- Linux owns the platform policy assertions (sandbox fail-closed message shape,
-  string-fixture path normalization). Windows owns wiring proof — that the
-  `#[cfg(target_os = "windows")]` branch is actually reached.
+- The merge-blocking path now pays for a cheap Ubuntu diff classifier on every
+  PR plus a tiny native canary on Windows-relevant PRs, instead of the full
+  broad Windows matrix on every PR.
+- Linux owns generic compile coverage via `check-all-targets`; Windows owns
+  wiring proof — that the `#[cfg(target_os = "windows")]` branch is actually
+  reached, currently the sandbox fail-closed test.
 - Full Windows coverage still runs, but on master, manual dispatch, and
   high-risk PRs (toolchain/lockfile/workflow) — not on every normal PR.
   Nightly Windows soak coverage lives in `ci-nightly.yml`.

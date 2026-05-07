@@ -367,7 +367,6 @@ jobs:
       - conflict-markers
       - check-all-targets
       - ux-tests
-      - linux-windows-compile-shape
       - windows-required
       - merge-gate-shards
     if: always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
@@ -705,41 +704,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # ── Linux Windows compile-shape: cheap cross-target check ────────────
-  # Catches most #[cfg(windows)] type/compile mistakes on a Linux runner so
-  # the slow native Windows lane stops being the universal merge blocker.
-  linux-windows-compile-shape:
-    name: Linux Windows compile-shape
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    needs: [draft-pr-check, preflight-latest-check]
-    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
-        with:
-          toolchain: 1.93.1
-          targets: x86_64-pc-windows-msvc
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-          shared-key: ci-linux-windows-shape-${{ hashFiles('Cargo.lock') }}
-
-      - name: Check Windows cfg shape from Linux
-        run: |
-          cargo check --locked --target x86_64-pc-windows-msvc \
-            -p perl-module \
-            -p perl-lsp-rs \
-            -p perl-workspace \
-            --lib
-
   # ── Windows scope: decide whether the native Windows canary is needed ─
   # Cheap Ubuntu job that diffs against master and decides whether the
   # diff plausibly affects Windows-specific behavior. Default for normal
@@ -853,16 +817,17 @@ jobs:
             -- --exact
 
   # ── Windows Required: Ubuntu aggregator consumed by merge-gate ──────
-  # Always runs (never skipped). Succeeds when the canary isn't needed,
-  # fails when the canary was required but didn't pass, and fails closed
-  # if windows-scope itself errored out (so a broken scope doesn't slip
-  # through as a green required check).
+  # Skipped together with the rest of CI on draft PRs / superseded SHAs
+  # (same gate as merge-gate). Otherwise always runs: succeeds when the
+  # canary isn't needed, fails when the canary was required but didn't
+  # pass, and fails closed if windows-scope itself errored out (so a
+  # broken scope doesn't slip through as a green required check).
   windows-required:
     name: Windows Required
     runs-on: ubuntu-24.04
     timeout-minutes: 2
-    needs: [windows-scope, windows-canary]
-    if: always()
+    needs: [draft-pr-check, preflight-latest-check, windows-scope, windows-canary]
+    if: always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
       - name: Summarize Windows requirement
         shell: bash
