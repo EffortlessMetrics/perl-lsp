@@ -24,7 +24,7 @@
 
 Clean reviews (no actionable findings) must include:
 
-```
+```text
 No actionable findings emitted.
 
 Inspected surfaces:

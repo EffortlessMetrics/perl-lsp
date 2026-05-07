@@ -46,7 +46,7 @@ Every Monday at 08:00 UTC:
 
 When Droid finds no actionable issues, it posts:
 
-```
+```text
 No actionable findings emitted.
 
 Inspected surfaces:
@@ -74,7 +74,7 @@ Validation signal:
 
 When Droid finds issues, it uses:
 
-```
+```text
 [P0|P1|P2] Short title
 
 Failure mode:

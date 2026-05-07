@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$HOME/.factory"
-          cat > "$HOME/.factory/settings.local.json" <<'JSON'
+          cat > "$HOME/.factory/settings.local.json" <<JSON
           {
             "customModels": [
               {
