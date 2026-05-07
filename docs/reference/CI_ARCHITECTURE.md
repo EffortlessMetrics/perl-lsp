@@ -64,7 +64,7 @@ CI hasn't broken since their last look).
 | `windows-scope` | 5 min | Diff classifier: decides whether the native Windows canary (and full guardrails) need to run for this PR |
 | `windows-canary` | 15 min | Native Windows runner that proves the Windows-only sandbox dispatch path is wired. Conditional on `windows-scope.required=true` |
 | `windows-required` | 2 min | Ubuntu aggregator for branch protection — succeeds when canary isn't required, fails when canary is required and didn't pass |
-| `windows-full-guardrails` | 35 min | Old broad Windows matrix (compile / module-separator / sandbox). Runs on push to master, schedule, manual dispatch, or PRs that change toolchain/lockfile/workflows. **Not** a merge-gate dependency for normal PRs |
+| `windows-full-guardrails` | 35 min | Old broad Windows matrix (compile / module-separator / sandbox). Runs on push to master, manual dispatch, or PRs that change toolchain/lockfile/workflows. **Not** a merge-gate dependency for normal PRs |
 
 **Scoping within Frontdoor Proof**: The pr-smoke job uses `cargo xtask ci-scope` to
 classify the diff and select scoped lanes. This is "scoped-deep" CI — narrow to the blast
@@ -559,7 +559,7 @@ that arrangement was reorganized into five jobs.
 | `windows-scope` | ubuntu-24.04 | Diff classifier. Sets `required=true` when the diff touches sandbox/module/workspace/URI code or generic path/uri/module names. Sets `full=true` on toolchain/lockfile/workflow changes or non-PR events. | (input to others) |
 | `windows-canary` | windows-latest | Tiny native dispatch canary — currently `test_windows_sandbox_fails_closed` via `cargo test --lib`. Runs only when `windows-scope.required=true`. | (covered via aggregator) |
 | `windows-required` | ubuntu-24.04 | Aggregator that branch protection points at. Always present; succeeds when canary isn't needed; fails when canary was required and didn't pass. Avoids the "skipped required check" antipattern. | Yes |
-| `windows-full-guardrails` | windows-latest | Old broad Windows matrix (`compile`, `module-separator-regressions`, `sandbox-fail-closed`). Runs on push to master, schedule, manual dispatch, and PRs flagged `full=true`. | No (advisory / risk-triggered) |
+| `windows-full-guardrails` | windows-latest | Old broad Windows matrix (`compile`, `module-separator-regressions`, `sandbox-fail-closed`). Runs on push to master, manual dispatch, and PRs flagged `full=true`. (Nightly Windows soak runs are owned by `ci-nightly.yml`.) | No (advisory / risk-triggered) |
 
 **Why this shape:**
 
@@ -569,8 +569,9 @@ that arrangement was reorganized into five jobs.
 - Linux owns the platform policy assertions (sandbox fail-closed message shape,
   string-fixture path normalization). Windows owns wiring proof — that the
   `#[cfg(target_os = "windows")]` branch is actually reached.
-- Full Windows coverage still runs, but on master, nightly, manual dispatch, and
+- Full Windows coverage still runs, but on master, manual dispatch, and
   high-risk PRs (toolchain/lockfile/workflow) — not on every normal PR.
+  Nightly Windows soak coverage lives in `ci-nightly.yml`.
 
 **Known failure pattern** (see `feedback_xtask_fmt_false_cascade.md` in MEMORY.md): The
 `Compile + PR Smoke + Windows Full Guardrails (module-separator-regressions)` triple-failure

@@ -876,12 +876,13 @@ jobs:
           echo "::error::Windows canary required but result was: $result"
           exit 1
 
-  # ── Windows Full Guardrails: advisory / risk-triggered / nightly ─────
-  # The old broad Windows matrix. Runs on push to master, schedule,
-  # manual dispatch, and PRs that windows-scope flagged as full=true
+  # ── Windows Full Guardrails: advisory / risk-triggered ──────────────
+  # The old broad Windows matrix. Runs on push to master, manual
+  # dispatch, and PRs that windows-scope flagged as full=true
   # (workflow/toolchain/lockfile changes). Not a merge-gate dependency
   # for normal PRs — the cheap Linux cross-target check + windows-canary
   # cover the universal slow lane, and this lane catches the rest.
+  # (Nightly Windows soak runs are owned by ci-nightly.yml, not here.)
   windows-full-guardrails:
     name: Windows Full Guardrails (${{ matrix.lane.name }})
     runs-on: windows-latest
