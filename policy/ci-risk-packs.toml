@@ -17,15 +17,23 @@ updated = "2026-05-07"
 # Parser risk: parser, lexer, token, AST, tree-sitter, parser-core changes.
 # -----------------------------------------------------------------------------
 [risk_pack.parser]
-description = "Parser, lexer, token, AST, tree-sitter, and parser-core changes."
+description = "Parser, lexer, token, AST, tree-sitter, parser-core, incremental parsing, line index, position tracking, POD, pragma, and regex changes."
 paths = [
   "crates/perl-parser/**",
   "crates/perl-parser-core/**",
   "crates/perl-parser-pest/**",
+  "crates/perl-parser-bench/**",
+  "crates/perl-incremental-parsing/**",
   "crates/perl-lexer/**",
   "crates/perl-token/**",
   "crates/perl-ast/**",
   "crates/perl-ast-v2/**",
+  "crates/perl-line-index/**",
+  "crates/perl-position-tracking/**",
+  "crates/perl-pod/**",
+  "crates/perl-pragma/**",
+  "crates/perl-regex/**",
+  "crates/tree-sitter-perl/**",
   "crates/tree-sitter-perl-c/**",
   "crates/tree-sitter-perl-rs/**",
 ]
@@ -37,11 +45,17 @@ labels = ["ci:parser", "ci:mutation", "ci:coverage"]
 # LSP provider risk: LSP, completion, diagnostics, navigation, code action.
 # -----------------------------------------------------------------------------
 [risk_pack.lsp_provider]
-description = "LSP provider, protocol, completion, diagnostics, navigation, and code action changes."
+description = "LSP server, providers (completion, diagnostics, navigation, refactoring), perltidy integration, dead-code analysis, and UX regression coverage changes."
 paths = [
   "crates/perl-lsp-rs/**",
   "crates/perl-lsp-rs-core/**",
+  "crates/perl-lsp-perltidy/**",
+  "crates/perl-lsp-ux-tests/**",
+  "crates/perl-diagnostics/**",
+  "crates/perl-refactoring/**",
+  "crates/perl-dead-code/**",
   "crates/perllsp/**",
+  "features.toml",
 ]
 lanes = ["pr_smoke", "merge_gate_shards", "ux_tests", "ripr_advisory"]
 deep_lanes = ["real_repo_latency", "vscode_smoke_matrix"]
@@ -51,13 +65,14 @@ labels = ["ci:ux", "ci:real-repo-latency"]
 # Workspace / index risk: module resolution, semantic facts, indexing.
 # -----------------------------------------------------------------------------
 [risk_pack.workspace_index]
-description = "Workspace, module resolution, semantic facts, indexing, and symbol resolution."
+description = "Workspace, module resolution, semantic facts, indexing, symbol resolution, and corpus changes."
 paths = [
   "crates/perl-workspace/**",
   "crates/perl-module/**",
   "crates/perl-semantic-analyzer/**",
   "crates/perl-semantic-facts/**",
   "crates/perl-symbol/**",
+  "crates/perl-corpus/**",
 ]
 lanes = ["merge_gate_shards", "lsp_memory_smoke", "windows_guardrails", "ripr_advisory"]
 deep_lanes = ["memory_plateau", "real_repo_latency"]
@@ -68,11 +83,12 @@ labels = ["ci:memory", "ci:bench"]
 # Pairs with the PR template "Retained State" checklist.
 # -----------------------------------------------------------------------------
 [risk_pack.retained_state]
-description = "Long-lived maps, caches, queues, background tasks, sessions, document lifecycle, subprocess state."
+description = "Long-lived maps, caches, queues, background tasks, sessions, document lifecycle, subprocess state, and workspace-folder lifecycle changes."
 paths = [
   "crates/perl-lsp-rs/src/runtime/**",
   "crates/perl-lsp-rs-core/**",
   "crates/perl-workspace/**",
+  "crates/perl-subprocess-runtime/**",
 ]
 keywords = [
   "cache",
@@ -95,11 +111,13 @@ labels = ["ci:memory"]
 # DAP risk
 # -----------------------------------------------------------------------------
 [risk_pack.dap]
-description = "Debug adapter protocol, breakpoints, stepping, variables, evaluate, launch/attach."
+description = "Debug adapter protocol, breakpoints, stepping, variables, evaluate, launch/attach, and DAP session lifecycle changes."
 paths = [
   "crates/perl-dap/**",
 ]
-lanes = ["merge_gate_shards", "ux_tests", "ripr_advisory"]
+# DAP retains per-session state (stack frames, variable scopes, breakpoint
+# maps); memory smoke applies to it like the LSP runtime.
+lanes = ["merge_gate_shards", "ux_tests", "lsp_memory_smoke", "ripr_advisory"]
 deep_lanes = []
 labels = ["ci:dap"]
 
@@ -216,7 +234,11 @@ paths = [
   "Cargo.toml",
   "Cargo.lock",
   "rust-toolchain.toml",
+  "rust-toolchain",
   ".cargo/**",
+  "crates/*/Cargo.toml",
+  "xtask/Cargo.toml",
+  "deny.toml",
 ]
 lanes = ["pr_smoke", "merge_gate_shards", "security_audit"]
 deep_lanes = ["release_check"]
