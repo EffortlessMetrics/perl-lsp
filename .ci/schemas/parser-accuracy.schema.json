@@ -486,6 +486,9 @@
         },
         "cache_sample_count": {
           "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "peak_rss_mb": {
+          "$ref": "#/$defs/nonNegativeNumber"
         }
       }
     }

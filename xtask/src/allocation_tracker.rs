@@ -21,6 +21,12 @@ pub(crate) struct AllocationMeasurement {
     pub(crate) peak_delta_bytes: u64,
 }
 
+impl AllocationMeasurement {
+    pub(crate) fn peak_delta_mb(&self) -> f64 {
+        bytes_to_mb(self.peak_delta_bytes)
+    }
+}
+
 struct TrackingAllocator;
 
 pub(crate) fn measure_allocations<F, R>(operation: F) -> (R, AllocationMeasurement)
