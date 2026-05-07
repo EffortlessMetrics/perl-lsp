@@ -748,6 +748,270 @@ mod tests {
         commands.iter().map(|proof| proof.command.clone()).collect()
     }
 
+    fn surface_strings(plan: &Plan) -> Vec<String> {
+        plan.surfaces.iter().map(|surface| surface.id().to_string()).collect()
+    }
+
+    struct DevexRoutingFixture {
+        name: &'static str,
+        files: &'static [&'static str],
+        expected_surfaces: &'static [&'static str],
+        expected_required_commands: &'static [&'static str],
+        expected_optional_commands: &'static [&'static str],
+        expected_agent_hint_snippets: &'static [&'static str],
+    }
+
+    #[test]
+    fn routing_fixture_matrix_locks_surface_and_proof_selection() {
+        let fixtures = [
+            DevexRoutingFixture {
+                name: "docs only",
+                files: &["docs/how-to/LOCAL_WATCH_MODE.md"],
+                expected_surfaces: &["docs"],
+                expected_required_commands: &["cargo xtask fmt", "git diff --check"],
+                expected_optional_commands: &["just pr-fast", "just ci-gate"],
+                expected_agent_hint_snippets: &[
+                    "Use `just agent-check`",
+                    "Use `just agent-pr-fast`",
+                ],
+            },
+            DevexRoutingFixture {
+                name: "rust code only",
+                files: &["crates/perl-parser-core/src/lib.rs"],
+                expected_surfaces: &["rust_code"],
+                expected_required_commands: &["cargo xtask fmt", "git diff --check"],
+                expected_optional_commands: &["just pr-fast", "just ci-gate"],
+                expected_agent_hint_snippets: &[
+                    "Use `just agent-check`",
+                    "Use `just agent-pr-fast`",
+                ],
+            },
+            DevexRoutingFixture {
+                name: "parser accuracy",
+                files: &["crates/perl-corpus/fixtures/parser_accuracy/scalar_ref.pl"],
+                expected_surfaces: &["parser_accuracy"],
+                expected_required_commands: &[
+                    "cargo xtask fmt",
+                    "just ci-metrics-ratchet-check parser_accuracy",
+                    "git diff --check",
+                ],
+                expected_optional_commands: &[
+                    "just pr-fast",
+                    "just ci-gate",
+                    "just cpan-corpus-check",
+                    "just corpus-sweep-check",
+                ],
+                expected_agent_hint_snippets: &[
+                    "Use `just agent-check`",
+                    "Use `just agent-pr-fast`",
+                    "For parser-accuracy edits",
+                ],
+            },
+            DevexRoutingFixture {
+                name: "generated status docs",
+                files: &["docs/project/status/lsp.md"],
+                expected_surfaces: &["generated_status_docs", "docs"],
+                expected_required_commands: &[
+                    "cargo xtask fmt",
+                    "just status-update",
+                    "just status-check",
+                    "git diff --check",
+                ],
+                expected_optional_commands: &["just pr-fast", "just ci-gate"],
+                expected_agent_hint_snippets: &[
+                    "Use `just agent-check`",
+                    "Use `just agent-pr-fast`",
+                ],
+            },
+            DevexRoutingFixture {
+                name: "memory-sensitive runtime",
+                files: &["docs/large-workspaces/MEMORY_CONTROL_CLOSEOUT.md"],
+                expected_surfaces: &["memory_sensitive_runtime", "docs"],
+                expected_required_commands: &[
+                    "cargo xtask fmt",
+                    "cargo xtask check-memory-lifecycle-policy",
+                    "git diff --check",
+                ],
+                expected_optional_commands: &["just pr-fast", "just ci-gate"],
+                expected_agent_hint_snippets: &[
+                    "Use `just agent-check`",
+                    "Use `just agent-pr-fast`",
+                    "For memory-sensitive edits",
+                ],
+            },
+            DevexRoutingFixture {
+                name: "retained-owner candidate",
+                files: &["crates/perl-workspace/src/workspace/workspace_index.rs"],
+                expected_surfaces: &[
+                    "memory_sensitive_runtime",
+                    "retained_owner_candidate",
+                    "rust_code",
+                ],
+                expected_required_commands: &[
+                    "cargo xtask fmt",
+                    "cargo xtask check-memory-lifecycle-policy",
+                    "cargo xtask check-memory-retained-owner-drift --base origin/master",
+                    "git diff --check",
+                ],
+                expected_optional_commands: &["just pr-fast", "just ci-gate"],
+                expected_agent_hint_snippets: &[
+                    "Use `just agent-check`",
+                    "Use `just agent-pr-fast`",
+                    "For memory-sensitive edits",
+                ],
+            },
+            DevexRoutingFixture {
+                name: "release/version surface",
+                files: &["rust-toolchain.toml"],
+                expected_surfaces: &["release_version"],
+                expected_required_commands: &[
+                    "cargo xtask fmt",
+                    "just version-check",
+                    "just release-check",
+                    "git diff --check",
+                ],
+                expected_optional_commands: &["just pr-fast", "just ci-gate"],
+                expected_agent_hint_snippets: &[
+                    "Use `just agent-check`",
+                    "Use `just agent-pr-fast`",
+                ],
+            },
+            DevexRoutingFixture {
+                name: "policy/CI surface",
+                files: &[".github/workflows/ci.yml"],
+                expected_surfaces: &["policy_ci"],
+                expected_required_commands: &["cargo xtask fmt", "git diff --check"],
+                expected_optional_commands: &[
+                    "just pr-fast",
+                    "just ci-gate",
+                    "cargo xtask workflow-policy-lint",
+                    "cargo xtask workflow-trigger-lint",
+                ],
+                expected_agent_hint_snippets: &[
+                    "Use `just agent-check`",
+                    "Use `just agent-pr-fast`",
+                ],
+            },
+            DevexRoutingFixture {
+                name: "xtask/devex tooling",
+                files: &["xtask/src/tasks/devex_plan.rs"],
+                expected_surfaces: &["policy_ci", "rust_code"],
+                expected_required_commands: &["cargo xtask fmt", "git diff --check"],
+                expected_optional_commands: &[
+                    "just pr-fast",
+                    "just ci-gate",
+                    "cargo xtask workflow-policy-lint",
+                    "cargo xtask workflow-trigger-lint",
+                ],
+                expected_agent_hint_snippets: &[
+                    "Use `just agent-check`",
+                    "Use `just agent-pr-fast`",
+                ],
+            },
+            DevexRoutingFixture {
+                name: "mixed parser + status",
+                files: &["docs/project/status/parser.md"],
+                expected_surfaces: &["parser_accuracy", "generated_status_docs", "docs"],
+                expected_required_commands: &[
+                    "cargo xtask fmt",
+                    "just ci-metrics-ratchet-check parser_accuracy",
+                    "just status-update",
+                    "just status-check",
+                    "git diff --check",
+                ],
+                expected_optional_commands: &[
+                    "just pr-fast",
+                    "just ci-gate",
+                    "just cpan-corpus-check",
+                    "just corpus-sweep-check",
+                ],
+                expected_agent_hint_snippets: &[
+                    "Use `just agent-check`",
+                    "Use `just agent-pr-fast`",
+                    "For parser-accuracy edits",
+                ],
+            },
+            DevexRoutingFixture {
+                name: "mixed memory + retained owner",
+                files: &["crates/perl-lsp-rs/src/runtime/text_sync.rs"],
+                expected_surfaces: &[
+                    "memory_sensitive_runtime",
+                    "retained_owner_candidate",
+                    "rust_code",
+                ],
+                expected_required_commands: &[
+                    "cargo xtask fmt",
+                    "cargo xtask check-memory-lifecycle-policy",
+                    "cargo xtask check-memory-retained-owner-drift --base origin/master",
+                    "git diff --check",
+                ],
+                expected_optional_commands: &["just pr-fast", "just ci-gate"],
+                expected_agent_hint_snippets: &[
+                    "Use `just agent-check`",
+                    "Use `just agent-pr-fast`",
+                    "For memory-sensitive edits",
+                ],
+            },
+            DevexRoutingFixture {
+                name: "mixed release + changelog",
+                files: &["CHANGELOG.md"],
+                expected_surfaces: &["release_version", "docs"],
+                expected_required_commands: &[
+                    "cargo xtask fmt",
+                    "just version-check",
+                    "just release-check",
+                    "git diff --check",
+                ],
+                expected_optional_commands: &["just pr-fast", "just ci-gate"],
+                expected_agent_hint_snippets: &[
+                    "Use `just agent-check`",
+                    "Use `just agent-pr-fast`",
+                ],
+            },
+        ];
+
+        for fixture in fixtures {
+            let plan = build_plan(
+                "origin/master".to_string(),
+                "abc123".to_string(),
+                strings(fixture.files),
+            );
+
+            assert_eq!(
+                surface_strings(&plan),
+                strings(fixture.expected_surfaces),
+                "{}: changed surfaces",
+                fixture.name
+            );
+            assert_eq!(
+                command_strings(&plan.required_commands),
+                strings(fixture.expected_required_commands),
+                "{}: required proof commands",
+                fixture.name
+            );
+            assert_eq!(
+                command_strings(&plan.optional_commands),
+                strings(fixture.expected_optional_commands),
+                "{}: optional proof commands",
+                fixture.name
+            );
+            assert_eq!(
+                plan.agent_hints.len(),
+                fixture.expected_agent_hint_snippets.len(),
+                "{}: agent hint count",
+                fixture.name
+            );
+            for snippet in fixture.expected_agent_hint_snippets {
+                assert!(
+                    plan.agent_hints.iter().any(|hint| hint.contains(snippet)),
+                    "{}: missing agent hint containing `{snippet}` in {:?}",
+                    fixture.name,
+                    plan.agent_hints
+                );
+            }
+        }
+    }
+
     #[test]
     fn plan_routes_parser_accuracy_status_memory_and_release_surfaces() {
         let plan = build_plan(
