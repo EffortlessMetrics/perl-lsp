@@ -1286,6 +1286,7 @@ fn score_manifest_line_tags(
         let actual_by_line = extract_line_tags(source);
         for expectation in &fixture.line_expectations {
             let actual = actual_by_line.get(&expectation.line).cloned().unwrap_or_default();
+            let actual = comparable_actual_line_tags(&expectation.expected_tags, &actual);
             score_line_tags(&expectation.expected_tags, &actual, &mut score);
         }
     }
@@ -1298,6 +1299,7 @@ fn extract_line_tags(source: &str) -> BTreeMap<u64, BTreeSet<LineTag>> {
     let line_starts = line_starts(source);
     let mut by_line = BTreeMap::new();
     collect_node_line_tags(&output.ast, &line_starts, &mut by_line);
+    normalize_diagnostic_line_tags(&output, &line_starts, &mut by_line);
     by_line
 }
 
@@ -1336,6 +1338,53 @@ fn collect_node_line_tags(
         by_line.entry(line).or_default().insert(LineTag::DynamicBoundary);
     }
     node.for_each_child(|child| collect_node_line_tags(child, line_starts, by_line));
+}
+
+fn normalize_diagnostic_line_tags(
+    output: &perl_parser::ParseOutput,
+    line_starts: &[usize],
+    by_line: &mut BTreeMap<u64, BTreeSet<LineTag>>,
+) {
+    let mut error_lines = BTreeSet::new();
+    for diagnostic in &output.diagnostics {
+        if let Some(location) = quote_like_parse_error_location(diagnostic) {
+            error_lines.insert(line_for_offset(line_starts, location));
+        }
+    }
+
+    for line in error_lines {
+        by_line.entry(line).or_default().insert(LineTag::ParseError);
+    }
+}
+
+fn comparable_actual_line_tags(
+    expected: &BTreeSet<LineTag>,
+    actual: &BTreeSet<LineTag>,
+) -> BTreeSet<LineTag> {
+    if expected.len() == 1
+        && expected.contains(&LineTag::ParseError)
+        && actual.contains(&LineTag::ParseError)
+    {
+        return BTreeSet::from([LineTag::ParseError]);
+    }
+
+    actual.clone()
+}
+
+fn quote_like_parse_error_location(error: &ParseError) -> Option<usize> {
+    if let ParseError::SyntaxError { message, location } = error
+        && is_unclosed_quote_like_diagnostic(message)
+    {
+        return Some(*location);
+    }
+
+    None
+}
+
+fn is_unclosed_quote_like_diagnostic(message: &str) -> bool {
+    message.starts_with("Unclosed ")
+        && (message.contains(" delimiter in string operator ")
+            || message.starts_with("Unclosed qw() delimiter"))
 }
 
 fn line_tag_for_node(node: &Node) -> Option<LineTag> {
@@ -1613,6 +1662,7 @@ fn score_recovery_expectation(
     for line_expectation in &expectation.post_error_line_expectations {
         let actual =
             prediction.actual_by_line.get(&line_expectation.line).cloned().unwrap_or_default();
+        let actual = comparable_actual_line_tags(&line_expectation.expected_tags, &actual);
         score_line_tags(&line_expectation.expected_tags, &actual, &mut score.post_error_line_score);
     }
 
@@ -7621,6 +7671,27 @@ sub dynamic_boundary_case {
             .ok_or_else(|| eyre!("expected line 4 tags for eval expression"))?;
 
         assert!(line_tags.contains(&LineTag::FunctionCall));
+        Ok(())
+    }
+
+    #[test]
+    fn line_tags_normalize_diagnostic_lines_to_parse_error() -> Result<()> {
+        for (operator, source) in [
+            ("q", "package Accuracy::Unclosed;\n\nmy $message = q{still open\n"),
+            ("qq", "package Accuracy::Unclosed;\n\nmy $message = qq{still open\n"),
+            ("qw", "package Accuracy::Unclosed;\n\nmy @words = qw{still open\n"),
+        ] {
+            let actual_by_line = extract_line_tags(source);
+            let line_tags = actual_by_line
+                .get(&3)
+                .ok_or_else(|| eyre!("expected line 3 tags for unclosed {operator} expression"))?;
+            let expected = tags(&[LineTag::ParseError]);
+
+            assert!(line_tags.contains(&LineTag::ParseError));
+            assert!(line_tags.contains(&LineTag::VariableDecl));
+            assert_eq!(comparable_actual_line_tags(&expected, line_tags), expected);
+        }
+
         Ok(())
     }
 

@@ -84,6 +84,13 @@ fn malformed_missing_quote_like_closer_still_reports_error() {
 }
 
 #[test]
+fn malformed_unimplemented_quote_like_recovery_stays_generic() {
+    for source in [r#"my $r = qr{hello;"#, r#"my $x = qx{hello;"#] {
+        assert_has_error(source, "unknown token");
+    }
+}
+
+#[test]
 fn malformed_missing_call_paren_still_reports_error() {
     assert_has_error(r#"my $x = func($a, $b;"#, "insertedcloser");
 }

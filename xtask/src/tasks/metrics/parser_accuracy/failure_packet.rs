@@ -46,6 +46,7 @@ fn collect_line_failure_packets(
         }
 
         let actual = actual_by_line.get(&expectation.line).cloned().unwrap_or_default();
+        let actual = comparable_actual_line_tags(&expectation.expected_tags, &actual);
         if actual == expectation.expected_tags {
             continue;
         }

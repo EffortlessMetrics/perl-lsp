@@ -428,6 +428,28 @@ impl<'a> TokenStream<'a> {
                 // Check if it's a specific error we want to handle specially
                 if msg.as_ref() == "Heredoc nesting too deep" {
                     TokenKind::HeredocDepthLimit
+                } else if msg.as_ref().starts_with("unclosed ") {
+                    // Unclosed quote-like operator from the lexer (e.g. "unclosed qq delimiter '{'").
+                    // Map to the corresponding quote token kind so the parser's quote-handler
+                    // produces a proper "Unclosed delimiter" diagnostic rather than the generic
+                    // "expected expression, found unknown token" error.  Only q/qq/qw have
+                    // unclosed-detection in their primary-expression arms; other operators
+                    // (qr, qx, m, s, tr, y) fall through to Unknown so they keep the current
+                    // behaviour until dedicated recovery is added.
+                    let text = token.text.as_ref();
+                    if text.starts_with("qq") {
+                        TokenKind::QuoteDouble
+                    } else if text.starts_with("qw") {
+                        TokenKind::QuoteWords
+                    } else if text
+                        .strip_prefix('q')
+                        .and_then(|rest| rest.chars().next())
+                        .is_some_and(|ch| !ch.is_ascii_alphanumeric() && ch != '_')
+                    {
+                        TokenKind::QuoteSingle
+                    } else {
+                        TokenKind::Unknown
+                    }
                 } else {
                     // Check if it's a brace that the lexer couldn't recognize
                     TokenKind::from_delimiter(token.text.as_ref()).unwrap_or(TokenKind::Unknown)
