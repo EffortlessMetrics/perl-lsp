@@ -3815,17 +3815,52 @@ fn parser_accuracy_entity_kind(
     entity: &EntityFact,
     anchor: Option<&AnchorFact>,
 ) -> String {
-    if entity.kind != EntityKind::Variable {
-        return format!("{:?}", entity.kind);
+    match entity.kind {
+        EntityKind::Variable => match anchor.and_then(|anchor| {
+            variable_declarator_before_anchor(source, anchor.span_start_byte as usize)
+        }) {
+            Some("our" | "local") => "GlobalVariable".to_string(),
+            Some("my" | "state") => "LexicalVariable".to_string(),
+            _ => "Variable".to_string(),
+        },
+        EntityKind::Subroutine
+            if subroutine_package_is_inherited(source, &entity.canonical_name) =>
+        {
+            "InheritedMethod".to_string()
+        }
+        _ => format!("{:?}", entity.kind),
+    }
+}
+
+fn subroutine_package_is_inherited(source: &str, canonical_name: &str) -> bool {
+    let Some((package, _name)) = canonical_name.rsplit_once("::") else {
+        return false;
+    };
+
+    source.lines().any(|line| inheritance_line_references_package(line, package))
+}
+
+fn inheritance_line_references_package(line: &str, package: &str) -> bool {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with('#')
+        || !(trimmed.contains("@ISA")
+            || trimmed.starts_with("use parent")
+            || trimmed.starts_with("use base"))
+    {
+        return false;
     }
 
-    match anchor.and_then(|anchor| {
-        variable_declarator_before_anchor(source, anchor.span_start_byte as usize)
-    }) {
-        Some("our" | "local") => "GlobalVariable".to_string(),
-        Some("my" | "state") => "LexicalVariable".to_string(),
-        _ => "Variable".to_string(),
-    }
+    contains_perl_name_token(trimmed, package)
+}
+
+fn contains_perl_name_token(text: &str, name: &str) -> bool {
+    text.match_indices(name).any(|(start, matched)| {
+        let end = start + matched.len();
+        let before_ok =
+            start == 0 || is_perl_name_boundary(text.as_bytes().get(start - 1).copied());
+        let after_ok = is_perl_name_boundary(text.as_bytes().get(end).copied());
+        before_ok && after_ok
+    })
 }
 
 fn variable_declarator_before_anchor(source: &str, anchor_start: usize) -> Option<&str> {
@@ -3857,7 +3892,7 @@ fn variable_declarator_before_anchor(source: &str, anchor_start: usize) -> Optio
 
 fn previous_variable_token_start(bytes: &[u8], index: usize) -> Option<usize> {
     let mut cursor = index;
-    while cursor > 0 && is_perl_variable_name_byte(bytes[cursor - 1]) {
+    while cursor > 0 && is_perl_name_byte(bytes[cursor - 1]) {
         cursor -= 1;
     }
 
@@ -3868,7 +3903,11 @@ fn previous_variable_token_start(bytes: &[u8], index: usize) -> Option<usize> {
     }
 }
 
-fn is_perl_variable_name_byte(byte: u8) -> bool {
+fn is_perl_name_boundary(byte: Option<u8>) -> bool {
+    byte.map_or(true, |byte| !is_perl_name_byte(byte))
+}
+
+fn is_perl_name_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b':' | b'\'')
 }
 
@@ -7699,6 +7738,34 @@ sub dynamic_boundary_case {
         );
         assert_eq!(parser_accuracy_entity_kind(source, &entity, None), "Variable");
         Ok(())
+    }
+
+    #[test]
+    fn parser_accuracy_entity_kind_projects_inherited_subroutine_declarations() {
+        let source = concat!(
+            "package Accuracy::Parent;\n",
+            "sub inherited { 1 }\n",
+            "package Accuracy::Child;\n",
+            "our @ISA = qw(Accuracy::Parent);\n",
+            "sub own { 1 }\n",
+        );
+        let inherited = EntityFact {
+            id: EntityId(1),
+            kind: EntityKind::Subroutine,
+            canonical_name: "Accuracy::Parent::inherited".to_string(),
+            anchor_id: None,
+            scope_id: None,
+            provenance: perl_semantic_facts::Provenance::ExactAst,
+            confidence: perl_semantic_facts::Confidence::High,
+        };
+        let own = EntityFact {
+            id: EntityId(2),
+            canonical_name: "Accuracy::Child::own".to_string(),
+            ..inherited.clone()
+        };
+
+        assert_eq!(parser_accuracy_entity_kind(source, &inherited, None), "InheritedMethod");
+        assert_eq!(parser_accuracy_entity_kind(source, &own, None), "Subroutine");
     }
 
     #[test]
