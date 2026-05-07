@@ -34,6 +34,7 @@ Choose the path that matches what you are trying to do:
 | Share project settings with my team | [Project Configuration File (.perl-lsp.toml)](reference/CONFIG.md#project-configuration-file-perl-lsptoml) |
 | Troubleshoot startup, indexing, or editor issues | [Troubleshooting](how-to/TROUBLESHOOTING.md) |
 | Understand the server architecture | [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md) |
+| Understand the compiler-backed LSP direction | [Compiler-Backed LSP Roadmap](project/COMPILER_BACKED_LSP_ROADMAP.md) |
 | Work on LSP features as a contributor | [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md) |
 | Run builds, tests, and CI commands | [Commands Reference](reference/COMMANDS_REFERENCE.md) |
 | Add or audit public API documentation | [Missing Documentation Guide](reference/MISSING_DOCUMENTATION_GUIDE.md) |
@@ -95,6 +96,8 @@ Background material that explains why the system is designed the way it is (unde
 Decision records, project status, and planning documents.
 
 - [ADR Index](adr/README.md) — chronological index plus a topic guide for parser, runtime, DAP, security, and swarm decisions
+- [Project Roadmap](project/ROADMAP.md)
+- [Compiler-Backed LSP Roadmap](project/COMPILER_BACKED_LSP_ROADMAP.md)
 - [Project Milestones](project/MILESTONES.md)
 - [Feature Governance](project/FEATURE_GOVERNANCE.md)
 - [Metric Stack](project/metrics/README.md) — contributor-facing summary of the layered scorecard model and the ratchet
