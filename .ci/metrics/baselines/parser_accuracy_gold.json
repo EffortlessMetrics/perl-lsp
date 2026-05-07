@@ -113,6 +113,7 @@
     "method_call::symbol_edge::method_call_defines_invoke",
     "method_call::symbol_edge::method_call_defines_run",
     "method_call::symbol_entity::method_call_invoke_entity",
+    "method_call::symbol_entity::method_call_object_entity",
     "method_call::symbol_entity::method_call_package_entity",
     "method_call::symbol_entity::method_call_run_entity",
     "method_call::symbol_occurrence::method_call_instance_call",
