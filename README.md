@@ -106,6 +106,7 @@ The v0.13 architecture collapsed the old microcrate graph into a smaller publish
 | Troubleshooting | [docs/how-to/TROUBLESHOOTING.md](docs/how-to/TROUBLESHOOTING.md) |
 | Project status and metrics | [docs/project/status/index.md](docs/project/status/index.md) |
 | Roadmap | [docs/project/ROADMAP.md](docs/project/ROADMAP.md) |
+| Compiler-backed LSP roadmap | [docs/project/COMPILER_BACKED_LSP_ROADMAP.md](docs/project/COMPILER_BACKED_LSP_ROADMAP.md) |
 | Release history | [RELEASE_HISTORY.md](RELEASE_HISTORY.md) |
 | Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Agent workflow | [AGENTS.md](AGENTS.md) |

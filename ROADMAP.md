@@ -11,6 +11,7 @@ project docs when you need exact release facts, receipts, or milestone detail.
 
 - Active milestone plan: [docs/project/ROADMAP.md](docs/project/ROADMAP.md)
 - Current truth and receipts: [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md)
+- Compiler-backed LSP build-out: [docs/project/COMPILER_BACKED_LSP_ROADMAP.md](docs/project/COMPILER_BACKED_LSP_ROADMAP.md)
 - Published release tracking: [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
 
 ## Now (post-v0.12.3 ship / pre-announcement cleanup)

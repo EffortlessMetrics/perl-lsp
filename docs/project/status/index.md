@@ -43,6 +43,7 @@
 - Keep all three parser corpus lanes current: Ubuntu system Perl, the cached CPAN top 1000 install, and the repo-owned corpus audit
 - Fold internal torture and edge-case suites into routine verification receipts
 - Resume parser, corpus, semantic, and DAP hardening after the release-channel receipts are closed
+- Track the post-parser semantic build-out through the [compiler-backed LSP roadmap](../COMPILER_BACKED_LSP_ROADMAP.md), keeping generated metrics in subsystem files rather than duplicating them here
 
 **Later**
 - DAP preview hardening (deeper live variables/evaluate, shim packaging, cross-editor native receipts)

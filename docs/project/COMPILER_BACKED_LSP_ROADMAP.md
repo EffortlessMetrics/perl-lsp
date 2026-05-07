@@ -143,7 +143,7 @@ and link the verification receipt there.
 | Framework adapters | [#8195](https://github.com/EffortlessMetrics/perl-lsp/issues/8195) | Adapter registry and one generated-member family | HIR, stash, imports | Framework fixtures with provenance |
 | Compile-time effects | [#3394](https://github.com/EffortlessMetrics/perl-lsp/issues/3394) plus future child issues from [#8191](https://github.com/EffortlessMetrics/perl-lsp/issues/8191) | Effect log and dynamic-boundary packets | HIR, scope, stash, imports | Effect fixtures and dynamic-boundary proof |
 | Tooling IR / PIR | [#8196](https://github.com/EffortlessMetrics/perl-lsp/issues/8196) | PIR data model with context, no provider cutover | HIR, scope, stash | PIR lowering fixtures |
-| Differential oracle | [#4389](https://github.com/EffortlessMetrics/perl-lsp/issues/4389) | Real-Perl conformance runner for proof lanes only | Fact schema and sandbox policy | Structured agreement receipt |
+| Differential oracle | [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199) ([#4389](https://github.com/EffortlessMetrics/perl-lsp/issues/4389) background) | Real-Perl conformance runner for proof lanes only | Fact schema and sandbox policy | Structured agreement receipt |
 | Provider cutover | [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) | Fact-source tracing before behavior changes | Semantic scorecards, shadow compare | Provider-impact fixtures |
 
 ## Immediate PR Sequence
