@@ -1136,7 +1136,8 @@ Agent-safe hints:
     }
 
     #[test]
-    fn receipt_json_contract_keeps_agent_handoff_fields_stable() {
+    fn receipt_json_contract_keeps_agent_handoff_fields_stable()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
         let receipt = build_receipt_payload(
             plan_for(&[
                 "docs/project/status/parser.md",
@@ -1145,11 +1146,12 @@ Agent-safe hints:
             ]),
             false,
             "2026-05-07T12:34:56Z".to_string(),
-        )
-        .unwrap();
+        )?;
 
-        let value = serde_json::to_value(&receipt).expect("receipt should serialize");
-        let object = value.as_object().expect("receipt should serialize as an object");
+        let value = serde_json::to_value(&receipt)?;
+        let object = value
+            .as_object()
+            .ok_or_else(|| std::io::Error::other("receipt should serialize as an object"))?;
         assert_object_keys(
             object,
             &[
@@ -1189,24 +1191,34 @@ Agent-safe hints:
             ])
         );
 
-        let required = value["required_proof"].as_array().expect("required proof array");
+        let required = value["required_proof"]
+            .as_array()
+            .ok_or_else(|| std::io::Error::other("required proof array"))?;
         assert!(required.len() >= 2, "required proof should not collapse to an empty contract");
         for proof in required {
-            let proof_object = proof.as_object().expect("proof command should be an object");
+            let proof_object = proof
+                .as_object()
+                .ok_or_else(|| std::io::Error::other("proof command should be an object"))?;
             assert_object_keys(proof_object, &["command", "why", "evidence"]);
             assert!(proof["command"].as_str().is_some_and(|command| !command.is_empty()));
             assert!(proof["why"].as_str().is_some_and(|why| !why.is_empty()));
             assert!(proof["evidence"].as_str().is_some_and(|evidence| !evidence.is_empty()));
         }
 
-        let optional = value["optional_proof"].as_array().expect("optional proof array");
+        let optional = value["optional_proof"]
+            .as_array()
+            .ok_or_else(|| std::io::Error::other("optional proof array"))?;
         assert!(optional.iter().any(|proof| proof["command"] == "just pr-fast"));
         for proof in optional {
-            let proof_object = proof.as_object().expect("optional proof should be an object");
+            let proof_object = proof
+                .as_object()
+                .ok_or_else(|| std::io::Error::other("optional proof should be an object"))?;
             assert_object_keys(proof_object, &["command", "why", "evidence"]);
         }
 
-        let hints = value["agent_hints"].as_array().expect("agent hints array");
+        let hints = value["agent_hints"]
+            .as_array()
+            .ok_or_else(|| std::io::Error::other("agent hints array"))?;
         assert!(
             hints.iter().any(|hint| {
                 hint.as_str().is_some_and(|hint| hint.contains("just agent-check"))
@@ -1218,6 +1230,8 @@ Agent-safe hints:
         assert!(hints.iter().any(|hint| {
             hint.as_str().is_some_and(|hint| hint.contains("For parser-accuracy edits"))
         }));
+
+        Ok(())
     }
 
     #[test]
