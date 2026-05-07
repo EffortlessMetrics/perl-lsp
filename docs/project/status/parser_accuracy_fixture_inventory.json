@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "commit": "b1fb5ba57",
+  "commit": "66a8d41b3",
   "generated_by": "cargo xtask metrics parser-accuracy --export-status-receipts",
   "fixture_count": 48,
   "family_count": 28,
   "scored_lines": 134,
-  "scored_symbols": 109,
+  "scored_symbols": 110,
   "fixtures": [
     {
       "id": "package_basic",
@@ -391,7 +391,7 @@
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/imports_exports.pl",
       "label_mode": "partial",
       "scored_lines": 6,
-      "scored_symbols": 7,
+      "scored_symbols": 8,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,

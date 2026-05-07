@@ -35,7 +35,7 @@ use perl_parser::{
     Edit as TextEdit, IncrementalState, Node, NodeKind, ParseError, Parser, PositionMapper,
     TokenKind, TokenStream,
 };
-use perl_semantic_facts::{AnchorId, EntityId};
+use perl_semantic_facts::{AnchorFact, AnchorId, EntityFact, EntityId, EntityKind};
 use perl_workspace::position::Range;
 use perl_workspace::semantic::queries::QueryContext;
 use perl_workspace::workspace::document_store::DocumentStore;
@@ -3748,12 +3748,13 @@ fn symbol_predictions_from_shard(source: &str, shard: &FileFactShard) -> SymbolP
         .entities
         .iter()
         .map(|entity| {
-            let anchor = entity.anchor_id.and_then(|anchor_id| anchors_by_id.get(&anchor_id));
+            let anchor =
+                entity.anchor_id.and_then(|anchor_id| anchors_by_id.get(&anchor_id).copied());
             if let Some(anchor) = anchor {
                 safety_spans.insert(symbol_span_location(source, anchor));
             }
             SymbolEntityKey {
-                kind: format!("{:?}", entity.kind),
+                kind: parser_accuracy_entity_kind(source, entity, anchor),
                 canonical_name: entity.canonical_name.clone(),
                 span_text: anchor.map(|anchor| anchor_text(source, anchor)).unwrap_or_default(),
                 package: package_from_name(&entity.canonical_name),
@@ -3807,6 +3808,68 @@ fn symbol_predictions_from_shard(source: &str, shard: &FileFactShard) -> SymbolP
         .collect();
 
     SymbolPredictions { entities, occurrences, safety_spans, edges }
+}
+
+fn parser_accuracy_entity_kind(
+    source: &str,
+    entity: &EntityFact,
+    anchor: Option<&AnchorFact>,
+) -> String {
+    if entity.kind != EntityKind::Variable {
+        return format!("{:?}", entity.kind);
+    }
+
+    match anchor.and_then(|anchor| {
+        variable_declarator_before_anchor(source, anchor.span_start_byte as usize)
+    }) {
+        Some("our" | "local") => "GlobalVariable".to_string(),
+        Some("my" | "state") => "LexicalVariable".to_string(),
+        _ => "Variable".to_string(),
+    }
+}
+
+fn variable_declarator_before_anchor(source: &str, anchor_start: usize) -> Option<&str> {
+    let bytes = source.as_bytes();
+    let mut index = anchor_start.min(source.len());
+
+    loop {
+        while index > 0 && bytes[index - 1].is_ascii_whitespace() {
+            index -= 1;
+        }
+        if index > 0 && matches!(bytes[index - 1], b'(' | b',') {
+            index -= 1;
+            continue;
+        }
+        if let Some(next_index) = previous_variable_token_start(bytes, index) {
+            index = next_index;
+            continue;
+        }
+        break;
+    }
+
+    let end = index;
+    while index > 0 && bytes[index - 1].is_ascii_alphabetic() {
+        index -= 1;
+    }
+
+    if index == end { None } else { source.get(index..end) }
+}
+
+fn previous_variable_token_start(bytes: &[u8], index: usize) -> Option<usize> {
+    let mut cursor = index;
+    while cursor > 0 && is_perl_variable_name_byte(bytes[cursor - 1]) {
+        cursor -= 1;
+    }
+
+    if cursor > 0 && matches!(bytes[cursor - 1], b'$' | b'@' | b'%' | b'*') {
+        Some(cursor - 1)
+    } else {
+        None
+    }
+}
+
+fn is_perl_variable_name_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b':' | b'\'')
 }
 
 fn anchor_text(source: &str, anchor: &perl_semantic_facts::AnchorFact) -> String {
@@ -7566,6 +7629,75 @@ sub dynamic_boundary_case {
             .get("GeneratedMember")
             .ok_or_else(|| eyre!("generated member score should be present"))?;
         assert_eq!(generated.false_negative_count, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn parser_accuracy_entity_kind_splits_variable_declaration_scope() -> Result<()> {
+        let source = concat!(
+            "package Accuracy::Vars;\n",
+            "our ($VERSION, @EXPORT_OK) = (1, qw(run));\n",
+            "sub run { my ($alpha, $local) = (1, 2); }\n",
+        );
+        let entity = EntityFact {
+            id: EntityId(1),
+            kind: EntityKind::Variable,
+            canonical_name: "Accuracy::Vars::EXPORT_OK".to_string(),
+            anchor_id: Some(AnchorId(1)),
+            scope_id: None,
+            provenance: perl_semantic_facts::Provenance::ExactAst,
+            confidence: perl_semantic_facts::Confidence::High,
+        };
+        let version_start =
+            source.find("$VERSION").ok_or_else(|| eyre!("version fixture anchor missing"))?;
+        let version_anchor = AnchorFact {
+            id: AnchorId(1),
+            file_id: perl_semantic_facts::FileId(1),
+            span_start_byte: version_start as u32,
+            span_end_byte: (version_start + "$VERSION".len()) as u32,
+            scope_id: None,
+            provenance: perl_semantic_facts::Provenance::ExactAst,
+            confidence: perl_semantic_facts::Confidence::High,
+        };
+        let global_start =
+            source.find("@EXPORT_OK").ok_or_else(|| eyre!("global fixture anchor missing"))?;
+        let global_anchor = AnchorFact {
+            span_start_byte: global_start as u32,
+            span_end_byte: (global_start + "@EXPORT_OK".len()) as u32,
+            ..version_anchor.clone()
+        };
+        let alpha_start =
+            source.find("$alpha").ok_or_else(|| eyre!("alpha fixture anchor missing"))?;
+        let alpha_anchor = AnchorFact {
+            span_start_byte: alpha_start as u32,
+            span_end_byte: (alpha_start + "$alpha".len()) as u32,
+            ..version_anchor.clone()
+        };
+        let lexical_start =
+            source.find("$local").ok_or_else(|| eyre!("lexical fixture anchor missing"))?;
+        let lexical_anchor = AnchorFact {
+            span_start_byte: lexical_start as u32,
+            span_end_byte: (lexical_start + "$local".len()) as u32,
+            ..version_anchor.clone()
+        };
+
+        assert_eq!(
+            parser_accuracy_entity_kind(source, &entity, Some(&version_anchor)),
+            "GlobalVariable"
+        );
+        assert_eq!(
+            parser_accuracy_entity_kind(source, &entity, Some(&global_anchor)),
+            "GlobalVariable"
+        );
+        assert_eq!(
+            parser_accuracy_entity_kind(source, &entity, Some(&alpha_anchor)),
+            "LexicalVariable"
+        );
+        assert_eq!(
+            parser_accuracy_entity_kind(source, &entity, Some(&lexical_anchor)),
+            "LexicalVariable"
+        );
+        assert_eq!(parser_accuracy_entity_kind(source, &entity, None), "Variable");
         Ok(())
     }
 
