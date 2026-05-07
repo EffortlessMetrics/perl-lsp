@@ -63,7 +63,7 @@ CI hasn't broken since their last look).
 | `linux-windows-compile-shape` | 10 min | `cargo check --target x86_64-pc-windows-msvc --lib` for sandbox/module/workspace crates (cheap Windows cfg-shape check on Linux) |
 | `windows-scope` | 5 min | Diff classifier: decides whether the native Windows canary (and full guardrails) need to run for this PR |
 | `windows-canary` | 15 min | Native Windows runner that proves the Windows-only sandbox dispatch path is wired. Conditional on `windows-scope.required=true` |
-| `windows-required` | 2 min | Ubuntu aggregator for branch protection — succeeds when canary isn't required, fails when canary is required and didn't pass |
+| `windows-required` | 2 min | Ubuntu aggregator consumed by `merge-gate` — succeeds when canary isn't required, fails when canary is required and didn't pass, fails closed if `windows-scope` errored |
 | `windows-full-guardrails` | 35 min | Old broad Windows matrix (compile / module-separator / sandbox). Runs on push to master, manual dispatch, or PRs that change toolchain/lockfile/workflows. **Not** a merge-gate dependency for normal PRs |
 
 **Scoping within Frontdoor Proof**: The pr-smoke job uses `cargo xtask ci-scope` to
@@ -558,7 +558,7 @@ that arrangement was reorganized into five jobs.
 | `linux-windows-compile-shape` | ubuntu-24.04 | `cargo check --target x86_64-pc-windows-msvc --lib` for `perl-module`, `perl-lsp-rs`, `perl-workspace`. Catches most `#[cfg(windows)]` type/compile mistakes cheaply. | Yes |
 | `windows-scope` | ubuntu-24.04 | Diff classifier. Sets `required=true` when the diff touches sandbox/module/workspace/URI code or generic path/uri/module names. Sets `full=true` on toolchain/lockfile/workflow changes or non-PR events. | (input to others) |
 | `windows-canary` | windows-latest | Tiny native dispatch canary — currently `test_windows_sandbox_fails_closed` via `cargo test --lib`. Runs only when `windows-scope.required=true`. | (covered via aggregator) |
-| `windows-required` | ubuntu-24.04 | Aggregator that branch protection points at. Always present; succeeds when canary isn't needed; fails when canary was required and didn't pass. Avoids the "skipped required check" antipattern. | Yes |
+| `windows-required` | ubuntu-24.04 | Aggregator consumed by `merge-gate`. Always runs (never skipped); succeeds when the canary isn't needed; fails when the canary was required and didn't pass; fails closed if `windows-scope` itself errored. The "skipped required check" antipattern is avoided by `merge-gate` (which is the actual branch-protection target via the `ci/merge-gate` commit status). | Yes |
 | `windows-full-guardrails` | windows-latest | Old broad Windows matrix (`compile`, `module-separator-regressions`, `sandbox-fail-closed`). Runs on push to master, manual dispatch, and PRs flagged `full=true`. (Nightly Windows soak runs are owned by `ci-nightly.yml`.) | No (advisory / risk-triggered) |
 
 **Why this shape:**

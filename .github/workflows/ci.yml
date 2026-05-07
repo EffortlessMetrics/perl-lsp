@@ -799,13 +799,19 @@ jobs:
 
           # Toolchain / workflow / lockfile changes can shift Windows
           # behavior in ways the diff alone won't reveal — promote to full.
-          if echo "$changed" | grep -E '(\.github/workflows/|Cargo\.lock|Cargo\.toml|rust-toolchain\.toml|justfile)' >/dev/null; then
+          # Cargo.toml is anchored to the workspace root only; per-crate
+          # Cargo.toml files are treated as ordinary code changes.
+          if echo "$changed" | grep -E '(^\.github/workflows/|^Cargo\.lock$|^Cargo\.toml$|^rust-toolchain\.toml$|^justfile$)' >/dev/null; then
             required=true
             full=true
           fi
 
-          # Generic path/URI/module heuristic across other crates.
-          if echo "$changed" | grep -E '(uri|path|workspace-folder|file_uri|module)' >/dev/null; then
+          # Generic path/URI/module heuristic across other crates. Match
+          # path basenames (segments) rather than substrings so PRs that
+          # merely happen to mention these tokens inside an unrelated file
+          # path don't get pulled in.
+          if echo "$changed" | awk -F/ '{ print $NF }' \
+              | grep -E '(^|[._-])(uri|path|module|workspace-folder|file_uri)([._-]|$)' >/dev/null; then
             required=true
           fi
 
@@ -846,20 +852,27 @@ jobs:
             security::sandbox::tests::test_windows_sandbox_fails_closed \
             -- --exact
 
-  # ── Windows Required: Ubuntu aggregator that branch protection points at
-  # Always present, succeeds when the canary isn't needed, fails when the
-  # canary is required but didn't pass. Avoids the "skipped required check"
-  # antipattern in branch protection.
+  # ── Windows Required: Ubuntu aggregator consumed by merge-gate ──────
+  # Always runs (never skipped). Succeeds when the canary isn't needed,
+  # fails when the canary was required but didn't pass, and fails closed
+  # if windows-scope itself errored out (so a broken scope doesn't slip
+  # through as a green required check).
   windows-required:
     name: Windows Required
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     needs: [windows-scope, windows-canary]
-    if: always() && needs.windows-scope.result == 'success'
+    if: always()
     steps:
       - name: Summarize Windows requirement
         shell: bash
         run: |
+          scope_result='${{ needs.windows-scope.result }}'
+          if [ "$scope_result" != "success" ]; then
+            echo "::error::windows-scope did not succeed (result=$scope_result); failing closed."
+            exit 1
+          fi
+
           required='${{ needs.windows-scope.outputs.required }}'
           result='${{ needs.windows-canary.result }}'
 
