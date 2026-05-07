@@ -1,0 +1,37 @@
+# ripr configuration
+#
+# Static RIPR exposure analysis for changed Rust behavior.
+# Reads policy/ripr-suppressions.toml for suppressions.
+#
+# See docs/ci/ripr.md for the perl-lsp framing. ripr is mutation-testing-lite
+# at static-analysis prices; it does not run mutants and does not replace
+# mutation testing.
+
+schema_version = 1
+
+[analysis]
+# Diff mode: analyze only changed code relative to the merge base.
+mode = "diff"
+
+[policy]
+# Advisory only in this rollout PR. PR 18 introduces narrow soft-gating for
+# high-confidence new oracle gaps.
+fail_on = []
+
+[report]
+max_related_tests = 8
+include_context = true
+
+[severity]
+# Use ripr's own classifications. Do NOT use mutation-runtime words
+# (killed/survived) when reporting these.
+exposed = "notice"
+weakly_exposed = "warning"
+reachable_unrevealed = "warning"
+no_static_path = "notice"
+infection_unknown = "notice"
+propagation_unknown = "notice"
+static_unknown = "notice"
+
+[suppressions]
+path = "policy/ripr-suppressions.toml"
