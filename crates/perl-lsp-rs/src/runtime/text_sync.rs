@@ -1978,6 +1978,131 @@ mod tests {
     }
 
     #[test]
+    fn test_diagnostics_churn_drains_retained_state_after_close_delete()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = tokio::runtime::Runtime::new()?;
+        runtime.block_on(async {
+            let (server, _buf) = make_server_with_capture();
+            server.install_diagnostic_debouncer(
+                super::diagnostic_debounce::DiagnosticDebouncer::with_interval(
+                    Duration::from_millis(60),
+                    |_| {},
+                ),
+            );
+
+            let dir = tempfile::tempdir()?;
+            let path = dir.path().join("diagnostics_churn.pl");
+            let uri = url::Url::from_file_path(&path).map_err(|_| "invalid file path")?;
+            let uri = uri.to_string();
+            let normalized_uri = server.normalize_uri_key(&uri);
+            let fixed_template = |version: i32| {
+                format!("package Diagnostics::Churn;\nmy $value = {version};\n$value;\n1;\n")
+            };
+            let broken_template =
+                |version: i32| format!("package Diagnostics::Churn;\nsub broken_{version} {{\n");
+
+            std::fs::write(&path, fixed_template(1))?;
+            server.did_open(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": fixed_template(1)
+                }
+            }))?;
+
+            let _ = server.handle_hover(Some(json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": 1, "character": 4 }
+            })));
+            {
+                let cache = server.semantic_analyzer_cache.lock();
+                assert!(
+                    cache.keys().any(|(cached_uri, _)| cached_uri == &normalized_uri),
+                    "hover should populate semantic analyzer cache before churn"
+                );
+            }
+
+            let mut saw_debounce_pressure = false;
+            for version in 2..10 {
+                let text = if version % 2 == 0 {
+                    broken_template(version)
+                } else {
+                    fixed_template(version)
+                };
+                std::fs::write(&path, &text)?;
+                server.handle_did_change(Some(json!({
+                    "textDocument": { "uri": uri, "version": version },
+                    "contentChanges": [{ "text": text }]
+                })))?;
+                server.publish_diagnostics(&uri);
+
+                let pressure = server.runtime_pressure_snapshot();
+                saw_debounce_pressure |= pressure.diagnostic_debounce_pending_uris > 0;
+
+                if version % 2 != 0 {
+                    let _ = server.handle_hover(Some(json!({
+                        "textDocument": { "uri": uri },
+                        "position": { "line": 1, "character": 4 }
+                    })));
+                }
+            }
+            assert!(saw_debounce_pressure, "diagnostics churn should exercise debounce pressure");
+
+            let in_flight_token = server.new_parse_token(&uri);
+            server.stream_sessions().start_session(crate::runtime::stream_session::SessionKey {
+                uri: uri.clone(),
+                document_version: 9,
+                line: 1,
+                character: 4,
+            });
+
+            server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+            std::fs::remove_file(&path)?;
+            server.handle_did_change_watched_files(Some(json!({
+                "changes": [
+                    { "uri": uri, "type": 3 }
+                ]
+            })))?;
+
+            for _ in 0..100 {
+                let pressure = server.runtime_pressure_snapshot();
+                if pressure.pending_index_tasks == 0
+                    && pressure.diagnostic_debounce_pending_uris == 0
+                    && pressure.active_stream_sessions == 0
+                {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+
+            assert!(in_flight_token.load(Ordering::Relaxed), "close/delete must trip parse token");
+
+            let memory = server.memory_state_snapshot();
+            assert_eq!(memory.documents, 0);
+            assert_eq!(memory.open_text_bytes, 0);
+            assert_eq!(memory.parse_cancel_flags, 0);
+            assert_eq!(memory.stream_sessions, 0);
+            assert_eq!(memory.pending_index_tasks, 0);
+
+            let pressure = server.runtime_pressure_snapshot();
+            assert_eq!(pressure.pending_index_tasks, 0);
+            assert_eq!(pressure.diagnostic_debounce_pending_uris, 0);
+            assert_eq!(pressure.active_stream_sessions, 0);
+
+            let cache = server.semantic_analyzer_cache.lock();
+            assert!(
+                !cache.keys().any(|(cached_uri, _)| cached_uri == &normalized_uri),
+                "semantic analyzer cache must not retain diagnostics churn URI after close/delete"
+            );
+
+            Ok::<(), Box<dyn std::error::Error>>(())
+        })?;
+
+        Ok(())
+    }
+
+    #[test]
     fn test_did_change_cancels_stream_sessions_for_uri_variants()
     -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
