@@ -549,7 +549,7 @@ Windows is treated as a scarce platform canary plus a periodic full-platform soa
 not a full proof lane on every PR. The merge-blocking path used to wait on the
 entire `windows-guardrails` matrix on `windows-latest`; the 2026-04-25 failure
 catalog showed the sandbox lane had only ~6% headroom over master runtime, so
-that arrangement was reorganized into four jobs.
+that arrangement was reorganized into five jobs.
 
 **Current shape:**
 
