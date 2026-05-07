@@ -41,7 +41,7 @@ use perl_workspace::semantic::queries::QueryContext;
 use perl_workspace::workspace::workspace_index::{FileFactShard, WorkspaceIndex};
 use serde::{Deserialize, Serialize};
 
-use crate::allocation_tracker::measure_allocations;
+use crate::allocation_tracker::{get_current_memory_usage, measure_allocations};
 use crate::tasks::metrics::ratchet::MetricReceipt;
 use crate::utils::project_root;
 
@@ -600,6 +600,8 @@ struct MetricRuntime {
     #[serde(skip_serializing_if = "is_zero_u64")]
     cache_sample_count: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    peak_rss_mb: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     allocated_bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     allocation_count: Option<u64>,
@@ -1017,16 +1019,33 @@ fn build_status_artifact(
 ) -> Result<(ParserAccuracyManifest, ParserAccuracyArtifact)> {
     let start = Instant::now();
     let manifest = read_manifest(root, manifest_path)?;
+    let rss_before = get_current_memory_usage().ok();
     let (artifact, allocation_measurement) =
         measure_allocations(|| build_artifact(root, &manifest, cadence));
+    let rss_after = get_current_memory_usage().ok();
     let mut artifact = artifact?;
     artifact.metric_runtime.runtime_ms = start.elapsed().as_secs_f64() * 1000.0;
+    artifact.metric_runtime.peak_rss_mb =
+        measured_memory_mb(rss_before, rss_after, allocation_measurement.peak_delta_mb());
     artifact.metric_runtime.allocated_bytes = Some(allocation_measurement.allocated_bytes);
     artifact.metric_runtime.allocation_count = Some(allocation_measurement.allocation_count);
     settle_artifact_size(&mut artifact)?;
     sync_allocation_metric_rows(&mut artifact, cadence);
     sync_runtime_metric_rows(&mut artifact, cadence);
     Ok((manifest, artifact))
+}
+
+fn measured_memory_mb(
+    rss_before: Option<f64>,
+    rss_after: Option<f64>,
+    fallback_mb: f64,
+) -> Option<f64> {
+    if let (Some(before), Some(after)) = (rss_before, rss_after) {
+        if after > before {
+            return Some(after - before);
+        }
+    }
+    (fallback_mb > 0.0).then_some(fallback_mb)
 }
 
 fn read_manifest(root: &Path, path: &Path) -> Result<ParserAccuracyManifest> {
@@ -4973,6 +4992,11 @@ fn sync_runtime_metric_rows(artifact: &mut ParserAccuracyArtifact, cadence: Cade
 }
 
 fn sync_allocation_metric_rows(artifact: &mut ParserAccuracyArtifact, cadence: Cadence) {
+    if let Some(peak_rss_mb) = artifact.metric_runtime.peak_rss_mb {
+        if let Some(row) = artifact.metrics.iter_mut().find(|row| row.name() == "peak_rss_mb") {
+            *row = measured_value("peak_rss_mb", peak_rss_mb, 1, cadence);
+        }
+    }
     if let Some(allocated_bytes) = artifact.metric_runtime.allocated_bytes {
         if let Some(row) = artifact.metrics.iter_mut().find(|row| row.name() == "allocated_bytes") {
             *row = measured_count("allocated_bytes", allocated_bytes, 1, cadence);
@@ -6458,6 +6482,13 @@ sub dynamic_boundary_case {
         assert_eq!(source_cache.hit_rate(), Some(0.5));
 
         Ok(())
+    }
+
+    #[test]
+    fn measured_memory_prefers_positive_rss_delta_and_falls_back_to_allocator_peak() {
+        assert_eq!(measured_memory_mb(Some(10.0), Some(13.5), 1.0), Some(3.5));
+        assert_eq!(measured_memory_mb(Some(13.5), Some(10.0), 2.25), Some(2.25));
+        assert_eq!(measured_memory_mb(None, Some(10.0), 0.0), None);
     }
 
     #[test]
@@ -7965,12 +7996,14 @@ sub dynamic_boundary_case {
             denominator: Denominator::default(),
             families: Vec::new(),
             metrics: vec![
+                insufficient("peak_rss_mb", "memory telemetry is not wired yet"),
                 insufficient("allocated_bytes", "allocation telemetry is not wired yet"),
                 insufficient("allocation_count", "allocation telemetry is not wired yet"),
             ],
             failure_packets: Vec::new(),
             gold_drift: GoldDrift::default(),
             metric_runtime: MetricRuntime {
+                peak_rss_mb: Some(1.5),
                 allocated_bytes: Some(1234),
                 allocation_count: Some(56),
                 ..MetricRuntime::default()
@@ -7979,6 +8012,14 @@ sub dynamic_boundary_case {
 
         sync_allocation_metric_rows(&mut artifact, Cadence::Pr);
 
+        assert!(artifact.metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "peak_rss_mb"
+                        && (*value - 1.5).abs() < f64::EPSILON
+            )
+        }));
         assert!(artifact.metrics.iter().any(|metric| {
             matches!(
                 metric,
