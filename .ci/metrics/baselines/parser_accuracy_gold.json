@@ -80,6 +80,7 @@
     "imports_exports::symbol_entity::imports_exports_package_entity",
     "imports_exports::symbol_occurrence::imports_exports_call_answer",
     "imports_exports::symbol_occurrence::imports_exports_export_answer",
+    "imports_exports::symbol_occurrence::imports_exports_import_answer",
     "incremental_small_edit::incremental::small_value_edit_matches_full_parse",
     "inherited_method::line::1::PackageDecl",
     "inherited_method::line::11::SubDecl",
