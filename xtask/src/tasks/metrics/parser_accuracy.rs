@@ -41,6 +41,7 @@ use perl_workspace::semantic::queries::QueryContext;
 use perl_workspace::workspace::workspace_index::{FileFactShard, WorkspaceIndex};
 use serde::{Deserialize, Serialize};
 
+use crate::allocation_tracker::measure_allocations;
 use crate::tasks::metrics::ratchet::MetricReceipt;
 use crate::utils::project_root;
 
@@ -523,6 +524,16 @@ enum MetricRow {
     },
 }
 
+impl MetricRow {
+    fn name(&self) -> &str {
+        match self {
+            MetricRow::Measured { metric, .. } | MetricRow::InsufficientData { metric, .. } => {
+                metric
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum Direction {
@@ -586,6 +597,8 @@ struct MetricRuntime {
     ci_runner_failure_count: u64,
     orphan_process_count: u64,
     cache_hit_rate: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    allocated_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -964,9 +977,13 @@ fn build_status_artifact(
 ) -> Result<(ParserAccuracyManifest, ParserAccuracyArtifact)> {
     let start = Instant::now();
     let manifest = read_manifest(root, manifest_path)?;
-    let mut artifact = build_artifact(root, &manifest, cadence)?;
+    let (artifact, allocation_measurement) =
+        measure_allocations(|| build_artifact(root, &manifest, cadence));
+    let mut artifact = artifact?;
     artifact.metric_runtime.runtime_ms = start.elapsed().as_secs_f64() * 1000.0;
+    artifact.metric_runtime.allocated_bytes = Some(allocation_measurement.allocated_bytes);
     settle_artifact_size(&mut artifact)?;
+    sync_allocated_bytes_metric_row(&mut artifact, cadence);
     sync_runtime_metric_rows(&mut artifact, cadence);
     Ok((manifest, artifact))
 }
@@ -4850,6 +4867,15 @@ fn sync_runtime_metric_rows(artifact: &mut ParserAccuracyArtifact, cadence: Cade
     ]);
 }
 
+fn sync_allocated_bytes_metric_row(artifact: &mut ParserAccuracyArtifact, cadence: Cadence) {
+    let Some(allocated_bytes) = artifact.metric_runtime.allocated_bytes else {
+        return;
+    };
+    if let Some(row) = artifact.metrics.iter_mut().find(|row| row.name() == "allocated_bytes") {
+        *row = measured_count("allocated_bytes", allocated_bytes, 1, cadence);
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 enum SymbolMetricSource {
     Entity,
@@ -7756,6 +7782,47 @@ sub dynamic_boundary_case {
                 MetricRow::Measured { metric, value, sample_count: 1, .. }
                     if metric == "metric_artifact_size_bytes"
                         && (*value - 900.0).abs() < f64::EPSILON
+            )
+        }));
+    }
+
+    #[test]
+    fn allocated_bytes_row_is_replaced_after_runtime_measurement() {
+        let mut artifact = ParserAccuracyArtifact {
+            schema_version: 1,
+            subsystem: "parser_accuracy".to_string(),
+            generated_at: "2026-05-02T00:00:00Z".to_string(),
+            commit: "test".to_string(),
+            cadence: Cadence::Pr,
+            denominator: Denominator::default(),
+            families: Vec::new(),
+            metrics: vec![
+                insufficient("allocated_bytes", "allocation telemetry is not wired yet"),
+                insufficient("allocation_count", "allocation telemetry is not wired yet"),
+            ],
+            failure_packets: Vec::new(),
+            gold_drift: GoldDrift::default(),
+            metric_runtime: MetricRuntime {
+                allocated_bytes: Some(1234),
+                ..MetricRuntime::default()
+            },
+        };
+
+        sync_allocated_bytes_metric_row(&mut artifact, Cadence::Pr);
+
+        assert!(artifact.metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "allocated_bytes"
+                        && (*value - 1234.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(artifact.metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                    if metric == "allocation_count"
             )
         }));
     }

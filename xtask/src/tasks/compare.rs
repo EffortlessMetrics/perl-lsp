@@ -10,7 +10,7 @@
 //! - **Real Perl Code Testing**: Uses actual Perl benchmark files, not test format files
 //! - **Performance Measurement**: Time and memory usage comparison with statistical analysis
 //! - **Report Generation**: Comprehensive markdown and JSON reports with detailed metrics
-//! - **Enhanced Memory Profiling**: Dual-mode memory tracking using both peak_alloc and procfs RSS measurement
+//! - **Enhanced Memory Profiling**: Dual-mode memory tracking using xtask allocation telemetry and procfs RSS measurement
 //! - **CI Integration**: Performance gates for continuous integration
 //! - **Error Recovery**: Graceful handling of parse failures with detailed reporting
 //!
@@ -59,12 +59,6 @@
 
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
-use peak_alloc::PeakAlloc;
-
-// Only available on Linux runners.
-#[cfg(target_os = "linux")]
-use procfs::process::Process;
-
 use serde_json::json;
 use std::fs;
 use std::io::Write;
@@ -72,53 +66,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
-#[global_allocator]
-static PEAK_ALLOC: PeakAlloc = PeakAlloc;
-
-/// Memory measurement helper that provides safe fallback behavior
-fn measure_memory_usage<F, R>(operation: F) -> (R, f64)
-where
-    F: FnOnce() -> R,
-{
-    // Measure RSS memory before operation using procfs
-    let memory_before = get_current_memory_usage().unwrap_or(0.0);
-
-    // Also reset peak allocator for local memory tracking
-    PEAK_ALLOC.reset_peak_usage();
-
-    // Perform the operation
-    let result = operation();
-
-    // Measure RSS memory after operation
-    let memory_after = get_current_memory_usage().unwrap_or(0.0);
-
-    // Get peak allocator usage as fallback
-    let peak_memory_mb = PEAK_ALLOC.peak_usage_as_mb() as f64;
-
-    // Use the more accurate measurement or fallback to peak allocator
-    let memory_delta = memory_after - memory_before;
-    let memory_mb = if memory_delta > 0.0 { memory_delta } else { peak_memory_mb };
-
-    (result, memory_mb)
-}
-
-/// Get current process memory usage in MB using procfs (Linux only)
-#[cfg(target_os = "linux")]
-fn get_current_memory_usage() -> Result<f64> {
-    let pid = std::process::id() as i32;
-    let process = Process::new(pid)?;
-    let statm = process.statm()?;
-    let page_size = procfs::page_size();
-    let rss_bytes = statm.resident.saturating_mul(page_size);
-    Ok(rss_bytes as f64 / (1024.0 * 1024.0)) // MB
-}
-
-/// Fallback memory measurement for non-Linux platforms
-#[cfg(not(target_os = "linux"))]
-fn get_current_memory_usage() -> Result<f64> {
-    // Non-Linux: no procfs. Return 0 and let callers fall back to peak_alloc.
-    Ok(0.0)
-}
+use crate::allocation_tracker::{get_current_memory_usage, measure_memory_usage};
 
 /// Estimate memory usage based on file size and parsing complexity
 fn estimate_subprocess_memory(file_path: &str) -> f64 {
