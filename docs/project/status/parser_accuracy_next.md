@@ -12,10 +12,10 @@ Pointer: no active failure packets.
 
 | Metric | Reason | Suggested PR |
 |---|---|---|
-| `semantic_fact_cache_hit_rate` | semantic fact cache telemetry is not wired yet | `feat(metrics): wire parser-accuracy measurement for semantic_fact_cache_hit_rate` |
 | `unchanged_file_skip_rate` | unchanged-file skip telemetry is not wired yet | `feat(metrics): wire parser-accuracy measurement for unchanged_file_skip_rate` |
 | `workspace_shard_reuse_rate` | workspace shard reuse telemetry is not wired yet | `feat(metrics): wire parser-accuracy measurement for workspace_shard_reuse_rate` |
 | `ast_delimiter_pairing_accuracy` | no expected AST delimiter-pairing labels are available | `feat(metrics): wire parser-accuracy measurement for ast_delimiter_pairing_accuracy` |
 | `comment_invariance_rate` | metamorphic comment fixtures are not wired yet | `feat(metrics): wire parser-accuracy measurement for comment_invariance_rate` |
+| `dynamic_boundary_precision` | no dynamic-boundary fact predictions are available in fully labeled fixtures | `feat(metrics): wire parser-accuracy measurement for dynamic_boundary_precision` |
 
 Use this section only when there are no active failure packets. Keep each measurement gap in its own PR and regenerate this file after a lane lands.
