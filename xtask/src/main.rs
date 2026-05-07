@@ -374,6 +374,12 @@ enum Commands {
         /// Lint a single workflow fixture instead of repository workflows.
         #[arg(long)]
         fixture: Option<PathBuf>,
+
+        /// Also validate that every workflow has a `[[lane]]` entry in
+        /// policy/ci-lane-whitelist.toml. Advisory (warning-level) until the
+        /// whitelist has stabilized — see docs/ci/perl-lsp-rollout-plan.md PR 11.
+        #[arg(long)]
+        check_lane_whitelist: bool,
     },
 
     /// Measure CI lane runtimes and emit timing artifacts.
@@ -2017,10 +2023,11 @@ fn main() -> Result<()> {
         }
         Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
         Commands::CiAuditWorkflows => ci_audit_workflows::run(),
-        Commands::WorkflowPolicyLint { receipt, fixture } => {
+        Commands::WorkflowPolicyLint { receipt, fixture, check_lane_whitelist } => {
             workflow_policy_lint::run(workflow_policy_lint::WorkflowPolicyLintConfig {
                 receipt,
                 fixture,
+                check_lane_whitelist,
             })
         }
         Commands::CiMeasure => ci_measure::run(),

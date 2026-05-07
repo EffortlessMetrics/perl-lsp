@@ -1,6 +1,7 @@
 use color_eyre::eyre::{Context, Result, bail};
 use serde::Serialize;
 use serde_yaml_ng::{Mapping, Value};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -10,10 +11,44 @@ const ALLOWLIST_PR_CONTENTS_WRITE: &[&str] = &["ci.yml", "ci-nightly.yml"];
 const POLICY_WARN_UNPINNED_ACTIONS: bool = true;
 const ALLOWLIST_BLANKET_CANCEL_IN_PROGRESS: &[&str] = &["docs-deploy.yml", "post-merge-status.yml"];
 
+/// Workflow files that intentionally have no `policy/ci-lane-whitelist.toml`
+/// entry. Add an entry here only when there's a documented reason — e.g. a
+/// release/publish workflow that's release-time-only and not part of
+/// per-PR economics.
+const ALLOWLIST_WORKFLOW_LANE_MISSING: &[&str] = &[
+    // Release / publish workflows: out of scope for the per-PR economics map.
+    "brew-bump.yml",
+    "chocolatey-bump.yml",
+    "docker-publish.yml",
+    "docs-deploy.yml",
+    "post-merge-corpus-ratchet.yml",
+    "post-merge-status.yml",
+    "post-publish-smoke.yml",
+    "publish-crates.yml",
+    "publish-extension.yml",
+    "publish-dry-run.yml",
+    "release-orchestration.yml",
+    "release.yml",
+    "scoop-bump.yml",
+    "tokmd.yml",
+    "version-bump.yml",
+    "vscode-published-extension-smoke.yml",
+    "winget-bump.yml",
+    // Schedule/utility workflows tracked separately from the lane economics.
+    "ci-gate-self-tests.yml",
+    "merge-ready-reconciler.yml",
+    "triage-issues.yml",
+    "workflow-trigger-lint.yml",
+];
+
 #[derive(Debug, Clone)]
 pub struct WorkflowPolicyLintConfig {
     pub receipt: Option<PathBuf>,
     pub fixture: Option<PathBuf>,
+    /// Run the per-workflow lane-whitelist check against
+    /// `policy/ci-lane-whitelist.toml`. Advisory (warning-level) until the
+    /// whitelist has stabilized.
+    pub check_lane_whitelist: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -55,6 +90,10 @@ pub fn run(config: WorkflowPolicyLintConfig) -> Result<()> {
                 }
                 lint_workflow_file(&path, false, &mut issues)?;
             }
+        }
+
+        if config.check_lane_whitelist {
+            check_lane_whitelist(&root, &mut issues)?;
         }
     }
 
@@ -520,6 +559,74 @@ fn is_sha_pinned(uses: &str) -> bool {
         return false;
     };
     reference.len() == 40 && reference.chars().all(|ch| ch.is_ascii_hexdigit())
+}
+
+/// Validate that every workflow under `.github/workflows/` is referenced by at
+/// least one `[[lane]]` entry in `policy/ci-lane-whitelist.toml`, OR is in the
+/// `ALLOWLIST_WORKFLOW_LANE_MISSING` allowlist (release/utility workflows).
+///
+/// Issues are emitted at warning level — advisory until the whitelist has
+/// stabilized. PR 11 introduces this as advisory; promotion to error level
+/// happens only after a calibration window.
+fn check_lane_whitelist(root: &Path, issues: &mut Vec<LintIssue>) -> Result<()> {
+    let whitelist_path = root.join("policy").join("ci-lane-whitelist.toml");
+    if !whitelist_path.exists() {
+        // Whitelist not present in this repo; silently skip rather than failing.
+        return Ok(());
+    }
+
+    let whitelist_text = fs::read_to_string(&whitelist_path)
+        .with_context(|| format!("reading {}", whitelist_path.display()))?;
+    let whitelist: toml::Value = toml::from_str(&whitelist_text)
+        .with_context(|| format!("parsing {}", whitelist_path.display()))?;
+
+    // Collect workflow paths referenced by whitelist lanes.
+    let mut whitelisted_workflows: HashSet<String> = HashSet::new();
+    if let Some(lanes) = whitelist.get("lane").and_then(|v| v.as_array()) {
+        for lane in lanes {
+            if let Some(workflow) = lane.get("workflow").and_then(|v| v.as_str()) {
+                whitelisted_workflows.insert(workflow.to_string());
+            }
+        }
+    }
+
+    let workflows_dir = root.join(".github").join("workflows");
+    if !workflows_dir.exists() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(&workflows_dir)
+        .with_context(|| format!("reading {}", workflows_dir.display()))?
+    {
+        let path = entry.context("reading workflow entry")?.path();
+        let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
+            continue;
+        };
+        if ext != "yml" && ext != "yaml" {
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if ALLOWLIST_WORKFLOW_LANE_MISSING.contains(&file_name) {
+            continue;
+        }
+        let workflow_ref = format!(".github/workflows/{file_name}");
+        if !whitelisted_workflows.contains(&workflow_ref) {
+            issues.push(LintIssue {
+                level: "warning",
+                code: "LANE_WHITELIST_MISSING",
+                workflow: file_name.to_string(),
+                message: format!(
+                    "workflow has no `[[lane]]` entry in policy/ci-lane-whitelist.toml \
+                     (and is not in ALLOWLIST_WORKFLOW_LANE_MISSING). Add an entry or \
+                     allowlist with reason."
+                ),
+            });
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
