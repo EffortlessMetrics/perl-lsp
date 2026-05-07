@@ -1,7 +1,9 @@
 use color_eyre::eyre::{Context, Result, bail};
 use regex::Regex;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 use walkdir::WalkDir;
 
 use crate::utils::project_root;
@@ -9,6 +11,37 @@ use crate::utils::project_root;
 const FROM_RAW_PATTERN: &str = r"\b([A-Za-z_][A-Za-z0-9_:]*::)?ExitStatus::from_raw\(";
 const ALLOWED_FROM_RAW_PATTERN: &str = r"::from_raw\(\s*raw[_ ]?exit\s*\(";
 const SEARCH_ROOTS: &[&str] = &["crates", "xtask", "examples", "tests"];
+const RETAINED_STATE_INVENTORY: &str = "docs/large-workspaces/RETAINED_STATE_INVENTORY.md";
+const RETAINED_OWNER_PATTERN_LABELS: &[(&str, &str)] = &[
+    ("Arc<Mutex<", "shared mutex state"),
+    ("Arc<RwLock<", "shared rwlock state"),
+    ("moka::Cache", "cache"),
+    ("Cache::new", "cache"),
+    ("DashMap", "concurrent map"),
+    ("HashMap", "map"),
+    ("BTreeMap", "map"),
+    ("VecDeque", "queue"),
+    ("JoinSet", "task set"),
+    ("tokio::spawn", "spawned task"),
+    ("mpsc::", "channel"),
+    ("oneshot::", "channel"),
+    ("broadcast::", "channel"),
+    ("watch::", "channel"),
+    ("Child", "child process handle"),
+    ("tokio::process::Child", "child process handle"),
+    ("std::process::Child", "child process handle"),
+    ("Debouncer", "debouncer"),
+    ("SessionManager", "session holder"),
+    ("sessions:", "session holder"),
+];
+const MEMORY_SENSITIVE_RUST_PREFIXES: &[&str] = &[
+    "crates/perl-lsp-rs/src/runtime/",
+    "crates/perl-lsp-rs/src/runtime/language/",
+    "crates/perl-workspace/src/workspace/",
+    "crates/perl-lsp-perltidy/src/",
+    "crates/perl-lsp-rs-core/src/tooling/",
+    "crates/perl-dap/src/",
+];
 
 struct MemoryLifecycleInputs {
     text_sync: String,
@@ -19,6 +52,20 @@ struct MemoryLifecycleInputs {
     retained_state_inventory: String,
     receipt_registry: String,
     memory_receipt_schema: String,
+}
+
+pub struct RetainedOwnerDriftConfig {
+    pub base: String,
+    pub report_only: bool,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct RetainedOwnerFinding {
+    path: String,
+    line: String,
+    pattern: &'static str,
+    label: &'static str,
+    sensitive_path: bool,
 }
 
 fn source_fragment(line: &str) -> &str {
@@ -398,6 +445,170 @@ pub fn check_memory_lifecycle() -> Result<()> {
     bail!("memory lifecycle policy check failed");
 }
 
+fn resolve_diff_base(root: &Path, requested_base: &str) -> Result<String> {
+    for candidate in [requested_base, "origin/master", "origin/main", "master", "main", "HEAD~1"] {
+        let output = Command::new("git")
+            .current_dir(root)
+            .args(["rev-parse", "--verify", candidate])
+            .output()
+            .with_context(|| format!("failed to resolve git ref {candidate}"))?;
+        if output.status.success() {
+            return Ok(candidate.to_string());
+        }
+    }
+
+    bail!("could not resolve a diff base for retained-owner drift check");
+}
+
+fn diff_name_only(root: &Path, base: &str) -> Result<Vec<String>> {
+    let output = Command::new("git")
+        .current_dir(root)
+        .args(["diff", "--name-only", &format!("{base}...HEAD")])
+        .output()
+        .context("failed to run git diff --name-only for retained-owner drift check")?;
+
+    if !output.status.success() {
+        bail!("git diff --name-only failed for retained-owner drift check");
+    }
+
+    let stdout = String::from_utf8(output.stdout).context("git diff output was not UTF-8")?;
+    Ok(stdout.lines().map(str::to_string).filter(|line| !line.is_empty()).collect())
+}
+
+fn diff_added_lines(root: &Path, base: &str) -> Result<BTreeMap<String, Vec<String>>> {
+    let output = Command::new("git")
+        .current_dir(root)
+        .args(["diff", "--unified=0", &format!("{base}...HEAD"), "--", "*.rs"])
+        .output()
+        .context("failed to run git diff for retained-owner drift check")?;
+
+    if !output.status.success() {
+        bail!("git diff failed for retained-owner drift check");
+    }
+
+    let stdout = String::from_utf8(output.stdout).context("git diff output was not UTF-8")?;
+    Ok(parse_added_lines_by_file(&stdout))
+}
+
+fn parse_added_lines_by_file(diff: &str) -> BTreeMap<String, Vec<String>> {
+    let mut current_file: Option<String> = None;
+    let mut added_by_file: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+    for line in diff.lines() {
+        if let Some(path) = line.strip_prefix("+++ b/") {
+            current_file = Some(path.to_string());
+            continue;
+        }
+
+        if line.starts_with("+++") || !line.starts_with('+') {
+            continue;
+        }
+
+        let Some(path) = current_file.as_ref() else {
+            continue;
+        };
+        added_by_file.entry(path.clone()).or_default().push(line[1..].to_string());
+    }
+
+    added_by_file
+}
+
+fn line_contains_retained_owner_pattern(line: &str) -> Option<(&'static str, &'static str)> {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with("//") || trimmed.starts_with("///") || trimmed.starts_with("//!") {
+        return None;
+    }
+
+    RETAINED_OWNER_PATTERN_LABELS
+        .iter()
+        .find_map(|(pattern, label)| line.contains(pattern).then_some((*pattern, *label)))
+}
+
+fn is_memory_sensitive_path(path: &str) -> bool {
+    MEMORY_SENSITIVE_RUST_PREFIXES.iter().any(|prefix| path.starts_with(prefix))
+}
+
+fn retained_owner_findings(
+    changed_files: &[String],
+    added_lines: &BTreeMap<String, Vec<String>>,
+) -> Vec<RetainedOwnerFinding> {
+    let changed: BTreeSet<_> = changed_files.iter().collect();
+    added_lines
+        .iter()
+        .filter(|(path, _)| changed.contains(path) && is_memory_sensitive_path(path))
+        .flat_map(|(path, lines)| {
+            lines.iter().filter_map(move |line| {
+                let (pattern, label) = line_contains_retained_owner_pattern(line)?;
+                Some(RetainedOwnerFinding {
+                    path: path.clone(),
+                    line: line.trim().to_string(),
+                    pattern,
+                    label,
+                    sensitive_path: is_memory_sensitive_path(path),
+                })
+            })
+        })
+        .collect()
+}
+
+fn inventory_was_changed(changed_files: &[String]) -> bool {
+    changed_files.iter().any(|path| path == RETAINED_STATE_INVENTORY)
+}
+
+pub fn check_memory_retained_owner_drift(config: RetainedOwnerDriftConfig) -> Result<()> {
+    let root = project_root()?;
+    let base = resolve_diff_base(&root, &config.base)?;
+    let changed_files = diff_name_only(&root, &base)?;
+    let added_lines = diff_added_lines(&root, &base)?;
+    let findings = retained_owner_findings(&changed_files, &added_lines);
+
+    if findings.is_empty() {
+        println!(
+            "Memory retained-owner drift check passed: no new retained-owner patterns found in memory-sensitive Rust paths"
+        );
+        return Ok(());
+    }
+
+    if inventory_was_changed(&changed_files) {
+        println!(
+            "Memory retained-owner drift check passed: retained-owner patterns found and {RETAINED_STATE_INVENTORY} changed"
+        );
+        for finding in findings {
+            println!(
+                "::notice file={}::new {} pattern `{}` is covered by retained-state inventory changes",
+                finding.path, finding.label, finding.pattern
+            );
+        }
+        return Ok(());
+    }
+
+    for finding in &findings {
+        let annotation = if finding.sensitive_path { "warning" } else { "notice" };
+        println!(
+            "::{annotation} file={}::new {} pattern `{}` without {RETAINED_STATE_INVENTORY}: {}",
+            finding.path, finding.label, finding.pattern, finding.line
+        );
+    }
+
+    let sensitive_count = findings.iter().filter(|finding| finding.sensitive_path).count();
+    if !config.report_only && sensitive_count > 0 {
+        bail!(
+            "retained-owner drift check found {sensitive_count} memory-sensitive additions without {RETAINED_STATE_INVENTORY}"
+        );
+    }
+
+    if config.report_only {
+        println!(
+            "Memory retained-owner drift check completed in report-only mode; update {RETAINED_STATE_INVENTORY} when the new storage/task owner is long-lived"
+        );
+    } else {
+        println!(
+            "Memory retained-owner drift check passed: only non-sensitive retained-owner patterns were added without {RETAINED_STATE_INVENTORY}"
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -619,5 +830,57 @@ mod tests {
             violations.iter().any(|v| v.contains("pressure counter or signal column")),
             "expected missing pressure-signal column violation, got {violations:?}"
         );
+    }
+
+    #[test]
+    fn retained_owner_drift_detects_added_storage_patterns() {
+        let diff = r#"
+diff --git a/crates/perl-lsp-rs/src/runtime/example.rs b/crates/perl-lsp-rs/src/runtime/example.rs
+index 0000000..1111111 100644
+--- a/crates/perl-lsp-rs/src/runtime/example.rs
++++ b/crates/perl-lsp-rs/src/runtime/example.rs
+@@ -1,0 +1,4 @@
++use std::collections::HashMap;
++let cache = Arc<Mutex<HashMap<String, String>>>;
++// HashMap in comments should not be counted after parsing added lines
++tokio::spawn(async move {});
+"#;
+        let changed_files = vec!["crates/perl-lsp-rs/src/runtime/example.rs".to_string()];
+        let added_lines = parse_added_lines_by_file(diff);
+        let findings = retained_owner_findings(&changed_files, &added_lines);
+
+        assert!(
+            findings.iter().any(|finding| finding.pattern == "HashMap"),
+            "expected HashMap finding, got {findings:?}"
+        );
+        assert!(
+            findings.iter().any(|finding| finding.pattern == "Arc<Mutex<"),
+            "expected Arc<Mutex< finding, got {findings:?}"
+        );
+        assert!(
+            findings.iter().any(|finding| finding.pattern == "tokio::spawn"),
+            "expected tokio::spawn finding, got {findings:?}"
+        );
+        assert!(
+            findings.iter().all(|finding| finding.sensitive_path),
+            "runtime findings should be memory-sensitive: {findings:?}"
+        );
+        assert_eq!(
+            findings.iter().filter(|finding| finding.line.contains("comments")).count(),
+            0,
+            "comment-only retained-owner mentions should not be findings"
+        );
+    }
+
+    #[test]
+    fn retained_owner_drift_notes_inventory_updates() {
+        let changed_files = vec![
+            "crates/perl-dap/src/session.rs".to_string(),
+            RETAINED_STATE_INVENTORY.to_string(),
+        ];
+
+        assert!(inventory_was_changed(&changed_files));
+        assert!(is_memory_sensitive_path("crates/perl-dap/src/session.rs"));
+        assert!(!is_memory_sensitive_path("docs/large-workspaces/example.md"));
     }
 }
