@@ -23,6 +23,12 @@ pub struct DevexReceiptConfig {
     pub output: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+pub struct DevexCockpitConfig {
+    pub base: String,
+    pub receipt: PathBuf,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 enum Surface {
     ParserAccuracy,
@@ -101,6 +107,16 @@ struct ProofCommandReceipt {
     evidence: String,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct WorktreeState {
+    branch: String,
+    head_short: String,
+    clean: bool,
+    staged_present: bool,
+    unstaged_present: bool,
+    untracked_present: bool,
+}
+
 pub fn run(config: DevexPlanConfig) -> Result<()> {
     let plan = load_plan(&config.base)?;
     print_plan(&plan);
@@ -114,6 +130,24 @@ pub fn write_receipt(config: DevexReceiptConfig) -> Result<()> {
     write_receipt_json(&config.output, &receipt)?;
 
     println!("Wrote DevEx local proof receipt to {}", config.output.display());
+    Ok(())
+}
+
+pub fn cockpit(config: DevexCockpitConfig) -> Result<()> {
+    let root = project_root()?;
+    let plan = load_plan_from_root(&root, &config.base)?;
+    let receipt = build_receipt(&root, plan.clone())?;
+    write_receipt_json(&config.receipt, &receipt)?;
+    let worktree = load_worktree_state(&root)?;
+
+    print!(
+        "{}",
+        render_cockpit(CockpitView {
+            plan: &plan,
+            worktree: &worktree,
+            receipt_path: &config.receipt,
+        })
+    );
     Ok(())
 }
 
@@ -178,6 +212,35 @@ fn is_worktree_clean(root: &Path) -> Result<bool> {
     Ok(git_stdout(root, &["status", "--porcelain"])?.trim().is_empty())
 }
 
+fn load_worktree_state(root: &Path) -> Result<WorktreeState> {
+    let branch_raw = git_stdout(root, &["branch", "--show-current"])?;
+    let branch = match branch_raw.trim() {
+        "" => "detached HEAD".to_string(),
+        branch => branch.to_string(),
+    };
+    let head = git_stdout(root, &["rev-parse", "HEAD"])?;
+    let staged = git_stdout(root, &["diff", "--cached", "--name-only"])?;
+    let unstaged = git_stdout(root, &["diff", "--name-only"])?;
+    let untracked = git_stdout(root, &["ls-files", "--others", "--exclude-standard"])?;
+
+    let staged_present = !staged.trim().is_empty();
+    let unstaged_present = !unstaged.trim().is_empty();
+    let untracked_present = !untracked.trim().is_empty();
+
+    Ok(WorktreeState {
+        branch,
+        head_short: short_sha(head.trim()),
+        clean: !(staged_present || unstaged_present || untracked_present),
+        staged_present,
+        unstaged_present,
+        untracked_present,
+    })
+}
+
+fn short_sha(sha: &str) -> String {
+    sha.chars().take(9).collect()
+}
+
 fn build_plan(base: String, head: String, changed_files: Vec<String>) -> Plan {
     let surfaces = classify_surfaces(&changed_files);
     let required_commands = required_commands(&surfaces, &base);
@@ -220,6 +283,14 @@ fn proof_receipts(commands: Vec<ProofCommand>) -> Vec<ProofCommandReceipt> {
         .collect()
 }
 
+fn surface_ids(plan: &Plan) -> Vec<String> {
+    plan.surfaces.iter().map(|surface| surface.id().to_string()).collect()
+}
+
+fn proof_command_names(commands: &[ProofCommand]) -> Vec<String> {
+    commands.iter().map(|proof| proof.command.clone()).collect()
+}
+
 fn write_receipt_json(path: &Path, receipt: &DevexReceipt) -> Result<()> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
@@ -231,6 +302,82 @@ fn write_receipt_json(path: &Path, receipt: &DevexReceipt) -> Result<()> {
     let rendered = serde_json::to_string_pretty(receipt).context("serializing devex receipt")?;
     fs::write(path, format!("{rendered}\n"))
         .with_context(|| format!("writing devex receipt {}", path.display()))
+}
+
+struct CockpitView<'a> {
+    plan: &'a Plan,
+    worktree: &'a WorktreeState,
+    receipt_path: &'a Path,
+}
+
+fn render_cockpit(view: CockpitView<'_>) -> String {
+    let surfaces = surface_ids(view.plan);
+    let required = proof_command_names(&view.plan.required_commands);
+    let optional = proof_command_names(&view.plan.optional_commands);
+
+    let mut out = String::new();
+    out.push_str("PR Cockpit\n");
+    out.push_str("----------\n");
+    out.push_str(&format!("Base:                  {}\n", view.plan.base));
+    out.push_str(&format!("Head:                  {}\n", view.worktree.head_short));
+    out.push_str(&format!("Branch:                {}\n", view.worktree.branch));
+    out.push_str(&format!("Worktree clean:        {}\n", yes_no(view.worktree.clean)));
+    out.push_str(&format!("Staged changes:        {}\n", yes_no(view.worktree.staged_present)));
+    out.push_str(&format!("Unstaged changes:      {}\n", yes_no(view.worktree.unstaged_present)));
+    out.push_str(&format!("Untracked files:       {}\n", yes_no(view.worktree.untracked_present)));
+    out.push_str(&format!("Changed files:         {}\n", view.plan.changed_files.len()));
+    out.push_str(&format!("Changed surfaces:      {}\n", list_or_none(&surfaces)));
+    out.push_str(&format!("Required proof:        {} commands\n", required.len()));
+    for command in &required {
+        out.push_str(&format!("  - {command}\n"));
+    }
+    out.push_str(&format!("Optional proof:        {} commands\n", optional.len()));
+    for command in &optional {
+        out.push_str(&format!("  - {command}\n"));
+    }
+    out.push_str(&format!(
+        "Memory owner drift:    {}\n",
+        applicability(
+            view.plan.surfaces.contains(&Surface::RetainedOwnerCandidate),
+            "run retained-owner drift proof",
+        )
+    ));
+    out.push_str(&format!(
+        "Release/version drift: {}\n",
+        applicability(view.plan.surfaces.contains(&Surface::ReleaseVersion), "run release proof")
+    ));
+    out.push_str(&format!(
+        "Agent-safe path:       {}\n",
+        if view.plan.agent_hints.is_empty() { "none" } else { "available" }
+    ));
+    out.push_str(&format!("Receipt written:       {}\n", view.receipt_path.display()));
+    out.push('\n');
+    out.push_str("Agent hints:\n");
+    for hint in &view.plan.agent_hints {
+        out.push_str(&format!("  - {hint}\n"));
+    }
+    out.push('\n');
+    out.push_str("Next:\n");
+    out.push_str("  - Paste receipt summary into the PR body.\n");
+    out.push_str("  - Run missing required proof commands.\n");
+    out.push_str(&format!(
+        "  - Use `cargo xtask devex receipt --base {} --output {}` for JSON handoff.\n",
+        view.plan.base,
+        view.receipt_path.display()
+    ));
+    out
+}
+
+fn yes_no(value: bool) -> &'static str {
+    if value { "yes" } else { "no" }
+}
+
+fn list_or_none(values: &[String]) -> String {
+    if values.is_empty() { "none".to_string() } else { values.join(", ") }
+}
+
+fn applicability(applies: bool, action: &'static str) -> &'static str {
+    if applies { action } else { "not applicable" }
 }
 
 fn merge_changed_file_lists(lists: &[&str]) -> Vec<String> {
@@ -631,5 +778,53 @@ mod tests {
                 && proof["why"].as_str().is_some_and(|why| !why.is_empty())
                 && proof["evidence"].as_str().is_some_and(|evidence| !evidence.is_empty())
         }));
+    }
+
+    #[test]
+    fn cockpit_renders_branch_state_proof_summary_and_receipt_path() {
+        let plan = build_plan(
+            "origin/master".to_string(),
+            "abcdef1234567890".to_string(),
+            strings(&[
+                "docs/project/status/parser.md",
+                "crates/perl-lsp-rs/src/runtime/text_sync.rs",
+                "CHANGELOG.md",
+            ]),
+        );
+        let worktree = WorktreeState {
+            branch: "feature/devex".to_string(),
+            head_short: "abcdef123".to_string(),
+            clean: true,
+            staged_present: false,
+            unstaged_present: false,
+            untracked_present: false,
+        };
+
+        let rendered = render_cockpit(CockpitView {
+            plan: &plan,
+            worktree: &worktree,
+            receipt_path: Path::new("target/devex/local-proof.json"),
+        });
+
+        assert!(rendered.contains("PR Cockpit"));
+        assert!(rendered.contains("Base:                  origin/master"));
+        assert!(rendered.contains("Head:                  abcdef123"));
+        assert!(rendered.contains("Branch:                feature/devex"));
+        assert!(rendered.contains("Worktree clean:        yes"));
+        assert!(rendered.contains("Changed surfaces:      parser_accuracy"));
+        assert!(rendered.contains("generated_status_docs"));
+        assert!(rendered.contains("memory_sensitive_runtime"));
+        assert!(rendered.contains("Required proof:"));
+        assert!(rendered.contains("just ci-metrics-ratchet-check parser_accuracy"));
+        assert!(
+            rendered.contains("cargo xtask check-memory-retained-owner-drift --base origin/master")
+        );
+        assert!(rendered.contains("just release-check"));
+        assert!(rendered.contains("cargo xtask check-memory-lifecycle-policy"));
+        assert!(rendered.contains("Memory owner drift:    run retained-owner drift proof"));
+        assert!(rendered.contains("Release/version drift: run release proof"));
+        assert!(rendered.contains("Agent-safe path:       available"));
+        assert!(rendered.contains("Receipt written:       target/devex/local-proof.json"));
+        assert!(rendered.contains("Next:"));
     }
 }
