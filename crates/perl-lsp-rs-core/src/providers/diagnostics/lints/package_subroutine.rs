@@ -178,7 +178,7 @@ pub fn check_duplicate_subroutine(node: &Node, diagnostics: &mut Vec<Diagnostic>
 mod tests {
     use super::*;
     use perl_parser::Parser;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     fn missing_pkg_diags(source: &str, path: Option<&Path>) -> Vec<Diagnostic> {
         let ast = must(Parser::new(source).parse());
@@ -289,10 +289,11 @@ mod tests {
     #[test]
     fn duplicate_package_message_names_it() {
         let diags = dup_pkg_diags("package Baz;\npackage Baz;\n");
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL201")).unwrap();
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL201")));
         assert!(
             diag.message.contains("Baz"),
-            "PL201 message should name the duplicate package: {}", diag.message
+            "PL201 message should name the duplicate package: {}",
+            diag.message
         );
     }
 
@@ -318,9 +319,8 @@ mod tests {
 
     #[test]
     fn same_name_different_packages_not_flagged() {
-        let diags = dup_sub_diags(
-            "package Alpha;\nsub new { 1; }\npackage Beta;\nsub new { 2; }\n",
-        );
+        let diags =
+            dup_sub_diags("package Alpha;\nsub new { 1; }\npackage Beta;\nsub new { 2; }\n");
         assert!(
             diags.iter().all(|d| d.code.as_deref() != Some("PL300")),
             "same sub name in different packages should not be flagged: {diags:?}"
@@ -330,17 +330,18 @@ mod tests {
     #[test]
     fn duplicate_sub_message_names_it() {
         let diags = dup_sub_diags("package X;\nsub helper { 1; }\nsub helper { 2; }\n");
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL300")).unwrap();
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL300")));
         assert!(
             diag.message.contains("helper"),
-            "PL300 message should name the duplicate subroutine: {}", diag.message
+            "PL300 message should name the duplicate subroutine: {}",
+            diag.message
         );
     }
 
     #[test]
     fn duplicate_sub_has_suggestion() {
         let diags = dup_sub_diags("package X;\nsub run { 1; }\nsub run { 2; }\n");
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL300")).unwrap();
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL300")));
         assert!(diag.suggestion.is_some(), "PL300 should carry a suggestion");
     }
 }

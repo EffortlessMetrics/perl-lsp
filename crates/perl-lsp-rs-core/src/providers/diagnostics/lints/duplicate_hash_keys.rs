@@ -90,7 +90,7 @@ pub fn check_duplicate_hash_keys(node: &Node, diagnostics: &mut Vec<Diagnostic>)
 mod tests {
     use super::*;
     use perl_parser::Parser;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     fn dup_key_diags(source: &str) -> Vec<Diagnostic> {
         let ast = must(Parser::new(source).parse());
@@ -106,7 +106,10 @@ mod tests {
     #[test]
     fn duplicate_string_key_is_flagged() {
         let diags = dup_key_diags(r#"my %h = (foo => 1, foo => 2);"#);
-        assert!(has_pl408(&diags), "duplicate string key 'foo' should be flagged as PL408: {diags:?}");
+        assert!(
+            has_pl408(&diags),
+            "duplicate string key 'foo' should be flagged as PL408: {diags:?}"
+        );
     }
 
     #[test]
@@ -119,7 +122,10 @@ mod tests {
     fn three_occurrences_two_diagnostics() {
         let diags = dup_key_diags(r#"my %h = (x => 1, x => 2, x => 3);"#);
         let count = diags.iter().filter(|d| d.code.as_deref() == Some("PL408")).count();
-        assert_eq!(count, 2, "three occurrences of same key should produce two PL408 diagnostics: {diags:?}");
+        assert_eq!(
+            count, 2,
+            "three occurrences of same key should produce two PL408 diagnostics: {diags:?}"
+        );
     }
 
     #[test]
@@ -137,17 +143,18 @@ mod tests {
     #[test]
     fn duplicate_message_names_the_key() {
         let diags = dup_key_diags(r#"my %h = (alpha => 1, alpha => 2);"#);
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL408")).unwrap();
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL408")));
         assert!(
             diag.message.contains("alpha"),
-            "PL408 message should name the duplicate key: {}", diag.message
+            "PL408 message should name the duplicate key: {}",
+            diag.message
         );
     }
 
     #[test]
     fn duplicate_diagnostic_has_related_info_for_first_occurrence() {
         let diags = dup_key_diags(r#"my %h = (name => "Alice", name => "Bob");"#);
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL408")).unwrap();
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL408")));
         assert!(
             !diag.related_information.is_empty(),
             "PL408 should include related information pointing to first occurrence"
@@ -157,7 +164,10 @@ mod tests {
     #[test]
     fn nested_hash_inner_duplicate_flagged() {
         let diags = dup_key_diags(r#"my %outer = (inner => { x => 1, x => 2 });"#);
-        assert!(has_pl408(&diags), "duplicate key inside nested hash ref should be flagged: {diags:?}");
+        assert!(
+            has_pl408(&diags),
+            "duplicate key inside nested hash ref should be flagged: {diags:?}"
+        );
     }
 
     #[test]

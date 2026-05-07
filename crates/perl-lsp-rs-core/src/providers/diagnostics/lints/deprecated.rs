@@ -90,7 +90,7 @@ pub fn check_deprecated_syntax(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 mod tests {
     use super::*;
     use perl_parser::Parser;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     fn deprecated_diags(source: &str) -> Vec<Diagnostic> {
         let ast = must(Parser::new(source).parse());
@@ -108,28 +108,19 @@ mod tests {
     #[test]
     fn defined_array_is_flagged() {
         let diags = deprecated_diags("my @arr = (1,2); if (defined @arr) { }");
-        assert!(
-            has_code(&diags, "PL500"),
-            "defined @arr should be flagged as PL500: {diags:?}"
-        );
+        assert!(has_code(&diags, "PL500"), "defined @arr should be flagged as PL500: {diags:?}");
     }
 
     #[test]
     fn defined_hash_is_flagged() {
         let diags = deprecated_diags("my %h = (a => 1); if (defined %h) { }");
-        assert!(
-            has_code(&diags, "PL500"),
-            "defined %h should be flagged as PL500: {diags:?}"
-        );
+        assert!(has_code(&diags, "PL500"), "defined %h should be flagged as PL500: {diags:?}");
     }
 
     #[test]
     fn defined_scalar_is_not_flagged() {
         let diags = deprecated_diags("my $x; if (defined $x) { }");
-        assert!(
-            !has_code(&diags, "PL500"),
-            "defined $x should NOT be flagged as PL500: {diags:?}"
-        );
+        assert!(!has_code(&diags, "PL500"), "defined $x should NOT be flagged as PL500: {diags:?}");
     }
 
     #[test]
@@ -144,9 +135,7 @@ mod tests {
     #[test]
     fn defined_array_diagnostic_has_deprecated_tag() {
         let diags = deprecated_diags("my @arr = (); defined @arr;");
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL500"));
-        assert!(diag.is_some(), "expected PL500 diagnostic");
-        let diag = diag.unwrap();
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL500")));
         assert!(
             diag.tags.contains(&DiagnosticTag::Deprecated),
             "PL500 should carry the Deprecated tag"
@@ -156,21 +145,19 @@ mod tests {
     #[test]
     fn defined_hash_diagnostic_message_mentions_hash() {
         let diags = deprecated_diags("my %h = (); defined %h;");
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL500")).unwrap();
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL500")));
         assert!(
             diag.message.contains("%h"),
-            "message should mention the hash variable: {}", diag.message
+            "message should mention the hash variable: {}",
+            diag.message
         );
     }
 
     #[test]
     fn defined_array_diagnostic_suggestion_present() {
         let diags = deprecated_diags("my @a = (); defined @a;");
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL500")).unwrap();
-        assert!(
-            diag.suggestion.is_some(),
-            "PL500 should carry a suggestion"
-        );
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL500")));
+        assert!(diag.suggestion.is_some(), "PL500 should carry a suggestion");
     }
 
     // --- $[ deprecated array base ---
@@ -178,10 +165,7 @@ mod tests {
     #[test]
     fn array_base_variable_is_flagged() {
         let diags = deprecated_diags("my $base = $[;");
-        assert!(
-            has_code(&diags, "PL501"),
-            "use of $[ should be flagged as PL501: {diags:?}"
-        );
+        assert!(has_code(&diags, "PL501"), "use of $[ should be flagged as PL501: {diags:?}");
     }
 
     #[test]
@@ -196,7 +180,7 @@ mod tests {
     #[test]
     fn array_base_diagnostic_has_deprecated_tag() {
         let diags = deprecated_diags("my $x = $[;");
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL501")).unwrap();
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL501")));
         assert!(
             diag.tags.contains(&DiagnosticTag::Deprecated),
             "PL501 should carry the Deprecated tag"
@@ -206,10 +190,7 @@ mod tests {
     #[test]
     fn normal_array_index_not_flagged() {
         let diags = deprecated_diags("my @a = (1,2,3); my $x = $a[0];");
-        assert!(
-            !has_code(&diags, "PL501"),
-            "$a[0] should not be flagged as PL501: {diags:?}"
-        );
+        assert!(!has_code(&diags, "PL501"), "$a[0] should not be flagged as PL501: {diags:?}");
     }
 
     #[test]

@@ -71,7 +71,7 @@ mod tests {
     use super::*;
     use perl_parser::Parser;
     use perl_semantic_analyzer::analysis::symbol::SymbolExtractor;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     fn goto_diags(source: &str) -> Vec<Diagnostic> {
         let ast = must(Parser::new(source).parse());
@@ -112,17 +112,18 @@ mod tests {
     #[test]
     fn diagnostic_message_names_the_label() {
         let diags = goto_diags("goto NOWHERE;");
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL409")).unwrap();
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL409")));
         assert!(
             diag.message.contains("NOWHERE"),
-            "PL409 message should name the missing label: {}", diag.message
+            "PL409 message should name the missing label: {}",
+            diag.message
         );
     }
 
     #[test]
     fn diagnostic_has_suggestion() {
         let diags = goto_diags("goto PHANTOM;");
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL409")).unwrap();
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL409")));
         assert!(diag.suggestion.is_some(), "PL409 should carry a suggestion");
     }
 

@@ -94,7 +94,7 @@ mod tests {
     use super::*;
     use perl_parser::Parser;
     use perl_semantic_analyzer::analysis::symbol::SymbolExtractor;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     fn loop_ctrl_diags(source: &str) -> Vec<Diagnostic> {
         let ast = must(Parser::new(source).parse());
@@ -113,13 +113,19 @@ mod tests {
     #[test]
     fn next_undefined_label_flagged() {
         let diags = loop_ctrl_diags("for my $i (1..10) { next OUTER; }");
-        assert!(has_pl410(&diags), "next with undefined label should be flagged as PL410: {diags:?}");
+        assert!(
+            has_pl410(&diags),
+            "next with undefined label should be flagged as PL410: {diags:?}"
+        );
     }
 
     #[test]
     fn next_defined_label_not_flagged() {
         let diags = loop_ctrl_diags("OUTER: for my $i (1..3) { for my $j (1..3) { next OUTER; } }");
-        assert!(!has_pl410(&diags), "next OUTER with defined label should not be flagged: {diags:?}");
+        assert!(
+            !has_pl410(&diags),
+            "next OUTER with defined label should not be flagged: {diags:?}"
+        );
     }
 
     #[test]
@@ -133,13 +139,19 @@ mod tests {
     #[test]
     fn last_undefined_label_flagged() {
         let diags = loop_ctrl_diags("for my $i (1..10) { last MISSING; }");
-        assert!(has_pl410(&diags), "last with undefined label should be flagged as PL410: {diags:?}");
+        assert!(
+            has_pl410(&diags),
+            "last with undefined label should be flagged as PL410: {diags:?}"
+        );
     }
 
     #[test]
     fn last_defined_label_not_flagged() {
         let diags = loop_ctrl_diags("LOOP: while (1) { last LOOP; }");
-        assert!(!has_pl410(&diags), "last LOOP with defined label should not be flagged: {diags:?}");
+        assert!(
+            !has_pl410(&diags),
+            "last LOOP with defined label should not be flagged: {diags:?}"
+        );
     }
 
     #[test]
@@ -153,13 +165,19 @@ mod tests {
     #[test]
     fn redo_undefined_label_flagged() {
         let diags = loop_ctrl_diags("for my $i (1..5) { redo NOWHERE; }");
-        assert!(has_pl410(&diags), "redo with undefined label should be flagged as PL410: {diags:?}");
+        assert!(
+            has_pl410(&diags),
+            "redo with undefined label should be flagged as PL410: {diags:?}"
+        );
     }
 
     #[test]
     fn redo_defined_label_not_flagged() {
         let diags = loop_ctrl_diags("ITER: for my $i (1..5) { redo ITER; }");
-        assert!(!has_pl410(&diags), "redo ITER with defined label should not be flagged: {diags:?}");
+        assert!(
+            !has_pl410(&diags),
+            "redo ITER with defined label should not be flagged: {diags:?}"
+        );
     }
 
     // --- message quality ---
@@ -167,7 +185,7 @@ mod tests {
     #[test]
     fn diagnostic_message_names_op_and_label() {
         let diags = loop_ctrl_diags("for my $x (1..3) { next GHOST; }");
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL410")).unwrap();
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL410")));
         assert!(diag.message.contains("next"), "message should name the op: {}", diag.message);
         assert!(diag.message.contains("GHOST"), "message should name the label: {}", diag.message);
     }
@@ -175,7 +193,7 @@ mod tests {
     #[test]
     fn diagnostic_has_suggestion() {
         let diags = loop_ctrl_diags("while (1) { last PHANTOM; }");
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL410")).unwrap();
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL410")));
         assert!(diag.suggestion.is_some(), "PL410 should carry a suggestion");
     }
 

@@ -221,7 +221,7 @@ fn is_module_referenced(source: &str, module: &str, use_start: usize, use_end: u
 mod tests {
     use super::*;
     use perl_parser::Parser;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     fn unused_import_diags(source: &str) -> Vec<Diagnostic> {
         let ast = must(Parser::new(source).parse());
@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn used_module_not_flagged() {
-        let source = "use Scalar::Util qw(blessed);\nmy $class = blessed($obj);\n";
+        let source = "use Project::Thing;\nmy $thing = Project::Thing->new;\n";
         let diags = unused_import_diags(source);
         assert!(
             !has_unused_import(&diags),
@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn use_with_explicit_import_list_not_flagged() {
-        let source = "use List::Util qw(max min);\nmy $m = max(1, 2);\n";
+        let source = "use Project::Exports qw(project_value);\nmy $v = project_value();\n";
         let diags = unused_import_diags(source);
         assert!(
             !has_unused_import(&diags),
@@ -341,24 +341,22 @@ mod tests {
     fn unused_import_diagnostic_names_the_module() {
         let source = "use SomeModule::Unused;\nmy $x = 1;\n";
         let diags = unused_import_diags(source);
-        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL700"));
-        if let Some(diag) = diag {
-            assert!(
-                diag.message.contains("SomeModule::Unused"),
-                "diagnostic should name the module: {}", diag.message
-            );
-        }
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL700")));
+        assert!(
+            diag.message.contains("SomeModule::Unused"),
+            "diagnostic should name the module: {}",
+            diag.message
+        );
     }
 
     #[test]
     fn unused_import_has_unnecessary_tag() {
         let source = "use POSIX::Ghost;\nmy $x = 1;\n";
         let diags = unused_import_diags(source);
-        if let Some(diag) = diags.iter().find(|d| d.code.as_deref() == Some("PL700")) {
-            assert!(
-                diag.tags.contains(&DiagnosticTag::Unnecessary),
-                "unused-import should carry the Unnecessary tag"
-            );
-        }
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL700")));
+        assert!(
+            diag.tags.contains(&DiagnosticTag::Unnecessary),
+            "unused-import should carry the Unnecessary tag"
+        );
     }
 }
