@@ -83,16 +83,17 @@ Three phases:
 
 ## Soft warnings, hard guard
 
-After PR 13:
+| Estimated LEM | Band | Behavior |
+|---:|---|---|
+| 0–35 | `default` | green summary |
+| 36–75 | `elevated` | warning |
+| 76–125 | `high` | warning; recommends `ci-budget-ack` (acknowledged silently if `ci-budget-ack` or `full-ci` is set) |
+| >125 | `over_ceiling` | **PR Plan job fails** unless `ci-budget-override` or `full-ci` is set |
 
-| Estimated LEM | Behavior |
-|---:|---|
-| 0–35 | green summary |
-| 36–75 | warning |
-| 76–125 | high warning, suggest `ci-budget-ack` |
-| >125 | fails unless `full-ci` or `ci-budget-override` |
-
-Sub-125-LEM PRs never hard-fail on cost.
+Sub-125-LEM PRs never hard-fail on cost. The PR Plan workflow itself is not a required
+check, so even a budget-guard failure does not block merges — it only surfaces the
+overrun visibly to the contributor and to anyone reviewing the PR. PR-merge enforcement
+of LEM is intentionally **not** part of this rollout.
 
 ---
 

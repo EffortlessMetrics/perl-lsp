@@ -364,22 +364,42 @@ def main() -> int:
 
     warnings: list[str] = []
     band = band_for(estimated_lem, budget)
+    label_set = {l.lower() for l in labels}
+    has_ack = "ci-budget-ack" in label_set or "full-ci" in label_set
+    has_override = "ci-budget-override" in label_set or "full-ci" in label_set
+
+    over_ceiling_failure = False
     if band == "elevated":
         warnings.append(
             f"Estimated LEM {estimated_lem:.1f} is in the *elevated* band "
-            f"(>{budget.get('default_limit_lem', 35)}). Consider whether all selected lanes are needed."
+            f"(>{budget.get('default_limit_lem', 35)}). Consider whether all "
+            "selected lanes are needed."
         )
     elif band == "high":
-        warnings.append(
-            f"Estimated LEM {estimated_lem:.1f} is in the *high* band. "
-            "Consider applying `ci-budget-ack`."
-        )
+        if has_ack:
+            warnings.append(
+                f"Estimated LEM {estimated_lem:.1f} is in the *high* band; "
+                "acknowledged via `ci-budget-ack` (or `full-ci`)."
+            )
+        else:
+            warnings.append(
+                f"Estimated LEM {estimated_lem:.1f} is in the *high* band. "
+                "Apply `ci-budget-ack` if this spend is intentional."
+            )
     elif band == "over_ceiling":
-        if not any(lbl in {"full-ci", "ci-budget-override"} for lbl in labels):
+        if has_override:
             warnings.append(
                 f"Estimated LEM {estimated_lem:.1f} exceeds hard ceiling "
-                f"({budget.get('hard_limit_lem', 125)}). PR Plan is advisory in this rollout PR; "
-                "PR 13 will fail without `full-ci` or `ci-budget-override`."
+                f"({budget.get('hard_limit_lem', 125)}); explicitly overridden "
+                "via `ci-budget-override` (or `full-ci`)."
+            )
+        else:
+            over_ceiling_failure = True
+            warnings.append(
+                f"::error::Estimated LEM {estimated_lem:.1f} exceeds hard "
+                f"ceiling ({budget.get('hard_limit_lem', 125)}). Apply "
+                "`ci-budget-override` or `full-ci` to acknowledge, or trim "
+                "selected lanes."
             )
 
     plan: dict[str, Any] = {
@@ -408,6 +428,12 @@ def main() -> int:
             "skipped_lanes": skipped_lanes,
         },
         "warnings": warnings,
+        "guard": {
+            "hard_ceiling_exceeded": band == "over_ceiling",
+            "override_present": has_override,
+            "ack_present": has_ack,
+            "failed": over_ceiling_failure,
+        },
     }
 
     args.json_out.parent.mkdir(parents=True, exist_ok=True)
@@ -420,6 +446,8 @@ def main() -> int:
             f.write(render_summary(plan))
 
     print(json.dumps({"estimated_lem": estimated_lem, "band": band, "lanes": len(selected_lanes)}))
+    if over_ceiling_failure:
+        return 2  # distinct from generic error so workflow can branch on it
     return 0
 
 
