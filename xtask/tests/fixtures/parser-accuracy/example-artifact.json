@@ -1618,9 +1618,13 @@
     "duplicate_symbol_id_count": 0,
     "missing_resolves_to_target_count": 0,
     "changed_line_count": 0,
+    "changed_line_sample_count": 0,
     "changed_symbol_count": 0,
+    "changed_symbol_sample_count": 0,
     "removed_expectation_count": 0,
+    "removed_expectation_sample_count": 0,
     "added_expectation_count": 0,
+    "added_expectation_sample_count": 0,
     "dynamic_expectation_change_count": 0
   },
   "metric_runtime": {
