@@ -34,6 +34,7 @@ pub mod cpan_corpus;
 pub mod dead_code;
 pub mod debt_report;
 pub mod dev;
+pub mod devex_docs;
 pub mod devex_doctor;
 pub mod devex_plan;
 pub mod doc;
