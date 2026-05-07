@@ -8,6 +8,9 @@ on:
   pull_request_review:
     types: [submitted]
 
+env:
+  MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+
 jobs:
   droid:
     if: |
@@ -23,10 +26,37 @@ jobs:
       actions: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 1
-      - name: Run Droid Exec
-        uses: Factory-AI/droid-action@8ea31f351ee6636ebef918ccb64682f477af7184
+      - name: Configure MiniMax BYOK for Factory Droid
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.factory"
+          cat > "$HOME/.factory/settings.local.json" <<JSON
+          {
+            "customModels": [
+              {
+                "displayName": "MiniMax-M2.7",
+                "model": "MiniMax-M2.7",
+                "baseUrl": "https://api.minimax.io/anthropic",
+                "apiKey": "${MINIMAX_API_KEY}",
+                "provider": "anthropic",
+                "maxOutputTokens": 64000,
+                "noImageSupport": true,
+                "extraArgs": {
+                  "temperature": 1
+                }
+              }
+            ]
+          }
+          JSON
+      - name: Run Droid Exec with MiniMax M2.7 BYOK
+        uses: EffortlessMetrics/droid-action-safe@01e76b659e4b1e5f23feedc8cfabf8dc14c7485f # based on Factory-AI/droid-action v5; raw debug artifact upload disabled
         with:
           factory_api_key: ${{ secrets.FACTORY_API_KEY }}
+          upload_debug_artifacts: false
+          review_depth: shallow
+          review_model: "custom:MiniMax-M2.7-0"
+          security_model: "custom:MiniMax-M2.7-0"
+          show_full_output: false

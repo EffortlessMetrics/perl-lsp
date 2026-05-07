@@ -553,7 +553,7 @@ expires = "2026-11-07"
 [[lane]]
 id = "droid_auto_review"
 workflow = ".github/workflows/droid-review.yml"
-job = "droid"
+job = "droid-review"
 tier = "frontdoor"
 kind = "automation"
 blocking = false
@@ -567,6 +567,48 @@ proof_obligation = "Run external AI reviewer and post comments."
 evidence = ["PR comments"]
 allowed_triggers = ["pull_request"]
 labels = ["ai-review", "full-ci"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-08-07"
+
+[[lane]]
+id = "droid_manual_review"
+workflow = ".github/workflows/droid.yml"
+job = "droid"
+tier = "on-demand"
+kind = "automation"
+blocking = false
+default_pr = false
+runner = "ubuntu_latest"
+base_lem = 2
+owner = "ci"
+intent = "Manual @droid review triggered by trusted contributors."
+failure_mode = "On-demand review not available for trusted actors."
+proof_obligation = "Execute @droid commands from OWNER/MEMBER/COLLABORATOR."
+evidence = ["PR comments"]
+allowed_triggers = ["issue_comment", "pull_request_review_comment", "pull_request_review"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-08-07"
+
+[[lane]]
+id = "droid_security_scan"
+workflow = ".github/workflows/droid-security-scan.yml"
+job = "droid-security-scan"
+tier = "nightly"
+kind = "automation"
+blocking = false
+default_pr = false
+runner = "ubuntu_latest"
+base_lem = 3
+owner = "ci"
+intent = "Scheduled + manual security scanning via Droid."
+failure_mode = "Security gaps not detected via automated scan."
+proof_obligation = "Run security scanner on schedule or manual trigger."
+evidence = ["security issues created"]
+allowed_triggers = ["schedule", "workflow_dispatch"]
 expensive = false
 duplicate_of = []
 review_after = "2026-06-07"
