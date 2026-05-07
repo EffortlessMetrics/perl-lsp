@@ -726,3 +726,24 @@ expensive = false
 duplicate_of = []
 review_after = "2026-06-07"
 expires = "2026-11-07"
+
+[[lane]]
+id = "policy_validators"
+workflow = ".github/workflows/policy-validators.yml"
+job = "validate"
+tier = "frontdoor"
+kind = "hygiene"
+blocking = true
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 2
+owner = "ci"
+intent = "Validate CI policy ledgers when policy/ or gate-policy changes."
+failure_mode = "Risk packs reference unknown lanes, gates have no lane mapping, or TOML files break."
+proof_obligation = "Run validate_risk_packs.py, validate_gate_lane_mapping.py, and policy/*.toml parse-checks in --strict mode."
+evidence = ["job logs"]
+allowed_triggers = ["pull_request", "workflow_dispatch"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"

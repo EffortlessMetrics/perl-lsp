@@ -1,0 +1,69 @@
+# Policy Validators
+#
+# Runs the CI economics policy validators on PRs that touch policy/, the
+# gate-policy YAML, or any of the validator scripts themselves. Catches drift
+# automatically instead of relying on contributors to remember to run the
+# scripts locally.
+#
+# See policy/ci-lane-whitelist.toml entry `policy_validators`.
+
+name: Policy Validators
+
+on:
+  pull_request:
+    paths:
+      - 'policy/**'
+      - '.ci/gate-policy.yaml'
+      - 'scripts/ci/validate_risk_packs.py'
+      - 'scripts/ci/validate_gate_lane_mapping.py'
+      - '.github/workflows/policy-validators.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: policy-validators-${{ github.event.pull_request.number || github.ref }}
+  # Only cancel on synchronize to avoid label-event cancellation cascades
+  # (workflow-policy-lint LABEL_EVENT_CANCELS_PR_RUN rule).
+  cancel-in-progress: ${{ github.event.action == 'synchronize' }}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate CI policy ledgers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Validate risk packs
+        run: |
+          python3 scripts/ci/validate_risk_packs.py --strict
+
+      - name: Validate gate -> lane mapping
+        run: |
+          python3 scripts/ci/validate_gate_lane_mapping.py --strict
+
+      - name: Validate policy TOML parses
+        run: |
+          python3 - <<'EOF'
+          import sys, tomllib
+          from pathlib import Path
+          failed = []
+          for p in sorted(Path("policy").glob("*.toml")):
+              try:
+                  tomllib.loads(p.read_text(encoding="utf-8"))
+                  print(f"OK: {p}")
+              except tomllib.TOMLDecodeError as e:
+                  failed.append((p, e))
+                  print(f"FAIL: {p}: {e}")
+          sys.exit(1 if failed else 0)
+          EOF
