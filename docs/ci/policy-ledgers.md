@@ -74,11 +74,22 @@ When adding a new CI workflow or job:
 1. Add a `[[lane]]` entry to `policy/ci-lane-whitelist.toml` with intent,
    failure mode, proof obligation, evidence, runner, base LEM.
 2. Add or extend a `[lane.<id>]` entry in `policy/ci-lanes.toml` for the
-   economics-side metadata.
+   economics-side metadata. **The whitelist `id` field must equal the
+   lanes.toml key** so the planner and policy linter can cross-reference.
 3. If the lane is `default_pr = true` and `expensive = true`, add a
    corresponding `[[exception]]` entry to
    `policy/ci-whitelist-exceptions.toml` with `review_after` and `expires`.
 4. If the lane uses non-Rust tooling, ensure
    `policy/ci-non-rust-allowlist.toml` covers its paths.
+
+## Cross-file invariants
+
+- Lane IDs use underscores (e.g. `pr_smoke`, `merge_gate_shards`,
+  `windows_guardrails`). Hyphenated job names from `.github/workflows/*.yml`
+  are mapped via the whitelist's `job` field, not its `id` field.
+- LEM bands and runner multipliers are owned by `policy/ci-budget.toml` only.
+  Other ledgers reference them by name; they are not duplicated.
+- Lanes use `base_lem` (already pre-multiplied by runner multiplier). The
+  planner does not re-apply runner multipliers to `base_lem` values.
 
 The policy lint (PR 11) will reject workflows whose jobs lack lane entries.

@@ -15,7 +15,7 @@ updated = "2026-05-07"
 [[exception]]
 id = "ci-exception-windows-guardrails-default-pr"
 kind = "expensive_default_pr_lane"
-lane = "windows-guardrails"
+lane = "windows_guardrails"
 allowed = true
 owner = "platform"
 issue = "TODO"
@@ -31,7 +31,7 @@ expires = "2026-08-07"
 [[exception]]
 id = "ci-exception-lsp-memory-smoke-default-pr"
 kind = "expensive_default_pr_lane"
-lane = "lsp-memory-smoke"
+lane = "lsp_memory_smoke"
 allowed = true
 owner = "runtime"
 issue = "TODO"
@@ -46,7 +46,7 @@ expires = "2026-08-07"
 [[exception]]
 id = "ci-exception-ux-regression-default-pr"
 kind = "expensive_default_pr_lane"
-lane = "ux-regression"
+lane = "ux_tests"
 allowed = true
 owner = "lsp"
 issue = "TODO"
