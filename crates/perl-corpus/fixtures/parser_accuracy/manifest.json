@@ -1497,6 +1497,73 @@
       }
     },
     {
+      "id": "medium_method_call",
+      "family": "method_call",
+      "label_mode": "full",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/medium_method_call.pl",
+      "scored_lines": 2,
+      "scored_symbols": 3,
+      "fully_labeled_regions": 1,
+      "partial_labeled_regions": 0,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "method_call"
+          ]
+        }
+      ],
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "medium_method_call_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::MediumMethodCall",
+            "span_text": "Accuracy::MediumMethodCall",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "occurrences": [
+          {
+            "id": "medium_method_call_object_read",
+            "kind": "Read",
+            "canonical_name": null,
+            "span_text": "$object",
+            "package": null,
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          },
+          {
+            "id": "medium_method_call_instance_call",
+            "kind": "MethodCall",
+            "canonical_name": null,
+            "span_text": "$object->run",
+            "package": null,
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "Medium"
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
       "id": "autoload_boundary",
       "family": "autoload",
       "label_mode": "partial",
