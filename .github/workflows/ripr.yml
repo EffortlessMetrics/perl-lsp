@@ -1,0 +1,96 @@
+# ripr — static RIPR exposure analysis (advisory)
+#
+# Adds mutation-testing-lite oracle-gap detection at static-analysis prices.
+# Advisory in this rollout PR (PR 06). PR 18 introduces narrow soft-gating
+# for high-confidence new oracle gaps with `ripr` / `ripr-waive` / `full-ci`
+# / `ci-budget-ack` labels.
+#
+# See docs/ci/ripr.md.
+
+name: ripr
+
+on:
+  pull_request:
+    branches: [master, main]
+    paths:
+      - 'crates/**'
+      - 'xtask/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'ripr.toml'
+      - 'policy/ripr-suppressions.toml'
+      - '.github/workflows/ripr.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: ripr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  ripr:
+    name: ripr static exposure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    # Advisory only in this PR. Failures do not block.
+    continue-on-error: true
+    if: github.event.pull_request.draft != true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Toolchain (rust-toolchain.toml pins 1.93.1)
+        run: rustc --version
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ripr-${{ hashFiles('Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
+
+      - name: Install ripr
+        run: cargo install ripr --locked
+
+      - name: Run ripr (doctor)
+        run: ripr doctor
+
+      - name: Run ripr (JSON report)
+        run: |
+          mkdir -p target/ripr
+          ripr check --base "origin/${{ github.base_ref || 'master' }}" --json \
+            > target/ripr/ripr.json || true
+
+      - name: Run ripr (GitHub annotations)
+        run: |
+          ripr check --base "origin/${{ github.base_ref || 'master' }}" \
+            --format github || true
+
+      - name: Run ripr (SARIF)
+        run: |
+          ripr check --base "origin/${{ github.base_ref || 'master' }}" \
+            --format sarif > target/ripr/ripr.sarif || true
+
+      - name: Summarize ripr findings
+        if: always()
+        run: |
+          if [ -f target/ripr/ripr.json ]; then
+            python3 scripts/ci/ripr_summary.py \
+              --report target/ripr/ripr.json \
+              --summary "$GITHUB_STEP_SUMMARY" || true
+          fi
+
+      - name: Upload ripr report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ripr-report
+          path: target/ripr/
+          retention-days: 14
+          if-no-files-found: warn
