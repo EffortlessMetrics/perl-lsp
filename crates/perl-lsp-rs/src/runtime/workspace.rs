@@ -2159,6 +2159,125 @@ mod tests {
 
     #[cfg(feature = "workspace")]
     #[test]
+    fn bulk_file_watcher_churn_drains_pressure_and_delete_state()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::runtime::file_watcher_debounce::FileWatcherDebouncer;
+        use std::sync::Arc;
+        use std::time::{Duration, Instant};
+
+        let server = LspServer::with_io(Box::new(std::io::empty()), Box::new(Vec::<u8>::new()));
+        let delivered = Arc::new(parking_lot::Mutex::new(Vec::<String>::new()));
+        let delivered_for_worker = Arc::clone(&delivered);
+        server.install_file_watcher_debouncer(FileWatcherDebouncer::with_interval(
+            Duration::from_millis(150),
+            move |uris| {
+                delivered_for_worker.lock().extend(uris);
+            },
+        ));
+
+        let dir = tempfile::tempdir()?;
+        let mut uris = Vec::new();
+        for i in 0..20 {
+            let path = dir.path().join(format!("BulkWatcher{i}.pm"));
+            let source = format!("package BulkWatcher{i};\nsub value {{ {i} }}\n1;\n");
+            std::fs::write(&path, &source)?;
+            let uri = url::Url::from_file_path(&path).map_err(|_| "invalid file path")?;
+            let uri = uri.to_string();
+
+            server.did_open(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": source
+                }
+            }))?;
+            server.new_parse_token(&uri);
+            server.stream_sessions().start_session(crate::runtime::stream_session::SessionKey {
+                uri: uri.clone(),
+                document_version: 1,
+                line: i,
+                character: 0,
+            });
+            if let Some(coordinator) = server.coordinator() {
+                coordinator.index().index_file(url::Url::parse(&uri)?, source)?;
+                assert!(
+                    !coordinator.index().file_symbols(&uri).is_empty(),
+                    "workspace index should contain {uri} before delete"
+                );
+            }
+            uris.push(uri);
+        }
+
+        let changes = uris.iter().map(|uri| json!({ "uri": uri, "type": 2 })).collect::<Vec<_>>();
+        server.handle_did_change_watched_files(Some(json!({ "changes": changes })))?;
+
+        let mut max_pending = 0usize;
+        let pressure_deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < pressure_deadline {
+            let pending = server.runtime_pressure_snapshot().file_watcher_pending_uris;
+            max_pending = max_pending.max(pending);
+            if pending == uris.len() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            max_pending > 1,
+            "bulk watched-file changes should raise file watcher pressure, max pending {max_pending}"
+        );
+
+        let drain_deadline = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < drain_deadline {
+            if server.runtime_pressure_snapshot().file_watcher_pending_uris == 0
+                && delivered.lock().len() == uris.len()
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(server.runtime_pressure_snapshot().file_watcher_pending_uris, 0);
+
+        let delivered_uris = delivered.lock().clone();
+        assert_eq!(delivered_uris.len(), uris.len());
+        server.handle_watched_file_batch(delivered_uris);
+
+        for uri in &uris {
+            if let Some(path) = perl_uri::uri_to_fs_path(uri) {
+                std::fs::remove_file(path)?;
+            }
+        }
+        let deletes = uris.iter().map(|uri| json!({ "uri": uri, "type": 3 })).collect::<Vec<_>>();
+        server.handle_did_change_watched_files(Some(json!({ "changes": deletes })))?;
+
+        for _ in 0..100 {
+            let pressure = server.runtime_pressure_snapshot();
+            if pressure.pending_index_tasks == 0 && pressure.file_watcher_pending_uris == 0 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        let memory = server.memory_state_snapshot();
+        assert_eq!(memory.documents, 0);
+        assert_eq!(memory.open_text_bytes, 0);
+        assert_eq!(memory.parse_cancel_flags, 0);
+        assert_eq!(memory.stream_sessions, 0);
+        assert_eq!(memory.pending_index_tasks, 0);
+        assert_eq!(server.runtime_pressure_snapshot().file_watcher_pending_uris, 0);
+
+        if let Some(coordinator) = server.coordinator() {
+            for uri in &uris {
+                assert!(coordinator.index().file_symbols(uri).is_empty());
+                assert!(coordinator.index().document_store().get(uri).is_none());
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
     fn workspace_folder_removal_evicts_open_docs_under_root()
     -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
