@@ -970,6 +970,8 @@ struct DeterminismScore {
     semantic_fact_hash_stable_count: u64,
     diagnostic_hash_stable_count: u64,
     repeated_parse_stable_count: u64,
+    comment_invariance_stable_count: u64,
+    comment_invariance_sample_count: u64,
 }
 
 /// Run `cargo xtask metrics parser-accuracy`.
@@ -2934,8 +2936,38 @@ fn score_manifest_determinism(
         if first_fact_hash == second_fact_hash {
             score.semantic_fact_hash_stable_count += 1;
         }
+
+        if let Some(comment_variant) = comment_invariance_variant(source) {
+            score.comment_invariance_sample_count += 1;
+            if parser_accuracy_projection_signature(source)
+                == parser_accuracy_projection_signature(&comment_variant)
+            {
+                score.comment_invariance_stable_count += 1;
+            }
+        }
     }
     Ok(score)
+}
+
+fn comment_invariance_variant(source: &str) -> Option<String> {
+    if source.contains("<<") || source.contains("__DATA__") || source.contains("__END__") {
+        return None;
+    }
+
+    let mut variant = String::with_capacity(source.len() + 43);
+    variant.push_str(source);
+    if !source.ends_with('\n') {
+        variant.push('\n');
+    }
+    variant.push_str("# parser accuracy comment invariance probe\n");
+    Some(variant)
+}
+
+fn parser_accuracy_projection_signature(source: &str) -> u64 {
+    let line_tags = extract_line_tags(source);
+    let ast_predictions = extract_ast_predictions(source);
+    let diagnostic_hash = parse_determinism_hashes(source).diagnostic_hash;
+    stable_hash(&format!("{line_tags:?}\n{ast_predictions:?}\n{diagnostic_hash}"))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -5012,7 +5044,13 @@ fn determinism_metrics(score: &DeterminismScore, cadence: Cadence) -> Vec<Metric
             "whitespace_invariance_rate",
             "metamorphic whitespace fixtures are not wired yet",
         ),
-        insufficient("comment_invariance_rate", "metamorphic comment fixtures are not wired yet"),
+        optional_measured_rate(
+            "comment_invariance_rate",
+            ratio(score.comment_invariance_stable_count, score.comment_invariance_sample_count),
+            score.comment_invariance_sample_count,
+            "metamorphic comment fixtures are not wired yet",
+            cadence,
+        ),
         insufficient(
             "newline_style_invariance_rate",
             "metamorphic newline fixtures are not wired yet",
@@ -8080,6 +8118,8 @@ sub dynamic_boundary_case {
             semantic_fact_hash_stable_count: 2,
             diagnostic_hash_stable_count: 2,
             repeated_parse_stable_count: 2,
+            comment_invariance_stable_count: 1,
+            comment_invariance_sample_count: 2,
         };
 
         let metrics = determinism_metrics(&score, Cadence::Pr);
@@ -8097,6 +8137,14 @@ sub dynamic_boundary_case {
                 metric,
                 MetricRow::InsufficientData { metric, sample_count: 0, .. }
                     if metric == "whitespace_invariance_rate"
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "comment_invariance_rate"
+                        && (*value - 0.5).abs() < f64::EPSILON
             )
         }));
     }
