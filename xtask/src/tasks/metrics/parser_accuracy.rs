@@ -156,6 +156,12 @@ struct AstPrediction {
     parent_operator: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct AstDelimiterPair {
+    open: char,
+    close: char,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 struct ProviderExpectations {
     #[serde(default)]
@@ -3275,6 +3281,22 @@ fn node_operator(node: &Node) -> Option<&str> {
     }
 }
 
+fn expected_ast_delimiter_pair(expectation: &AstExpectation) -> Option<AstDelimiterPair> {
+    let pair = match expectation.kind.as_str() {
+        "Subroutine" | "Format" => AstDelimiterPair { open: '{', close: '}' },
+        "FunctionCall" | "MethodCall" => AstDelimiterPair { open: '(', close: ')' },
+        _ => return None,
+    };
+    span_has_delimiter_pair(&expectation.span_text, pair).then_some(pair)
+}
+
+fn span_has_delimiter_pair(span_text: &str, pair: AstDelimiterPair) -> bool {
+    match (span_text.find(pair.open), span_text.rfind(pair.close)) {
+        (Some(open), Some(close)) => open < close,
+        _ => false,
+    }
+}
+
 fn score_ast_expectations(
     expectations: &[AstExpectation],
     predictions: &[AstPrediction],
@@ -3287,9 +3309,13 @@ fn score_ast_expectations(
 
     let mut matched = BTreeSet::new();
     for expectation in expectations {
+        let expected_delimiter_pair = expected_ast_delimiter_pair(expectation);
         let prediction_index = best_ast_prediction_index(expectation, predictions, &matched);
 
         let Some(prediction_index) = prediction_index else {
+            if expected_delimiter_pair.is_some() {
+                score.delimiter_pairing_expected_count += 1;
+            }
             score.node_kind_false_negative_count += 1;
             score.missing_expected_node_count += 1;
             continue;
@@ -3322,6 +3348,12 @@ fn score_ast_expectations(
                 && prediction.parent_operator.as_ref() == expectation.parent_operator.as_ref()
             {
                 score.operator_precedence_correct_count += 1;
+            }
+        }
+        if let Some(pair) = expected_delimiter_pair {
+            score.delimiter_pairing_expected_count += 1;
+            if span_has_delimiter_pair(&prediction.span_text, pair) {
+                score.delimiter_pairing_correct_count += 1;
             }
         }
     }
@@ -7038,6 +7070,44 @@ sub dynamic_boundary_case {
         assert_eq!(score.node_kind_true_positive_count, 1);
         assert_eq!(score.parent_child_expected_count, 1);
         assert_eq!(score.parent_child_correct_count, 0);
+    }
+
+    #[test]
+    fn ast_scorer_counts_delimiter_pairing_from_gold_span() {
+        let expectations = vec![AstExpectation {
+            id: "subroutine".to_string(),
+            kind: "Subroutine".to_string(),
+            line: 3,
+            span_text: "sub answer { 42 }".to_string(),
+            parent_kind: Some("Program".to_string()),
+            depth: Some(1),
+            operator: None,
+            parent_operator: None,
+        }];
+        let predictions = vec![AstPrediction {
+            kind: "Subroutine".to_string(),
+            line: 3,
+            span_text: "sub answer { 42 }".to_string(),
+            parent_kind: Some("Program".to_string()),
+            depth: 1,
+            operator: None,
+            parent_operator: None,
+        }];
+        let mut score = AstScore::default();
+
+        score_ast_expectations(&expectations, &predictions, &mut score);
+
+        assert_eq!(score.delimiter_pairing_expected_count, 1);
+        assert_eq!(score.delimiter_pairing_correct_count, 1);
+        let metrics = ast_metrics(&score, Cadence::Pr);
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "ast_delimiter_pairing_accuracy"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
     }
 
     #[test]
