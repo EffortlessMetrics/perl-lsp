@@ -1467,7 +1467,7 @@
     {
       "state": "insufficient_data",
       "metric": "newline_style_invariance_rate",
-      "reason": "metamorphic newline fixtures are not wired yet",
+      "reason": "no eligible newline-style invariance samples are available",
       "sample_count": 0,
       "confidence": "low"
     },
