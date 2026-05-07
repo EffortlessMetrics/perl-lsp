@@ -12,6 +12,6 @@ Pointer: no active failure packets.
 
 | Metric | Reason | Suggested PR |
 |---|---|---|
-| `whitespace_invariance_rate` | metamorphic whitespace fixtures are not wired yet | `feat(metrics): wire parser-accuracy measurement for whitespace_invariance_rate` |
+| none | n/a | n/a |
 
 Use this section only when there are no active failure packets. Keep each measurement gap in its own PR and regenerate this file after a lane lands.

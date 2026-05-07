@@ -987,6 +987,8 @@ struct DeterminismScore {
     semantic_fact_hash_stable_count: u64,
     diagnostic_hash_stable_count: u64,
     repeated_parse_stable_count: u64,
+    whitespace_invariance_stable_count: u64,
+    whitespace_invariance_sample_count: u64,
     comment_invariance_stable_count: u64,
     comment_invariance_sample_count: u64,
     newline_style_invariance_stable_count: u64,
@@ -2990,10 +2992,20 @@ fn score_manifest_determinism(
             score.semantic_fact_hash_stable_count += 1;
         }
 
+        let whitespace_variant = whitespace_invariance_variant(source);
         let comment_variant = comment_invariance_variant(source);
         let newline_variant = newline_style_invariance_variant(source);
-        if comment_variant.is_some() || newline_variant.is_some() {
+        if whitespace_variant.is_some() || comment_variant.is_some() || newline_variant.is_some() {
             let base_projection_signature = parser_accuracy_projection_signature(source);
+
+            if let Some(whitespace_variant) = whitespace_variant {
+                score.whitespace_invariance_sample_count += 1;
+                if base_projection_signature
+                    == parser_accuracy_projection_signature(&whitespace_variant)
+                {
+                    score.whitespace_invariance_stable_count += 1;
+                }
+            }
 
             if let Some(comment_variant) = comment_variant {
                 score.comment_invariance_sample_count += 1;
@@ -3015,6 +3027,38 @@ fn score_manifest_determinism(
         }
     }
     Ok(score)
+}
+
+fn whitespace_invariance_variant(source: &str) -> Option<String> {
+    if has_metamorphic_literal_boundary(source) {
+        return None;
+    }
+
+    let mut variant = String::with_capacity(source.len() + source.lines().count() * 2);
+    let mut changed = false;
+    for segment in source.split_inclusive('\n') {
+        let (body, line_ending) = split_line_ending(segment);
+        if body.trim().is_empty() {
+            variant.push_str(segment);
+            continue;
+        }
+        variant.push_str(body);
+        variant.push_str("  ");
+        variant.push_str(line_ending);
+        changed = true;
+    }
+
+    changed.then_some(variant)
+}
+
+fn split_line_ending(segment: &str) -> (&str, &str) {
+    if let Some(body) = segment.strip_suffix("\r\n") {
+        (body, "\r\n")
+    } else if let Some(body) = segment.strip_suffix('\n') {
+        (body, "\n")
+    } else {
+        (segment, "")
+    }
 }
 
 fn comment_invariance_variant(source: &str) -> Option<String> {
@@ -5525,9 +5569,15 @@ fn determinism_metrics(score: &DeterminismScore, cadence: Cadence) -> Vec<Metric
             score.fixture_count,
             cadence,
         ),
-        insufficient(
+        optional_measured_rate(
             "whitespace_invariance_rate",
-            "metamorphic whitespace fixtures are not wired yet",
+            ratio(
+                score.whitespace_invariance_stable_count,
+                score.whitespace_invariance_sample_count,
+            ),
+            score.whitespace_invariance_sample_count,
+            "no eligible whitespace invariance samples are available",
+            cadence,
         ),
         optional_measured_rate(
             "comment_invariance_rate",
@@ -8887,6 +8937,8 @@ sub dynamic_boundary_case {
             semantic_fact_hash_stable_count: 2,
             diagnostic_hash_stable_count: 2,
             repeated_parse_stable_count: 2,
+            whitespace_invariance_stable_count: 1,
+            whitespace_invariance_sample_count: 2,
             comment_invariance_stable_count: 1,
             comment_invariance_sample_count: 2,
             newline_style_invariance_stable_count: 1,
@@ -8906,8 +8958,9 @@ sub dynamic_boundary_case {
         assert!(metrics.iter().any(|metric| {
             matches!(
                 metric,
-                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
                     if metric == "whitespace_invariance_rate"
+                        && (*value - 0.5).abs() < f64::EPSILON
             )
         }));
         assert!(metrics.iter().any(|metric| {
@@ -8926,6 +8979,19 @@ sub dynamic_boundary_case {
                         && (*value - 0.5).abs() < f64::EPSILON
             )
         }));
+    }
+
+    #[test]
+    fn whitespace_invariance_variant_adds_trailing_spaces_without_crossing_literal_boundaries() {
+        assert_eq!(
+            whitespace_invariance_variant("package Demo;\n\n1;\n"),
+            Some("package Demo;  \n\n1;  \n".to_string())
+        );
+        assert_eq!(
+            whitespace_invariance_variant("package Demo;\r\n1;\r\n"),
+            Some("package Demo;  \r\n1;  \r\n".to_string())
+        );
+        assert!(whitespace_invariance_variant("print <<'EOF';\nEOF\n").is_none());
     }
 
     #[test]
