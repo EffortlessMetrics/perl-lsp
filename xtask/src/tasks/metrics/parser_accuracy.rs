@@ -596,6 +596,7 @@ struct GoldDrift {
     duplicate_symbol_id_count: u64,
     missing_resolves_to_target_count: u64,
     changed_line_count: u64,
+    changed_line_sample_count: u64,
     changed_symbol_count: u64,
     removed_expectation_count: u64,
     added_expectation_count: u64,
@@ -3052,6 +3053,13 @@ fn audit_gold_drift(
         drift.added_expectation_count =
             current_expectations.difference(&baseline.expectation_signatures).count() as u64;
         drift.added_expectation_sample_count = current_expectations.len() as u64;
+        let current_line_expectations = line_gold_signatures(&current_expectations);
+        let baseline_line_expectations = line_gold_signatures(&baseline.expectation_signatures);
+        drift.changed_line_count = current_line_expectations
+            .symmetric_difference(&baseline_line_expectations)
+            .count() as u64;
+        drift.changed_line_sample_count =
+            current_line_expectations.union(&baseline_line_expectations).count() as u64;
     }
 
     for fixture in &manifest.fixtures {
@@ -3130,6 +3138,14 @@ fn collect_fixture_gold_signatures(fixture: &FixtureMetadata, signatures: &mut B
     for expectation in &fixture.provider_expectations.navigation {
         signatures.insert(format!("{fixture_id}::provider_navigation::{}", expectation.id));
     }
+}
+
+fn line_gold_signatures(signatures: &BTreeSet<String>) -> BTreeSet<String> {
+    signatures
+        .iter()
+        .filter(|signature| signature.contains("::line::") || signature.contains("::post_line::"))
+        .cloned()
+        .collect()
 }
 
 fn count_span_expectation_errors(source: &str, expectations: &[SpanExpectation]) -> u64 {
@@ -5189,7 +5205,13 @@ fn gold_drift_metrics(drift: &GoldDrift, fixture_count: u64, cadence: Cadence) -
             "gold fixtures are not available",
             cadence,
         ),
-        insufficient("gold_changed_line_count", "gold drift baseline is not wired yet"),
+        optional_measured_count(
+            "gold_changed_line_count",
+            drift.changed_line_count,
+            drift.changed_line_sample_count,
+            "gold drift baseline is not wired yet",
+            cadence,
+        ),
         insufficient("gold_changed_symbol_count", "gold drift baseline is not wired yet"),
         insufficient("gold_removed_expectation_count", "gold drift baseline is not wired yet"),
         optional_measured_count(
@@ -8447,6 +8469,11 @@ sub dynamic_boundary_case {
             drift.added_expectation_sample_count,
             gold_expectation_signatures(&manifest).len() as u64
         );
+        assert_eq!(drift.changed_line_count, 1);
+        assert_eq!(
+            drift.changed_line_sample_count,
+            line_gold_signatures(&gold_expectation_signatures(&manifest)).len() as u64
+        );
         Ok(())
     }
 
@@ -8456,6 +8483,8 @@ sub dynamic_boundary_case {
             span_error_count: 1,
             duplicate_symbol_id_count: 2,
             missing_resolves_to_target_count: 3,
+            changed_line_count: 1,
+            changed_line_sample_count: 4,
             added_expectation_count: 1,
             added_expectation_sample_count: 4,
             ..GoldDrift::default()
@@ -8468,6 +8497,14 @@ sub dynamic_boundary_case {
                 metric,
                 MetricRow::Measured { metric, value, sample_count: 4, .. }
                     if metric == "gold_span_errors"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "gold_changed_line_count"
                         && (*value - 1.0).abs() < f64::EPSILON
             )
         }));
