@@ -598,6 +598,7 @@ struct GoldDrift {
     changed_line_count: u64,
     changed_line_sample_count: u64,
     changed_symbol_count: u64,
+    changed_symbol_sample_count: u64,
     removed_expectation_count: u64,
     added_expectation_count: u64,
     added_expectation_sample_count: u64,
@@ -3060,6 +3061,13 @@ fn audit_gold_drift(
             .count() as u64;
         drift.changed_line_sample_count =
             current_line_expectations.union(&baseline_line_expectations).count() as u64;
+        let current_symbol_expectations = symbol_gold_signatures(&current_expectations);
+        let baseline_symbol_expectations = symbol_gold_signatures(&baseline.expectation_signatures);
+        drift.changed_symbol_count = current_symbol_expectations
+            .symmetric_difference(&baseline_symbol_expectations)
+            .count() as u64;
+        drift.changed_symbol_sample_count =
+            current_symbol_expectations.union(&baseline_symbol_expectations).count() as u64;
     }
 
     for fixture in &manifest.fixtures {
@@ -3144,6 +3152,20 @@ fn line_gold_signatures(signatures: &BTreeSet<String>) -> BTreeSet<String> {
     signatures
         .iter()
         .filter(|signature| signature.contains("::line::") || signature.contains("::post_line::"))
+        .cloned()
+        .collect()
+}
+
+fn symbol_gold_signatures(signatures: &BTreeSet<String>) -> BTreeSet<String> {
+    signatures
+        .iter()
+        .filter(|signature| {
+            signature.contains("::symbol_entity::")
+                || signature.contains("::symbol_occurrence::")
+                || signature.contains("::symbol_edge::")
+                || signature.contains("::symbol_safety::")
+                || signature.contains("::post_symbol::")
+        })
         .cloned()
         .collect()
 }
@@ -5212,7 +5234,13 @@ fn gold_drift_metrics(drift: &GoldDrift, fixture_count: u64, cadence: Cadence) -
             "gold drift baseline is not wired yet",
             cadence,
         ),
-        insufficient("gold_changed_symbol_count", "gold drift baseline is not wired yet"),
+        optional_measured_count(
+            "gold_changed_symbol_count",
+            drift.changed_symbol_count,
+            drift.changed_symbol_sample_count,
+            "gold drift baseline is not wired yet",
+            cadence,
+        ),
         insufficient("gold_removed_expectation_count", "gold drift baseline is not wired yet"),
         optional_measured_count(
             "gold_added_expectation_count",
@@ -8451,6 +8479,7 @@ sub dynamic_boundary_case {
         let manifest = fixture_manifest();
         let mut baseline_signatures = gold_expectation_signatures(&manifest);
         baseline_signatures.remove("package_basic::line::3::SubDecl");
+        baseline_signatures.remove("package_basic::symbol_entity::package_basic_answer_entity");
         let baseline_dir = tmp.path().join(".ci/metrics/baselines");
         fs::create_dir_all(&baseline_dir)?;
         fs::write(
@@ -8464,7 +8493,7 @@ sub dynamic_boundary_case {
 
         let drift = audit_gold_drift(tmp.path(), &manifest, &mut source_cache)?;
 
-        assert_eq!(drift.added_expectation_count, 1);
+        assert_eq!(drift.added_expectation_count, 2);
         assert_eq!(
             drift.added_expectation_sample_count,
             gold_expectation_signatures(&manifest).len() as u64
@@ -8473,6 +8502,11 @@ sub dynamic_boundary_case {
         assert_eq!(
             drift.changed_line_sample_count,
             line_gold_signatures(&gold_expectation_signatures(&manifest)).len() as u64
+        );
+        assert_eq!(drift.changed_symbol_count, 1);
+        assert_eq!(
+            drift.changed_symbol_sample_count,
+            symbol_gold_signatures(&gold_expectation_signatures(&manifest)).len() as u64
         );
         Ok(())
     }
@@ -8485,6 +8519,8 @@ sub dynamic_boundary_case {
             missing_resolves_to_target_count: 3,
             changed_line_count: 1,
             changed_line_sample_count: 4,
+            changed_symbol_count: 1,
+            changed_symbol_sample_count: 4,
             added_expectation_count: 1,
             added_expectation_sample_count: 4,
             ..GoldDrift::default()
@@ -8505,6 +8541,14 @@ sub dynamic_boundary_case {
                 metric,
                 MetricRow::Measured { metric, value, sample_count: 4, .. }
                     if metric == "gold_changed_line_count"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "gold_changed_symbol_count"
                         && (*value - 1.0).abs() < f64::EPSILON
             )
         }));
