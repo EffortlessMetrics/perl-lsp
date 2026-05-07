@@ -38,6 +38,7 @@ use perl_parser::{
 use perl_semantic_facts::{AnchorId, EntityId};
 use perl_workspace::position::Range;
 use perl_workspace::semantic::queries::QueryContext;
+use perl_workspace::workspace::document_store::DocumentStore;
 use perl_workspace::workspace::workspace_index::{FileFactShard, WorkspaceIndex};
 use serde::{Deserialize, Serialize};
 
@@ -841,6 +842,8 @@ struct IncrementalScore {
     content_hash_miss_count: u64,
     semantic_fact_cache_hit_count: u64,
     semantic_fact_cache_miss_count: u64,
+    workspace_shard_reuse_count: u64,
+    workspace_shard_replacement_attempt_count: u64,
     unchanged_file_skip_count: u64,
     unchanged_file_index_attempt_count: u64,
     reparse_byte_ratios: Vec<f64>,
@@ -1618,6 +1621,7 @@ fn score_content_hash_reuse_probe(
     record_content_hash_probe(score, first_hit);
     record_semantic_fact_cache_probe(score, first_semantic_hit);
     record_unchanged_file_skip_probe(score, first_hit);
+    record_workspace_shard_reuse_probe(index, &source_path_text, score);
 
     let second_hit = content_hash_probe_hits(index, &source_path_text, source);
     let second_semantic_hit = semantic_fact_cache_probe_hits(index, &source_path_text);
@@ -1643,6 +1647,22 @@ fn content_hash_probe_hits(index: &WorkspaceIndex, source_path_text: &str, sourc
 
 fn semantic_fact_cache_probe_hits(index: &WorkspaceIndex, source_path_text: &str) -> bool {
     index.file_fact_shard(source_path_text).is_some()
+}
+
+fn record_workspace_shard_reuse_probe(
+    index: &WorkspaceIndex,
+    source_path_text: &str,
+    score: &mut IncrementalScore,
+) {
+    let Some(shard) = index.file_fact_shard(source_path_text) else {
+        return;
+    };
+    let key = DocumentStore::uri_key(&shard.source_uri);
+    let replacement = index.replace_fact_shard_incremental(&key, shard);
+    score.workspace_shard_replacement_attempt_count += 1;
+    if replacement.content_unchanged {
+        score.workspace_shard_reuse_count += 1;
+    }
 }
 
 fn record_content_hash_probe(score: &mut IncrementalScore, hit: bool) {
@@ -4856,9 +4876,15 @@ fn cache_reuse_metrics(score: &IncrementalScore, cadence: Cadence) -> Vec<Metric
             "semantic fact cache telemetry is not wired yet",
             cadence,
         ),
-        insufficient(
+        optional_measured_rate(
             "workspace_shard_reuse_rate",
+            ratio(
+                score.workspace_shard_reuse_count,
+                score.workspace_shard_replacement_attempt_count,
+            ),
+            score.workspace_shard_replacement_attempt_count,
             "workspace shard reuse telemetry is not wired yet",
+            cadence,
         ),
         optional_measured_rate(
             "unchanged_file_skip_rate",
@@ -7907,6 +7933,8 @@ sub dynamic_boundary_case {
             content_hash_miss_count: 1,
             semantic_fact_cache_hit_count: 2,
             semantic_fact_cache_miss_count: 2,
+            workspace_shard_reuse_count: 3,
+            workspace_shard_replacement_attempt_count: 4,
             unchanged_file_skip_count: 1,
             unchanged_file_index_attempt_count: 4,
             ..IncrementalScore::default()
@@ -7944,6 +7972,14 @@ sub dynamic_boundary_case {
                 MetricRow::Measured { metric, value, sample_count: 4, .. }
                     if metric == "semantic_fact_cache_hit_rate"
                         && (*value - 0.5).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "workspace_shard_reuse_rate"
+                        && (*value - 0.75).abs() < f64::EPSILON
             )
         }));
         assert!(metrics.iter().any(|metric| {
