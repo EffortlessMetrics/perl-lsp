@@ -293,6 +293,31 @@ jobs:
             --output target/test-results/gate-shard-${{ matrix.name }}-junit.xml \
             --suite-name "gate-${{ matrix.name }}"
 
+      - name: Emit CI actuals (LEM telemetry)
+        # Reads gate receipts produced above and writes target/ci/ci-actuals.json
+        # for the calibration pipeline. See docs/ci/ci-actuals.md and
+        # docs/ci/learned-estimates.md. Tolerant of missing data.
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p target/ci
+          python3 scripts/ci/emit_ci_actuals.py \
+            --receipts-dir target/receipts/shards \
+            --workflow "${{ github.workflow }}" \
+            --sha "${{ github.sha }}" \
+            --pr "${{ github.event.pull_request.number || 0 }}" \
+            --json-out "target/ci/ci-actuals-${{ matrix.name }}.json" || true
+
+      - name: Upload CI actuals
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-actuals-${{ matrix.name }}-${{ github.sha }}
+          path: target/ci/ci-actuals-${{ matrix.name }}.json
+          retention-days: 30
+          if-no-files-found: warn
+
       - name: Upload gate shard test results to Codecov
         if: always() && env.CODECOV_TOKEN != ''
         continue-on-error: true
