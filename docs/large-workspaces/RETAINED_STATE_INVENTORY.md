@@ -55,7 +55,7 @@ before committing derived state.
 | `FileWatcherDebouncer` | Pending file-watcher URI queue | URI `String` | Deferred URI set during bulk filesystem operations | Expiration removes entries; `Drop` flushes pending entries on shutdown | file watcher debouncer tests; bulk watcher churn retained-state coverage; `RuntimePressureSnapshot.file_watcher_pending_uris` |
 | Read scheduler | Queued read requests and latest-sequence map | Request dedup key | Queued request payloads and cancellation tokens | Stale reads are cancelled before worker dispatch; queue drains on channel close | scheduler classification tests; add direct retained-state regression if pressure grows |
 | DAP bridge | Debug child process and session state | Debug session/process id | Child process handles, reader tasks, debugger session state | Stop, disconnect, and shutdown paths must terminate or detach process state | DAP lifecycle tests; future `dap_bridge_start_stop_loop` scenario |
-| Formatting and external tools | Perltidy/perlcritic subprocess buffers | Request scope and file path | Subprocess output buffers and temp data | Request-scoped by subprocess runtime; no session bag should retain output after completion | formatting/diagnostics tests; future subprocess churn scenario |
+| Formatting and external tools | Perltidy/perlcritic subprocess buffers | Request scope and file path | Subprocess output buffers and temp data | Request-scoped by subprocess runtime; no session bag should retain output after completion | formatting/diagnostics tests; formatting subprocess retention smoke |
 
 ## Memory Budgets
 
@@ -85,7 +85,7 @@ hard to interpret; focused scenarios make the owner obvious.
 | `file_watcher_bulk_create_change_delete` | Watcher debouncer and delete lifecycle | Unit retained-state coverage |
 | `workspace_folder_add_remove_multi_root` | Folder-scoped cleanup without cross-root eviction | Unit coverage, add process scenario if needed |
 | `dap_bridge_start_stop_loop` | Debug process/session lifecycle | Follow-up scenario |
-| `formatting_perltidy_loop` | Subprocess and output-buffer retention | Follow-up scenario |
+| `formatting_perltidy_loop` | Subprocess and output-buffer retention | Unit retained-state coverage |
 
 ## Review Checklist
 

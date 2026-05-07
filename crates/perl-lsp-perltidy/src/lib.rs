@@ -251,6 +251,12 @@ impl PerlTidyFormatter {
         self.cache.clear();
     }
 
+    /// Return the number of memoized formatting results.
+    #[must_use]
+    pub fn cache_len(&self) -> usize {
+        self.cache.len()
+    }
+
     /// Format a range of code.
     pub fn format_range(
         &mut self,
