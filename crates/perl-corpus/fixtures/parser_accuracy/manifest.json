@@ -2003,7 +2003,7 @@
           },
           {
             "id": "role_method_role_provided_entity",
-            "kind": "Subroutine",
+            "kind": "RoleMethod",
             "canonical_name": "Accuracy::Role::provided",
             "span_text": "provided",
             "package": "Accuracy::Role",

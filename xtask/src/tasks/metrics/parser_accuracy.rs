@@ -3823,6 +3823,9 @@ fn parser_accuracy_entity_kind(
             Some("my" | "state") => "LexicalVariable".to_string(),
             _ => "Variable".to_string(),
         },
+        EntityKind::Subroutine if subroutine_package_looks_like_role(&entity.canonical_name) => {
+            "RoleMethod".to_string()
+        }
         EntityKind::Subroutine
             if subroutine_package_is_inherited(source, &entity.canonical_name) =>
         {
@@ -3830,6 +3833,13 @@ fn parser_accuracy_entity_kind(
         }
         _ => format!("{:?}", entity.kind),
     }
+}
+
+fn subroutine_package_looks_like_role(canonical_name: &str) -> bool {
+    let Some((package, _name)) = canonical_name.rsplit_once("::") else {
+        return false;
+    };
+    package == "Role" || package.ends_with("::Role")
 }
 
 fn subroutine_package_is_inherited(source: &str, canonical_name: &str) -> bool {
@@ -7766,6 +7776,27 @@ sub dynamic_boundary_case {
 
         assert_eq!(parser_accuracy_entity_kind(source, &inherited, None), "InheritedMethod");
         assert_eq!(parser_accuracy_entity_kind(source, &own, None), "Subroutine");
+    }
+
+    #[test]
+    fn parser_accuracy_entity_kind_projects_role_subroutine_declarations() {
+        let role_method = EntityFact {
+            id: EntityId(1),
+            kind: EntityKind::Subroutine,
+            canonical_name: "Accuracy::Role::provided".to_string(),
+            anchor_id: None,
+            scope_id: None,
+            provenance: perl_semantic_facts::Provenance::ExactAst,
+            confidence: perl_semantic_facts::Confidence::High,
+        };
+        let consumer_method = EntityFact {
+            id: EntityId(2),
+            canonical_name: "Accuracy::RoleConsumer::local_method".to_string(),
+            ..role_method.clone()
+        };
+
+        assert_eq!(parser_accuracy_entity_kind("", &role_method, None), "RoleMethod");
+        assert_eq!(parser_accuracy_entity_kind("", &consumer_method, None), "Subroutine");
     }
 
     #[test]

@@ -12,7 +12,6 @@ Pointer: no active failure packets.
 
 | Metric | Reason | Suggested PR |
 |---|---|---|
-| `symbol_decl_role_method_f1` | no symbol gold labels are available for this kind | `feat(metrics): wire parser-accuracy measurement for symbol_decl_role_method_f1` |
 | `symbol_ref_dynamic_boundary_f1` | no symbol gold labels are available for this kind | `feat(metrics): wire parser-accuracy measurement for symbol_ref_dynamic_boundary_f1` |
 | `symbol_ref_export_f1` | no symbol gold labels are available for this kind | `feat(metrics): wire parser-accuracy measurement for symbol_ref_export_f1` |
 | `symbol_ref_import_f1` | no symbol gold labels are available for this kind | `feat(metrics): wire parser-accuracy measurement for symbol_ref_import_f1` |
