@@ -1816,6 +1816,17 @@ enum DevexCommand {
         #[arg(long, default_value = "target/devex/local-proof.json")]
         output: PathBuf,
     },
+
+    /// Show a local PR cockpit summary for the current diff.
+    Cockpit {
+        /// Git base ref used for changed-file detection.
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+
+        /// Output path for the JSON receipt refreshed by the cockpit.
+        #[arg(long, default_value = "target/devex/local-proof.json")]
+        receipt: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2009,6 +2020,9 @@ fn main() -> Result<()> {
             DevexCommand::Plan { base } => devex_plan::run(devex_plan::DevexPlanConfig { base }),
             DevexCommand::Receipt { base, output } => {
                 devex_plan::write_receipt(devex_plan::DevexReceiptConfig { base, output })
+            }
+            DevexCommand::Cockpit { base, receipt } => {
+                devex_plan::cockpit(devex_plan::DevexCockpitConfig { base, receipt })
             }
         },
         Commands::ParseRust { source, sexp, ast, bench } => {
