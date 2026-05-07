@@ -16,9 +16,12 @@ Risk packs route extra proof to PRs that touch known-risky surfaces. Defined in
 | `workspace_index` | module resolution, semantic facts, indexing | `merge_gate_shards`, `lsp_memory_smoke`, `windows_guardrails`, `ripr_advisory` | `memory_plateau`, `real_repo_latency` |
 | `retained_state` | long-lived maps, caches, queues, sessions | `lsp_memory_smoke`, `ripr_advisory` | `memory_plateau` |
 | `dap` | debug adapter, breakpoints, evaluate | `merge_gate_shards`, `ux_tests`, `ripr_advisory` | — |
-| `vscode` | extension packaging, managed binary | `docs_gate` | `vscode_smoke_matrix` |
+| `vscode` | extension packaging, managed binary | `pr_smoke` | `vscode_smoke_matrix` |
+| `path_security` | URI normalization, path traversal, sandbox | `merge_gate_shards`, `windows_guardrails`, `ripr_advisory` | — |
 | `security` | sandbox, subprocess, exec, deserialization | `security_audit`, `windows_guardrails`, `ripr_advisory` | — |
 | `manifest` | Cargo.toml/lock, toolchain | `pr_smoke`, `merge_gate_shards`, `security_audit` | `release_check` |
+| `policy` | policy ledgers, gate policy, ripr config | `pr_smoke`, `merge_gate_shards` | — |
+| `workflow` | GitHub Actions, CI scripts, xtask CI tasks | `pr_smoke`, `merge_gate_shards` | — |
 | `docs_only` | prose / markdown / status | `docs_gate` | — |
 
 ---

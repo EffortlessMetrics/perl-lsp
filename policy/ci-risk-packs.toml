@@ -111,9 +111,74 @@ description = "VS Code extension packaging, managed binary, extension-host behav
 paths = [
   "vscode-extension/**",
 ]
-lanes = ["docs_gate"]
+# A TypeScript change in the extension still needs the LSP binary built and
+# UX-smoke-tested; docs_gate alone is insufficient. Cross-OS smoke matrix
+# remains label-gated via deep_lanes.
+lanes = ["pr_smoke"]
 deep_lanes = ["vscode_smoke_matrix"]
 labels = ["ci:vscode-matrix"]
+
+# -----------------------------------------------------------------------------
+# Path-security risk: URI normalization, path traversal, sandbox enforcement.
+# Carved out from the broader security pack because Windows path handling and
+# sandbox fail-closed behavior are this repo's most frequent regression class —
+# split routes windows_guardrails precisely without requiring Cargo.lock to move.
+# -----------------------------------------------------------------------------
+[risk_pack.path_security]
+description = "URI normalization, path traversal, sandbox enforcement, and file-system access surface changes."
+paths = [
+  "crates/perl-uri/**",
+  "crates/perl-lsp-rs/src/runtime/**",
+  "crates/perl-subprocess-runtime/**",
+]
+keywords = [
+  "uri",
+  "sandbox",
+  "path_security",
+  "canonicalize",
+  "normalize",
+  "traversal",
+]
+lanes = ["merge_gate_shards", "windows_guardrails", "ripr_advisory"]
+deep_lanes = []
+labels = ["ci:security", "security-audit"]
+
+# -----------------------------------------------------------------------------
+# Policy risk: changes to policy ledgers, gate policy, or risk-pack TOML
+# itself. A change here can invalidate every other PR's routing, so the
+# merge gate must run.
+# -----------------------------------------------------------------------------
+[risk_pack.policy]
+description = "Changes to policy ledgers (policy/*.toml), gate policy (.ci/gate-policy.yaml), or CI economics TOMLs."
+paths = [
+  "policy/**",
+  ".ci/gate-policy.yaml",
+  ".ci/blockers.yaml",
+  ".ci/receipt.schema.json",
+  "ripr.toml",
+]
+lanes = ["pr_smoke", "merge_gate_shards"]
+deep_lanes = []
+labels = ["ci:policy"]
+
+# -----------------------------------------------------------------------------
+# Workflow risk: GitHub Actions workflows, CI scripts, and xtask CI tasks.
+# A workflow change can ripple through every other PR's gate behavior, so the
+# gate must run.
+# -----------------------------------------------------------------------------
+[risk_pack.workflow]
+description = "GitHub Actions workflows, CI scripts, and xtask CI tasks."
+paths = [
+  ".github/workflows/**",
+  ".github/actions/**",
+  "scripts/ci/**",
+  "xtask/src/tasks/ci_*",
+  "xtask/src/tasks/workflow_*",
+  "xtask/src/tasks/gate_*",
+]
+lanes = ["pr_smoke", "merge_gate_shards"]
+deep_lanes = []
+labels = ["ci:workflow"]
 
 # -----------------------------------------------------------------------------
 # Security risk: sandbox, subprocess, eval, exec, path security, deserialization.
