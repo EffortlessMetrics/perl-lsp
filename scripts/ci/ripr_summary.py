@@ -88,18 +88,28 @@ def render(findings: list[dict[str, Any]]) -> str:
             f.get("location", ""),
         )
 
+    def _md_safe(s: str) -> str:
+        # Normalize Windows separators and escape pipes so they don't break the
+        # markdown table.
+        return s.replace("\\", "/").replace("|", "\\|")
+
     for f in sorted(findings, key=sort_key)[:20]:
         cls = classify(f)
-        loc = f.get("location") or f.get("path") or "?"
-        if isinstance(loc, dict):
-            loc = f"{loc.get('file', '?')}:{loc.get('line', '?')}"
+        loc_raw = f.get("location") or f.get("path") or "?"
+        if isinstance(loc_raw, dict):
+            file_part = str(loc_raw.get("file", "?"))
+            line_part = loc_raw.get("line", "?")
+            loc = f"{file_part}:{line_part}"
+        else:
+            loc = str(loc_raw)
+        loc = _md_safe(loc)
         tests = f.get("related_tests") or f.get("tests") or []
         if isinstance(tests, list):
-            test_str = ", ".join(str(t) for t in tests[:3])
+            test_str = ", ".join(_md_safe(str(t)) for t in tests[:3])
             if len(tests) > 3:
                 test_str += f" (+{len(tests) - 3})"
         else:
-            test_str = str(tests)
+            test_str = _md_safe(str(tests))
         lines.append(f"| `{cls}` | {loc} | {test_str or '—'} |")
 
     lines.append("")
@@ -119,23 +129,23 @@ def main() -> int:
     p.add_argument("--summary", type=str, required=True)
     args = p.parse_args()
 
+    summary_path = Path(args.summary)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+
     if not args.report.exists() or args.report.stat().st_size == 0:
-        Path(args.summary).parent.mkdir(parents=True, exist_ok=True)
-        with open(args.summary, "a") as f:
+        with open(summary_path, "a", encoding="utf-8") as f:
             f.write("# ripr (advisory)\n\nReport file empty or missing.\n")
         return 0
 
     try:
-        doc = json.loads(args.report.read_text())
+        doc = json.loads(args.report.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        Path(args.summary).parent.mkdir(parents=True, exist_ok=True)
-        with open(args.summary, "a") as f:
+        with open(summary_path, "a", encoding="utf-8") as f:
             f.write(f"# ripr (advisory)\n\nCould not parse report: {e}\n")
         return 0
 
     findings = collect_findings(doc)
-    Path(args.summary).parent.mkdir(parents=True, exist_ok=True)
-    with open(args.summary, "a") as f:
+    with open(summary_path, "a", encoding="utf-8") as f:
         f.write(render(findings))
     return 0
 
