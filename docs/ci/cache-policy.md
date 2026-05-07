@@ -17,9 +17,15 @@ For every `Swatinem/rust-cache` invocation in a PR-capable workflow:
   with:
     cache-on-failure: true
     cache-all-crates: true
-    shared-key: <stable-key>-${{ hashFiles('Cargo.lock') }}
+    shared-key: <stable-key>
     save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 ```
+
+The example uses a stable `shared-key` without `${{ hashFiles('Cargo.lock') }}` because
+`Swatinem/rust-cache` already incorporates the lockfile hash into its internal keying;
+adding it to `shared-key` prevents restore-fallback when `Cargo.lock` changes (the action
+uses `shared-key` as a restore prefix). Existing workflows that include the hash for
+historical reasons are not changed by this rollout.
 
 Effects:
 
@@ -32,30 +38,28 @@ Effects:
 ## What this does not change
 
 - Concurrency (`concurrency.cancel-in-progress`) for PR workflows is preserved.
-- Release/deploy workflows (`release.yml`, `publish-*.yml`) are not modified by this
-  policy — they are infrequent and need their own cache lifecycle.
+- Release/deploy workflows are not modified by this policy — they are infrequent and
+  need their own cache lifecycle.
 - Nightly workflows that already have their own scheduling are unaffected.
 
 ---
 
-## Workflows updated in PR 05
+## Scope
 
-- `.github/workflows/ci.yml` (6 cache blocks: pr-smoke, merge-gate-shards × 2,
-  ux-tests, check-all-targets, lsp-memory-smoke, windows-guardrails)
-- `.github/workflows/ux-regression-gate.yml`
-- `.github/workflows/ci-gate-self-tests.yml`
-- `.github/workflows/publish-dry-run.yml`
-- `.github/workflows/ci-security.yml`
+This policy applies to every `Swatinem/rust-cache` invocation in any workflow that runs
+on `pull_request`. The exhaustive list is not maintained here to avoid drift; verify by
+grepping `Swatinem/rust-cache` against `pull_request`-triggered workflows under
+`.github/workflows/`.
 
 ---
 
 ## Verification
 
-After this PR merges, the first master push saves the canonical cache. PRs from then on
-restore-only. Expected impact:
+After this policy lands, the first master push saves the canonical cache. PRs from then
+on restore-only. Expected impact:
 
 - PR run wall time: ≈ unchanged (restore time is comparable).
 - Cache write traffic: drops to one save per master push instead of one per PR push.
 - Cache eviction churn: substantially reduced.
 
-LEM impact appears in `target/ci/ci-actuals.json` after PR 08 lands.
+LEM impact appears in `target/ci/ci-actuals.json` once the CI actuals receipt is wired up.
