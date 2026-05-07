@@ -95,6 +95,9 @@ fn test_parser_nodekind_row_renders() -> Result<()> {
         perl_corpus_files: 22,
         nodekind_covered: 65,
         nodekind_total: 69,
+        nodekind_never_seen: 4,
+        nodekind_allowlisted_never_seen: 4,
+        nodekind_actionable_never_seen: 0,
         ga_covered: 12,
         ga_total: 12,
     };
@@ -113,13 +116,48 @@ fn test_parser_nodekind_row_renders() -> Result<()> {
     let result = generate_parser_status(&metrics, template)?;
     assert!(result.contains("65/69"), "nodekind row missing 65/69");
     assert!(result.contains("94.2"), "nodekind row missing 94.2%");
-    assert!(result.contains("4 never-seen"), "nodekind row missing never-seen count");
+    assert!(result.contains("0 actionable never-seen"), "nodekind row missing actionable count");
+    assert!(result.contains("4 recovery-only allowlisted"), "nodekind row missing allowlist count");
     assert!(
         result.contains("insufficient_data"),
         "strict-clean no-receipt row should report insufficient_data"
     );
     assert!(!result.contains("10/10"), "strict-clean no-receipt row must not show 10/10");
     Ok(())
+}
+
+#[test]
+fn test_nodekind_gap_note_distinguishes_actionable_and_allowlisted() {
+    let mut summary = super::super::super::corpus_audit::StatusSummary {
+        total_files: 91,
+        ok_files: 91,
+        error_files: 0,
+        timeout_files: 0,
+        panic_files: 0,
+        test_corpus_files: 69,
+        perl_corpus_files: 22,
+        nodekind_covered: 65,
+        nodekind_total: 69,
+        nodekind_never_seen: 4,
+        nodekind_allowlisted_never_seen: 4,
+        nodekind_actionable_never_seen: 0,
+        ga_covered: 12,
+        ga_total: 12,
+    };
+
+    assert_eq!(
+        format_nodekind_gap_note(&summary),
+        "0 actionable never-seen; 4 recovery-only allowlisted"
+    );
+
+    summary.nodekind_never_seen = 3;
+    summary.nodekind_allowlisted_never_seen = 1;
+    summary.nodekind_actionable_never_seen = 2;
+
+    assert_eq!(
+        format_nodekind_gap_note(&summary),
+        "2 actionable never-seen; 1 recovery-only allowlisted; 3 total never-seen"
+    );
 }
 
 #[test]
