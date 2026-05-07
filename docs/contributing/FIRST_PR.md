@@ -178,6 +178,7 @@ If the reviewer pushes a fix directly to your branch, that is normal. Check and 
 | Parser-accuracy metrics | `just ci-metrics-ratchet-check parser_accuracy` |
 | Status docs | `just status-update` then `just status-check` |
 | Release/version prep | `just version-check` then `just release-check` |
+| DevEx docs drift | `cargo xtask check-devex-docs` |
 | Build LSP server | `cargo build -p perl-lsp-rs --release` |
 | Run all library tests | `cargo test --workspace --lib` |
 | Format | `cargo xtask fmt` |

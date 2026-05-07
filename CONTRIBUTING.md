@@ -104,7 +104,7 @@ For Codex Desktop specifically:
 
 1. Open the repository root as the workspace.
 2. Run checks through a POSIX shell (`bash`) even on Windows.
-3. Prefer `just agent-*` commands for large compile/test work.
+3. Prefer `just agent-check`, `just agent-test`, and `just agent-clippy` for large compile/test work.
 4. Use `just pr-fast` or `just ready` before handing a PR to review.
 
 ```bash
@@ -212,6 +212,7 @@ It is a quick push guard, not the full merge gate.
 | Generated status docs touched | `just status-update` then `just status-check` | Regenerates and verifies `docs/project/status/` outputs. |
 | Release/version surfaces touched | `just version-check` then `just release-check` | Verifies version sync and the release-prep gate before tagging/publishing. |
 | Need a command map | `just quick-ref` or [Commands Reference](docs/reference/COMMANDS_REFERENCE.md) | Shows the short command decision tree. |
+| DevEx docs changed | `cargo xtask check-devex-docs` | Verifies toolchain wording and documented command references stay current. |
 
 ### 5. Expand for larger changes or release prep
 

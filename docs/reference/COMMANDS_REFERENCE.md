@@ -92,6 +92,7 @@ perl-dap --stdio  # Standard DAP transport
 | Parser-accuracy metrics touched | `just ci-metrics-ratchet-check parser_accuracy` | Verifies parser-accuracy scorecard floors do not regress. |
 | Generated status docs touched | `just status-update` then `just status-check` | Regenerates and verifies `docs/project/status/` outputs. |
 | Release/version surfaces touched | `just version-check` then `just release-check` | Verifies version sync and the release-prep gate before tagging/publishing. |
+| DevEx docs touched | `cargo xtask check-devex-docs` | Verifies toolchain wording and documented command references stay current. |
 | Need a terminal summary | `just quick-ref` | Prints the short command decision tree. |
 
 ### Common Commands
@@ -1261,7 +1262,7 @@ See [CONTRIBUTING.md](../../CONTRIBUTING.md#release-workflow) for the full relea
 6. Run benchmarks: `cargo bench --features pure-rust`
 
 ### Debugging Parse Failures
-1. Use `cargo xtask corpus --diagnose` for detailed error info
+1. Use `cargo run -p xtask --features legacy -- corpus --diagnose` for detailed error info
 2. For Pest parser: Check parse error messages which show exact location
 3. Use `cargo xtask parse-rust file.pl --ast` to see AST structure
 
