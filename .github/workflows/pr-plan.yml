@@ -46,6 +46,10 @@ jobs:
           python-version: "3.12"
 
       - name: Compute PR Plan
+        # continue-on-error so the artifact upload step still runs even when
+        # the budget guard returns exit 2 (over hard ceiling, no override).
+        continue-on-error: true
+        id: plan
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -70,3 +74,15 @@ jobs:
           path: target/ci/ci-plan.json
           retention-days: 14
           if-no-files-found: warn
+
+      - name: Budget guard (hard ceiling)
+        # Re-surface a non-zero exit from the planner so over-ceiling PRs that
+        # don't have a `full-ci` or `ci-budget-override` label visibly fail.
+        # Sub-125-LEM PRs and acknowledged over-ceiling PRs pass.
+        if: always() && steps.plan.outcome == 'failure'
+        run: |
+          echo "::error::PR Plan returned a non-success exit code; see the step summary."
+          # Fail this job so the budget guard is visible. The PR Plan workflow
+          # is not a required check, so this never blocks merges — it only
+          # surfaces budget overruns to the contributor.
+          exit 1
