@@ -597,10 +597,46 @@ struct MetricRuntime {
     ci_runner_failure_count: u64,
     orphan_process_count: u64,
     cache_hit_rate: Option<f64>,
+    #[serde(skip_serializing_if = "is_zero_u64")]
+    cache_sample_count: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     allocated_bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     allocation_count: Option<u64>,
+}
+
+#[derive(Debug, Default)]
+struct MetricSourceCache {
+    sources: BTreeMap<PathBuf, String>,
+    hit_count: u64,
+    miss_count: u64,
+}
+
+impl MetricSourceCache {
+    fn read<'a>(&'a mut self, path: &Path, label: &str) -> Result<&'a str> {
+        let key = path.to_path_buf();
+        match self.sources.entry(key) {
+            std::collections::btree_map::Entry::Occupied(entry) => {
+                self.hit_count += 1;
+                Ok(entry.into_mut().as_str())
+            }
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                self.miss_count += 1;
+                let source = fs::read_to_string(path).with_context(|| {
+                    format!("reading parser accuracy {label} {}", path.display())
+                })?;
+                Ok(entry.insert(source).as_str())
+            }
+        }
+    }
+
+    fn hit_rate(&self) -> Option<f64> {
+        ratio(self.hit_count, self.hit_count + self.miss_count)
+    }
+
+    fn sample_count(&self) -> u64 {
+        self.hit_count + self.miss_count
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -1023,20 +1059,24 @@ fn build_artifact(
     let denominator = compute_denominator(manifest);
     let families = summarize_families(manifest);
     let fixture_count = denominator.fixture_count as f64;
-    let line_score = score_manifest_line_tags(root, manifest)?;
-    let ast_score = score_manifest_ast(root, manifest)?;
-    let symbol_score = score_manifest_symbols(root, manifest)?;
-    let recovery_score = score_manifest_recovery(root, manifest)?;
-    let incremental_score = score_manifest_incremental(root, manifest)?;
-    let span_score = score_manifest_spans(root, manifest)?;
-    let unsupported_score = score_manifest_unsupported(root, manifest, &line_score)?;
+    let mut source_cache = MetricSourceCache::default();
+    let line_score = score_manifest_line_tags(root, manifest, &mut source_cache)?;
+    let ast_score = score_manifest_ast(root, manifest, &mut source_cache)?;
+    let symbol_score = score_manifest_symbols(root, manifest, &mut source_cache)?;
+    let recovery_score = score_manifest_recovery(root, manifest, &mut source_cache)?;
+    let incremental_score = score_manifest_incremental(root, manifest, &mut source_cache)?;
+    let span_score = score_manifest_spans(root, manifest, &mut source_cache)?;
+    let unsupported_score =
+        score_manifest_unsupported(root, manifest, &line_score, &mut source_cache)?;
     let method_completion_provider_score =
-        score_method_completion_provider_expectations(root, manifest)?;
-    let diagnostic_provider_score = score_diagnostic_provider_expectations(root, manifest)?;
-    let navigation_provider_score = score_navigation_provider_expectations(root, manifest)?;
-    let scale_cost_score = score_manifest_scale_cost(root, manifest)?;
-    let determinism_score = score_manifest_determinism(root, manifest)?;
-    let gold_drift = audit_gold_drift(root, manifest)?;
+        score_method_completion_provider_expectations(root, manifest, &mut source_cache)?;
+    let diagnostic_provider_score =
+        score_diagnostic_provider_expectations(root, manifest, &mut source_cache)?;
+    let navigation_provider_score =
+        score_navigation_provider_expectations(root, manifest, &mut source_cache)?;
+    let scale_cost_score = score_manifest_scale_cost(root, manifest, &mut source_cache)?;
+    let determinism_score = score_manifest_determinism(root, manifest, &mut source_cache)?;
+    let gold_drift = audit_gold_drift(root, manifest, &mut source_cache)?;
     let mut metrics = vec![measured_value(
         "denominator_fixture_count",
         fixture_count,
@@ -1082,7 +1122,11 @@ fn build_artifact(
         metrics,
         failure_packets: failure_packet::collect_failure_packets(root, manifest)?,
         gold_drift,
-        metric_runtime: MetricRuntime::default(),
+        metric_runtime: MetricRuntime {
+            cache_hit_rate: source_cache.hit_rate(),
+            cache_sample_count: source_cache.sample_count(),
+            ..MetricRuntime::default()
+        },
     })
 }
 
@@ -1151,17 +1195,19 @@ fn summarize_families(manifest: &ParserAccuracyManifest) -> Vec<FamilySummary> {
         .collect()
 }
 
-fn score_manifest_line_tags(root: &Path, manifest: &ParserAccuracyManifest) -> Result<LineScore> {
+fn score_manifest_line_tags(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+    source_cache: &mut MetricSourceCache,
+) -> Result<LineScore> {
     let mut score = LineScore::default();
     for fixture in &manifest.fixtures {
         if fixture.line_expectations.is_empty() {
             continue;
         }
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy fixture source {}", source_path.display())
-        })?;
-        let actual_by_line = extract_line_tags(&source);
+        let source = source_cache.read(&source_path, "fixture source")?;
+        let actual_by_line = extract_line_tags(source);
         for expectation in &fixture.line_expectations {
             let actual = actual_by_line.get(&expectation.line).cloned().unwrap_or_default();
             score_line_tags(&expectation.expected_tags, &actual, &mut score);
@@ -1389,6 +1435,7 @@ fn line_metrics(score: &LineScore, cadence: Cadence) -> Vec<MetricRow> {
 fn score_manifest_recovery(
     root: &Path,
     manifest: &ParserAccuracyManifest,
+    source_cache: &mut MetricSourceCache,
 ) -> Result<RecoveryScore> {
     let mut score = RecoveryScore::default();
     for fixture in &manifest.fixtures {
@@ -1396,10 +1443,8 @@ fn score_manifest_recovery(
             continue;
         }
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy recovery fixture source {}", source_path.display())
-        })?;
-        let (prediction, recovery_micros) = extract_recovery_prediction(&source_path, &source);
+        let source = source_cache.read(&source_path, "recovery fixture source")?;
+        let (prediction, recovery_micros) = extract_recovery_prediction(&source_path, source);
         score.recovery_parse_micros.push(recovery_micros);
         for expectation in &fixture.recovery_expectations {
             score_recovery_expectation(expectation, &prediction, &mut score);
@@ -1517,20 +1562,19 @@ fn line_range_set(range: LineRange) -> BTreeSet<u64> {
 fn score_manifest_incremental(
     root: &Path,
     manifest: &ParserAccuracyManifest,
+    source_cache: &mut MetricSourceCache,
 ) -> Result<IncrementalScore> {
     let mut score = IncrementalScore::default();
     let content_hash_index = WorkspaceIndex::new();
     for fixture in &manifest.fixtures {
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy incremental fixture source {}", source_path.display())
-        })?;
-        score_content_hash_reuse_probe(&content_hash_index, &source_path, &source, &mut score)?;
+        let source = source_cache.read(&source_path, "incremental fixture source")?;
+        score_content_hash_reuse_probe(&content_hash_index, &source_path, source, &mut score)?;
         if fixture.incremental_expectations.is_empty() {
             continue;
         }
         for expectation in &fixture.incremental_expectations {
-            score_incremental_expectation(&source, expectation, &mut score);
+            score_incremental_expectation(source, expectation, &mut score);
         }
     }
     Ok(score)
@@ -1805,18 +1849,20 @@ fn position_at(source: &str, byte: usize) -> Result<Position> {
     Ok(position)
 }
 
-fn score_manifest_spans(root: &Path, manifest: &ParserAccuracyManifest) -> Result<SpanScore> {
+fn score_manifest_spans(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+    source_cache: &mut MetricSourceCache,
+) -> Result<SpanScore> {
     let mut score = SpanScore::default();
     for fixture in &manifest.fixtures {
         if fixture.span_expectations.is_empty() {
             continue;
         }
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy span fixture source {}", source_path.display())
-        })?;
+        let source = source_cache.read(&source_path, "span fixture source")?;
         for expectation in &fixture.span_expectations {
-            score_span_expectation(&source, expectation, &mut score);
+            score_span_expectation(source, expectation, &mut score);
         }
     }
     Ok(score)
@@ -1826,6 +1872,7 @@ fn score_manifest_unsupported(
     root: &Path,
     manifest: &ParserAccuracyManifest,
     line_score: &LineScore,
+    source_cache: &mut MetricSourceCache,
 ) -> Result<UnsupportedScore> {
     let mut score = UnsupportedScore {
         line_labeled_construct_count: line_score.expected_unsupported_construct_count,
@@ -1849,10 +1896,8 @@ fn score_manifest_unsupported(
         }
 
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy unsupported fixture source {}", source_path.display())
-        })?;
-        let predictions = extract_symbol_predictions(&source_path, &source)?;
+        let source = source_cache.read(&source_path, "unsupported fixture source")?;
+        let predictions = extract_symbol_predictions(&source_path, source)?;
         score_unsupported_symbol_expectations(
             &fixture.symbol_expectations,
             &predictions,
@@ -1941,6 +1986,7 @@ fn is_conservative_symbol_edge(edge: &SymbolEdgeKey) -> bool {
 fn score_method_completion_provider_expectations(
     root: &Path,
     manifest: &ParserAccuracyManifest,
+    source_cache: &mut MetricSourceCache,
 ) -> Result<MethodCompletionProviderScore> {
     let mut score = MethodCompletionProviderScore::default();
 
@@ -1950,11 +1996,9 @@ fn score_method_completion_provider_expectations(
         }
 
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy provider fixture source {}", source_path.display())
-        })?;
-        let provider_source = provider_completion_source(&source)?;
-        let index_source = provider_completion_index_source(&source)?;
+        let source = source_cache.read(&source_path, "provider fixture source")?;
+        let provider_source = provider_completion_source(source)?;
+        let index_source = provider_completion_index_source(source)?;
 
         let index = Arc::new(WorkspaceIndex::new());
         let source_path_text = source_path.to_string_lossy();
@@ -1971,7 +2015,7 @@ fn score_method_completion_provider_expectations(
         );
 
         for expectation in &fixture.provider_expectations.method_completion {
-            let cursor = locate_cursor_marker(&source, &expectation.cursor_marker)
+            let cursor = locate_cursor_marker(source, &expectation.cursor_marker)
                 .with_context(|| format!("locating cursor marker for {}", expectation.id))?;
             let query_start = Instant::now();
             let completions = provider.get_completions(&provider_source, cursor);
@@ -2034,6 +2078,7 @@ fn score_method_completion_expectation(
 fn score_diagnostic_provider_expectations(
     root: &Path,
     manifest: &ParserAccuracyManifest,
+    source_cache: &mut MetricSourceCache,
 ) -> Result<DiagnosticProviderScore> {
     let mut score = DiagnosticProviderScore::default();
 
@@ -2043,11 +2088,9 @@ fn score_diagnostic_provider_expectations(
         }
 
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy diagnostic provider fixture {}", source_path.display())
-        })?;
-        let provider_source = provider_diagnostic_source(&source)?;
-        let index_source = provider_diagnostic_index_source(&source)?;
+        let source = source_cache.read(&source_path, "diagnostic provider fixture source")?;
+        let provider_source = provider_diagnostic_source(source)?;
+        let index_source = provider_diagnostic_index_source(source)?;
 
         let index = WorkspaceIndex::new();
         let source_path_text = source_path.to_string_lossy();
@@ -2118,6 +2161,7 @@ fn score_diagnostic_expectation(
 fn score_navigation_provider_expectations(
     root: &Path,
     manifest: &ParserAccuracyManifest,
+    source_cache: &mut MetricSourceCache,
 ) -> Result<NavigationProviderScore> {
     let mut score = NavigationProviderScore::default();
 
@@ -2127,11 +2171,9 @@ fn score_navigation_provider_expectations(
         }
 
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy navigation provider fixture {}", source_path.display())
-        })?;
-        let provider_source = provider_navigation_source(&source)?;
-        let index_source = provider_navigation_index_source(&source)?;
+        let source = source_cache.read(&source_path, "navigation provider fixture source")?;
+        let provider_source = provider_navigation_source(source)?;
+        let index_source = provider_navigation_index_source(source)?;
 
         let index = WorkspaceIndex::new();
         let source_path_text = source_path.to_string_lossy();
@@ -2155,7 +2197,7 @@ fn score_navigation_provider_expectations(
             score_navigation_document_symbols(expectation, &document_symbol_spans, &mut score);
             score_navigation_goto_definition(
                 expectation,
-                &source,
+                source,
                 &index_source,
                 &index,
                 &source_path_text,
@@ -2171,7 +2213,7 @@ fn score_navigation_provider_expectations(
                 &anchors_by_id,
                 &mut score,
             )?;
-            score_navigation_hover(expectation, &source, &index, &source_path_text, &mut score)?;
+            score_navigation_hover(expectation, source, &index, &source_path_text, &mut score)?;
             score_navigation_rename_safe_edit(
                 expectation,
                 &index,
@@ -2673,44 +2715,43 @@ fn mask_ranges_preserving_newlines(
 fn score_manifest_scale_cost(
     root: &Path,
     manifest: &ParserAccuracyManifest,
+    source_cache: &mut MetricSourceCache,
 ) -> Result<ScaleCostScore> {
     let mut score = ScaleCostScore::default();
     for fixture in &manifest.fixtures {
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy scale fixture source {}", source_path.display())
-        })?;
+        let source = source_cache.read(&source_path, "scale fixture source")?;
         score.fixture_count += 1;
         score.file_bytes += source.len() as u64;
-        score.source_lines += line_starts(&source).len() as u64;
-        score.max_brace_depth = score.max_brace_depth.max(max_brace_depth(&source));
+        score.source_lines += line_starts(source).len() as u64;
+        score.max_brace_depth = score.max_brace_depth.max(max_brace_depth(source));
         score.export_count += source.matches("@EXPORT").count() as u64;
         score.export_count += source.matches("%EXPORT_TAGS").count() as u64;
 
         let lex_start = Instant::now();
-        let tokens = collect_parser_tokens(&source)?;
+        let tokens = collect_parser_tokens(source)?;
         score.lex_ms.push(lex_start.elapsed().as_secs_f64() * 1000.0);
         score.token_count += tokens.len() as u64;
 
         let parse_start = Instant::now();
-        let mut parser = Parser::new(&source);
+        let mut parser = Parser::new(source);
         let output = parser.parse_with_recovery();
         score.parse_ms.push(parse_start.elapsed().as_secs_f64() * 1000.0);
 
         let ast_start = Instant::now();
-        collect_scale_from_node(&output.ast, &source, 0, &mut score);
+        collect_scale_from_node(&output.ast, source, 0, &mut score);
         score.ast_projection_ms.push(ast_start.elapsed().as_secs_f64() * 1000.0);
 
         let semantic_start = Instant::now();
         let (predictions, workspace_insert_ms) =
-            extract_symbol_predictions_with_insert_timing(&source_path, &source)?;
+            extract_symbol_predictions_with_insert_timing(&source_path, source)?;
         score.semantic_extraction_ms.push(semantic_start.elapsed().as_secs_f64() * 1000.0);
         score.workspace_insert_ms.push(workspace_insert_ms);
         score.symbol_count += (predictions.entities.len()
             + predictions.occurrences.len()
             + predictions.edges.len()) as u64;
 
-        let actual_by_line = extract_line_tags(&source);
+        let actual_by_line = extract_line_tags(source);
         score.dynamic_boundary_count +=
             actual_by_line.values().filter(|tags| tags.contains(&LineTag::DynamicBoundary)).count()
                 as u64;
@@ -2787,23 +2828,22 @@ fn max_brace_depth(source: &str) -> u64 {
 fn score_manifest_determinism(
     root: &Path,
     manifest: &ParserAccuracyManifest,
+    source_cache: &mut MetricSourceCache,
 ) -> Result<DeterminismScore> {
     let mut score = DeterminismScore::default();
     for fixture in &manifest.fixtures {
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy determinism fixture source {}", source_path.display())
-        })?;
+        let source = source_cache.read(&source_path, "determinism fixture source")?;
         score.fixture_count += 1;
 
-        let first_tokens = collect_parser_tokens(&source)?;
-        let second_tokens = collect_parser_tokens(&source)?;
+        let first_tokens = collect_parser_tokens(source)?;
+        let second_tokens = collect_parser_tokens(source)?;
         if stable_hash(&first_tokens) == stable_hash(&second_tokens) {
             score.token_stream_stable_count += 1;
         }
 
-        let first_parse = parse_determinism_hashes(&source);
-        let second_parse = parse_determinism_hashes(&source);
+        let first_parse = parse_determinism_hashes(source);
+        let second_parse = parse_determinism_hashes(source);
         if first_parse.parse_hash == second_parse.parse_hash {
             score.parse_hash_stable_count += 1;
             score.repeated_parse_stable_count += 1;
@@ -2815,8 +2855,8 @@ fn score_manifest_determinism(
             score.diagnostic_hash_stable_count += 1;
         }
 
-        let first_fact_hash = semantic_fact_hash(&source_path, &source)?;
-        let second_fact_hash = semantic_fact_hash(&source_path, &source)?;
+        let first_fact_hash = semantic_fact_hash(&source_path, source)?;
+        let second_fact_hash = semantic_fact_hash(&source_path, source)?;
         if first_fact_hash == second_fact_hash {
             score.semantic_fact_hash_stable_count += 1;
         }
@@ -2864,17 +2904,18 @@ fn stable_hash<T: Hash>(value: &T) -> u64 {
     hasher.finish()
 }
 
-fn audit_gold_drift(root: &Path, manifest: &ParserAccuracyManifest) -> Result<GoldDrift> {
+fn audit_gold_drift(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+    source_cache: &mut MetricSourceCache,
+) -> Result<GoldDrift> {
     let mut drift = GoldDrift::default();
     let mut symbol_ids = BTreeSet::new();
 
     for fixture in &manifest.fixtures {
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy gold fixture source {}", source_path.display())
-        })?;
-        drift.span_error_count +=
-            count_span_expectation_errors(&source, &fixture.span_expectations);
+        let source = source_cache.read(&source_path, "gold fixture source")?;
+        drift.span_error_count += count_span_expectation_errors(source, &fixture.span_expectations);
         drift.duplicate_symbol_id_count +=
             count_duplicate_symbol_ids(&fixture.symbol_expectations, &mut symbol_ids);
         drift.missing_resolves_to_target_count +=
@@ -3063,22 +3104,24 @@ fn span_is_near(expectation: &SpanExpectation, actual: &ActualSpanCoordinates) -
         && expectation.byte_end.abs_diff(actual.byte_end) <= 2
 }
 
-fn score_manifest_ast(root: &Path, manifest: &ParserAccuracyManifest) -> Result<AstScore> {
+fn score_manifest_ast(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+    source_cache: &mut MetricSourceCache,
+) -> Result<AstScore> {
     let mut score = AstScore::default();
     for fixture in &manifest.fixtures {
         if fixture.ast_expectations.is_empty() {
             continue;
         }
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy fixture source {}", source_path.display())
-        })?;
+        let source = source_cache.read(&source_path, "fixture source")?;
         let expected_lines = fixture
             .ast_expectations
             .iter()
             .map(|expectation| expectation.line)
             .collect::<BTreeSet<_>>();
-        let predictions = extract_ast_predictions(&source)
+        let predictions = extract_ast_predictions(source)
             .into_iter()
             .filter(|prediction| expected_lines.contains(&prediction.line))
             .collect::<Vec<_>>();
@@ -3272,7 +3315,11 @@ fn ast_prediction_match_score(expectation: &AstExpectation, prediction: &AstPred
     score
 }
 
-fn score_manifest_symbols(root: &Path, manifest: &ParserAccuracyManifest) -> Result<SymbolScore> {
+fn score_manifest_symbols(
+    root: &Path,
+    manifest: &ParserAccuracyManifest,
+    source_cache: &mut MetricSourceCache,
+) -> Result<SymbolScore> {
     let mut score = SymbolScore::default();
     for fixture in &manifest.fixtures {
         if fixture.symbol_expectations.entities.is_empty()
@@ -3284,10 +3331,8 @@ fn score_manifest_symbols(root: &Path, manifest: &ParserAccuracyManifest) -> Res
         }
 
         let source_path = root.join(&fixture.source_path);
-        let source = fs::read_to_string(&source_path).with_context(|| {
-            format!("reading parser accuracy fixture source {}", source_path.display())
-        })?;
-        let predictions = extract_symbol_predictions(&source_path, &source)?;
+        let source = source_cache.read(&source_path, "fixture source")?;
+        let predictions = extract_symbol_predictions(&source_path, source)?;
         score_symbol_expectations(
             &fixture.symbol_expectations,
             &predictions,
@@ -4920,7 +4965,7 @@ fn sync_runtime_metric_rows(artifact: &mut ParserAccuracyArtifact, cadence: Cade
         optional_measured_value(
             "metric_cache_hit_rate",
             runtime.cache_hit_rate,
-            u64::from(runtime.cache_hit_rate.is_some()),
+            runtime.cache_sample_count,
             "metric cache telemetry is not wired yet",
             cadence,
         ),
@@ -5079,6 +5124,10 @@ fn optional_measured_rate(
 
 fn ratio(numerator: u64, denominator: u64) -> Option<f64> {
     if denominator == 0 { None } else { Some(numerator as f64 / denominator as f64) }
+}
+
+fn is_zero_u64(value: &u64) -> bool {
+    *value == 0
 }
 
 fn f1_from_counts(true_positive: u64, false_positive: u64, false_negative: u64) -> Option<f64> {
@@ -6396,6 +6445,22 @@ sub dynamic_boundary_case {
     }
 
     #[test]
+    fn metric_source_cache_reports_reused_fixture_source_hits() -> Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let source_path = tmp.path().join("fixture.pl");
+        fs::write(&source_path, "package Cache;\n1;\n")?;
+        let mut source_cache = MetricSourceCache::default();
+
+        assert_eq!(source_cache.hit_rate(), None);
+        assert_eq!(source_cache.read(&source_path, "test fixture source")?, "package Cache;\n1;\n");
+        assert_eq!(source_cache.hit_rate(), Some(0.0));
+        assert_eq!(source_cache.read(&source_path, "test fixture source")?, "package Cache;\n1;\n");
+        assert_eq!(source_cache.hit_rate(), Some(0.5));
+
+        Ok(())
+    }
+
+    #[test]
     fn family_summary_groups_label_modes() -> Result<()> {
         let families = summarize_families(&fixture_manifest());
         assert_eq!(families.len(), 2);
@@ -6413,10 +6478,12 @@ sub dynamic_boundary_case {
     fn method_completion_provider_scorer_measures_receiver_and_fallback() -> Result<()> {
         let tmp = tempfile::tempdir()?;
         write_method_completion_provider_fixture(tmp.path())?;
+        let mut source_cache = MetricSourceCache::default();
 
         let score = score_method_completion_provider_expectations(
             tmp.path(),
             &method_completion_provider_manifest(),
+            &mut source_cache,
         )?;
 
         assert_eq!(score.receiver_expected_count, 1);
@@ -6508,9 +6575,13 @@ sub dynamic_boundary_case {
     fn diagnostic_provider_scorer_measures_false_positive_and_negative_rows() -> Result<()> {
         let tmp = tempfile::tempdir()?;
         write_diagnostic_provider_fixture(tmp.path())?;
+        let mut source_cache = MetricSourceCache::default();
 
-        let score =
-            score_diagnostic_provider_expectations(tmp.path(), &diagnostic_provider_manifest())?;
+        let score = score_diagnostic_provider_expectations(
+            tmp.path(),
+            &diagnostic_provider_manifest(),
+            &mut source_cache,
+        )?;
 
         assert_eq!(score.dynamic_boundary_expected_absent_count, 4);
         assert_eq!(score.dynamic_boundary_false_positive_count, 0);
@@ -6577,9 +6648,13 @@ sub dynamic_boundary_case {
     fn navigation_provider_scorer_measures_provider_rows() -> Result<()> {
         let tmp = tempfile::tempdir()?;
         write_navigation_provider_fixture(tmp.path())?;
+        let mut source_cache = MetricSourceCache::default();
 
-        let score =
-            score_navigation_provider_expectations(tmp.path(), &navigation_provider_manifest())?;
+        let score = score_navigation_provider_expectations(
+            tmp.path(),
+            &navigation_provider_manifest(),
+            &mut source_cache,
+        )?;
 
         assert_eq!(score.document_symbol_expected_count, 11);
         assert_eq!(score.document_symbol_returned_count, 11);
@@ -7845,6 +7920,8 @@ sub dynamic_boundary_case {
             metric_runtime: MetricRuntime {
                 runtime_ms: 12.5,
                 artifact_size_bytes: 900,
+                cache_hit_rate: Some(0.25),
+                cache_sample_count: 4,
                 ..MetricRuntime::default()
             },
         };
@@ -7865,6 +7942,14 @@ sub dynamic_boundary_case {
                 MetricRow::Measured { metric, value, sample_count: 1, .. }
                     if metric == "metric_artifact_size_bytes"
                         && (*value - 900.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(artifact.metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "metric_cache_hit_rate"
+                        && (*value - 0.25).abs() < f64::EPSILON
             )
         }));
     }
