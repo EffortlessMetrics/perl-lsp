@@ -216,3 +216,149 @@ fn is_module_referenced(source: &str, module: &str, use_start: usize, use_end: u
     }
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser::Parser;
+    use perl_tdd_support::must;
+
+    fn unused_import_diags(source: &str) -> Vec<Diagnostic> {
+        let ast = must(Parser::new(source).parse());
+        let mut diags = Vec::new();
+        check_unused_imports(&ast, source, &mut diags);
+        diags
+    }
+
+    fn has_unused_import(diags: &[Diagnostic]) -> bool {
+        diags.iter().any(|d| d.code.as_deref() == Some("PL700"))
+    }
+
+    // --- basic detection ---
+
+    #[test]
+    fn genuinely_unused_module_is_flagged() {
+        let source = "use POSIX::Unused;\nmy $x = 1;\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            has_unused_import(&diags),
+            "unused module should produce an unused-import diagnostic: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn used_module_not_flagged() {
+        let source = "use Scalar::Util qw(blessed);\nmy $class = blessed($obj);\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "module referenced in code should not be flagged: {diags:?}"
+        );
+    }
+
+    // --- pragma skip list ---
+
+    #[test]
+    fn strict_pragma_not_flagged() {
+        let source = "use strict;\nmy $x = 1;\n";
+        let diags = unused_import_diags(source);
+        assert!(!has_unused_import(&diags), "use strict should never be flagged: {diags:?}");
+    }
+
+    #[test]
+    fn warnings_pragma_not_flagged() {
+        let source = "use warnings;\nmy $x = 1;\n";
+        let diags = unused_import_diags(source);
+        assert!(!has_unused_import(&diags), "use warnings should never be flagged: {diags:?}");
+    }
+
+    #[test]
+    fn utf8_pragma_not_flagged() {
+        let source = "use utf8;\nmy $x = 1;\n";
+        let diags = unused_import_diags(source);
+        assert!(!has_unused_import(&diags), "use utf8 should never be flagged: {diags:?}");
+    }
+
+    #[test]
+    fn feature_pragma_not_flagged() {
+        let source = "use feature 'say';\nsay 'hello';\n";
+        let diags = unused_import_diags(source);
+        assert!(!has_unused_import(&diags), "use feature should never be flagged: {diags:?}");
+    }
+
+    // --- implicit export skip list ---
+
+    #[test]
+    fn moose_not_flagged() {
+        let source = "use Moose;\nhas 'name' => (is => 'ro');\n";
+        let diags = unused_import_diags(source);
+        assert!(!has_unused_import(&diags), "use Moose should never be flagged: {diags:?}");
+    }
+
+    #[test]
+    fn test_more_not_flagged() {
+        let source = "use Test::More;\nok(1, 'passes');\n";
+        let diags = unused_import_diags(source);
+        assert!(!has_unused_import(&diags), "use Test::More should never be flagged: {diags:?}");
+    }
+
+    // --- explicit imports not flagged ---
+
+    #[test]
+    fn use_with_explicit_import_list_not_flagged() {
+        let source = "use List::Util qw(max min);\nmy $m = max(1, 2);\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "use with explicit import list should not be flagged: {diags:?}"
+        );
+    }
+
+    // --- version declarations not flagged ---
+
+    #[test]
+    fn version_use_not_flagged() {
+        let source = "use 5.010;\nmy $x = 1;\n";
+        let diags = unused_import_diags(source);
+        assert!(!has_unused_import(&diags), "use 5.010 should not be flagged: {diags:?}");
+    }
+
+    // --- module used by qualified call ---
+
+    #[test]
+    fn module_used_by_qualified_call_not_flagged() {
+        let source = "use File::Spec;\nmy $p = File::Spec->catfile('a', 'b');\n";
+        let diags = unused_import_diags(source);
+        assert!(
+            !has_unused_import(&diags),
+            "module used via qualified call should not be flagged: {diags:?}"
+        );
+    }
+
+    // --- diagnostic quality ---
+
+    #[test]
+    fn unused_import_diagnostic_names_the_module() {
+        let source = "use SomeModule::Unused;\nmy $x = 1;\n";
+        let diags = unused_import_diags(source);
+        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL700"));
+        if let Some(diag) = diag {
+            assert!(
+                diag.message.contains("SomeModule::Unused"),
+                "diagnostic should name the module: {}", diag.message
+            );
+        }
+    }
+
+    #[test]
+    fn unused_import_has_unnecessary_tag() {
+        let source = "use POSIX::Ghost;\nmy $x = 1;\n";
+        let diags = unused_import_diags(source);
+        if let Some(diag) = diags.iter().find(|d| d.code.as_deref() == Some("PL700")) {
+            assert!(
+                diag.tags.contains(&DiagnosticTag::Unnecessary),
+                "unused-import should carry the Unnecessary tag"
+            );
+        }
+    }
+}

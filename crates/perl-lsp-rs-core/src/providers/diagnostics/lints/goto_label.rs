@@ -65,3 +65,70 @@ pub fn check_goto_labels(
         });
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser::Parser;
+    use perl_semantic_analyzer::analysis::symbol::SymbolExtractor;
+    use perl_tdd_support::must;
+
+    fn goto_diags(source: &str) -> Vec<Diagnostic> {
+        let ast = must(Parser::new(source).parse());
+        let symbol_table = SymbolExtractor::new_with_source(source).extract(&ast);
+        let mut diags = Vec::new();
+        check_goto_labels(&ast, &symbol_table, &mut diags);
+        diags
+    }
+
+    fn has_pl409(diags: &[Diagnostic]) -> bool {
+        diags.iter().any(|d| d.code.as_deref() == Some("PL409"))
+    }
+
+    #[test]
+    fn goto_undefined_label_is_flagged() {
+        let diags = goto_diags("goto MISSING;");
+        assert!(has_pl409(&diags), "goto to undefined label should be flagged as PL409: {diags:?}");
+    }
+
+    #[test]
+    fn goto_defined_label_not_flagged() {
+        let diags = goto_diags("goto FOUND;\nFOUND: my $x = 1;");
+        assert!(!has_pl409(&diags), "goto to a defined label should not be flagged: {diags:?}");
+    }
+
+    #[test]
+    fn goto_sub_reference_not_flagged() {
+        let diags = goto_diags("sub foo { }; goto &foo;");
+        assert!(!has_pl409(&diags), "goto &sub should not be flagged as PL409: {diags:?}");
+    }
+
+    #[test]
+    fn goto_variable_not_flagged() {
+        let diags = goto_diags("my $target = 'LABEL'; goto $target;");
+        assert!(!has_pl409(&diags), "goto $var should not be flagged as PL409: {diags:?}");
+    }
+
+    #[test]
+    fn diagnostic_message_names_the_label() {
+        let diags = goto_diags("goto NOWHERE;");
+        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL409")).unwrap();
+        assert!(
+            diag.message.contains("NOWHERE"),
+            "PL409 message should name the missing label: {}", diag.message
+        );
+    }
+
+    #[test]
+    fn diagnostic_has_suggestion() {
+        let diags = goto_diags("goto PHANTOM;");
+        let diag = diags.iter().find(|d| d.code.as_deref() == Some("PL409")).unwrap();
+        assert!(diag.suggestion.is_some(), "PL409 should carry a suggestion");
+    }
+
+    #[test]
+    fn no_goto_no_diagnostic() {
+        let diags = goto_diags("my $x = 1; print $x;");
+        assert!(!has_pl409(&diags), "code without goto should not trigger PL409: {diags:?}");
+    }
+}
