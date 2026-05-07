@@ -761,21 +761,21 @@ jobs:
             required=true
           fi
 
-          # Toolchain / workflow / lockfile changes can shift Windows
-          # behavior in ways the diff alone won't reveal — promote to full.
-          # Cargo.toml is anchored to the workspace root only; per-crate
-          # Cargo.toml files are treated as ordinary code changes.
-          if echo "$changed" | grep -E '(^\.github/workflows/|^Cargo\.lock$|^Cargo\.toml$|^rust-toolchain\.toml$|^justfile$)' >/dev/null; then
+          # Toolchain / workflow / lockfile / CI-policy changes can shift
+          # Windows behavior in ways the diff alone won't reveal — promote
+          # to full. Cargo.toml is anchored to the workspace root only;
+          # per-crate Cargo.toml files are treated as ordinary code changes.
+          if echo "$changed" | grep -E '(^\.github/workflows/|^\.ci/|^Cargo\.lock$|^Cargo\.toml$|^rust-toolchain\.toml$|^justfile$)' >/dev/null; then
             required=true
             full=true
           fi
 
-          # Generic path/URI/module heuristic across other crates. Match
+          # Generic Windows-sensitive heuristic across other crates. Match
           # path basenames (segments) rather than substrings so PRs that
           # merely happen to mention these tokens inside an unrelated file
           # path don't get pulled in.
           if echo "$changed" | awk -F/ '{ print $NF }' \
-              | grep -E '(^|[._-])(uri|path|module|workspace-folder|file_uri)([._-]|$)' >/dev/null; then
+              | grep -E '(^|[._-])(uri|path|module|workspace-folder|file_uri|windows|separator|canonicalize|sandbox)([._-]|$)' >/dev/null; then
             required=true
           fi
 
