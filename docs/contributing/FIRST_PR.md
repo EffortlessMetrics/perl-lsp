@@ -175,6 +175,9 @@ If the reviewer pushes a fix directly to your branch, that is normal. Check and 
 | Before push | `just ready` |
 | Fast PR loop | `just pr-fast` |
 | Agent-safe compile/test | `just agent-check` / `just agent-test` |
+| Parser-accuracy metrics | `just ci-metrics-ratchet-check parser_accuracy` |
+| Status docs | `just status-update` then `just status-check` |
+| Release/version prep | `just version-check` then `just release-check` |
 | Build LSP server | `cargo build -p perl-lsp-rs --release` |
 | Run all library tests | `cargo test --workspace --lib` |
 | Format | `cargo xtask fmt` |

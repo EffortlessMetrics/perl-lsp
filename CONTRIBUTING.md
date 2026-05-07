@@ -208,6 +208,9 @@ It is a quick push guard, not the full merge gate.
 | Full pre-merge | `just ci-gate` or `nix develop -c just ci-gate` | Canonical local merge gate. |
 | Memory lifecycle touched | `cargo xtask check-memory-lifecycle-policy` | Enforces retained-state lifecycle and receipt policy. |
 | Retained owner added | `cargo xtask check-memory-retained-owner-drift --base origin/master` | Checks whether long-lived storage/task additions need retained-state inventory coverage. |
+| Parser-accuracy metrics touched | `just ci-metrics-ratchet-check parser_accuracy` | Verifies parser-accuracy scorecard floors do not regress. |
+| Generated status docs touched | `just status-update` then `just status-check` | Regenerates and verifies `docs/project/status/` outputs. |
+| Release/version surfaces touched | `just version-check` then `just release-check` | Verifies version sync and the release-prep gate before tagging/publishing. |
 | Need a command map | `just quick-ref` or [Commands Reference](docs/reference/COMMANDS_REFERENCE.md) | Shows the short command decision tree. |
 
 ### 5. Expand for larger changes or release prep
