@@ -91,10 +91,16 @@ cat target/ci/ci-plan.json | jq .budget
 
 ## Roadmap
 
-| PR | Change |
-|---:|---|
-| 04 | This file. Python prototype, advisory only. |
-| 07 | Wire `ripr` selection and risk-pack outputs visible in summary. |
-| 12 | Replace prototype with `cargo xtask ci plan`. |
-| 13 | Add hard-ceiling guard above 125 LEM. |
-| 16 | Use historical actuals to derive learned estimates. |
+| PR | Change | Status |
+|---:|---|---|
+| 04 | Python prototype, advisory only. | landed |
+| 07 | Lane origins + paths-filter + ripr summary section. | landed |
+| 12 | Replace prototype with `cargo xtask ci plan`. | deferred |
+| 13 | Hard-ceiling guard above 125 LEM. | landed |
+| 16 | Aggregator + consumer scripts; PR Plan reads `.ci/metrics/ci-lane-history.json` when present. | landed |
+
+The planner now consumes learned LEM estimates whenever the history file has
+`learned: true` for a lane (≥ 5 samples in the rolling window). Sampled lanes
+substitute `p50 × 1.15` (clamped to the static floor) for the static `base_lem`,
+and the plan's `learned` block reports `lanes_using_learned` and
+`delta_lem_vs_static`.
