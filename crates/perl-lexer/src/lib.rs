@@ -1451,21 +1451,7 @@ impl<'a> PerlLexer<'a> {
                         // EXCEPT for globs - *{$glob} should be parsed as one token
                         // Also check for empty braces or EOF - in these cases we should split the tokens
                         if sigil != '*'
-                            && (matches!(
-                                self.current_char(),
-                                Some(
-                                    '$' | '@'
-                                        | '%'
-                                        | '*'
-                                        | '&'
-                                        | '['
-                                        | ' '
-                                        | '\t'
-                                        | '\n'
-                                        | '\r'
-                                        | '}'
-                                )
-                            ) || self.current_char().is_none())
+                            && !self.current_char().is_some_and(is_perl_identifier_start)
                         {
                             // This is a dereference or empty/invalid brace, backtrack
                             self.position = start + 1; // Just past the sigil
