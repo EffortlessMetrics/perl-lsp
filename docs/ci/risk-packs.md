@@ -11,16 +11,16 @@ Risk packs route extra proof to PRs that touch known-risky surfaces. Defined in
 
 | Risk pack | Surface | Default lanes | Deep lanes (label-gated) |
 |---|---|---|---|
-| `parser` | parser, lexer, token, AST, tree-sitter | `pr_smoke`, `merge_gate_shards`, `ripr_advisory` | `mutation`, `fuzz`, `coverage` |
-| `lsp_provider` | LSP, completion, diagnostics, navigation | `pr_smoke`, `merge_gate_shards`, `ux_tests`, `ripr_advisory` | `real_repo_latency`, `vscode_smoke_matrix` |
-| `workspace_index` | module resolution, semantic facts, indexing | `merge_gate_shards`, `lsp_memory_smoke`, `windows_guardrails`, `ripr_advisory` | `memory_plateau`, `real_repo_latency` |
+| `parser` | parser, lexer, token, AST, tree-sitter, corpus, POD, regex, position support | `pr_smoke`, `merge_gate_shards`, `ripr_advisory` | `mutation`, `fuzz`, `coverage` |
+| `lsp_provider` | LSP, completion, diagnostics, navigation, refactoring, dead-code, formatting, UX harness | `pr_smoke`, `merge_gate_shards`, `ux_tests`, `ripr_advisory` | `real_repo_latency`, `vscode_smoke_matrix` |
+| `workspace_index` | module resolution, pragma state, semantic facts, indexing | `merge_gate_shards`, `lsp_memory_smoke`, `windows_guardrails`, `ripr_advisory` | `memory_plateau`, `real_repo_latency` |
 | `retained_state` | long-lived maps, caches, queues, sessions | `lsp_memory_smoke`, `ripr_advisory` | `memory_plateau` |
 | `dap` | debug adapter, breakpoints, evaluate | `merge_gate_shards`, `ux_tests`, `ripr_advisory` | — |
 | `vscode` | extension packaging, managed binary | `pr_smoke` | `vscode_smoke_matrix` |
 | `path_security` | URI normalization, path traversal, sandbox | `merge_gate_shards`, `windows_guardrails`, `ripr_advisory` | — |
 | `security` | sandbox, subprocess, exec, deserialization | `security_audit`, `windows_guardrails`, `ripr_advisory` | — |
 | `manifest` | Cargo.toml/lock, toolchain | `pr_smoke`, `merge_gate_shards`, `security_audit` | `release_check` |
-| `policy` | policy ledgers, gate policy, ripr config | `pr_smoke`, `merge_gate_shards` | — |
+| `policy` | policy ledgers, gate policy, CI hygiene crate, ripr config | `pr_smoke`, `merge_gate_shards` | — |
 | `workflow` | GitHub Actions, CI scripts, xtask CI tasks | `pr_smoke`, `merge_gate_shards` | — |
 | `docs_only` | prose / markdown / status | `docs_gate` | — |
 

@@ -14,33 +14,51 @@ status = "advisory"
 updated = "2026-05-07"
 
 # -----------------------------------------------------------------------------
-# Parser risk: parser, lexer, token, AST, tree-sitter, parser-core changes.
+# Parser risk: parser, lexer, token, AST, tree-sitter, corpus, POD, regex,
+# source-position, and parser support changes.
 # -----------------------------------------------------------------------------
 [risk_pack.parser]
-description = "Parser, lexer, token, AST, tree-sitter, and parser-core changes."
+description = "Parser, lexer, token, AST, tree-sitter, corpus, POD, regex, source-position, and parser support changes."
 paths = [
   "crates/perl-parser/**",
   "crates/perl-parser-core/**",
+  "crates/perl-parser-bench/**",
   "crates/perl-parser-pest/**",
+  "crates/perl-incremental-parsing/**",
   "crates/perl-lexer/**",
   "crates/perl-token/**",
   "crates/perl-ast/**",
   "crates/perl-ast-v2/**",
+  "crates/perl-corpus/**",
+  "crates/perl-line-index/**",
+  "crates/perl-position-tracking/**",
+  "crates/perl-pod/**",
+  "crates/perl-regex/**",
+  "crates/perl-tdd-support/**",
+  "crates/perl-test-generators/**",
+  "crates/perl-test-must/**",
   "crates/tree-sitter-perl-c/**",
   "crates/tree-sitter-perl-rs/**",
+  "tree-sitter-perl/**",
 ]
 lanes = ["pr_smoke", "merge_gate_shards", "ripr_advisory"]
 deep_lanes = ["mutation", "fuzz", "coverage"]
 labels = ["ci:parser", "ci:mutation", "ci:coverage"]
 
 # -----------------------------------------------------------------------------
-# LSP provider risk: LSP, completion, diagnostics, navigation, code action.
+# LSP provider risk: LSP, completion, diagnostics, navigation, code action,
+# refactoring, dead-code, formatting, and UX harness changes.
 # -----------------------------------------------------------------------------
 [risk_pack.lsp_provider]
-description = "LSP provider, protocol, completion, diagnostics, navigation, and code action changes."
+description = "LSP provider, protocol, completion, diagnostics, navigation, code action, refactoring, dead-code, formatting, and UX harness changes."
 paths = [
+  "crates/perl-dead-code/**",
+  "crates/perl-diagnostics/**",
+  "crates/perl-lsp-perltidy/**",
   "crates/perl-lsp-rs/**",
   "crates/perl-lsp-rs-core/**",
+  "crates/perl-lsp-ux-tests/**",
+  "crates/perl-refactoring/**",
   "crates/perllsp/**",
 ]
 lanes = ["pr_smoke", "merge_gate_shards", "ux_tests", "ripr_advisory"]
@@ -55,6 +73,7 @@ description = "Workspace, module resolution, semantic facts, indexing, and symbo
 paths = [
   "crates/perl-workspace/**",
   "crates/perl-module/**",
+  "crates/perl-pragma/**",
   "crates/perl-semantic-analyzer/**",
   "crates/perl-semantic-facts/**",
   "crates/perl-symbol/**",
@@ -151,6 +170,7 @@ labels = ["ci:security", "security-audit"]
 [risk_pack.policy]
 description = "Changes to policy ledgers (policy/*.toml), gate policy (.ci/gate-policy.yaml), or CI economics TOMLs."
 paths = [
+  "crates/perl-ci-hygiene/**",
   "policy/**",
   ".ci/gate-policy.yaml",
   ".ci/blockers.yaml",
