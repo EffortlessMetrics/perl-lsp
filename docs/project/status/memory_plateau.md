@@ -58,6 +58,12 @@ another named scenario), nonzero `MemoryStateSnapshot` or
 `RuntimePressureSnapshot` counters, and suspected state owner. Patch work should
 start from a narrow failing regression, not from a broad leak hunt.
 
+## Closeout
+
+The retained-state memory incident is closed as an active lane. The closeout
+evidence map and response playbook live in
+`docs/large-workspaces/MEMORY_CONTROL_CLOSEOUT.md`.
+
 ## Interpretation Rules
 
 - Close-only churn may retain workspace-index entries for files that still exist.
