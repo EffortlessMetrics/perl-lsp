@@ -20,10 +20,11 @@ We are not reducing CI because we want less verification. We are reducing wasted
 can afford more verification where it matters.
 
 Agentic development makes code generation cheaper and faster, but verification remains
-expensive. That ratio is getting worse. At the author's current operating volume, 500+
-GitHub contributions per day is already routine from one Codex ChatGPT Pro subscription
-during the May bonus period, and 1,000 useful PRs/day is feasible with the broader local
-LLM tooling stack enabled.
+expensive. That ratio is getting worse. At high agent-driven operating volumes, 500+
+GitHub contributions per day is already routine for a single contributor with current
+LLM tooling, and 1,000 useful PRs/day is feasible with the broader local LLM tooling
+stack enabled. Even if your repo is not at that volume today, the verification system
+needs to be efficient enough to absorb agentic throughput as it grows.
 
 OpenClaw is useful as a benchmark for the pressure, not as criticism. Their published
 Blacksmith runner spend of roughly $511k maps directionally to about $20/commit since

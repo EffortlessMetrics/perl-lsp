@@ -26,8 +26,12 @@ Initial values:
 | `docker_build` | 6.0 |
 | `external_ai_review` | 4.0 |
 
-These reflect GitHub's documented per-minute billing weights for hosted runners. The
-exact rates are kept in TOML so they can be tuned without edits to docs.
+For standard GitHub-hosted runners (`ubuntu-*`, `windows-*`, `macos-*`) these reflect
+GitHub's documented per-minute billing weights. For composite or specialized lanes
+(`docker_build`, `external_ai_review`, `self_hosted_gpu`) the multipliers are internal
+cost estimates rather than documented billing weights, since GitHub does not bill those
+as a single runner type. The exact rates are kept in TOML so they can be tuned without
+edits to docs.
 
 ---
 
