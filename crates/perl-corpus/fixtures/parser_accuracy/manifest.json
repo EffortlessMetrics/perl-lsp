@@ -402,6 +402,79 @@
       }
     },
     {
+      "id": "heuristic_generated_member",
+      "family": "generated_accessor",
+      "label_mode": "full",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/heuristic_generated_member.pl",
+      "scored_lines": 3,
+      "scored_symbols": 3,
+      "fully_labeled_regions": 1,
+      "partial_labeled_regions": 0,
+      "unknown_regions": 0,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 1,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "import"
+          ]
+        },
+        {
+          "line": 5,
+          "expected_tags": [
+            "function_call"
+          ]
+        }
+      ],
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "heuristic_generated_member_name_entity",
+            "kind": "GeneratedMember",
+            "canonical_name": "Accuracy::HeuristicGeneratedMember::name",
+            "span_text": "name",
+            "package": "Accuracy::HeuristicGeneratedMember",
+            "scope": null,
+            "provenance": "FrameworkSynthesis",
+            "confidence": "Medium"
+          },
+          {
+            "id": "heuristic_generated_member_package_entity",
+            "kind": "Package",
+            "canonical_name": "Accuracy::HeuristicGeneratedMember",
+            "span_text": "Accuracy::HeuristicGeneratedMember",
+            "package": "Accuracy",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "occurrences": [
+          {
+            "id": "heuristic_generated_member_has_call",
+            "kind": "Call",
+            "canonical_name": null,
+            "span_text": "has name => (is => 'ro')",
+            "package": null,
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
       "id": "negative_symbol_regions",
       "family": "negative_symbol_regions",
       "label_mode": "negative",
