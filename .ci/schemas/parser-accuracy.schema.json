@@ -467,6 +467,9 @@
         "allocated_bytes": {
           "$ref": "#/$defs/nonNegativeInteger"
         },
+        "allocation_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
         "ci_runner_failure_count": {
           "$ref": "#/$defs/nonNegativeInteger"
         },
