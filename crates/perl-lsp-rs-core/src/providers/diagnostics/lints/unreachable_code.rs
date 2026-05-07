@@ -347,3 +347,173 @@ fn is_unconditional_exit_in_continue(node: &Node) -> bool {
         _ => false,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser::Parser;
+    use perl_tdd_support::{must, must_some};
+
+    fn unreachable_diags(source: &str) -> Vec<Diagnostic> {
+        let ast = must(Parser::new(source).parse());
+        let mut diags = Vec::new();
+        check_unreachable_code(&ast, &mut diags);
+        diags
+    }
+
+    fn has_pl406(diags: &[Diagnostic]) -> bool {
+        diags.iter().any(|d| d.code.as_deref() == Some("PL406"))
+    }
+
+    fn count_pl406(diags: &[Diagnostic]) -> usize {
+        diags.iter().filter(|d| d.code.as_deref() == Some("PL406")).count()
+    }
+
+    // --- return as exit ---
+
+    #[test]
+    fn return_then_statement_is_flagged() {
+        let diags = unreachable_diags("sub f { return 1; my $x = 2; }");
+        assert!(has_pl406(&diags), "statement after return should be flagged as PL406: {diags:?}");
+    }
+
+    #[test]
+    fn return_at_end_no_flag() {
+        let diags = unreachable_diags("sub f { my $x = 1; return $x; }");
+        assert!(!has_pl406(&diags), "return at end of sub should not flag anything: {diags:?}");
+    }
+
+    #[test]
+    fn conditional_return_does_not_flag_subsequent_code() {
+        let diags = unreachable_diags("sub f { return if $cond; my $x = 1; }");
+        assert!(!has_pl406(&diags), "return if cond should not flag subsequent code: {diags:?}");
+    }
+
+    // --- die as exit ---
+
+    #[test]
+    fn die_then_statement_is_flagged() {
+        let diags = unreachable_diags(r#"sub f { die "error"; print "never"; }"#);
+        assert!(has_pl406(&diags), "statement after die should be flagged as PL406: {diags:?}");
+    }
+
+    #[test]
+    fn croak_then_statement_is_flagged() {
+        let diags = unreachable_diags(r#"sub f { croak "err"; print "never"; }"#);
+        assert!(has_pl406(&diags), "statement after croak should be flagged as PL406: {diags:?}");
+    }
+
+    #[test]
+    fn qualified_croak_then_statement_is_flagged() {
+        let diags = unreachable_diags(r#"sub f { Carp::croak "err"; print "never"; }"#);
+        assert!(
+            has_pl406(&diags),
+            "statement after Carp::croak should be flagged as PL406: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn exit_then_statement_is_flagged() {
+        let diags = unreachable_diags("exit 0; my $x = 1;");
+        assert!(has_pl406(&diags), "statement after exit should be flagged as PL406: {diags:?}");
+    }
+
+    // --- multiple unreachable statements ---
+
+    #[test]
+    fn two_statements_after_return_both_flagged() {
+        let diags = unreachable_diags("sub f { return; my $a = 1; my $b = 2; }");
+        assert_eq!(
+            count_pl406(&diags),
+            2,
+            "both statements after return should be PL406: {diags:?}"
+        );
+    }
+
+    // --- nested sub reachability isolation ---
+
+    #[test]
+    fn return_in_inner_sub_does_not_poison_outer() {
+        let diags = unreachable_diags("sub outer { my $f = sub { return 1; }; my $x = 2; }");
+        assert!(
+            !has_pl406(&diags),
+            "return inside anonymous sub should not flag outer code: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn return_in_inner_sub_flags_inner_unreachable() {
+        let diags = unreachable_diags("sub outer { my $f = sub { return 1; my $dead = 99; }; }");
+        assert!(
+            has_pl406(&diags),
+            "unreachable code inside anonymous sub should be flagged: {diags:?}"
+        );
+    }
+
+    // --- loop control exits ---
+
+    #[test]
+    fn last_in_loop_body_flags_subsequent() {
+        let diags = unreachable_diags("for my $i (1..5) { last; print $i; }");
+        assert!(has_pl406(&diags), "code after 'last' should be flagged: {diags:?}");
+    }
+
+    #[test]
+    fn next_in_loop_body_flags_subsequent() {
+        let diags = unreachable_diags("for my $i (1..5) { next; print $i; }");
+        assert!(has_pl406(&diags), "code after 'next' should be flagged: {diags:?}");
+    }
+
+    // --- eval block: die is caught, outer code is reachable ---
+
+    #[test]
+    fn die_inside_eval_does_not_flag_after_eval() {
+        let diags = unreachable_diags(r#"eval { die "oops"; }; my $x = 1;"#);
+        assert!(
+            !has_pl406(&diags),
+            "die inside eval should not flag code after the eval block: {diags:?}"
+        );
+    }
+
+    // --- confess ---
+
+    #[test]
+    fn confess_then_statement_is_flagged() {
+        let diags = unreachable_diags(r#"sub f { confess "msg"; print "dead"; }"#);
+        assert!(has_pl406(&diags), "statement after confess should be flagged as PL406: {diags:?}");
+    }
+
+    #[test]
+    fn qualified_confess_then_statement_is_flagged() {
+        let diags = unreachable_diags(r#"sub f { Carp::confess "msg"; print "dead"; }"#);
+        assert!(
+            has_pl406(&diags),
+            "statement after Carp::confess should be flagged as PL406: {diags:?}"
+        );
+    }
+
+    // --- diagnostic quality ---
+
+    #[test]
+    fn pl406_has_unnecessary_tag() {
+        let diags = unreachable_diags("sub f { return; my $x = 1; }");
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL406")));
+        assert!(
+            diag.tags.contains(&DiagnosticTag::Unnecessary),
+            "PL406 should carry the Unnecessary tag"
+        );
+    }
+
+    #[test]
+    fn pl406_has_suggestion() {
+        let diags = unreachable_diags("sub f { return; my $x = 1; }");
+        let diag = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL406")));
+        assert!(diag.suggestion.is_some(), "PL406 should carry a suggestion");
+    }
+
+    #[test]
+    fn clean_sub_no_pl406() {
+        let diags = unreachable_diags("sub f { my $x = 1; my $y = 2; return $x + $y; }");
+        assert!(!has_pl406(&diags), "clean sub should not trigger PL406: {diags:?}");
+    }
+}
