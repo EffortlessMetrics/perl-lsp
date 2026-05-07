@@ -2081,7 +2081,7 @@
           },
           {
             "id": "inherited_method_inherited_entity",
-            "kind": "Subroutine",
+            "kind": "InheritedMethod",
             "canonical_name": "Accuracy::Parent::inherited",
             "span_text": "inherited",
             "package": "Accuracy::Parent",
