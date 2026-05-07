@@ -115,6 +115,19 @@ def docs_only(files: list[str]) -> bool:
     return True
 
 
+def lane_paths_match(lane: dict[str, Any], files: list[str]) -> bool:
+    """True if a lane's path filter matches at least one changed file.
+
+    A lane without a `paths` field is treated as path-agnostic (matches).
+    A lane with a `paths` field is selected only when at least one changed
+    file matches, mirroring the GitHub workflow `paths:` filter behavior.
+    """
+    patterns = lane.get("paths")
+    if not patterns:
+        return True
+    return any(path_matches_glob(f, p) for f in files for p in patterns)
+
+
 def select_lanes(
     *,
     files: list[str],
@@ -122,13 +135,24 @@ def select_lanes(
     risk_pack_ids: list[str],
     risk_packs: dict[str, Any],
     lanes: dict[str, Any],
-) -> list[dict[str, Any]]:
-    """Pick lanes that should run for this PR."""
-    selected_ids: set[str] = set()
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Pick lanes that should run for this PR.
+
+    Returns (selected, skipped) where:
+      selected: lanes that will run, with selection origin attached.
+      skipped:  lanes considered (default_pr or label-triggered) but
+                excluded because their path filter did not match. Useful
+                for transparency in the PR Plan summary.
+    """
+    # Track origin: where the selection came from.
+    origins: dict[str, list[str]] = {}
+
+    def mark(lane_id: str, origin: str) -> None:
+        origins.setdefault(lane_id, []).append(origin)
 
     if docs_only(files):
         if "docs_gate" in lanes:
-            selected_ids.add("docs_gate")
+            mark("docs_gate", "docs-only")
     else:
         # Drive default-PR lanes from policy/ci-lanes.toml's `default_pr = true`
         # flag rather than hardcoding a list. This keeps the policy file as the
@@ -137,21 +161,22 @@ def select_lanes(
         # `docs_gate` is excluded because it is handled by the docs-only branch.
         for lane_id, lane in lanes.items():
             if lane.get("default_pr") and lane_id != "docs_gate":
-                selected_ids.add(lane_id)
+                mark(lane_id, "default-pr")
 
     # Add lanes from selected risk packs.
     for pack_id in risk_pack_ids:
         pack = risk_packs.get(pack_id, {})
         for lane_id in pack.get("lanes", []):
             if lane_id in lanes:
-                selected_ids.add(lane_id)
+                mark(lane_id, f"risk-pack:{pack_id}")
 
     # Label-triggered lanes.
     label_set = {l.lower() for l in labels}
     for lane_id, lane in lanes.items():
         lane_labels = [l.lower() for l in lane.get("labels", [])]
-        if any(lbl in label_set for lbl in lane_labels):
-            selected_ids.add(lane_id)
+        for lbl in lane_labels:
+            if lbl in label_set:
+                mark(lane_id, f"label:{lbl}")
 
     # full-ci pulls in deep_lanes for matched risk packs.
     if "full-ci" in label_set:
@@ -159,23 +184,29 @@ def select_lanes(
             pack = risk_packs.get(pack_id, {})
             for lane_id in pack.get("deep_lanes", []):
                 if lane_id in lanes:
-                    selected_ids.add(lane_id)
+                    mark(lane_id, "deep-lane:full-ci")
 
-    out: list[dict[str, Any]] = []
-    for lane_id in sorted(selected_ids):
+    selected: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for lane_id in sorted(origins.keys()):
         lane = lanes[lane_id]
-        out.append(
-            {
-                "id": lane_id,
-                "intent": lane.get("intent", ""),
-                "runner": lane.get("runner", "ubuntu_24_04"),
-                "base_lem": lane.get("base_lem"),
-                "base_minutes": lane.get("base_minutes"),
-                "default_pr": bool(lane.get("default_pr", False)),
-                "blocking": bool(lane.get("blocking", False)),
-            }
-        )
-    return out
+        entry = {
+            "id": lane_id,
+            "intent": lane.get("intent", ""),
+            "runner": lane.get("runner", "ubuntu_24_04"),
+            "base_lem": lane.get("base_lem"),
+            "default_pr": bool(lane.get("default_pr", False)),
+            "blocking": bool(lane.get("blocking", False)),
+            "origin": origins[lane_id],
+        }
+        # Honor lane-level `paths:` filters. A path-filtered lane that doesn't
+        # match the diff is reported as skipped (not silently dropped).
+        if lane_paths_match(lane, files):
+            selected.append(entry)
+        else:
+            entry["skipped_reason"] = "paths-filter-no-match"
+            skipped.append(entry)
+    return selected, skipped
 
 
 def lane_lem(lane: dict[str, Any], multipliers: dict[str, float]) -> float:
@@ -212,23 +243,65 @@ def render_summary(plan: dict[str, Any]) -> str:
         "",
         "## Selected lanes",
         "",
-        "| Lane | Runner | Base LEM | Default-PR | Blocking |",
-        "|---|---|---:|:---:|:---:|",
+        "| Lane | Runner | Base LEM | Blocking | Origin |",
+        "|---|---|---:|:---:|---|",
     ]
     for lane in plan["selection"]["lanes"]:
         base = lane.get("base_lem")
         if base is None:
-            base = f"{lane.get('base_minutes', '?')}m"
+            base = "—"
+        origin = ", ".join(f"`{o}`" for o in lane.get("origin", []))
         lines.append(
             f"| `{lane['id']}` | {lane['runner']} | {base} | "
-            f"{'✓' if lane['default_pr'] else ''} | {'✓' if lane['blocking'] else ''} |"
+            f"{'✓' if lane['blocking'] else ''} | {origin} |"
         )
+
+    skipped = plan["selection"].get("skipped_lanes") or []
+    if skipped:
+        lines.append("")
+        lines.append("## Considered but skipped")
+        lines.append("")
+        lines.append("Lanes that would have been selected but are skipped because their")
+        lines.append("`paths:` filter didn't match this diff.")
+        lines.append("")
+        lines.append("| Lane | Reason | Origin |")
+        lines.append("|---|---|---|")
+        for lane in skipped:
+            origin = ", ".join(f"`{o}`" for o in lane.get("origin", []))
+            reason = lane.get("skipped_reason", "?")
+            lines.append(f"| `{lane['id']}` | {reason} | {origin} |")
+
     if plan["selection"]["risk_packs"]:
         lines.append("")
         lines.append("## Risk packs")
         lines.append("")
         for p in plan["selection"]["risk_packs"]:
             lines.append(f"- `{p}`")
+
+    # Highlight ripr's role explicitly: contributors should be able to see
+    # whether ripr ran on this PR and why.
+    ripr_lane = next(
+        (l for l in plan["selection"]["lanes"] if l["id"] == "ripr_advisory"), None
+    )
+    ripr_skipped = next(
+        (l for l in skipped if l["id"] == "ripr_advisory"), None
+    )
+    if ripr_lane or ripr_skipped:
+        lines.append("")
+        lines.append("## ripr (advisory)")
+        lines.append("")
+        if ripr_lane:
+            origin = ", ".join(f"`{o}`" for o in ripr_lane.get("origin", []))
+            lines.append(f"Selected — origin: {origin}")
+        else:
+            lines.append("Skipped — no production Rust paths changed.")
+        lines.append("")
+        lines.append(
+            "ripr is mutation-testing-lite at static-analysis prices. It is "
+            "**advisory**; it does not block merges. See "
+            "[`docs/ci/ripr.md`](../blob/master/docs/ci/ripr.md)."
+        )
+
     if plan["warnings"]:
         lines.append("")
         lines.append("## Warnings")
@@ -278,7 +351,7 @@ def main() -> int:
 
     files = changed_files(args.base, args.head)
     selected_packs, areas = classify_areas(files, risk_packs)
-    selected_lanes = select_lanes(
+    selected_lanes, skipped_lanes = select_lanes(
         files=files,
         labels=labels,
         risk_pack_ids=selected_packs,
@@ -332,6 +405,7 @@ def main() -> int:
         "selection": {
             "risk_packs": selected_packs,
             "lanes": selected_lanes,
+            "skipped_lanes": skipped_lanes,
         },
         "warnings": warnings,
     }
