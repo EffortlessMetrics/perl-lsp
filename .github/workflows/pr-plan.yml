@@ -1,0 +1,72 @@
+# PR Plan
+#
+# Advisory CI economics forecast. Runs on every PR. Reads:
+#   policy/ci-budget.toml
+#   policy/ci-lanes.toml
+#   policy/ci-risk-packs.toml
+# Emits target/ci/ci-plan.json and a step summary. Does not block merges.
+#
+# See docs/ci/perl-lsp-rollout-plan.md (PR 04). Replaced by `xtask ci plan`
+# in PR 12.
+
+name: PR Plan
+
+on:
+  pull_request:
+    branches: [master, main]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  workflow_dispatch:
+
+concurrency:
+  group: pr-plan-${{ github.event.pull_request.number || github.ref }}
+  # Only cancel on synchronize so label add/remove events re-run the plan
+  # without cancelling an in-progress run. Required by workflow-policy-lint
+  # rule LABEL_EVENT_CANCELS_PR_RUN.
+  cancel-in-progress: ${{ github.event.action == 'synchronize' }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  plan:
+    name: Forecast LEM and lanes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    if: github.event.pull_request.draft != true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compute PR Plan
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          LABELS_JSON: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          mkdir -p target/ci
+          python3 scripts/ci/pr_plan.py \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --labels-json "$LABELS_JSON" \
+            --budget policy/ci-budget.toml \
+            --lanes policy/ci-lanes.toml \
+            --risk-packs policy/ci-risk-packs.toml \
+            --json-out target/ci/ci-plan.json \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload ci-plan.json
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-plan
+          path: target/ci/ci-plan.json
+          retention-days: 14
+          if-no-files-found: warn
