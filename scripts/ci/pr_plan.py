@@ -220,6 +220,57 @@ def lane_lem(lane: dict[str, Any], multipliers: dict[str, float]) -> float:
     return 0.0
 
 
+def load_learned_history(path: Path) -> dict[str, Any]:
+    """Read .ci/metrics/ci-lane-history.json if present; tolerant on errors."""
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def apply_learned_estimates(
+    lanes: list[dict[str, Any]], history: dict[str, Any]
+) -> tuple[float, int]:
+    """Mutate `lanes` in place: replace `base_lem` with learned estimate where
+    available. Returns (delta_lem, learned_count) for the summary.
+
+    Estimate model (matches scripts/ci/learned_estimate.py):
+      estimate = max(static_floor, p50_recent_actual * 1.15)
+    """
+    if not history:
+        return 0.0, 0
+    by_lane: dict[str, Any] = history.get("lanes") or {}
+    delta = 0.0
+    learned_count = 0
+    for lane in lanes:
+        entry = by_lane.get(lane["id"])
+        if not isinstance(entry, dict) or not entry.get("learned"):
+            continue
+        p50 = entry.get("p50")
+        floor = entry.get("static_floor")
+        if not isinstance(p50, (int, float)):
+            continue
+        learned_estimate = float(p50) * 1.15
+        if isinstance(floor, (int, float)) and float(floor) > learned_estimate:
+            new_lem = float(floor)
+            source = "static_floor"
+        else:
+            new_lem = learned_estimate
+            source = "learned (p50 * 1.15)"
+        old_lem = lane.get("base_lem")
+        if isinstance(old_lem, (int, float)):
+            delta += new_lem - float(old_lem)
+        lane["base_lem"] = new_lem
+        lane["learned"] = True
+        lane["learned_source"] = source
+        lane["p90_warning"] = entry.get("p90")
+        lane["p95_hard_planning"] = entry.get("p95")
+        learned_count += 1
+    return delta, learned_count
+
+
 def band_for(lem: float, budget: dict[str, Any]) -> str:
     if lem <= budget.get("default_limit_lem", 35):
         return "default"
@@ -330,6 +381,13 @@ def main() -> int:
     parser.add_argument(
         "--json-out", type=Path, default=Path("target/ci/ci-plan.json")
     )
+    parser.add_argument(
+        "--history",
+        type=Path,
+        default=Path(".ci/metrics/ci-lane-history.json"),
+        help="Optional learned-LEM history (PR 16). Falls back to static "
+        "base_lem when missing or sparse.",
+    )
     parser.add_argument("--summary", type=str, default=os.environ.get("GITHUB_STEP_SUMMARY"))
     args = parser.parse_args()
 
@@ -358,6 +416,12 @@ def main() -> int:
         risk_packs=risk_packs,
         lanes=lanes,
     )
+
+    # Apply learned LEM estimates from .ci/metrics/ci-lane-history.json when
+    # the file is present and the lane has enough samples. Falls back to the
+    # static base_lem when history is absent or sparse.
+    history = load_learned_history(args.history)
+    learned_delta, learned_count = apply_learned_estimates(selected_lanes, history)
 
     estimated_lem = sum(lane_lem(lane, multipliers) for lane in selected_lanes)
     rate = float(budget.get("linux_minute_rate_usd", 0.008))
@@ -433,6 +497,11 @@ def main() -> int:
             "override_present": has_override,
             "ack_present": has_ack,
             "failed": over_ceiling_failure,
+        },
+        "learned": {
+            "history_present": bool(history),
+            "lanes_using_learned": learned_count,
+            "delta_lem_vs_static": learned_delta,
         },
     }
 

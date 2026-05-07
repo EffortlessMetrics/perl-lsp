@@ -120,23 +120,27 @@ When history is missing or the lane has too few samples:
 
 ---
 
-## Wiring (deferred)
+## Wiring status
 
-The PR Plan workflow does **not** consume this in PR 16. The minimal
-end-to-end story requires:
+The minimal end-to-end story:
 
-1. PR 16 (this PR) — aggregator + consumer scripts. ✓
+1. ✓ Aggregator + consumer scripts (PR 16).
 2. CI workflow change to upload `ci-actuals.json` artifacts to a
-   discoverable location. (PR 08's
+   discoverable location. **Pending.** PR 08's
    [`scripts/ci/emit_ci_actuals.py`](../../scripts/ci/emit_ci_actuals.py)
-   produces the right files; the wiring step is intentionally deferred.)
+   produces the right files; what's missing is a step in `ci.yml` (or a
+   sibling) that runs it after `cargo xtask gates` and uploads the JSON.
 3. A scheduled job that downloads recent actuals artifacts and runs
-   `aggregate_lane_history.py` to update `.ci/metrics/ci-lane-history.json`.
-4. The PR Plan reads the history when present and the consumer reports
-   `learned: true`; otherwise it uses the static floor (current behavior).
+   `aggregate_lane_history.py` to update
+   `.ci/metrics/ci-lane-history.json`. **Pending.**
+4. ✓ PR Plan reads the history when present (delivered alongside the
+   rollout finalize PR). When the consumer reports `learned: true`, the
+   planner substitutes `p50 × 1.15` (clamped to the static floor); it
+   falls back to the static floor otherwise.
 
-Step 1 is delivered by this PR. Steps 2–4 land as follow-ups once the
-PR 08 wiring is decided.
+Steps 2 and 3 land as follow-ups once the upload location is decided
+(artifact retention vs. committing back to the repo). The planner is
+ready for either path.
 
 ---
 
