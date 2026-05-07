@@ -989,6 +989,8 @@ struct DeterminismScore {
     repeated_parse_stable_count: u64,
     comment_invariance_stable_count: u64,
     comment_invariance_sample_count: u64,
+    newline_style_invariance_stable_count: u64,
+    newline_style_invariance_sample_count: u64,
 }
 
 /// Run `cargo xtask metrics parser-accuracy`.
@@ -2988,12 +2990,27 @@ fn score_manifest_determinism(
             score.semantic_fact_hash_stable_count += 1;
         }
 
-        if let Some(comment_variant) = comment_invariance_variant(source) {
-            score.comment_invariance_sample_count += 1;
-            if parser_accuracy_projection_signature(source)
-                == parser_accuracy_projection_signature(&comment_variant)
-            {
-                score.comment_invariance_stable_count += 1;
+        let comment_variant = comment_invariance_variant(source);
+        let newline_variant = newline_style_invariance_variant(source);
+        if comment_variant.is_some() || newline_variant.is_some() {
+            let base_projection_signature = parser_accuracy_projection_signature(source);
+
+            if let Some(comment_variant) = comment_variant {
+                score.comment_invariance_sample_count += 1;
+                if base_projection_signature
+                    == parser_accuracy_projection_signature(&comment_variant)
+                {
+                    score.comment_invariance_stable_count += 1;
+                }
+            }
+
+            if let Some(newline_variant) = newline_variant {
+                score.newline_style_invariance_sample_count += 1;
+                if base_projection_signature
+                    == parser_accuracy_projection_signature(&newline_variant)
+                {
+                    score.newline_style_invariance_stable_count += 1;
+                }
             }
         }
     }
@@ -3001,7 +3018,7 @@ fn score_manifest_determinism(
 }
 
 fn comment_invariance_variant(source: &str) -> Option<String> {
-    if source.contains("<<") || source.contains("__DATA__") || source.contains("__END__") {
+    if has_metamorphic_literal_boundary(source) {
         return None;
     }
 
@@ -3012,6 +3029,18 @@ fn comment_invariance_variant(source: &str) -> Option<String> {
     }
     variant.push_str("# parser accuracy comment invariance probe\n");
     Some(variant)
+}
+
+fn newline_style_invariance_variant(source: &str) -> Option<String> {
+    if !source.contains('\n') || source.contains('\r') || has_metamorphic_literal_boundary(source) {
+        return None;
+    }
+
+    Some(source.replace('\n', "\r\n"))
+}
+
+fn has_metamorphic_literal_boundary(source: &str) -> bool {
+    source.contains("<<") || source.contains("__DATA__") || source.contains("__END__")
 }
 
 fn parser_accuracy_projection_signature(source: &str) -> u64 {
@@ -5263,9 +5292,15 @@ fn determinism_metrics(score: &DeterminismScore, cadence: Cadence) -> Vec<Metric
             "metamorphic comment fixtures are not wired yet",
             cadence,
         ),
-        insufficient(
+        optional_measured_rate(
             "newline_style_invariance_rate",
-            "metamorphic newline fixtures are not wired yet",
+            ratio(
+                score.newline_style_invariance_stable_count,
+                score.newline_style_invariance_sample_count,
+            ),
+            score.newline_style_invariance_sample_count,
+            "no eligible newline-style invariance samples are available",
+            cadence,
         ),
     ]
 }
@@ -8366,6 +8401,8 @@ sub dynamic_boundary_case {
             repeated_parse_stable_count: 2,
             comment_invariance_stable_count: 1,
             comment_invariance_sample_count: 2,
+            newline_style_invariance_stable_count: 1,
+            newline_style_invariance_sample_count: 2,
         };
 
         let metrics = determinism_metrics(&score, Cadence::Pr);
@@ -8393,6 +8430,24 @@ sub dynamic_boundary_case {
                         && (*value - 0.5).abs() < f64::EPSILON
             )
         }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 2, .. }
+                    if metric == "newline_style_invariance_rate"
+                        && (*value - 0.5).abs() < f64::EPSILON
+            )
+        }));
+    }
+
+    #[test]
+    fn newline_style_invariance_variant_converts_lf_to_crlf() {
+        assert_eq!(
+            newline_style_invariance_variant("package Demo;\n1;\n"),
+            Some("package Demo;\r\n1;\r\n".to_string())
+        );
+        assert!(newline_style_invariance_variant("package Demo;\r\n1;\r\n").is_none());
+        assert!(newline_style_invariance_variant("print <<'EOF';\nEOF\n").is_none());
     }
 
     #[test]
