@@ -44,7 +44,7 @@ cargo install just
 just doctor
 ```
 
-Rust toolchain is pinned in `rust-toolchain.toml` (MSRV 1.92). `rustup` picks it up automatically.
+Rust toolchain is pinned in `rust-toolchain.toml` (MSRV 1.93, channel `1.93.1`). `rustup` picks it up automatically.
 
 **Windows users:** Enable long path support before building (one-time, requires admin terminal):
 
@@ -170,12 +170,16 @@ If the reviewer pushes a fix directly to your branch, that is normal. Check and 
 
 | Need | Command |
 |------|---------|
+| New checkout health | `just doctor` |
+| Tool/env check | `just devex` |
+| Before push | `just ready` |
+| Fast PR loop | `just pr-fast` |
+| Agent-safe compile/test | `just agent-check` / `just agent-test` |
 | Build LSP server | `cargo build -p perl-lsp-rs --release` |
-| Run all tests | `cargo test --workspace --lib` |
+| Run all library tests | `cargo test --workspace --lib` |
 | Format | `cargo xtask fmt` |
 | Lint | `cargo clippy --workspace` |
 | Full merge gate | `just ci-gate` |
-| Environment check | `just doctor` |
 | All commands | [docs/reference/COMMANDS_REFERENCE.md](../reference/COMMANDS_REFERENCE.md) |
 | Coding standards | [CLAUDE.md — Coding Standards](../../CLAUDE.md#coding-standards) |
 | Full contributor guide | [CONTRIBUTING.md](../../CONTRIBUTING.md) |

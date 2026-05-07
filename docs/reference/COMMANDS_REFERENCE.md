@@ -4,6 +4,7 @@ This reference lists the commands contributors actually use. The standard flow i
 
 ```bash
 just devex
+just doctor
 just pr-fast
 nix develop -c just ci-gate
 just ci-full
@@ -74,6 +75,24 @@ perl-dap --stdio  # Standard DAP transport
 
 ## Developer Workflow
 
+### Command Decision Table
+
+| Situation | Command | Why |
+|---|---|---|
+| New checkout | `just doctor` | Verifies workspace health, hooks, branch state, and common drift. |
+| Tool/env check | `just devex` | Checks required tools, Rust components, and local setup. |
+| Before push | `just ready` | Runs doctor plus the fast PR gate. |
+| Fast PR loop | `just pr-fast` | Cheapest useful proof while iterating. |
+| Agent compile/test | `just agent-check` / `just agent-test` | Uses cargo-safe agent profiles and bounded build directories. |
+| Agent lint | `just agent-clippy` | Runs clippy through the cargo-safe agent profile. |
+| Agent PR proof | `just agent-pr-fast` | Runs the PR-fast gate through cargo-safe. |
+| Full pre-merge | `just ci-gate` or `nix develop -c just ci-gate` | Canonical local merge gate. |
+| Memory touched | `cargo xtask check-memory-lifecycle-policy` | Enforces retained-state lifecycle and receipt policy. |
+| Retained owner added | `cargo xtask check-memory-retained-owner-drift --base origin/master` | Checks whether long-lived storage/task additions need retained-state inventory coverage. |
+| Need a terminal summary | `just quick-ref` | Prints the short command decision tree. |
+
+### Common Commands
+
 ```bash
 # Workspace health check (run before any agent-spawning session)
 just doctor         # Detects+fixes core.bare, worktree leaks, stale branches, etc.
@@ -86,6 +105,13 @@ just devex          # Alias: just doctor-env
 
 # Pre-push preflight (doctor + fast gate)
 just ready
+
+# Agent-safe compile/test/lint
+just agent-preflight
+just agent-check
+just agent-test
+just agent-clippy
+just agent-pr-fast
 
 # Fast validation while iterating
 just pr-fast
