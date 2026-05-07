@@ -14,14 +14,20 @@ Advisory CI economics forecast. Runs once per PR via
    `policy/ci-risk-packs.toml`.
 2. Computes changed files via `git diff --name-only $BASE...$HEAD`.
 3. Classifies the diff into risk packs (parser, LSP, retained-state, etc).
-4. Selects lanes:
-   - PR Plan, draft-guard, preflight, conflict-markers always run for non-docs PRs.
-   - Rust default gates run for non-docs PRs.
-   - Risk packs add their associated lanes.
-   - Labels (`ci:*`, `full-ci`, etc) trigger label-gated lanes.
-   - `full-ci` additionally pulls in `deep_lanes` for matched risk packs.
-5. Sums `base_lem` (or `base_minutes × runner_multiplier`) per lane.
-6. Emits the band: `default` / `elevated` / `high` / `over_ceiling`.
+4. Selects lanes from three independent sources, recording the **origin** of
+   each selection:
+   - `default-pr` — every lane with `default_pr = true` is selected for
+     non-docs PRs (`docs_gate` is selected only for docs-only PRs).
+   - `risk-pack:<id>` — lanes pulled in by a matched risk pack.
+   - `label:<name>` — lanes pulled in by labels (`ci:*`, `full-ci`, etc).
+   - `deep-lane:full-ci` — `deep_lanes` from matched risk packs when
+     `full-ci` is set.
+5. **Honors lane `paths:` filters.** A lane that has a `paths` field is only
+   counted toward LEM when at least one changed file matches. Lanes that
+   would have been selected but are skipped by paths-filter are reported in
+   the `skipped_lanes` section so contributors can see they were considered.
+6. Sums `base_lem` per selected lane.
+7. Emits the band: `default` / `elevated` / `high` / `over_ceiling`.
 
 ---
 
