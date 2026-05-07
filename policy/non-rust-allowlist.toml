@@ -1,0 +1,957 @@
+# Non-Rust File Allowlist
+#
+# Source of truth for which non-Rust files are permitted in `perl-lsp`.
+# Doctrine: docs/policy/FILE_POLICY.md.
+# Schema:   docs/policy/NON_RUST_POLICY.md.
+# Catalog:  docs/policy/POLICY_ALLOWLISTS.md.
+#
+# Read by: `cargo xtask check-file-policy` (PR 4 of the file-policy rollout).
+# Written by: humans, with proposals from `cargo xtask non-rust propose`
+# (PR 5) staged in `target/policy/non-rust-proposed-allowlist.toml`.
+#
+# Mode: this ledger is `advisory` until PR 4 introduces the checker. CI
+# becomes blocking-allowlist in PR 10 of the rollout.
+
+schema_version = 1
+policy = "non-rust-allowlist"
+owner = "EffortlessMetrics"
+status = "advisory"
+updated = "2026-05-07"
+
+[defaults]
+rust_is_default = true
+xtask_is_default_for_repo_automation = true
+new_non_rust_requires_review = true
+broad_globs_require_reason = true
+coverage_required_for_production_surfaces = true
+
+# =============================================================================
+# Documentation
+# =============================================================================
+
+[[allow]]
+id = "non-rust-docs-tree"
+glob = "docs/**"
+kind = "documentation"
+language = "markdown"
+surface = "docs"
+classification = "documentation"
+owner = "docs"
+reason = "Project documentation, release notes, implementation plans, status pages, policy prose, agent guides."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = "Docs are intentionally tree-shaped and non-executable. The executable, generated, process, and network companion ledgers cover risky drift."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-root-governance-docs"
+glob = "*.md"
+kind = "documentation"
+language = "markdown"
+surface = "docs"
+classification = "documentation"
+owner = "docs"
+reason = "Top-level README, CHANGELOG, RELEASE_HISTORY, ROADMAP, CONTRIBUTING, SECURITY, SUPPORT, and governance docs."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = "Repo root markdown files are governance/documentation by convention; non-Rust by definition."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-license-files"
+glob = "LICENSE-*"
+kind = "license"
+language = "text"
+surface = "release"
+classification = "documentation"
+owner = "release/legal"
+reason = "Apache-2.0 and MIT license texts required by the dual-licensed Rust ecosystem."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-11-07"
+
+# =============================================================================
+# CI / GitHub Actions
+# =============================================================================
+
+[[allow]]
+id = "non-rust-github-workflows"
+glob = ".github/workflows/*.yml"
+kind = "ci_declarative"
+language = "yaml"
+surface = "ci"
+classification = "config"
+owner = "release/ci"
+reason = "GitHub Actions workflow definitions are platform-required YAML."
+covered_by = [
+  "cargo xtask workflow-trigger-lint",
+  "cargo xtask workflow-policy-lint",
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-github-actions"
+glob = ".github/actions/**"
+kind = "ci_declarative"
+language = "yaml"
+surface = "ci"
+classification = "config"
+owner = "release/ci"
+reason = "Composite GitHub Actions used by the CI conveyor."
+covered_by = [
+  "cargo xtask workflow-policy-lint",
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = "Composite Actions are by-convention a tree of action.yml + helper scripts; cover the entire dir."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-github-policy"
+glob = ".github/**"
+kind = "ci_declarative"
+language = "mixed"
+surface = "ci"
+classification = "config"
+owner = "release/ci"
+reason = "Issue templates, PR templates, dependabot config, CODEOWNERS, and other GitHub-platform metadata."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = "GitHub-required metadata location. Workflow trigger and policy lints cover the executable subset."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-ci-config"
+glob = ".ci/**"
+kind = "ci_policy_config"
+language = "mixed"
+surface = "ci"
+classification = "config"
+owner = "release/ci"
+reason = "CI gate policy, blockers ledger, baseline metrics, receipt schemas, coverage baselines, corpus manifests, and CI receipt examples."
+covered_by = [
+  "cargo xtask gates --tier pr-fast --receipt",
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = ".ci is a governed policy/config tree. Companion workflow, dependency, process, and network checks cover risky drift."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+# =============================================================================
+# Policy ledgers
+# =============================================================================
+
+[[allow]]
+id = "non-rust-policy-ledgers"
+glob = "policy/**"
+kind = "ci_policy_config"
+language = "toml"
+surface = "ci"
+classification = "config"
+owner = "release/ci"
+reason = "TOML policy ledgers for CI economics, lint policy, ripr suppressions, and (this) file policy."
+covered_by = [
+  "cargo xtask check-lint-policy",
+  "cargo xtask check-file-policy",
+  "scripts/ci/validate_risk_packs.py",
+]
+broad_glob_reason = "Policy ledgers are intentionally a tree of TOML files; broad coverage is the policy stack itself."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+# =============================================================================
+# Perl fixtures (the corpus the LSP parses)
+# =============================================================================
+
+[[allow]]
+id = "non-rust-perl-fixtures"
+glob = "**/*.pl"
+kind = "language_fixture"
+language = "perl"
+surface = "fixtures"
+classification = "test"
+owner = "parser/lsp-fixtures"
+reason = "Perl source files are first-class parser, semantic-analysis, LSP, DAP, and corpus fixtures."
+covered_by = [
+  "cargo test --workspace",
+  "cargo xtask parser-corpus-sweep --enforce --receipt",
+]
+broad_glob_reason = "Perl source files are the corpus this LSP parses; their breadth is the product surface."
+created = "2026-05-07"
+review_after = "2026-11-07"
+
+[[allow]]
+id = "non-rust-perl-modules"
+glob = "**/*.pm"
+kind = "language_fixture"
+language = "perl"
+surface = "fixtures"
+classification = "test"
+owner = "parser/lsp-fixtures"
+reason = "Perl module files are parser, workspace, and module-resolution fixtures."
+covered_by = [
+  "cargo test --workspace",
+  "cargo xtask parser-corpus-sweep --enforce --receipt",
+]
+broad_glob_reason = "Perl modules are the corpus; their breadth is the product surface."
+created = "2026-05-07"
+review_after = "2026-11-07"
+
+[[allow]]
+id = "non-rust-perl-tests"
+glob = "**/*.t"
+kind = "language_fixture"
+language = "perl"
+surface = "fixtures"
+classification = "test"
+owner = "parser/lsp-fixtures"
+reason = "Perl `.t` test files are parser/LSP test corpus fixtures."
+covered_by = [
+  "cargo test --workspace",
+]
+broad_glob_reason = "Perl `.t` test files are corpus fixtures; they appear throughout test_corpus and crate tests."
+created = "2026-05-07"
+review_after = "2026-11-07"
+
+# =============================================================================
+# Native parser (tree-sitter)
+# =============================================================================
+
+[[allow]]
+id = "non-rust-tree-sitter-c"
+glob = "crates/tree-sitter-perl-c/**"
+kind = "native_parser_binding"
+language = "c"
+surface = "parser"
+classification = "production"
+owner = "parser/tree-sitter"
+reason = "Tree-sitter C parser source is required by the tree-sitter ecosystem; consumed by perl-tree-sitter-rs."
+covered_by = [
+  "cargo check --locked -p tree-sitter-perl-c",
+  "cargo test --locked -p tree-sitter-perl-rs",
+]
+broad_glob_reason = "tree-sitter generates a tree of C sources, headers, queries, and grammar tests; the entire crate is the artifact."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-tree-sitter-grammar"
+glob = "crates/tree-sitter-perl/**"
+kind = "native_parser_binding"
+language = "mixed"
+surface = "parser"
+classification = "production"
+owner = "parser/tree-sitter"
+reason = "Tree-sitter grammar definitions, queries, and corpus shared between the C and Rust crates."
+covered_by = [
+  "cargo test --locked -p tree-sitter-perl-rs",
+]
+broad_glob_reason = "Tree-sitter shared crate is a tree of grammar/queries/corpus by tree-sitter convention."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+# =============================================================================
+# VS Code extension
+# =============================================================================
+
+[[allow]]
+id = "non-rust-vscode-extension"
+glob = "vscode-extension/**"
+kind = "editor_extension"
+language = "typescript"
+surface = "editor"
+classification = "production"
+owner = "editor/vscode"
+reason = "VS Code extension client, packaging, managed-binary, and extension-host behavior require the VS Code extension ecosystem."
+covered_by = [
+  "vscode-managed-binary-smoke",
+  "vscode-published-extension-smoke",
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = "Editor extension is a first-class shipped artifact; TypeScript, package.json, esbuild config, and extension docs all live together."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+# =============================================================================
+# Build / release tooling
+# =============================================================================
+
+[[allow]]
+id = "non-rust-justfile"
+path = "justfile"
+kind = "task_runner"
+language = "just"
+surface = "tooling"
+classification = "tooling"
+owner = "release/ci"
+reason = "Repo task runner. Existing entry point for contributors; xtask migration is gradual."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-justfiles-tree"
+glob = ".justfiles/**"
+kind = "task_runner"
+language = "just"
+surface = "tooling"
+classification = "tooling"
+owner = "release/ci"
+reason = "Modular justfile fragments shared across just targets."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = "Modular justfile fragments live under a single tree."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-flake-nix"
+path = "flake.nix"
+kind = "build_environment"
+language = "nix"
+surface = "tooling"
+classification = "tooling"
+owner = "release/ci"
+reason = "Nix flake pins the local CI gate and developer toolchain."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-flake-lock"
+path = "flake.lock"
+kind = "lockfile"
+language = "json"
+surface = "tooling"
+classification = "config"
+owner = "release/ci"
+reason = "Nix flake lockfile pinning CI/dev-shell inputs."
+covered_by = [
+  "cargo xtask check-generated",
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-dist-workspace"
+path = "dist-workspace.toml"
+kind = "release_metadata"
+language = "toml"
+surface = "release"
+classification = "config"
+owner = "release/ci"
+reason = "cargo-dist release configuration."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-cliff-toml"
+path = "cliff.toml"
+kind = "release_metadata"
+language = "toml"
+surface = "release"
+classification = "config"
+owner = "release/ci"
+reason = "git-cliff changelog generator configuration."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-deny-toml"
+path = "deny.toml"
+kind = "security_config"
+language = "toml"
+surface = "ci"
+classification = "config"
+owner = "release/ci"
+reason = "cargo-deny advisory, license, and supply-chain rules."
+covered_by = [
+  "cargo deny check",
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-codecov-yml"
+path = "codecov.yml"
+kind = "ci_declarative"
+language = "yaml"
+surface = "ci"
+classification = "config"
+owner = "release/ci"
+reason = "Codecov reporter configuration."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-ripr-toml"
+path = "ripr.toml"
+kind = "ci_policy_config"
+language = "toml"
+surface = "ci"
+classification = "config"
+owner = "quality/ripr"
+reason = "RIPR static-analysis configuration; severity, suppressions, report shape."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-features-toml"
+path = "features.toml"
+kind = "feature_catalog"
+language = "toml"
+surface = "lsp"
+classification = "config"
+owner = "lsp/features"
+reason = "LSP feature catalog and capability declarations consumed by the LSP server."
+covered_by = [
+  "cargo test --workspace",
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-bacon-toml"
+path = "bacon.toml"
+kind = "developer_tooling"
+language = "toml"
+surface = "tooling"
+classification = "tooling"
+owner = "developer-experience"
+reason = "Bacon (bacon.rs) developer-loop runner config."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-rust-analyzer-toml"
+path = "rust-analyzer.toml"
+kind = "developer_tooling"
+language = "toml"
+surface = "tooling"
+classification = "tooling"
+owner = "developer-experience"
+reason = "rust-analyzer workspace configuration."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-clippy-toml"
+path = "clippy.toml"
+kind = "developer_tooling"
+language = "toml"
+surface = "tooling"
+classification = "config"
+owner = "developer-experience"
+reason = "Workspace Clippy lint configuration."
+covered_by = [
+  "cargo clippy --workspace",
+  "cargo xtask check-lint-policy",
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-cargo-config"
+glob = ".cargo/**"
+kind = "build_config"
+language = "toml"
+surface = "tooling"
+classification = "config"
+owner = "release/ci"
+reason = "Per-workspace cargo configuration (build flags, registries, aliases)."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = ".cargo/config.toml family lives in a single tree."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-cargo-semver-checks"
+path = ".cargo-semver-checks.toml"
+kind = "release_metadata"
+language = "toml"
+surface = "release"
+classification = "config"
+owner = "release/ci"
+reason = "cargo-semver-checks workspace configuration."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+# =============================================================================
+# Test fixtures and snapshots
+# =============================================================================
+
+[[allow]]
+id = "non-rust-insta-snapshots"
+glob = "**/*.snap"
+kind = "test_snapshot"
+language = "yaml"
+surface = "fixtures"
+classification = "test"
+owner = "parser/snapshots"
+reason = "cargo-insta snapshot test outputs."
+covered_by = [
+  "cargo test --workspace",
+  "cargo insta test",
+]
+broad_glob_reason = "cargo-insta writes snapshot files alongside tests across all crates; **/*.snap is the canonical match."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-insta-pending-snapshots"
+glob = "**/*.snap.new"
+kind = "test_snapshot"
+language = "yaml"
+surface = "fixtures"
+classification = "test"
+owner = "parser/snapshots"
+reason = "cargo-insta pending snapshot review files."
+covered_by = [
+  "cargo insta accept",
+]
+broad_glob_reason = "Pending snapshots co-locate with accepted ones across the tree."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-proptest-regressions"
+glob = "**/*.proptest-regressions"
+kind = "test_regression_corpus"
+language = "text"
+surface = "fixtures"
+classification = "test"
+owner = "parser/property-tests"
+reason = "proptest auto-generated regression seeds; permanent test corpus."
+covered_by = [
+  "cargo test --workspace",
+]
+broad_glob_reason = "proptest writes regression files alongside the failing test, always under crate `proptest-regressions/`."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+# =============================================================================
+# CI / release scripts
+# =============================================================================
+
+[[allow]]
+id = "non-rust-ci-scripts-tree"
+glob = "scripts/**"
+kind = "ci_tooling"
+language = "mixed"
+surface = "tooling"
+classification = "tooling"
+owner = "release/ci"
+reason = "Existing CI receipt conversion, memory workload, release helpers, and compatibility wrappers; migrate stable automation to xtask over time."
+covered_by = [
+  "cargo xtask gates --tier pr-fast --receipt",
+  "cargo xtask check-file-policy",
+  "cargo xtask check-executable-files",
+  "cargo xtask check-process-policy",
+  "cargo xtask check-network-policy",
+]
+broad_glob_reason = "scripts/ contains legacy and compatibility helpers being progressively migrated to xtask. The executable, process, and network companion policies constrain risky behavior."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-install-shell"
+path = "install.sh"
+kind = "release_tooling"
+language = "shell"
+surface = "release"
+classification = "tooling"
+owner = "release/ci"
+reason = "User-facing one-line installer for Linux/macOS; required by cargo-dist's installer model."
+covered_by = [
+  "cargo xtask check-executable-files",
+  "cargo xtask check-network-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-install-powershell"
+path = "install.ps1"
+kind = "release_tooling"
+language = "powershell"
+surface = "release"
+classification = "tooling"
+owner = "release/ci"
+reason = "User-facing one-line installer for Windows; required by cargo-dist's installer model."
+covered_by = [
+  "cargo xtask check-network-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+# =============================================================================
+# Editor / IDE / agent configuration
+# =============================================================================
+
+[[allow]]
+id = "non-rust-vscode-config"
+glob = ".vscode/**"
+kind = "editor_config"
+language = "json"
+surface = "tooling"
+classification = "tooling"
+owner = "developer-experience"
+reason = "Workspace-level VS Code settings, tasks, launch configurations."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = "Workspace VS Code config is a tree (settings, tasks, launch)."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-claude-config"
+glob = ".claude/**"
+kind = "agent_config"
+language = "mixed"
+surface = "tooling"
+classification = "tooling"
+owner = "developer-experience"
+reason = "Claude Code agent definitions, slash commands, hooks, and orchestration configs."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = "Agent runtime config is structurally a tree of agent files, prompts, and orchestrator state."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-spec-tree"
+glob = ".spec/**"
+kind = "agent_workflow"
+language = "mixed"
+surface = "tooling"
+classification = "tooling"
+owner = "developer-experience"
+reason = "Spec-planner branch artifacts (acceptance grids, checklists, context bundles) shared across agent runs."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = "Spec-planner artifacts are a tree (acceptance grids, checklists, context bundles)."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-other-agents"
+glob = ".{aider,roo,kiro,hermes,jules}/**"
+kind = "agent_config"
+language = "mixed"
+surface = "tooling"
+classification = "tooling"
+owner = "developer-experience"
+reason = "Other-agent configuration directories used by the swarm orchestration."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = "Each agent ecosystem has its own directory layout; covered together to avoid one entry per agent."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-agent-config-files"
+glob = "{AGENTS,AIDER,CLAUDE,CRUSH,GEMINI}.md"
+kind = "agent_config"
+language = "markdown"
+surface = "docs"
+classification = "documentation"
+owner = "developer-experience"
+reason = "Top-level agent guidance files (project-level prompts) read by the agent runtimes."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-aider-conf"
+path = ".aider.conf.yml"
+kind = "agent_config"
+language = "yaml"
+surface = "tooling"
+classification = "tooling"
+owner = "developer-experience"
+reason = "Aider agent project-level configuration."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+# =============================================================================
+# Developer / repo metadata
+# =============================================================================
+
+[[allow]]
+id = "non-rust-gitignore-family"
+glob = "**/.gitignore"
+kind = "vcs_config"
+language = "text"
+surface = "tooling"
+classification = "config"
+owner = "release/ci"
+reason = "Per-tree .gitignore files. Required by git for ignore semantics."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = "Per-tree .gitignore files appear under multiple subtrees; covered together."
+created = "2026-05-07"
+review_after = "2026-11-07"
+
+[[allow]]
+id = "non-rust-gitattributes"
+path = ".gitattributes"
+kind = "vcs_config"
+language = "text"
+surface = "tooling"
+classification = "config"
+owner = "release/ci"
+reason = "Git attributes for end-of-line normalization and file-type detection."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-11-07"
+
+[[allow]]
+id = "non-rust-markdownlint"
+path = ".markdownlint.json"
+kind = "linter_config"
+language = "json"
+surface = "tooling"
+classification = "config"
+owner = "docs"
+reason = "markdownlint configuration for prose CI."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-cspell"
+path = "cspell.json"
+kind = "linter_config"
+language = "json"
+surface = "tooling"
+classification = "config"
+owner = "docs"
+reason = "cspell dictionary and exclusions for prose CI."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-trivyignore"
+path = ".trivyignore"
+kind = "security_config"
+language = "text"
+surface = "ci"
+classification = "config"
+owner = "release/ci"
+reason = "Trivy security-scanner suppression list."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-tokeignore"
+path = ".tokeignore"
+kind = "tooling_config"
+language = "text"
+surface = "tooling"
+classification = "config"
+owner = "developer-experience"
+reason = "tokei (line counter) ignore patterns."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-pre-commit-hooks"
+path = ".pre-commit-hooks.yaml"
+kind = "vcs_config"
+language = "yaml"
+surface = "tooling"
+classification = "config"
+owner = "developer-experience"
+reason = "pre-commit hook declarations published by this repo for downstream consumers."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-perl-lsp-example-config"
+path = ".perl-lsp.toml.example"
+kind = "user_config_example"
+language = "toml"
+surface = "lsp"
+classification = "documentation"
+owner = "lsp/config"
+reason = "Example user-facing .perl-lsp.toml configuration; documents supported keys."
+covered_by = [
+  "cargo test --workspace",
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+# =============================================================================
+# Container / packaging
+# =============================================================================
+
+[[allow]]
+id = "non-rust-docker-tree"
+glob = ".docker/**"
+kind = "container_config"
+language = "mixed"
+surface = "release"
+classification = "config"
+owner = "release/ci"
+reason = "Dockerfiles and container scripts for release artifact builds."
+covered_by = [
+  "cargo xtask check-file-policy",
+  "cargo xtask check-network-policy",
+]
+broad_glob_reason = "Docker build context is a tree of Dockerfiles, scripts, and supporting files."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-docker-compose"
+path = "docker-compose.yml"
+kind = "container_config"
+language = "yaml"
+surface = "release"
+classification = "config"
+owner = "release/ci"
+reason = "Top-level compose definition for local container workflows."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-homebrew-formula"
+glob = "Formula/**"
+kind = "package_distribution"
+language = "ruby"
+surface = "release"
+classification = "production"
+owner = "release/ci"
+reason = "Homebrew formula(s) generated/maintained for macOS distribution."
+covered_by = [
+  "cargo xtask check-file-policy",
+  "cargo xtask check-network-policy",
+]
+broad_glob_reason = "Homebrew formulas live in a single Formula/ directory."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+# =============================================================================
+# Receipts / status / metrics
+# =============================================================================
+
+[[allow]]
+id = "non-rust-receipts-tree"
+glob = ".receipts/**"
+kind = "ci_receipt"
+language = "json"
+surface = "ci"
+classification = "config"
+owner = "release/ci"
+reason = "Persisted CI gate receipts referenced by status pages and review tooling."
+covered_by = [
+  "cargo xtask gate-receipts validate",
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = ".receipts/ holds CI gate receipts as a tree of JSON files."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-ops-tree"
+glob = ".ops-perl-lsp/**"
+kind = "ops_metrics"
+language = "mixed"
+surface = "ci"
+classification = "config"
+owner = "release/ci"
+reason = "Swarm orchestration metrics, queue snapshots, and per-cycle ops state."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = "Swarm ops directory holds heterogeneous operational state by design."
+created = "2026-05-07"
+review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-config-tree"
+glob = ".config/**"
+kind = "tooling_config"
+language = "mixed"
+surface = "tooling"
+classification = "config"
+owner = "developer-experience"
+reason = "Per-repo XDG-style config (nextest profile, mdbook, etc.)."
+covered_by = [
+  "cargo xtask check-file-policy",
+]
+broad_glob_reason = ".config/ holds per-tool XDG-style config as a tree."
+created = "2026-05-07"
+review_after = "2026-08-07"

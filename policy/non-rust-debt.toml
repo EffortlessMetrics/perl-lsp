@@ -1,0 +1,42 @@
+# Non-Rust File Debt Ledger
+#
+# Time-boxed register of non-Rust files whose ownership or justification is
+# genuinely ambiguous. Entries here are NOT allowlisted — they fail the
+# blocking-allowlist checker once it lands. Use this ledger when you want a
+# tracked place to record "we know this is here, we have not yet classified
+# it, here is the deadline."
+#
+# Policy: most newly-discovered non-Rust files should go directly into
+# `policy/non-rust-allowlist.toml` after `cargo xtask non-rust propose`.
+# This ledger is for cases that cannot be classified within a single PR.
+#
+# Doctrine: docs/policy/FILE_POLICY.md.
+# Schema:   docs/policy/NON_RUST_POLICY.md.
+
+schema_version = 1
+policy = "non-rust-debt"
+owner = "EffortlessMetrics"
+status = "active"
+updated = "2026-05-07"
+
+[defaults]
+max_debt_age_days = 30
+escalate_after_days = 14
+
+# No active debt at seed time. The non-rust-allowlist.toml seeds the known
+# surface; anything not covered there appears as an unallowlisted finding
+# in `cargo xtask check-file-policy --mode advisory` and should be
+# classified into either the allowlist or this debt register.
+#
+# Example debt entry shape:
+#
+# [[debt]]
+# id = "non-rust-debt-0001"
+# glob = "scripts/legacy-bench-runner.py"
+# kind = "unknown_non_rust_surface"
+# language = "python"
+# owner = "TODO: parser/perf?"
+# reason = "Initial inventory found this surface; classification unclear; possibly migrated to xtask in PR #NNNN."
+# created = "2026-05-07"
+# review_after = "2026-05-21"
+# expires = "2026-06-07"
