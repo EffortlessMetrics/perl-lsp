@@ -235,5 +235,9 @@
     "unclosed_regex::line::3::ParseError",
     "unterminated_heredoc::line::1::PackageDecl",
     "unterminated_heredoc::line::4::UnsupportedConstruct"
+  ],
+  "dynamic_expectation_signatures": [
+    "dynamic_require_boundary::line::4::DynamicBoundary",
+    "typeglob_alias::symbol_occurrence::typeglob_alias_lhs_typeglob"
   ]
 }

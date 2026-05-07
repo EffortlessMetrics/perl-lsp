@@ -414,7 +414,8 @@
         "removed_expectation_sample_count",
         "added_expectation_count",
         "added_expectation_sample_count",
-        "dynamic_expectation_change_count"
+        "dynamic_expectation_change_count",
+        "dynamic_expectation_sample_count"
       ],
       "properties": {
         "schema_error_count": {
@@ -454,6 +455,9 @@
           "$ref": "#/$defs/nonNegativeInteger"
         },
         "dynamic_expectation_change_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "dynamic_expectation_sample_count": {
           "$ref": "#/$defs/nonNegativeInteger"
         }
       }
