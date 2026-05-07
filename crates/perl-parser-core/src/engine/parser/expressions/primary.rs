@@ -858,8 +858,45 @@ impl<'a> Parser<'a> {
                         }
                         _ => {
                             // Could be an operator like 'or', 'and', etc.
-                            // We need to continue parsing the expression
-                            self.parse_word_or_expr(expr)?
+                            // Also detect no-paren function calls inside parens:
+                            //   (func KEY => VALUE or ...)
+                            // When the first element is a bare identifier and the
+                            // next tokens are IDENT => , the identifier is a
+                            // function being called with fat-comma arguments.
+                            let is_no_paren_call =
+                                matches!(&expr.kind, NodeKind::Identifier { .. })
+                                    && self.peek_kind() == Some(TokenKind::Identifier)
+                                    && self.tokens
+                                        .peek_second()
+                                        .ok()
+                                        .map(|t| t.kind)
+                                        == Some(TokenKind::FatArrow);
+                            if is_no_paren_call {
+                                let NodeKind::Identifier { name } = &expr.kind else {
+                                    return self.parse_word_or_expr(expr);
+                                };
+                                let name = name.clone();
+                                let call_start = expr.location.start;
+                                let first_arg = self.parse_assignment_or_declaration()?;
+                                let args_node =
+                                    self.collect_comma_fat_arrow_continuation(first_arg)?;
+                                let args = match args_node.kind {
+                                    NodeKind::ArrayLiteral { elements } => elements,
+                                    NodeKind::HashLiteral { pairs } => pairs
+                                        .into_iter()
+                                        .flat_map(|(k, v)| [k, v])
+                                        .collect(),
+                                    _ => vec![args_node],
+                                };
+                                let call_end = self.previous_position();
+                                let call = Node::new(
+                                    NodeKind::FunctionCall { name, args },
+                                    SourceLocation { start: call_start, end: call_end },
+                                );
+                                self.parse_word_or_expr(call)?
+                            } else {
+                                self.parse_word_or_expr(expr)?
+                            }
                         }
                     }
                 };
