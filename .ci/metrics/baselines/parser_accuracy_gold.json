@@ -118,6 +118,8 @@
     "method_call::symbol_entity::method_call_run_entity",
     "method_call::symbol_occurrence::method_call_instance_call",
     "method_call::symbol_occurrence::method_call_static_call",
+    "method_decl::line::2::MethodDecl",
+    "method_decl::symbol_entity::method_decl_tick_entity",
     "method_completion_provider::provider_method_completion::concat_bless_does_not_infer_exact_receiver",
     "method_completion_provider::provider_method_completion::constructor_receiver_methods",
     "method_completion_provider::provider_method_completion::dynamic_bless_does_not_infer_exact_receiver",
