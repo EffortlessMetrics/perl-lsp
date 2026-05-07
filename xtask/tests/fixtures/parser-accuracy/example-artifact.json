@@ -1626,7 +1626,9 @@
     "added_expectation_count": 0,
     "added_expectation_sample_count": 0,
     "dynamic_expectation_change_count": 0,
-    "dynamic_expectation_sample_count": 0
+    "dynamic_expectation_sample_count": 0,
+    "weakening_explanation_required_count": 0,
+    "weakening_explanation_sample_count": 0
   },
   "metric_runtime": {
     "runtime_ms": 170.5846,
