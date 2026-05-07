@@ -46,9 +46,16 @@ struct Plan {
     head: String,
     changed_files: Vec<String>,
     surfaces: BTreeSet<Surface>,
-    required_commands: Vec<String>,
-    optional_commands: Vec<String>,
+    required_commands: Vec<ProofCommand>,
+    optional_commands: Vec<ProofCommand>,
     agent_hints: Vec<String>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct ProofCommand {
+    command: String,
+    why: String,
+    evidence: String,
 }
 
 pub fn run(config: DevexPlanConfig) -> Result<()> {
@@ -159,44 +166,115 @@ fn classify_surfaces(files: &[String]) -> BTreeSet<Surface> {
     surfaces
 }
 
-fn required_commands(surfaces: &BTreeSet<Surface>, base: &str) -> Vec<String> {
-    let mut commands = vec!["cargo xtask fmt".to_string()];
+fn required_commands(surfaces: &BTreeSet<Surface>, base: &str) -> Vec<ProofCommand> {
+    let mut commands = vec![proof_command(
+        "cargo xtask fmt",
+        "keeps formatting deterministic before any other proof",
+        "PR body lists `cargo xtask fmt` as passed and the branch has no formatting-only drift",
+    )];
 
     if surfaces.contains(&Surface::ParserAccuracy) {
-        commands.push("just ci-metrics-ratchet-check parser_accuracy".to_string());
+        commands.push(proof_command(
+            "just ci-metrics-ratchet-check parser_accuracy",
+            "parser fixtures, baselines, or parser status changed",
+            "attach/pass parser accuracy ratchet output or explain an intentional baseline update",
+        ));
     }
     if surfaces.contains(&Surface::GeneratedStatusDocs) {
-        commands.push("just status-update".to_string());
-        commands.push("just status-check".to_string());
+        commands.push(proof_command(
+            "just status-update",
+            "generated status docs changed and should be regenerated from source data",
+            "generated status diffs are present when expected",
+        ));
+        commands.push(proof_command(
+            "just status-check",
+            "generated status docs should match their checked-in sources",
+            "PR body lists `just status-check` as passed",
+        ));
     }
     if surfaces.contains(&Surface::MemorySensitiveRuntime) {
-        commands.push("cargo xtask check-memory-lifecycle-policy".to_string());
+        commands.push(proof_command(
+            "cargo xtask check-memory-lifecycle-policy",
+            "memory-sensitive lifecycle, cache, or retained-state surfaces changed",
+            "PR body includes the policy pass and any focused lifecycle/cache test evidence",
+        ));
     }
     if surfaces.contains(&Surface::RetainedOwnerCandidate) {
-        commands.push(format!("cargo xtask check-memory-retained-owner-drift --base {base}"));
+        commands.push(proof_command(
+            format!("cargo xtask check-memory-retained-owner-drift --base {base}"),
+            "a Rust file in a retained-owner-sensitive path changed",
+            "show no owner drift, or include the retained-state inventory/counter/test update",
+        ));
     }
     if surfaces.contains(&Surface::ReleaseVersion) {
-        commands.push("just version-check".to_string());
-        commands.push("just release-check".to_string());
+        commands.push(proof_command(
+            "just version-check",
+            "release/version surfaces changed and version declarations must stay aligned",
+            "PR body lists `just version-check` as passed",
+        ));
+        commands.push(proof_command(
+            "just release-check",
+            "release-facing files changed and release hygiene should be validated",
+            "PR body lists `just release-check` as passed",
+        ));
     }
 
-    commands.push("git diff --check".to_string());
+    commands.push(proof_command(
+        "git diff --check",
+        "guards against whitespace errors in the final patch",
+        "command exits cleanly after all edits",
+    ));
     commands
 }
 
-fn optional_commands(surfaces: &BTreeSet<Surface>) -> Vec<String> {
-    let mut commands = vec!["just pr-fast".to_string(), "just ci-gate".to_string()];
+fn optional_commands(surfaces: &BTreeSet<Surface>) -> Vec<ProofCommand> {
+    let mut commands = vec![
+        proof_command(
+            "just pr-fast",
+            "cheap broader proof when the change spans more than docs or one small module",
+            "useful PR-body evidence when you want confidence before pushing",
+        ),
+        proof_command(
+            "just ci-gate",
+            "local approximation of the merge-blocking CI gate",
+            "optional unless the change is broad, risky, or CI-only behavior is unclear",
+        ),
+    ];
 
     if surfaces.contains(&Surface::ParserAccuracy) {
-        commands.push("just cpan-corpus-check".to_string());
-        commands.push("just corpus-sweep-check".to_string());
+        commands.push(proof_command(
+            "just cpan-corpus-check",
+            "broader parser corpus confidence after parser accuracy changes",
+            "attach only when parser grammar/accuracy changes need extra confidence",
+        ));
+        commands.push(proof_command(
+            "just corpus-sweep-check",
+            "expensive corpus sweep for parser changes with broad blast radius",
+            "usually saved for risky parser edits or follow-up validation",
+        ));
     }
     if surfaces.contains(&Surface::PolicyOrCi) {
-        commands.push("cargo xtask workflow-policy-lint".to_string());
-        commands.push("cargo xtask workflow-trigger-lint".to_string());
+        commands.push(proof_command(
+            "cargo xtask workflow-policy-lint",
+            "policy or CI files changed",
+            "use when workflow/policy semantics changed, not for every xtask-only edit",
+        ));
+        commands.push(proof_command(
+            "cargo xtask workflow-trigger-lint",
+            "workflow trigger behavior may have changed",
+            "use when GitHub workflow trigger files are touched",
+        ));
     }
 
     commands
+}
+
+fn proof_command(
+    command: impl Into<String>,
+    why: impl Into<String>,
+    evidence: impl Into<String>,
+) -> ProofCommand {
+    ProofCommand { command: command.into(), why: why.into(), evidence: evidence.into() }
 }
 
 fn agent_hints(surfaces: &BTreeSet<Surface>) -> Vec<String> {
@@ -307,14 +385,18 @@ fn print_plan(plan: &Plan) {
     println!();
 
     println!("Required local proof:");
-    for command in &plan.required_commands {
-        println!("- {command}");
+    for proof in &plan.required_commands {
+        println!("- {}", proof.command);
+        println!("  why: {}", proof.why);
+        println!("  evidence: {}", proof.evidence);
     }
     println!();
 
     println!("Optional / expensive:");
-    for command in &plan.optional_commands {
-        println!("- {command}");
+    for proof in &plan.optional_commands {
+        println!("- {}", proof.command);
+        println!("  why: {}", proof.why);
+        println!("  evidence: {}", proof.evidence);
     }
     println!();
 
@@ -330,6 +412,10 @@ mod tests {
 
     fn strings(paths: &[&str]) -> Vec<String> {
         paths.iter().map(|path| path.to_string()).collect()
+    }
+
+    fn command_strings(commands: &[ProofCommand]) -> Vec<String> {
+        commands.iter().map(|proof| proof.command.clone()).collect()
     }
 
     #[test]
@@ -350,22 +436,19 @@ mod tests {
         assert!(plan.surfaces.contains(&Surface::MemorySensitiveRuntime));
         assert!(plan.surfaces.contains(&Surface::RetainedOwnerCandidate));
         assert!(plan.surfaces.contains(&Surface::ReleaseVersion));
-        assert!(
-            plan.required_commands
-                .contains(&"just ci-metrics-ratchet-check parser_accuracy".to_string())
-        );
-        assert!(plan.required_commands.contains(&"just status-update".to_string()));
-        assert!(plan.required_commands.contains(&"just status-check".to_string()));
-        assert!(
-            plan.required_commands
-                .contains(&"cargo xtask check-memory-lifecycle-policy".to_string())
-        );
-        assert!(plan.required_commands.contains(
+        let commands = command_strings(&plan.required_commands);
+        assert!(commands.contains(&"just ci-metrics-ratchet-check parser_accuracy".to_string()));
+        assert!(commands.contains(&"just status-update".to_string()));
+        assert!(commands.contains(&"just status-check".to_string()));
+        assert!(commands.contains(&"cargo xtask check-memory-lifecycle-policy".to_string()));
+        assert!(commands.contains(
             &"cargo xtask check-memory-retained-owner-drift --base origin/master".to_string()
         ));
-        assert!(plan.required_commands.contains(&"just version-check".to_string()));
-        assert!(plan.required_commands.contains(&"just release-check".to_string()));
-        assert!(plan.required_commands.contains(&"git diff --check".to_string()));
+        assert!(commands.contains(&"just version-check".to_string()));
+        assert!(commands.contains(&"just release-check".to_string()));
+        assert!(commands.contains(&"git diff --check".to_string()));
+        assert!(plan.required_commands.iter().all(|proof| !proof.why.is_empty()));
+        assert!(plan.required_commands.iter().all(|proof| !proof.evidence.is_empty()));
     }
 
     #[test]
@@ -379,10 +462,10 @@ mod tests {
         assert!(plan.surfaces.contains(&Surface::Docs));
         assert!(!plan.surfaces.contains(&Surface::ParserAccuracy));
         assert_eq!(
-            plan.required_commands,
+            command_strings(&plan.required_commands),
             vec!["cargo xtask fmt".to_string(), "git diff --check".to_string()]
         );
-        assert!(plan.optional_commands.contains(&"just pr-fast".to_string()));
+        assert!(command_strings(&plan.optional_commands).contains(&"just pr-fast".to_string()));
     }
 
     #[test]
