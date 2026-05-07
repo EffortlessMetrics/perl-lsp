@@ -839,6 +839,8 @@ struct IncrementalScore {
     checkpoint_miss_count: u64,
     content_hash_hit_count: u64,
     content_hash_miss_count: u64,
+    semantic_fact_cache_hit_count: u64,
+    semantic_fact_cache_miss_count: u64,
     reparse_byte_ratios: Vec<f64>,
     reused_node_ratios: Vec<f64>,
     changed_range_sample_count: u64,
@@ -1607,12 +1609,15 @@ fn score_content_hash_reuse_probe(
 ) -> Result<()> {
     let source_path_text = source_path.to_string_lossy();
     let first_hit = content_hash_probe_hits(index, &source_path_text, source);
+    let first_semantic_hit = semantic_fact_cache_probe_hits(index, &source_path_text);
     if index.index_file_str(&source_path_text, source).is_err() {
         return Ok(());
     }
     record_content_hash_probe(score, first_hit);
+    record_semantic_fact_cache_probe(score, first_semantic_hit);
 
     let second_hit = content_hash_probe_hits(index, &source_path_text, source);
+    let second_semantic_hit = semantic_fact_cache_probe_hits(index, &source_path_text);
     index.index_file_str(&source_path_text, source).map_err(|err| {
         eyre!(
             "re-indexing parser accuracy fixture {} for content-hash metric: {err}",
@@ -1620,6 +1625,7 @@ fn score_content_hash_reuse_probe(
         )
     })?;
     record_content_hash_probe(score, second_hit);
+    record_semantic_fact_cache_probe(score, second_semantic_hit);
 
     Ok(())
 }
@@ -1631,11 +1637,23 @@ fn content_hash_probe_hits(index: &WorkspaceIndex, source_path_text: &str, sourc
     index.file_fact_shard(source_path_text).is_some_and(|shard| shard.content_hash == content_hash)
 }
 
+fn semantic_fact_cache_probe_hits(index: &WorkspaceIndex, source_path_text: &str) -> bool {
+    index.file_fact_shard(source_path_text).is_some()
+}
+
 fn record_content_hash_probe(score: &mut IncrementalScore, hit: bool) {
     if hit {
         score.content_hash_hit_count += 1;
     } else {
         score.content_hash_miss_count += 1;
+    }
+}
+
+fn record_semantic_fact_cache_probe(score: &mut IncrementalScore, hit: bool) {
+    if hit {
+        score.semantic_fact_cache_hit_count += 1;
+    } else {
+        score.semantic_fact_cache_miss_count += 1;
     }
 }
 
@@ -4803,6 +4821,8 @@ fn cost_metrics(
 fn cache_reuse_metrics(score: &IncrementalScore, cadence: Cadence) -> Vec<MetricRow> {
     let checkpoint_total = score.checkpoint_hit_count + score.checkpoint_miss_count;
     let content_hash_total = score.content_hash_hit_count + score.content_hash_miss_count;
+    let semantic_fact_cache_total =
+        score.semantic_fact_cache_hit_count + score.semantic_fact_cache_miss_count;
     vec![
         optional_measured_rate(
             "lexer_checkpoint_reuse_rate",
@@ -4818,9 +4838,12 @@ fn cache_reuse_metrics(score: &IncrementalScore, cadence: Cadence) -> Vec<Metric
             "parser checkpoint telemetry is not available",
             cadence,
         ),
-        insufficient(
+        optional_measured_rate(
             "semantic_fact_cache_hit_rate",
+            ratio(score.semantic_fact_cache_hit_count, semantic_fact_cache_total),
+            semantic_fact_cache_total,
             "semantic fact cache telemetry is not wired yet",
+            cadence,
         ),
         insufficient(
             "workspace_shard_reuse_rate",
@@ -7865,6 +7888,8 @@ sub dynamic_boundary_case {
             checkpoint_miss_count: 1,
             content_hash_hit_count: 3,
             content_hash_miss_count: 1,
+            semantic_fact_cache_hit_count: 2,
+            semantic_fact_cache_miss_count: 2,
             ..IncrementalScore::default()
         };
 
@@ -7892,6 +7917,14 @@ sub dynamic_boundary_case {
                 MetricRow::Measured { metric, value, sample_count: 4, .. }
                     if metric == "content_hash_hit_rate"
                         && (*value - 0.75).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "semantic_fact_cache_hit_rate"
+                        && (*value - 0.5).abs() < f64::EPSILON
             )
         }));
         assert!(metrics.iter().any(|metric| {
