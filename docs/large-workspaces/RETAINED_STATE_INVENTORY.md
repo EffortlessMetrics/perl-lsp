@@ -115,3 +115,8 @@ When memory growth moves again:
 5. Add a failing regression before changing cleanup logic.
 6. Patch the owner or eviction boundary.
 7. Add or update a receipt so future runs classify the retained surface.
+
+Use the GitHub **Memory Regression** issue template for plateau or retained-state
+failures. The issue should name the scenario, commit, workflow run, artifact,
+tail growth, median tail slope, lifecycle, nonzero counters, and suspected
+owner before implementation begins.

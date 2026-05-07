@@ -1,0 +1,157 @@
+name: Memory Regression
+description: Report a retained-state or RSS plateau regression from memory receipts, counters, or local profiling.
+title: "[Memory] "
+labels: ["performance", "memory", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when an LSP memory guard fails or a local run shows retained state that should drain. Attach receipts before guessing at a fix.
+
+  - type: dropdown
+    id: scenario
+    attributes:
+      label: Scenario
+      description: Which memory lifecycle or subsystem exposed the regression?
+      options:
+        - lsp_doc_churn_delete
+        - lsp_workspace_symbol_churn_delete
+        - workspace_index_remove_reindex_cycle
+        - diagnostics_pull_push_churn
+        - hover_pod_many_modules
+        - completion_stream_cancel_storm
+        - file_watcher_bulk_create_change_delete
+        - workspace_folder_add_remove_multi_root
+        - formatting_perltidy_loop
+        - dap_bridge_start_stop_loop
+        - other
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: Commit SHA where the regression was observed.
+      placeholder: "e.g. fbd14c9bce23377ede14be837938772c34e0ce29"
+    validations:
+      required: true
+
+  - type: input
+    id: workflow-run
+    attributes:
+      label: Workflow run
+      description: Link to the failed workflow run, if available.
+      placeholder: "https://github.com/EffortlessMetrics/perl-lsp/actions/runs/..."
+
+  - type: input
+    id: artifact
+    attributes:
+      label: Artifact
+      description: Link or path to the JSON, CSV, server log, or process-tree artifact.
+      placeholder: "target/memory/doc_churn_500_delete.plateau.json"
+    validations:
+      required: true
+
+  - type: input
+    id: tail-growth-kb
+    attributes:
+      label: tail_growth_kb
+      description: Tail RSS growth from the plateau summary or receipt.
+      placeholder: "e.g. 4096"
+    validations:
+      required: true
+
+  - type: input
+    id: median-tail-slope
+    attributes:
+      label: median_tail_slope_kb_per_file
+      description: Median tail slope from the plateau summary or receipt.
+      placeholder: "e.g. 12.5"
+    validations:
+      required: true
+
+  - type: textarea
+    id: nonzero-counters
+    attributes:
+      label: Which counter stayed nonzero?
+      description: Include MemoryStateSnapshot and RuntimePressureSnapshot fields that did not drain.
+      placeholder: |
+        - documents:
+        - open_text_bytes:
+        - semantic_analyzer_cache:
+        - parse_cancel_flags:
+        - stream_sessions:
+        - pending_index_tasks:
+        - diagnostic_debounce_pending_uris:
+        - file_watcher_pending_uris:
+      render: markdown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: suspected-owner
+    attributes:
+      label: Suspected owner
+      description: Pick the state holder most likely to own the retained memory.
+      options:
+        - document/session state
+        - workspace index
+        - diagnostics cache
+        - POD cache
+        - stream sessions
+        - debouncer/task pressure
+        - subprocess or child process
+        - DAP session state
+        - unknown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: lifecycle
+    attributes:
+      label: Lifecycle
+      description: Close-only and close+delete have intentionally different expectations.
+      options:
+        - close-only
+        - close+delete
+        - reindex
+        - query churn
+        - cancellation
+        - workspace-folder removal
+        - subprocess loop
+        - DAP start/stop
+        - unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: failure-classification
+    attributes:
+      label: Failure classification
+      description: Classify what failed before proposing a fix.
+      value: |
+        - [ ] tail growth
+        - [ ] slope
+        - [ ] missing artifact
+        - [ ] harness crash
+        - [ ] server crash
+        - [ ] counter did not drain
+        - [ ] child process retained
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: triage-notes
+    attributes:
+      label: Triage notes
+      description: Summarize the evidence and the next narrow regression to add before patching.
+      value: |
+        1. Downloaded plateau JSON/CSV/server log:
+        2. Compared MemoryStateSnapshot and RuntimePressureSnapshot:
+        3. Identified suspected owner:
+        4. Proposed failing regression test:
+      render: markdown
+    validations:
+      required: true
