@@ -367,7 +367,8 @@ jobs:
       - conflict-markers
       - check-all-targets
       - ux-tests
-      - windows-guardrails
+      - linux-windows-compile-shape
+      - windows-required
       - merge-gate-shards
     if: always() && needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     permissions:
@@ -704,13 +705,193 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # ── Windows Guardrails: proactive Windows regression catchers ─────────
-  windows-guardrails:
-    name: Windows Guardrails (${{ matrix.lane.name }})
+  # ── Linux Windows compile-shape: cheap cross-target check ────────────
+  # Catches most #[cfg(windows)] type/compile mistakes on a Linux runner so
+  # the slow native Windows lane stops being the universal merge blocker.
+  linux-windows-compile-shape:
+    name: Linux Windows compile-shape
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [draft-pr-check, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.93.1
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ci-linux-windows-shape-${{ hashFiles('Cargo.lock') }}
+
+      - name: Check Windows cfg shape from Linux
+        run: |
+          cargo check --locked --target x86_64-pc-windows-msvc \
+            -p perl-module \
+            -p perl-lsp-rs \
+            -p perl-workspace \
+            --lib
+
+  # ── Windows scope: decide whether the native Windows canary is needed ─
+  # Cheap Ubuntu job that diffs against master and decides whether the
+  # diff plausibly affects Windows-specific behavior. Default for normal
+  # PRs is to skip the native Windows runner entirely and let the Linux
+  # cross-target compile check + tests cover the surface.
+  windows-scope:
+    name: Windows scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: [draft-pr-check, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
+    outputs:
+      required: ${{ steps.scope.outputs.required }}
+      full: ${{ steps.scope.outputs.full }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Decide Windows scope
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          # On non-PR events (push to master, schedule, manual dispatch),
+          # always run the canary and the full guardrails.
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            echo "full=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Non-PR event — Windows canary + full guardrails required"
+            exit 0
+          fi
+
+          # Diff against the PR base; fall back to origin/master.
+          base_ref="${{ github.event.pull_request.base.ref }}"
+          if [ -n "$base_ref" ]; then
+            git fetch --no-tags --depth=200 origin "$base_ref" || true
+            base="origin/$base_ref"
+          else
+            git fetch --no-tags --depth=200 origin master || true
+            base="origin/master"
+          fi
+
+          changed="$(git diff --name-only "$base"...HEAD || true)"
+          echo "Changed files vs $base:"
+          echo "$changed"
+
+          required=false
+          full=false
+
+          # Windows-sensitive code paths (sandbox, module path resolution,
+          # workspace discovery, URI handling).
+          if echo "$changed" | grep -E '^(crates/perl-lsp-rs/src/security/sandbox\.rs|crates/perl-module/|crates/perl-workspace/|crates/perl-uri/)' >/dev/null; then
+            required=true
+          fi
+
+          # Toolchain / workflow / lockfile changes can shift Windows
+          # behavior in ways the diff alone won't reveal — promote to full.
+          if echo "$changed" | grep -E '(\.github/workflows/|Cargo\.lock|Cargo\.toml|rust-toolchain\.toml|justfile)' >/dev/null; then
+            required=true
+            full=true
+          fi
+
+          # Generic path/URI/module heuristic across other crates.
+          if echo "$changed" | grep -E '(uri|path|workspace-folder|file_uri|module)' >/dev/null; then
+            required=true
+          fi
+
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+          echo "::notice::windows-scope: required=$required full=$full"
+
+  # ── Windows Canary: tiny native dispatch check ───────────────────────
+  # Proves the Windows-only code path (currently sandbox fail-closed) is
+  # still wired. Runs only when windows-scope says required=true.
+  windows-canary:
+    name: Windows Canary
     runs-on: windows-latest
-    timeout-minutes: 20
-    needs: preflight-latest-check
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    timeout-minutes: 15
+    needs: [draft-pr-check, preflight-latest-check, windows-scope]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true' && needs.windows-scope.outputs.required == 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.93.1
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ci-windows-canary-${{ hashFiles('Cargo.lock') }}
+
+      - name: Run sandbox fail-closed canary
+        shell: bash
+        run: |
+          cargo test --locked --lib -p perl-lsp-rs \
+            security::sandbox::tests::test_windows_sandbox_fails_closed \
+            -- --exact
+
+  # ── Windows Required: Ubuntu aggregator that branch protection points at
+  # Always present, succeeds when the canary isn't needed, fails when the
+  # canary is required but didn't pass. Avoids the "skipped required check"
+  # antipattern in branch protection.
+  windows-required:
+    name: Windows Required
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    needs: [windows-scope, windows-canary]
+    if: always() && needs.windows-scope.result == 'success'
+    steps:
+      - name: Summarize Windows requirement
+        shell: bash
+        run: |
+          required='${{ needs.windows-scope.outputs.required }}'
+          result='${{ needs.windows-canary.result }}'
+
+          if [ "$required" != "true" ]; then
+            echo "::notice::Windows canary not required for this diff."
+            exit 0
+          fi
+
+          if [ "$result" = "success" ]; then
+            echo "::notice::Windows canary passed."
+            exit 0
+          fi
+
+          echo "::error::Windows canary required but result was: $result"
+          exit 1
+
+  # ── Windows Full Guardrails: advisory / risk-triggered / nightly ─────
+  # The old broad Windows matrix. Runs on push to master, schedule,
+  # manual dispatch, and PRs that windows-scope flagged as full=true
+  # (workflow/toolchain/lockfile changes). Not a merge-gate dependency
+  # for normal PRs — the cheap Linux cross-target check + windows-canary
+  # cover the universal slow lane, and this lane catches the rest.
+  windows-full-guardrails:
+    name: Windows Full Guardrails (${{ matrix.lane.name }})
+    runs-on: windows-latest
+    timeout-minutes: 35
+    needs: [draft-pr-check, preflight-latest-check, windows-scope]
+    if: |
+      always()
+      && needs.draft-pr-check.outputs.run_ci == 'true'
+      && needs.preflight-latest-check.outputs.is_latest == 'true'
+      && (github.event_name != 'pull_request' || needs.windows-scope.outputs.full == 'true')
     strategy:
       fail-fast: false
       matrix:
@@ -728,7 +909,7 @@ jobs:
               --test module_resolution_use_require
           - name: sandbox-fail-closed
             command: >-
-              cargo test --locked -p perl-lsp-rs
+              cargo test --locked --lib -p perl-lsp-rs
               security::sandbox::tests::test_windows_sandbox_fails_closed
               -- --exact
     steps:
@@ -747,8 +928,8 @@ jobs:
         with:
           cache-on-failure: true
           cache-all-crates: true
-          shared-key: ci-windows-guardrails-${{ hashFiles('Cargo.lock') }}-${{ matrix.lane.name }}
+          shared-key: ci-windows-full-${{ hashFiles('Cargo.lock') }}-${{ matrix.lane.name }}
 
-      - name: Run Windows guardrail lane
+      - name: Run Windows full guardrail lane
         shell: bash
         run: ${{ matrix.lane.command }}
