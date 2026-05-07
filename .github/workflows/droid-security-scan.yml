@@ -1,43 +1,34 @@
-name: Droid Auto Review
-
-# External AI reviewer. Advisory: see policy/ci-lane-whitelist.toml entry
-# `droid_auto_review` and docs/ci/labels.md `ai-review`. The job runs on
-# ready_for_review credible PRs only (already filtered by `if:` below).
-#
-# The job is marked continue-on-error: true so that external-service
-# failures (rate limits, vendor outages) do not break unrelated CI signal
-# on the PR. Any review comments the action manages to post before failing
-# are still visible.
+name: Droid Security Scan
 
 on:
-  pull_request:
-    types: [opened, ready_for_review, reopened]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * 1"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: droid-security-scan-${{ github.repository }}
+  cancel-in-progress: false
 
 env:
   MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
 jobs:
-  droid-review:
-    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+  droid-security-scan:
     runs-on: ubuntu-latest
-    # Advisory lane: do not break PR signal on external-AI-review failures.
-    # See docs/ci/perl-lsp-rollout-plan.md PR 14.
-    continue-on-error: true
+
     permissions:
       contents: write
       pull-requests: write
       issues: write
       id-token: write
       actions: read
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 1
+
       - name: Configure MiniMax BYOK for Factory Droid
         shell: bash
         run: |
@@ -60,18 +51,16 @@ jobs:
             ]
           }
           JSON
-      - name: Run Droid Auto Review with MiniMax M2.7 BYOK
+
+      - name: Run Droid scheduled security scan
         uses: EffortlessMetrics/droid-action-safe@01e76b659e4b1e5f23feedc8cfabf8dc14c7485f # based on Factory-AI/droid-action v5; raw debug artifact upload disabled
         with:
           factory_api_key: ${{ secrets.FACTORY_API_KEY }}
           upload_debug_artifacts: false
-          automatic_review: true
-          automatic_security_review: true
-          review_depth: shallow
-          review_model: "custom:MiniMax-M2.7-0"
+          security_scan_schedule: true
+          security_scan_days: 7
           security_model: "custom:MiniMax-M2.7-0"
-          security_severity_threshold: high
+          security_severity_threshold: medium
           security_block_on_critical: true
           security_block_on_high: false
-          include_suggestions: true
           show_full_output: false
