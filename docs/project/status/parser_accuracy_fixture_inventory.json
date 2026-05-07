@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "commit": "92776cb39",
+  "commit": "3995cef76",
   "generated_by": "cargo xtask metrics parser-accuracy --export-status-receipts",
-  "fixture_count": 46,
+  "fixture_count": 47,
   "family_count": 28,
-  "scored_lines": 129,
-  "scored_symbols": 103,
+  "scored_lines": 131,
+  "scored_symbols": 106,
   "fixtures": [
     {
       "id": "package_basic",
@@ -479,6 +479,27 @@
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "provider_expectation_counts": {
+        "method_completion": 0,
+        "diagnostics": 0,
+        "navigation": 0
+      }
+    },
+    {
+      "id": "medium_method_call",
+      "family": "method_call",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/medium_method_call.pl",
+      "label_mode": "full",
+      "scored_lines": 2,
+      "scored_symbols": 3,
+      "fully_labeled_regions": 1,
+      "partial_labeled_regions": 0,
+      "unknown_regions": 0,
       "negative_regions": 0,
       "dynamic_boundaries": 0,
       "unsupported_constructs": 0,
