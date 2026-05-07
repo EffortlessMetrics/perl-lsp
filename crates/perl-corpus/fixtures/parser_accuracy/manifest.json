@@ -1590,6 +1590,46 @@
       }
     },
     {
+      "id": "method_decl",
+      "family": "method_decl",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/method_decl.pl",
+      "scored_lines": 1,
+      "scored_symbols": 1,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 2,
+          "expected_tags": [
+            "method_decl"
+          ]
+        }
+      ],
+      "symbol_expectations": {
+        "entities": [
+          {
+            "id": "method_decl_tick_entity",
+            "kind": "Method",
+            "canonical_name": "Accuracy::MethodDecl::tick",
+            "span_text": "method tick () { 1 }",
+            "package": "Accuracy::MethodDecl",
+            "scope": null,
+            "provenance": "ExactAst",
+            "confidence": "High"
+          }
+        ],
+        "occurrences": [],
+        "edges": []
+      }
+    },
+    {
       "id": "medium_method_call",
       "family": "method_call",
       "label_mode": "full",
