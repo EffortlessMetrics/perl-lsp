@@ -34,6 +34,21 @@ The receipt is registered as `memory-plateau` in
 cargo xtask gate-receipts validate target/memory/receipts/nightly-doc-churn.receipt.json
 ```
 
+## Trend Command
+
+Render the current plateau trend table from local plateau summaries, registered
+receipts, and the committed baseline:
+
+```bash
+cargo xtask memory-trends render \
+  --input-dir target/memory \
+  --output docs/project/status/memory_plateau_trends.md
+```
+
+Use `--history-dir <path>` to include archived receipt directories. The command
+is evidence-only: it does not run a memory workload or participate in PR gates
+unless a workflow invokes it explicitly.
+
 ## Interpretation Rules
 
 - Close-only churn may retain workspace-index entries for files that still exist.

@@ -59,6 +59,7 @@ pub mod inject_sha_assets;
 pub mod install_surface_check;
 pub mod intent_diff_gate;
 pub mod layer_check;
+pub mod memory_trends;
 pub mod merge_ready;
 pub mod methodology_gate;
 pub mod metrics;
