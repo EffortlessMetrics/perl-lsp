@@ -113,6 +113,7 @@
     "method_completion_provider::provider_method_completion::self_receiver_methods",
     "method_completion_provider::provider_method_completion::unknown_receiver_does_not_infer_exact_receiver",
     "missing_comma_list::line::1::PackageDecl",
+    "missing_comma_list::line::3::ParseError",
     "navigation_provider::provider_navigation::bare_call_goto",
     "navigation_provider::provider_navigation::document_symbol_spans",
     "navigation_provider::provider_navigation::imported_symbol_goto_and_hover",
@@ -215,7 +216,9 @@
     "typeglob_alias::symbol_occurrence::typeglob_alias_rhs_coderef",
     "unbalanced_bracket::line::1::PackageDecl",
     "unclosed_quote_like_operator::line::1::PackageDecl",
+    "unclosed_quote_like_operator::line::3::ParseError",
     "unclosed_regex::line::1::PackageDecl",
+    "unclosed_regex::line::3::ParseError",
     "unterminated_heredoc::line::1::PackageDecl"
   ]
 }
