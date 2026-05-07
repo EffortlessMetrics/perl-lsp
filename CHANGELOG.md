@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.4] - 2026-05-07
+
+Release notes: [v0.13.4](docs/releases/v0.13.4.md)
+
+### Fixed
+
+- **Known session-creep leaks across LSP caches** — Hover, text-sync,
+  workspace, stream-session, and workspace-index caches were retaining
+  per-session state past document close/delete lifecycle paths. Eviction is
+  now wired through, and retained-state regression tests lock the behavior.
+  (#8064)
+- **Stream sessions cancel across URI variants** — Stale inline-completion
+  stream sessions on `didChange` are cancelled even when the client mixes
+  canonical `file://` and `file://localhost` spellings for the same
+  document. Regression covers both spellings.
+- **Regex embedded code annotated, not rejected** — The parser now
+  annotates embedded code inside regex constructs instead of failing the
+  parse. (#8056)
+- **Status pipeline regeneration** — Parser-accuracy artifact is now
+  bootstrapped before regeneration (#8069) and quality counts are parsed
+  from external target dirs (#8068), so `docs/project/status/*.md`
+  reflects reality after out-of-tree CI runs.
+- **Stricter VS Code extension lint** — Cleared lint failures from the
+  upgraded TypeScript and `@types/vscode` toolchain. (#8065)
+
+### Added
+
+- **Class::Tiny and Class::Tiny::RW OO framework support** — Full
+  semantic analysis for the Class::Tiny family across both the
+  `ClassModelBuilder` and `SymbolExtractor` pipelines. `use Class::Tiny
+  qw(name email)` and bare `has 'name';` declarations now produce
+  accessor symbols so go-to-definition, hover, and workspace symbol
+  search work for Class::Tiny accessors. (#8062)
+- **LSP churn plateau guardrails** — New `memory_plateau.json` receipt,
+  nightly + PR CI gates, `scripts/repro_lsp_storm.py` reproducer, and
+  `scripts/assert_rss_plateau.py` plateau assertion. Documented in
+  `docs/large-workspaces/LSP_CHURN_REPRO.md` and a new
+  `RETAINED_STATE_INVENTORY.md` cataloguing every retained cache, its
+  owner, and its eviction rule. Runtime pressure counters expose async
+  task/debounce/session pressure, and diagnostics churn now has direct
+  retained-state coverage. (#8072, #8076, #8088, #8115)
+- **Governed clippy lint policy gate** — New CI gate enforcing the
+  `policy/clippy-lints.toml` allowlist. (#8066)
+- **Parser coverage risk map and baseline.** (#8005)
+
+### Changed
+
+- **MSRV bumped to Rust 1.93.1** — Toolchain pins, CI matrix, clippy
+  policy, `clippy.toml`, and `rust-toolchain.toml` aligned. (#7832)
+- **Decoupled `perl-semantic-analyzer` from `perl-workspace`** —
+  Removed direct coupling; analyzer no longer reaches into workspace
+  internals. (#7962)
+- **Internal refactor wave (non-user-visible)** — Hover receiver
+  package resolver extracted (#8045); execute-command test-runner
+  fallback split into helpers (#8046); completion provider
+  construction helpers extracted (#8044); call-hierarchy subroutine
+  item builder extracted (#8043); refactor-plan contract skeleton
+  added to `perl-refactoring` (#7983).
+- **Centralized VS Marketplace install badge count.** (#8049)
+- **Dependency bumps** — `actions/upload-artifact` 4 → 7 (#7914),
+  `actions/checkout` 4 → 6 (#7915), `actions/cache` 4 → 5 (#7916),
+  `@types/vscode` (#7912), TypeScript group (#7911).
+- Prepared the `v0.13.4` public-alpha patch train with workspace, crate,
+  feature catalog, and VS Code extension version surfaces aligned.
+
 ## [0.13.3] - 2026-05-03
 
 Release notes: [v0.13.3](docs/releases/v0.13.3.md)

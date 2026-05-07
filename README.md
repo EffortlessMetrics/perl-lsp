@@ -20,7 +20,7 @@
 
 <p align="center">
   <a href="https://codecov.io/gh/EffortlessMetrics/perl-lsp"><img src="https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg" alt="code coverage" /></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/MSRV-1.92-blue" alt="MSRV" /></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/MSRV-1.93-blue" alt="MSRV" /></a>
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg" alt="License: MIT OR Apache-2.0" /></a>
 </p>
 
@@ -40,7 +40,7 @@ These are behavioral and corpus-backed signals, not feature-inventory counts. Pr
 
 | Area | Current signal |
 |---|---:|
-| Release track | `v0.13.3` public-alpha patch |
+| Release track | `v0.13.4` public-alpha patch |
 | Published crate surface | 31 crates in `[workspace.metadata.publish.allow]` |
 | Ubuntu system Perl corpus | 94.5% clean (`2825/2990`) |
 | CPAN top 1000 corpus | 95.3% clean (`8931/9372`) |
