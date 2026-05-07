@@ -8,6 +8,12 @@ use perl_parser_core::parser::Parser;
 use ropey::Rope;
 use std::ops::Range;
 
+pub(crate) struct SingleEditReparse {
+    pub(crate) range: Range<usize>,
+    pub(crate) reused_tokens: usize,
+    pub(crate) token_count: usize,
+}
+
 pub(crate) fn apply_text_edit_to_state(state: &mut IncrementalState, edit: &Edit) -> Result<()> {
     let old_end = edit.old_end_byte.min(state.source.len());
     let start = edit.start_byte.min(state.source.len());
@@ -27,7 +33,10 @@ pub(crate) fn apply_text_edit_to_state(state: &mut IncrementalState, edit: &Edit
     Ok(())
 }
 
-pub(crate) fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<usize>> {
+pub(crate) fn apply_single_edit(
+    state: &mut IncrementalState,
+    edit: &Edit,
+) -> Result<SingleEditReparse> {
     let Some(cp) = state.find_lex_checkpoint(edit.start_byte).copied() else {
         apply_text_edit_to_state(state, edit)?;
         anyhow::bail!("No checkpoint found");
@@ -85,6 +94,7 @@ pub(crate) fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Re
             new_tokens.push(token);
         }
     }
+    let reused_tokens = if synced { state.tokens.len().saturating_sub(sync_old_idx) } else { 0 };
     if synced {
         for old_tok in &state.tokens[sync_old_idx..] {
             let mut adjusted = old_tok.clone();
@@ -96,7 +106,7 @@ pub(crate) fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Re
     }
     state.tokens.splice(start_idx.., new_tokens);
     state.lex_checkpoints = create_lex_checkpoints(&state.tokens, &state.line_index);
-    Ok(cp.byte..last)
+    Ok(SingleEditReparse { range: cp.byte..last, reused_tokens, token_count: state.tokens.len() })
 }
 
 pub(crate) fn full_reparse(state: &mut IncrementalState) -> Result<ReparseResult> {
@@ -130,5 +140,7 @@ pub(crate) fn full_reparse(state: &mut IncrementalState) -> Result<ReparseResult
         changed_ranges: vec![0..state.source.len()],
         diagnostics: vec![],
         reparsed_bytes: state.source.len(),
+        reused_tokens: 0,
+        token_count: state.tokens.len(),
     })
 }

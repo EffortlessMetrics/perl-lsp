@@ -864,6 +864,7 @@ struct IncrementalScore {
     unchanged_file_skip_count: u64,
     unchanged_file_index_attempt_count: u64,
     reparse_byte_ratios: Vec<f64>,
+    reused_token_ratios: Vec<f64>,
     reused_node_ratios: Vec<f64>,
     changed_range_sample_count: u64,
     changed_range_correct_count: u64,
@@ -1736,6 +1737,7 @@ struct IncrementalExpectationResult {
     checkpoint_hit_count: u64,
     checkpoint_miss_count: u64,
     reparse_byte_ratio: Option<f64>,
+    reused_token_ratio: Option<f64>,
     reused_node_ratio: Option<f64>,
     changed_range_correct: Option<bool>,
 }
@@ -1778,6 +1780,9 @@ fn score_incremental_expectation(
     if let Some(value) = result.reparse_byte_ratio {
         score.reparse_byte_ratios.push(value);
     }
+    if let Some(value) = result.reused_token_ratio {
+        score.reused_token_ratios.push(value);
+    }
     if let Some(value) = result.reused_node_ratio {
         score.reused_node_ratios.push(value);
     }
@@ -1817,6 +1822,7 @@ fn run_incremental_expectation(
         checkpoint_hit_count: apply_result.checkpoint_hit_count,
         checkpoint_miss_count: apply_result.checkpoint_miss_count,
         reparse_byte_ratio: apply_result.reparse_byte_ratio,
+        reused_token_ratio: apply_result.reused_token_ratio,
         reused_node_ratio,
         changed_range_correct: apply_result.changed_range_correct,
     })
@@ -1838,6 +1844,7 @@ struct IncrementalApplyResult {
     checkpoint_hit_count: u64,
     checkpoint_miss_count: u64,
     reparse_byte_ratio: Option<f64>,
+    reused_token_ratio: Option<f64>,
     changed_range_correct: Option<bool>,
 }
 
@@ -1849,6 +1856,8 @@ fn run_incremental_apply_path(
     let expected_source = apply_resolved_edits(source, resolved_edits)?;
     let mut result = IncrementalApplyResult::default();
     let mut total_reparsed_bytes = 0usize;
+    let mut total_reused_tokens = 0usize;
+    let mut total_tokens = 0usize;
     let mut changed_ranges_cover_edits = true;
 
     for edit in resolved_edits {
@@ -1873,6 +1882,8 @@ fn run_incremental_apply_path(
             result.fallback_used = true;
         }
         total_reparsed_bytes += reparse.reparsed_bytes;
+        total_reused_tokens += reparse.reused_tokens;
+        total_tokens += reparse.token_count;
         let expected_range = edit.start_byte..edit.new_end_byte;
         changed_ranges_cover_edits &= reparse
             .changed_ranges
@@ -1886,6 +1897,9 @@ fn run_incremental_apply_path(
     }
     if !state.source.is_empty() {
         result.reparse_byte_ratio = Some(total_reparsed_bytes as f64 / state.source.len() as f64);
+    }
+    if total_tokens > 0 {
+        result.reused_token_ratio = Some(total_reused_tokens as f64 / total_tokens as f64);
     }
     Ok(result)
 }
@@ -4484,9 +4498,12 @@ fn incremental_metrics(score: &IncrementalScore, cadence: Cadence) -> Vec<Metric
             "no incremental reparse byte samples are available",
             cadence,
         ),
-        insufficient(
+        optional_measured_value(
             "incremental_reused_token_ratio",
-            "incremental reparse result does not report token reuse yet",
+            mean_f64(&score.reused_token_ratios),
+            score.reused_token_ratios.len() as u64,
+            "no incremental token reuse samples are available",
+            cadence,
         ),
         optional_measured_value(
             "incremental_reused_node_ratio",
@@ -7913,11 +7930,13 @@ sub dynamic_boundary_case {
         assert_eq!(score.checkpoint_hit_count, 1);
         assert_eq!(score.checkpoint_miss_count, 0);
         assert_eq!(score.reparse_byte_ratios.len(), 1);
+        assert_eq!(score.reused_token_ratios.len(), 1);
+        assert!(score.reused_token_ratios[0] > 0.0);
         assert_eq!(score.reused_node_ratios.len(), 1);
     }
 
     #[test]
-    fn incremental_metrics_emit_equivalence_rows_and_token_reuse_gap() {
+    fn incremental_metrics_emit_equivalence_and_reuse_rows() {
         let score = IncrementalScore {
             expectation_count: 1,
             full_parse_equivalent_count: 1,
@@ -7925,6 +7944,7 @@ sub dynamic_boundary_case {
             no_panic_count: 1,
             checkpoint_hit_count: 1,
             reparse_byte_ratios: vec![0.25],
+            reused_token_ratios: vec![0.5],
             reused_node_ratios: vec![0.75],
             changed_range_sample_count: 1,
             changed_range_correct_count: 1,
@@ -7944,8 +7964,9 @@ sub dynamic_boundary_case {
         assert!(metrics.iter().any(|metric| {
             matches!(
                 metric,
-                MetricRow::InsufficientData { metric, sample_count: 0, .. }
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
                     if metric == "incremental_reused_token_ratio"
+                        && (*value - 0.5).abs() < f64::EPSILON
             )
         }));
     }

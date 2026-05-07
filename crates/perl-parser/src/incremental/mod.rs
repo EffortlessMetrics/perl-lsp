@@ -52,16 +52,18 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
             return full_reparse(state);
         }
 
-        let reparsed_range = match apply_single_edit(state, edit) {
-            Ok(range) => range,
+        let reparse = match apply_single_edit(state, edit) {
+            Ok(reparse) => reparse,
             Err(_) => return full_reparse(state),
         };
-        let reparsed_bytes = reparsed_range.end - reparsed_range.start;
+        let reparsed_bytes = reparse.range.end - reparse.range.start;
 
         Ok(ReparseResult {
-            changed_ranges: vec![reparsed_range],
+            changed_ranges: vec![reparse.range],
             diagnostics: vec![],
             reparsed_bytes,
+            reused_tokens: reparse.reused_tokens,
+            token_count: reparse.token_count,
         })
     } else {
         for edit in sorted_edits {

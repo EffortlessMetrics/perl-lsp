@@ -20,7 +20,8 @@ fn test_incremental_state_small_edit_uses_checkpoint() -> Result<()> {
     let doc_len = source.len();
     let mut state = IncrementalState::new(source.clone());
     assert!(state.lex_checkpoints.len() > 1);
-    let edit_start = source.rfind("29;").unwrap_or(source.len() - 3);
+    let edit_start =
+        source.find("10;").ok_or_else(|| anyhow::anyhow!("test source is missing edit target"))?;
     let edit = Edit {
         start_byte: edit_start,
         old_end_byte: edit_start + 2,
@@ -29,6 +30,9 @@ fn test_incremental_state_small_edit_uses_checkpoint() -> Result<()> {
     };
     let result = apply_edits(&mut state, &[edit])?;
     assert!(result.reparsed_bytes < doc_len);
+    assert!(result.token_count > 0);
+    assert!(result.reused_tokens > 0);
+    assert!(result.reused_tokens <= result.token_count);
     Ok(())
 }
 
