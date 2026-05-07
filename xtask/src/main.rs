@@ -1805,6 +1805,17 @@ enum DevexCommand {
         #[arg(long, default_value = "origin/master")]
         base: String,
     },
+
+    /// Emit a JSON receipt for the current local proof plan.
+    Receipt {
+        /// Git base ref used for changed-file detection.
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+
+        /// Output path for the JSON receipt.
+        #[arg(long, default_value = "target/devex/local-proof.json")]
+        output: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1996,6 +2007,9 @@ fn main() -> Result<()> {
         Commands::DevexDoctor => devex_doctor::run(),
         Commands::Devex { command } => match command {
             DevexCommand::Plan { base } => devex_plan::run(devex_plan::DevexPlanConfig { base }),
+            DevexCommand::Receipt { base, output } => {
+                devex_plan::write_receipt(devex_plan::DevexReceiptConfig { base, output })
+            }
         },
         Commands::ParseRust { source, sexp, ast, bench } => {
             parse_rust::run(source, sexp, ast, bench)
