@@ -141,6 +141,7 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
           shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
       - name: Warm xtask
         run: cargo build -p xtask --locked
@@ -248,6 +249,7 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
           shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
       - name: Warm xtask
         run: cargo build -p xtask --locked
@@ -474,6 +476,7 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
           shared-key: ci-ux-tests-${{ hashFiles('Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
       - name: Build perl-lsp binary
         run: cargo build -p perl-lsp-rs
@@ -598,6 +601,7 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
           shared-key: ci-all-targets-${{ hashFiles('Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
       - name: Compile all targets (catches integration-test + bench bit-rot)
         run: just check-all-targets
@@ -625,6 +629,7 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
           shared-key: ci-lsp-memory-${{ hashFiles('Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
       - name: Build perl-lsp release binary
         run: cargo build --release -p perl-lsp-rs --bin perl-lsp --locked
@@ -908,6 +913,7 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
           shared-key: ci-windows-full-${{ hashFiles('Cargo.lock') }}-${{ matrix.lane.name }}
+          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
       - name: Run Windows full guardrail lane
         shell: bash

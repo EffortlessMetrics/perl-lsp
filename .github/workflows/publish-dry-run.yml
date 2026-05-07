@@ -55,6 +55,7 @@ jobs:
         with:
           cache-on-failure: true
           cache-all-crates: true
+          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
       - name: Run publish-topo unit tests
         run: python3 scripts/tests/test-publish-topo.py -v

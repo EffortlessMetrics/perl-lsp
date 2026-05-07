@@ -65,6 +65,7 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
           shared-key: ux-gate-${{ hashFiles('Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
       - name: Install system dependencies (perl, perltidy, perlcritic)
         run: |
