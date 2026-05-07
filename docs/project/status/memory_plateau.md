@@ -49,6 +49,15 @@ Use `--history-dir <path>` to include archived receipt directories. The command
 is evidence-only: it does not run a memory workload or participate in PR gates
 unless a workflow invokes it explicitly.
 
+## Failure Triage
+
+When a plateau gate fails, file a **Memory Regression** issue and include the
+plateau JSON/CSV/server log artifact, `tail_growth_kb`,
+`median_tail_slope_kb_per_file`, lifecycle (`close-only`, `close+delete`, or
+another named scenario), nonzero `MemoryStateSnapshot` or
+`RuntimePressureSnapshot` counters, and suspected state owner. Patch work should
+start from a narrow failing regression, not from a broad leak hunt.
+
 ## Interpretation Rules
 
 - Close-only churn may retain workspace-index entries for files that still exist.

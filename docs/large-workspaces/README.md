@@ -12,6 +12,10 @@ Perl workspaces (5 000–10 000+ files).
 | [LSP_CHURN_REPRO.md](LSP_CHURN_REPRO.md) | Reproducing open/change/close RSS churn and checking plateau behavior |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Diagnosing slowdowns, stale symbols, index degradation |
 
+Memory plateau or retained-state regressions should be filed with the
+**Memory Regression** issue template so the report includes the receipt,
+counter, lifecycle, and suspected owner evidence needed for triage.
+
 ## Quick Reference
 
 ```bash
