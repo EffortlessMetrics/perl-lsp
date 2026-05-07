@@ -35,7 +35,7 @@ use perl_parser::{
     Edit as TextEdit, IncrementalState, Node, NodeKind, ParseError, Parser, PositionMapper,
     TokenKind, TokenStream,
 };
-use perl_semantic_facts::{AnchorFact, AnchorId, EntityFact, EntityId, EntityKind};
+use perl_semantic_facts::{AnchorFact, AnchorId, EntityFact, EntityId, EntityKind, Provenance};
 use perl_workspace::position::Range;
 use perl_workspace::semantic::queries::QueryContext;
 use perl_workspace::workspace::document_store::DocumentStore;
@@ -3765,29 +3765,30 @@ fn symbol_predictions_from_shard(source: &str, shard: &FileFactShard) -> SymbolP
         })
         .collect();
 
-    let occurrences = shard
-        .occurrences
-        .iter()
-        .map(|occurrence| {
-            let anchor = anchors_by_id.get(&occurrence.anchor_id);
-            if let Some(anchor) = anchor {
-                safety_spans.insert(symbol_span_location(source, anchor));
-            }
-            let canonical_name = occurrence
-                .entity_id
-                .and_then(|entity_id| entities_by_id.get(&entity_id))
-                .map(|entity| entity.canonical_name.clone());
-            SymbolOccurrenceKey {
-                kind: format!("{:?}", occurrence.kind),
-                package: canonical_name.as_deref().and_then(package_from_name),
-                canonical_name,
-                span_text: anchor.map(|anchor| anchor_text(source, anchor)).unwrap_or_default(),
-                scope: occurrence.scope_id.map(|scope| scope.0.to_string()),
-                provenance: format!("{:?}", occurrence.provenance),
-                confidence: format!("{:?}", occurrence.confidence),
-            }
-        })
-        .collect();
+    let mut occurrences = BTreeSet::new();
+    for occurrence in &shard.occurrences {
+        let anchor = anchors_by_id.get(&occurrence.anchor_id);
+        if let Some(anchor) = anchor {
+            safety_spans.insert(symbol_span_location(source, anchor));
+        }
+        let canonical_name = occurrence
+            .entity_id
+            .and_then(|entity_id| entities_by_id.get(&entity_id))
+            .map(|entity| entity.canonical_name.clone());
+        let key = SymbolOccurrenceKey {
+            kind: format!("{:?}", occurrence.kind),
+            package: canonical_name.as_deref().and_then(package_from_name),
+            canonical_name,
+            span_text: anchor.map(|anchor| anchor_text(source, anchor)).unwrap_or_default(),
+            scope: occurrence.scope_id.map(|scope| scope.0.to_string()),
+            provenance: format!("{:?}", occurrence.provenance),
+            confidence: format!("{:?}", occurrence.confidence),
+        };
+        occurrences.insert(key.clone());
+        if occurrence.provenance == Provenance::DynamicBoundary {
+            occurrences.insert(SymbolOccurrenceKey { kind: "DynamicBoundary".to_string(), ..key });
+        }
+    }
 
     let edges = shard
         .edges
