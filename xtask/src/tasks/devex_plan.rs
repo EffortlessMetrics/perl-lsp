@@ -1,16 +1,26 @@
 //! Diff-aware DevEx proof planner.
 
 use std::collections::BTreeSet;
+use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 
+use chrono::Utc;
 use color_eyre::eyre::{Context, Result, bail};
+use serde::Serialize;
 
 use crate::utils::project_root;
 
 #[derive(Debug, Clone)]
 pub struct DevexPlanConfig {
     pub base: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct DevexReceiptConfig {
+    pub base: String,
+    pub output: PathBuf,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -38,6 +48,19 @@ impl Surface {
             Self::Docs => "docs/prose",
         }
     }
+
+    fn id(&self) -> &'static str {
+        match self {
+            Self::ParserAccuracy => "parser_accuracy",
+            Self::GeneratedStatusDocs => "generated_status_docs",
+            Self::MemorySensitiveRuntime => "memory_sensitive_runtime",
+            Self::RetainedOwnerCandidate => "retained_owner_candidate",
+            Self::ReleaseVersion => "release_version",
+            Self::PolicyOrCi => "policy_ci",
+            Self::RustCode => "rust_code",
+            Self::Docs => "docs",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -58,14 +81,52 @@ struct ProofCommand {
     evidence: String,
 }
 
+#[derive(Debug, Serialize)]
+struct DevexReceipt {
+    base: String,
+    head: String,
+    changed_files: Vec<String>,
+    changed_surfaces: Vec<String>,
+    required_proof: Vec<ProofCommandReceipt>,
+    optional_proof: Vec<ProofCommandReceipt>,
+    agent_hints: Vec<String>,
+    worktree_clean: bool,
+    generated_at: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ProofCommandReceipt {
+    command: String,
+    why: String,
+    evidence: String,
+}
+
 pub fn run(config: DevexPlanConfig) -> Result<()> {
-    let root = project_root()?;
-    let base = resolve_diff_base(&root, &config.base)?;
-    let changed_files = changed_files(&root, &base)?;
-    let head = git_stdout(&root, &["rev-parse", "--short", "HEAD"])?;
-    let plan = build_plan(base, head, changed_files);
+    let plan = load_plan(&config.base)?;
     print_plan(&plan);
     Ok(())
+}
+
+pub fn write_receipt(config: DevexReceiptConfig) -> Result<()> {
+    let root = project_root()?;
+    let plan = load_plan_from_root(&root, &config.base)?;
+    let receipt = build_receipt(&root, plan)?;
+    write_receipt_json(&config.output, &receipt)?;
+
+    println!("Wrote DevEx local proof receipt to {}", config.output.display());
+    Ok(())
+}
+
+fn load_plan(requested_base: &str) -> Result<Plan> {
+    let root = project_root()?;
+    load_plan_from_root(&root, requested_base)
+}
+
+fn load_plan_from_root(root: &Path, requested_base: &str) -> Result<Plan> {
+    let base = resolve_diff_base(root, requested_base)?;
+    let changed_files = changed_files(root, &base)?;
+    let head = git_stdout(root, &["rev-parse", "HEAD"])?;
+    Ok(build_plan(base, head.trim().to_string(), changed_files))
 }
 
 fn resolve_diff_base(root: &Path, requested_base: &str) -> Result<String> {
@@ -113,6 +174,10 @@ fn git_stdout(root: &Path, args: &[&str]) -> Result<String> {
     String::from_utf8(output.stdout).context("git output was not UTF-8")
 }
 
+fn is_worktree_clean(root: &Path) -> Result<bool> {
+    Ok(git_stdout(root, &["status", "--porcelain"])?.trim().is_empty())
+}
+
 fn build_plan(base: String, head: String, changed_files: Vec<String>) -> Plan {
     let surfaces = classify_surfaces(&changed_files);
     let required_commands = required_commands(&surfaces, &base);
@@ -120,6 +185,52 @@ fn build_plan(base: String, head: String, changed_files: Vec<String>) -> Plan {
     let agent_hints = agent_hints(&surfaces);
 
     Plan { base, head, changed_files, surfaces, required_commands, optional_commands, agent_hints }
+}
+
+fn build_receipt(root: &Path, plan: Plan) -> Result<DevexReceipt> {
+    build_receipt_payload(plan, is_worktree_clean(root)?, Utc::now().to_rfc3339())
+}
+
+fn build_receipt_payload(
+    plan: Plan,
+    worktree_clean: bool,
+    generated_at: String,
+) -> Result<DevexReceipt> {
+    Ok(DevexReceipt {
+        base: plan.base,
+        head: plan.head,
+        changed_files: plan.changed_files,
+        changed_surfaces: plan.surfaces.iter().map(|surface| surface.id().to_string()).collect(),
+        required_proof: proof_receipts(plan.required_commands),
+        optional_proof: proof_receipts(plan.optional_commands),
+        agent_hints: plan.agent_hints,
+        worktree_clean,
+        generated_at,
+    })
+}
+
+fn proof_receipts(commands: Vec<ProofCommand>) -> Vec<ProofCommandReceipt> {
+    commands
+        .into_iter()
+        .map(|proof| ProofCommandReceipt {
+            command: proof.command,
+            why: proof.why,
+            evidence: proof.evidence,
+        })
+        .collect()
+}
+
+fn write_receipt_json(path: &Path, receipt: &DevexReceipt) -> Result<()> {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("creating receipt directory {}", parent.display()))?;
+    }
+
+    let rendered = serde_json::to_string_pretty(receipt).context("serializing devex receipt")?;
+    fs::write(path, format!("{rendered}\n"))
+        .with_context(|| format!("writing devex receipt {}", path.display()))
 }
 
 fn merge_changed_file_lists(lists: &[&str]) -> Vec<String> {
@@ -486,5 +597,39 @@ mod tests {
                 "xtask/src/tasks/devex_receipt.rs".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn receipt_serializes_plan_with_machine_readable_surfaces() {
+        let plan = build_plan(
+            "origin/master".to_string(),
+            "abcdef1234567890".to_string(),
+            strings(&[
+                "docs/project/status/parser.md",
+                "crates/perl-lsp-rs/src/runtime/text_sync.rs",
+                "CHANGELOG.md",
+            ]),
+        );
+
+        let receipt =
+            build_receipt_payload(plan, true, "2026-05-07T12:00:00Z".to_string()).unwrap();
+        let value = serde_json::to_value(&receipt).expect("receipt should serialize");
+
+        assert_eq!(value["base"], "origin/master");
+        assert_eq!(value["head"], "abcdef1234567890");
+        assert_eq!(value["worktree_clean"], true);
+        assert_eq!(value["generated_at"], "2026-05-07T12:00:00Z");
+        let surfaces = value["changed_surfaces"].as_array().expect("surfaces array");
+        assert!(surfaces.iter().any(|surface| surface == "generated_status_docs"));
+        assert!(surfaces.iter().any(|surface| surface == "memory_sensitive_runtime"));
+        assert!(surfaces.iter().any(|surface| surface == "retained_owner_candidate"));
+        assert!(surfaces.iter().any(|surface| surface == "release_version"));
+
+        let required = value["required_proof"].as_array().expect("required proof array");
+        assert!(required.iter().any(|proof| {
+            proof["command"] == "cargo xtask check-memory-lifecycle-policy"
+                && proof["why"].as_str().is_some_and(|why| !why.is_empty())
+                && proof["evidence"].as_str().is_some_and(|evidence| !evidence.is_empty())
+        }));
     }
 }
