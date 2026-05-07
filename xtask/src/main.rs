@@ -1827,6 +1827,17 @@ enum DevexCommand {
         #[arg(long, default_value = "target/devex/local-proof.json")]
         receipt: PathBuf,
     },
+
+    /// Print a paste-ready PR proof packet for the current diff.
+    PrBody {
+        /// Git base ref used for changed-file detection.
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+
+        /// Receipt path referenced by the generated PR body.
+        #[arg(long, default_value = "target/devex/local-proof.json")]
+        receipt: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2023,6 +2034,9 @@ fn main() -> Result<()> {
             }
             DevexCommand::Cockpit { base, receipt } => {
                 devex_plan::cockpit(devex_plan::DevexCockpitConfig { base, receipt })
+            }
+            DevexCommand::PrBody { base, receipt } => {
+                devex_plan::pr_body(devex_plan::DevexPrBodyConfig { base, receipt })
             }
         },
         Commands::ParseRust { source, sexp, ast, bench } => {

@@ -29,6 +29,12 @@ pub struct DevexCockpitConfig {
     pub receipt: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+pub struct DevexPrBodyConfig {
+    pub base: String,
+    pub receipt: PathBuf,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 enum Surface {
     ParserAccuracy,
@@ -148,6 +154,12 @@ pub fn cockpit(config: DevexCockpitConfig) -> Result<()> {
             receipt_path: &config.receipt,
         })
     );
+    Ok(())
+}
+
+pub fn pr_body(config: DevexPrBodyConfig) -> Result<()> {
+    let plan = load_plan(&config.base)?;
+    print!("{}", render_pr_body(PrBodyView { plan: &plan, receipt_path: &config.receipt }));
     Ok(())
 }
 
@@ -366,6 +378,66 @@ fn render_cockpit(view: CockpitView<'_>) -> String {
         view.receipt_path.display()
     ));
     out
+}
+
+struct PrBodyView<'a> {
+    plan: &'a Plan,
+    receipt_path: &'a Path,
+}
+
+fn render_pr_body(view: PrBodyView<'_>) -> String {
+    let surfaces = surface_ids(view.plan);
+    let mut out = String::new();
+    out.push_str("## Proof packet\n\n");
+    out.push_str("Changed surfaces:\n");
+    if surfaces.is_empty() {
+        out.push_str("- none\n");
+    } else {
+        for surface in &surfaces {
+            out.push_str(&format!("- {surface}\n"));
+        }
+    }
+    out.push('\n');
+
+    out.push_str("Required proof:\n");
+    render_pr_body_proof_commands(&mut out, &view.plan.required_commands, true);
+    out.push('\n');
+
+    out.push_str("Optional proof:\n");
+    render_pr_body_proof_commands(&mut out, &view.plan.optional_commands, false);
+    out.push('\n');
+
+    if !view.plan.agent_hints.is_empty() {
+        out.push_str("Agent hints:\n");
+        for hint in &view.plan.agent_hints {
+            out.push_str(&format!("- {hint}\n"));
+        }
+        out.push('\n');
+    }
+
+    out.push_str("Receipt:\n");
+    out.push_str(&format!("- {}\n", view.receipt_path.display()));
+    out
+}
+
+fn render_pr_body_proof_commands(
+    out: &mut String,
+    commands: &[ProofCommand],
+    include_details: bool,
+) {
+    if commands.is_empty() {
+        out.push_str("- none\n");
+        return;
+    }
+
+    for proof in commands {
+        out.push_str(&format!("- [ ] {}\n", proof.command));
+        if include_details {
+            out.push_str(&format!("  - why: {}\n", proof.why));
+            out.push_str(&format!("  - evidence: {}\n", proof.evidence));
+        }
+        out.push('\n');
+    }
 }
 
 fn yes_no(value: bool) -> &'static str {
@@ -826,5 +898,40 @@ mod tests {
         assert!(rendered.contains("Agent-safe path:       available"));
         assert!(rendered.contains("Receipt written:       target/devex/local-proof.json"));
         assert!(rendered.contains("Next:"));
+    }
+
+    #[test]
+    fn pr_body_renders_paste_ready_proof_packet() {
+        let plan = build_plan(
+            "origin/master".to_string(),
+            "abcdef1234567890".to_string(),
+            strings(&[
+                "docs/project/status/parser.md",
+                "crates/perl-lsp-rs/src/runtime/text_sync.rs",
+                "CHANGELOG.md",
+            ]),
+        );
+
+        let rendered = render_pr_body(PrBodyView {
+            plan: &plan,
+            receipt_path: Path::new("target/devex/local-proof.json"),
+        });
+
+        assert!(rendered.starts_with("## Proof packet"));
+        assert!(rendered.contains("Changed surfaces:"));
+        assert!(rendered.contains("- parser_accuracy"));
+        assert!(rendered.contains("- generated_status_docs"));
+        assert!(rendered.contains("- memory_sensitive_runtime"));
+        assert!(rendered.contains("Required proof:"));
+        assert!(rendered.contains("- [ ] cargo xtask fmt"));
+        assert!(rendered.contains("- [ ] just ci-metrics-ratchet-check parser_accuracy"));
+        assert!(rendered.contains("- [ ] cargo xtask check-memory-lifecycle-policy"));
+        assert!(rendered.contains("  - why: "));
+        assert!(rendered.contains("  - evidence: "));
+        assert!(rendered.contains("Optional proof:"));
+        assert!(rendered.contains("- [ ] just pr-fast"));
+        assert!(rendered.contains("Agent hints:"));
+        assert!(rendered.contains("Receipt:"));
+        assert!(rendered.contains("- target/devex/local-proof.json"));
     }
 }
