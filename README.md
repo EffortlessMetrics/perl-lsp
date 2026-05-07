@@ -52,6 +52,7 @@ These are behavioral and corpus-backed signals, not feature-inventory counts. Pr
 | Issue-regression UX workflows | 13 workflows tracked |
 | Workspace stale-index defects | 0 / 7 tested scenarios |
 | Multi-root workspace tests | 8 / 8 |
+| Memory-control closeout | Known retained-state/session-creep class closed with guardrails ([closeout](docs/large-workspaces/MEMORY_CONTROL_CLOSEOUT.md)) |
 
 See [project status](docs/project/status/index.md), [parser status](docs/project/status/parser.md), [workspace status](docs/project/status/workspace.md), and [quality metrics](docs/project/status/quality.md) for generated details.
 

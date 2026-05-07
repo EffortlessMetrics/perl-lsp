@@ -48,6 +48,13 @@ Release notes: [v0.13.4](docs/releases/v0.13.4.md)
   owner, and its eviction rule. Runtime pressure counters expose async
   task/debounce/session pressure, and diagnostics churn now has direct
   retained-state coverage. (#8072, #8076, #8088, #8115)
+- **Memory-control closeout** — Long-session retained-state memory behavior
+  is now covered by lifecycle cleanup, runtime pressure counters, plateau
+  receipts, trend rendering, focused subsystem regressions, and
+  retained-state inventory policy. This closes the known retained-state /
+  session-creep class and adds guardrails against recurrence, without
+  claiming every possible memory issue is fixed. See
+  [MEMORY_CONTROL_CLOSEOUT.md](docs/large-workspaces/MEMORY_CONTROL_CLOSEOUT.md).
 - **Governed clippy lint policy gate** — New CI gate enforcing the
   `policy/clippy-lints.toml` allowlist. (#8066)
 - **Parser coverage risk map and baseline.** (#8005)
