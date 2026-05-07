@@ -978,11 +978,7 @@ fn scenario_14_include_path_missing_module_completion_consistency() {
     harness.assert_no_crash();
 }
 
-// FIXME(#7570): SystemModule appears in completion BEFORE the useSystemInc
-// opt-in when PERL5LIB is set — the PERL5LIB completion source is not gated
-// on the opt-in. Tracked in #7570; ignored to unblock master CI Gate.
 #[test]
-#[ignore = "FIXME(#7570): PERL5LIB completion not gated on useSystemInc opt-in"]
 fn scenario_14_system_inc_completion_opt_in_enabled() {
     if !binary_available() {
         eprintln!(
@@ -1016,10 +1012,6 @@ fn scenario_14_system_inc_completion_opt_in_enabled() {
     let after = harness.completion("fixture.pl", 2, 7).expect("completion after opt-in");
     let after_has_system_module = completion_has_module(&after, "SystemModule");
 
-    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
-    let def_resolves = !defs.is_empty();
-    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
-
     assert!(
         !before_has_system_module,
         "Expected SystemModule to be absent from completion before useSystemInc opt-in; labels={:?}",
@@ -1030,6 +1022,16 @@ fn scenario_14_system_inc_completion_opt_in_enabled() {
         "Expected SystemModule in completion after useSystemInc opt-in; labels={:?}",
         completion_labels(&after)
     );
+
+    harness
+        .change_file_full("fixture.pl", "use strict;\nuse warnings;\nuse SystemModule;\n")
+        .expect("didChange to completed module should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+
+    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
+    let def_resolves = !defs.is_empty();
+    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
+
     assert!(
         def_resolves,
         "Expected goto-definition to resolve SystemModule after opt-in; defs={:?}",

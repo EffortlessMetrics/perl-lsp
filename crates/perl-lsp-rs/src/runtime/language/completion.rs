@@ -41,6 +41,19 @@ fn get_snippet_simple_regex() -> Option<&'static Regex> {
     SNIPPET_SIMPLE_RE.get_or_init(|| Regex::new(r"\$\d+")).as_ref().ok()
 }
 
+fn perl5lib_paths_for_completion(
+    config: &perl_lsp_rs_core::config::WorkspaceConfig,
+    perl5lib_value: Option<&str>,
+) -> Vec<String> {
+    if !config.use_system_inc {
+        return Vec::new();
+    }
+
+    perl5lib_value
+        .map(perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib)
+        .unwrap_or_default()
+}
+
 /// Returns commit characters for a completion item based on its kind.
 /// Each string is exactly one character, per the LSP 3.x spec.
 ///
@@ -95,12 +108,17 @@ impl LspServer {
             }
         }
 
-        // Read effective include paths from the config clone (PERL5LIB + workspace paths).
+        // Read effective include paths from the config clone (workspace paths only here;
+        // PERL5LIB is gated below on use_system_inc).
         // The clone is lightweight — it does not trigger the system @INC subprocess.
         if let Some(config) = self.config_for_doc(uri) {
-            let perl5lib_paths = std::env::var("PERL5LIB")
-                .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
-                .unwrap_or_default();
+            // PERL5LIB comes from the system environment and is treated as a "system"
+            // source for completion purposes.  Only merge it into the completion roots
+            // after the user opts in via useSystemInc, matching the behaviour of the
+            // system @INC source.  Passing an empty slice omits PERL5LIB without
+            // changing anything else in effective_include_paths.
+            let perl5lib_value = std::env::var("PERL5LIB").ok();
+            let perl5lib_paths = perl5lib_paths_for_completion(&config, perl5lib_value.as_deref());
             let effective_paths = config.effective_include_paths(&perl5lib_paths);
             include_system_inc = config.use_system_inc;
 
@@ -1572,6 +1590,40 @@ mod tests {
             Some("scalar"),
             "scalar variable should have labelDetails.detail = 'scalar'"
         );
+        Ok(())
+    }
+
+    /// Verify that PERL5LIB paths are excluded from completion roots when
+    /// `use_system_inc` is disabled, and included when it is enabled.
+    #[test]
+    fn test_perl5lib_excluded_from_completion_roots_when_system_inc_disabled()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use perl_lsp_rs_core::config::WorkspaceConfig;
+        use tempfile::TempDir;
+
+        let temp = TempDir::new()?;
+        let perl5lib_dir = temp.path().join("perl5lib");
+        std::fs::create_dir_all(&perl5lib_dir)?;
+        let perl5lib_value = perl5lib_dir.to_string_lossy().to_string();
+
+        let mut config = WorkspaceConfig::default();
+        config.use_system_inc = false;
+
+        let paths_no_p5l = perl5lib_paths_for_completion(&config, Some(&perl5lib_value));
+        assert!(
+            !paths_no_p5l.iter().any(|p| p == &perl5lib_value),
+            "PERL5LIB dir must not appear in completion inputs when use_system_inc=false; \
+             got: {paths_no_p5l:?}"
+        );
+
+        config.use_system_inc = true;
+        let paths_with_p5l = perl5lib_paths_for_completion(&config, Some(&perl5lib_value));
+        assert!(
+            paths_with_p5l.iter().any(|p| p == &perl5lib_value),
+            "PERL5LIB dir must appear in completion inputs after use_system_inc=true; \
+             got: {paths_with_p5l:?}"
+        );
+
         Ok(())
     }
 }
