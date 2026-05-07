@@ -28,20 +28,23 @@ is decided in PR 15+ once actuals confirm the overlap.
 
 | Workflow | Job(s) | Trigger | Blocking? | Runner | Intent | Est. LEM | Whitelist id | Duplicate of | Disposition |
 |---|---|---|---:|---|---|---:|---|---|---|
-| `ci.yml` | `pr-smoke` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` | Fast scoped Rust proof | 4 | `pr-smoke` | — | keep |
-| `ci.yml` | `merge-gate-shards` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` (×N) | Bounded merge-gate shards | 24 | `merge-gate-shards` | — | keep |
-| `ci.yml` | `merge-gate` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` | Aggregate shard results | 1 | `merge-gate-aggregate` | — | keep |
-| `ci.yml` | `ux-tests` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` | LSP UX regression smoke | 8 | `ux-regression` | `workflow:ux-regression-gate` | **decide PR 15** |
-| `ci.yml` | `lsp-memory-smoke` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` | Retained-state regression | 8 | `lsp-memory-smoke` | `nightly:memory_plateau` | keep, exception logged |
-| `ci.yml` | `windows-guardrails` | `pull_request`, `push`, `merge_group` | yes | `windows-latest` | Windows path / sandbox regression | 20 (10m × 2.0) | `windows-guardrails` | — | keep, exception logged |
-| `ci.yml` | `conflict-markers` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` | Reject committed conflict markers | 1 | `conflict-marker-check` | `gate:check_conflict_markers` | **decide PR 15** |
-| `ci.yml` | `draft-pr-check` | `pull_request` | yes | `ubuntu-24.04` | Skip draft PRs | 1 | `draft-pr-guard` | — | keep |
-| `ci.yml` | `preflight-latest-check` | `pull_request`, `push` | yes | `ubuntu-24.04` | Skip superseded SHAs | 1 | `preflight-latest-sha` | — | keep |
-| `methodology-gate.yml` | `methodology` | `pull_request` | yes | `ubuntu-24.04` | PR-shape and methodology lint | 2 | `methodology-gate` | — | keep |
-| `pr-title-check.yml` | `validate-title` | `pull_request` | yes | `ubuntu-24.04` | Real issue ref enforcement | 1 | `pr-title-check` | — | keep |
+| `pr-plan.yml` | `plan` | `pull_request`, `workflow_dispatch` | no | `ubuntu-24.04` | LEM forecast and lane selection | 1 | `pr_plan` | — | keep |
+| `ci.yml` | `pr-smoke` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` | Fast scoped Rust proof | 4 | `pr_smoke` | — | keep |
+| `ci.yml` | `merge-gate-shards` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` (×N) | Bounded merge-gate shards | 24 | `merge_gate_shards` | — | keep |
+| `ci.yml` | `merge-gate` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` | Aggregate shard results | 1 | `merge_gate_aggregate` | — | keep |
+| `ci.yml` | `check-all-targets` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` | Compile all targets | 6 | `check_all_targets` | — | keep |
+| `ci.yml` | `ux-tests` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` | LSP UX regression smoke | 8 | `ux_tests` | `workflow:ux-regression-gate` | **decide PR 15** |
+| `ci.yml` | `lsp-memory-smoke` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` | Retained-state regression | 8 | `lsp_memory_smoke` | `nightly:memory_plateau` | keep, exception logged |
+| `ci.yml` | `windows-guardrails` | `pull_request`, `push`, `merge_group` | yes | `windows-latest` | Windows path / sandbox regression | 20 (10m × 2.0) | `windows_guardrails` | — | keep, exception logged |
+| `ci.yml` | `conflict-markers` | `pull_request`, `push`, `merge_group` | yes | `ubuntu-24.04` | Reject committed conflict markers | 1 | `conflict_markers` | `gate:check_conflict_markers` | **decide PR 15** |
+| `ci.yml` | `draft-pr-check` | `pull_request` | yes | `ubuntu-24.04` | Skip draft PRs | 1 | `draft_guard` | — | keep |
+| `ci.yml` | `preflight-latest-check` | `pull_request`, `push` | yes | `ubuntu-24.04` | Skip superseded SHAs | 1 | `preflight_latest` | — | keep |
+| `ripr.yml` | `ripr` | `pull_request` (Rust paths), `workflow_dispatch` | no | `ubuntu-24.04` | Static oracle-gap detection | 4 | `ripr_advisory` | `nightly:mutation` | keep |
+| `methodology-gate.yml` | `methodology` | `pull_request` | yes | `ubuntu-24.04` | PR-shape and methodology lint | 2 | `methodology_gate` | — | keep |
+| `pr-title-check.yml` | `validate-title` | `pull_request` | yes | `ubuntu-24.04` | Real issue ref enforcement | 1 | `pr_title_check` | — | keep |
 | `workflow-policy.yml` | `workflow-policy-lint` | `pull_request`, `workflow_dispatch` | yes | `ubuntu-24.04` | Workflow trigger / policy lint | 2 | _add in PR 11_ | — | keep, extend in PR 11 |
 | `workflow-trigger-lint.yml` | `workflow-trigger-lint` | `pull_request` | yes | `ubuntu-24.04` | Trigger policy lint (legacy) | 1 | _add in PR 11_ | `workflow:workflow-policy` | **decide PR 15** |
-| `droid-review.yml` | `droid` | `pull_request` (opened/ready/reopened) | no | `ubuntu-latest` | External AI review | 4 | `droid-auto-review` | — | tune in PR 14 |
+| `droid-review.yml` | `droid` | `pull_request` (opened/ready/reopened) | no | `ubuntu-latest` | External AI review | 4 | `droid_auto_review` | — | tune in PR 14 |
 | `pipeline-labels.yml` | `apply-pipeline-labels` | `pull_request`, `pull_request_target` | no | `ubuntu-24.04` | Apply pipeline state labels | 1 | _add in PR 11_ | — | keep |
 | `flake-detection.yml` | `flake-detect` | `pull_request`, `schedule` | no | `ubuntu-24.04` | Detect flaky tests | varies | _add in PR 11_ | — | keep |
 
@@ -49,11 +52,15 @@ is decided in PR 15+ once actuals confirm the overlap.
 
 | Workflow | Trigger | Blocking? | Runner | Intent | Est. LEM | Whitelist id | Disposition |
 |---|---|---:|---|---|---:|---|---|
-| `ci-nightly.yml` (mutation) | `schedule`, `workflow_dispatch`, label | no | `ubuntu-24.04` | Mutation testing | 60 | `mutation-nightly` | keep |
+| `ci-nightly.yml` (mutation) | `schedule`, `workflow_dispatch`, label | no | `ubuntu-24.04` | Mutation testing | 60 | `mutation` | keep |
 | `ci-nightly.yml` (test-coverage) | `schedule`, `workflow_dispatch`, label | no | `ubuntu-24.04` | Coverage | 45 | `coverage` | keep |
-| `ci-security.yml` | `schedule`, `pull_request` (security paths), `workflow_dispatch` | no | `ubuntu-24.04` | audit / deny / Trivy | 15 | `ci-security` | keep |
-| `perl-version-matrix.yml` | `schedule`, `workflow_dispatch`, label | no | `ubuntu-24.04` | Perl 5.8–5.40 compat | 40 | `perl-version-matrix` | keep |
-| `vscode-managed-binary-smoke.yml` | `schedule`, `workflow_dispatch`, paths, label | no | mixed (Linux/Win/macOS) | VS Code extension smoke | 35 | `vscode-managed-binary-smoke` | keep |
+| `ci-nightly.yml` (fuzz) | `schedule`, `workflow_dispatch` | no | `ubuntu-24.04` | Bounded fuzz sweep | 60 | `fuzz` | keep |
+| `ci-nightly.yml` (real-repo-latency) | `schedule`, `workflow_dispatch`, label | no | `ubuntu-24.04` | Real-repo latency | 30 | `real_repo_latency` | keep |
+| `ci-nightly.yml` (memory-plateau) | `schedule`, `workflow_dispatch`, label | no | `ubuntu-24.04` | Memory plateau | 35 | `memory_plateau` | keep |
+| `publish-dry-run.yml` | `pull_request` (release paths), `workflow_dispatch` | no | `ubuntu-24.04` | Release dry-run | 15 | `release_check` | keep |
+| `ci-security.yml` | `schedule`, `pull_request` (security paths), `workflow_dispatch` | no | `ubuntu-24.04` | audit / deny / Trivy | 15 | `security_audit` | keep |
+| `perl-version-matrix.yml` | `schedule`, `workflow_dispatch`, label | no | `ubuntu-24.04` | Perl 5.8–5.40 compat | 40 | `perl_version_matrix` | keep |
+| `vscode-managed-binary-smoke.yml` | `schedule`, `workflow_dispatch`, paths, label | no | mixed (Linux/Win/macOS) | VS Code extension smoke | 35 | `vscode_smoke_matrix` | keep |
 | `vscode-published-extension-smoke.yml` | `schedule`, `workflow_dispatch` | no | mixed | Post-publish extension smoke | varies | _add in PR 11_ | keep |
 | `post-merge-corpus-ratchet.yml` | `push` (master) | no | `ubuntu-24.04` | Auto-ratchet CPAN corpus | 5 | _add in PR 11_ | keep |
 | `post-merge-status.yml` | `push` (master) | no | `ubuntu-24.04` | Regenerate status docs | 3 | _add in PR 11_ | keep |
