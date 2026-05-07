@@ -407,9 +407,13 @@
         "duplicate_symbol_id_count",
         "missing_resolves_to_target_count",
         "changed_line_count",
+        "changed_line_sample_count",
         "changed_symbol_count",
+        "changed_symbol_sample_count",
         "removed_expectation_count",
+        "removed_expectation_sample_count",
         "added_expectation_count",
+        "added_expectation_sample_count",
         "dynamic_expectation_change_count"
       ],
       "properties": {
@@ -428,13 +432,25 @@
         "changed_line_count": {
           "$ref": "#/$defs/nonNegativeInteger"
         },
+        "changed_line_sample_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
         "changed_symbol_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "changed_symbol_sample_count": {
           "$ref": "#/$defs/nonNegativeInteger"
         },
         "removed_expectation_count": {
           "$ref": "#/$defs/nonNegativeInteger"
         },
+        "removed_expectation_sample_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
         "added_expectation_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "added_expectation_sample_count": {
           "$ref": "#/$defs/nonNegativeInteger"
         },
         "dynamic_expectation_change_count": {
