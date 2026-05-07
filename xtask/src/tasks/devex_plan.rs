@@ -689,51 +689,57 @@ fn is_policy_or_ci_path(file: &str) -> bool {
 }
 
 fn print_plan(plan: &Plan) {
-    println!("DevEx local proof plan");
-    println!("Base: {}", plan.base);
-    println!("Head: {}", plan.head.trim());
-    println!();
+    print!("{}", render_plan(plan));
+}
 
-    println!("Changed files:");
+fn render_plan(plan: &Plan) -> String {
+    let mut out = String::new();
+    out.push_str("DevEx local proof plan\n");
+    out.push_str(&format!("Base: {}\n", plan.base));
+    out.push_str(&format!("Head: {}\n", plan.head.trim()));
+    out.push('\n');
+
+    out.push_str("Changed files:\n");
     if plan.changed_files.is_empty() {
-        println!("- none");
+        out.push_str("- none\n");
     } else {
         for file in &plan.changed_files {
-            println!("- {file}");
+            out.push_str(&format!("- {file}\n"));
         }
     }
-    println!();
+    out.push('\n');
 
-    println!("Changed surfaces:");
+    out.push_str("Changed surfaces:\n");
     if plan.surfaces.is_empty() {
-        println!("- none");
+        out.push_str("- none\n");
     } else {
         for surface in &plan.surfaces {
-            println!("- {}", surface.label());
+            out.push_str(&format!("- {}\n", surface.label()));
         }
     }
-    println!();
+    out.push('\n');
 
-    println!("Required local proof:");
+    out.push_str("Required local proof:\n");
     for proof in &plan.required_commands {
-        println!("- {}", proof.command);
-        println!("  why: {}", proof.why);
-        println!("  evidence: {}", proof.evidence);
+        out.push_str(&format!("- {}\n", proof.command));
+        out.push_str(&format!("  why: {}\n", proof.why));
+        out.push_str(&format!("  evidence: {}\n", proof.evidence));
     }
-    println!();
+    out.push('\n');
 
-    println!("Optional / expensive:");
+    out.push_str("Optional / expensive:\n");
     for proof in &plan.optional_commands {
-        println!("- {}", proof.command);
-        println!("  why: {}", proof.why);
-        println!("  evidence: {}", proof.evidence);
+        out.push_str(&format!("- {}\n", proof.command));
+        out.push_str(&format!("  why: {}\n", proof.why));
+        out.push_str(&format!("  evidence: {}\n", proof.evidence));
     }
-    println!();
+    out.push('\n');
 
-    println!("Agent-safe hints:");
+    out.push_str("Agent-safe hints:\n");
     for hint in &plan.agent_hints {
-        println!("- {hint}");
+        out.push_str(&format!("- {hint}\n"));
     }
+    out
 }
 
 #[cfg(test)]
@@ -746,6 +752,10 @@ mod tests {
 
     fn command_strings(commands: &[ProofCommand]) -> Vec<String> {
         commands.iter().map(|proof| proof.command.clone()).collect()
+    }
+
+    fn plan_for(files: &[&str]) -> Plan {
+        build_plan("origin/master".to_string(), "abcdef1234567890".to_string(), strings(files))
     }
 
     fn surface_strings(plan: &Plan) -> Vec<String> {
@@ -1009,6 +1019,268 @@ mod tests {
                     plan.agent_hints
                 );
             }
+        }
+    }
+
+    #[test]
+    fn golden_plan_output_for_empty_change_set() {
+        let plan = plan_for(&[]);
+
+        assert_eq!(
+            render_plan(&plan),
+            r#"DevEx local proof plan
+Base: origin/master
+Head: abcdef1234567890
+
+Changed files:
+- none
+
+Changed surfaces:
+- none
+
+Required local proof:
+- cargo xtask fmt
+  why: keeps formatting deterministic before any other proof
+  evidence: PR body lists `cargo xtask fmt` as passed and the branch has no formatting-only drift
+- git diff --check
+  why: guards against whitespace errors in the final patch
+  evidence: command exits cleanly after all edits
+
+Optional / expensive:
+- just pr-fast
+  why: cheap broader proof when the change spans more than docs or one small module
+  evidence: useful PR-body evidence when you want confidence before pushing
+- just ci-gate
+  why: local approximation of the merge-blocking CI gate
+  evidence: optional unless the change is broad, risky, or CI-only behavior is unclear
+
+Agent-safe hints:
+- Use `just agent-check`, `just agent-test`, and `just agent-clippy` for large agent-run compile/test loops.
+- Use `just agent-pr-fast` when you need the PR-fast gate through cargo-safe agent profiles.
+"#
+        );
+    }
+
+    #[test]
+    fn golden_receipt_json_for_release_version_surface() {
+        let receipt = build_receipt_payload(
+            plan_for(&["rust-toolchain.toml"]),
+            true,
+            "2026-05-07T12:00:00Z".to_string(),
+        )
+        .unwrap();
+
+        let rendered = serde_json::to_string_pretty(&receipt).expect("receipt serializes");
+
+        assert_eq!(
+            rendered,
+            r#"{
+  "base": "origin/master",
+  "head": "abcdef1234567890",
+  "changed_files": [
+    "rust-toolchain.toml"
+  ],
+  "changed_surfaces": [
+    "release_version"
+  ],
+  "required_proof": [
+    {
+      "command": "cargo xtask fmt",
+      "why": "keeps formatting deterministic before any other proof",
+      "evidence": "PR body lists `cargo xtask fmt` as passed and the branch has no formatting-only drift"
+    },
+    {
+      "command": "just version-check",
+      "why": "release/version surfaces changed and version declarations must stay aligned",
+      "evidence": "PR body lists `just version-check` as passed"
+    },
+    {
+      "command": "just release-check",
+      "why": "release-facing files changed and release hygiene should be validated",
+      "evidence": "PR body lists `just release-check` as passed"
+    },
+    {
+      "command": "git diff --check",
+      "why": "guards against whitespace errors in the final patch",
+      "evidence": "command exits cleanly after all edits"
+    }
+  ],
+  "optional_proof": [
+    {
+      "command": "just pr-fast",
+      "why": "cheap broader proof when the change spans more than docs or one small module",
+      "evidence": "useful PR-body evidence when you want confidence before pushing"
+    },
+    {
+      "command": "just ci-gate",
+      "why": "local approximation of the merge-blocking CI gate",
+      "evidence": "optional unless the change is broad, risky, or CI-only behavior is unclear"
+    }
+  ],
+  "agent_hints": [
+    "Use `just agent-check`, `just agent-test`, and `just agent-clippy` for large agent-run compile/test loops.",
+    "Use `just agent-pr-fast` when you need the PR-fast gate through cargo-safe agent profiles."
+  ],
+  "worktree_clean": true,
+  "generated_at": "2026-05-07T12:00:00Z"
+}"#
+        );
+    }
+
+    #[test]
+    fn golden_cockpit_output_for_memory_retained_owner_surface() {
+        let plan = plan_for(&["crates/perl-lsp-rs/src/runtime/text_sync.rs"]);
+        let worktree = WorktreeState {
+            branch: "codex/devex-golden-renderer-tests".to_string(),
+            head_short: "abcdef123".to_string(),
+            clean: false,
+            staged_present: true,
+            unstaged_present: false,
+            untracked_present: true,
+        };
+
+        let rendered = render_cockpit(CockpitView {
+            plan: &plan,
+            worktree: &worktree,
+            receipt_path: Path::new("target/devex/local-proof.json"),
+        });
+
+        assert_eq!(
+            rendered,
+            r#"PR Cockpit
+----------
+Base:                  origin/master
+Head:                  abcdef123
+Branch:                codex/devex-golden-renderer-tests
+Worktree clean:        no
+Staged changes:        yes
+Unstaged changes:      no
+Untracked files:       yes
+Changed files:         1
+Changed surfaces:      memory_sensitive_runtime, retained_owner_candidate, rust_code
+Required proof:        4 commands
+  - cargo xtask fmt
+  - cargo xtask check-memory-lifecycle-policy
+  - cargo xtask check-memory-retained-owner-drift --base origin/master
+  - git diff --check
+Optional proof:        2 commands
+  - just pr-fast
+  - just ci-gate
+Memory owner drift:    run retained-owner drift proof
+Release/version drift: not applicable
+Agent-safe path:       available
+Receipt written:       target/devex/local-proof.json
+
+Agent hints:
+  - Use `just agent-check`, `just agent-test`, and `just agent-clippy` for large agent-run compile/test loops.
+  - Use `just agent-pr-fast` when you need the PR-fast gate through cargo-safe agent profiles.
+  - For memory-sensitive edits, keep focused lifecycle/cache tests in the PR body alongside policy proof.
+
+Next:
+  - Paste receipt summary into the PR body.
+  - Run missing required proof commands.
+  - Use `cargo xtask devex receipt --base origin/master --output target/devex/local-proof.json` for JSON handoff.
+"#
+        );
+    }
+
+    #[test]
+    fn golden_pr_body_output_for_parser_status_surface() {
+        let plan = plan_for(&["docs/project/status/parser.md"]);
+
+        assert_eq!(
+            render_pr_body(PrBodyView {
+                plan: &plan,
+                receipt_path: Path::new("target/devex/local-proof.json"),
+            }),
+            r#"## Proof packet
+
+Changed surfaces:
+- parser_accuracy
+- generated_status_docs
+- docs
+
+Required proof:
+- [ ] cargo xtask fmt
+  - why: keeps formatting deterministic before any other proof
+  - evidence: PR body lists `cargo xtask fmt` as passed and the branch has no formatting-only drift
+
+- [ ] just ci-metrics-ratchet-check parser_accuracy
+  - why: parser fixtures, baselines, or parser status changed
+  - evidence: attach/pass parser accuracy ratchet output or explain an intentional baseline update
+
+- [ ] just status-update
+  - why: generated status docs changed and should be regenerated from source data
+  - evidence: generated status diffs are present when expected
+
+- [ ] just status-check
+  - why: generated status docs should match their checked-in sources
+  - evidence: PR body lists `just status-check` as passed
+
+- [ ] git diff --check
+  - why: guards against whitespace errors in the final patch
+  - evidence: command exits cleanly after all edits
+
+
+Optional proof:
+- [ ] just pr-fast
+
+- [ ] just ci-gate
+
+- [ ] just cpan-corpus-check
+
+- [ ] just corpus-sweep-check
+
+
+Agent hints:
+- Use `just agent-check`, `just agent-test`, and `just agent-clippy` for large agent-run compile/test loops.
+- Use `just agent-pr-fast` when you need the PR-fast gate through cargo-safe agent profiles.
+- For parser-accuracy edits, attach ratchet output or explain intentional baseline/status changes.
+
+Receipt:
+- target/devex/local-proof.json
+"#
+        );
+    }
+
+    #[test]
+    fn golden_scenarios_cover_devex_surface_families() {
+        let cases = [
+            ("docs-only", &["docs/how-to/LOCAL_WATCH_MODE.md"][..]),
+            ("parser + generated status", &["docs/project/status/parser.md"][..]),
+            ("memory + retained owner", &["crates/perl-lsp-rs/src/runtime/text_sync.rs"][..]),
+            ("release/version", &["rust-toolchain.toml"][..]),
+            ("policy/CI", &[".github/workflows/ci.yml"][..]),
+            (
+                "mixed broad change",
+                &[
+                    "docs/project/status/parser.md",
+                    "crates/perl-lsp-rs/src/runtime/text_sync.rs",
+                    "CHANGELOG.md",
+                    ".github/workflows/ci.yml",
+                ][..],
+            ),
+            ("empty/no-change", &[][..]),
+        ];
+
+        for (name, files) in cases {
+            let plan = plan_for(files);
+            assert!(
+                !render_plan(&plan).is_empty(),
+                "{name}: plan renderer should have golden coverage input"
+            );
+            assert!(
+                !render_pr_body(PrBodyView {
+                    plan: &plan,
+                    receipt_path: Path::new("target/devex/local-proof.json"),
+                })
+                .is_empty(),
+                "{name}: PR-body renderer should have golden coverage input"
+            );
+            assert!(
+                build_receipt_payload(plan, true, "2026-05-07T12:00:00Z".to_string()).is_ok(),
+                "{name}: receipt payload should build for golden coverage input"
+            );
         }
     }
 
