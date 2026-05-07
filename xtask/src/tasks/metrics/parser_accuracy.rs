@@ -799,6 +799,8 @@ struct IncrementalScore {
     fallback_count: u64,
     checkpoint_hit_count: u64,
     checkpoint_miss_count: u64,
+    content_hash_hit_count: u64,
+    content_hash_miss_count: u64,
     reparse_byte_ratios: Vec<f64>,
     reused_node_ratios: Vec<f64>,
     changed_range_sample_count: u64,
@@ -1517,19 +1519,61 @@ fn score_manifest_incremental(
     manifest: &ParserAccuracyManifest,
 ) -> Result<IncrementalScore> {
     let mut score = IncrementalScore::default();
+    let content_hash_index = WorkspaceIndex::new();
     for fixture in &manifest.fixtures {
-        if fixture.incremental_expectations.is_empty() {
-            continue;
-        }
         let source_path = root.join(&fixture.source_path);
         let source = fs::read_to_string(&source_path).with_context(|| {
             format!("reading parser accuracy incremental fixture source {}", source_path.display())
         })?;
+        score_content_hash_reuse_probe(&content_hash_index, &source_path, &source, &mut score)?;
+        if fixture.incremental_expectations.is_empty() {
+            continue;
+        }
         for expectation in &fixture.incremental_expectations {
             score_incremental_expectation(&source, expectation, &mut score);
         }
     }
     Ok(score)
+}
+
+fn score_content_hash_reuse_probe(
+    index: &WorkspaceIndex,
+    source_path: &Path,
+    source: &str,
+    score: &mut IncrementalScore,
+) -> Result<()> {
+    let source_path_text = source_path.to_string_lossy();
+    let first_hit = content_hash_probe_hits(index, &source_path_text, source);
+    if index.index_file_str(&source_path_text, source).is_err() {
+        return Ok(());
+    }
+    record_content_hash_probe(score, first_hit);
+
+    let second_hit = content_hash_probe_hits(index, &source_path_text, source);
+    index.index_file_str(&source_path_text, source).map_err(|err| {
+        eyre!(
+            "re-indexing parser accuracy fixture {} for content-hash metric: {err}",
+            source_path.display()
+        )
+    })?;
+    record_content_hash_probe(score, second_hit);
+
+    Ok(())
+}
+
+fn content_hash_probe_hits(index: &WorkspaceIndex, source_path_text: &str, source: &str) -> bool {
+    let mut hasher = DefaultHasher::new();
+    source.hash(&mut hasher);
+    let content_hash = hasher.finish();
+    index.file_fact_shard(source_path_text).is_some_and(|shard| shard.content_hash == content_hash)
+}
+
+fn record_content_hash_probe(score: &mut IncrementalScore, hit: bool) {
+    if hit {
+        score.content_hash_hit_count += 1;
+    } else {
+        score.content_hash_miss_count += 1;
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -4694,6 +4738,7 @@ fn cost_metrics(
 
 fn cache_reuse_metrics(score: &IncrementalScore, cadence: Cadence) -> Vec<MetricRow> {
     let checkpoint_total = score.checkpoint_hit_count + score.checkpoint_miss_count;
+    let content_hash_total = score.content_hash_hit_count + score.content_hash_miss_count;
     vec![
         insufficient("lexer_checkpoint_reuse_rate", "lexer checkpoint telemetry is not wired yet"),
         optional_measured_rate(
@@ -4712,7 +4757,13 @@ fn cache_reuse_metrics(score: &IncrementalScore, cadence: Cadence) -> Vec<Metric
             "workspace shard reuse telemetry is not wired yet",
         ),
         insufficient("unchanged_file_skip_rate", "unchanged-file skip telemetry is not wired yet"),
-        insufficient("content_hash_hit_rate", "content hash telemetry is not wired yet"),
+        optional_measured_rate(
+            "content_hash_hit_rate",
+            ratio(score.content_hash_hit_count, content_hash_total),
+            content_hash_total,
+            "content hash telemetry is not available",
+            cadence,
+        ),
         optional_measured_count(
             "fast_path_attempt_count",
             score.expectation_count,
@@ -7700,6 +7751,8 @@ sub dynamic_boundary_case {
             fallback_count: 1,
             checkpoint_hit_count: 3,
             checkpoint_miss_count: 1,
+            content_hash_hit_count: 3,
+            content_hash_miss_count: 1,
             ..IncrementalScore::default()
         };
 
@@ -7710,6 +7763,14 @@ sub dynamic_boundary_case {
                 metric,
                 MetricRow::Measured { metric, value, sample_count: 4, .. }
                     if metric == "parser_checkpoint_reuse_rate"
+                        && (*value - 0.75).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "content_hash_hit_rate"
                         && (*value - 0.75).abs() < f64::EPSILON
             )
         }));
