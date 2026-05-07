@@ -613,3 +613,116 @@ expensive = false
 duplicate_of = []
 review_after = "2026-06-07"
 expires = "2026-11-07"
+
+# =============================================================================
+# Lanes added by follow-up B (closing PR 11 LANE_WHITELIST_MISSING warnings)
+# =============================================================================
+
+[[lane]]
+id = "droid_command"
+workflow = ".github/workflows/droid.yml"
+job = "droid"
+tier = "frontdoor"
+kind = "automation"
+blocking = false
+default_pr = false
+runner = "ubuntu_latest"
+base_lem = 4
+owner = "ci"
+intent = "Manual / dispatch Droid command (separate from droid_auto_review)."
+failure_mode = "External AI command path unavailable."
+proof_obligation = "Run external AI action on workflow_dispatch."
+evidence = ["job logs"]
+allowed_triggers = ["workflow_dispatch"]
+labels = ["ai-review"]
+expensive = false
+duplicate_of = ["droid_auto_review"]
+review_after = "2026-06-07"
+expires = "2026-08-07"
+
+[[lane]]
+id = "flake_detection"
+workflow = ".github/workflows/flake-detection.yml"
+job = "flake-detect"
+tier = "nightly"
+kind = "automation"
+blocking = false
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 4
+owner = "ci"
+intent = "Detect flaky tests by re-running test history."
+failure_mode = "Flaky tests not surfaced; CI reliability erodes."
+proof_obligation = "Run flake detection sweep and emit report."
+evidence = ["flake-report.json"]
+allowed_triggers = ["pull_request", "schedule", "workflow_dispatch"]
+labels = ["ci:flake"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "pipeline_labels"
+workflow = ".github/workflows/pipeline-labels.yml"
+job = "apply-pipeline-labels"
+tier = "frontdoor"
+kind = "automation"
+blocking = false
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 1
+owner = "ci"
+intent = "Apply pipeline state labels (ci-green, merge-ready, etc.)."
+failure_mode = "Labels diverge from PR state, breaking orchestration."
+proof_obligation = "Reconcile pipeline labels against PR state."
+evidence = ["job logs"]
+allowed_triggers = ["pull_request", "pull_request_target"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "ux_regression_gate_path_filtered"
+workflow = ".github/workflows/ux-regression-gate.yml"
+job = "ux-regression-gate"
+tier = "merge_gate"
+kind = "ux"
+blocking = true
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 8
+owner = "lsp"
+intent = "Path-filtered UX regression gate for LSP/DAP/extension changes."
+failure_mode = "UX regression on LSP/DAP/extension paths slips through."
+proof_obligation = "Run UX regression suite when paths match."
+evidence = ["target/receipts/ux-regression.json"]
+allowed_triggers = ["pull_request", "workflow_dispatch"]
+expensive = true
+expensive_reason = "Builds binary and runs UX harness."
+duplicate_of = ["ux_tests"]
+review_after = "2026-06-07"
+# Decision deadline aligned with PR 17 — see docs/ci/ux-ownership.md.
+expires = "2026-08-07"
+
+[[lane]]
+id = "workflow_policy_lint"
+workflow = ".github/workflows/workflow-policy.yml"
+job = "workflow-policy-lint"
+tier = "frontdoor"
+kind = "hygiene"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 2
+owner = "ci"
+intent = "Lint workflows against policy (PR_TARGET_CHECKOUT_HEAD, WRITE_ALL_PERMISSIONS, BLANKET_CANCEL_IN_PROGRESS, LANE_WHITELIST_MISSING, etc)."
+failure_mode = "Unsafe workflow patterns land in .github/workflows/."
+proof_obligation = "Run cargo xtask workflow-policy-lint and emit receipt."
+evidence = ["target/receipts/workflow-policy.json"]
+allowed_triggers = ["pull_request", "workflow_dispatch"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
