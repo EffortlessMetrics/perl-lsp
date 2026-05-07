@@ -41,7 +41,7 @@ before committing derived state.
 | `LspServer` | `semantic_analyzer_cache` | `(normalized_uri, content_hash)` | Semantic analyzer graphs and derived scope state | Invalidated on `didChange`, close, and delete; hard-clears when the cache reaches 50 entries | semantic analyzer invalidation tests in `text_sync.rs`; `MemoryStateSnapshot` |
 | `LspServer` | `parse_cancel_flags` | URI `String` | Per-document cancellation tokens and stale parse coordination | New parses cancel prior tokens; close/delete/folder cleanup trips and removes flags | `test_did_close_cancels_and_removes_flag`; snapshot tests |
 | `LspServer` | `pod_cache` | Filesystem `PathBuf` | Parsed POD hover docs | Soft cap 1024 entries, prune target 512; close/delete removes the file path entry | `MemoryStateSnapshot`; hover cache cap should be covered by future POD churn scenario |
-| `LspServer` | Pull diagnostics file cache | Filesystem path | Diagnostic result state and external diagnostic reuse | Invalidated on text change, close, and delete through the pull diagnostics orchestrator | lifecycle snapshot tests; future diagnostics churn receipt |
+| `LspServer` | Pull diagnostics file cache | Filesystem path | Diagnostic result state and external diagnostic reuse | Invalidated on text change, close, and delete through the pull diagnostics orchestrator | lifecycle snapshot tests; diagnostics churn retained-state coverage |
 | `LspServer` | Perl::Critic analyzer and warning set | Analyzer config and workspace warning keys | External analyzer cache, profile discovery, warning suppression keys | Analyzer reset on critic configuration changes; file cache invalidated on document changes and eviction | diagnostics tests; future diagnostics churn receipt |
 | `StreamSessionManager` | Inline-completion stream sessions | `SessionKey { uri, document_version, line, character }` | Streaming buffers, cancellation flags, per-request session entries | `cancel_for_uri` and `cancel_for_uri_version` cancel and remove entries immediately | stream-session eviction tests; `MemoryStateSnapshot.stream_sessions` |
 | `SymbolIndex` | Open-document symbols | Document URI plus symbol name | Per-open-document symbol vectors and lookup maps | Re-index replaces old symbols; close cleanup clears document symbols | `test_did_close_removes_document_symbols_from_index` |
@@ -79,7 +79,7 @@ hard to interpret; focused scenarios make the owner obvious.
 | `lsp_doc_churn_delete` | Baseline open/change/close/delete process RSS plateau | PR smoke and nightly receipts |
 | `lsp_workspace_symbol_churn_delete` | Index/query pressure during document churn | Nightly receipts |
 | `workspace_index_reindex_same_files` | Secondary-index duplication and remove/reindex cycles | Unit regression coverage |
-| `diagnostics_pull_push_churn` | Pull diagnostics, result ids, critic analyzer cache | Follow-up scenario |
+| `diagnostics_pull_push_churn` | Pull diagnostics, result ids, critic analyzer cache | Unit retained-state coverage |
 | `hover_pod_many_modules` | POD cache cap and path eviction | Follow-up scenario |
 | `completion_stream_cancel_storm` | Stream-session cancellation and removal | Unit regression coverage |
 | `file_watcher_bulk_create_change_delete` | Watcher debouncer and delete lifecycle | Follow-up scenario |
