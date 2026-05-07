@@ -455,6 +455,12 @@ enum Commands {
     /// Enforce retained-state lifecycle and memory receipt invariants.
     CheckMemoryLifecyclePolicy,
 
+    /// Render memory plateau receipt trends.
+    MemoryTrends {
+        #[command(subcommand)]
+        command: MemoryTrendsCommand,
+    },
+
     /// Run production security hardening checks.
     SecurityHardening,
 
@@ -1750,6 +1756,25 @@ enum MetricsCommand {
 }
 
 #[derive(Subcommand)]
+enum MemoryTrendsCommand {
+    /// Render memory plateau trends from receipts and baseline files.
+    Render {
+        /// Directory containing current memory receipts or plateau JSON files.
+        #[arg(long, default_value = "target/memory")]
+        input_dir: PathBuf,
+        /// Additional historical receipt directories.
+        #[arg(long = "history-dir")]
+        history_dirs: Vec<PathBuf>,
+        /// Committed baseline file to include when present.
+        #[arg(long, default_value = ".ci/metrics/baselines/memory_plateau.json")]
+        baseline: PathBuf,
+        /// Output markdown path.
+        #[arg(long, default_value = "docs/project/status/memory_plateau_trends.md")]
+        output: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum QueueCommand {
     /// Capture the open PR queue into a stable JSON snapshot document.
     Snapshot {
@@ -2013,6 +2038,16 @@ fn main() -> Result<()> {
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
         Commands::CheckMemoryLifecyclePolicy => ci_policy::check_memory_lifecycle(),
+        Commands::MemoryTrends { command } => match command {
+            MemoryTrendsCommand::Render { input_dir, history_dirs, baseline, output } => {
+                memory_trends::render(memory_trends::MemoryTrendsConfig {
+                    input_dir,
+                    history_dirs,
+                    baseline,
+                    output,
+                })
+            }
+        },
         Commands::SecurityHardening => hardening::security_hardening(),
         Commands::PerformanceHardening => hardening::performance_hardening(),
         Commands::ProductionGatesValidation => hardening::production_gates_validation(),
