@@ -253,6 +253,11 @@ fn test_parser_accuracy_artifact_renders_denominator_and_metric_rows() -> Result
                     value: 1.0,
                     sample_count: 6,
                 },
+                ParserAccuracyMetricSummary::Measured {
+                    metric: "whitespace_invariance_rate".to_string(),
+                    value: 0.32,
+                    sample_count: 44,
+                },
             ],
             failure_packets: vec![],
         }),
@@ -274,6 +279,10 @@ fn test_parser_accuracy_artifact_renders_denominator_and_metric_rows() -> Result
     assert!(
         result.contains("line_construct_f1=1.0"),
         "measured accuracy scorer rows should render their values"
+    );
+    assert!(
+        result.contains("whitespace_invariance_rate=0.3 (trailing whitespace; n=44)"),
+        "whitespace invariance summary must disclose its sampled trailing-whitespace basis"
     );
     Ok(())
 }

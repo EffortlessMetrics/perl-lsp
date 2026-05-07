@@ -151,6 +151,7 @@ fn parser_accuracy_metric_summary(metrics: &[ParserAccuracyMetricSummary]) -> St
         "references_recall",
         "references_false_positive_count",
         "hover_origin_accuracy",
+        "whitespace_invariance_rate",
     ];
 
     if metrics.is_empty() {
@@ -163,7 +164,11 @@ fn parser_accuracy_metric_summary(metrics: &[ParserAccuracyMetricSummary]) -> St
         .filter_map(|name| metrics.iter().find(|metric| metric.name() == *name))
         .map(|metric| match metric {
             ParserAccuracyMetricSummary::Measured { metric, value, sample_count } => {
-                format!("{metric}={value:.1} (n={sample_count})")
+                if metric == "whitespace_invariance_rate" {
+                    format!("{metric}={value:.1} (trailing whitespace; n={sample_count})")
+                } else {
+                    format!("{metric}={value:.1} (n={sample_count})")
+                }
             }
             ParserAccuracyMetricSummary::InsufficientData { metric, reason, sample_count } => {
                 format!("{metric}: insufficient_data ({reason}; n={sample_count})")
