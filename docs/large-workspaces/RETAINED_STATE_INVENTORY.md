@@ -40,7 +40,7 @@ before committing derived state.
 | `LspServer` | `ast_cache` | URI `String` with cached content hash | Parsed ASTs for recently used documents | `AstCache::new(100, 300)` in runtime constructors; explicit `AstCache::remove` on close/delete | `ast_cache_remove_evicts_entry_immediately` |
 | `LspServer` | `semantic_analyzer_cache` | `(normalized_uri, content_hash)` | Semantic analyzer graphs and derived scope state | Invalidated on `didChange`, close, and delete; hard-clears when the cache reaches 50 entries | semantic analyzer invalidation tests in `text_sync.rs`; `MemoryStateSnapshot` |
 | `LspServer` | `parse_cancel_flags` | URI `String` | Per-document cancellation tokens and stale parse coordination | New parses cancel prior tokens; close/delete/folder cleanup trips and removes flags | `test_did_close_cancels_and_removes_flag`; snapshot tests |
-| `LspServer` | `pod_cache` | Filesystem `PathBuf` | Parsed POD hover docs | Soft cap 1024 entries, prune target 512; close/delete removes the file path entry | `MemoryStateSnapshot`; hover cache cap should be covered by future POD churn scenario |
+| `LspServer` | `pod_cache` | Filesystem `PathBuf` | Parsed POD hover docs | Soft cap 1024 entries, prune target 512; close/delete removes the file path entry | POD hover cache cap and close/delete eviction test; `MemoryStateSnapshot.pod_cache_entries` |
 | `LspServer` | Pull diagnostics file cache | Filesystem path | Diagnostic result state and external diagnostic reuse | Invalidated on text change, close, and delete through the pull diagnostics orchestrator | lifecycle snapshot tests; diagnostics churn retained-state coverage |
 | `LspServer` | Perl::Critic analyzer and warning set | Analyzer config and workspace warning keys | External analyzer cache, profile discovery, warning suppression keys | Analyzer reset on critic configuration changes; file cache invalidated on document changes and eviction | diagnostics tests; future diagnostics churn receipt |
 | `StreamSessionManager` | Inline-completion stream sessions | `SessionKey { uri, document_version, line, character }` | Streaming buffers, cancellation flags, per-request session entries | `cancel_for_uri` and `cancel_for_uri_version` cancel and remove entries immediately | stream-session eviction tests; `MemoryStateSnapshot.stream_sessions` |
@@ -80,7 +80,7 @@ hard to interpret; focused scenarios make the owner obvious.
 | `lsp_workspace_symbol_churn_delete` | Index/query pressure during document churn | Nightly receipts |
 | `workspace_index_reindex_same_files` | Secondary-index duplication and remove/reindex cycles | Unit regression coverage |
 | `diagnostics_pull_push_churn` | Pull diagnostics, result ids, critic analyzer cache | Unit retained-state coverage |
-| `hover_pod_many_modules` | POD cache cap and path eviction | Follow-up scenario |
+| `hover_pod_many_modules` | POD cache cap and path eviction | Unit retained-state coverage |
 | `completion_stream_cancel_storm` | Stream-session cancellation and removal | Unit regression coverage |
 | `file_watcher_bulk_create_change_delete` | Watcher debouncer and delete lifecycle | Follow-up scenario |
 | `workspace_folder_add_remove_multi_root` | Folder-scoped cleanup without cross-root eviction | Unit coverage, add process scenario if needed |
