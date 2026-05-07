@@ -4740,7 +4740,13 @@ fn cache_reuse_metrics(score: &IncrementalScore, cadence: Cadence) -> Vec<Metric
     let checkpoint_total = score.checkpoint_hit_count + score.checkpoint_miss_count;
     let content_hash_total = score.content_hash_hit_count + score.content_hash_miss_count;
     vec![
-        insufficient("lexer_checkpoint_reuse_rate", "lexer checkpoint telemetry is not wired yet"),
+        optional_measured_rate(
+            "lexer_checkpoint_reuse_rate",
+            ratio(score.checkpoint_hit_count, checkpoint_total),
+            checkpoint_total,
+            "lexer checkpoint telemetry is not available",
+            cadence,
+        ),
         optional_measured_rate(
             "parser_checkpoint_reuse_rate",
             ratio(score.checkpoint_hit_count, checkpoint_total),
@@ -7758,6 +7764,14 @@ sub dynamic_boundary_case {
 
         let metrics = cache_reuse_metrics(&score, Cadence::Pr);
 
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "lexer_checkpoint_reuse_rate"
+                        && (*value - 0.75).abs() < f64::EPSILON
+            )
+        }));
         assert!(metrics.iter().any(|metric| {
             matches!(
                 metric,
