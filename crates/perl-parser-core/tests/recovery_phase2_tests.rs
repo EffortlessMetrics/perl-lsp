@@ -15,6 +15,7 @@ use cpan_test_helpers::*;
 
 use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
 use perl_parser_core::{Parser, classify_recovery_salvage};
+use perl_tdd_support::must;
 
 // ──────────────────────────────────────────────────────────────
 // Helpers
@@ -206,7 +207,7 @@ fn mixed_recovery_and_error_node_is_not_structured_recovery_only() {
     // Together they should NOT be classified as structured-recovery-only.
     let code = "} my $x = $a +;";
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("parser should not catastrophically fail");
+    let ast = must(parser.parse());
     let metrics = classify_recovery_salvage(&ast, parser.errors());
 
     assert!(metrics.is_dirty(), "file with Error node and recovery is dirty: {metrics:?}");
