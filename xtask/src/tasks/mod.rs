@@ -35,6 +35,7 @@ pub mod dead_code;
 pub mod debt_report;
 pub mod dev;
 pub mod devex_doctor;
+pub mod devex_plan;
 pub mod doc;
 pub mod doc_claims;
 pub mod e2e_validate;

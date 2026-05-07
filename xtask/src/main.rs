@@ -362,6 +362,12 @@ enum Commands {
     /// Run a developer environment smoke check.
     DevexDoctor,
 
+    /// Developer experience helpers.
+    Devex {
+        #[command(subcommand)]
+        command: DevexCommand,
+    },
+
     /// Audit CI workflows for PR-safety and spend-risk controls.
     CiAuditWorkflows,
 
@@ -1792,6 +1798,16 @@ enum MemoryTrendsCommand {
 }
 
 #[derive(Subcommand)]
+enum DevexCommand {
+    /// Plan the cheapest correct local proof commands for the current diff.
+    Plan {
+        /// Git base ref used for changed-file detection.
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+    },
+}
+
+#[derive(Subcommand)]
 enum QueueCommand {
     /// Capture the open PR queue into a stable JSON snapshot document.
     Snapshot {
@@ -1978,6 +1994,9 @@ fn main() -> Result<()> {
         Commands::Bindings { header, output } => bindings::run(header, output),
         Commands::Dev { watch, port } => dev::run(watch, port),
         Commands::DevexDoctor => devex_doctor::run(),
+        Commands::Devex { command } => match command {
+            DevexCommand::Plan { base } => devex_plan::run(devex_plan::DevexPlanConfig { base }),
+        },
         Commands::ParseRust { source, sexp, ast, bench } => {
             parse_rust::run(source, sexp, ast, bench)
         }
