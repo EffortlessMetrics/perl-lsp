@@ -82,6 +82,9 @@ pub struct StatusSummary {
     pub perl_corpus_files: usize,
     pub nodekind_covered: usize,
     pub nodekind_total: usize,
+    pub nodekind_never_seen: usize,
+    pub nodekind_allowlisted_never_seen: usize,
+    pub nodekind_actionable_never_seen: usize,
     pub ga_covered: usize,
     pub ga_total: usize,
 }
@@ -131,6 +134,9 @@ pub fn compute_status_summary(corpus_path: &Path, timeout: Duration) -> Result<S
         perl_corpus_files,
         nodekind_covered: nodekind_stats.covered_count,
         nodekind_total: nodekind_stats.total_count,
+        nodekind_never_seen: nodekind_stats.never_seen.len(),
+        nodekind_allowlisted_never_seen: nodekind_stats.allowlisted_never_seen.len(),
+        nodekind_actionable_never_seen: nodekind_stats.actionable_never_seen.len(),
         ga_covered: ga_coverage.covered_count,
         ga_total: ga_coverage.total_count,
     })

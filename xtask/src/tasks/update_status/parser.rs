@@ -160,6 +160,27 @@ fn format_perf_metric_row(name: &str, metric: Option<&ParserPerfMetric>) -> Stri
     )
 }
 
+fn format_nodekind_gap_note(summary: &super::super::corpus_audit::StatusSummary) -> String {
+    match (
+        summary.nodekind_actionable_never_seen,
+        summary.nodekind_allowlisted_never_seen,
+        summary.nodekind_never_seen,
+    ) {
+        (0, 0, 0) => "0 never-seen node kinds".to_string(),
+        (0, allowlisted, _) => {
+            format!("0 actionable never-seen; {allowlisted} recovery-only allowlisted")
+        }
+        (actionable, 0, total) => {
+            format!("{actionable} actionable never-seen; {total} total never-seen")
+        }
+        (actionable, allowlisted, total) => {
+            format!(
+                "{actionable} actionable never-seen; {allowlisted} recovery-only allowlisted; {total} total never-seen"
+            )
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Generator
 // ---------------------------------------------------------------------------
@@ -234,10 +255,10 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             } else {
                 100.0 * summary.nodekind_covered as f64 / summary.nodekind_total as f64
             };
-            let never_seen = summary.nodekind_total.saturating_sub(summary.nodekind_covered);
+            let gap_note = format_nodekind_gap_note(summary);
             format!(
-                "| **Node-kind coverage** | {}/{} ({:.1}%) | {} never-seen node kinds | `corpus_audit` |",
-                summary.nodekind_covered, summary.nodekind_total, pct, never_seen,
+                "| **Node-kind coverage** | {}/{} ({:.1}%) | {} | `corpus_audit` |",
+                summary.nodekind_covered, summary.nodekind_total, pct, gap_note,
             )
         },
     );
