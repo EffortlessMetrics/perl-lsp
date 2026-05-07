@@ -233,6 +233,7 @@
     "typeglob_alias::symbol_entity::typeglob_alias_original_entity",
     "typeglob_alias::symbol_entity::typeglob_alias_package_entity",
     "typeglob_alias::symbol_occurrence::typeglob_alias_call",
+    "typeglob_alias::symbol_occurrence::typeglob_alias_lhs_dynamic_boundary",
     "typeglob_alias::symbol_occurrence::typeglob_alias_lhs_typeglob",
     "typeglob_alias::symbol_occurrence::typeglob_alias_rhs_coderef",
     "unbalanced_bracket::line::1::PackageDecl",
@@ -245,6 +246,7 @@
   ],
   "dynamic_expectation_signatures": [
     "dynamic_require_boundary::line::4::DynamicBoundary",
+    "typeglob_alias::symbol_occurrence::typeglob_alias_lhs_dynamic_boundary",
     "typeglob_alias::symbol_occurrence::typeglob_alias_lhs_typeglob"
   ]
 }
