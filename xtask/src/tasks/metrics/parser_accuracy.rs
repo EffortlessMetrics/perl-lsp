@@ -89,6 +89,8 @@ struct ParserAccuracyManifest {
 struct GoldBaseline {
     schema_version: u32,
     expectation_signatures: BTreeSet<String>,
+    #[serde(default)]
+    dynamic_expectation_signatures: Option<BTreeSet<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -604,6 +606,7 @@ struct GoldDrift {
     added_expectation_count: u64,
     added_expectation_sample_count: u64,
     dynamic_expectation_change_count: u64,
+    dynamic_expectation_sample_count: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -3086,6 +3089,14 @@ fn audit_gold_drift(
             .count() as u64;
         drift.changed_symbol_sample_count =
             current_symbol_expectations.union(&baseline_symbol_expectations).count() as u64;
+        if let Some(baseline_dynamic_expectations) = &baseline.dynamic_expectation_signatures {
+            let current_dynamic_expectations = dynamic_gold_signatures(manifest);
+            drift.dynamic_expectation_change_count = current_dynamic_expectations
+                .symmetric_difference(baseline_dynamic_expectations)
+                .count() as u64;
+            drift.dynamic_expectation_sample_count =
+                current_dynamic_expectations.union(baseline_dynamic_expectations).count() as u64;
+        }
     }
 
     for fixture in &manifest.fixtures {
@@ -3163,6 +3174,43 @@ fn collect_fixture_gold_signatures(fixture: &FixtureMetadata, signatures: &mut B
     }
     for expectation in &fixture.provider_expectations.navigation {
         signatures.insert(format!("{fixture_id}::provider_navigation::{}", expectation.id));
+    }
+}
+
+fn dynamic_gold_signatures(manifest: &ParserAccuracyManifest) -> BTreeSet<String> {
+    let mut signatures = BTreeSet::new();
+    for fixture in &manifest.fixtures {
+        collect_fixture_dynamic_gold_signatures(fixture, &mut signatures);
+    }
+    signatures
+}
+
+fn collect_fixture_dynamic_gold_signatures(
+    fixture: &FixtureMetadata,
+    signatures: &mut BTreeSet<String>,
+) {
+    let fixture_id = fixture.id.as_str();
+    for expectation in &fixture.line_expectations {
+        for tag in &expectation.expected_tags {
+            if *tag == LineTag::DynamicBoundary {
+                signatures.insert(format!("{fixture_id}::line::{}::{tag:?}", expectation.line));
+            }
+        }
+    }
+    for expectation in &fixture.symbol_expectations.entities {
+        if expectation.provenance == "DynamicBoundary" {
+            signatures.insert(format!("{fixture_id}::symbol_entity::{}", expectation.id));
+        }
+    }
+    for expectation in &fixture.symbol_expectations.occurrences {
+        if expectation.provenance == "DynamicBoundary" {
+            signatures.insert(format!("{fixture_id}::symbol_occurrence::{}", expectation.id));
+        }
+    }
+    for expectation in &fixture.symbol_expectations.edges {
+        if expectation.provenance == "DynamicBoundary" {
+            signatures.insert(format!("{fixture_id}::symbol_edge::{}", expectation.id));
+        }
     }
 }
 
@@ -5276,9 +5324,12 @@ fn gold_drift_metrics(drift: &GoldDrift, fixture_count: u64, cadence: Cadence) -
             "gold drift baseline is not wired yet",
             cadence,
         ),
-        insufficient(
+        optional_measured_count(
             "gold_dynamic_expectation_change_count",
+            drift.dynamic_expectation_change_count,
+            drift.dynamic_expectation_sample_count,
             "gold drift baseline is not wired yet",
+            cadence,
         ),
         insufficient(
             "gold_weakening_explanation_required_count",
@@ -8545,6 +8596,49 @@ sub dynamic_boundary_case {
             drift.removed_expectation_sample_count,
             gold_expectation_signatures(&manifest).len() as u64 - 1
         );
+        assert_eq!(drift.dynamic_expectation_change_count, 0);
+        assert_eq!(drift.dynamic_expectation_sample_count, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn gold_drift_audit_counts_dynamic_baseline_expectation_deltas() -> Result<()> {
+        let tmp = tempfile::tempdir()?;
+        write_fixture_sources(tmp.path())?;
+        let manifest = fixture_manifest();
+        let current_dynamic_signatures = dynamic_gold_signatures(&manifest);
+        let removed_signature = current_dynamic_signatures
+            .iter()
+            .next()
+            .cloned()
+            .ok_or_else(|| eyre!("fixture manifest should include dynamic gold signatures"))?;
+        let mut baseline_dynamic_signatures = current_dynamic_signatures.clone();
+        baseline_dynamic_signatures.remove(&removed_signature);
+        baseline_dynamic_signatures
+            .insert("dynamic_require_boundary::line::99::DynamicBoundary".to_string());
+        let baseline_dir = tmp.path().join(".ci/metrics/baselines");
+        fs::create_dir_all(&baseline_dir)?;
+        fs::write(
+            baseline_dir.join("parser_accuracy_gold.json"),
+            serde_json::to_string_pretty(&serde_json::json!({
+                "schema_version": 1,
+                "expectation_signatures": gold_expectation_signatures(&manifest),
+                "dynamic_expectation_signatures": baseline_dynamic_signatures,
+            }))?,
+        )?;
+        let mut source_cache = MetricSourceCache::default();
+
+        let drift = audit_gold_drift(tmp.path(), &manifest, &mut source_cache)?;
+
+        assert_eq!(
+            drift.dynamic_expectation_change_count,
+            current_dynamic_signatures.symmetric_difference(&baseline_dynamic_signatures).count()
+                as u64
+        );
+        assert_eq!(
+            drift.dynamic_expectation_sample_count,
+            current_dynamic_signatures.union(&baseline_dynamic_signatures).count() as u64
+        );
         Ok(())
     }
 
@@ -8562,6 +8656,8 @@ sub dynamic_boundary_case {
             removed_expectation_sample_count: 4,
             added_expectation_count: 1,
             added_expectation_sample_count: 4,
+            dynamic_expectation_change_count: 1,
+            dynamic_expectation_sample_count: 4,
             ..GoldDrift::default()
         };
 
@@ -8604,6 +8700,14 @@ sub dynamic_boundary_case {
                 metric,
                 MetricRow::Measured { metric, value, sample_count: 4, .. }
                     if metric == "gold_added_expectation_count"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "gold_dynamic_expectation_change_count"
                         && (*value - 1.0).abs() < f64::EPSILON
             )
         }));
