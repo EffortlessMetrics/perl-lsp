@@ -391,6 +391,33 @@ mod tests {
         }
     }
 
+    async fn process_is_running(pid: u32) -> Result<bool> {
+        #[cfg(unix)]
+        {
+            let status = Command::new("sh")
+                .arg("-c")
+                .arg(format!("kill -0 {pid} 2>/dev/null"))
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .await?;
+            Ok(status.success())
+        }
+
+        #[cfg(windows)]
+        {
+            let output = Command::new("cmd")
+                .arg("/C")
+                .arg(format!("tasklist /FI \"PID eq {pid}\" /NH"))
+                .output()
+                .await?;
+            if !output.status.success() {
+                anyhow::bail!("tasklist failed while checking child process {pid}");
+            }
+            Ok(String::from_utf8_lossy(&output.stdout).contains(&pid.to_string()))
+        }
+    }
+
     #[tokio::test]
     async fn proxy_returns_error_when_child_already_exited() -> Result<()> {
         let mut adapter = BridgeAdapter::new();
@@ -407,6 +434,35 @@ mod tests {
         let proxy_result = result?;
         assert!(proxy_result.is_err(), "proxy_messages should error for exited child");
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn repeated_start_stop_cycles_do_not_leave_child_processes() -> Result<()> {
+        let mut observed_pids = Vec::new();
+
+        for _ in 0..5 {
+            let mut adapter = BridgeAdapter::new();
+            let child = spawn_long_running_child().await?;
+            let pid = child
+                .id()
+                .ok_or_else(|| anyhow::anyhow!("spawned child should have a process id"))?;
+            observed_pids.push(pid);
+            adapter.child_process = Some(child);
+
+            let result = tokio::time::timeout(Duration::from_secs(2), adapter.shutdown()).await;
+            assert!(result.is_ok(), "shutdown should not hang for child process {pid}");
+            result??;
+
+            assert!(
+                !process_is_running(pid).await?,
+                "DAP bridge shutdown left child process {pid} running"
+            );
+        }
+
+        observed_pids.sort_unstable();
+        observed_pids.dedup();
+        assert_eq!(observed_pids.len(), 5, "each cycle should own a distinct child process");
         Ok(())
     }
 
