@@ -6,26 +6,30 @@ Thank you for your interest in contributing to Perl LSP! This is a **public alph
 
 ## Quick Start
 
-Clone, build, and run the tests in three commands:
+Clone, check the environment, and run the fast local gate:
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
-nix develop -c just ci-gate   # Reproducible env + full local gate (~3-5 min)
+nix develop                   # Recommended: Rust 1.93.1 + all repo tools
+just devex
+just pr-fast
 ```
 
-No Nix? Install Rust via [rustup](https://rustup.rs/) (MSRV 1.92, pinned in `rust-toolchain.toml`), then:
+No Nix? Install Rust via [rustup](https://rustup.rs/) (MSRV 1.93, toolchain `1.93.1` pinned in `rust-toolchain.toml`), install `just`, then run the same commands:
 
 ```bash
-just ci-gate
+cargo install just
+just devex
+just pr-fast
 ```
 
 ## Getting Started
 
 ### Prerequisites
 
-- **Rust** toolchain (pinned via `rust-toolchain.toml`, MSRV 1.92)
-- **Nix** (recommended) for a fully reproducible dev environment — `nix develop` drops you into a shell with all tools present
+- **Rust** toolchain (pinned via `rust-toolchain.toml`, MSRV 1.93, channel `1.93.1`)
+- **Nix** (recommended, not required) for a fully reproducible dev environment — `nix develop` drops you into a shell with all tools present
 - **just** — task runner used for all build/test/lint commands (`cargo install just` or via Nix)
 
 ### First-Time Setup Checklist
@@ -40,16 +44,17 @@ cd perl-lsp
 
 **2. Enter the dev environment**
 ```bash
-nix develop          # Recommended: pins Rust 1.92 + all tools
+nix develop          # Recommended: pins Rust 1.93.1 + all tools
 # No Nix? Install rustup and then: cargo install just
 ```
 Success: your shell prompt changes (or you see the nix shellHook banner listing available commands).
 
 **3. Verify the environment**
 ```bash
-just doctor
+just devex           # Required tools and Rust components
+just doctor          # Workspace health, hooks, branch/worktree state
 ```
-Success: every line shows ✅. If you see ❌, the output explains what's missing and how to install it. ⚠️ lines are optional tools — safe to skip for basic contribution work.
+Success: every required check passes. If something fails, the output explains what's missing and how to install it. Optional-tool warnings are safe to skip for basic contribution work.
 
 **4. Validate everything compiles and tests pass**
 ```bash
@@ -63,7 +68,7 @@ bash scripts/install-githooks.sh
 ```
 Success: prints `Installed pre-push hook`. The hook runs `just pr-fast` automatically before every `git push`.
 
-Once all five steps succeed, you're ready to make changes.
+Once all five steps succeed, you're ready to make changes. Before pushing, run `just ready` to combine the workspace doctor with the fast PR gate.
 
 ### Setup
 
@@ -83,14 +88,24 @@ Install the pre-push git hook so the gate runs automatically before every push:
 bash scripts/install-githooks.sh
 ```
 
-### Codex Desktop workflow (agent contributors)
+### Agent Quickstart
 
-If you are contributing from the Codex desktop app, use this repo-specific startup
-sequence to match CI and avoid platform gotchas:
+If you are contributing from an agentic coding environment, use the repo's bounded build profiles so target directories and caches do not grow inside disposable worktrees:
+
+```bash
+just agent-preflight
+just agent-check
+just agent-test
+just agent-clippy
+just agent-pr-fast
+```
+
+For Codex Desktop specifically:
 
 1. Open the repository root as the workspace.
 2. Run checks through a POSIX shell (`bash`) even on Windows.
-3. Prefer the fast gate while iterating, then run the full local gate before PR.
+3. Prefer `just agent-*` commands for large compile/test work.
+4. Use `just pr-fast` or `just ready` before handing a PR to review.
 
 ```bash
 # Fast inner-loop validation
@@ -101,7 +116,7 @@ nix develop -c just ci-gate
 ```
 
 If your desktop environment does not use Nix, run `just ci-gate` directly.
-For stale toolchains or workspace drift, run `just doctor`.
+For stale toolchains or workspace drift, run `just devex` and `just doctor`.
 
 ### Build and Test
 
@@ -178,6 +193,22 @@ bash scripts/install-githooks.sh
 
 That hook runs `nix develop -c just pr-fast` (or `just pr-fast` without Nix).
 It is a quick push guard, not the full merge gate.
+
+### Command Decision Table
+
+| Situation | Command | Why |
+|---|---|---|
+| New checkout | `just doctor` | Verifies workspace health, hooks, branch state, and common drift. |
+| Tool/env check | `just devex` | Checks required tools, Rust components, and local setup. |
+| Before push | `just ready` | Runs doctor plus the fast PR gate. |
+| Fast PR loop | `just pr-fast` | Cheapest useful proof while iterating. |
+| Agent compile/test | `just agent-check` / `just agent-test` | Uses cargo-safe agent profiles and bounded build directories. |
+| Agent lint | `just agent-clippy` | Runs clippy through the cargo-safe agent profile. |
+| Agent PR proof | `just agent-pr-fast` | Runs the PR-fast gate through cargo-safe. |
+| Full pre-merge | `just ci-gate` or `nix develop -c just ci-gate` | Canonical local merge gate. |
+| Memory lifecycle touched | `cargo xtask check-memory-lifecycle-policy` | Enforces retained-state lifecycle and receipt policy. |
+| Retained owner added | `cargo xtask check-memory-retained-owner-drift --base origin/master` | Checks whether long-lived storage/task additions need retained-state inventory coverage. |
+| Need a command map | `just quick-ref` or [Commands Reference](docs/reference/COMMANDS_REFERENCE.md) | Shows the short command decision tree. |
 
 ### 5. Expand for larger changes or release prep
 
