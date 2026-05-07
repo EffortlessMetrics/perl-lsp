@@ -89,6 +89,9 @@ perl-dap --stdio  # Standard DAP transport
 | Full pre-merge | `just ci-gate` or `nix develop -c just ci-gate` | Canonical local merge gate. |
 | Memory touched | `cargo xtask check-memory-lifecycle-policy` | Enforces retained-state lifecycle and receipt policy. |
 | Retained owner added | `cargo xtask check-memory-retained-owner-drift --base origin/master` | Checks whether long-lived storage/task additions need retained-state inventory coverage. |
+| Parser-accuracy metrics touched | `just ci-metrics-ratchet-check parser_accuracy` | Verifies parser-accuracy scorecard floors do not regress. |
+| Generated status docs touched | `just status-update` then `just status-check` | Regenerates and verifies `docs/project/status/` outputs. |
+| Release/version surfaces touched | `just version-check` then `just release-check` | Verifies version sync and the release-prep gate before tagging/publishing. |
 | Need a terminal summary | `just quick-ref` | Prints the short command decision tree. |
 
 ### Common Commands
@@ -118,6 +121,13 @@ just pr-fast
 
 # Canonical local merge gate
 nix develop -c just ci-gate
+
+# Metrics/status/release surfaces
+just ci-metrics-ratchet-check parser_accuracy
+just status-update
+just status-check
+just version-check
+just release-check
 ```
 
 ## Build Commands
