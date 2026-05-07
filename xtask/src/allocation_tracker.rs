@@ -13,9 +13,11 @@ static ALLOCATOR: TrackingAllocator = TrackingAllocator;
 static CURRENT_BYTES: AtomicUsize = AtomicUsize::new(0);
 static PEAK_BYTES: AtomicUsize = AtomicUsize::new(0);
 static WINDOW_ALLOCATED_BYTES: AtomicU64 = AtomicU64::new(0);
+static WINDOW_ALLOCATION_COUNT: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) struct AllocationMeasurement {
     pub(crate) allocated_bytes: u64,
+    pub(crate) allocation_count: u64,
     pub(crate) peak_delta_bytes: u64,
 }
 
@@ -57,6 +59,7 @@ pub(crate) fn get_current_memory_usage() -> Result<f64> {
 fn reset_allocation_window() -> usize {
     let current = CURRENT_BYTES.load(Ordering::Relaxed);
     WINDOW_ALLOCATED_BYTES.store(0, Ordering::Relaxed);
+    WINDOW_ALLOCATION_COUNT.store(0, Ordering::Relaxed);
     PEAK_BYTES.store(current, Ordering::Relaxed);
     current
 }
@@ -65,6 +68,7 @@ fn allocation_measurement(baseline: usize) -> AllocationMeasurement {
     let peak = PEAK_BYTES.load(Ordering::Relaxed);
     AllocationMeasurement {
         allocated_bytes: WINDOW_ALLOCATED_BYTES.load(Ordering::Relaxed),
+        allocation_count: WINDOW_ALLOCATION_COUNT.load(Ordering::Relaxed),
         peak_delta_bytes: peak.saturating_sub(baseline) as u64,
     }
 }
@@ -74,6 +78,7 @@ fn record_allocation(size: usize) {
         return;
     }
     WINDOW_ALLOCATED_BYTES.fetch_add(size as u64, Ordering::Relaxed);
+    WINDOW_ALLOCATION_COUNT.fetch_add(1, Ordering::Relaxed);
 }
 
 fn add_current(size: usize) {
