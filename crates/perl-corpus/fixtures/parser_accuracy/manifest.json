@@ -847,14 +847,14 @@
       "family": "recovery",
       "label_mode": "partial",
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/malformed_heredoc_recovery.pl",
-      "scored_lines": 3,
+      "scored_lines": 4,
       "scored_symbols": 1,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
       "negative_regions": 0,
       "dynamic_boundaries": 0,
-      "unsupported_constructs": 0,
+      "unsupported_constructs": 1,
       "real_project_file": false,
       "generated": false,
       "line_expectations": [
@@ -869,6 +869,12 @@
           "expected_tags": [
             "variable_decl",
             "heredoc_opener"
+          ]
+        },
+        {
+          "line": 4,
+          "expected_tags": [
+            "unsupported_construct"
           ]
         },
         {
@@ -2157,14 +2163,14 @@
       "family": "recovery",
       "label_mode": "partial",
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/unterminated_heredoc.pl",
-      "scored_lines": 1,
+      "scored_lines": 2,
       "scored_symbols": 1,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
       "negative_regions": 0,
       "dynamic_boundaries": 0,
-      "unsupported_constructs": 0,
+      "unsupported_constructs": 1,
       "real_project_file": false,
       "generated": false,
       "line_expectations": [
@@ -2172,6 +2178,12 @@
           "line": 1,
           "expected_tags": [
             "package_decl"
+          ]
+        },
+        {
+          "line": 4,
+          "expected_tags": [
+            "unsupported_construct"
           ]
         }
       ]
@@ -2181,14 +2193,14 @@
       "family": "recovery",
       "label_mode": "partial",
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/bad_heredoc_terminator.pl",
-      "scored_lines": 1,
+      "scored_lines": 2,
       "scored_symbols": 1,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
       "negative_regions": 0,
       "dynamic_boundaries": 0,
-      "unsupported_constructs": 0,
+      "unsupported_constructs": 1,
       "real_project_file": false,
       "generated": false,
       "line_expectations": [
@@ -2196,6 +2208,12 @@
           "line": 1,
           "expected_tags": [
             "package_decl"
+          ]
+        },
+        {
+          "line": 4,
+          "expected_tags": [
+            "unsupported_construct"
           ]
         }
       ]
