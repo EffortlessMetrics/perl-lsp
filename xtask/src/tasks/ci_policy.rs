@@ -16,6 +16,7 @@ struct MemoryLifecycleInputs {
     runtime_mod: String,
     streaming_tests: String,
     memory_status: String,
+    retained_state_inventory: String,
     receipt_registry: String,
     memory_receipt_schema: String,
 }
@@ -153,6 +154,80 @@ fn function_body<'a>(contents: &'a str, fn_name: &str) -> Option<&'a str> {
     None
 }
 
+fn markdown_section<'a>(contents: &'a str, heading: &str) -> Option<&'a str> {
+    let section_start = contents.find(heading)?;
+    let after_heading = section_start + heading.len();
+    let section_end = contents[after_heading..]
+        .find("\n## ")
+        .map(|offset| after_heading + offset)
+        .unwrap_or(contents.len());
+    Some(&contents[after_heading..section_end])
+}
+
+fn retained_state_inventory_violations(inventory: &str) -> Vec<String> {
+    let mut violations = Vec::new();
+
+    if !inventory.contains("- pressure counter or retained-process signal") {
+        violations.push(
+            "retained-state inventory must require a pressure counter or retained-process signal"
+                .to_string(),
+        );
+    }
+    if !inventory.contains(
+        "| Owner | State | Key type | Byte-risk | Bounds and cleanup | Pressure counter or signal | Regression test or receipt |",
+    ) {
+        violations.push(
+            "retained-state inventory table must include a pressure counter or signal column"
+                .to_string(),
+        );
+    }
+    if !inventory.contains("Is there a pressure counter, retained-process signal, or receipt?") {
+        violations.push(
+            "retained-state review checklist must ask for a pressure counter or signal".to_string(),
+        );
+    }
+
+    let Some(current_inventory) = markdown_section(inventory, "## Current Inventory") else {
+        violations
+            .push("retained-state inventory must keep a Current Inventory section".to_string());
+        return violations;
+    };
+
+    for (line_index, line) in current_inventory.lines().enumerate() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with('|')
+            || trimmed.contains("| Owner |")
+            || trimmed.contains("|-------|")
+        {
+            continue;
+        }
+
+        let cells: Vec<_> = trimmed.trim_matches('|').split('|').map(str::trim).collect();
+        if cells.len() != 7 {
+            violations.push(format!(
+                "retained-state inventory row {} must have 7 cells including pressure signal",
+                line_index + 1
+            ));
+            continue;
+        }
+
+        let pressure_signal = cells[5];
+        if pressure_signal.is_empty()
+            || matches!(
+                pressure_signal.to_ascii_lowercase().as_str(),
+                "n/a" | "none" | "todo" | "tbd"
+            )
+        {
+            violations.push(format!(
+                "retained-state inventory row for {} must name a concrete pressure signal",
+                cells[1]
+            ));
+        }
+    }
+
+    violations
+}
+
 fn memory_lifecycle_violations(inputs: &MemoryLifecycleInputs) -> Vec<String> {
     let mut violations = Vec::new();
 
@@ -262,6 +337,8 @@ fn memory_lifecycle_violations(inputs: &MemoryLifecycleInputs) -> Vec<String> {
         }
     }
 
+    violations.extend(retained_state_inventory_violations(&inputs.retained_state_inventory));
+
     if !inputs.receipt_registry.contains("check = \"memory-plateau\"")
         || !inputs
             .receipt_registry
@@ -303,6 +380,7 @@ pub fn check_memory_lifecycle() -> Result<()> {
         runtime_mod: read("crates/perl-lsp-rs/src/runtime/mod.rs")?,
         streaming_tests: read("crates/perl-lsp-rs/tests/lsp_streaming_completion_tests.rs")?,
         memory_status: read("docs/project/status/memory_plateau.md")?,
+        retained_state_inventory: read("docs/large-workspaces/RETAINED_STATE_INVENTORY.md")?,
         receipt_registry: read(".ci/receipts/registry.toml")?,
         memory_receipt_schema: read(".ci/receipts/schemas/memory-plateau.schema.json")?,
     };
@@ -417,6 +495,20 @@ mod tests {
                 The plateau gate tracks tail growth and median tail slope.
             "#
             .to_string(),
+            retained_state_inventory: r#"
+                - pressure counter or retained-process signal
+
+                ## Current Inventory
+
+                | Owner | State | Key type | Byte-risk | Bounds and cleanup | Pressure counter or signal | Regression test or receipt |
+                |-------|-------|----------|-----------|--------------------|----------------------------|----------------------------|
+                | `LspServer` | Open documents | URI | Source text | Close/delete cleanup | `MemoryStateSnapshot.documents` | close/delete test |
+
+                ## Review Checklist
+
+                - Is there a pressure counter, retained-process signal, or receipt?
+            "#
+            .to_string(),
             receipt_registry: r#"
                 check = "memory-plateau"
                 schema = ".ci/receipts/schemas/memory-plateau.schema.json"
@@ -460,6 +552,7 @@ mod tests {
             runtime_mod: String::new(),
             streaming_tests: String::new(),
             memory_status: String::new(),
+            retained_state_inventory: String::new(),
             receipt_registry: String::new(),
             memory_receipt_schema: String::new(),
         };
@@ -487,6 +580,7 @@ mod tests {
             runtime_mod: String::new(),
             streaming_tests: String::new(),
             memory_status: String::new(),
+            retained_state_inventory: String::new(),
             receipt_registry: String::new(),
             memory_receipt_schema: String::new(),
         };
@@ -499,6 +593,31 @@ mod tests {
         assert!(
             violations.iter().any(|v| v.contains("change-storm background index regression")),
             "expected regression-test presence violation, got {violations:?}"
+        );
+    }
+
+    #[test]
+    fn memory_lifecycle_policy_flags_missing_inventory_pressure_signal() {
+        let inventory = r#"
+            ## Current Inventory
+
+            | Owner | State | Key type | Byte-risk | Bounds and cleanup | Regression test or receipt |
+            |-------|-------|----------|-----------|--------------------|----------------------------|
+            | `LspServer` | Open documents | URI | Source text | Close/delete cleanup | close/delete test |
+
+            ## Review Checklist
+
+            - Is there a regression test?
+        "#;
+
+        let violations = retained_state_inventory_violations(inventory);
+        assert!(
+            violations.iter().any(|v| v.contains("pressure counter or retained-process signal")),
+            "expected missing pressure-signal requirement violation, got {violations:?}"
+        );
+        assert!(
+            violations.iter().any(|v| v.contains("pressure counter or signal column")),
+            "expected missing pressure-signal column violation, got {violations:?}"
         );
     }
 }
