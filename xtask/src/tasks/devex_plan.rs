@@ -754,6 +754,14 @@ mod tests {
         commands.iter().map(|proof| proof.command.clone()).collect()
     }
 
+    fn assert_object_keys(object: &serde_json::Map<String, serde_json::Value>, expected: &[&str]) {
+        let mut actual = object.keys().map(String::as_str).collect::<Vec<_>>();
+        let mut expected = expected.to_vec();
+        actual.sort_unstable();
+        expected.sort_unstable();
+        assert_eq!(actual, expected);
+    }
+
     fn plan_for(files: &[&str]) -> Plan {
         build_plan("origin/master".to_string(), "abcdef1234567890".to_string(), strings(files))
     }
@@ -1125,6 +1133,91 @@ Agent-safe hints:
   "generated_at": "2026-05-07T12:00:00Z"
 }"#
         );
+    }
+
+    #[test]
+    fn receipt_json_contract_keeps_agent_handoff_fields_stable() {
+        let receipt = build_receipt_payload(
+            plan_for(&[
+                "docs/project/status/parser.md",
+                "crates/perl-lsp-rs/src/runtime/text_sync.rs",
+                "CHANGELOG.md",
+            ]),
+            false,
+            "2026-05-07T12:34:56Z".to_string(),
+        )
+        .unwrap();
+
+        let value = serde_json::to_value(&receipt).expect("receipt should serialize");
+        let object = value.as_object().expect("receipt should serialize as an object");
+        assert_object_keys(
+            object,
+            &[
+                "base",
+                "head",
+                "changed_files",
+                "changed_surfaces",
+                "required_proof",
+                "optional_proof",
+                "agent_hints",
+                "worktree_clean",
+                "generated_at",
+            ],
+        );
+        assert_eq!(value["base"], "origin/master");
+        assert_eq!(value["head"], "abcdef1234567890");
+        assert_eq!(value["worktree_clean"], false);
+        assert_eq!(value["generated_at"], "2026-05-07T12:34:56Z");
+        assert_eq!(
+            value["changed_files"],
+            serde_json::json!([
+                "docs/project/status/parser.md",
+                "crates/perl-lsp-rs/src/runtime/text_sync.rs",
+                "CHANGELOG.md"
+            ])
+        );
+        assert_eq!(
+            value["changed_surfaces"],
+            serde_json::json!([
+                "parser_accuracy",
+                "generated_status_docs",
+                "memory_sensitive_runtime",
+                "retained_owner_candidate",
+                "release_version",
+                "rust_code",
+                "docs"
+            ])
+        );
+
+        let required = value["required_proof"].as_array().expect("required proof array");
+        assert!(required.len() >= 2, "required proof should not collapse to an empty contract");
+        for proof in required {
+            let proof_object = proof.as_object().expect("proof command should be an object");
+            assert_object_keys(proof_object, &["command", "why", "evidence"]);
+            assert!(proof["command"].as_str().is_some_and(|command| !command.is_empty()));
+            assert!(proof["why"].as_str().is_some_and(|why| !why.is_empty()));
+            assert!(proof["evidence"].as_str().is_some_and(|evidence| !evidence.is_empty()));
+        }
+
+        let optional = value["optional_proof"].as_array().expect("optional proof array");
+        assert!(optional.iter().any(|proof| proof["command"] == "just pr-fast"));
+        for proof in optional {
+            let proof_object = proof.as_object().expect("optional proof should be an object");
+            assert_object_keys(proof_object, &["command", "why", "evidence"]);
+        }
+
+        let hints = value["agent_hints"].as_array().expect("agent hints array");
+        assert!(
+            hints.iter().any(|hint| {
+                hint.as_str().is_some_and(|hint| hint.contains("just agent-check"))
+            })
+        );
+        assert!(hints.iter().any(|hint| {
+            hint.as_str().is_some_and(|hint| hint.contains("For memory-sensitive edits"))
+        }));
+        assert!(hints.iter().any(|hint| {
+            hint.as_str().is_some_and(|hint| hint.contains("For parser-accuracy edits"))
+        }));
     }
 
     #[test]
