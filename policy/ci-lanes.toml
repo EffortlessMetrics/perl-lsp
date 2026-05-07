@@ -1,0 +1,278 @@
+# CI Lane Economics
+#
+# Maps every CI lane to a single intent, runner, base LEM, and default-PR flag.
+# This file is the economics counterpart to .ci/gate-policy.yaml (which defines
+# what gates execute). See docs/ci/perl-lsp-rollout-plan.md.
+#
+# Lane keys here are referenced by:
+#   policy/ci-lane-whitelist.toml  (governance: why each lane exists, owner, expiry)
+#   policy/ci-risk-packs.toml      (when extra proof is relevant)
+#   .github/workflows/pr-plan.yml  (PR 04+ planner reads this file)
+
+schema_version = 1
+policy = "ci-lanes"
+owner = "EffortlessMetrics"
+status = "advisory"
+updated = "2026-05-07"
+
+# -----------------------------------------------------------------------------
+# Frontdoor / control lanes
+# -----------------------------------------------------------------------------
+
+[lane.pr_plan]
+description = "Forecast PR CI cost and selected verification lanes."
+intent = "visibility"
+runner = "ubuntu_24_04"
+base_lem = 1
+default_pr = true
+blocking = false
+labels = []
+paths = ["**"]
+outputs = ["target/ci/ci-plan.json", "step-summary"]
+duplicate_of = []
+
+[lane.draft_guard]
+description = "Skip non-credible draft PR validation."
+intent = "cost avoidance"
+runner = "ubuntu_24_04"
+base_lem = 1
+default_pr = true
+blocking = true
+duplicate_of = []
+
+[lane.preflight_latest]
+description = "Skip superseded PR SHAs."
+intent = "cost avoidance"
+runner = "ubuntu_24_04"
+base_lem = 1
+default_pr = true
+blocking = true
+duplicate_of = []
+
+[lane.conflict_markers]
+description = "Prevent committed conflict markers from reaching master."
+intent = "cheap mechanical correctness"
+runner = "ubuntu_24_04"
+base_lem = 1
+default_pr = true
+blocking = true
+duplicate_of = ["gate:check_conflict_markers"]
+
+# -----------------------------------------------------------------------------
+# Default Rust gates
+# -----------------------------------------------------------------------------
+
+[lane.pr_smoke]
+description = "Run pr-fast gate through xtask."
+intent = "frontdoor mechanical proof"
+runner = "ubuntu_24_04"
+base_lem = 4
+default_pr = true
+blocking = true
+paths = ["crates/**", "xtask/**", "Cargo.toml", "Cargo.lock"]
+outputs = ["target/receipts/receipt.json", "target/test-results/pr-fast-junit.xml"]
+duplicate_of = []
+
+[lane.merge_gate_shards]
+description = "Run bounded required merge-gate shards."
+intent = "merge-blocking correctness"
+runner = "ubuntu_24_04"
+base_lem = 24
+default_pr = true
+blocking = true
+outputs = ["target/receipts/shards/*.json", "target/test-results/*.xml"]
+duplicate_of = []
+
+[lane.merge_gate_aggregate]
+description = "Aggregate required gate results into merge-blocking status."
+intent = "branch protection surface"
+runner = "ubuntu_24_04"
+base_lem = 1
+default_pr = true
+blocking = true
+duplicate_of = []
+
+[lane.check_all_targets]
+description = "Compile all targets to catch integration-test and bench bit-rot."
+intent = "compile surface"
+runner = "ubuntu_24_04"
+base_lem = 6
+default_pr = true
+blocking = true
+duplicate_of = []
+
+[lane.docs_gate]
+description = "Validate docs-only changes without compiling Rust."
+intent = "docs correctness"
+runner = "ubuntu_24_04"
+base_lem = 3
+default_pr = true
+blocking = true
+paths = ["docs/**", "**/*.md", "README*", "CHANGELOG*", "RELEASE_HISTORY*"]
+duplicate_of = []
+
+# -----------------------------------------------------------------------------
+# UX / memory / platform default lanes
+# -----------------------------------------------------------------------------
+
+[lane.ux_tests]
+description = "Run first-five-minutes UX regression suite."
+intent = "user-visible LSP behavior proof"
+runner = "ubuntu_24_04"
+base_lem = 8
+default_pr = true
+blocking = true
+areas = ["lsp", "dap", "ux", "vscode"]
+outputs = ["target/receipts/ux-regression.json"]
+duplicate_of = ["workflow:ux-regression-gate"]
+
+[lane.lsp_memory_smoke]
+description = "Run bounded LSP document churn memory smoke."
+intent = "retained-state regression proof"
+runner = "ubuntu_24_04"
+base_lem = 8
+default_pr = true
+blocking = true
+areas = ["memory", "runtime", "workspace_lifecycle"]
+outputs = ["target/memory/receipts/*.json"]
+duplicate_of = ["nightly:memory_plateau"]
+
+[lane.windows_guardrails]
+description = "Windows compile, path separator, and sandbox guardrails."
+intent = "Windows-specific regression proof"
+runner = "windows_latest"
+base_minutes = 10
+default_pr = true
+blocking = true
+areas = ["path_normalization", "module_resolution", "sandbox"]
+duplicate_of = []
+
+# -----------------------------------------------------------------------------
+# Oracle-gap / advisory lanes
+# -----------------------------------------------------------------------------
+
+[lane.ripr_advisory]
+description = "Static RIPR exposure analysis for production Rust diffs."
+intent = "oracle-gap detection"
+runner = "ubuntu_24_04"
+base_lem = 4
+default_pr = true
+blocking = false
+paths = ["crates/**/src/**", "xtask/src/**"]
+labels = ["ripr", "full-ci"]
+outputs = ["target/ripr/ripr.json", "target/ripr/ripr.sarif", "step-summary"]
+duplicate_of = ["nightly:mutation"]
+
+# -----------------------------------------------------------------------------
+# Label / nightly / branch-gated deep lanes
+# -----------------------------------------------------------------------------
+
+[lane.security_audit]
+description = "Cargo audit, cargo deny, and Trivy scan."
+intent = "dependency and supply-chain risk"
+runner = "ubuntu_24_04"
+base_lem = 15
+default_pr = false
+blocking = false
+labels = ["security-audit", "ci:security", "full-ci"]
+branches = ["master"]
+duplicate_of = []
+
+[lane.perl_version_matrix]
+description = "Perl runtime compatibility from 5.8 through 5.40."
+intent = "runtime compatibility"
+runner = "ubuntu_24_04"
+base_lem = 40
+default_pr = false
+blocking = false
+labels = ["ci:perl-matrix", "full-ci"]
+branches = ["master"]
+duplicate_of = []
+
+[lane.vscode_smoke_matrix]
+description = "VS Code extension-host smoke across OSes."
+intent = "extension integration"
+runner = "mixed"
+base_lem = 35
+default_pr = false
+blocking = false
+labels = ["ci:vscode-matrix", "full-ci"]
+branches = ["master"]
+duplicate_of = []
+
+[lane.coverage]
+description = "Coverage collection."
+intent = "execution-surface measurement"
+runner = "ubuntu_24_04"
+base_lem = 45
+default_pr = false
+blocking = false
+labels = ["ci:coverage", "coverage", "full-ci"]
+branches = ["master"]
+duplicate_of = []
+
+[lane.mutation]
+description = "Runtime mutation testing calibration."
+intent = "execution-backed test adequacy"
+runner = "ubuntu_24_04"
+base_lem = 60
+default_pr = false
+blocking = false
+labels = ["ci:mutation", "mutation", "full-ci"]
+branches = ["master"]
+duplicate_of = ["ripr-advisory"]
+
+[lane.fuzz]
+description = "Nightly fuzz targets."
+intent = "robustness"
+runner = "ubuntu_24_04"
+base_lem = 60
+default_pr = false
+blocking = false
+branches = ["schedule", "workflow_dispatch"]
+duplicate_of = []
+
+[lane.real_repo_latency]
+description = "Real project latency and performance scenarios."
+intent = "performance regression proof"
+runner = "ubuntu_24_04"
+base_lem = 30
+default_pr = false
+blocking = false
+labels = ["ci:bench", "ci:real-repo-latency", "full-ci"]
+duplicate_of = []
+
+[lane.memory_plateau]
+description = "Full LSP memory plateau workloads."
+intent = "retained-state trend proof"
+runner = "ubuntu_24_04"
+base_lem = 35
+default_pr = false
+blocking = false
+labels = ["ci:memory", "full-ci"]
+duplicate_of = []
+
+[lane.release_check]
+description = "Package, publish dry-run, semver/API checks."
+intent = "release correctness"
+runner = "ubuntu_24_04"
+base_lem = 15
+default_pr = false
+blocking = false
+labels = ["release-check", "full-ci"]
+branches = ["master"]
+duplicate_of = []
+
+# -----------------------------------------------------------------------------
+# Automation / external review lanes
+# -----------------------------------------------------------------------------
+
+[lane.droid_auto_review]
+description = "External AI review on credible PRs."
+intent = "advisory review"
+runner = "ubuntu_latest"
+base_lem = 4
+default_pr = true
+blocking = false
+labels = ["ai-review", "full-ci"]
+duplicate_of = []
