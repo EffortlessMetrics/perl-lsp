@@ -2576,6 +2576,31 @@
             "package_decl"
           ]
         }
+      ],
+      "recovery_expectations": [
+        {
+          "id": "unclosed_expression_recovers_package_and_sub",
+          "first_error_line": 3,
+          "error_region": {
+            "start": 3,
+            "end": 3
+          },
+          "recovery_line": 4,
+          "post_error_line_expectations": [
+            {
+              "line": 4,
+              "expected_tags": [
+                "package_decl"
+              ]
+            },
+            {
+              "line": 5,
+              "expected_tags": [
+                "sub_decl"
+              ]
+            }
+          ]
+        }
       ]
     },
     {

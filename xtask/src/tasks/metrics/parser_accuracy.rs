@@ -7982,6 +7982,14 @@ sub dynamic_boundary_case {
                         && (*value - 1.0).abs() < f64::EPSILON
             )
         }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 1, .. }
+                    if metric == "recovery_post_error_line_f1"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
         let cost_metrics = cost_metrics(
             &ScaleCostScore::default(),
             &score,
