@@ -1,5 +1,14 @@
 name: Droid Auto Review
 
+# External AI reviewer. Advisory: see policy/ci-lane-whitelist.toml entry
+# `droid_auto_review` and docs/ci/labels.md `ai-review`. The job runs on
+# ready_for_review credible PRs only (already filtered by `if:` below).
+#
+# The job is marked continue-on-error: true so that external-service
+# failures (rate limits, vendor outages) do not break unrelated CI signal
+# on the PR. Any review comments the action manages to post before failing
+# are still visible.
+
 on:
   pull_request:
     types: [opened, ready_for_review, reopened]
@@ -12,6 +21,9 @@ jobs:
   droid-review:
     if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    # Advisory lane: do not break PR signal on external-AI-review failures.
+    # See docs/ci/perl-lsp-rollout-plan.md PR 14.
+    continue-on-error: true
     permissions:
       contents: read
       pull-requests: write
