@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use crate::utils::project_root;
 
-const ALLOWLIST_PR_CONTENTS_WRITE: &[&str] = &["ci.yml", "ci-nightly.yml"];
+const ALLOWLIST_PR_CONTENTS_WRITE: &[&str] = &["ci.yml", "ci-nightly.yml", "droid-review.yml"];
 const POLICY_WARN_UNPINNED_ACTIONS: bool = true;
 const ALLOWLIST_BLANKET_CANCEL_IN_PROGRESS: &[&str] = &["docs-deploy.yml", "post-merge-status.yml"];
 
