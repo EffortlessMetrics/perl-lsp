@@ -1002,7 +1002,7 @@
       "label_mode": "partial",
       "source_path": "crates/perl-corpus/fixtures/parser_accuracy/imports_exports.pl",
       "scored_lines": 6,
-      "scored_symbols": 9,
+      "scored_symbols": 10,
       "fully_labeled_regions": 0,
       "partial_labeled_regions": 1,
       "unknown_regions": 1,
@@ -1116,6 +1116,16 @@
           {
             "id": "imports_exports_export_answer",
             "kind": "Export",
+            "canonical_name": "Accuracy::ImportsExports::answer",
+            "span_text": "answer",
+            "package": "Accuracy::ImportsExports",
+            "scope": null,
+            "provenance": "ImportExportInference",
+            "confidence": "Medium"
+          },
+          {
+            "id": "imports_exports_import_answer",
+            "kind": "Import",
             "canonical_name": "Accuracy::ImportsExports::answer",
             "span_text": "answer",
             "package": "Accuracy::ImportsExports",

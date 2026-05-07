@@ -3735,6 +3735,7 @@ fn extract_symbol_predictions_with_insert_timing(
     })?;
     let mut predictions = symbol_predictions_from_shard(source, &shard);
     add_export_occurrence_predictions(source, &mut predictions);
+    add_import_occurrence_predictions(source, &mut predictions);
     Ok((predictions, workspace_insert_ms))
 }
 
@@ -3840,11 +3841,40 @@ fn add_export_occurrence_predictions(source: &str, predictions: &mut SymbolPredi
     }
 }
 
+fn add_import_occurrence_predictions(source: &str, predictions: &mut SymbolPredictions) {
+    for line in source.lines() {
+        for statement in line.split(';') {
+            let trimmed = statement.trim();
+            let Some(module) = use_decl_module(trimmed) else {
+                continue;
+            };
+            for import_name in qw_names(trimmed) {
+                predictions.occurrences.insert(SymbolOccurrenceKey {
+                    kind: "Import".to_string(),
+                    canonical_name: Some(format!("{module}::{import_name}")),
+                    span_text: import_name.to_string(),
+                    package: Some(module.to_string()),
+                    scope: None,
+                    provenance: "ImportExportInference".to_string(),
+                    confidence: "Medium".to_string(),
+                });
+            }
+        }
+    }
+}
+
 fn package_decl_name(line: &str) -> Option<&str> {
     let rest = line.strip_prefix("package ")?;
     let end = rest
         .find(|ch: char| ch.is_ascii_whitespace() || matches!(ch, ';' | '{'))
         .unwrap_or(rest.len());
+    if end == 0 { None } else { rest.get(..end) }
+}
+
+fn use_decl_module(line: &str) -> Option<&str> {
+    let rest = line.strip_prefix("use ")?;
+    let rest = rest.trim_start();
+    let end = rest.find(|ch: char| ch.is_ascii_whitespace()).unwrap_or(rest.len());
     if end == 0 { None } else { rest.get(..end) }
 }
 
@@ -7929,6 +7959,64 @@ sub dynamic_boundary_case {
             scope: None,
             provenance: "ImportExportInference".to_string(),
             confidence: "Medium".to_string(),
+        }));
+    }
+
+    #[test]
+    fn scorecard_import_projection_collects_qw_import_names() {
+        let source =
+            concat!("package Accuracy::Consumer;\n", "use Accuracy::Exports qw(answer helper);\n",);
+        let mut predictions = SymbolPredictions::default();
+
+        add_import_occurrence_predictions(source, &mut predictions);
+
+        assert!(predictions.occurrences.contains(&SymbolOccurrenceKey {
+            kind: "Import".to_string(),
+            canonical_name: Some("Accuracy::Exports::answer".to_string()),
+            span_text: "answer".to_string(),
+            package: Some("Accuracy::Exports".to_string()),
+            scope: None,
+            provenance: "ImportExportInference".to_string(),
+            confidence: "Medium".to_string(),
+        }));
+        assert!(predictions.occurrences.contains(&SymbolOccurrenceKey {
+            kind: "Import".to_string(),
+            canonical_name: Some("Accuracy::Exports::helper".to_string()),
+            span_text: "helper".to_string(),
+            package: Some("Accuracy::Exports".to_string()),
+            scope: None,
+            provenance: "ImportExportInference".to_string(),
+            confidence: "Medium".to_string(),
+        }));
+    }
+
+    #[test]
+    fn scorecard_import_projection_keeps_semicolon_separated_modules_distinct() {
+        let source = concat!("use Accuracy::One qw(first); use Accuracy::Two qw[second];\n",);
+        let mut predictions = SymbolPredictions::default();
+
+        add_import_occurrence_predictions(source, &mut predictions);
+
+        assert!(predictions.occurrences.contains(&SymbolOccurrenceKey {
+            kind: "Import".to_string(),
+            canonical_name: Some("Accuracy::One::first".to_string()),
+            span_text: "first".to_string(),
+            package: Some("Accuracy::One".to_string()),
+            scope: None,
+            provenance: "ImportExportInference".to_string(),
+            confidence: "Medium".to_string(),
+        }));
+        assert!(predictions.occurrences.contains(&SymbolOccurrenceKey {
+            kind: "Import".to_string(),
+            canonical_name: Some("Accuracy::Two::second".to_string()),
+            span_text: "second".to_string(),
+            package: Some("Accuracy::Two".to_string()),
+            scope: None,
+            provenance: "ImportExportInference".to_string(),
+            confidence: "Medium".to_string(),
+        }));
+        assert!(!predictions.occurrences.iter().any(|occurrence| {
+            occurrence.canonical_name.as_deref() == Some("Accuracy::One::second")
         }));
     }
 
