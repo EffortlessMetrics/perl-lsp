@@ -37,5 +37,12 @@ like (#0000) or (#9999) will fail CI.
 ## What's next
 <!-- Follow-up work, edge cases to address, related issues to file -->
 
+## CI cost / verification note
+<!-- See docs/ci/cost-and-verification-policy.md and docs/ci/lem-budgeting.md. -->
+- [ ] I used the cheapest relevant proof first.
+- [ ] I did not request broad CI unless this PR's risk surface needs it.
+- [ ] Any high-cost CI label (`full-ci`, `ci-budget-ack`, `ci-budget-override`) is explained in the PR body.
+- [ ] New CI work states the failure mode it catches and its estimated LEM.
+
 ## Agent
 <!-- If created by swarm: agent type, issue number, model tier -->
