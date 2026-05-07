@@ -607,6 +607,8 @@ struct GoldDrift {
     added_expectation_sample_count: u64,
     dynamic_expectation_change_count: u64,
     dynamic_expectation_sample_count: u64,
+    weakening_explanation_required_count: u64,
+    weakening_explanation_sample_count: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -3075,6 +3077,8 @@ fn audit_gold_drift(
         drift.removed_expectation_count =
             baseline.expectation_signatures.difference(&current_expectations).count() as u64;
         drift.removed_expectation_sample_count = baseline.expectation_signatures.len() as u64;
+        drift.weakening_explanation_required_count = drift.removed_expectation_count;
+        drift.weakening_explanation_sample_count = drift.removed_expectation_sample_count;
         let current_line_expectations = line_gold_signatures(&current_expectations);
         let baseline_line_expectations = line_gold_signatures(&baseline.expectation_signatures);
         drift.changed_line_count = current_line_expectations
@@ -5331,9 +5335,12 @@ fn gold_drift_metrics(drift: &GoldDrift, fixture_count: u64, cadence: Cadence) -
             "gold drift baseline is not wired yet",
             cadence,
         ),
-        insufficient(
+        optional_measured_count(
             "gold_weakening_explanation_required_count",
+            drift.weakening_explanation_required_count,
+            drift.weakening_explanation_sample_count,
             "gold weakening explanation checks require a baseline diff in CI",
+            cadence,
         ),
     ]
 }
@@ -8596,6 +8603,11 @@ sub dynamic_boundary_case {
             drift.removed_expectation_sample_count,
             gold_expectation_signatures(&manifest).len() as u64 - 1
         );
+        assert_eq!(drift.weakening_explanation_required_count, 1);
+        assert_eq!(
+            drift.weakening_explanation_sample_count,
+            drift.removed_expectation_sample_count
+        );
         assert_eq!(drift.dynamic_expectation_change_count, 0);
         assert_eq!(drift.dynamic_expectation_sample_count, 0);
         Ok(())
@@ -8658,6 +8670,8 @@ sub dynamic_boundary_case {
             added_expectation_sample_count: 4,
             dynamic_expectation_change_count: 1,
             dynamic_expectation_sample_count: 4,
+            weakening_explanation_required_count: 1,
+            weakening_explanation_sample_count: 4,
             ..GoldDrift::default()
         };
 
@@ -8708,6 +8722,14 @@ sub dynamic_boundary_case {
                 metric,
                 MetricRow::Measured { metric, value, sample_count: 4, .. }
                     if metric == "gold_dynamic_expectation_change_count"
+                        && (*value - 1.0).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "gold_weakening_explanation_required_count"
                         && (*value - 1.0).abs() < f64::EPSILON
             )
         }));
