@@ -51,6 +51,7 @@ mod failure_packet;
 const DEFAULT_MANIFEST: &str = "crates/perl-corpus/fixtures/parser_accuracy/manifest.json";
 const DEFAULT_OUTPUT: &str = "target/metrics/parser_accuracy.json";
 const DEFAULT_RATCHET_RECEIPT: &str = "target/receipts/metrics/parser_accuracy.json";
+const GOLD_BASELINE: &str = ".ci/metrics/baselines/parser_accuracy_gold.json";
 const FAILURE_PACKET_STATUS_RECEIPT: &str =
     "docs/project/status/parser_accuracy_failure_packets.json";
 const FIXTURE_INVENTORY_STATUS_RECEIPT: &str =
@@ -82,6 +83,12 @@ const DEFERRED_PRECISION_RECALL_CANDIDATES: &[&str] = &[
 struct ParserAccuracyManifest {
     schema_version: u32,
     fixtures: Vec<FixtureMetadata>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GoldBaseline {
+    schema_version: u32,
+    expectation_signatures: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -592,6 +599,7 @@ struct GoldDrift {
     changed_symbol_count: u64,
     removed_expectation_count: u64,
     added_expectation_count: u64,
+    added_expectation_sample_count: u64,
     dynamic_expectation_change_count: u64,
 }
 
@@ -1083,6 +1091,27 @@ fn read_manifest(root: &Path, path: &Path) -> Result<ParserAccuracyManifest> {
         }
     }
     Ok(manifest)
+}
+
+fn read_gold_baseline(root: &Path) -> Result<Option<GoldBaseline>> {
+    let baseline_path = root.join(GOLD_BASELINE);
+    if !baseline_path.exists() {
+        return Ok(None);
+    }
+
+    let raw = fs::read_to_string(&baseline_path).with_context(|| {
+        format!("reading parser accuracy gold baseline {}", baseline_path.display())
+    })?;
+    let baseline: GoldBaseline = serde_json::from_str(&raw).with_context(|| {
+        format!("parsing parser accuracy gold baseline {}", baseline_path.display())
+    })?;
+    if baseline.schema_version != 1 {
+        bail!(
+            "unsupported parser accuracy gold baseline schema_version {}",
+            baseline.schema_version
+        );
+    }
+    Ok(Some(baseline))
 }
 
 fn build_artifact(
@@ -3018,6 +3047,13 @@ fn audit_gold_drift(
     let mut drift = GoldDrift::default();
     let mut symbol_ids = BTreeSet::new();
 
+    let current_expectations = gold_expectation_signatures(manifest);
+    if let Some(baseline) = read_gold_baseline(root)? {
+        drift.added_expectation_count =
+            current_expectations.difference(&baseline.expectation_signatures).count() as u64;
+        drift.added_expectation_sample_count = current_expectations.len() as u64;
+    }
+
     for fixture in &manifest.fixtures {
         let source_path = root.join(&fixture.source_path);
         let source = source_cache.read(&source_path, "gold fixture source")?;
@@ -3029,6 +3065,71 @@ fn audit_gold_drift(
     }
 
     Ok(drift)
+}
+
+fn gold_expectation_signatures(manifest: &ParserAccuracyManifest) -> BTreeSet<String> {
+    let mut signatures = BTreeSet::new();
+    for fixture in &manifest.fixtures {
+        collect_fixture_gold_signatures(fixture, &mut signatures);
+    }
+    signatures
+}
+
+fn collect_fixture_gold_signatures(fixture: &FixtureMetadata, signatures: &mut BTreeSet<String>) {
+    let fixture_id = fixture.id.as_str();
+    for expectation in &fixture.line_expectations {
+        for tag in &expectation.expected_tags {
+            signatures.insert(format!("{fixture_id}::line::{}::{tag:?}", expectation.line));
+        }
+    }
+    for expectation in &fixture.ast_expectations {
+        signatures.insert(format!("{fixture_id}::ast::{}", expectation.id));
+    }
+    for expectation in &fixture.symbol_expectations.entities {
+        signatures.insert(format!("{fixture_id}::symbol_entity::{}", expectation.id));
+    }
+    for expectation in &fixture.symbol_expectations.occurrences {
+        signatures.insert(format!("{fixture_id}::symbol_occurrence::{}", expectation.id));
+    }
+    for expectation in &fixture.symbol_expectations.edges {
+        signatures.insert(format!("{fixture_id}::symbol_edge::{}", expectation.id));
+    }
+    for expectation in &fixture.symbol_safety_regions {
+        signatures.insert(format!(
+            "{fixture_id}::symbol_safety::{:?}::{}::{}",
+            expectation.kind, expectation.line, expectation.span_text
+        ));
+    }
+    for expectation in &fixture.recovery_expectations {
+        signatures.insert(format!("{fixture_id}::recovery::{}", expectation.id));
+        for line_expectation in &expectation.post_error_line_expectations {
+            for tag in &line_expectation.expected_tags {
+                signatures.insert(format!(
+                    "{fixture_id}::recovery::{}::post_line::{}::{tag:?}",
+                    expectation.id, line_expectation.line
+                ));
+            }
+        }
+        for span in &expectation.post_error_symbol_spans {
+            signatures
+                .insert(format!("{fixture_id}::recovery::{}::post_symbol::{span}", expectation.id));
+        }
+    }
+    for expectation in &fixture.incremental_expectations {
+        signatures.insert(format!("{fixture_id}::incremental::{}", expectation.id));
+    }
+    for expectation in &fixture.span_expectations {
+        signatures.insert(format!("{fixture_id}::span::{}", expectation.id));
+    }
+    for expectation in &fixture.provider_expectations.method_completion {
+        signatures.insert(format!("{fixture_id}::provider_method_completion::{}", expectation.id));
+    }
+    for expectation in &fixture.provider_expectations.diagnostics {
+        signatures.insert(format!("{fixture_id}::provider_diagnostic::{}", expectation.id));
+    }
+    for expectation in &fixture.provider_expectations.navigation {
+        signatures.insert(format!("{fixture_id}::provider_navigation::{}", expectation.id));
+    }
 }
 
 fn count_span_expectation_errors(source: &str, expectations: &[SpanExpectation]) -> u64 {
@@ -5091,7 +5192,13 @@ fn gold_drift_metrics(drift: &GoldDrift, fixture_count: u64, cadence: Cadence) -
         insufficient("gold_changed_line_count", "gold drift baseline is not wired yet"),
         insufficient("gold_changed_symbol_count", "gold drift baseline is not wired yet"),
         insufficient("gold_removed_expectation_count", "gold drift baseline is not wired yet"),
-        insufficient("gold_added_expectation_count", "gold drift baseline is not wired yet"),
+        optional_measured_count(
+            "gold_added_expectation_count",
+            drift.added_expectation_count,
+            drift.added_expectation_sample_count,
+            "gold drift baseline is not wired yet",
+            cadence,
+        ),
         insufficient(
             "gold_dynamic_expectation_change_count",
             "gold drift baseline is not wired yet",
@@ -8316,11 +8423,41 @@ sub dynamic_boundary_case {
     }
 
     #[test]
+    fn gold_drift_audit_counts_added_expectations_from_baseline() -> Result<()> {
+        let tmp = tempfile::tempdir()?;
+        write_fixture_sources(tmp.path())?;
+        let manifest = fixture_manifest();
+        let mut baseline_signatures = gold_expectation_signatures(&manifest);
+        baseline_signatures.remove("package_basic::line::3::SubDecl");
+        let baseline_dir = tmp.path().join(".ci/metrics/baselines");
+        fs::create_dir_all(&baseline_dir)?;
+        fs::write(
+            baseline_dir.join("parser_accuracy_gold.json"),
+            serde_json::to_string_pretty(&serde_json::json!({
+                "schema_version": 1,
+                "expectation_signatures": baseline_signatures,
+            }))?,
+        )?;
+        let mut source_cache = MetricSourceCache::default();
+
+        let drift = audit_gold_drift(tmp.path(), &manifest, &mut source_cache)?;
+
+        assert_eq!(drift.added_expectation_count, 1);
+        assert_eq!(
+            drift.added_expectation_sample_count,
+            gold_expectation_signatures(&manifest).len() as u64
+        );
+        Ok(())
+    }
+
+    #[test]
     fn gold_drift_metrics_emit_validation_and_baseline_rows() {
         let drift = GoldDrift {
             span_error_count: 1,
             duplicate_symbol_id_count: 2,
             missing_resolves_to_target_count: 3,
+            added_expectation_count: 1,
+            added_expectation_sample_count: 4,
             ..GoldDrift::default()
         };
 
@@ -8339,6 +8476,14 @@ sub dynamic_boundary_case {
                 metric,
                 MetricRow::InsufficientData { metric, sample_count: 0, .. }
                     if metric == "gold_removed_expectation_count"
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "gold_added_expectation_count"
+                        && (*value - 1.0).abs() < f64::EPSILON
             )
         }));
     }
