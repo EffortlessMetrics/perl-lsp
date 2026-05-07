@@ -31,7 +31,7 @@ When `@droid security` is commented:
 1. **Requires trusted actor.** Same OWNER/MEMBER/COLLABORATOR gate as `@droid review`.
 2. **Focuses on security rules.** Checks for injection, secrets exposure, unsafe patterns.
 3. **May create issues.** Critical findings are filed as separate issues.
-4. **Blocks on high + critical if configured.** perl-lsp config: block on critical, warn on high.
+4. **Blocks on critical if configured.** perl-lsp config: block on critical, do not block on high.
 
 ## Scheduled Security Scan
 
