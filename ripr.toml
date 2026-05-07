@@ -7,31 +7,28 @@
 # at static-analysis prices; it does not run mutants and does not replace
 # mutation testing.
 
-schema_version = 1
-
 [analysis]
-# Diff mode: analyze only changed code relative to the merge base.
-mode = "diff"
+# The workflow supplies the diff base with:
+#   ripr check --base origin/<base>
+#
+# analysis.mode controls analysis breadth, not the Git diff mode.
+# Valid: instant, draft, fast, deep, ready.
+mode = "draft"
+include_unchanged_tests = true
 
-[policy]
-# Advisory only in this rollout PR. PR 18 introduces narrow soft-gating for
-# high-confidence new oracle gaps.
-fail_on = []
-
-[report]
+[reports]
 max_related_tests = 8
-include_context = true
 
-[severity]
+[severity.findings]
 # Use ripr's own classifications. Do NOT use mutation-runtime words
 # (killed/survived) when reporting these.
-exposed = "notice"
+exposed = "info"
 weakly_exposed = "warning"
 reachable_unrevealed = "warning"
-no_static_path = "notice"
-infection_unknown = "notice"
-propagation_unknown = "notice"
-static_unknown = "notice"
+no_static_path = "info"
+infection_unknown = "info"
+propagation_unknown = "note"
+static_unknown = "note"
 
 [suppressions]
 path = "policy/ripr-suppressions.toml"
