@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-07T09:54:19Z",
+  "window_days": 14,
+  "min_samples_for_learned": 5,
+  "lane_count": 23,
+  "lanes": {
+    "check_all_targets": {
+      "samples": 0,
+      "static_floor": 6.0,
+      "learned": false
+    },
+    "conflict_markers": {
+      "samples": 0,
+      "static_floor": 1.0,
+      "learned": false
+    },
+    "coverage": {
+      "samples": 0,
+      "static_floor": 45.0,
+      "learned": false
+    },
+    "docs_gate": {
+      "samples": 0,
+      "static_floor": 3.0,
+      "learned": false
+    },
+    "draft_guard": {
+      "samples": 0,
+      "static_floor": 1.0,
+      "learned": false
+    },
+    "droid_auto_review": {
+      "samples": 0,
+      "static_floor": 4.0,
+      "learned": false
+    },
+    "fuzz": {
+      "samples": 0,
+      "static_floor": 60.0,
+      "learned": false
+    },
+    "lsp_memory_smoke": {
+      "samples": 0,
+      "static_floor": 8.0,
+      "learned": false
+    },
+    "memory_plateau": {
+      "samples": 0,
+      "static_floor": 35.0,
+      "learned": false
+    },
+    "merge_gate_aggregate": {
+      "samples": 0,
+      "static_floor": 1.0,
+      "learned": false
+    },
+    "merge_gate_shards": {
+      "samples": 0,
+      "static_floor": 24.0,
+      "learned": false
+    },
+    "mutation": {
+      "samples": 0,
+      "static_floor": 60.0,
+      "learned": false
+    },
+    "perl_version_matrix": {
+      "samples": 0,
+      "static_floor": 40.0,
+      "learned": false
+    },
+    "pr_plan": {
+      "samples": 0,
+      "static_floor": 1.0,
+      "learned": false
+    },
+    "pr_smoke": {
+      "samples": 0,
+      "static_floor": 4.0,
+      "learned": false
+    },
+    "preflight_latest": {
+      "samples": 0,
+      "static_floor": 1.0,
+      "learned": false
+    },
+    "real_repo_latency": {
+      "samples": 0,
+      "static_floor": 30.0,
+      "learned": false
+    },
+    "release_check": {
+      "samples": 0,
+      "static_floor": 15.0,
+      "learned": false
+    },
+    "ripr_advisory": {
+      "samples": 0,
+      "static_floor": 4.0,
+      "learned": false
+    },
+    "security_audit": {
+      "samples": 0,
+      "static_floor": 15.0,
+      "learned": false
+    },
+    "ux_tests": {
+      "samples": 0,
+      "static_floor": 8.0,
+      "learned": false
+    },
+    "vscode_smoke_matrix": {
+      "samples": 0,
+      "static_floor": 35.0,
+      "learned": false
+    },
+    "windows_guardrails": {
+      "samples": 0,
+      "static_floor": 20.0,
+      "learned": false
+    }
+  }
+}
