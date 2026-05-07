@@ -354,6 +354,9 @@ jobs:
             --event "$RECEIPT_EVENT" \
             --markdown >> "$GITHUB_STEP_SUMMARY"
           cargo xtask gate-receipts validate target/memory/receipts/nightly-workspace-symbol.receipt.json
+          cargo xtask memory-trends render \
+            --input-dir target/memory \
+            --output target/memory/memory_plateau_trends.md
           python3 - <<'PY'
           import json
           import os
@@ -410,6 +413,7 @@ jobs:
             target/memory/nightly-workspace-symbol.plateau.json
             target/memory/nightly-workspace-symbol.server.log
             target/memory/receipts/nightly-workspace-symbol.receipt.json
+            target/memory/memory_plateau_trends.md
           if-no-files-found: warn
           retention-days: 30
 

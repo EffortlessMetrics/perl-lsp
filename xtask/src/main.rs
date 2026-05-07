@@ -461,6 +461,17 @@ enum Commands {
     /// Enforce retained-state lifecycle and memory receipt invariants.
     CheckMemoryLifecyclePolicy,
 
+    /// Warn when a diff adds retained-state owner patterns without inventory updates.
+    CheckMemoryRetainedOwnerDrift {
+        /// Git base ref used for diffing changed files.
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+
+        /// Warn instead of fail when drift appears in existing retained-owner paths.
+        #[arg(long)]
+        report_only: bool,
+    },
+
     /// Render memory plateau receipt trends.
     MemoryTrends {
         #[command(subcommand)]
@@ -2045,6 +2056,12 @@ fn main() -> Result<()> {
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
         Commands::CheckMemoryLifecyclePolicy => ci_policy::check_memory_lifecycle(),
+        Commands::CheckMemoryRetainedOwnerDrift { base, report_only } => {
+            ci_policy::check_memory_retained_owner_drift(ci_policy::RetainedOwnerDriftConfig {
+                base,
+                report_only,
+            })
+        }
         Commands::MemoryTrends { command } => match command {
             MemoryTrendsCommand::Render { input_dir, history_dirs, baseline, output } => {
                 memory_trends::render(memory_trends::MemoryTrendsConfig {
