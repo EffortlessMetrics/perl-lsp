@@ -1,0 +1,51 @@
+# CI Budget Policy
+#
+# Source of truth for LEM bands, runner multipliers, and budget label conventions.
+# See docs/ci/lem-budgeting.md for the LEM model.
+#
+# This is policy metadata only. Enforcement lives in the PR Plan workflow
+# (see docs/ci/perl-lsp-rollout-plan.md PR 04 / PR 13).
+
+schema_version = 1
+policy = "ci-budget"
+owner = "EffortlessMetrics"
+status = "advisory"
+updated = "2026-05-07"
+
+[budget]
+# Preferred default-PR LEM. Aspirational; warning fires above default_limit_lem.
+preferred_default_lem = 25
+# Default-PR LEM ceiling. Warning above this.
+default_limit_lem = 35
+# Elevated-PR LEM ceiling. High warning above this.
+elevated_limit_lem = 75
+# Hard ceiling. Fails unless full-ci or ci-budget-override label is present.
+hard_limit_lem = 125
+# Display only. Billing truth lives in GitHub/runner billing.
+linux_minute_rate_usd = 0.008
+
+[runner_multipliers]
+# Mirrors GitHub Actions documented per-minute weights for hosted runners.
+# Tune here without touching docs.
+ubuntu_22_04 = 1.0
+ubuntu_24_04 = 1.0
+ubuntu_latest = 1.0
+windows_latest = 2.0
+windows_2022 = 2.0
+macos_14 = 10.0
+macos_latest = 10.0
+docker_build = 6.0
+external_ai_review = 4.0
+self_hosted_gpu = 6.0
+# Composite "matrix" runner: used for lanes whose base_lem is already pre-summed
+# across multiple OS legs (e.g. vscode_smoke_matrix). Multiplier is 1.0 because
+# the per-leg multipliers are already folded into the lane's base_lem.
+mixed = 1.0
+
+[labels]
+# Canonical label names used throughout policy and workflows.
+full_ci = "full-ci"
+budget_ack = "ci-budget-ack"
+budget_override = "ci-budget-override"
+ripr_force = "ripr"
+ripr_waive = "ripr-waive"

@@ -1,0 +1,59 @@
+# CI Whitelist Exceptions
+#
+# Debt ledger for whitelist-specific deviations: lanes that are expensive but
+# remain default-PR for documented reasons until actuals justify routing them.
+#
+# Each exception requires owner, reason, issue, created, review_after, and
+# expires. Expiry dates force re-review.
+
+schema_version = 1
+policy = "ci-whitelist-exceptions"
+owner = "EffortlessMetrics"
+status = "active"
+updated = "2026-05-07"
+
+[[exception]]
+id = "ci-exception-windows-guardrails-default-pr"
+kind = "expensive_default_pr_lane"
+lane = "windows_guardrails"
+allowed = true
+owner = "platform"
+issue = "TODO"
+reason = """
+Windows path and sandbox regressions have historically passed Linux CI. Keep
+default until LEM actuals (PR 08) and failure history support risk-pack
+routing (PR 17).
+"""
+created = "2026-05-07"
+review_after = "2026-06-07"
+expires = "2026-08-07"
+
+[[exception]]
+id = "ci-exception-lsp-memory-smoke-default-pr"
+kind = "expensive_default_pr_lane"
+lane = "lsp_memory_smoke"
+allowed = true
+owner = "runtime"
+issue = "TODO"
+reason = """
+Recent retained-state failures justify default memory smoke until actuals
+show safe routing conditions.
+"""
+created = "2026-05-07"
+review_after = "2026-06-07"
+expires = "2026-08-07"
+
+[[exception]]
+id = "ci-exception-ux-regression-default-pr"
+kind = "expensive_default_pr_lane"
+lane = "ux_tests"
+allowed = true
+owner = "lsp"
+issue = "TODO"
+reason = """
+User-visible LSP regressions are high-impact. Keep default until duplicate
+ownership with ux-regression-gate workflow is resolved (PR 15).
+"""
+created = "2026-05-07"
+review_after = "2026-06-07"
+expires = "2026-08-07"

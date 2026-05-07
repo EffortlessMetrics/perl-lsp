@@ -1,0 +1,174 @@
+# CI Risk Packs
+#
+# Risk packs route extra proof to PRs that touch known-risky surfaces.
+# Each risk pack maps a set of paths/keywords to a list of lanes that
+# should be selected when those paths or keywords appear in the diff.
+#
+# Lane keys reference policy/ci-lanes.toml.
+# Read by the PR Plan workflow (PR 04+).
+
+schema_version = 1
+policy = "ci-risk-packs"
+owner = "EffortlessMetrics"
+status = "advisory"
+updated = "2026-05-07"
+
+# -----------------------------------------------------------------------------
+# Parser risk: parser, lexer, token, AST, tree-sitter, parser-core changes.
+# -----------------------------------------------------------------------------
+[risk_pack.parser]
+description = "Parser, lexer, token, AST, tree-sitter, and parser-core changes."
+paths = [
+  "crates/perl-parser/**",
+  "crates/perl-parser-core/**",
+  "crates/perl-parser-pest/**",
+  "crates/perl-lexer/**",
+  "crates/perl-token/**",
+  "crates/perl-ast/**",
+  "crates/perl-ast-v2/**",
+  "crates/tree-sitter-perl-c/**",
+  "crates/tree-sitter-perl-rs/**",
+]
+lanes = ["pr_smoke", "merge_gate_shards", "ripr_advisory"]
+deep_lanes = ["mutation", "fuzz", "coverage"]
+labels = ["ci:parser", "ci:mutation", "ci:coverage"]
+
+# -----------------------------------------------------------------------------
+# LSP provider risk: LSP, completion, diagnostics, navigation, code action.
+# -----------------------------------------------------------------------------
+[risk_pack.lsp_provider]
+description = "LSP provider, protocol, completion, diagnostics, navigation, and code action changes."
+paths = [
+  "crates/perl-lsp-rs/**",
+  "crates/perl-lsp-rs-core/**",
+  "crates/perllsp/**",
+]
+lanes = ["pr_smoke", "merge_gate_shards", "ux_tests", "ripr_advisory"]
+deep_lanes = ["real_repo_latency", "vscode_smoke_matrix"]
+labels = ["ci:ux", "ci:real-repo-latency"]
+
+# -----------------------------------------------------------------------------
+# Workspace / index risk: module resolution, semantic facts, indexing.
+# -----------------------------------------------------------------------------
+[risk_pack.workspace_index]
+description = "Workspace, module resolution, semantic facts, indexing, and symbol resolution."
+paths = [
+  "crates/perl-workspace/**",
+  "crates/perl-module/**",
+  "crates/perl-semantic-analyzer/**",
+  "crates/perl-semantic-facts/**",
+  "crates/perl-symbol/**",
+]
+lanes = ["merge_gate_shards", "lsp_memory_smoke", "windows_guardrails", "ripr_advisory"]
+deep_lanes = ["memory_plateau", "real_repo_latency"]
+labels = ["ci:memory", "ci:bench"]
+
+# -----------------------------------------------------------------------------
+# Retained-state risk: long-lived maps, caches, queues, sessions.
+# Pairs with the PR template "Retained State" checklist.
+# -----------------------------------------------------------------------------
+[risk_pack.retained_state]
+description = "Long-lived maps, caches, queues, background tasks, sessions, document lifecycle, subprocess state."
+paths = [
+  "crates/perl-lsp-rs/src/runtime/**",
+  "crates/perl-lsp-rs-core/**",
+  "crates/perl-workspace/**",
+]
+keywords = [
+  "cache",
+  "session",
+  "queue",
+  "background",
+  "evict",
+  "close",
+  "delete",
+  "uri",
+  "workspace_folder",
+  "stream",
+  "subprocess",
+]
+lanes = ["lsp_memory_smoke", "ripr_advisory"]
+deep_lanes = ["memory_plateau"]
+labels = ["ci:memory"]
+
+# -----------------------------------------------------------------------------
+# DAP risk
+# -----------------------------------------------------------------------------
+[risk_pack.dap]
+description = "Debug adapter protocol, breakpoints, stepping, variables, evaluate, launch/attach."
+paths = [
+  "crates/perl-dap/**",
+]
+lanes = ["merge_gate_shards", "ux_tests", "ripr_advisory"]
+deep_lanes = []
+labels = ["ci:dap"]
+
+# -----------------------------------------------------------------------------
+# VS Code extension risk
+# -----------------------------------------------------------------------------
+[risk_pack.vscode]
+description = "VS Code extension packaging, managed binary, extension-host behavior."
+paths = [
+  "vscode-extension/**",
+]
+lanes = ["docs_gate"]
+deep_lanes = ["vscode_smoke_matrix"]
+labels = ["ci:vscode-matrix"]
+
+# -----------------------------------------------------------------------------
+# Security risk: sandbox, subprocess, eval, exec, path security, deserialization.
+# -----------------------------------------------------------------------------
+[risk_pack.security]
+description = "Sandbox, subprocess, eval, exec, path security, deserialization, dependency changes."
+paths = [
+  "crates/perl-subprocess-runtime/**",
+  "crates/perl-lsp-rs/**",
+  "crates/perl-lsp-rs-core/**",
+  "crates/perl-dap/**",
+  "Cargo.lock",
+  "Cargo.toml",
+]
+keywords = [
+  "sandbox",
+  "exec",
+  "eval",
+  "shell",
+  "subprocess",
+  "path_security",
+  "auth",
+  "token",
+]
+lanes = ["security_audit", "windows_guardrails", "ripr_advisory"]
+deep_lanes = []
+labels = ["security-audit", "ci:security"]
+
+# -----------------------------------------------------------------------------
+# Manifest risk: Cargo manifest, lockfile, toolchain.
+# -----------------------------------------------------------------------------
+[risk_pack.manifest]
+description = "Cargo manifest, lockfile, toolchain, or release metadata changed."
+paths = [
+  "Cargo.toml",
+  "Cargo.lock",
+  "rust-toolchain.toml",
+  ".cargo/**",
+]
+lanes = ["pr_smoke", "merge_gate_shards", "security_audit"]
+deep_lanes = ["release_check"]
+labels = ["release-check", "security-audit"]
+
+# -----------------------------------------------------------------------------
+# Docs-only: prose / markdown / generated status.
+# -----------------------------------------------------------------------------
+[risk_pack.docs_only]
+description = "Prose or generated docs changed without code."
+paths = [
+  "docs/**",
+  "**/*.md",
+  "README*",
+  "CHANGELOG*",
+  "RELEASE_HISTORY*",
+]
+lanes = ["docs_gate"]
+deep_lanes = []
+labels = []

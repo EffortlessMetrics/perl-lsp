@@ -1,0 +1,615 @@
+# CI Lane Whitelist
+#
+# Governed map of every CI lane to its proof obligation, owner, trigger,
+# cost estimate, and evidence artifact. This is the missing inventory layer
+# between docs and the planner: not just "CI runs," but "CI has a reason,
+# an owner, a cost, a proof obligation, and a review date."
+#
+# See docs/ci/perl-lsp-rollout-plan.md (PR 02 entry) for the rationale.
+#
+# Lifecycle:
+#   unknown → whitelisted → measured → learned-estimate → routed → enforced
+#
+# Do not route or enforce a lane until it has been whitelisted and measured.
+#
+# Source-of-truth boundaries:
+#   - LEM bands and runner multipliers live in policy/ci-budget.toml. They are
+#     NOT duplicated here; the policy linter resolves them from ci-budget.toml.
+#   - Lane IDs use underscores to match policy/ci-lanes.toml lane keys (so the
+#     planner and linter can cross-reference by lane.id == lane.<id>).
+
+schema_version = 1
+policy = "ci-lane-whitelist"
+owner = "EffortlessMetrics"
+status = "advisory"
+updated = "2026-05-07"
+
+# =============================================================================
+# Frontdoor / control lanes
+# =============================================================================
+
+[[lane]]
+id = "pr_plan"
+workflow = ".github/workflows/pr-plan.yml"
+job = "plan"
+tier = "frontdoor"
+kind = "visibility"
+blocking = false
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 1
+owner = "ci"
+intent = "Forecast PR CI cost and selected verification lanes."
+failure_mode = "Spending CI without a cost forecast or lane rationale."
+proof_obligation = "Compute changed files, classify risk packs, sum lane LEM, emit ci-plan.json."
+evidence = ["target/ci/ci-plan.json", "step-summary"]
+allowed_triggers = ["pull_request", "workflow_dispatch"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "draft_guard"
+workflow = ".github/workflows/ci.yml"
+job = "draft-pr-check"
+tier = "frontdoor"
+kind = "control"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 1
+owner = "ci"
+intent = "Avoid running full CI on draft PRs."
+failure_mode = "Draft or non-credible candidates consuming CI."
+proof_obligation = "Classify draft status and skip downstream CI when appropriate."
+evidence = ["job output"]
+allowed_triggers = ["pull_request", "push", "merge_group", "workflow_dispatch"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "preflight_latest"
+workflow = ".github/workflows/ci.yml"
+job = "preflight-latest-check"
+tier = "frontdoor"
+kind = "control"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 1
+owner = "ci"
+intent = "Skip superseded PR SHAs."
+failure_mode = "Spending CI on commits that are no longer current."
+proof_obligation = "Compare current SHA to latest branch SHA."
+evidence = ["job output"]
+allowed_triggers = ["pull_request", "push", "merge_group"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "conflict_markers"
+workflow = ".github/workflows/ci.yml"
+job = "conflict-markers"
+tier = "frontdoor"
+kind = "hygiene"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 1
+owner = "ci"
+intent = "Prevent merge conflict markers from reaching master."
+failure_mode = "Committed conflict markers break builds or user workflows."
+proof_obligation = "Search tracked files for conflict marker patterns."
+evidence = ["job log"]
+allowed_triggers = ["pull_request", "push", "merge_group"]
+expensive = false
+duplicate_of = ["gate:check_conflict_markers"]
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+# =============================================================================
+# Default Rust gates
+# =============================================================================
+
+[[lane]]
+id = "pr_smoke"
+workflow = ".github/workflows/ci.yml"
+job = "pr-smoke"
+tier = "frontdoor"
+kind = "rust"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 4
+owner = "ci"
+intent = "Run fast scoped Rust proof through xtask gates."
+failure_mode = "Obvious compile, format, lint, or scoped unit-test failure."
+proof_obligation = "Run pr-fast gates selected by ci-scope."
+evidence = [
+  "target/receipts/receipt.json",
+  "target/test-results/pr-fast-junit.xml",
+]
+allowed_triggers = ["pull_request", "push", "merge_group", "workflow_dispatch"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "merge_gate_shards"
+workflow = ".github/workflows/ci.yml"
+job = "merge-gate-shards"
+tier = "merge_gate"
+kind = "rust"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 24
+owner = "ci"
+intent = "Run bounded required merge-gate shards."
+failure_mode = "Defect not caught by scoped PR smoke but required before merge."
+proof_obligation = "Run required gate groups from .ci/gate-policy.yaml and emit receipts."
+evidence = [
+  "target/receipts/shards/*.json",
+  "target/test-results/gate-shard-*-junit.xml",
+]
+allowed_triggers = ["pull_request", "push", "merge_group", "workflow_dispatch"]
+expensive = true
+expensive_reason = "Multiple shard jobs compile and test distinct workspace surfaces."
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "merge_gate_aggregate"
+workflow = ".github/workflows/ci.yml"
+job = "merge-gate"
+tier = "merge_gate"
+kind = "control"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 1
+owner = "ci"
+intent = "Aggregate shard results into the required merge-blocking status."
+failure_mode = "Branch protection cannot rely on a stable summary check."
+proof_obligation = "Reduce shard outcomes to a single required status."
+evidence = ["job output"]
+allowed_triggers = ["pull_request", "push", "merge_group"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "check_all_targets"
+workflow = ".github/workflows/ci.yml"
+job = "check-all-targets"
+tier = "merge_gate"
+kind = "rust"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 6
+owner = "ci"
+intent = "Compile all targets to catch integration-test and bench bit-rot."
+failure_mode = "Default gates pass while integration tests or benches fail to compile."
+proof_obligation = "cargo check --workspace --all-targets."
+evidence = ["job output"]
+allowed_triggers = ["pull_request", "push", "merge_group"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "docs_gate"
+workflow = ".github/workflows/ci.yml"
+job = "docs-gate"
+tier = "frontdoor"
+kind = "docs"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 3
+owner = "docs"
+intent = "Validate docs-only changes without compiling Rust."
+failure_mode = "Docs build break lands without compile."
+proof_obligation = "Markdown / mkdocs validation on docs-only diffs."
+evidence = ["job output"]
+allowed_triggers = ["pull_request"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+# =============================================================================
+# UX / memory / platform default lanes
+# =============================================================================
+
+[[lane]]
+id = "ux_tests"
+workflow = ".github/workflows/ci.yml"
+job = "ux-tests"
+tier = "merge_gate"
+kind = "ux"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 8
+owner = "lsp"
+intent = "Prevent first-five-minutes LSP UX regressions."
+failure_mode = "User-visible LSP behavior regresses while compile/unit tests stay green."
+proof_obligation = "Run UX scenario suite against live binary and classify failures."
+evidence = [
+  "target/receipts/ux-regression.json",
+  "target/receipts/ux-regression.log",
+  "target/test-results/ux-regression-junit.xml",
+]
+allowed_triggers = ["pull_request", "push", "merge_group"]
+expensive = true
+expensive_reason = "Builds binary and runs integration UX harness."
+default_pr_exception = "ci-exception-ux-regression-default-pr"
+duplicate_of = ["workflow:ux-regression-gate"]
+review_after = "2026-06-07"
+expires = "2026-08-07"
+
+[[lane]]
+id = "lsp_memory_smoke"
+workflow = ".github/workflows/ci.yml"
+job = "lsp-memory-smoke"
+tier = "merge_gate"
+kind = "memory"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 8
+owner = "runtime"
+intent = "Catch retained-state regressions in LSP document churn."
+failure_mode = "Open/change/close churn retains document/session/cache state."
+proof_obligation = "Run bounded document-churn workload and validate RSS plateau receipt."
+evidence = [
+  "target/memory/receipts/*.json",
+  "target/memory/*.plateau.json",
+  "target/memory/*.csv",
+]
+allowed_triggers = ["pull_request", "push", "merge_group"]
+expensive = true
+expensive_reason = "Builds release binary and runs process-level memory workload."
+default_pr_exception = "ci-exception-lsp-memory-smoke-default-pr"
+duplicate_of = ["nightly:memory_plateau"]
+review_after = "2026-06-07"
+expires = "2026-08-07"
+
+[[lane]]
+id = "windows_guardrails"
+workflow = ".github/workflows/ci.yml"
+job = "windows-guardrails"
+tier = "merge_gate"
+kind = "platform"
+blocking = true
+default_pr = true
+runner = "windows_latest"
+# 10 wall-clock minutes × 2.0 windows multiplier = 20 LEM
+base_lem = 20
+owner = "platform"
+intent = "Catch Windows path, module separator, and sandbox regressions."
+failure_mode = "Windows-specific behavior fails while Linux CI passes."
+proof_obligation = "Compile key crates and run path/sandbox regression lanes on Windows."
+evidence = ["job logs"]
+allowed_triggers = ["pull_request", "push", "merge_group"]
+expensive = true
+expensive_reason = "Windows runner multiplier and separate compile surface."
+default_pr_exception = "ci-exception-windows-guardrails-default-pr"
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-08-07"
+
+# =============================================================================
+# Oracle-gap lane (advisory)
+# =============================================================================
+
+[[lane]]
+id = "ripr_advisory"
+workflow = ".github/workflows/ripr.yml"
+job = "ripr"
+tier = "frontdoor"
+kind = "oracle_gap"
+blocking = false
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 4
+owner = "testing"
+intent = "Find static oracle-gap evidence for changed Rust behavior."
+failure_mode = "Changed behavior is reachable but tests do not appear to discriminate it."
+proof_obligation = "Run static RIPR exposure analysis on production Rust diffs."
+evidence = [
+  "target/ripr/ripr.json",
+  "target/ripr/ripr.sarif",
+  "GitHub annotations",
+]
+allowed_triggers = ["pull_request", "workflow_dispatch"]
+labels = ["ripr", "full-ci"]
+expensive = false
+blocking_promotion_allowed = false
+duplicate_of = ["nightly:mutation"]
+review_after = "2026-06-07"
+expires = "2026-08-07"
+
+# =============================================================================
+# Nightly / branch-gated deep lanes
+# =============================================================================
+
+[[lane]]
+id = "mutation"
+workflow = ".github/workflows/ci-nightly.yml"
+job = "mutation"
+tier = "nightly"
+kind = "mutation"
+blocking = false
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 60
+owner = "testing"
+intent = "Execution-backed test adequacy calibration."
+failure_mode = "Tests execute code but fail to reject concrete behavioral mutants."
+proof_obligation = "Run cargo-mutants on bounded package subset."
+evidence = ["mutants.out/mutants.json"]
+allowed_triggers = ["schedule", "workflow_dispatch", "pull_request:labeled"]
+labels = ["ci:mutation", "mutation", "full-ci"]
+expensive = true
+expensive_reason = "Runs concrete mutants and executes tests repeatedly."
+duplicate_of = ["ripr_advisory"]
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "coverage"
+workflow = ".github/workflows/ci-nightly.yml"
+job = "test-coverage"
+tier = "nightly"
+kind = "coverage"
+blocking = false
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 45
+owner = "testing"
+intent = "Measure execution surface."
+failure_mode = "Coverage drops or important code becomes unexecuted."
+proof_obligation = "Run cargo-llvm-cov and upload report."
+evidence = ["lcov.info", "Codecov"]
+allowed_triggers = ["schedule", "workflow_dispatch", "pull_request:labeled"]
+labels = ["ci:coverage", "coverage", "full-ci"]
+expensive = true
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "fuzz"
+workflow = ".github/workflows/ci-nightly.yml"
+job = "fuzz"
+tier = "nightly"
+kind = "fuzz"
+blocking = false
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 60
+owner = "testing"
+intent = "Bounded nightly fuzz sweep across registered targets."
+failure_mode = "Crashing inputs or timeouts not caught by deterministic tests."
+proof_obligation = "Run cargo-fuzz with bounded budget per target."
+evidence = ["fuzz/artifacts/**"]
+allowed_triggers = ["schedule", "workflow_dispatch"]
+labels = ["ci:fuzz", "full-ci"]
+expensive = true
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "real_repo_latency"
+workflow = ".github/workflows/ci-nightly.yml"
+job = "real-repo-latency"
+tier = "nightly"
+kind = "performance"
+blocking = false
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 30
+owner = "lsp"
+intent = "Real project latency and performance scenarios."
+failure_mode = "User-visible LSP latency regression on real repos."
+proof_obligation = "Run real-repo latency harness and emit metrics."
+evidence = ["target/receipts/real-repo-latency.json"]
+allowed_triggers = ["schedule", "workflow_dispatch", "pull_request:labeled"]
+labels = ["ci:bench", "ci:real-repo-latency", "full-ci"]
+expensive = true
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "memory_plateau"
+workflow = ".github/workflows/ci-nightly.yml"
+job = "memory-plateau"
+tier = "nightly"
+kind = "memory"
+blocking = false
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 35
+owner = "runtime"
+intent = "Full LSP memory plateau workloads (deeper than memory smoke)."
+failure_mode = "Retained-state regressions only visible at longer plateau workloads."
+proof_obligation = "Run plateau workload, validate RSS trend over time."
+evidence = ["target/memory/plateau/**"]
+allowed_triggers = ["schedule", "workflow_dispatch", "pull_request:labeled"]
+labels = ["ci:memory", "full-ci"]
+expensive = true
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "release_check"
+workflow = ".github/workflows/publish-dry-run.yml"
+job = "publish-dry-run"
+tier = "release"
+kind = "release"
+blocking = false
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 15
+owner = "release"
+intent = "Package, publish dry-run, semver/API checks."
+failure_mode = "Release publishability regressions land before release tag."
+proof_obligation = "Run cargo package + publish dry-run + semver checks."
+evidence = ["target/package/**"]
+allowed_triggers = ["pull_request", "workflow_dispatch"]
+labels = ["release-check", "full-ci"]
+expensive = true
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "perl_version_matrix"
+workflow = ".github/workflows/perl-version-matrix.yml"
+job = "perl-matrix"
+tier = "nightly"
+kind = "platform"
+blocking = false
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 40
+owner = "platform"
+intent = "Perl runtime compatibility from 5.8 through 5.40."
+failure_mode = "Behavior regressions on older or newer Perl versions."
+proof_obligation = "Run Perl-version matrix smoke."
+evidence = ["job logs"]
+allowed_triggers = ["schedule", "workflow_dispatch", "pull_request:labeled"]
+labels = ["ci:perl-matrix", "full-ci"]
+expensive = true
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "vscode_smoke_matrix"
+workflow = ".github/workflows/vscode-managed-binary-smoke.yml"
+job = "smoke"
+tier = "nightly"
+kind = "platform"
+blocking = false
+default_pr = false
+runner = "mixed"
+# Pre-summed across Linux + Windows + macOS legs.
+base_lem = 35
+owner = "vscode"
+intent = "VS Code extension-host smoke across OSes."
+failure_mode = "Extension regressions on Windows or macOS while Linux passes."
+proof_obligation = "Run VS Code managed-binary smoke matrix."
+evidence = ["job logs"]
+allowed_triggers = ["schedule", "workflow_dispatch", "pull_request:labeled"]
+labels = ["ci:vscode-matrix", "full-ci"]
+expensive = true
+expensive_reason = "Three-OS matrix with extension-host startup."
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "security_audit"
+workflow = ".github/workflows/ci-security.yml"
+job = "security"
+tier = "nightly"
+kind = "security"
+blocking = false
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 15
+owner = "security"
+intent = "Cargo audit, cargo deny, and Trivy scan."
+failure_mode = "Dependency vulnerabilities or supply-chain regressions."
+proof_obligation = "Run cargo-audit, cargo-deny, Trivy."
+evidence = ["audit reports", "deny reports", "Trivy SARIF"]
+allowed_triggers = ["schedule", "workflow_dispatch", "pull_request"]
+labels = ["security-audit", "ci:security", "full-ci"]
+expensive = true
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+# =============================================================================
+# Automation / external review
+# =============================================================================
+
+[[lane]]
+id = "droid_auto_review"
+workflow = ".github/workflows/droid-review.yml"
+job = "droid"
+tier = "frontdoor"
+kind = "automation"
+blocking = false
+default_pr = true
+runner = "ubuntu_latest"
+base_lem = 4
+owner = "ci"
+intent = "External AI review on credible PRs."
+failure_mode = "Review feedback gap on agent-generated PRs."
+proof_obligation = "Run external AI reviewer and post comments."
+evidence = ["PR comments"]
+allowed_triggers = ["pull_request"]
+labels = ["ai-review", "full-ci"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-08-07"
+
+[[lane]]
+id = "methodology_gate"
+workflow = ".github/workflows/methodology-gate.yml"
+job = "methodology"
+tier = "frontdoor"
+kind = "hygiene"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 2
+owner = "ci"
+intent = "Enforce methodology and PR-shape rules."
+failure_mode = "PRs land without required methodology evidence."
+proof_obligation = "Lint PR title, body, and metadata."
+evidence = ["job output"]
+allowed_triggers = ["pull_request"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+[[lane]]
+id = "pr_title_check"
+workflow = ".github/workflows/pr-title-check.yml"
+job = "validate-title"
+tier = "frontdoor"
+kind = "hygiene"
+blocking = true
+default_pr = true
+runner = "ubuntu_24_04"
+base_lem = 1
+owner = "ci"
+intent = "Enforce PR title convention with real issue ref."
+failure_mode = "PRs with placeholder issue refs land in master."
+proof_obligation = "Validate title format ends with (#NNNN) where NNNN is a real issue."
+evidence = ["job output"]
+allowed_triggers = ["pull_request"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-07"
+expires = "2026-11-07"

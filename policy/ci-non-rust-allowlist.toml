@@ -1,0 +1,97 @@
+# CI Non-Rust Allowlist
+#
+# Some CI surfaces are not Rust (TypeScript extension, markdown docs, Python
+# scripts that drive CI receipts and benchmarks). This ledger records which
+# non-Rust surfaces are first-class shipped artifacts and what lanes validate
+# them.
+#
+# Same governance pattern as policy/ci-exceptions.toml: every entry has owner,
+# reason, issue, review_after, and expires.
+
+schema_version = 1
+policy = "ci-non-rust-allowlist"
+owner = "EffortlessMetrics"
+status = "active"
+updated = "2026-05-07"
+
+# -----------------------------------------------------------------------------
+# VS Code extension: TypeScript, ships with the LSP server.
+# -----------------------------------------------------------------------------
+[[allow]]
+id = "non-rust-vscode-extension"
+kind = "non_rust_ci_surface"
+paths = ["vscode-extension/**"]
+language = "typescript"
+owner = "repo-owner"
+issue = "TODO"
+reason = "VS Code extension is a first-class shipped artifact alongside the LSP server."
+default_pr_lanes = ["docs_gate"]
+expensive_lanes = ["vscode_smoke_matrix"]
+created = "2026-05-07"
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+# -----------------------------------------------------------------------------
+# Docs and generated status files.
+# -----------------------------------------------------------------------------
+[[allow]]
+id = "non-rust-docs"
+kind = "non_rust_ci_surface"
+paths = [
+  "docs/**",
+  "**/*.md",
+  "README.md",
+  "CHANGELOG.md",
+  "RELEASE_HISTORY.md",
+]
+language = "markdown"
+owner = "repo-owner"
+issue = "TODO"
+reason = "Docs and generated status files are first-class project outputs and should validate without compiling Rust."
+default_pr_lanes = ["docs_gate"]
+expensive_lanes = []
+created = "2026-05-07"
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+# -----------------------------------------------------------------------------
+# Python CI scripts: receipts, benchmarks, memory workloads.
+# -----------------------------------------------------------------------------
+[[allow]]
+id = "non-rust-python-ci-scripts"
+kind = "non_rust_ci_surface"
+paths = [
+  "scripts/**",
+  "benchmarks/scripts/**",
+]
+language = "python"
+owner = "repo-owner"
+issue = "TODO"
+reason = "Python scripts drive CI receipts, memory workloads, and benchmark reporting."
+default_pr_lanes = ["pr_smoke"]
+expensive_lanes = ["real_repo_latency", "memory_plateau"]
+created = "2026-05-07"
+review_after = "2026-06-07"
+expires = "2026-11-07"
+
+# -----------------------------------------------------------------------------
+# Workflow YAML.
+# -----------------------------------------------------------------------------
+[[allow]]
+id = "non-rust-workflow-yaml"
+kind = "non_rust_ci_surface"
+paths = [
+  ".github/workflows/**",
+  ".github/actions/**",
+  ".ci/**",
+  "policy/**",
+]
+language = "yaml-toml"
+owner = "repo-owner"
+issue = "TODO"
+reason = "CI configuration must be lintable without a full Rust compile."
+default_pr_lanes = ["docs_gate"]
+expensive_lanes = []
+created = "2026-05-07"
+review_after = "2026-06-07"
+expires = "2026-11-07"

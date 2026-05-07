@@ -1,0 +1,30 @@
+# RIPR Suppressions
+#
+# Suppressions for ripr static exposure analysis findings. Each suppression
+# requires owner, reason, created, review_after, and expires. Suppressions
+# are the documented exception path; the default is to leave findings
+# advisory-visible.
+#
+# Read by .github/workflows/ripr.yml (PR 06+) and ripr.toml.
+
+schema_version = 1
+policy = "ripr-suppressions"
+owner = "EffortlessMetrics"
+status = "advisory"
+updated = "2026-05-07"
+
+# -----------------------------------------------------------------------------
+# Generated status docs: validated through status-generation checks, not
+# Rust test oracle exposure.
+# -----------------------------------------------------------------------------
+[[suppress]]
+id = "ripr-suppress-generated-status-docs"
+kind = "generated_or_non_production_surface"
+paths = ["docs/project/status/**"]
+classification = ["static_unknown", "no_static_path"]
+owner = "repo-owner"
+issue = "TODO"
+reason = "Generated status docs are verified through status-generation checks, not Rust test oracle exposure."
+created = "2026-05-07"
+review_after = "2026-06-07"
+expires = "2026-08-07"

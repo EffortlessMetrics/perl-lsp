@@ -1,0 +1,33 @@
+# CI Exceptions Ledger
+#
+# Debt ledger for CI policy deviations. Same governance pattern as
+# .ci/debt-ledger.yaml: each entry has owner, reason, issue, created,
+# review_after, and expires.
+#
+# This file pairs with policy/ci-whitelist-exceptions.toml. ci-exceptions.toml
+# carries general-purpose policy deviations; ci-whitelist-exceptions.toml
+# carries whitelist-specific entries (e.g. expensive_default_pr_lane).
+
+schema_version = 1
+policy = "ci-exceptions"
+owner = "EffortlessMetrics"
+status = "active"
+updated = "2026-05-07"
+
+# -----------------------------------------------------------------------------
+# Example structure. Real exceptions land in subsequent rollout PRs once the
+# inventory (PR 03) and PR Plan (PR 04) flag specific deviations.
+# -----------------------------------------------------------------------------
+
+[[exception]]
+id = "ci-exception-example-long-running-release-check"
+kind = "lane_default_pr_override"
+lane = "release_check"
+scope = "repo"
+allowed = false
+owner = "repo-owner"
+issue = "TODO"
+reason = "Release checks are high-value but too expensive for default PR lane."
+created = "2026-05-07"
+review_after = "2026-06-07"
+expires = "2026-08-07"
