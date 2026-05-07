@@ -745,6 +745,7 @@ fn render_plan(plan: &Plan) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::CommandFactory;
 
     fn strings(paths: &[&str]) -> Vec<String> {
         paths.iter().map(|path| path.to_string()).collect()
@@ -768,6 +769,52 @@ mod tests {
 
     fn surface_strings(plan: &Plan) -> Vec<String> {
         plan.surfaces.iter().map(|surface| surface.id().to_string()).collect()
+    }
+
+    fn just_recipes() -> BTreeSet<String> {
+        include_str!("../../../justfile")
+            .lines()
+            .filter_map(|line| {
+                if line.starts_with(char::is_whitespace) || line.starts_with('#') {
+                    return None;
+                }
+                let (name, _) = line.split_once(':')?;
+                let name = name.split_whitespace().next()?;
+                if name.contains('=') || name.is_empty() {
+                    return None;
+                }
+                Some(name.to_string())
+            })
+            .collect()
+    }
+
+    fn xtask_subcommands() -> BTreeSet<String> {
+        crate::Cli::command()
+            .get_subcommands()
+            .map(|command| command.get_name().to_string())
+            .collect()
+    }
+
+    fn assert_proof_command_resolves(command: &str) {
+        let parts = command.split_whitespace().collect::<Vec<_>>();
+        match parts.as_slice() {
+            ["just", recipe, ..] => {
+                let recipes = just_recipes();
+                assert!(
+                    recipes.contains(*recipe),
+                    "`{command}` references missing just recipe `{recipe}`"
+                );
+            }
+            ["cargo", "xtask", subcommand, ..] => {
+                let subcommands = xtask_subcommands();
+                assert!(
+                    subcommands.contains(*subcommand),
+                    "`{command}` references missing cargo xtask subcommand `{subcommand}`"
+                );
+            }
+            ["git", "diff", "--check"] => {}
+            _ => panic!("`{command}` is not a recognized DevEx proof command shape"),
+        }
     }
 
     struct DevexRoutingFixture {
@@ -1027,6 +1074,25 @@ mod tests {
                     plan.agent_hints
                 );
             }
+        }
+    }
+
+    #[test]
+    fn planner_proof_commands_resolve_to_real_local_commands() {
+        let plan = plan_for(&[
+            "docs/project/status/parser.md",
+            "crates/perl-lsp-rs/src/runtime/text_sync.rs",
+            ".github/workflows/ci.yml",
+            "CHANGELOG.md",
+        ]);
+
+        for command in plan
+            .required_commands
+            .iter()
+            .chain(plan.optional_commands.iter())
+            .map(|proof| &proof.command)
+        {
+            assert_proof_command_resolves(command);
         }
     }
 
