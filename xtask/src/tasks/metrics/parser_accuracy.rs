@@ -841,6 +841,8 @@ struct IncrementalScore {
     content_hash_miss_count: u64,
     semantic_fact_cache_hit_count: u64,
     semantic_fact_cache_miss_count: u64,
+    unchanged_file_skip_count: u64,
+    unchanged_file_index_attempt_count: u64,
     reparse_byte_ratios: Vec<f64>,
     reused_node_ratios: Vec<f64>,
     changed_range_sample_count: u64,
@@ -1615,6 +1617,7 @@ fn score_content_hash_reuse_probe(
     }
     record_content_hash_probe(score, first_hit);
     record_semantic_fact_cache_probe(score, first_semantic_hit);
+    record_unchanged_file_skip_probe(score, first_hit);
 
     let second_hit = content_hash_probe_hits(index, &source_path_text, source);
     let second_semantic_hit = semantic_fact_cache_probe_hits(index, &source_path_text);
@@ -1626,6 +1629,7 @@ fn score_content_hash_reuse_probe(
     })?;
     record_content_hash_probe(score, second_hit);
     record_semantic_fact_cache_probe(score, second_semantic_hit);
+    record_unchanged_file_skip_probe(score, second_hit);
 
     Ok(())
 }
@@ -1654,6 +1658,13 @@ fn record_semantic_fact_cache_probe(score: &mut IncrementalScore, hit: bool) {
         score.semantic_fact_cache_hit_count += 1;
     } else {
         score.semantic_fact_cache_miss_count += 1;
+    }
+}
+
+fn record_unchanged_file_skip_probe(score: &mut IncrementalScore, skipped: bool) {
+    score.unchanged_file_index_attempt_count += 1;
+    if skipped {
+        score.unchanged_file_skip_count += 1;
     }
 }
 
@@ -4849,7 +4860,13 @@ fn cache_reuse_metrics(score: &IncrementalScore, cadence: Cadence) -> Vec<Metric
             "workspace_shard_reuse_rate",
             "workspace shard reuse telemetry is not wired yet",
         ),
-        insufficient("unchanged_file_skip_rate", "unchanged-file skip telemetry is not wired yet"),
+        optional_measured_rate(
+            "unchanged_file_skip_rate",
+            ratio(score.unchanged_file_skip_count, score.unchanged_file_index_attempt_count),
+            score.unchanged_file_index_attempt_count,
+            "unchanged-file skip telemetry is not wired yet",
+            cadence,
+        ),
         optional_measured_rate(
             "content_hash_hit_rate",
             ratio(score.content_hash_hit_count, content_hash_total),
@@ -7890,6 +7907,8 @@ sub dynamic_boundary_case {
             content_hash_miss_count: 1,
             semantic_fact_cache_hit_count: 2,
             semantic_fact_cache_miss_count: 2,
+            unchanged_file_skip_count: 1,
+            unchanged_file_index_attempt_count: 4,
             ..IncrementalScore::default()
         };
 
@@ -7925,6 +7944,14 @@ sub dynamic_boundary_case {
                 MetricRow::Measured { metric, value, sample_count: 4, .. }
                     if metric == "semantic_fact_cache_hit_rate"
                         && (*value - 0.5).abs() < f64::EPSILON
+            )
+        }));
+        assert!(metrics.iter().any(|metric| {
+            matches!(
+                metric,
+                MetricRow::Measured { metric, value, sample_count: 4, .. }
+                    if metric == "unchanged_file_skip_rate"
+                        && (*value - 0.25).abs() < f64::EPSILON
             )
         }));
         assert!(metrics.iter().any(|metric| {
