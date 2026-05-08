@@ -1180,6 +1180,133 @@ fn hir_module_resolution_outcomes_resolve_against_explicit_roots()
 }
 
 #[test]
+fn hir_module_resolution_cache_key_tracks_roots_and_epoch() -> Result<(), Box<dyn std::error::Error>>
+{
+    let file = lower_source("package Cache::Demo;\nuse Foo::Bar;\n");
+    let roots = vec![
+        ModuleResolutionRoot::new("workspace/lib", IncRootKind::Configured, "configured"),
+        ModuleResolutionRoot::new("env/lib", IncRootKind::Perl5Lib, "perl5lib"),
+        ModuleResolutionRoot::new("system/lib", IncRootKind::SystemInc, "system-inc"),
+    ];
+
+    let candidate = file
+        .compile_environment
+        .module_resolution_candidates(&roots)
+        .into_iter()
+        .next()
+        .ok_or("expected a static module-resolution candidate")?;
+    let same_candidate = file
+        .compile_environment
+        .module_resolution_candidates(&roots)
+        .into_iter()
+        .next()
+        .ok_or("expected a stable static module-resolution candidate")?;
+
+    assert_eq!(candidate.cache_key(7), same_candidate.cache_key(7));
+    assert_ne!(candidate.cache_key(7), candidate.cache_key(8));
+
+    let reversed_roots = vec![
+        ModuleResolutionRoot::new("system/lib", IncRootKind::SystemInc, "system-inc"),
+        ModuleResolutionRoot::new("env/lib", IncRootKind::Perl5Lib, "perl5lib"),
+        ModuleResolutionRoot::new("workspace/lib", IncRootKind::Configured, "configured"),
+    ];
+    let reversed_candidate = file
+        .compile_environment
+        .module_resolution_candidates(&reversed_roots)
+        .into_iter()
+        .next()
+        .ok_or("expected a candidate for reordered roots")?;
+    assert_ne!(candidate.cache_key(7), reversed_candidate.cache_key(7));
+
+    let relabeled_roots = vec![
+        ModuleResolutionRoot::new("workspace/lib", IncRootKind::Perl5Lib, "configured"),
+        ModuleResolutionRoot::new("env/lib", IncRootKind::Perl5Lib, "perl5lib"),
+        ModuleResolutionRoot::new("system/lib", IncRootKind::SystemInc, "system-inc"),
+    ];
+    let relabeled_candidate = file
+        .compile_environment
+        .module_resolution_candidates(&relabeled_roots)
+        .into_iter()
+        .next()
+        .ok_or("expected a candidate for relabeled roots")?;
+    assert_ne!(candidate.cache_key(7), relabeled_candidate.cache_key(7));
+
+    let key = candidate.cache_key(7);
+    assert_eq!(key.resolver_epoch, 7);
+    let first_root = key.roots.first().ok_or("expected first root in cache key")?;
+    assert_eq!(first_root.path, "workspace/lib");
+    assert_eq!(first_root.kind, IncRootKind::Configured);
+    assert_eq!(first_root.source, "configured");
+    assert_eq!(first_root.candidate_path, "workspace/lib/Foo/Bar.pm");
+    assert_eq!(first_root.precedence, 0);
+
+    Ok(())
+}
+
+#[test]
+fn hir_module_resolution_cache_invalidation_tracks_candidate_file_state()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let root = dir.path().join("lib");
+    fs::create_dir_all(&root)?;
+    let root = root.to_string_lossy().replace('\\', "/");
+    let module_path = std::path::PathBuf::from(&root).join("Foo/Bar.pm");
+
+    let file = lower_source("package Cache::Demo;\nuse Foo::Bar;\n");
+    let roots =
+        vec![ModuleResolutionRoot::new(root.clone(), IncRootKind::Configured, "configured")];
+    let candidate = file
+        .compile_environment
+        .module_resolution_candidates(&roots)
+        .into_iter()
+        .next()
+        .ok_or("expected a static module-resolution candidate")?;
+
+    let missing_state =
+        candidate.cache_invalidation(11, |path| std::path::PathBuf::from(path).is_file());
+
+    let module_parent = module_path.parent().ok_or("expected module parent directory")?;
+    fs::create_dir_all(module_parent)?;
+    fs::write(&module_path, "package Foo::Bar;\n1;\n")?;
+
+    let resolved_state =
+        candidate.cache_invalidation(11, |path| std::path::PathBuf::from(path).is_file());
+    assert_eq!(missing_state.key, resolved_state.key);
+    assert_ne!(missing_state.path_states, resolved_state.path_states);
+    let resolved_path_state =
+        resolved_state.path_states.first().ok_or("expected resolved candidate path state")?;
+    assert!(resolved_path_state.exists);
+
+    fs::remove_file(&module_path)?;
+
+    let removed_state =
+        candidate.cache_invalidation(11, |path| std::path::PathBuf::from(path).is_file());
+    assert_eq!(resolved_state.key, removed_state.key);
+    assert_ne!(resolved_state.path_states, removed_state.path_states);
+    let removed_path_state =
+        removed_state.path_states.first().ok_or("expected removed candidate path state")?;
+    assert!(!removed_path_state.exists);
+
+    Ok(())
+}
+
+#[test]
+fn hir_module_resolution_cache_key_excludes_dynamic_requires() {
+    let file = lower_source("package Cache::Demo;\nrequire $dynamic;\n");
+    let roots =
+        vec![ModuleResolutionRoot::new("workspace/lib", IncRootKind::Configured, "configured")];
+
+    assert!(
+        file.compile_environment.module_resolution_candidates(&roots).is_empty(),
+        "dynamic require should not produce a static cache key candidate"
+    );
+    assert!(
+        file.compile_environment.resolved_module_resolution_candidates(&roots, |_| true).is_empty(),
+        "dynamic require should not produce a resolved cacheable outcome"
+    );
+}
+
+#[test]
 fn hir_marks_items_lowered_from_error_partials_as_recovered()
 -> Result<(), Box<dyn std::error::Error>> {
     let loc = SourceLocation { start: 0, end: 12 };

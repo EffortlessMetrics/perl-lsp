@@ -1043,6 +1043,56 @@ pub struct ModuleResolutionCandidate {
     pub confidence: CompileConfidence,
 }
 
+impl ModuleResolutionCandidate {
+    /// Build the cache key for this module-resolution candidate.
+    ///
+    /// The key intentionally records request identity, root provenance/order,
+    /// candidate paths, source anchor, and resolver epoch, but not the current
+    /// resolution outcome. Candidate existence is tracked separately as an
+    /// invalidation input so file appearance/removal can invalidate a cached
+    /// result without changing the request identity.
+    #[must_use]
+    pub fn cache_key(&self, resolver_epoch: u64) -> ModuleResolutionCacheKey {
+        ModuleResolutionCacheKey {
+            resolver_epoch,
+            request_index: self.request_index,
+            directive_item: self.directive_item,
+            request_kind: self.request_kind,
+            target: self.target.clone(),
+            relative_path: self.relative_path.clone(),
+            roots: self
+                .roots
+                .iter()
+                .map(ModuleResolutionCacheRootKey::from_candidate_root)
+                .collect(),
+            range: self.range,
+            package_context: self.package_context.clone(),
+        }
+    }
+
+    /// Build cache invalidation inputs for this candidate.
+    ///
+    /// The caller supplies the path-existence predicate; parser-core still does
+    /// not read ambient process state or inspect the filesystem directly.
+    #[must_use]
+    pub fn cache_invalidation(
+        &self,
+        resolver_epoch: u64,
+        mut path_exists: impl FnMut(&str) -> bool,
+    ) -> ModuleResolutionCacheInvalidation {
+        let path_states = self
+            .roots
+            .iter()
+            .map(|root| ModuleResolutionCandidatePathState {
+                candidate_path: root.candidate_path.clone(),
+                exists: path_exists(&root.candidate_path),
+            })
+            .collect();
+
+        ModuleResolutionCacheInvalidation { key: self.cache_key(resolver_epoch), path_states }
+    }
+}
+
 /// A single candidate root/path pair for a static module request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -1057,6 +1107,78 @@ pub struct ModuleResolutionCandidateRoot {
     pub candidate_path: String,
     /// Search precedence; lower values are searched first.
     pub precedence: usize,
+}
+
+/// Cache key for a static module-resolution candidate.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct ModuleResolutionCacheKey {
+    /// Caller-supplied resolver epoch, policy version, or filesystem snapshot id.
+    pub resolver_epoch: u64,
+    /// Zero-based request index in [`CompileEnvironment::module_requests`].
+    pub request_index: usize,
+    /// Directive HIR item that produced this request.
+    pub directive_item: Option<HirId>,
+    /// Source shape that requested the module.
+    pub request_kind: ModuleRequestKind,
+    /// Static module target.
+    pub target: String,
+    /// Relative module path, for example `Foo/Bar.pm`.
+    pub relative_path: String,
+    /// Ordered candidate roots included in the cache identity.
+    pub roots: Vec<ModuleResolutionCacheRootKey>,
+    /// Source range for the request.
+    pub range: SourceLocation,
+    /// Package context active at the request.
+    pub package_context: Option<String>,
+}
+
+/// Root identity included in module-resolution cache keys.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct ModuleResolutionCacheRootKey {
+    /// Include root path as configured or observed by the caller.
+    pub path: String,
+    /// Root source category.
+    pub kind: IncRootKind,
+    /// Human-readable source label.
+    pub source: String,
+    /// Candidate module path under this root.
+    pub candidate_path: String,
+    /// Search precedence; lower values are searched first.
+    pub precedence: usize,
+}
+
+impl ModuleResolutionCacheRootKey {
+    fn from_candidate_root(root: &ModuleResolutionCandidateRoot) -> Self {
+        Self {
+            path: root.path.clone(),
+            kind: root.kind,
+            source: root.source.clone(),
+            candidate_path: root.candidate_path.clone(),
+            precedence: root.precedence,
+        }
+    }
+}
+
+/// Candidate path state used to invalidate module-resolution cache entries.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct ModuleResolutionCandidatePathState {
+    /// Candidate module path under a searched root.
+    pub candidate_path: String,
+    /// Whether the caller observed the candidate path as existing.
+    pub exists: bool,
+}
+
+/// Cache invalidation inputs for a module-resolution candidate.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct ModuleResolutionCacheInvalidation {
+    /// Stable cache key for the module-resolution request and root set.
+    pub key: ModuleResolutionCacheKey,
+    /// Candidate path existence states observed by the caller.
+    pub path_states: Vec<ModuleResolutionCandidatePathState>,
 }
 
 /// Static resolution state for a module candidate packet.
