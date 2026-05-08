@@ -240,6 +240,7 @@ impl NativeCriticRegistry {
             Box::new(AssignmentInConditionRule),
             Box::new(BarewordFilehandleRule),
             Box::new(TwoArgOpenRule),
+            Box::new(PipeOpenRule),
             Box::new(StringEvalRule),
             Box::new(UnusedLexicalVariableRule),
             Box::new(UnusedParameterRule),
@@ -510,6 +511,32 @@ impl CriticRule for TwoArgOpenRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_two_arg_open_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports pipe-open command execution.
+///
+/// Pipe-open forms execute shell commands through `open`. The rule mirrors the
+/// existing security diagnostic through the native critic contract and remains
+/// diagnostic-only because rewriting command execution safely needs user
+/// intent.
+pub struct PipeOpenRule;
+
+impl CriticRule for PipeOpenRule {
+    fn id(&self) -> &'static str {
+        "native.io.pipe_open"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Security
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Harsh
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_pipe_open_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -943,6 +970,25 @@ fn two_arg_open_fix_text(source: &str, open_args: &[Node]) -> Option<String> {
     Some(format!("open({handle_text}, '<', {path_text})"))
 }
 
+fn pipe_open_finding(rule: &PipeOpenRule, source: &str, open_node: &Node) -> CriticFinding {
+    let range = range_for_byte_span(source, open_node.location.start, open_node.location.end);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: "Pipe-open executes a shell command".to_string(),
+        explanation: "Pipe-open forms run a command through the shell. Prefer explicit command argument lists or IPC modules when command execution is required.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: vec![CriticRelatedInformation {
+            range,
+            message: "Validate command arguments and avoid string command execution when input may be user-controlled.".to_string(),
+        }],
+        fix: None,
+    }
+}
+
 fn string_eval_finding(rule: &StringEvalRule, source: &str, eval_node: &Node) -> CriticFinding {
     let range = range_for_byte_span(source, eval_node.location.start, eval_node.location.end);
 
@@ -1103,6 +1149,56 @@ fn collect_two_arg_open_findings(
 
     for child in node.children() {
         collect_two_arg_open_findings(rule, source, child, out);
+    }
+}
+
+fn collect_pipe_open_findings(
+    rule: &PipeOpenRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    if let NodeKind::FunctionCall { name, args } = &node.kind
+        && name == "open"
+    {
+        let open_args = effective_call_args(args);
+        if is_pipe_open_args(open_args) {
+            out.push(pipe_open_finding(rule, source, node));
+        }
+    }
+
+    for child in node.children() {
+        collect_pipe_open_findings(rule, source, child, out);
+    }
+}
+
+fn is_pipe_open_args(open_args: &[Node]) -> bool {
+    match open_args.len() {
+        // 3+ arg form: open(my $fh, "|-", "cmd") or open(my $fh, "-|", "cmd")
+        n if n >= 3 => open_args.get(1).is_some_and(is_pipe_mode_string),
+        // 2-arg form: open(FH, "|cmd")
+        2 => open_args.get(1).is_some_and(is_pipe_two_arg_string),
+        _ => false,
+    }
+}
+
+fn is_pipe_mode_string(node: &Node) -> bool {
+    match &node.kind {
+        NodeKind::String { value, .. } => {
+            let trimmed = value.trim_matches(['"', '\'']);
+            trimmed == "|-" || trimmed == "-|"
+        }
+        _ => false,
+    }
+}
+
+fn is_pipe_two_arg_string(node: &Node) -> bool {
+    match &node.kind {
+        NodeKind::String { value, .. } => {
+            let trimmed = value.trim_matches(['"', '\'']);
+            trimmed.starts_with('|')
+        }
+        _ => false,
     }
 }
 
@@ -1955,6 +2051,98 @@ mod tests {
     }
 
     #[test]
+    fn native_pipe_open_rule_reports_pipe_open_forms() {
+        let source = "use strict;\nuse warnings;\nopen(my $read_fh, '-|', 'ls');\nopen(my $write_fh, '|-', 'cat');\nopen(FH, '|cmd');\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(PipeOpenRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 3);
+        for finding in &findings {
+            assert_eq!(finding.rule_id, "native.io.pipe_open");
+            assert_eq!(finding.category, CriticCategory::Security);
+            assert_eq!(finding.severity, Severity::Harsh);
+            assert_eq!(finding.message, "Pipe-open executes a shell command");
+            assert_eq!(finding.suppression_key, "native.io.pipe_open");
+            assert!(finding.fix.is_none(), "pipe-open replacement is not safe to automate");
+        }
+        assert_eq!(
+            &source[findings[0].range.start.byte..findings[0].range.end.byte],
+            "open(my $read_fh, '-|', 'ls')"
+        );
+        assert_eq!(
+            &source[findings[1].range.start.byte..findings[1].range.end.byte],
+            "open(my $write_fh, '|-', 'cat')"
+        );
+        assert_eq!(
+            &source[findings[2].range.start.byte..findings[2].range.end.byte],
+            "open(FH, '|cmd')"
+        );
+    }
+
+    #[test]
+    fn native_pipe_open_rule_accepts_normal_open() {
+        let source =
+            "use strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, '<', $path);\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(PipeOpenRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "normal three-argument open should be accepted");
+    }
+
+    #[test]
+    fn native_pipe_open_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nopen(my $fh, '-|', 'ls');\n";
+        let ast = parse_source(source);
+        let excluded_config =
+            CriticConfig { exclude: vec!["native.io.pipe_open".to_string()], ..Default::default() };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(PipeOpenRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.io.pipe_open -- trusted command\nuse strict;\nuse warnings;\nopen(my $fh, '-|', 'ls');\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+
+        let severity_config =
+            CriticConfig { severity: Severity::Stern as u8, ..Default::default() };
+        let severity_ctx = CriticContext::new(source, &ast, &severity_config);
+        assert!(registry.check(&severity_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_pipe_open_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nopen(my $fh, '-|', 'ls');\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(PipeOpenRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.io.pipe_open");
+        assert_eq!(violations[0].description, "Pipe-open executes a shell command");
+        assert_eq!(
+            violations[0].explanation,
+            "Pipe-open forms run a command through the shell. Prefer explicit command argument lists or IPC modules when command execution is required."
+        );
+        assert_eq!(violations[0].severity, Severity::Harsh);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_string_eval_rule_reports_literal_and_variable_eval() {
         let source =
             "use strict;\nuse warnings;\nmy $code = 'print 1';\neval $code;\neval 'print 2';\n";
@@ -2059,6 +2247,7 @@ mod tests {
                 "native.common.assignment_in_condition",
                 "native.io.bareword_filehandle",
                 "native.io.two_arg_open",
+                "native.io.pipe_open",
                 "native.security.string_eval",
                 "native.variables.unused_lexical",
                 "native.variables.unused_parameter",
