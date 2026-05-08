@@ -1348,7 +1348,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nprint $x + $shadow;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param;\n",
             None,
             &context,
             None,
@@ -1435,6 +1435,28 @@ mod tests {
             .ok_or("native duplicate parameter data should be populated")?;
         assert_eq!(data["code"], "native.variables.duplicate_parameter");
         assert_eq!(data["suppressionKey"], "native.variables.duplicate_parameter");
+        assert_eq!(data["fixable"], true);
+
+        let parameter_shadow = items
+            .iter()
+            .find(|diag| {
+                diag.code
+                    .as_ref()
+                    .is_some_and(|code| matches!(code, NumberOrString::String(value) if value == "native.variables.parameter_shadows_global"))
+            })
+            .ok_or("expected native parameter shadowing finding")?;
+        assert_eq!(parameter_shadow.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(parameter_shadow.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(
+            parameter_shadow.message,
+            "Parameter '$outer_param' shadows an outer declaration"
+        );
+        let data = parameter_shadow
+            .data
+            .as_ref()
+            .ok_or("native parameter shadowing data should be populated")?;
+        assert_eq!(data["code"], "native.variables.parameter_shadows_global");
+        assert_eq!(data["suppressionKey"], "native.variables.parameter_shadows_global");
         assert_eq!(data["fixable"], true);
 
         let duplicate = items
