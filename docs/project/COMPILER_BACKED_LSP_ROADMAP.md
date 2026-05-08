@@ -142,7 +142,7 @@ and link the verification receipt there.
 | Compile environment and module resolution | [#8206](https://github.com/EffortlessMetrics/perl-lsp/issues/8206), [#8242](https://github.com/EffortlessMetrics/perl-lsp/issues/8242), [#8270](https://github.com/EffortlessMetrics/perl-lsp/issues/8270), [#8275](https://github.com/EffortlessMetrics/perl-lsp/issues/8275), [#8280](https://github.com/EffortlessMetrics/perl-lsp/issues/8280) | Current fixture-backed lane complete; keep facts available for downstream effects and provider proof | HIR, scope, stash, shared include-root builder, module-resolution cache-key proof | Compile-environment fixtures and [#8284](https://github.com/EffortlessMetrics/perl-lsp/pull/8284) receipt |
 | Imports and exports | [#8244](https://github.com/EffortlessMetrics/perl-lsp/issues/8244), [#8264](https://github.com/EffortlessMetrics/perl-lsp/issues/8264) | Keep canonical `ImportSpec` / `ExportSet` / visible-symbol proof as provider input evidence | [#8252](https://github.com/EffortlessMetrics/perl-lsp/issues/8252), [#8253](https://github.com/EffortlessMetrics/perl-lsp/issues/8253), stash model, module resolution | Semantic scorecard and shadow compare |
 | Framework adapters | [#8195](https://github.com/EffortlessMetrics/perl-lsp/issues/8195), [#8245](https://github.com/EffortlessMetrics/perl-lsp/issues/8245) | Exporter-family adapter registry slice complete; broader adapters stay issue-owned and parked | HIR, stash, imports | Framework fixtures with provenance and [#8287](https://github.com/EffortlessMetrics/perl-lsp/pull/8287) receipt |
-| Compile-time effects | [#8207](https://github.com/EffortlessMetrics/perl-lsp/issues/8207), [#3394](https://github.com/EffortlessMetrics/perl-lsp/issues/3394), [#8293](https://github.com/EffortlessMetrics/perl-lsp/issues/8293), [#8294](https://github.com/EffortlessMetrics/perl-lsp/issues/8294) | HIR effect log and symbolic-ref boundaries complete; differential proof remains | HIR, scope, stash, imports | Differential oracle comparison for selected effect-derived facts |
+| Compile-time effects | [#8207](https://github.com/EffortlessMetrics/perl-lsp/issues/8207), [#3394](https://github.com/EffortlessMetrics/perl-lsp/issues/3394), [#8293](https://github.com/EffortlessMetrics/perl-lsp/issues/8293), [#8294](https://github.com/EffortlessMetrics/perl-lsp/issues/8294) | HIR effect log, symbolic-ref boundaries, and selected differential proof complete | HIR, scope, stash, imports | Provider consumption remains gated by [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) |
 | Tooling IR / PIR | [#8196](https://github.com/EffortlessMetrics/perl-lsp/issues/8196) | PIR data model with context, no provider cutover | HIR, scope, stash | PIR lowering fixtures |
 | Differential oracle | [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199) ([#4389](https://github.com/EffortlessMetrics/perl-lsp/issues/4389) background) | Real-Perl conformance runner for proof lanes only | Fact schema and sandbox policy | Structured agreement receipt |
 | Provider cutover | [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) | Fact-source tracing before behavior changes | Semantic scorecards, shadow compare | Provider-impact fixtures |
@@ -151,11 +151,10 @@ and link the verification receipt there.
 
 1. Keep [compiler capability status](COMPILER_CAPABILITY_STATUS.md) issue-owned
    and visible without copying generated parser metrics.
-2. Continue [#8207](https://github.com/EffortlessMetrics/perl-lsp/issues/8207)
-   from the landed HIR effect-log and symbolic-ref boundary slices, using
-   [#8294](https://github.com/EffortlessMetrics/perl-lsp/issues/8294) for
-   differential oracle comparison.
-3. Add fact-source tracing before any provider consumes the new compiler facts.
+2. Add fact-source tracing before any provider consumes the new compiler facts,
+   tracked in [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197).
+3. Keep broader real-Perl conformance expansion issue-owned under
+   [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199).
 
 Recent module-resolution control points are complete:
 
@@ -176,6 +175,10 @@ Recent module-resolution control points are complete:
 - [#8297](https://github.com/EffortlessMetrics/perl-lsp/pull/8297):
   symbolic-reference dynamic-boundary facts under disabled `strict refs`, with
   HIR and compile-effect proof and no provider cutover.
+- [#8300](https://github.com/EffortlessMetrics/perl-lsp/pull/8300):
+  selected compile-effect facts compared against a real-Perl oracle receipt for
+  packages, subs, constants, prototypes, and `@ISA`, with zero disagreements
+  and no provider cutover.
 
 ## Phase 0: Measurement Closeout To Capability Gaps
 
