@@ -189,13 +189,123 @@
           "model_version": 1
         }
       ]
+    },
+    {
+      "schema_version": 2,
+      "query": "diagnostics_check",
+      "input": {
+        "symbol": "imported_func"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "false_positive_removed:imported_func"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "diagnostics shadow fixture: legacy=warn compiler_fact=suppress via ImportSpec/ExportSet; false_positive_delta=-1; false_negative_delta=0"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Diagnostics",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "diagnostics_check",
+      "input": {
+        "symbol": "genuinely_missing"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "warn:genuinely_missing"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "warn:genuinely_missing"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "diagnostics shadow fixture: compiler facts preserve exact undefined-symbol warning; false_positive_delta=0; false_negative_delta=0"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Diagnostics",
+          "source": "CompilerFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "diagnostics_check",
+      "input": {
+        "symbol": "symbolic_ref_boundary"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "dynamic_boundary_blocked:symbolic_ref_boundary"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "diagnostics shadow fixture: legacy=warn compiler_fact=dynamic-boundary-blocked for symbolic ref; false_positive_delta=-1; false_negative_delta=0"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Diagnostics",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
     }
   ],
   "verdict_counts": {
     "ambiguous": 1,
-    "improved": 1,
+    "improved": 3,
     "regression": 1,
-    "same": 1,
+    "same": 2,
     "unavailable": 1
   },
   "release_readiness_verdict_counts": {
@@ -207,9 +317,9 @@
   },
   "schema_fixture_verdict_counts": {
     "ambiguous": 1,
-    "improved": 0,
+    "improved": 2,
     "regression": 1,
-    "same": 0,
+    "same": 1,
     "unavailable": 1
   },
   "notes": "0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes."

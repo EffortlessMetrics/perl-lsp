@@ -2,16 +2,16 @@
 
 Measured: `deterministic-fixture-baseline`
 
-Receipts: `5`
+Receipts: `8`
 
 ## Verdict Counts
 
 | Verdict | Count |
 |---|---:|
 | ambiguous | 1 |
-| improved | 1 |
+| improved | 3 |
 | regression | 1 |
-| same | 1 |
+| same | 2 |
 | unavailable | 1 |
 
 ## Release-Readiness Verdict Counts
@@ -29,9 +29,9 @@ Receipts: `5`
 | Verdict | Count |
 |---|---:|
 | ambiguous | 1 |
-| improved | 0 |
+| improved | 2 |
 | regression | 1 |
-| same | 0 |
+| same | 1 |
 | unavailable | 1 |
 
 ## Receipts
@@ -43,6 +43,9 @@ Receipts: `5`
 | schema-fixture | CountUsages | `Foo::bar` | regression | 4 | 3 |
 | schema-fixture | VisibleSymbols | `Foo::bar` | ambiguous | 2 | 2 |
 | schema-fixture | Hover | `Foo::bar` | unavailable | 0 | 1 |
+| schema-fixture | DiagnosticsCheck | `imported_func` | improved | 0 | 1 |
+| schema-fixture | DiagnosticsCheck | `genuinely_missing` | same | 1 | 1 |
+| schema-fixture | DiagnosticsCheck | `symbolic_ref_boundary` | improved | 0 | 1 |
 
 ## Fact Source Traces
 
@@ -53,5 +56,8 @@ Receipts: `5`
 | schema-fixture | CountUsages | References | SemanticFact | SemanticAnalyzer | Medium | Fresh | Shadow |
 | schema-fixture | VisibleSymbols | Completion | CompilerFact | ImportExportInference | Medium | Fresh | Shadow |
 | schema-fixture | Hover | Hover | Fallback | SearchFallback | Low | NotApplicable | Unavailable |
+| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | High | Fresh | Shadow |
+| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | SemanticAnalyzer | High | Fresh | Shadow |
+| schema-fixture | DiagnosticsCheck | Diagnostics | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
 
 0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes.

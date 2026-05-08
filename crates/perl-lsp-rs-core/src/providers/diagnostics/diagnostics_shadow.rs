@@ -28,7 +28,10 @@
 //! - **Req 22.6**: Exact -> warn; Ambiguous -> suppress / weak warning;
 //!   Dynamic/Unavailable -> suppress.
 
-use perl_semantic_facts::{Confidence, FileId, Provenance, ScopeId};
+use perl_semantic_facts::{
+    Confidence, DefinitionCandidate, FileId, Provenance, ProviderFactFreshness,
+    ProviderFactSourceKind, ProviderFactTrace, ProviderFallbackState, ProviderSurface, ScopeId,
+};
 use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
 use perl_workspace::semantic_shadow_compare::{
     SemanticShadowCompareReceipt, ShadowQueryInput, ShadowQueryName, ShadowResultSummary,
@@ -86,12 +89,14 @@ pub fn diagnostics_undefined_symbol_shadow<Q: SemanticQueries>(
     let new_summary = classification_to_summary(&classification, symbol);
 
     // Build receipt
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let fact_source_traces = diagnostics_fact_source_traces(&classification, &candidates);
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::DiagnosticsCheck,
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
         Vec::new(),
+        fact_source_traces,
     );
 
     tracing::debug!(
@@ -197,12 +202,19 @@ pub fn diagnostics_undefined_symbol_cutover<Q: SemanticQueries>(
         let old_summary = legacy_warn_to_summary(legacy_should_warn);
         let new_summary = summarize_identities(Some(Vec::new()));
 
-        let receipt = SemanticShadowCompareReceipt::from_summaries(
+        let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
             ShadowQueryName::DiagnosticsCheck,
             ShadowQueryInput { symbol: symbol.to_string() },
             old_summary,
             new_summary,
             vec!["suppressed: dynamic boundary scope".to_string()],
+            vec![diagnostics_trace(
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                Confidence::High,
+                ProviderFallbackState::Blocked,
+                None,
+            )],
         );
 
         return DiagnosticsCutoverOutcome {
@@ -232,12 +244,14 @@ pub fn diagnostics_undefined_symbol_cutover<Q: SemanticQueries>(
         }
     };
 
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let fact_source_traces = diagnostics_fact_source_traces(&classification, &candidates);
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::DiagnosticsCheck,
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
         notes,
+        fact_source_traces,
     );
 
     // Map classification to action
@@ -331,6 +345,68 @@ fn classification_to_summary(
         DiagnosticClassification::DynamicOrUnavailable => {
             // Suppressed -> no diagnostic.
             summarize_identities(Some(Vec::new()))
+        }
+    }
+}
+
+fn diagnostics_fact_source_traces(
+    classification: &DiagnosticClassification,
+    candidates: &[DefinitionCandidate],
+) -> Vec<ProviderFactTrace> {
+    if let Some(candidate) = candidates.first() {
+        return vec![diagnostics_trace(
+            provider_source_for_provenance(candidate.provenance),
+            candidate.provenance,
+            candidate.confidence,
+            ProviderFallbackState::Shadow,
+            Some(candidate.anchor_id),
+        )];
+    }
+
+    let (source, provenance, confidence) = match classification {
+        DiagnosticClassification::Exact => {
+            (ProviderFactSourceKind::CompilerFact, Provenance::SemanticAnalyzer, Confidence::High)
+        }
+        DiagnosticClassification::Ambiguous => {
+            (ProviderFactSourceKind::SemanticFact, Provenance::NameHeuristic, Confidence::Low)
+        }
+        DiagnosticClassification::DynamicOrUnavailable => {
+            (ProviderFactSourceKind::DynamicBoundary, Provenance::DynamicBoundary, Confidence::High)
+        }
+    };
+
+    vec![diagnostics_trace(source, provenance, confidence, ProviderFallbackState::Shadow, None)]
+}
+
+fn diagnostics_trace(
+    source: ProviderFactSourceKind,
+    provenance: Provenance,
+    confidence: Confidence,
+    fallback_state: ProviderFallbackState,
+    anchor_id: Option<perl_semantic_facts::AnchorId>,
+) -> ProviderFactTrace {
+    ProviderFactTrace::new(
+        ProviderSurface::Diagnostics,
+        source,
+        provenance,
+        confidence,
+        ProviderFactFreshness::Fresh,
+        fallback_state,
+        None,
+        anchor_id,
+        Some(1),
+    )
+}
+
+fn provider_source_for_provenance(provenance: Provenance) -> ProviderFactSourceKind {
+    match provenance {
+        Provenance::ImportExportInference
+        | Provenance::FrameworkSynthesis
+        | Provenance::PragmaInference => ProviderFactSourceKind::CompilerFact,
+        Provenance::DynamicBoundary => ProviderFactSourceKind::DynamicBoundary,
+        Provenance::SearchFallback | Provenance::NameHeuristic => ProviderFactSourceKind::Fallback,
+        Provenance::ExactAst | Provenance::DesugaredAst | Provenance::SemanticAnalyzer => {
+            ProviderFactSourceKind::SemanticFact
         }
     }
 }
@@ -488,7 +564,13 @@ mod tests {
     #[test]
     fn shadow_legacy_warn_semantic_suppresses() -> Result<(), Box<dyn std::error::Error>> {
         // Legacy would warn (false positive), but semantic finds the symbol.
-        let candidate = make_exact_candidate("imported_sub", 10, 20);
+        let candidate = make_candidate(
+            "imported_sub",
+            10,
+            20,
+            Provenance::ImportExportInference,
+            Confidence::High,
+        );
         let queries = StubSemanticQueries { definitions_result: vec![candidate] };
 
         let result =
@@ -498,6 +580,67 @@ mod tests {
         assert_eq!(result.receipt.old_result.match_count, 1); // legacy warns
         assert_eq!(result.receipt.new_result.match_count, 0); // semantic suppresses
         assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Regression);
+        assert_eq!(result.receipt.fact_source_traces.len(), 1);
+        let trace = &result.receipt.fact_source_traces[0];
+        assert_eq!(trace.surface, ProviderSurface::Diagnostics);
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::ImportExportInference);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+        Ok(())
+    }
+
+    #[test]
+    fn diagnostics_compiler_shadow_exact_warning_trace_is_shadow_only()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let queries = StubSemanticQueries { definitions_result: vec![] };
+
+        let result = diagnostics_undefined_symbol_shadow(
+            true,
+            &queries,
+            "genuinely_missing",
+            FileId(1),
+            None,
+            42,
+        );
+
+        assert!(result.legacy_should_warn, "shadow mode must preserve legacy behavior");
+        assert_eq!(result.receipt.old_result.match_count, 1);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+        let trace = &result.receipt.fact_source_traces[0];
+        assert_eq!(trace.surface, ProviderSurface::Diagnostics);
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+        Ok(())
+    }
+
+    #[test]
+    fn diagnostics_compiler_shadow_dynamic_boundary_trace_is_labeled()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dynamic =
+            make_candidate("maybe_dynamic", 10, 20, Provenance::DynamicBoundary, Confidence::Low);
+        let queries = StubSemanticQueries { definitions_result: vec![dynamic] };
+
+        let result = diagnostics_undefined_symbol_shadow(
+            true,
+            &queries,
+            "maybe_dynamic",
+            FileId(1),
+            None,
+            5,
+        );
+
+        assert!(result.legacy_should_warn, "shadow mode must preserve legacy behavior");
+        assert_eq!(result.receipt.new_result.match_count, 0);
+        let trace = &result.receipt.fact_source_traces[0];
+        assert_eq!(trace.surface, ProviderSurface::Diagnostics);
+        assert_eq!(trace.source, ProviderFactSourceKind::DynamicBoundary);
+        assert_eq!(trace.provenance, Provenance::DynamicBoundary);
+        assert_eq!(trace.confidence, Confidence::Low);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
         Ok(())
     }
 
