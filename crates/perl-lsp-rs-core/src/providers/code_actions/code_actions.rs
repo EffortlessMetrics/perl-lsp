@@ -126,7 +126,9 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_unused_variable(&self.source, &qf_diag));
                     }
                     // PL403: Assignment in condition
-                    c if c == DiagnosticCode::AssignmentInCondition.as_str() => {
+                    c if c == DiagnosticCode::AssignmentInCondition.as_str()
+                        || c == "native.common.assignment_in_condition" =>
+                    {
                         actions.extend(quick_fixes::fix_assignment_in_condition(
                             &self.source,
                             &qf_diag,
@@ -360,6 +362,34 @@ mod tests {
         assert!(
             actions.iter().any(|a| a.title.contains("==")),
             "Expected action to change to comparison, got: {:?}",
+            actions
+        );
+    }
+
+    #[test]
+    fn test_native_critic_policy_alias_for_assignment_in_condition() {
+        let source = "if ($x = 5) { }";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![make_diagnostic(
+            4,
+            10,
+            "native.common.assignment_in_condition",
+            "Assignment in condition - did you mean '=='?",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(
+            actions.iter().any(|a| a.title == "Change to comparison (==)"
+                && a.edit.changes.iter().any(|edit| edit.new_text == "==")),
+            "Expected native critic alias to offer comparison fix, got: {:?}",
+            actions
+        );
+        assert!(
+            actions.iter().any(|a| a.title == "Keep assignment (add parentheses)"),
+            "Expected native critic alias to offer intentional-assignment fix, got: {:?}",
             actions
         );
     }

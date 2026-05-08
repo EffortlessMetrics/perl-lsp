@@ -12,11 +12,12 @@ mod types;
 pub use analyzer::{CriticAnalyzer, hash_content};
 pub use built_in::{BuiltInAnalyzer, Policy};
 pub use native::{
-    CriticCategory, CriticContext, CriticFinding, CriticFix, CriticRelatedInformation, CriticRule,
-    CriticSuppression, CriticSuppressionMap, CriticSuppressionScope, CriticTextEdit,
-    DuplicateLexicalDeclarationRule, DuplicateParameterRule, FixSafety, NativeCriticRegistry,
-    ParameterShadowsGlobalRule, RequireUseStrictRule, RequireUseWarningsRule,
-    ShadowedLexicalVariableRule, UnusedLexicalVariableRule, UnusedParameterRule,
+    AssignmentInConditionRule, CriticCategory, CriticContext, CriticFinding, CriticFix,
+    CriticRelatedInformation, CriticRule, CriticSuppression, CriticSuppressionMap,
+    CriticSuppressionScope, CriticTextEdit, DuplicateLexicalDeclarationRule,
+    DuplicateParameterRule, FixSafety, NativeCriticRegistry, ParameterShadowsGlobalRule,
+    RequireUseStrictRule, RequireUseWarningsRule, ShadowedLexicalVariableRule,
+    UnusedLexicalVariableRule, UnusedParameterRule,
 };
 pub use quick_fix::{QuickFix, TextEdit};
 pub use types::{CriticConfig, Severity, Violation};

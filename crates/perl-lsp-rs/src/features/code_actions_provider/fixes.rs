@@ -75,6 +75,38 @@ pub(super) fn fix_unused_variable(
     actions
 }
 
+pub(super) fn fix_assignment_in_condition(
+    provider: &CodeActionsProvider,
+    diagnostic: &Diagnostic,
+) -> Vec<CodeAction> {
+    let Some(relative_pos) = provider.source()[diagnostic.range.0..diagnostic.range.1].find('=')
+    else {
+        return Vec::new();
+    };
+    let equals_pos = diagnostic.range.0 + relative_pos;
+
+    vec![
+        diagnostic_action(
+            diagnostic,
+            "Change to comparison (==)",
+            CodeActionKind::QuickFix,
+            TextEdit { range: (equals_pos, equals_pos + 1), new_text: "==".to_string() },
+        ),
+        diagnostic_action(
+            diagnostic,
+            "Keep assignment (add parentheses)",
+            CodeActionKind::QuickFix,
+            TextEdit {
+                range: diagnostic.range,
+                new_text: format!(
+                    "({})",
+                    &provider.source()[diagnostic.range.0..diagnostic.range.1]
+                ),
+            },
+        ),
+    ]
+}
+
 pub(super) fn add_use_strict(diagnostic: &Diagnostic) -> Vec<CodeAction> {
     vec![diagnostic_action(
         diagnostic,
