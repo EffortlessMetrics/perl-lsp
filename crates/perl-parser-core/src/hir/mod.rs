@@ -16,8 +16,9 @@ pub use model::{
     GlobSlotKind, GlobSlotSource, HirBindingId, HirFile, HirId, HirItem, HirKind, HirScopeId,
     IncRootAction, IncRootFact, IncRootKind, IndirectCallExpr, InheritanceSource, LiteralExpr,
     LiteralKind, MethodCallExpr, MethodDecl, ModuleRequest, ModuleRequestKind,
-    ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash, PragmaEffect,
-    RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind, StashConfidence,
-    StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph, StashProvenance, StorageClass,
-    SubDecl, UseDecl, VariableBinding, VariableDecl,
+    ModuleResolutionCandidate, ModuleResolutionCandidateRoot, ModuleResolutionCandidateStatus,
+    ModuleResolutionRoot, ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge,
+    PackageStash, PragmaEffect, RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind,
+    StashConfidence, StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph, StashProvenance,
+    StorageClass, SubDecl, UseDecl, VariableBinding, VariableDecl,
 };

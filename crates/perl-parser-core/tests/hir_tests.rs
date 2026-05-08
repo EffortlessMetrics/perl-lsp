@@ -1,5 +1,6 @@
 use perl_parser_core::hir::{
-    CompileEnvironment, HirFile, HirKind, RecoveryConfidence, ScopeGraph, StashGraph, lower_ast,
+    CompileEnvironment, HirFile, HirKind, IncRootKind, ModuleResolutionRoot, RecoveryConfidence,
+    ScopeGraph, StashGraph, lower_ast,
 };
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 
@@ -294,6 +295,39 @@ fn render_compile_environment(environment: &CompileEnvironment) -> String {
             "{:?} pkg={} {:?} {:?} reason={}",
             boundary.kind, package, boundary.provenance, boundary.confidence, boundary.reason
         ));
+    }
+
+    lines.join("\n")
+}
+
+fn render_module_resolution_candidates(
+    environment: &CompileEnvironment,
+    supplied_roots: &[ModuleResolutionRoot],
+) -> String {
+    let mut lines = Vec::new();
+    lines.push("[module-candidates]".to_string());
+
+    for candidate in environment.module_resolution_candidates(supplied_roots) {
+        let package = candidate.package_context.as_deref().unwrap_or("<none>");
+        lines.push(format!(
+            "request={} target={} kind={:?} rel={} status={:?} roots={} pkg={} {:?} {:?}",
+            candidate.request_index,
+            candidate.target,
+            candidate.request_kind,
+            candidate.relative_path,
+            candidate.status,
+            candidate.roots.len(),
+            package,
+            candidate.provenance,
+            candidate.confidence
+        ));
+
+        for root in candidate.roots {
+            lines.push(format!(
+                "root={} {:?} source={} candidate={} precedence={}",
+                root.path, root.kind, root.source, root.candidate_path, root.precedence
+            ));
+        }
     }
 
     lines.join("\n")
@@ -653,6 +687,122 @@ fn hir_compile_environment_records_directives_without_provider_cutover()
             |item| matches!(&item.kind, HirKind::CallExpr(expr) if expr.name == "provider_cutover")
         ),
         "compile-environment facts must not imply live provider cutover"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_module_resolution_candidate_facts_preserve_root_sources_and_dynamic_boundaries()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(
+        "package Env::Demo;\n\
+         use lib 'lib';\n\
+         use Foo::Bar;\n\
+         no lib 'lib';\n\
+         require Other::Thing;\n\
+         require $dynamic;\n",
+    );
+    let supplied_roots = vec![
+        ModuleResolutionRoot::new(
+            "configured/lib",
+            IncRootKind::Configured,
+            "workspace-include-paths",
+        ),
+        ModuleResolutionRoot::new("env/lib", IncRootKind::Perl5Lib, "perl5lib-env"),
+        ModuleResolutionRoot::new(
+            "/usr/share/perl5",
+            IncRootKind::SystemInc,
+            "interpreter-startup-inc",
+        ),
+    ];
+
+    assert_eq!(
+        render_module_resolution_candidates(&file.compile_environment, &supplied_roots),
+        "[module-candidates]\n\
+         request=0 target=Foo::Bar kind=Use rel=Foo/Bar.pm status=CandidateBuilt roots=4 pkg=Env::Demo ExactAst High\n\
+           root=lib UseLib source=use-lib-lexical candidate=lib/Foo/Bar.pm precedence=0\n\
+           root=configured/lib Configured source=workspace-include-paths candidate=configured/lib/Foo/Bar.pm precedence=1\n\
+           root=env/lib Perl5Lib source=perl5lib-env candidate=env/lib/Foo/Bar.pm precedence=2\n\
+           root=/usr/share/perl5 SystemInc source=interpreter-startup-inc candidate=/usr/share/perl5/Foo/Bar.pm precedence=3\n\
+         request=1 target=Other::Thing kind=Require rel=Other/Thing.pm status=CandidateBuilt roots=3 pkg=Env::Demo ExactAst High\n\
+           root=configured/lib Configured source=workspace-include-paths candidate=configured/lib/Other/Thing.pm precedence=0\n\
+           root=env/lib Perl5Lib source=perl5lib-env candidate=env/lib/Other/Thing.pm precedence=1\n\
+           root=/usr/share/perl5 SystemInc source=interpreter-startup-inc candidate=/usr/share/perl5/Other/Thing.pm precedence=2"
+    );
+
+    assert_eq!(file.compile_environment.module_requests.len(), 3);
+    assert_eq!(
+        file.compile_environment.module_resolution_candidates(&supplied_roots).len(),
+        2,
+        "dynamic require must not produce fake candidate paths"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_module_resolution_candidate_facts_mark_static_requests_without_roots_as_not_found()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source("use Missing::Module;\n");
+
+    assert_eq!(
+        render_module_resolution_candidates(&file.compile_environment, &[]),
+        "[module-candidates]\n\
+         request=0 target=Missing::Module kind=Use rel=Missing/Module.pm status=NotFound roots=0 pkg=<none> ExactAst High"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_module_resolution_candidate_facts_preserve_path_like_require_targets()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source("require 'Local/Path.pm';\n");
+    let supplied_roots =
+        [ModuleResolutionRoot::new("lib", IncRootKind::Configured, "workspace-include-paths")];
+
+    assert_eq!(
+        render_module_resolution_candidates(&file.compile_environment, &supplied_roots),
+        "[module-candidates]\n\
+         request=0 target=Local/Path.pm kind=Require rel=Local/Path.pm status=CandidateBuilt roots=1 pkg=<none> ExactAst High\n\
+         root=lib Configured source=workspace-include-paths candidate=lib/Local/Path.pm precedence=0"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_module_resolution_candidate_facts_match_use_lib_precedence()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(
+        "use lib 'older';\n\
+         use lib qw(first second);\n\
+         use Foo::Bar;\n",
+    );
+
+    assert_eq!(
+        render_module_resolution_candidates(&file.compile_environment, &[]),
+        "[module-candidates]\n\
+         request=0 target=Foo::Bar kind=Use rel=Foo/Bar.pm status=CandidateBuilt roots=3 pkg=<none> ExactAst High\n\
+         root=first UseLib source=use-lib-lexical candidate=first/Foo/Bar.pm precedence=0\n\
+         root=second UseLib source=use-lib-lexical candidate=second/Foo/Bar.pm precedence=1\n\
+         root=older UseLib source=use-lib-lexical candidate=older/Foo/Bar.pm precedence=2"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_module_resolution_candidate_facts_reject_path_traversal_targets()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source("require '../Secret.pm';\n");
+    let supplied_roots =
+        [ModuleResolutionRoot::new("lib", IncRootKind::Configured, "workspace-include-paths")];
+
+    assert_eq!(
+        render_module_resolution_candidates(&file.compile_environment, &supplied_roots),
+        "[module-candidates]"
     );
 
     Ok(())
