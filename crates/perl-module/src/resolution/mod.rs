@@ -10,6 +10,6 @@ pub mod use_lib;
 
 pub use path::resolve_module_path;
 pub use uri::{
-    IncRoot, IncRootKind, ModuleUriResolution, resolve_module_uri,
+    IncRoot, IncRootKind, ModuleUriResolution, build_effective_inc_roots, resolve_module_uri,
     resolve_module_uri_with_effective_inc,
 };

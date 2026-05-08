@@ -44,6 +44,78 @@ pub struct IncRoot {
     pub source: String,
 }
 
+/// Build ordered effective include roots from lexical, configured, environment,
+/// and interpreter startup sources.
+///
+/// This centralizes the source-labeling and precedence model used by URI
+/// resolution. Callers are still responsible for computing configured include
+/// paths and deciding whether `PERL5LIB` / system `@INC` should participate.
+#[must_use]
+pub fn build_effective_inc_roots(
+    include_paths: &[String],
+    perl5lib_paths: &[String],
+    use_perl5lib: bool,
+    lexical_paths: &[String],
+    system_paths: &[PathBuf],
+) -> Vec<IncRoot> {
+    let perl5lib_set: HashSet<String> =
+        if use_perl5lib { perl5lib_paths.iter().cloned().collect() } else { HashSet::new() };
+
+    let mut roots = Vec::new();
+    let mut seen = HashSet::new();
+    let mut precedence = 0usize;
+
+    for path in lexical_paths {
+        let path_buf = PathBuf::from(path);
+        let kind = if path_buf.is_absolute() {
+            IncRootKind::ExternalAbsolute
+        } else {
+            IncRootKind::FileLocalLexical
+        };
+        if !seen.insert(normalized_inc_key(&path_buf)) {
+            continue;
+        }
+        roots.push(IncRoot {
+            kind,
+            path: path_buf,
+            precedence,
+            source: "use-lib-lexical".to_string(),
+        });
+        precedence += 1;
+    }
+
+    for path in include_paths {
+        let path_buf = PathBuf::from(path);
+        if !seen.insert(normalized_inc_key(&path_buf)) {
+            continue;
+        }
+        let (kind, source) = if perl5lib_set.contains(path) {
+            (IncRootKind::Perl5LibEnv, "perl5lib-env")
+        } else if path_buf.is_absolute() {
+            (IncRootKind::ExternalAbsolute, "workspace-include-paths")
+        } else {
+            (IncRootKind::WorkspaceRelative, "workspace-include-paths")
+        };
+        roots.push(IncRoot { kind, path: path_buf, precedence, source: source.to_string() });
+        precedence += 1;
+    }
+
+    for path in system_paths {
+        if !seen.insert(normalized_inc_key(path)) {
+            continue;
+        }
+        roots.push(IncRoot {
+            kind: IncRootKind::InterpreterStartup,
+            path: path.clone(),
+            precedence,
+            source: "interpreter-startup-inc".to_string(),
+        });
+        precedence += 1;
+    }
+
+    roots
+}
+
 /// Outcome of a module name to URI resolution attempt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModuleUriResolution {
@@ -234,6 +306,11 @@ fn normalize_path_for_dedupe(path: &Path) -> PathBuf {
     if normalized.as_os_str().is_empty() { PathBuf::from(".") } else { normalized }
 }
 
+fn normalized_inc_key(path: &Path) -> String {
+    let normalized = path.to_string_lossy().replace('\\', "/");
+    if normalized == "/" { normalized } else { normalized.trim_end_matches('/').to_string() }
+}
+
 fn full_path_for_root(
     inc_root: &IncRoot,
     workspace_path: &Path,
@@ -255,5 +332,66 @@ fn full_path_for_root(
         | IncRootKind::Perl5LibEnv
         | IncRootKind::InterpreterStartup
         | IncRootKind::RuntimeDerived => Some(inc_root.path.join(relative_path)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{IncRootKind, build_effective_inc_roots};
+    use std::path::PathBuf;
+
+    #[test]
+    fn effective_inc_roots_dedupes_normalized_sources() {
+        let include_paths = vec!["lib".to_string(), "lib/".to_string(), "other".to_string()];
+        let lexical_paths = vec!["lib\\".to_string()];
+        let system_paths = vec![PathBuf::from("other/"), PathBuf::from("syslib")];
+
+        let roots =
+            build_effective_inc_roots(&include_paths, &[], false, &lexical_paths, &system_paths);
+        let root_paths: Vec<String> =
+            roots.iter().map(|root| root.path.to_string_lossy().replace('\\', "/")).collect();
+
+        assert_eq!(root_paths, vec!["lib/".to_string(), "other".to_string(), "syslib".to_string()]);
+        assert_eq!(roots[0].source, "use-lib-lexical");
+        assert_eq!(roots[1].source, "workspace-include-paths");
+        assert_eq!(roots[2].source, "interpreter-startup-inc");
+    }
+
+    #[test]
+    fn effective_inc_roots_preserves_first_source_precedence() {
+        let include_paths = vec!["dup".to_string(), "late".to_string()];
+        let lexical_paths = vec!["dup".to_string()];
+        let system_paths = vec![PathBuf::from("late"), PathBuf::from("sys")];
+
+        let roots =
+            build_effective_inc_roots(&include_paths, &[], false, &lexical_paths, &system_paths);
+
+        assert_eq!(roots.len(), 3);
+        assert_eq!(roots[0].path, PathBuf::from("dup"));
+        assert_eq!(roots[0].kind, IncRootKind::FileLocalLexical);
+        assert_eq!(roots[1].path, PathBuf::from("late"));
+        assert_eq!(roots[1].kind, IncRootKind::WorkspaceRelative);
+        assert_eq!(roots[2].path, PathBuf::from("sys"));
+        assert_eq!(roots[2].kind, IncRootKind::InterpreterStartup);
+        assert_eq!(roots[0].precedence, 0);
+        assert_eq!(roots[1].precedence, 1);
+        assert_eq!(roots[2].precedence, 2);
+    }
+
+    #[test]
+    fn effective_inc_roots_labels_perl5lib_only_when_enabled() {
+        let perl5lib_path = "perl5lib".to_string();
+        let include_paths = vec![perl5lib_path.clone(), "lib".to_string()];
+
+        let enabled =
+            build_effective_inc_roots(&include_paths, &[perl5lib_path.clone()], true, &[], &[]);
+        assert_eq!(enabled[0].kind, IncRootKind::Perl5LibEnv);
+        assert_eq!(enabled[0].source, "perl5lib-env");
+        assert_eq!(enabled[1].kind, IncRootKind::WorkspaceRelative);
+
+        let disabled = build_effective_inc_roots(&include_paths, &[perl5lib_path], false, &[], &[]);
+        assert_eq!(disabled[0].kind, IncRootKind::WorkspaceRelative);
+        assert_eq!(disabled[0].source, "workspace-include-paths");
+        assert_eq!(disabled[1].kind, IncRootKind::WorkspaceRelative);
     }
 }
