@@ -180,6 +180,30 @@ fn native_formatter_uses_configured_indent_for_simple_while_blocks() {
 }
 
 #[test]
+fn native_formatter_expands_simple_unless_blocks() {
+    let formatter = NativeFormatter::new();
+    let source = "unless($ok){my$x=1;return$x;}\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "unless ($ok) {\n    my $x = 1;\n    return $x;\n}\n");
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn native_formatter_expands_simple_until_blocks() {
+    let formatter = NativeFormatter::new();
+    let source = "until($done){return 1;}\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "until ($done) {\n    return 1;\n}\n");
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_range_formatter_formats_selected_simple_subroutine_line() {
     let formatter = NativeFormatter::new();
     let source = "my$x=1;\nsub answer{our@y;return@y;}\n";
@@ -222,4 +246,19 @@ fn native_range_formatter_formats_selected_simple_while_line() {
     assert_eq!(result.edits.len(), 1);
     assert_eq!(result.edits[0].range, range);
     assert_eq!(result.edits[0].new_text, "while ($ok) {\n    return $x;\n}");
+}
+
+#[test]
+fn native_range_formatter_formats_selected_simple_unless_line() {
+    let formatter = NativeFormatter::new();
+    let source = "my$x=1;\nunless($ok){return$x;}\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 22));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "my$x=1;\nunless ($ok) {\n    return $x;\n}\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(result.edits[0].new_text, "unless ($ok) {\n    return $x;\n}");
 }

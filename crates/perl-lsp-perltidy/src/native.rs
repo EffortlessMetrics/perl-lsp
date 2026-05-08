@@ -711,7 +711,9 @@ fn format_simple_control_block_tokens(
     }
     let keyword = match tokens[0].kind {
         TokenKind::If => "if",
+        TokenKind::Unless => "unless",
         TokenKind::While => "while",
+        TokenKind::Until => "until",
         _ => return None,
     };
     if tokens[1].kind != TokenKind::LeftParen {
