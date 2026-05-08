@@ -237,6 +237,7 @@ impl NativeCriticRegistry {
             Box::new(RequireUseStrictRule),
             Box::new(RequireUseWarningsRule),
             Box::new(UnusedLexicalVariableRule),
+            Box::new(DuplicateLexicalDeclarationRule),
         ])
     }
 
@@ -460,6 +461,39 @@ impl CriticRule for UnusedLexicalVariableRule {
     }
 }
 
+/// Native rule that reports lexical variables declared more than once in a scope.
+///
+/// This rule delegates redeclaration detection to the semantic scope analyzer so
+/// native critic diagnostics reuse the same binding facts as existing PL105
+/// diagnostics while exposing a stable native policy ID.
+pub struct DuplicateLexicalDeclarationRule;
+
+impl CriticRule for DuplicateLexicalDeclarationRule {
+    fn id(&self) -> &'static str {
+        "native.variables.duplicate_lexical"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Semantic
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Gentle
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        let pragma_map = PragmaTracker::build(ctx.ast);
+        let issues = ScopeAnalyzer::new().analyze(ctx.ast, ctx.source, &pragma_map);
+
+        out.extend(
+            issues
+                .into_iter()
+                .filter(|issue| issue.kind == IssueKind::VariableRedeclaration)
+                .map(|issue| duplicate_lexical_finding(self, ctx.source, &issue)),
+        );
+    }
+}
+
 fn unused_lexical_finding(
     rule: &UnusedLexicalVariableRule,
     source: &str,
@@ -482,6 +516,59 @@ fn unused_lexical_finding(
             safety: FixSafety::Suggested,
             edits: vec![CriticTextEdit { range, new_text: unused_name }],
         }),
+    }
+}
+
+fn duplicate_lexical_finding(
+    rule: &DuplicateLexicalDeclarationRule,
+    source: &str,
+    issue: &ScopeIssue,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, issue.range.0, issue.range.1);
+    let fix = duplicate_my_fix(source, issue.range.0);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!(
+            "Lexical variable '{}' is declared more than once in the same scope",
+            issue.variable_name
+        ),
+        explanation:
+            "Remove the duplicate lexical declarator or assign to the existing lexical variable."
+                .to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix,
+    }
+}
+
+fn duplicate_my_fix(source: &str, variable_start: usize) -> Option<CriticFix> {
+    let (start, end) = duplicate_my_span(source, variable_start)?;
+
+    Some(CriticFix {
+        title: "Remove duplicate 'my' declaration".to_string(),
+        safety: FixSafety::Safe,
+        edits: vec![CriticTextEdit {
+            range: range_for_byte_span(source, start, end),
+            new_text: String::new(),
+        }],
+    })
+}
+
+fn duplicate_my_span(source: &str, variable_start: usize) -> Option<(usize, usize)> {
+    let variable_start = variable_start.min(source.len());
+    let line_start = source[..variable_start].rfind('\n').map_or(0, |pos| pos + 1);
+    let before_var = &source[line_start..variable_start];
+    let my_offset = before_var.rfind("my ")?;
+
+    if before_var[my_offset + 3..].chars().all(char::is_whitespace) {
+        let start = line_start + my_offset;
+        Some((start, start + 3))
+    } else {
+        None
     }
 }
 
@@ -858,7 +945,8 @@ mod tests {
             vec![
                 "native.testing.require_use_strict",
                 "native.testing.require_use_warnings",
-                "native.variables.unused_lexical"
+                "native.variables.unused_lexical",
+                "native.variables.duplicate_lexical"
             ]
         );
         assert_eq!(findings.len(), 2);
@@ -975,6 +1063,98 @@ mod tests {
             "Remove the lexical variable, use it, or prefix it with '_' to mark it intentionally unused."
         );
         assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
+    fn native_duplicate_lexical_rule_reports_same_scope_redeclaration() {
+        let source = "use strict;\nuse warnings;\nmy $dup = 1;\nmy $dup = 2;\nprint $dup;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(DuplicateLexicalDeclarationRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.variables.duplicate_lexical");
+        assert_eq!(finding.category, CriticCategory::Semantic);
+        assert_eq!(finding.severity, Severity::Gentle);
+        assert_eq!(
+            finding.message,
+            "Lexical variable '$dup' is declared more than once in the same scope"
+        );
+        assert_eq!(finding.suppression_key, "native.variables.duplicate_lexical");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$dup");
+
+        let fix = finding.fix.as_ref().expect("duplicate my should offer a safe fix");
+        assert_eq!(fix.title, "Remove duplicate 'my' declaration");
+        assert_eq!(fix.safety, FixSafety::Safe);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(&source[fix.edits[0].range.start.byte..fix.edits[0].range.end.byte], "my ");
+        assert_eq!(fix.edits[0].new_text, "");
+    }
+
+    #[test]
+    fn native_duplicate_lexical_rule_accepts_nested_shadowing() {
+        let source = "use strict;\nuse warnings;\nmy $value = 1;\n{ my $value = 2; print $value; }\nprint $value;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(DuplicateLexicalDeclarationRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "nested lexical shadowing is not same-scope duplication");
+    }
+
+    #[test]
+    fn native_duplicate_lexical_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $dup = 1;\nmy $dup = 2;\nprint $dup;\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.variables.duplicate_lexical".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(DuplicateLexicalDeclarationRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no perl-lsp-critic native.variables.duplicate_lexical -- fixture\nuse strict;\nuse warnings;\nmy $dup = 1;\nmy $dup = 2;\nprint $dup;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_duplicate_lexical_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $dup = 1;\nmy $dup = 2;\nprint $dup;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(DuplicateLexicalDeclarationRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.variables.duplicate_lexical");
+        assert_eq!(
+            violations[0].description,
+            "Lexical variable '$dup' is declared more than once in the same scope"
+        );
+        assert_eq!(
+            violations[0].explanation,
+            "Remove the duplicate lexical declarator or assign to the existing lexical variable."
+        );
+        assert_eq!(violations[0].severity, Severity::Gentle);
         assert_eq!(violations[0].file, "lib/App.pm");
     }
 

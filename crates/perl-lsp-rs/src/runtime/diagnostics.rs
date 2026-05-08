@@ -1835,7 +1835,7 @@ mod tests {
                     "uri": uri,
                     "languageId": "perl",
                     "version": 1,
-                    "text": "my $x = 1;\n"
+                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nprint $x;\n"
                 }
             })))
             .unwrap();
@@ -1859,8 +1859,16 @@ mod tests {
             "native critic engine should publish native unused lexical finding; got: {text:?}"
         );
         assert!(
-            text.contains("Lexical variable '$x' is declared but never used"),
+            text.contains("Lexical variable '$unused' is declared but never used"),
             "native unused lexical finding should preserve rule message; got: {text:?}"
+        );
+        assert!(
+            text.contains("native.variables.duplicate_lexical"),
+            "native critic engine should publish native duplicate lexical finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("Lexical variable '$x' is declared more than once in the same scope"),
+            "native duplicate lexical finding should preserve rule message; got: {text:?}"
         );
         assert!(
             text.contains("\"source\":\"perl-lsp-critic\""),
@@ -1914,7 +1922,7 @@ mod tests {
                 "uri": uri,
                 "languageId": "perl",
                 "version": 1,
-                "text": "my $x = 1;\n"
+                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nprint $x;\n"
             }
         })))?;
 
@@ -1951,9 +1959,20 @@ mod tests {
                 diag["code"].as_str() == Some("native.variables.unused_lexical")
                     && diag["source"].as_str() == Some("perl-lsp-critic")
                     && diag["message"].as_str()
-                        == Some("Lexical variable '$x' is declared but never used")
+                        == Some("Lexical variable '$unused' is declared but never used")
             }),
             "native critic engine should add native unused lexical finding to workspace diagnostics: {report}"
+        );
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag["code"].as_str() == Some("native.variables.duplicate_lexical")
+                    && diag["source"].as_str() == Some("perl-lsp-critic")
+                    && diag["message"].as_str()
+                        == Some(
+                            "Lexical variable '$x' is declared more than once in the same scope",
+                        )
+            }),
+            "native critic engine should add native duplicate lexical finding to workspace diagnostics: {report}"
         );
         assert!(
             !diagnostics.iter().any(|diag| {

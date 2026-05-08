@@ -13,8 +13,9 @@ pub use analyzer::{CriticAnalyzer, hash_content};
 pub use built_in::{BuiltInAnalyzer, Policy};
 pub use native::{
     CriticCategory, CriticContext, CriticFinding, CriticFix, CriticRelatedInformation, CriticRule,
-    CriticSuppression, CriticSuppressionMap, CriticSuppressionScope, CriticTextEdit, FixSafety,
-    NativeCriticRegistry, RequireUseStrictRule, RequireUseWarningsRule, UnusedLexicalVariableRule,
+    CriticSuppression, CriticSuppressionMap, CriticSuppressionScope, CriticTextEdit,
+    DuplicateLexicalDeclarationRule, FixSafety, NativeCriticRegistry, RequireUseStrictRule,
+    RequireUseWarningsRule, UnusedLexicalVariableRule,
 };
 pub use quick_fix::{QuickFix, TextEdit};
 pub use types::{CriticConfig, Severity, Violation};

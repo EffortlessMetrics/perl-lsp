@@ -1348,7 +1348,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nprint $x;\n",
             None,
             &context,
             None,
@@ -1390,10 +1390,30 @@ mod tests {
             .ok_or("expected native unused lexical finding")?;
         assert_eq!(unused.source.as_deref(), Some("perl-lsp-critic"));
         assert_eq!(unused.severity, Some(LspDiagnosticSeverity::WARNING));
-        assert_eq!(unused.message, "Lexical variable '$x' is declared but never used");
+        assert_eq!(unused.message, "Lexical variable '$unused' is declared but never used");
         let data = unused.data.as_ref().ok_or("native unused lexical data should be populated")?;
         assert_eq!(data["code"], "native.variables.unused_lexical");
         assert_eq!(data["suppressionKey"], "native.variables.unused_lexical");
+        assert_eq!(data["fixable"], true);
+
+        let duplicate = items
+            .iter()
+            .find(|diag| {
+                diag.code
+                    .as_ref()
+                    .is_some_and(|code| matches!(code, NumberOrString::String(value) if value == "native.variables.duplicate_lexical"))
+            })
+            .ok_or("expected native duplicate lexical finding")?;
+        assert_eq!(duplicate.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(duplicate.severity, Some(LspDiagnosticSeverity::ERROR));
+        assert_eq!(
+            duplicate.message,
+            "Lexical variable '$x' is declared more than once in the same scope"
+        );
+        let data =
+            duplicate.data.as_ref().ok_or("native duplicate lexical data should be populated")?;
+        assert_eq!(data["code"], "native.variables.duplicate_lexical");
+        assert_eq!(data["suppressionKey"], "native.variables.duplicate_lexical");
         assert_eq!(data["fixable"], true);
         Ok(())
     }

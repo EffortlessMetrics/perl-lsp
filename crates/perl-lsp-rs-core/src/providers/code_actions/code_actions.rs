@@ -221,7 +221,9 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_missing_package_declaration(&self.source));
                     }
                     // PL105: Variable redeclaration (duplicate my)
-                    c if c == DiagnosticCode::VariableRedeclaration.as_str() => {
+                    c if c == DiagnosticCode::VariableRedeclaration.as_str()
+                        || c == "native.variables.duplicate_lexical" =>
+                    {
                         actions.extend(quick_fixes::fix_variable_redeclaration(
                             &self.source,
                             &qf_diag,
@@ -668,6 +670,37 @@ mod tests {
         assert!(actions.iter().any(|a| {
             a.title == "Rename to '$_unused'"
                 && a.edit.changes.iter().any(|edit| edit.new_text == "$_unused")
+        }));
+    }
+
+    #[test]
+    fn test_native_critic_policy_alias_for_duplicate_lexical() {
+        let source = "use strict;\nuse warnings;\nmy $dup = 1;\nmy $dup = 2;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let start = source.rfind("$dup").unwrap();
+        let diagnostics = vec![Diagnostic {
+            range: (start, start + "$dup".len()),
+            severity: DiagnosticSeverity::Error,
+            code: Some("native.variables.duplicate_lexical".to_string()),
+            message: "Lexical variable '$dup' is declared more than once in the same scope"
+                .to_string(),
+            suggestion: None,
+            related_information: Vec::new(),
+            tags: Vec::new(),
+        }];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let action = actions
+            .iter()
+            .find(|action| action.title == "Remove duplicate 'my' declaration")
+            .expect("native duplicate lexical should reuse duplicate-my fix");
+        assert!(action.edit.changes.iter().any(|edit| {
+            edit.location.start == source.rfind("my $dup").unwrap()
+                && edit.location.end == start
+                && edit.new_text.is_empty()
         }));
     }
 
