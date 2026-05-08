@@ -29,6 +29,7 @@ perl-ast = { workspace = true }
 perl-ast-v2 = { workspace = true }
 perl-pragma = { workspace = true }
 perl-regex = { workspace = true }
+perl-semantic-facts = { workspace = true }
 perl-token = { workspace = true }
 # Wave D absorbed (internal modules in src/syntax/):
 #   perl-quote → src/syntax/quote.rs
@@ -55,4 +56,3 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true
-

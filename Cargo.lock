@@ -1779,6 +1779,7 @@ dependencies = [
  "perl-position-tracking",
  "perl-pragma",
  "perl-regex",
+ "perl-semantic-facts",
  "perl-tdd-support",
  "perl-token",
  "proptest",

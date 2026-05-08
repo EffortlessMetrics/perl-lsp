@@ -3,6 +3,7 @@ use perl_parser_core::hir::{
     ScopeGraph, StashGraph, lower_ast,
 };
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
+use perl_semantic_facts::{FileId, ImportKind, ImportSpec, ImportSymbols, Provenance};
 
 fn lower_source(source: &str) -> HirFile {
     let mut parser = Parser::new(source);
@@ -333,6 +334,16 @@ fn render_module_resolution_candidates(
     lines.join("\n")
 }
 
+fn find_import_spec<'a>(
+    specs: &'a [ImportSpec],
+    module: &str,
+) -> Result<&'a ImportSpec, Box<dyn std::error::Error>> {
+    specs
+        .iter()
+        .find(|spec| spec.module == module)
+        .ok_or_else(|| format!("expected ImportSpec for {module}").into())
+}
+
 #[test]
 fn hir_lowers_first_slice_constructs_with_stable_metadata() -> Result<(), Box<dyn std::error::Error>>
 {
@@ -623,6 +634,124 @@ fn hir_stash_graph_records_package_slots_inheritance_and_dynamic_boundaries()
         }),
         "AUTOLOAD should emit a HIR dynamic boundary"
     );
+
+    Ok(())
+}
+
+#[test]
+fn hir_compile_environment_projects_import_specs_from_directives()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(
+        "package Import::Demo;\n\
+         use Foo;\n\
+         use Empty ();\n\
+         use Explicit qw(alpha beta);\n\
+         use Brackets qw[one two];\n\
+         use Braces qw{:all delta};\n\
+         use Tags qw(:all gamma);\n\
+         use constant PI => 3;\n\
+         use Runtime @names;\n\
+         use CodeImport &handler;\n\
+         use GlobImport *slot;\n\
+         require Foo::Bar;\n\
+         require $runtime;\n",
+    );
+
+    let specs = file.compile_environment.import_specs(FileId(7));
+    let foo = find_import_spec(&specs, "Foo")?;
+    assert_eq!(foo.kind, ImportKind::Use);
+    assert_eq!(foo.symbols, ImportSymbols::Default);
+    assert_eq!(foo.provenance, Provenance::ExactAst);
+    assert_eq!(foo.file_id, Some(FileId(7)));
+    assert!(foo.scope_id.is_some(), "HIR import facts should preserve scope context");
+    assert!(foo.span_start_byte.is_some(), "HIR import facts should preserve directive order");
+
+    let empty = find_import_spec(&specs, "Empty")?;
+    assert_eq!(empty.kind, ImportKind::UseEmpty);
+    assert_eq!(empty.symbols, ImportSymbols::None);
+
+    let explicit = find_import_spec(&specs, "Explicit")?;
+    assert_eq!(explicit.kind, ImportKind::UseExplicitList);
+    assert_eq!(
+        explicit.symbols,
+        ImportSymbols::Explicit(vec!["alpha".to_string(), "beta".to_string()])
+    );
+
+    let brackets = find_import_spec(&specs, "Brackets")?;
+    assert_eq!(brackets.kind, ImportKind::UseExplicitList);
+    assert_eq!(
+        brackets.symbols,
+        ImportSymbols::Explicit(vec!["one".to_string(), "two".to_string()])
+    );
+
+    let braces = find_import_spec(&specs, "Braces")?;
+    assert_eq!(braces.kind, ImportKind::UseExplicitList);
+    assert_eq!(
+        braces.symbols,
+        ImportSymbols::Mixed { tags: vec!["all".to_string()], names: vec!["delta".to_string()] }
+    );
+
+    let tags = find_import_spec(&specs, "Tags")?;
+    assert_eq!(tags.kind, ImportKind::UseExplicitList);
+    assert_eq!(
+        tags.symbols,
+        ImportSymbols::Mixed { tags: vec!["all".to_string()], names: vec!["gamma".to_string()] }
+    );
+
+    let constant = find_import_spec(&specs, "constant")?;
+    assert_eq!(constant.kind, ImportKind::UseConstant);
+    assert_eq!(constant.symbols, ImportSymbols::Explicit(vec!["PI".to_string()]));
+
+    let runtime = find_import_spec(&specs, "Runtime")?;
+    assert_eq!(runtime.kind, ImportKind::UseExplicitList);
+    assert_eq!(runtime.symbols, ImportSymbols::Dynamic);
+    assert_eq!(runtime.provenance, Provenance::DynamicBoundary);
+
+    let code_import = find_import_spec(&specs, "CodeImport")?;
+    assert_eq!(code_import.symbols, ImportSymbols::Dynamic);
+    assert_eq!(code_import.provenance, Provenance::DynamicBoundary);
+
+    let glob_import = find_import_spec(&specs, "GlobImport")?;
+    assert_eq!(glob_import.symbols, ImportSymbols::Dynamic);
+    assert_eq!(glob_import.provenance, Provenance::DynamicBoundary);
+
+    let require = find_import_spec(&specs, "Foo::Bar")?;
+    assert_eq!(require.kind, ImportKind::Require);
+    assert_eq!(require.symbols, ImportSymbols::Default);
+
+    let dynamic_require = specs
+        .iter()
+        .find(|spec| spec.kind == ImportKind::DynamicRequire)
+        .ok_or("expected dynamic require ImportSpec")?;
+    assert_eq!(dynamic_require.module, "");
+    assert_eq!(dynamic_require.symbols, ImportSymbols::Dynamic);
+    assert_eq!(dynamic_require.provenance, Provenance::DynamicBoundary);
+
+    let starts = specs
+        .iter()
+        .map(|spec| spec.span_start_byte.ok_or("expected span_start_byte"))
+        .collect::<Result<Vec<_>, _>>()?;
+    assert!(
+        starts.windows(2).all(|window| window[0] <= window[1]),
+        "import facts must keep source order"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_compile_environment_skips_version_and_no_directives_for_import_specs()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(
+        "use 5.036;\n\
+         no strict 'refs';\n\
+         use Real::Module;\n",
+    );
+
+    let specs = file.compile_environment.import_specs(FileId(11));
+    assert_eq!(specs.len(), 1);
+    assert_eq!(specs[0].module, "Real::Module");
+    assert_eq!(specs[0].kind, ImportKind::Use);
 
     Ok(())
 }
