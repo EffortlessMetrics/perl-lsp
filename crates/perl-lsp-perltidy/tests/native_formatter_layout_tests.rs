@@ -134,6 +134,29 @@ fn native_formatter_uses_configured_indent_for_simple_subroutine_blocks() {
 }
 
 #[test]
+fn native_formatter_expands_simple_if_blocks() {
+    let formatter = NativeFormatter::new();
+    let source = "if($ok){my$x=1;return$x;}\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "if ($ok) {\n    my $x = 1;\n    return $x;\n}\n");
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn native_formatter_uses_configured_indent_for_simple_if_blocks() {
+    let formatter = NativeFormatter::new();
+    let config = FormatConfig { indent_width: 2, ..FormatConfig::default() };
+    let source = "  if($ok){return 1;}\n";
+
+    let result = formatter.format_document(source, &config);
+
+    assert_eq!(result.formatted, "  if ($ok) {\n    return 1;\n  }\n");
+}
+
+#[test]
 fn native_range_formatter_formats_selected_simple_subroutine_line() {
     let formatter = NativeFormatter::new();
     let source = "my$x=1;\nsub answer{our@y;return@y;}\n";
@@ -146,4 +169,19 @@ fn native_range_formatter_formats_selected_simple_subroutine_line() {
     assert_eq!(result.edits.len(), 1);
     assert_eq!(result.edits[0].range, range);
     assert_eq!(result.edits[0].new_text, "sub answer {\n    our @y;\n    return @y;\n}");
+}
+
+#[test]
+fn native_range_formatter_formats_selected_simple_if_line() {
+    let formatter = NativeFormatter::new();
+    let source = "my$x=1;\nif($ok){return$x;}\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 18));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "my$x=1;\nif ($ok) {\n    return $x;\n}\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(result.edits[0].new_text, "if ($ok) {\n    return $x;\n}");
 }
