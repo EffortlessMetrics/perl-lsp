@@ -30,7 +30,7 @@ Capability states:
 | Parser measurement control plane | `live` | [#4063](https://github.com/EffortlessMetrics/perl-lsp/issues/4063), [#6484](https://github.com/EffortlessMetrics/perl-lsp/issues/6484) | `cargo xtask metrics parser-accuracy --check`; `cargo xtask update-status --only parser --check` |
 | Compiler build-out umbrella | `planned` | [#8191](https://github.com/EffortlessMetrics/perl-lsp/issues/8191) | Child checklist stays current |
 | Compiler capability status surface | `live` | [#8205](https://github.com/EffortlessMetrics/perl-lsp/issues/8205) | Keep this page current after each compiler-substrate PR |
-| HIR lowering | `fixture-backed` | [#8224](https://github.com/EffortlessMetrics/perl-lsp/issues/8224) | Initial lowering baseline closed in [#8192](https://github.com/EffortlessMetrics/perl-lsp/issues/8192); add HIR coverage metric/status proof before provider cutover |
+| HIR lowering | `fixture-backed` | [#8224](https://github.com/EffortlessMetrics/perl-lsp/issues/8224) | [HIR lowering coverage](status/hir_lowering.md) tracks AST construct coverage; no provider cutover |
 | Scope and pad model | `planned` | [#8193](https://github.com/EffortlessMetrics/perl-lsp/issues/8193) | Lexical binding and local reference fixtures |
 | Package and stash model | `planned` | [#8194](https://github.com/EffortlessMetrics/perl-lsp/issues/8194) | Package, glob-slot, typeglob, and inheritance fixtures |
 | Compile environment and module resolution | `planned` | [#8206](https://github.com/EffortlessMetrics/perl-lsp/issues/8206) | Pragmas, features, `@INC`, and module-resolution fixtures |

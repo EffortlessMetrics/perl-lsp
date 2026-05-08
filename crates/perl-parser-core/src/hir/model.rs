@@ -117,6 +117,28 @@ pub enum HirKind {
     DynamicBoundary(DynamicBoundary),
 }
 
+impl HirKind {
+    /// Canonical names for all first-slice HIR construct variants.
+    ///
+    /// Metrics and status generators should use this list instead of keeping a
+    /// separate copy of the current HIR surface.
+    pub const ALL_KIND_NAMES: &[&'static str] = &[
+        "BarewordExpr",
+        "BlockShell",
+        "CallExpr",
+        "DynamicBoundary",
+        "IndirectCallExpr",
+        "LiteralExpr",
+        "MethodCallExpr",
+        "MethodDecl",
+        "PackageDecl",
+        "RequireDecl",
+        "SubDecl",
+        "UseDecl",
+        "VariableDecl",
+    ];
+}
+
 /// Package declaration HIR payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
