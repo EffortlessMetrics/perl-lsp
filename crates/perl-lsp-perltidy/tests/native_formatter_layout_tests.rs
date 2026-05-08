@@ -91,6 +91,21 @@ fn native_formatter_formats_simple_hash_constructors() {
 }
 
 #[test]
+fn native_formatter_formats_simple_method_calls() {
+    let formatter = NativeFormatter::new();
+    let source = "$x=$obj->build();\n$z=$obj->empty();\nreturn $obj->wrap(foo(1),{ok=>1});\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        "$x = $obj->build();\n$z = $obj->empty();\nreturn $obj->wrap(foo(1), {ok => 1});\n"
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_preserves_indent_and_line_endings_for_simple_declarations() {
     let formatter = NativeFormatter::new();
     let source = "  my $x=1;\r\n\tour @y;\r\n";
@@ -234,6 +249,21 @@ fn native_range_formatter_formats_selected_simple_hash_constructor_line() {
     assert_eq!(result.edits.len(), 1);
     assert_eq!(result.edits[0].range, range);
     assert_eq!(result.edits[0].new_text, "return {answer => 42};");
+}
+
+#[test]
+fn native_range_formatter_formats_selected_simple_method_call_line() {
+    let formatter = NativeFormatter::new();
+    let source = "$x=$obj->empty();\nreturn $obj->build(1,$y);\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 25));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "$x=$obj->empty();\nreturn $obj->build(1, $y);\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(result.edits[0].new_text, "return $obj->build(1, $y);");
 }
 
 #[test]

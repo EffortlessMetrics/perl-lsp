@@ -991,6 +991,10 @@ fn format_simple_atom_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
 ) -> Option<(String, usize)> {
+    if let Some((method_call, next_index)) = format_simple_method_call_tokens(tokens, start) {
+        return Some((method_call, next_index));
+    }
+
     if let Some((variable, next_index)) = format_variable_tokens(tokens, start) {
         return Some((variable, next_index));
     }
@@ -1010,6 +1014,65 @@ fn format_simple_atom_tokens(
     let token = tokens.get(start)?;
     let value = simple_value_text(token)?;
     Some((value.to_string(), start + 1))
+}
+
+fn format_simple_method_call_tokens(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+) -> Option<(String, usize)> {
+    use perl_parser_core::TokenKind;
+
+    let (receiver, mut index) = format_variable_tokens(tokens, start)?;
+    if tokens.get(index)?.kind != TokenKind::Arrow {
+        return None;
+    }
+    index += 1;
+
+    let method = tokens.get(index)?;
+    if method.kind != TokenKind::Identifier || tokens.get(index + 1)?.kind != TokenKind::LeftParen {
+        return None;
+    }
+    index += 2;
+
+    let mut args = Vec::new();
+    if tokens.get(index)?.kind == TokenKind::RightParen {
+        return Some((format!("{receiver}->{}()", method.text), index + 1));
+    }
+
+    loop {
+        let (arg, next_index) = format_simple_atom_tokens(tokens, index)?;
+        args.push(arg);
+        index = next_index;
+
+        match tokens.get(index)?.kind {
+            TokenKind::Comma => index += 1,
+            TokenKind::RightParen => {
+                return Some((
+                    render_simple_method_call_doc(&receiver, method.text.as_ref(), &args),
+                    index + 1,
+                ));
+            }
+            _ => return None,
+        }
+    }
+}
+
+fn render_simple_method_call_doc(receiver: &str, method: &str, args: &[String]) -> String {
+    let mut parts = vec![
+        FormatDoc::text(receiver),
+        FormatDoc::text("->"),
+        FormatDoc::text(method),
+        FormatDoc::text("("),
+    ];
+    for (index, arg) in args.iter().enumerate() {
+        if index > 0 {
+            parts.push(FormatDoc::text(","));
+            parts.push(FormatDoc::Space);
+        }
+        parts.push(FormatDoc::text(arg));
+    }
+    parts.push(FormatDoc::text(")"));
+    FormatDoc::group(parts).render(&FormatConfig::default())
 }
 
 fn format_simple_call_tokens(
