@@ -15,8 +15,8 @@ fixture-backed before any live LSP feature consumes it.
 | ScopeGraph / pad facts | `fixture-backed` | [#8193](https://github.com/EffortlessMetrics/perl-lsp/issues/8193) | `crates/perl-parser-core/tests/hir_tests.rs` | Broaden lexical reference and scope-shadow fixtures |
 | StashGraph / package facts | `fixture-backed` | [#8194](https://github.com/EffortlessMetrics/perl-lsp/issues/8194) | `crates/perl-parser-core/tests/hir_tests.rs` | Broaden typeglob, inheritance, and dynamic stash fixtures |
 | CompileEnvironment facts | `fixture-backed` | [#8206](https://github.com/EffortlessMetrics/perl-lsp/issues/8206) | `crates/perl-parser-core/tests/hir_tests.rs` | Keep configured, lexical, PERL5LIB, and system root provenance explicit |
-| Module-resolution candidates | `fixture-backed` | [#8242](https://github.com/EffortlessMetrics/perl-lsp/issues/8242) | `crates/perl-parser-core/tests/hir_tests.rs`; shared include-root builder in `perl-module` | Flow candidate provenance into later resolver and import/export consumers without parser-core environment reads |
-| ImportSpec / ExportSet / visible symbols | `fixture-backed` | [#8244](https://github.com/EffortlessMetrics/perl-lsp/issues/8244), [#8252](https://github.com/EffortlessMetrics/perl-lsp/issues/8252), [#8253](https://github.com/EffortlessMetrics/perl-lsp/issues/8253), [#8264](https://github.com/EffortlessMetrics/perl-lsp/issues/8264) | `crates/perl-parser-core/tests/hir_tests.rs`, [#8256](https://github.com/EffortlessMetrics/perl-lsp/pull/8256), [#8260](https://github.com/EffortlessMetrics/perl-lsp/pull/8260), [#8262](https://github.com/EffortlessMetrics/perl-lsp/pull/8262), [Semantic scorecard](semantic_scorecard.md), and [semantic shadow compare](semantic_shadow_compare.md) | Use [#8264](https://github.com/EffortlessMetrics/perl-lsp/issues/8264) for visible-symbol proof over canonical HIR import/export facts before provider cutover |
+| Module-resolution candidates | `fixture-backed` | [#8242](https://github.com/EffortlessMetrics/perl-lsp/issues/8242), [#8270](https://github.com/EffortlessMetrics/perl-lsp/issues/8270) | `crates/perl-parser-core/tests/hir_tests.rs`; shared include-root builder in `perl-module` | Resolve candidates against explicit provenance-labeled roots without parser-core environment reads |
+| ImportSpec / ExportSet / visible symbols | `fixture-backed` | [#8244](https://github.com/EffortlessMetrics/perl-lsp/issues/8244), [#8252](https://github.com/EffortlessMetrics/perl-lsp/issues/8252), [#8253](https://github.com/EffortlessMetrics/perl-lsp/issues/8253), [#8264](https://github.com/EffortlessMetrics/perl-lsp/issues/8264) | `crates/perl-parser-core/tests/hir_tests.rs`, [#8256](https://github.com/EffortlessMetrics/perl-lsp/pull/8256), [#8260](https://github.com/EffortlessMetrics/perl-lsp/pull/8260), [#8262](https://github.com/EffortlessMetrics/perl-lsp/pull/8262), [#8267](https://github.com/EffortlessMetrics/perl-lsp/pull/8267), [Semantic scorecard](semantic_scorecard.md), and [semantic shadow compare](semantic_shadow_compare.md) | Feed provider fact-source tracing and cutover gates in [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) |
 | Generated-member facts | `fixture-backed` | [#8195](https://github.com/EffortlessMetrics/perl-lsp/issues/8195) | [Semantic scorecard](semantic_scorecard.md) generated-member fixture family | Add adapter registry and Exporter projection in [#8245](https://github.com/EffortlessMetrics/perl-lsp/issues/8245) |
 | Compile-time effects | `planned` | [#8207](https://github.com/EffortlessMetrics/perl-lsp/issues/8207) | Roadmap only | Effect records that explain facts and dynamic boundaries |
 | Tooling PIR | `planned` | [#8196](https://github.com/EffortlessMetrics/perl-lsp/issues/8196) | Roadmap only | Context-aware PIR lowering fixtures |
@@ -27,11 +27,10 @@ fixture-backed before any live LSP feature consumes it.
 - `semantic-shadowed` means semantic facts and scorecards exist, but the
   compiler-substrate owner issue still needs to make the surface canonical for
   the Rust compiler path.
-- `fixture-backed` import/export facts mean HIR projections now emit canonical
-  `ImportSpec` and `ExportSet` values. Use
-  [#8264](https://github.com/EffortlessMetrics/perl-lsp/issues/8264) for
-  visible-symbol proof over those facts. Provider behavior remains separate
-  until provider-impact proof and [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197)
+- `fixture-backed` import/export facts mean HIR projections emit canonical
+  `ImportSpec` and `ExportSet` values, and [#8267](https://github.com/EffortlessMetrics/perl-lsp/pull/8267)
+  proves `visible_symbols_at` over those facts. Provider behavior remains
+  separate until provider-impact proof and [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197)
   cutover gates are satisfied.
 - Provider behavior is tracked separately in [provider_cutover.md](provider_cutover.md).
 - Runtime module resolution is tracked separately in
