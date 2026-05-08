@@ -1379,6 +1379,22 @@ mod tests {
             })
             .ok_or("expected native warnings finding")?;
         assert_eq!(warnings.source.as_deref(), Some("perl-lsp-critic"));
+
+        let unused = items
+            .iter()
+            .find(|diag| {
+                diag.code
+                    .as_ref()
+                    .is_some_and(|code| matches!(code, NumberOrString::String(value) if value == "native.variables.unused_lexical"))
+            })
+            .ok_or("expected native unused lexical finding")?;
+        assert_eq!(unused.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(unused.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(unused.message, "Lexical variable '$x' is declared but never used");
+        let data = unused.data.as_ref().ok_or("native unused lexical data should be populated")?;
+        assert_eq!(data["code"], "native.variables.unused_lexical");
+        assert_eq!(data["suppressionKey"], "native.variables.unused_lexical");
+        assert_eq!(data["fixable"], true);
         Ok(())
     }
 

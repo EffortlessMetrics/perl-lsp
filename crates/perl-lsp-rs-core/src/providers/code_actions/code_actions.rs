@@ -122,6 +122,9 @@ impl CodeActionsProvider {
                     c if c == DiagnosticCode::UnusedVariable.as_str() => {
                         actions.extend(quick_fixes::fix_unused_variable(&self.source, &qf_diag));
                     }
+                    "native.variables.unused_lexical" => {
+                        actions.extend(quick_fixes::fix_unused_variable(&self.source, &qf_diag));
+                    }
                     // PL403: Assignment in condition
                     c if c == DiagnosticCode::AssignmentInCondition.as_str() => {
                         actions.extend(quick_fixes::fix_assignment_in_condition(
@@ -640,6 +643,32 @@ mod tests {
 
         assert!(actions.iter().any(|a| a.title == "Add 'use strict'"));
         assert!(actions.iter().any(|a| a.title == "Add 'use warnings'"));
+    }
+
+    #[test]
+    fn test_native_critic_policy_alias_for_unused_lexical() {
+        let source = "use strict;\nuse warnings;\nmy $unused = 1;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let start = source.find("$unused").unwrap();
+        let diagnostics = vec![Diagnostic {
+            range: (start, start + "$unused".len()),
+            severity: DiagnosticSeverity::Warning,
+            code: Some("native.variables.unused_lexical".to_string()),
+            message: "Lexical variable '$unused' is declared but never used".to_string(),
+            suggestion: None,
+            related_information: Vec::new(),
+            tags: Vec::new(),
+        }];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(actions.iter().any(|a| a.title == "Remove unused variable"));
+        assert!(actions.iter().any(|a| {
+            a.title == "Rename to '$_unused'"
+                && a.edit.changes.iter().any(|edit| edit.new_text == "$_unused")
+        }));
     }
 
     #[test]

@@ -76,14 +76,15 @@ pub fn fix_unused_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec
 
     // Add underscore prefix to mark as intentionally unused
     if let Some(var_name) = diagnostic.message.split('\'').nth(1) {
+        let unused_name = mark_intentionally_unused(var_name);
         actions.push(CodeAction {
-            title: format!("Rename to '_{}'", var_name),
+            title: format!("Rename to '{}'", unused_name),
             kind: CodeActionKind::QuickFix,
             diagnostics: vec![DiagnosticCode::UnusedVariable.as_str().to_string()],
             edit: CodeActionEdit {
                 changes: vec![TextEdit {
                     location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
-                    new_text: format!("_{}", var_name),
+                    new_text: unused_name,
                 }],
             },
             is_preferred: false,
@@ -91,6 +92,17 @@ pub fn fix_unused_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec
     }
 
     actions
+}
+
+fn mark_intentionally_unused(name: &str) -> String {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(sigil @ ('$' | '@' | '%' | '&' | '*')) => {
+            let rest = chars.as_str();
+            format!("{sigil}_{rest}")
+        }
+        _ => format!("_{name}"),
+    }
 }
 
 #[cfg(test)]
