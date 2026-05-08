@@ -676,7 +676,7 @@ fn format_simple_statement_line(line: &str) -> Option<String> {
         tokens.push(token);
     }
 
-    let formatted = format_simple_return_tokens(&tokens)?;
+    let formatted = format_simple_statement_tokens(&tokens)?;
     Some(format!("{indent}{formatted}"))
 }
 
@@ -852,7 +852,9 @@ fn format_simple_statement_block(tokens: &[perl_parser_core::Token]) -> Option<V
 }
 
 fn format_simple_statement_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
-    format_simple_lexical_tokens(tokens).or_else(|| format_simple_return_tokens(tokens))
+    format_simple_lexical_tokens(tokens)
+        .or_else(|| format_simple_return_tokens(tokens))
+        .or_else(|| format_simple_assignment_tokens(tokens))
 }
 
 fn format_simple_lexical_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
@@ -922,6 +924,23 @@ fn format_simple_return_tokens(tokens: &[perl_parser_core::Token]) -> Option<Str
 
     let value = format_simple_expression_tokens(tokens, 1, semicolon_index)?;
     Some(format!("return {value};"))
+}
+
+fn format_simple_assignment_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.last()?.kind != TokenKind::Semicolon {
+        return None;
+    }
+
+    let (variable, next_index) = format_variable_tokens(tokens, 0)?;
+    let semicolon_index = tokens.len() - 1;
+    if tokens.get(next_index)?.kind != TokenKind::Assign {
+        return None;
+    }
+
+    let value = format_simple_expression_tokens(tokens, next_index + 1, semicolon_index)?;
+    Some(format!("{variable} = {value};"))
 }
 
 fn format_simple_condition_tokens(
