@@ -6,14 +6,14 @@ use super::model::{
     AstAnchor, BarewordExpr, Binding, BindingReference, BlockShell, CallExpr, CallForm,
     CompileConfidence, CompileDirective, CompileDirectiveAction, CompileDirectiveKind,
     CompileEnvironment, CompileEnvironmentBoundary, CompileEnvironmentBoundaryKind, CompilePhase,
-    CompilePhaseBlock, CompileProvenance, DynamicBoundary, DynamicBoundaryKind, GlobSlot,
-    GlobSlotKind, GlobSlotSource, HirBindingId, HirFile, HirId, HirItem, HirKind, HirScopeId,
-    IncRootAction, IncRootFact, IncRootKind, IndirectCallExpr, InheritanceSource, LiteralExpr,
-    LiteralKind, MethodCallExpr, MethodDecl, ModuleRequest, ModuleRequestKind,
-    ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash, PragmaEffect,
-    RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind, StashConfidence,
-    StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph, StashProvenance, StorageClass,
-    SubDecl, UseDecl, VariableBinding, VariableDecl,
+    CompilePhaseBlock, CompileProvenance, DynamicBoundary, DynamicBoundaryKind, ExportDeclaration,
+    ExportDeclarationKind, GlobSlot, GlobSlotKind, GlobSlotSource, HirBindingId, HirFile, HirId,
+    HirItem, HirKind, HirScopeId, IncRootAction, IncRootFact, IncRootKind, IndirectCallExpr,
+    InheritanceSource, LiteralExpr, LiteralKind, MethodCallExpr, MethodDecl, ModuleRequest,
+    ModuleRequestKind, ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash,
+    PragmaEffect, RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind,
+    StashConfidence, StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph, StashProvenance,
+    StorageClass, SubDecl, UseDecl, VariableBinding, VariableDecl,
 };
 
 /// Lower a parser AST into first-slice HIR items.
@@ -846,12 +846,20 @@ impl Lowerer {
                 if variable.sigil == "@" && symbol == "ISA" {
                     self.record_isa_edges_from_node(
                         initializer,
-                        package,
+                        package.clone(),
                         variable.range,
                         Some(item_id),
                         InheritanceSource::IsaAssignment,
                     );
                 }
+                self.record_export_declarations_from_node(
+                    package,
+                    &symbol,
+                    &variable.sigil,
+                    initializer,
+                    variable.range,
+                    Some(item_id),
+                );
             }
         }
     }
@@ -1199,7 +1207,7 @@ impl Lowerer {
                     self.record_slot(
                         package.clone(),
                         stash_slot(
-                            symbol,
+                            symbol.clone(),
                             GlobSlotKind::Array,
                             lhs.location,
                             None,
@@ -1211,14 +1219,165 @@ impl Lowerer {
                     );
                     self.record_isa_edges_from_node(
                         Some(rhs),
-                        package,
+                        package.clone(),
                         range,
                         None,
                         InheritanceSource::IsaAssignment,
                     );
                 }
+                if matches!(symbol.as_str(), "EXPORT" | "EXPORT_OK") {
+                    self.record_slot(
+                        package.clone(),
+                        stash_slot(
+                            symbol.clone(),
+                            GlobSlotKind::Array,
+                            lhs.location,
+                            None,
+                            GlobSlotSource::PackageAssignment,
+                            None,
+                            StashProvenance::ExactAst,
+                            StashConfidence::High,
+                        ),
+                    );
+                    self.record_export_declarations_from_node(
+                        package,
+                        &symbol,
+                        sigil,
+                        Some(rhs),
+                        range,
+                        None,
+                    );
+                }
+            }
+            NodeKind::Variable { sigil, name } if sigil == "%" => {
+                let (package, symbol) = package_and_symbol(name, self.package_context.as_deref());
+                if symbol == "EXPORT_TAGS" {
+                    self.record_slot(
+                        package.clone(),
+                        stash_slot(
+                            symbol.clone(),
+                            GlobSlotKind::Hash,
+                            lhs.location,
+                            None,
+                            GlobSlotSource::PackageAssignment,
+                            None,
+                            StashProvenance::ExactAst,
+                            StashConfidence::High,
+                        ),
+                    );
+                    self.record_export_declarations_from_node(
+                        package,
+                        &symbol,
+                        sigil,
+                        Some(rhs),
+                        range,
+                        None,
+                    );
+                }
             }
             _ => {}
+        }
+    }
+
+    fn record_export_declarations_from_node(
+        &mut self,
+        package: String,
+        symbol: &str,
+        sigil: &str,
+        initializer: Option<&Node>,
+        range: SourceLocation,
+        item_id: Option<HirId>,
+    ) {
+        let Some(initializer) = initializer else {
+            return;
+        };
+
+        match (sigil, symbol) {
+            ("@", "EXPORT") => {
+                self.record_export_symbol_declaration(
+                    package,
+                    ExportDeclarationKind::Default,
+                    initializer,
+                    range,
+                    item_id,
+                );
+            }
+            ("@", "EXPORT_OK") => {
+                self.record_export_symbol_declaration(
+                    package,
+                    ExportDeclarationKind::Optional,
+                    initializer,
+                    range,
+                    item_id,
+                );
+            }
+            ("%", "EXPORT_TAGS") => {
+                self.record_export_tag_declarations(package, initializer, range, item_id);
+            }
+            _ => {}
+        }
+    }
+
+    fn record_export_symbol_declaration(
+        &mut self,
+        package: String,
+        kind: ExportDeclarationKind,
+        initializer: &Node,
+        range: SourceLocation,
+        item_id: Option<HirId>,
+    ) {
+        if let Some(symbols) = static_export_symbols_from_node(initializer) {
+            self.stash_graph.export_declarations.push(ExportDeclaration {
+                package,
+                kind,
+                tag_name: None,
+                symbols,
+                range,
+                declaration_item: item_id,
+                provenance: StashProvenance::ExactAst,
+                confidence: StashConfidence::High,
+            });
+        } else {
+            self.record_dynamic_stash_boundary(
+                Some(package),
+                Some(export_declaration_symbol(kind).to_string()),
+                range,
+                item_id,
+                StashDynamicBoundaryKind::DynamicExportDeclaration,
+                "export declaration has non-static members",
+            );
+        }
+    }
+
+    fn record_export_tag_declarations(
+        &mut self,
+        package: String,
+        initializer: &Node,
+        range: SourceLocation,
+        item_id: Option<HirId>,
+    ) {
+        if let Some(tags) = static_export_tags_from_node(initializer) {
+            for (tag_name, symbols) in tags {
+                self.stash_graph.export_declarations.push(ExportDeclaration {
+                    package: package.clone(),
+                    kind: ExportDeclarationKind::Tag,
+                    tag_name: Some(tag_name),
+                    symbols,
+                    range,
+                    declaration_item: item_id,
+                    provenance: StashProvenance::ExactAst,
+                    confidence: StashConfidence::High,
+                });
+            }
+        } else {
+            self.record_dynamic_stash_boundary(
+                Some(package),
+                Some("EXPORT_TAGS".to_string()),
+                range,
+                item_id,
+                StashDynamicBoundaryKind::DynamicExportDeclaration,
+                "export tag declaration has non-static members",
+            );
         }
     }
 
@@ -1399,6 +1558,116 @@ fn static_code_alias_target(node: &Node) -> Option<String> {
         NodeKind::Typeglob { name } => Some(name.clone()),
         _ => None,
     }
+}
+
+fn export_declaration_symbol(kind: ExportDeclarationKind) -> &'static str {
+    match kind {
+        ExportDeclarationKind::Default => "EXPORT",
+        ExportDeclarationKind::Optional => "EXPORT_OK",
+        ExportDeclarationKind::Tag => "EXPORT_TAGS",
+    }
+}
+
+fn static_export_symbols_from_node(node: &Node) -> Option<Vec<String>> {
+    match &node.kind {
+        NodeKind::ArrayLiteral { elements } => {
+            if elements.len() == 1
+                && matches!(
+                    elements.first().map(|node| &node.kind),
+                    Some(NodeKind::ArrayLiteral { .. })
+                )
+            {
+                return static_export_symbols_from_node(&elements[0]);
+            }
+
+            let mut symbols = Vec::new();
+            for element in elements {
+                symbols.push(static_export_symbol_from_node(element)?);
+            }
+            Some(symbols)
+        }
+        NodeKind::String { .. } | NodeKind::Identifier { .. } => {
+            static_export_symbol_from_node(node).map(|symbol| vec![symbol])
+        }
+        _ => None,
+    }
+}
+
+fn static_export_symbol_from_node(node: &Node) -> Option<String> {
+    match &node.kind {
+        NodeKind::String { value, interpolated } => {
+            if *interpolated && contains_interpolation_marker(value) {
+                return None;
+            }
+            clean_export_symbol(value)
+        }
+        NodeKind::Identifier { name } => clean_export_symbol(name),
+        _ => None,
+    }
+}
+
+fn static_export_tags_from_node(node: &Node) -> Option<Vec<(String, Vec<String>)>> {
+    match &node.kind {
+        NodeKind::HashLiteral { pairs } => {
+            let mut tags = Vec::new();
+            for (key, value) in pairs {
+                tags.push((
+                    static_export_tag_name_from_node(key)?,
+                    static_export_symbols_from_node(value)?,
+                ));
+            }
+            Some(tags)
+        }
+        _ => None,
+    }
+}
+
+fn static_export_tag_name_from_node(node: &Node) -> Option<String> {
+    match &node.kind {
+        NodeKind::String { value, interpolated } => {
+            if *interpolated && contains_interpolation_marker(value) {
+                return None;
+            }
+            clean_export_tag(value)
+        }
+        NodeKind::Identifier { name } => clean_export_tag(name),
+        _ => None,
+    }
+}
+
+fn clean_export_symbol(value: &str) -> Option<String> {
+    let cleaned = value.trim().trim_matches(',').trim_matches('"').trim_matches('\'');
+    if is_export_symbol_name(cleaned) { Some(cleaned.to_string()) } else { None }
+}
+
+fn clean_export_tag(value: &str) -> Option<String> {
+    let cleaned =
+        value.trim().trim_matches(',').trim_matches('"').trim_matches('\'').trim_start_matches(':');
+    if is_bareword_like(cleaned) { Some(cleaned.to_string()) } else { None }
+}
+
+fn is_export_symbol_name(value: &str) -> bool {
+    let Some(first) = value.chars().next() else {
+        return false;
+    };
+    let body = if matches!(first, '$' | '@' | '%' | '&' | '*') {
+        &value[first.len_utf8()..]
+    } else {
+        value
+    };
+    is_bareword_like(body)
+}
+
+fn is_bareword_like(value: &str) -> bool {
+    let Some(first) = value.chars().next() else {
+        return false;
+    };
+    (first == '_' || first.is_ascii_alphabetic())
+        && value.chars().all(|ch| ch == '_' || ch == ':' || ch.is_ascii_alphanumeric())
+}
+
+fn contains_interpolation_marker(value: &str) -> bool {
+    value.contains('$') || value.contains('@') || value.contains('%')
 }
 
 fn static_package_args(args: &[String]) -> Vec<String> {

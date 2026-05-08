@@ -3,7 +3,9 @@ use perl_parser_core::hir::{
     ScopeGraph, StashGraph, lower_ast,
 };
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
-use perl_semantic_facts::{FileId, ImportKind, ImportSpec, ImportSymbols, Provenance};
+use perl_semantic_facts::{
+    Confidence, ExportSet, ExportTag, FileId, ImportKind, ImportSpec, ImportSymbols, Provenance,
+};
 
 fn lower_source(source: &str) -> HirFile {
     let mut parser = Parser::new(source);
@@ -342,6 +344,15 @@ fn find_import_spec<'a>(
         .iter()
         .find(|spec| spec.module == module)
         .ok_or_else(|| format!("expected ImportSpec for {module}").into())
+}
+
+fn find_export_set<'a>(
+    sets: &'a [ExportSet],
+    module: &str,
+) -> Result<&'a ExportSet, Box<dyn std::error::Error>> {
+    sets.iter()
+        .find(|set| set.module_name.as_deref() == Some(module))
+        .ok_or_else(|| format!("expected ExportSet for {module}").into())
 }
 
 #[test]
@@ -752,6 +763,98 @@ fn hir_compile_environment_skips_version_and_no_directives_for_import_specs()
     assert_eq!(specs.len(), 1);
     assert_eq!(specs[0].module, "Real::Module");
     assert_eq!(specs[0].kind, ImportKind::Use);
+
+    Ok(())
+}
+
+#[test]
+fn hir_stash_graph_projects_export_sets_from_static_declarations()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(
+        "package Export::One;\n\
+         use Exporter 'import';\n\
+         our @EXPORT = qw(default_one default_two);\n\
+         our @EXPORT_OK = ('optional_one', \"optional_two\", '$scalar_name');\n\
+         our %EXPORT_TAGS = (\n\
+             all => [qw(default_one default_two optional_one optional_two)],\n\
+             vars => [qw($scalar_name)],\n\
+         );\n\
+         package Export::Two;\n\
+         @EXPORT = qw(second_default);\n\
+         @EXPORT_OK = qw(second_optional);\n\
+         %EXPORT_TAGS = (only => [qw(second_default second_optional)]);\n",
+    );
+
+    let export_sets = file.stash_graph.export_sets();
+    assert_eq!(export_sets.len(), 2);
+
+    let first = find_export_set(&export_sets, "Export::One")?;
+    assert_eq!(first.default_exports, vec!["default_one".to_string(), "default_two".to_string()]);
+    assert_eq!(
+        first.optional_exports,
+        vec!["$scalar_name".to_string(), "optional_one".to_string(), "optional_two".to_string()]
+    );
+    assert_eq!(
+        first.tags,
+        vec![
+            ExportTag {
+                name: "all".to_string(),
+                members: vec![
+                    "default_one".to_string(),
+                    "default_two".to_string(),
+                    "optional_one".to_string(),
+                    "optional_two".to_string()
+                ],
+            },
+            ExportTag { name: "vars".to_string(), members: vec!["$scalar_name".to_string()] },
+        ]
+    );
+    assert_eq!(first.provenance, Provenance::ExactAst);
+    assert_eq!(first.confidence, Confidence::High);
+    assert!(first.anchor_id.is_some(), "export facts should preserve a source anchor");
+
+    let second = find_export_set(&export_sets, "Export::Two")?;
+    assert_eq!(second.default_exports, vec!["second_default".to_string()]);
+    assert_eq!(second.optional_exports, vec!["second_optional".to_string()]);
+    assert_eq!(
+        second.tags,
+        vec![ExportTag {
+            name: "only".to_string(),
+            members: vec!["second_default".to_string(), "second_optional".to_string()],
+        }]
+    );
+    assert_eq!(second.provenance, Provenance::ExactAst);
+    assert_eq!(second.confidence, Confidence::High);
+
+    Ok(())
+}
+
+#[test]
+fn hir_stash_graph_fails_closed_for_dynamic_export_declarations()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(
+        "package Dynamic::Exports;\n\
+         our @EXPORT = qw(stable_default);\n\
+         our @EXPORT_OK = @runtime;\n\
+         our %EXPORT_TAGS = (all => $runtime);\n",
+    );
+
+    let export_sets = file.stash_graph.export_sets();
+    let exports = find_export_set(&export_sets, "Dynamic::Exports")?;
+    assert_eq!(exports.default_exports, vec!["stable_default".to_string()]);
+    assert!(exports.optional_exports.is_empty());
+    assert!(exports.tags.is_empty());
+
+    let dynamic_export_boundaries = file
+        .stash_graph
+        .dynamic_boundaries
+        .iter()
+        .filter(|boundary| {
+            boundary.package.as_deref() == Some("Dynamic::Exports")
+                && boundary.reason.contains("non-static")
+        })
+        .count();
+    assert_eq!(dynamic_export_boundaries, 2);
 
     Ok(())
 }
