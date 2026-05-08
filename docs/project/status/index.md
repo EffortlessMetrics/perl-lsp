@@ -21,6 +21,7 @@
 | LSP coverage & compliance | [lsp.md](lsp.md) | Generator | Every LSP-touching merge |
 | Test counts & debt | [tests.md](tests.md) | Generator | Every merge |
 | Parser corpus & coverage | [parser.md](parser.md) | Generator | Every parser-touching merge |
+| HIR lowering coverage | [hir_lowering.md](hir_lowering.md) | Generator | Every HIR lowering merge |
 | Quality metrics | [quality.md](quality.md) | Generator | Every merge |
 | DAP debugger scorecard | [dap.md](dap.md) | Generator | Every DAP-touching merge |
 | Release readiness | [release.md](release.md) | Human | Ship readiness changes |

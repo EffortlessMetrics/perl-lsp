@@ -3878,6 +3878,7 @@ dependencies = [
  "perl-lsp-rs-core",
  "perl-lsp-ux-tests",
  "perl-parser",
+ "perl-parser-core",
  "perl-parser-pest",
  "perl-semantic-analyzer",
  "perl-semantic-facts",

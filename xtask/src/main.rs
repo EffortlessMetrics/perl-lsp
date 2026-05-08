@@ -1698,6 +1698,21 @@ enum MetricsCommand {
         #[arg(long, default_value = "pr")]
         cadence: String,
     },
+    /// HIR lowering coverage inventory and status proof.
+    HirCoverage {
+        /// Write JSON receipt to target/metrics/hir_coverage.json or --output.
+        #[arg(long)]
+        json: bool,
+        /// Output path for --json.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Regenerate docs/project/status/hir_lowering.md.
+        #[arg(long)]
+        write_status: bool,
+        /// Validate docs/project/status/hir_lowering.md is current.
+        #[arg(long)]
+        check: bool,
+    },
     /// LSP editor-intelligence scorecard — fixture inventory and pass rates.
     LspStats {
         /// Write output to .ci/metrics/editor_intelligence.json
@@ -2369,6 +2384,9 @@ fn main() -> Result<()> {
                 output,
                 &cadence,
             ),
+            MetricsCommand::HirCoverage { json, output, write_status, check } => {
+                metrics::hir_coverage::run(json, output, write_status, check)
+            }
             MetricsCommand::LspStats { json, receipt_dir } => {
                 metrics::lsp_stats::run_with_receipt_dir(json, receipt_dir.as_deref())
             }
