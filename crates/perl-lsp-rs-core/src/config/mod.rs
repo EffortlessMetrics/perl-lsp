@@ -18,6 +18,16 @@ mod native_build_hints;
 pub use native_build_hints::{NativeBuildHints, detect_native_build_hints};
 pub use perl_lsp_perltidy::FormatterMode;
 
+/// Critic diagnostic engine used for LSP policy diagnostics.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CriticEngine {
+    /// Existing built-in/external Perl::Critic-compatible path.
+    #[default]
+    Legacy,
+    /// Rust-native critic rule registry.
+    Native,
+}
+
 /// Server configuration
 ///
 /// Runtime configuration for the LSP server features including inlay hints
@@ -73,6 +83,9 @@ pub struct ServerConfig {
     ///
     /// When `Some`, passes `--theme=<expr>` to perlcritic.
     pub perlcritic_theme: Option<String>,
+
+    /// Critic engine used for LSP policy diagnostics.
+    pub critic_engine: CriticEngine,
 
     /// Whether LSP formatting is enabled.
     ///
@@ -207,6 +220,7 @@ impl Default for ServerConfig {
             perlcritic_severity: 3,
             perlcritic_profile: None,
             perlcritic_theme: None,
+            critic_engine: CriticEngine::Legacy,
             perltidy_enabled: true,
             formatting_engine: FormatterMode::Native,
             perltidy_profile: None,
@@ -284,6 +298,13 @@ impl ServerConfig {
                 let theme = theme.trim();
                 self.perlcritic_theme = (!theme.is_empty()).then(|| theme.to_string());
             }
+        }
+
+        if let Some(critic) = settings.get("critic")
+            && let Some(engine) = critic.get("engine").and_then(|v| v.as_str())
+            && let Some(engine) = parse_critic_engine(engine)
+        {
+            self.critic_engine = engine;
         }
 
         if let Some(formatting) = settings.get("formatting") {
@@ -385,6 +406,14 @@ fn parse_formatter_mode(value: &str) -> Option<FormatterMode> {
         "compat" | "perltidy-compat" => Some(FormatterMode::Compat),
         "external-legacy" | "external-perltidy" | "perltidy" => Some(FormatterMode::ExternalLegacy),
         "off" | "disabled" | "none" => Some(FormatterMode::Off),
+        _ => None,
+    }
+}
+
+fn parse_critic_engine(value: &str) -> Option<CriticEngine> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "legacy" | "external" | "perlcritic" => Some(CriticEngine::Legacy),
+        "native" => Some(CriticEngine::Native),
         _ => None,
     }
 }
@@ -674,6 +703,8 @@ pub struct ProjectConfig {
     pub ai_completion: ProjectAiCompletionConfig,
     /// `[formatting]` section: native formatter and legacy adapter configuration.
     pub formatting: ProjectFormattingConfig,
+    /// `[critic]` section: native critic and legacy adapter configuration.
+    pub critic: ProjectCriticConfig,
 }
 
 /// `[perl]` section of `.perl-lsp.toml`.
@@ -704,6 +735,14 @@ pub struct ProjectDiagnosticsConfig {
     pub perlcritic: Option<bool>,
     /// Minimum perlcritic severity (1-5). Maps to `ServerConfig.perlcritic_severity`.
     pub perlcritic_severity: Option<u8>,
+}
+
+/// `[critic]` section of `.perl-lsp.toml`.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct ProjectCriticConfig {
+    /// Critic engine (`legacy`, `perlcritic`, or `native`).
+    pub engine: Option<String>,
 }
 
 /// `[features]` section of `.perl-lsp.toml`.
@@ -875,6 +914,11 @@ impl ProjectConfig {
         {
             config.formatting_engine = mode;
         }
+        if let Some(ref engine) = self.critic.engine
+            && let Some(engine) = parse_critic_engine(engine)
+        {
+            config.critic_engine = engine;
+        }
         if let Some(ref profile) = self.formatting.perltidy_profile {
             config.perltidy_profile = Some(profile.clone());
         }
@@ -979,6 +1023,9 @@ enabled = true
 engine = "external-perltidy"
 perltidy_maximum_line_length = 100
 perltidy_extra_args = ["-noll"]
+
+[critic]
+engine = "native"
 "#,
         )?;
 
@@ -994,6 +1041,7 @@ perltidy_extra_args = ["-noll"]
         assert_eq!(config.formatting.engine.as_deref(), Some("external-perltidy"));
         assert_eq!(config.formatting.perltidy_maximum_line_length, Some(100));
         assert_eq!(config.formatting.perltidy_extra_args, vec!["-noll"]);
+        assert_eq!(config.critic.engine.as_deref(), Some("native"));
         Ok(())
     }
 
@@ -1080,6 +1128,26 @@ perltidy_extra_args = ["-noll"]
     }
 
     #[test]
+    fn server_config_accepts_native_critic_engine() {
+        let mut config = ServerConfig::default();
+        assert_eq!(config.critic_engine, CriticEngine::Legacy);
+
+        config.update_from_value(&serde_json::json!({
+            "critic": {
+                "engine": "native"
+            }
+        }));
+        assert_eq!(config.critic_engine, CriticEngine::Native);
+
+        config.update_from_value(&serde_json::json!({
+            "critic": {
+                "engine": "perlcritic"
+            }
+        }));
+        assert_eq!(config.critic_engine, CriticEngine::Legacy);
+    }
+
+    #[test]
     fn project_config_applies_formatter_engine() {
         let mut config = ServerConfig::default();
         let mut project = ProjectConfig::default();
@@ -1088,6 +1156,17 @@ perltidy_extra_args = ["-noll"]
         project.apply_to_server_config(&mut config);
 
         assert_eq!(config.formatting_engine, FormatterMode::Off);
+    }
+
+    #[test]
+    fn project_config_applies_native_critic_engine() {
+        let mut config = ServerConfig::default();
+        let mut project = ProjectConfig::default();
+        project.critic.engine = Some("native".to_string());
+
+        project.apply_to_server_config(&mut config);
+
+        assert_eq!(config.critic_engine, CriticEngine::Native);
     }
 
     #[test]
