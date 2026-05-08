@@ -63,6 +63,13 @@ impl CodeActionsProvider {
                 fixes::fix_unused_variable(self, diagnostic)
             }
             Some("native.variables.unused_lexical") => fixes::fix_unused_variable(self, diagnostic),
+            Some(c)
+                if c == DiagnosticCode::AssignmentInCondition.as_str()
+                    || c == "assignment-in-condition"
+                    || c == "native.common.assignment_in_condition" =>
+            {
+                fixes::fix_assignment_in_condition(self, diagnostic)
+            }
             Some("native.testing.require_use_strict") => fixes::add_use_strict(diagnostic),
             Some("native.testing.require_use_warnings") => fixes::add_use_warnings(diagnostic),
             Some(c)
@@ -613,6 +620,28 @@ mod tests {
         assert_eq!(actions[0].edit.new_text, "$p_name");
         assert_eq!(actions[1].title, "Rename parameter to '$name_param'");
         assert_eq!(actions[2].title, "Rename parameter to '$name_arg'");
+    }
+
+    #[test]
+    fn test_native_critic_assignment_in_condition_quick_fix() {
+        let source = "if ($x = 5) { }";
+        let diagnostic = make_diagnostic(
+            (4, 10),
+            DiagnosticSeverity::Warning,
+            "native.common.assignment_in_condition",
+            "Assignment in condition - did you mean '=='?",
+        );
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert_eq!(actions.len(), 2);
+        assert_eq!(actions[0].title, "Change to comparison (==)");
+        assert_eq!(actions[0].edit.range, (7, 8));
+        assert_eq!(actions[0].edit.new_text, "==");
+        assert_eq!(actions[1].title, "Keep assignment (add parentheses)");
+        assert_eq!(actions[1].edit.range, (4, 10));
+        assert_eq!(actions[1].edit.new_text, "($x = 5)");
     }
 
     // ── Quick-fix: unused parameter ─────────────────────────────────────

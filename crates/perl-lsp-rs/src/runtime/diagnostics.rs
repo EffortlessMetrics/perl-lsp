@@ -1835,7 +1835,7 @@ mod tests {
                     "uri": uri,
                     "languageId": "perl",
                     "version": 1,
-                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param;\n"
+                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nif ($cond = 1) { print $cond; }\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n"
                 }
             })))
             .unwrap();
@@ -1853,6 +1853,14 @@ mod tests {
         assert!(
             text.contains("native.testing.require_use_warnings"),
             "native critic engine should publish native warnings finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("native.common.assignment_in_condition"),
+            "native critic engine should publish native assignment-in-condition finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("Assignment in condition - did you mean '=='?"),
+            "native assignment-in-condition finding should preserve rule message; got: {text:?}"
         );
         assert!(
             text.contains("native.variables.unused_lexical"),
@@ -1954,7 +1962,7 @@ mod tests {
                 "uri": uri,
                 "languageId": "perl",
                 "version": 1,
-                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param;\n"
+                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nif ($cond = 1) { print $cond; }\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n"
             }
         })))?;
 
@@ -1985,6 +1993,15 @@ mod tests {
                     && diag["source"].as_str() == Some("perl-lsp-critic")
             }),
             "native critic engine should add native warnings finding to workspace diagnostics: {report}"
+        );
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag["code"].as_str() == Some("native.common.assignment_in_condition")
+                    && diag["source"].as_str() == Some("perl-lsp-critic")
+                    && diag["message"].as_str()
+                        == Some("Assignment in condition - did you mean '=='?")
+            }),
+            "native critic engine should add native assignment-in-condition finding to workspace diagnostics: {report}"
         );
         assert!(
             diagnostics.iter().any(|diag| {

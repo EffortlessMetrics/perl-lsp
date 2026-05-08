@@ -1348,7 +1348,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nif ($cond = 1) { print $cond; }\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n",
             None,
             &context,
             None,
@@ -1379,6 +1379,25 @@ mod tests {
             })
             .ok_or("expected native warnings finding")?;
         assert_eq!(warnings.source.as_deref(), Some("perl-lsp-critic"));
+
+        let assignment = items
+            .iter()
+            .find(|diag| {
+                diag.code
+                    .as_ref()
+                    .is_some_and(|code| matches!(code, NumberOrString::String(value) if value == "native.common.assignment_in_condition"))
+            })
+            .ok_or("expected native assignment-in-condition finding")?;
+        assert_eq!(assignment.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(assignment.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(assignment.message, "Assignment in condition - did you mean '=='?");
+        let data = assignment
+            .data
+            .as_ref()
+            .ok_or("native assignment-in-condition data should be populated")?;
+        assert_eq!(data["code"], "native.common.assignment_in_condition");
+        assert_eq!(data["suppressionKey"], "native.common.assignment_in_condition");
+        assert_eq!(data["fixable"], true);
 
         let unused = items
             .iter()

@@ -7,6 +7,7 @@
 
 use super::{CriticConfig, Severity, Violation, insertion_range};
 use perl_parser_core::Node;
+use perl_parser_core::NodeKind;
 use perl_parser_core::position::{Position, Range};
 use perl_pragma::PragmaTracker;
 use perl_semantic_analyzer::scope_analyzer::{IssueKind, ScopeAnalyzer, ScopeIssue};
@@ -236,6 +237,7 @@ impl NativeCriticRegistry {
         Self::with_rules(vec![
             Box::new(RequireUseStrictRule),
             Box::new(RequireUseWarningsRule),
+            Box::new(AssignmentInConditionRule),
             Box::new(UnusedLexicalVariableRule),
             Box::new(UnusedParameterRule),
             Box::new(DuplicateParameterRule),
@@ -430,6 +432,31 @@ impl CriticRule for RequireUseWarningsRule {
                 edits: vec![CriticTextEdit { range, new_text: "use warnings;\n".to_string() }],
             }),
         });
+    }
+}
+
+/// Native rule that reports assignments used directly as conditions.
+///
+/// This mirrors the existing common-mistake diagnostic through the native
+/// critic contract so opt-in native critic users get stable rule IDs,
+/// suppressions, severity filtering, and fix metadata.
+pub struct AssignmentInConditionRule;
+
+impl CriticRule for AssignmentInConditionRule {
+    fn id(&self) -> &'static str {
+        "native.common.assignment_in_condition"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Syntax
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_assignment_in_condition_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -736,6 +763,36 @@ fn parameter_shadows_global_finding(
     }
 }
 
+fn assignment_in_condition_finding(
+    rule: &AssignmentInConditionRule,
+    source: &str,
+    condition: &Node,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, condition.location.start, condition.location.end);
+    let fix = assignment_comparison_fix(source, condition.location.start, condition.location.end);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: "Assignment in condition - did you mean '=='?".to_string(),
+        explanation: "Assignments in conditions are usually accidental. Use '==' for numeric comparison, 'eq' for string comparison, or add parentheses if the assignment is intentional.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: vec![
+            CriticRelatedInformation {
+                range,
+                message: "Use '==' for numeric comparison or 'eq' for string comparison.".to_string(),
+            },
+            CriticRelatedInformation {
+                range,
+                message: "If the assignment is intentional, wrap it in parentheses.".to_string(),
+            },
+        ],
+        fix,
+    }
+}
+
 fn duplicate_lexical_finding(
     rule: &DuplicateLexicalDeclarationRule,
     source: &str,
@@ -785,6 +842,123 @@ fn shadowed_lexical_finding(
             edits: vec![CriticTextEdit { range, new_text: replacement }],
         }),
     }
+}
+
+fn collect_assignment_in_condition_findings(
+    rule: &AssignmentInConditionRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    match &node.kind {
+        NodeKind::If { condition, elsif_branches, .. } => {
+            push_assignment_condition_finding(rule, source, condition, out);
+            for (elsif_condition, _) in elsif_branches {
+                push_assignment_condition_finding(rule, source, elsif_condition, out);
+            }
+        }
+        NodeKind::While { condition, .. } => {
+            push_assignment_condition_finding(rule, source, condition, out);
+        }
+        NodeKind::For { condition: Some(condition), .. } => {
+            push_assignment_condition_finding(rule, source, condition, out);
+        }
+        NodeKind::StatementModifier { modifier, condition, .. }
+            if matches!(modifier.as_str(), "if" | "unless" | "while" | "until") =>
+        {
+            push_assignment_condition_finding(rule, source, condition, out);
+        }
+        _ => {}
+    }
+
+    for child in node.children() {
+        collect_assignment_in_condition_findings(rule, source, child, out);
+    }
+}
+
+fn push_assignment_condition_finding(
+    rule: &AssignmentInConditionRule,
+    source: &str,
+    condition: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    if is_assignment_condition(source, condition) {
+        out.push(assignment_in_condition_finding(rule, source, condition));
+    }
+}
+
+fn is_assignment_condition(source: &str, condition: &Node) -> bool {
+    let is_assignment = matches!(
+        &condition.kind,
+        NodeKind::Binary { op, .. } if op == "="
+    ) || matches!(&condition.kind, NodeKind::Assignment { .. });
+
+    is_assignment
+        && !has_extra_condition_parentheses(
+            source,
+            condition.location.start,
+            condition.location.end,
+        )
+}
+
+fn has_extra_condition_parentheses(source: &str, start: usize, end: usize) -> bool {
+    preceding_open_parens(source, start) >= 2 && following_close_parens(source, end) >= 2
+}
+
+fn preceding_open_parens(source: &str, start: usize) -> usize {
+    let mut count = 0;
+    let mut cursor = start.min(source.len());
+    while cursor > 0 {
+        let Some((idx, ch)) = source[..cursor].char_indices().next_back() else {
+            break;
+        };
+        if ch.is_whitespace() {
+            cursor = idx;
+            continue;
+        }
+        if ch == '(' {
+            count += 1;
+            cursor = idx;
+            continue;
+        }
+        break;
+    }
+    count
+}
+
+fn following_close_parens(source: &str, end: usize) -> usize {
+    let mut count = 0;
+    let mut cursor = end.min(source.len());
+    while cursor < source.len() {
+        let Some(ch) = source[cursor..].chars().next() else {
+            break;
+        };
+        if ch.is_whitespace() {
+            cursor += ch.len_utf8();
+            continue;
+        }
+        if ch == ')' {
+            count += 1;
+            cursor += ch.len_utf8();
+            continue;
+        }
+        break;
+    }
+    count
+}
+
+fn assignment_comparison_fix(source: &str, start: usize, end: usize) -> Option<CriticFix> {
+    let start = start.min(source.len());
+    let end = end.min(source.len()).max(start);
+    let equals_offset = source[start..end].find('=')?;
+    let equals_start = start + equals_offset;
+    let range = range_for_byte_span(source, equals_start, equals_start + 1);
+
+    Some(CriticFix {
+        title: "Change to comparison (==)".to_string(),
+        safety: FixSafety::Suggested,
+        edits: vec![CriticTextEdit { range, new_text: "==".to_string() }],
+    })
 }
 
 fn duplicate_my_fix(source: &str, variable_start: usize) -> Option<CriticFix> {
@@ -1194,6 +1368,140 @@ mod tests {
     }
 
     #[test]
+    fn native_assignment_in_condition_rule_reports_if_assignment() {
+        let source = "use strict;\nuse warnings;\nmy $x = 0;\nif ($x = 5) { print $x; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(AssignmentInConditionRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.common.assignment_in_condition");
+        assert_eq!(finding.category, CriticCategory::Syntax);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert_eq!(finding.message, "Assignment in condition - did you mean '=='?");
+        assert_eq!(finding.suppression_key, "native.common.assignment_in_condition");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$x = 5");
+
+        let fix = finding.fix.as_ref().expect("assignment condition should offer comparison fix");
+        assert_eq!(fix.title, "Change to comparison (==)");
+        assert_eq!(fix.safety, FixSafety::Suggested);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(&source[fix.edits[0].range.start.byte..fix.edits[0].range.end.byte], "=");
+        assert_eq!(fix.edits[0].new_text, "==");
+        assert_eq!(finding.related.len(), 2);
+    }
+
+    #[test]
+    fn native_assignment_in_condition_rule_reports_statement_modifier_assignment() {
+        let source = "use strict;\nuse warnings;\nmy $x = 0;\nprint $x if $x = 5;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(AssignmentInConditionRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "native.common.assignment_in_condition");
+        assert_eq!(&source[findings[0].range.start.byte..findings[0].range.end.byte], "$x = 5");
+    }
+
+    #[test]
+    fn native_assignment_in_condition_rule_reports_while_assignment() {
+        let source =
+            "use strict;\nuse warnings;\nmy $x = 0;\nwhile ($x = next_value()) { print $x; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(AssignmentInConditionRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "native.common.assignment_in_condition");
+        assert_eq!(
+            &source[findings[0].range.start.byte..findings[0].range.end.byte],
+            "$x = next_value()"
+        );
+    }
+
+    #[test]
+    fn native_assignment_in_condition_rule_accepts_comparisons() {
+        let source = "use strict;\nuse warnings;\nmy $x = 0;\nif ($x == 5) { print $x; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(AssignmentInConditionRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "comparison conditions should be accepted");
+    }
+
+    #[test]
+    fn native_assignment_in_condition_rule_accepts_explicitly_parenthesized_assignments() {
+        let source =
+            "use strict;\nuse warnings;\nmy $x = 0;\nif (($x = next_value())) { print $x; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(AssignmentInConditionRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(
+            findings.is_empty(),
+            "double-parenthesized assignment conditions are treated as intentional"
+        );
+    }
+
+    #[test]
+    fn native_assignment_in_condition_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $x = 0;\nif ($x = 5) { print $x; }\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.common.assignment_in_condition".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(AssignmentInConditionRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.common.assignment_in_condition -- intentional assignment\nuse strict;\nuse warnings;\nmy $x = 0;\nif ($x = 5) { print $x; }\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_assignment_in_condition_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $x = 0;\nif ($x = 5) { print $x; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(AssignmentInConditionRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.common.assignment_in_condition");
+        assert_eq!(violations[0].description, "Assignment in condition - did you mean '=='?");
+        assert_eq!(
+            violations[0].explanation,
+            "Assignments in conditions are usually accidental. Use '==' for numeric comparison, 'eq' for string comparison, or add parentheses if the assignment is intentional."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_recommended_registry_contains_initial_policy_bundle() {
         let source = "print 1;\n";
         let ast = parse_source(source);
@@ -1208,6 +1516,7 @@ mod tests {
             vec![
                 "native.testing.require_use_strict",
                 "native.testing.require_use_warnings",
+                "native.common.assignment_in_condition",
                 "native.variables.unused_lexical",
                 "native.variables.unused_parameter",
                 "native.variables.duplicate_parameter",
