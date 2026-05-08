@@ -191,7 +191,11 @@ fn row_for_ast_kind(ast_kind: &'static str) -> HirCoverageRow {
             "Lowered as sub declaration shell and contributes a subroutine scope frame.",
         ),
         "Undef" => lowered(ast_kind, &["LiteralExpr"], "Lowered as undef literal shell."),
-        "Use" => lowered(ast_kind, &["UseDecl"], "Lowered as use declaration shell."),
+        "Use" => lowered(
+            ast_kind,
+            &["UseDecl"],
+            "Lowered as use declaration shell and records CompileEnvironment directive facts.",
+        ),
         "VariableDeclaration" => lowered(
             ast_kind,
             &["VariableDecl"],
@@ -225,9 +229,13 @@ fn row_for_ast_kind(ast_kind: &'static str) -> HirCoverageRow {
             ast_kind,
             "No HIR shell yet; format declarations contribute a ScopeGraph format frame.",
         ),
-        "PhaseBlock" => not_modeled(
+        "No" => skipped(
             ast_kind,
-            "No HIR shell yet; phase blocks contribute a ScopeGraph phase frame.",
+            "`no` directives record CompileEnvironment facts; no standalone HIR item yet.",
+        ),
+        "PhaseBlock" => skipped(
+            ast_kind,
+            "Phase blocks record CompileEnvironment phase facts and contribute a ScopeGraph phase frame.",
         ),
         "Typeglob" => not_modeled(
             ast_kind,
