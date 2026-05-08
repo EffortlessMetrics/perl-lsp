@@ -267,6 +267,8 @@ pub enum CompileEffectSourceKind {
     RequireDirective,
     /// Compile-time phase block.
     PhaseBlock,
+    /// Symbolic-reference dereference.
+    SymbolicReferenceDeref,
     /// Assignment expression.
     Assignment,
     /// Typeglob assignment.
@@ -726,6 +728,9 @@ fn compile_boundary_source_kind(kind: CompileEnvironmentBoundaryKind) -> Compile
         CompileEnvironmentBoundaryKind::DynamicPragmaArgs
         | CompileEnvironmentBoundaryKind::DynamicIncRoot => CompileEffectSourceKind::UseDirective,
         CompileEnvironmentBoundaryKind::PhaseBlockExecution => CompileEffectSourceKind::PhaseBlock,
+        CompileEnvironmentBoundaryKind::SymbolicReferenceDeref => {
+            CompileEffectSourceKind::SymbolicReferenceDeref
+        }
     }
 }
 
@@ -2202,6 +2207,8 @@ pub enum CompileEnvironmentBoundaryKind {
     DynamicIncRoot,
     /// Phase block contains compile-time execution that is not evaluated here.
     PhaseBlockExecution,
+    /// Symbolic-reference dereference is possible while `strict refs` is disabled.
+    SymbolicReferenceDeref,
 }
 
 /// Provenance for HIR-local compile-environment facts.
@@ -2811,4 +2818,6 @@ pub enum DynamicBoundaryKind {
     DynamicStashMutation,
     /// `AUTOLOAD` declaration introduces dynamic method dispatch.
     Autoload,
+    /// Symbolic-reference dereference whose target cannot be modeled statically.
+    SymbolicReferenceDeref,
 }
