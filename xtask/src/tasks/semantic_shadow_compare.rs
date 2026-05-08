@@ -1,5 +1,9 @@
 use crate::utils::project_root;
 use color_eyre::eyre::{Context, Result, bail};
+use perl_semantic_facts::{
+    AnchorId, Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind,
+    ProviderFactTrace, ProviderFallbackState, ProviderSurface,
+};
 use perl_workspace::semantic_shadow_compare::{
     SemanticShadowCompareReceipt, ShadowCompareVerdict, ShadowQueryInput, ShadowQueryName,
     ShadowResultSummary, summarize_identities,
@@ -54,6 +58,14 @@ fn build_artifact() -> Artifact {
             Some(vec!["lib/Foo.pm:10:5"]),
             Some(vec!["lib/Foo.pm:10:5"]),
             "definition exact match fixture",
+            vec![trace(
+                ProviderSurface::Definition,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
         ),
         receipt_from_identities(
             ShadowQueryName::FindReferences,
@@ -61,6 +73,14 @@ fn build_artifact() -> Artifact {
             Some(vec!["lib/Foo.pm:10:5"]),
             Some(vec!["lib/Foo.pm:10:5", "t/foo.t:4:1"]),
             "reference improved count fixture",
+            vec![trace(
+                ProviderSurface::References,
+                ProviderFactSourceKind::SemanticFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
         ),
         receipt_from_counts(
             ShadowQueryName::CountUsages,
@@ -68,6 +88,14 @@ fn build_artifact() -> Artifact {
             ShadowResultSummary { available: true, match_count: 4, identities: Vec::new() },
             ShadowResultSummary { available: true, match_count: 3, identities: Vec::new() },
             "count regression sentinel fixture",
+            vec![trace(
+                ProviderSurface::References,
+                ProviderFactSourceKind::SemanticFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
         ),
         receipt_from_identities(
             ShadowQueryName::VisibleSymbols,
@@ -75,6 +103,14 @@ fn build_artifact() -> Artifact {
             Some(vec!["alpha", "beta"]),
             Some(vec!["alpha", "gamma"]),
             "visible symbol ambiguity fixture",
+            vec![trace(
+                ProviderSurface::Completion,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::ImportExportInference,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
         ),
         receipt_from_identities(
             ShadowQueryName::Hover,
@@ -82,6 +118,14 @@ fn build_artifact() -> Artifact {
             None,
             Some(vec!["hover:Foo::bar"]),
             "unavailable fact-backed hover fixture",
+            vec![trace(
+                ProviderSurface::Hover,
+                ProviderFactSourceKind::Fallback,
+                Provenance::SearchFallback,
+                Confidence::Low,
+                ProviderFactFreshness::NotApplicable,
+                ProviderFallbackState::Unavailable,
+            )],
         ),
     ];
 
@@ -92,7 +136,7 @@ fn build_artifact() -> Artifact {
         count_verdicts(receipts.iter().filter(|receipt| !is_release_readiness_receipt(receipt)));
 
     Artifact {
-        schema_version: 2,
+        schema_version: 3,
         measured_at: "deterministic-fixture-baseline",
         subsystem: "semantic_shadow_compare",
         receipts,
@@ -138,13 +182,15 @@ fn receipt_from_identities(
     old: Option<Vec<&str>>,
     new: Option<Vec<&str>>,
     note: &str,
+    fact_source_traces: Vec<ProviderFactTrace>,
 ) -> SemanticShadowCompareReceipt {
-    SemanticShadowCompareReceipt::from_summaries(
+    SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         query,
         ShadowQueryInput { symbol: symbol.to_string() },
         summarize_identities(old.map(strs_to_strings)),
         summarize_identities(new.map(strs_to_strings)),
         vec![note.to_string()],
+        fact_source_traces,
     )
 }
 
@@ -154,13 +200,36 @@ fn receipt_from_counts(
     old_result: ShadowResultSummary,
     new_result: ShadowResultSummary,
     note: &str,
+    fact_source_traces: Vec<ProviderFactTrace>,
 ) -> SemanticShadowCompareReceipt {
-    SemanticShadowCompareReceipt::from_summaries(
+    SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         query,
         ShadowQueryInput { symbol: symbol.to_string() },
         old_result,
         new_result,
         vec![note.to_string()],
+        fact_source_traces,
+    )
+}
+
+fn trace(
+    surface: ProviderSurface,
+    source: ProviderFactSourceKind,
+    provenance: Provenance,
+    confidence: Confidence,
+    freshness: ProviderFactFreshness,
+    fallback_state: ProviderFallbackState,
+) -> ProviderFactTrace {
+    ProviderFactTrace::new(
+        surface,
+        source,
+        provenance,
+        confidence,
+        freshness,
+        fallback_state,
+        Some("deterministic-fixture".to_string()),
+        Some(AnchorId(1)),
+        Some(1),
     )
 }
 
@@ -238,6 +307,27 @@ fn render_status_markdown(artifact: &Artifact) -> String {
         ));
     }
 
+    text.push_str("\n## Fact Source Traces\n\n");
+    text.push_str(
+        "| Scope | Query | Surface | Source | Provenance | Confidence | Freshness | State |\n",
+    );
+    text.push_str("|---|---|---|---|---|---|---|---|\n");
+    for receipt in &artifact.receipts {
+        for trace in &receipt.fact_source_traces {
+            text.push_str(&format!(
+                "| {} | {:?} | {:?} | {:?} | {:?} | {:?} | {:?} | {:?} |\n",
+                receipt_scope(receipt),
+                receipt.query,
+                trace.surface,
+                trace.source,
+                trace.provenance,
+                trace.confidence,
+                trace.freshness,
+                trace.fallback_state
+            ));
+        }
+    }
+
     text.push('\n');
     text.push_str(artifact.notes);
     text.push('\n');
@@ -251,7 +341,7 @@ mod tests {
     #[test]
     fn artifact_includes_required_verdict_rows() {
         let artifact = build_artifact();
-        assert_eq!(artifact.schema_version, 2);
+        assert_eq!(artifact.schema_version, 3);
         assert_eq!(artifact.verdict_counts.get("same"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("improved"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
@@ -264,6 +354,10 @@ mod tests {
         assert_eq!(artifact.schema_fixture_verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&1));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("unavailable"), Some(&1));
+        assert!(
+            artifact.receipts.iter().all(|receipt| !receipt.fact_source_traces.is_empty()),
+            "every deterministic shadow-compare receipt should carry fact-source trace proof"
+        );
     }
 
     #[test]
@@ -281,6 +375,8 @@ mod tests {
         assert!(markdown.contains("## Schema Fixture Verdict Counts"));
         assert!(markdown.contains("| release-readiness | FindDefinition"));
         assert!(markdown.contains("| schema-fixture | CountUsages"));
+        assert!(markdown.contains("## Fact Source Traces"));
+        assert!(markdown.contains("| release-readiness | FindDefinition | Definition | CompilerFact | SemanticAnalyzer | High | Fresh | Shadow |"));
     }
 
     #[test]

@@ -456,7 +456,10 @@ mod tests {
         assert!(result.legacy_should_warn);
         assert_eq!(result.receipt.query, ShadowQueryName::DiagnosticsCheck);
         assert_eq!(result.receipt.input.symbol, "undefined_sub");
-        assert_eq!(result.receipt.schema_version, 1);
+        assert_eq!(
+            result.receipt.schema_version,
+            perl_workspace::semantic_shadow_compare::SEMANTIC_SHADOW_COMPARE_RECEIPT_SCHEMA_VERSION
+        );
         // Legacy warns (1 identity), new also warns (1 identity) -> Same.
         assert_eq!(result.receipt.old_result.available, true);
         assert_eq!(result.receipt.old_result.match_count, 1);
@@ -508,7 +511,10 @@ mod tests {
 
         assert_eq!(result.receipt.query, ShadowQueryName::DiagnosticsCheck);
         assert_eq!(result.receipt.input.symbol, "test");
-        assert_eq!(result.receipt.schema_version, 1);
+        assert_eq!(
+            result.receipt.schema_version,
+            perl_workspace::semantic_shadow_compare::SEMANTIC_SHADOW_COMPARE_RECEIPT_SCHEMA_VERSION
+        );
         Ok(())
     }
 
