@@ -686,6 +686,34 @@ pub fn fix_duplicate_parameter(diagnostic: &QuickFixDiagnostic) -> Vec<CodeActio
     ]
 }
 
+/// Fix parameter shadowing by suggesting unambiguous parameter names.
+pub fn fix_parameter_shadowing(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    let Some(param_name) = diagnostic.message.split('\'').nth(1) else {
+        return Vec::new();
+    };
+    let (sigil, base_name) = split_sigil(param_name);
+
+    [
+        format!("{sigil}p_{base_name}"),
+        format!("{sigil}{base_name}_param"),
+        format!("{sigil}{base_name}_arg"),
+    ]
+    .into_iter()
+    .map(|new_name| CodeAction {
+        title: format!("Rename parameter to '{}'", new_name),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec![DiagnosticCode::ParameterShadowsGlobal.as_str().to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                new_text: new_name,
+            }],
+        },
+        is_preferred: false,
+    })
+    .collect()
+}
+
 /// Suggest portable shebang line
 ///
 /// Detects hardcoded perl paths in shebang lines (e.g., `#!/usr/bin/perl`,

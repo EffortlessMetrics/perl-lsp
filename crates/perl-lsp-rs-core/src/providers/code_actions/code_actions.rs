@@ -189,6 +189,12 @@ impl CodeActionsProvider {
                     {
                         actions.extend(quick_fixes::fix_duplicate_parameter(&qf_diag));
                     }
+                    // PL110: Parameter shadows outer/global variable
+                    c if c == DiagnosticCode::ParameterShadowsGlobal.as_str()
+                        || c == "native.variables.parameter_shadows_global" =>
+                    {
+                        actions.extend(quick_fixes::fix_parameter_shadowing(&qf_diag));
+                    }
                     // PL104: Variable shadowing
                     c if c == DiagnosticCode::VariableShadowing.as_str()
                         || c == "native.variables.shadowed_lexical" =>
@@ -742,6 +748,39 @@ mod tests {
         assert!(actions.iter().any(|action| {
             action.title == "Rename duplicate to '$arg_2'"
                 && action.edit.changes.iter().any(|edit| edit.new_text == "$arg_2")
+        }));
+    }
+
+    #[test]
+    fn test_native_critic_policy_alias_for_parameter_shadows_global() {
+        let source = "use strict;\nuse warnings;\nmy $name = 'outer';\nsub helper($name) { return $name; }\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let start = source.find("($name").unwrap() + 1;
+        let diagnostics = vec![Diagnostic {
+            range: (start, start + "$name".len()),
+            severity: DiagnosticSeverity::Warning,
+            code: Some("native.variables.parameter_shadows_global".to_string()),
+            message: "Parameter '$name' shadows an outer declaration".to_string(),
+            suggestion: None,
+            related_information: Vec::new(),
+            tags: Vec::new(),
+        }];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(actions.iter().any(|action| {
+            action.title == "Rename parameter to '$p_name'"
+                && action.edit.changes.iter().any(|edit| {
+                    edit.location.start == start
+                        && edit.location.end == start + "$name".len()
+                        && edit.new_text == "$p_name"
+                })
+        }));
+        assert!(actions.iter().any(|action| {
+            action.title == "Rename parameter to '$name_param'"
+                && action.edit.changes.iter().any(|edit| edit.new_text == "$name_param")
         }));
     }
 

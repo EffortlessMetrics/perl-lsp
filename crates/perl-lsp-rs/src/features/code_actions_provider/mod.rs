@@ -88,7 +88,8 @@ impl CodeActionsProvider {
             }
             Some(c)
                 if c == DiagnosticCode::ParameterShadowsGlobal.as_str()
-                    || c == "parameter-shadows-global" =>
+                    || c == "parameter-shadows-global"
+                    || c == "native.variables.parameter_shadows_global" =>
             {
                 fixes::fix_parameter_shadowing(diagnostic)
             }
@@ -593,6 +594,25 @@ mod tests {
         assert_eq!(actions[0].edit.new_text, "%p_opts");
         assert_eq!(actions[1].edit.new_text, "%opts_param");
         assert_eq!(actions[2].edit.new_text, "%opts_arg");
+    }
+
+    #[test]
+    fn test_native_critic_parameter_shadows_global_quick_fix() {
+        let diagnostic = make_diagnostic(
+            (20, 25),
+            DiagnosticSeverity::Warning,
+            "native.variables.parameter_shadows_global",
+            "Parameter '$name' shadows an outer declaration",
+        );
+
+        let provider = CodeActionsProvider::new(String::new());
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert_eq!(actions.len(), 3);
+        assert_eq!(actions[0].title, "Rename parameter to '$p_name'");
+        assert_eq!(actions[0].edit.new_text, "$p_name");
+        assert_eq!(actions[1].title, "Rename parameter to '$name_param'");
+        assert_eq!(actions[2].title, "Rename parameter to '$name_arg'");
     }
 
     // ── Quick-fix: unused parameter ─────────────────────────────────────

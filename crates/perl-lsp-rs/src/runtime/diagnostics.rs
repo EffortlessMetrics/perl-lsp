@@ -1835,7 +1835,7 @@ mod tests {
                     "uri": uri,
                     "languageId": "perl",
                     "version": 1,
-                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nprint $x + $shadow;\n"
+                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param;\n"
                 }
             })))
             .unwrap();
@@ -1877,6 +1877,14 @@ mod tests {
         assert!(
             text.contains("Parameter '$dup_param' appears more than once in this signature"),
             "native duplicate parameter finding should preserve rule message; got: {text:?}"
+        );
+        assert!(
+            text.contains("native.variables.parameter_shadows_global"),
+            "native critic engine should publish native parameter shadowing finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("Parameter '$outer_param' shadows an outer declaration"),
+            "native parameter shadowing finding should preserve rule message; got: {text:?}"
         );
         assert!(
             text.contains("native.variables.duplicate_lexical"),
@@ -1946,7 +1954,7 @@ mod tests {
                 "uri": uri,
                 "languageId": "perl",
                 "version": 1,
-                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nprint $x + $shadow;\n"
+                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param;\n"
             }
         })))?;
 
@@ -2003,6 +2011,15 @@ mod tests {
                         == Some("Parameter '$dup_param' appears more than once in this signature")
             }),
             "native critic engine should add native duplicate parameter finding to workspace diagnostics: {report}"
+        );
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag["code"].as_str() == Some("native.variables.parameter_shadows_global")
+                    && diag["source"].as_str() == Some("perl-lsp-critic")
+                    && diag["message"].as_str()
+                        == Some("Parameter '$outer_param' shadows an outer declaration")
+            }),
+            "native critic engine should add native parameter shadowing finding to workspace diagnostics: {report}"
         );
         assert!(
             diagnostics.iter().any(|diag| {
