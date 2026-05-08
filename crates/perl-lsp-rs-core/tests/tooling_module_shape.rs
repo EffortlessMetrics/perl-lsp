@@ -19,6 +19,13 @@ fn tooling_module_exposes_perl_critic_submodule() {
 }
 
 #[test]
+fn tooling_module_exposes_native_critic_contract() {
+    let _: Option<perl_critic::CriticFinding> = None;
+    let _: Option<perl_critic::CriticCategory> = None;
+    let _: Option<perl_critic::CriticFix> = None;
+}
+
+#[test]
 fn tooling_module_exposes_perltidy_submodule() {
     // Verify that perltidy submodule is accessible via tooling post-absorption.
     // NOTE(G3-API-fix): Actual type is PerlTidyFormatter, not FormattingProvider.
