@@ -351,3 +351,12 @@ pub(super) fn fix_bareword_filehandle(diagnostic: &Diagnostic) -> Vec<CodeAction
         TextEdit { range: diagnostic.range, new_text: format!("my {lexical_name}") },
     )]
 }
+
+pub(super) fn fix_two_arg_open(diagnostic: &Diagnostic) -> Vec<CodeAction> {
+    vec![diagnostic_action(
+        diagnostic,
+        "Convert to three-argument open() for safety",
+        CodeActionKind::QuickFix,
+        TextEdit { range: diagnostic.range, new_text: "open(my $fh, '<', $filename)".to_string() },
+    )]
+}

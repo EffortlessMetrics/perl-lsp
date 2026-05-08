@@ -119,6 +119,13 @@ impl CodeActionsProvider {
             {
                 fixes::fix_bareword_filehandle(diagnostic)
             }
+            Some(c)
+                if c == DiagnosticCode::TwoArgOpen.as_str()
+                    || c == "two-arg-open"
+                    || c == "native.io.two_arg_open" =>
+            {
+                fixes::fix_two_arg_open(diagnostic)
+            }
             Some(code) if code.starts_with("parse-error-") => {
                 fixes::fix_parse_error(self, diagnostic, code)
             }
@@ -667,6 +674,24 @@ mod tests {
         assert_eq!(actions[0].title, "Replace bareword filehandle 'FH' with lexical '$fh_fh'");
         assert_eq!(actions[0].edit.range, (5, 7));
         assert_eq!(actions[0].edit.new_text, "my $fh_fh");
+    }
+
+    #[test]
+    fn test_native_critic_two_arg_open_quick_fix() {
+        let diagnostic = make_diagnostic(
+            (0, 19),
+            DiagnosticSeverity::Warning,
+            "native.io.two_arg_open",
+            "Two-argument open should use an explicit mode",
+        );
+
+        let provider = CodeActionsProvider::new("open(my $fh, $path);\n".to_string());
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Convert to three-argument open() for safety");
+        assert_eq!(actions[0].edit.range, (0, 19));
+        assert_eq!(actions[0].edit.new_text, "open(my $fh, '<', $filename)");
     }
 
     // ── Quick-fix: unused parameter ─────────────────────────────────────

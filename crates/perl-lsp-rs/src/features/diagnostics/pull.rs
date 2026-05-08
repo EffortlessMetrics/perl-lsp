@@ -1114,6 +1114,7 @@ fn is_fixable_diagnostic(code: &str) -> bool {
             | "native.testing.require_use_strict"
             | "native.testing.require_use_warnings"
             | "native.io.bareword_filehandle"
+            | "native.io.two_arg_open"
             | "InputOutput::ProhibitBarewordFileHandles"
             | "InputOutput::RequireBriefOpen"
             | "InputOutput::RequireThreeArgOpen"
@@ -1349,7 +1350,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nprint $log_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n",
             None,
             &context,
             None,
@@ -1417,6 +1418,23 @@ mod tests {
             .ok_or("native bareword filehandle data should be populated")?;
         assert_eq!(data["code"], "native.io.bareword_filehandle");
         assert_eq!(data["suppressionKey"], "native.io.bareword_filehandle");
+        assert_eq!(data["fixable"], true);
+
+        let two_arg_open = items
+            .iter()
+            .find(|diag| {
+                diag.code
+                    .as_ref()
+                    .is_some_and(|code| matches!(code, NumberOrString::String(value) if value == "native.io.two_arg_open"))
+            })
+            .ok_or("expected native two-arg open finding")?;
+        assert_eq!(two_arg_open.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(two_arg_open.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(two_arg_open.message, "Two-argument open should use an explicit mode");
+        let data =
+            two_arg_open.data.as_ref().ok_or("native two-arg open data should be populated")?;
+        assert_eq!(data["code"], "native.io.two_arg_open");
+        assert_eq!(data["suppressionKey"], "native.io.two_arg_open");
         assert_eq!(data["fixable"], true);
 
         let unused = items

@@ -214,7 +214,9 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_bareword_filehandle(&qf_diag));
                     }
                     // PL401: Two-arg open
-                    c if c == DiagnosticCode::TwoArgOpen.as_str() => {
+                    c if c == DiagnosticCode::TwoArgOpen.as_str()
+                        || c == "native.io.two_arg_open" =>
+                    {
                         actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
                     }
                     // Perl::Critic policy aliases for two-arg open.
@@ -642,6 +644,31 @@ mod tests {
             .find(|action| action.title.contains("bareword filehandle"))
             .expect("native bareword filehandle diagnostic should produce a quick fix");
         assert_eq!(fix.edit.changes[0].new_text, "my $fh_fh");
+    }
+
+    #[test]
+    fn test_native_two_arg_open_alias_produces_quick_fix() {
+        let source = "open(my $fh, $path);\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![Diagnostic {
+            range: (0, 19),
+            severity: DiagnosticSeverity::Warning,
+            code: Some("native.io.two_arg_open".to_string()),
+            message: "Two-argument open should use an explicit mode".to_string(),
+            suggestion: None,
+            related_information: Vec::new(),
+            tags: Vec::new(),
+        }];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let fix = actions
+            .iter()
+            .find(|action| action.title.contains("three-argument open()"))
+            .expect("native two-arg open diagnostic should produce a quick fix");
+        assert_eq!(fix.edit.changes[0].new_text, "open(my $fh, '<', $filename)");
     }
 
     #[test]
