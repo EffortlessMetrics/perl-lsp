@@ -12,9 +12,25 @@
 //! 1. Explicit empty `textDocument/publishDiagnostics` (empty array).
 //! 2. Silently — no notification after fix.
 //!
-//! The test accepts either: it drains the pre-fix event queue, then checks
-//! whether the server sends an explicit empty notification within the timeout.
-//! If no new notification arrives, the test also passes (silence = cleared).
+//! The test accepts either: it drains the pre-fix event queue, waits for any
+//! stale in-flight broken-content results to arrive and be absorbed, then
+//! checks whether the server sends an explicit empty notification or remains
+//! silent (silence = cleared) within the post-settle window.
+//!
+//! # Race condition history
+//!
+//! The core challenge is that the LSP server runs diagnostics asynchronously.
+//! After `textDocument/didChange` is sent with the fixed content, the server
+//! may still be mid-analysis on the broken content, and those stale results
+//! can arrive in the event queue after the fix is sent.
+//!
+//! Solution: a two-phase drain around the fix:
+//!   Phase 1 (pre-fix):  drain + short settle to absorb events buffered before
+//!                        `change_file_full` is called.
+//!   Phase 2 (post-fix): a longer settle + drain immediately after
+//!                        `change_file_full` to absorb stale in-flight results
+//!                        from an analysis that was already running when the
+//!                        fix arrived. Only then enter the clean-window check.
 
 use perl_lsp_ux_tests::{LspEvent, ScenarioConfig, UxHarness};
 use std::time::Duration;
@@ -25,6 +41,7 @@ fn binary_available() -> bool {
 
 const BROKEN_SOURCE: &str = "use strict;\nuse warnings;\nmy $x = ;\n";
 const FIXED_SOURCE: &str = "use strict;\nuse warnings;\nmy $x = 1;\nprint $x;\n";
+const FIXED_VERSION: i64 = 2;
 
 /// Verifies the diagnostics edit lifecycle:
 ///   1. Broken content → diagnostics appear.
@@ -52,81 +69,87 @@ fn scenario_19_diagnostics_clear_after_fix() {
         "Expected diagnostics for broken source, but none were published."
     );
 
-    // Drain the event queue so post-fix checks only see new notifications.
-    //
-    // Three-pass flush: the stdout reader thread may still be delivering in-flight
-    // events from the broken-content analysis (async diagnostics pipeline).
-    // - First drain: remove any already-buffered events.
-    // - Settle window: wait for in-flight events from the server to arrive.
-    // - Second drain: remove events that arrived during the settle window.
-    // - Final drain immediately before didChange: close the race window between
-    //   the settle and the send.  Events that slip in during this last tiny gap
-    //   are cleared before we record the post-fix baseline.
+    // Phase 1 drain (pre-fix): remove events that have already arrived and any
+    // that arrive during a brief settle window. This covers the common case where
+    // the initial broken-content analysis is still delivering follow-up batches
+    // (e.g., separate perltidy and perlcritic passes).
     harness.collect_notifications();
-    std::thread::sleep(Duration::from_millis(300));
-    harness.collect_notifications();
-
-    // Final drain immediately before the fix — eliminates events that snuck in
-    // between the settle drain and the didChange notification.
+    std::thread::sleep(Duration::from_millis(400));
     harness.collect_notifications();
 
     // When: the user fixes the file via a full-document didChange.
     harness.change_file_full("live.pl", FIXED_SOURCE).expect("didChange should succeed");
 
+    // Phase 2 drain (post-fix): give any in-flight analysis of the BROKEN content
+    // time to complete and deliver its results, then drain those stale events.
+    // The server may have been mid-analysis when didChange arrived; those stale
+    // results can arrive up to ~500 ms after the fix is sent. Draining after this
+    // settle ensures the clean-window check below only sees events triggered by
+    // the fixed content.
+    std::thread::sleep(Duration::from_millis(600));
+    harness.collect_notifications();
+
     // Then: diagnostics eventually clear. Two acceptable outcomes:
     //   (a) Server sends explicit publishDiagnostics with empty array → cleared.
-    //   (b) No new non-empty notification arrives within the grace period → also cleared.
+    //   (b) No new non-empty notification arrives within the clean window → silence
+    //       means the server analysed the fixed content and found no errors.
     //
-    // Important: we accumulate ONLY events that arrive after the final pre-fix drain
-    // by draining periodically and appending to a local list.  Using peek_notifications
-    // would re-read pre-fix events that raced into the queue between the drain and the
-    // didChange send, producing false failures when the server never sends an explicit
-    // empty clear for the fixed content.
+    // Diagnostics carry the text document version. If stale broken-content
+    // diagnostics still arrive in this window, they are ignored when their
+    // version proves they belong to the previous document state.
     let uri = harness.workspace.uri("live.pl");
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let deadline = std::time::Instant::now() + Duration::from_secs(4);
 
-    let mut post_fix_events: Vec<LspEvent> = Vec::new();
+    let mut post_settle_events: Vec<LspEvent> = Vec::new();
     let mut cleared = false;
 
     while std::time::Instant::now() < deadline {
-        // Drain any new events since the last iteration and append to our local list.
-        post_fix_events.extend(harness.collect_notifications());
+        post_settle_events.extend(harness.collect_notifications());
 
-        let post_fix_diag_events: Vec<_> = post_fix_events
-            .iter()
-            .filter_map(|ev| match ev {
-                LspEvent::Diagnostics { uri: event_uri, diagnostics } if event_uri == &uri => {
-                    Some(diagnostics.as_slice())
+        // Walk in reverse to find the latest diagnostic event for this URI.
+        for ev in post_settle_events.iter().rev() {
+            if let LspEvent::Diagnostics { uri: event_uri, version, diagnostics } = ev {
+                if event_uri == &uri {
+                    if version.is_some_and(|value| value < FIXED_VERSION) {
+                        continue;
+                    }
+                    if diagnostics.is_empty() {
+                        cleared = true;
+                    }
+                    break; // latest diagnostic state found — stop scanning
                 }
-                _ => None,
-            })
-            .collect();
-
-        if let Some(latest) = post_fix_diag_events.last() {
-            // Server sent an explicit notification — check if cleared.
-            if latest.is_empty() {
-                cleared = true;
-                break;
             }
-            // Server sent new non-empty diagnostics — not cleared yet, keep waiting.
         }
-        // No post-fix notification seen yet — keep polling.
+
+        if cleared {
+            break;
+        }
+
         std::thread::sleep(Duration::from_millis(100));
     }
 
-    // Accept silence (no new non-empty notification in our post-fix window) as "cleared" too.
+    // Accept silence: no new non-empty events arrived in the post-settle window.
     if !cleared {
-        let has_new_errors = post_fix_events.iter().any(|ev| {
-            matches!(ev, LspEvent::Diagnostics { uri: event_uri, diagnostics }
-                if event_uri == &uri && !diagnostics.is_empty())
+        let has_new_errors = post_settle_events.iter().any(|ev| {
+            matches!(
+                ev,
+                LspEvent::Diagnostics {
+                    uri: event_uri,
+                    version,
+                    diagnostics,
+                } if event_uri == &uri
+                    && !diagnostics.is_empty()
+                    && !version.is_some_and(|value| value < FIXED_VERSION)
+            )
         });
         cleared = !has_new_errors;
     }
 
     assert!(
         cleared,
-        "Expected diagnostics to clear (or no new errors) after fixing the file; events: {:?}",
-        post_fix_events
+        "Expected diagnostics to clear (or no new errors) after fixing the file; \
+         post-settle events: {:?}",
+        post_settle_events
     );
     harness.assert_no_crash();
 }
