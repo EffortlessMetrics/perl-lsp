@@ -598,6 +598,17 @@ impl LspServer {
                                 "perl.testRunner.testArgs" => json!(config.test_runner_args),
                                 "perl.testRunner.testTimeout" => json!(config.test_runner_timeout),
                                 "perl.formatting.enabled" => json!(config.perltidy_enabled),
+                                "perl.formatting.engine" => {
+                                    let engine = match config.formatting_engine {
+                                        perl_lsp_rs_core::config::FormatterMode::Native => "native",
+                                        perl_lsp_rs_core::config::FormatterMode::Compat => "compat",
+                                        perl_lsp_rs_core::config::FormatterMode::ExternalLegacy => {
+                                            "external-perltidy"
+                                        }
+                                        perl_lsp_rs_core::config::FormatterMode::Off => "off",
+                                    };
+                                    json!(engine)
+                                }
                                 "perl.formatting.profile" => json!(config.perltidy_profile),
                                 "perl.formatting.maximumLineLength" => {
                                     json!(config.perltidy_maximum_line_length)

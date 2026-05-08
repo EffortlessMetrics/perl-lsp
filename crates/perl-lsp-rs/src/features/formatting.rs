@@ -9,6 +9,7 @@ pub use perl_lsp_rs_core::providers::formatting::{
     FormattingOptions, FormattingProvider, PerlTidyConfig,
 };
 use perl_lsp_rs_core::tooling::OsSubprocessRuntime;
+use perl_lsp_rs_core::tooling::perltidy::FormatterMode;
 
 /// Code formatter using the OS subprocess runtime
 ///
@@ -26,10 +27,16 @@ impl CodeFormatter {
 
     /// Create a new code formatter with perltidy configuration
     pub fn with_config(config: PerlTidyConfig) -> Self {
+        Self::with_config_and_mode(config, FormatterMode::Native)
+    }
+
+    /// Create a new code formatter with perltidy configuration and explicit engine mode.
+    pub fn with_config_and_mode(config: PerlTidyConfig, mode: FormatterMode) -> Self {
         let timeout = config.timeout_secs;
         Self {
             inner: FormattingProvider::new(OsSubprocessRuntime::with_timeout(timeout))
-                .with_perltidy_config(config),
+                .with_perltidy_config(config)
+                .with_formatter_mode(mode),
         }
     }
 

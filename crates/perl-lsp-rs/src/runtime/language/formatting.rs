@@ -9,6 +9,7 @@ use crate::features::formatting::{
     CodeFormatter, FormattingError, FormattingOptions, PerlTidyConfig,
 };
 use crate::protocol::{invalid_params, req_position, req_range, req_uri};
+use perl_lsp_rs_core::config::FormatterMode;
 
 /// Build a `JsonRpcError` from a `FormattingError`, populating the `data` field
 /// with a structured object so that VSCode / LSP clients can surface targeted
@@ -54,8 +55,13 @@ impl LspServer {
 }
 
 impl LspServer {
-    fn is_perltidy_enabled(&self) -> bool {
-        self.config.lock().perltidy_enabled
+    fn is_formatting_enabled(&self) -> bool {
+        let config = self.config.lock();
+        config.perltidy_enabled && config.formatting_engine != FormatterMode::Off
+    }
+
+    fn formatter_mode(&self) -> FormatterMode {
+        self.config.lock().formatting_engine
     }
 
     /// Handle textDocument/onTypeFormatting request
@@ -95,7 +101,7 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        if !self.is_perltidy_enabled() {
+        if !self.is_formatting_enabled() {
             return Ok(Some(json!([])));
         }
 
@@ -122,7 +128,7 @@ impl LspServer {
             let doc =
                 self.get_document(&documents, uri).ok_or_else(|| document_not_open_error(uri))?;
             let config = self.build_perltidy_config();
-            let formatter = CodeFormatter::with_config(config);
+            let formatter = CodeFormatter::with_config_and_mode(config, self.formatter_mode());
             match formatter.format_document(&doc.text, &options) {
                 Ok(edits) => {
                     let lsp_edits: Vec<Value> = edits
@@ -161,7 +167,7 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        if !self.is_perltidy_enabled() {
+        if !self.is_formatting_enabled() {
             return Ok(Some(json!([])));
         }
 
@@ -188,7 +194,7 @@ impl LspServer {
             let doc =
                 self.get_document(&documents, uri).ok_or_else(|| document_not_open_error(uri))?;
             let config = self.build_perltidy_config();
-            let formatter = CodeFormatter::with_config(config);
+            let formatter = CodeFormatter::with_config_and_mode(config, self.formatter_mode());
             match formatter.format_range(&doc.text, &range, &options) {
                 Ok(edits) => {
                     let lsp_edits: Vec<Value> = edits
@@ -227,7 +233,7 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        if !self.is_perltidy_enabled() {
+        if !self.is_formatting_enabled() {
             return Ok(Some(json!([])));
         }
 
@@ -258,7 +264,7 @@ impl LspServer {
             let doc =
                 self.get_document(&documents, uri).ok_or_else(|| document_not_open_error(uri))?;
             let config = self.build_perltidy_config();
-            let formatter = CodeFormatter::with_config(config);
+            let formatter = CodeFormatter::with_config_and_mode(config, self.formatter_mode());
             let mut all_edits = Vec::new();
 
             // Process each range

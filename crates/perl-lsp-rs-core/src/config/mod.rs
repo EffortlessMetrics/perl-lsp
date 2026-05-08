@@ -16,6 +16,7 @@ use std::{fs::File, io::Read};
 mod native_build_hints;
 
 pub use native_build_hints::{NativeBuildHints, detect_native_build_hints};
+pub use perl_lsp_perltidy::FormatterMode;
 
 /// Server configuration
 ///
@@ -73,8 +74,14 @@ pub struct ServerConfig {
     /// When `Some`, passes `--theme=<expr>` to perlcritic.
     pub perlcritic_theme: Option<String>,
 
-    /// Whether perltidy formatting is enabled.
+    /// Whether LSP formatting is enabled.
+    ///
+    /// Kept as `perltidy_enabled` for compatibility with older internal call sites
+    /// and configuration names; the actual engine is selected by `formatting_engine`.
     pub perltidy_enabled: bool,
+
+    /// Formatter engine used for LSP formatting requests.
+    pub formatting_engine: FormatterMode,
 
     /// Path to a `.perltidyrc` profile file.
     ///
@@ -201,6 +208,7 @@ impl Default for ServerConfig {
             perlcritic_profile: None,
             perlcritic_theme: None,
             perltidy_enabled: true,
+            formatting_engine: FormatterMode::Native,
             perltidy_profile: None,
             perltidy_maximum_line_length: Some(80),
             perltidy_indent_columns: Some(4),
@@ -281,6 +289,11 @@ impl ServerConfig {
         if let Some(formatting) = settings.get("formatting") {
             if let Some(enabled) = formatting.get("enabled").and_then(|v| v.as_bool()) {
                 self.perltidy_enabled = enabled;
+            }
+            if let Some(engine) = formatting.get("engine").and_then(|v| v.as_str())
+                && let Some(mode) = parse_formatter_mode(engine)
+            {
+                self.formatting_engine = mode;
             }
             if let Some(profile) = formatting.get("profile").and_then(|v| v.as_str()) {
                 let profile = profile.trim();
@@ -363,6 +376,16 @@ impl ServerConfig {
                 }
             }
         }
+    }
+}
+
+fn parse_formatter_mode(value: &str) -> Option<FormatterMode> {
+    match value.trim().to_ascii_lowercase().replace('_', "-").as_str() {
+        "native" => Some(FormatterMode::Native),
+        "compat" | "perltidy-compat" => Some(FormatterMode::Compat),
+        "external-legacy" | "external-perltidy" | "perltidy" => Some(FormatterMode::ExternalLegacy),
+        "off" | "disabled" | "none" => Some(FormatterMode::Off),
+        _ => None,
     }
 }
 
@@ -649,7 +672,7 @@ pub struct ProjectConfig {
     pub features: ProjectFeaturesConfig,
     /// `[ai_completion]` section: AI completion settings.
     pub ai_completion: ProjectAiCompletionConfig,
-    /// `[formatting]` section: perltidy configuration.
+    /// `[formatting]` section: native formatter and legacy adapter configuration.
     pub formatting: ProjectFormattingConfig,
 }
 
@@ -711,8 +734,10 @@ pub struct ProjectAiCompletionConfig {
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(default)]
 pub struct ProjectFormattingConfig {
-    /// Whether perltidy formatting is enabled.
+    /// Whether LSP formatting is enabled.
     pub enabled: Option<bool>,
+    /// Formatter engine (`native`, `compat`, `external-perltidy`, or `off`).
+    pub engine: Option<String>,
     /// Path to a `.perltidyrc` profile file.
     pub perltidy_profile: Option<String>,
     /// Maximum line length.
@@ -845,6 +870,11 @@ impl ProjectConfig {
         if let Some(enabled) = self.formatting.enabled {
             config.perltidy_enabled = enabled;
         }
+        if let Some(ref engine) = self.formatting.engine
+            && let Some(mode) = parse_formatter_mode(engine)
+        {
+            config.formatting_engine = mode;
+        }
         if let Some(ref profile) = self.formatting.perltidy_profile {
             config.perltidy_profile = Some(profile.clone());
         }
@@ -946,6 +976,7 @@ inlay_hints = false
 
 [formatting]
 enabled = true
+engine = "external-perltidy"
 perltidy_maximum_line_length = 100
 perltidy_extra_args = ["-noll"]
 "#,
@@ -960,6 +991,7 @@ perltidy_extra_args = ["-noll"]
         assert_eq!(config.diagnostics.perlcritic_severity, Some(4));
         assert_eq!(config.features.inlay_hints, Some(false));
         assert_eq!(config.formatting.enabled, Some(true));
+        assert_eq!(config.formatting.engine.as_deref(), Some("external-perltidy"));
         assert_eq!(config.formatting.perltidy_maximum_line_length, Some(100));
         assert_eq!(config.formatting.perltidy_extra_args, vec!["-noll"]);
         Ok(())
@@ -1026,6 +1058,36 @@ perltidy_extra_args = ["-noll"]
         project.apply_to_server_config(&mut config);
 
         assert_eq!(config.perlcritic_severity, 5);
+    }
+
+    #[test]
+    fn server_config_accepts_formatter_engine_aliases() {
+        let mut config = ServerConfig::default();
+
+        config.update_from_value(&serde_json::json!({
+            "formatting": {
+                "engine": "external-perltidy"
+            }
+        }));
+        assert_eq!(config.formatting_engine, FormatterMode::ExternalLegacy);
+
+        config.update_from_value(&serde_json::json!({
+            "formatting": {
+                "engine": "native"
+            }
+        }));
+        assert_eq!(config.formatting_engine, FormatterMode::Native);
+    }
+
+    #[test]
+    fn project_config_applies_formatter_engine() {
+        let mut config = ServerConfig::default();
+        let mut project = ProjectConfig::default();
+        project.formatting.engine = Some("off".to_string());
+
+        project.apply_to_server_config(&mut config);
+
+        assert_eq!(config.formatting_engine, FormatterMode::Off);
     }
 
     #[test]

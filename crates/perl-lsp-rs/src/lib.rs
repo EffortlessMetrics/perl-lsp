@@ -78,7 +78,7 @@
 //! - **References**: Find all references across workspace
 //! - **Rename**: Symbol renaming with conflict detection
 //! - **Diagnostics**: Real-time syntax and semantic validation
-//! - **Formatting**: Code formatting via perltidy integration
+//! - **Formatting**: Native code formatting with optional perltidy compatibility
 //! - **Semantic Tokens**: Fine-grained syntax highlighting
 //! - **Code Actions**: Quick fixes and refactoring suggestions
 //! - **Code Lens**: Inline actionable metadata
