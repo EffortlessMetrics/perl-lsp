@@ -16,6 +16,21 @@ fn native_formatter_formats_simple_lexical_declarations() {
 }
 
 #[test]
+fn native_formatter_formats_simple_binary_expressions() {
+    let formatter = NativeFormatter::new();
+    let source = "my$x=$y+1;\nreturn$x*2;\nif($x==2){return$y+1;}\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        "my $x = $y + 1;\nreturn $x * 2;\nif ($x == 2) {\n    return $y + 1;\n}\n"
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_preserves_indent_and_line_endings_for_simple_declarations() {
     let formatter = NativeFormatter::new();
     let source = "  my $x=1;\r\n\tour @y;\r\n";
@@ -84,6 +99,21 @@ fn native_range_formatter_formats_only_selected_simple_declaration_line() {
         TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 7))
     );
     assert_eq!(result.edits[0].new_text, "my $y = 2;");
+}
+
+#[test]
+fn native_range_formatter_formats_selected_simple_binary_expression_line() {
+    let formatter = NativeFormatter::new();
+    let source = "my$x=$y+1;\nreturn$x*2;\n";
+    let range = TextRange::new(TextPosition::new(0, 0), TextPosition::new(0, 10));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "my $x = $y + 1;\nreturn$x*2;\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(result.edits[0].new_text, "my $x = $y + 1;");
 }
 
 #[test]

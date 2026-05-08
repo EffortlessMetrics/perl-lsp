@@ -593,6 +593,7 @@ fn range_includes_line(range: TextRange, line: u32) -> bool {
 fn format_simple_line(line: &str, config: &FormatConfig) -> Option<String> {
     format_simple_control_block_line(line, config)
         .or_else(|| format_simple_subroutine_line(line, config))
+        .or_else(|| format_simple_statement_line(line))
         .or_else(|| format_simple_lexical_line(line))
 }
 
@@ -656,6 +657,27 @@ fn format_simple_control_block_line(line: &str, config: &FormatConfig) -> Option
     }
 
     format_simple_control_block_tokens(&tokens, indent, config)
+}
+
+fn format_simple_statement_line(line: &str) -> Option<String> {
+    let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
+    let (indent, body) = line.split_at(indent_len);
+    if body.is_empty() || body.contains('#') {
+        return None;
+    }
+
+    let mut stream = perl_parser_core::TokenStream::new(body);
+    let mut tokens = Vec::new();
+    loop {
+        let token = stream.next().ok()?;
+        if token.kind == perl_parser_core::TokenKind::Eof {
+            break;
+        }
+        tokens.push(token);
+    }
+
+    let formatted = format_simple_return_tokens(&tokens)?;
+    Some(format!("{indent}{formatted}"))
 }
 
 fn format_simple_subroutine_tokens(
@@ -852,8 +874,8 @@ fn format_simple_lexical_tokens(tokens: &[perl_parser_core::Token]) -> Option<St
     let semicolon_index = tokens.len() - 1;
     if next_index == semicolon_index {
         Some(format!("{keyword} {variable};"))
-    } else if next_index + 2 == semicolon_index && tokens[next_index].kind == TokenKind::Assign {
-        let value = simple_value_text(&tokens[next_index + 1])?;
+    } else if tokens[next_index].kind == TokenKind::Assign {
+        let value = format_simple_expression_tokens(tokens, next_index + 1, semicolon_index)?;
         Some(format!("{keyword} {variable} = {value};"))
     } else {
         None
@@ -898,21 +920,40 @@ fn format_simple_return_tokens(tokens: &[perl_parser_core::Token]) -> Option<Str
         return Some("return;".to_string());
     }
 
-    if let Some((variable, next_index)) = format_variable_tokens(tokens, 1)
-        && next_index == semicolon_index
-    {
-        return Some(format!("return {variable};"));
-    }
-
-    if semicolon_index == 2 {
-        let value = simple_value_text(&tokens[1])?;
-        return Some(format!("return {value};"));
-    }
-
-    None
+    let value = format_simple_expression_tokens(tokens, 1, semicolon_index)?;
+    Some(format!("return {value};"))
 }
 
 fn format_simple_condition_tokens(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+) -> Option<(String, usize)> {
+    use perl_parser_core::TokenKind;
+
+    let end = tokens[start..]
+        .iter()
+        .position(|token| token.kind == TokenKind::RightParen)
+        .map(|offset| start + offset)?;
+    let condition = format_simple_expression_tokens(tokens, start, end)?;
+    Some((condition, end))
+}
+
+fn format_simple_expression_tokens(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+    end: usize,
+) -> Option<String> {
+    let (left, next_index) = format_simple_atom_tokens(tokens, start)?;
+    if next_index == end {
+        return Some(left);
+    }
+
+    let operator = simple_binary_operator_text(tokens.get(next_index)?)?;
+    let (right, final_index) = format_simple_atom_tokens(tokens, next_index + 1)?;
+    (final_index == end).then(|| format!("{left} {operator} {right}"))
+}
+
+fn format_simple_atom_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
 ) -> Option<(String, usize)> {
@@ -923,6 +964,33 @@ fn format_simple_condition_tokens(
     let token = tokens.get(start)?;
     let value = simple_value_text(token)?;
     Some((value.to_string(), start + 1))
+}
+
+fn simple_binary_operator_text(token: &perl_parser_core::Token) -> Option<&str> {
+    use perl_parser_core::TokenKind;
+
+    matches!(
+        token.kind,
+        TokenKind::Plus
+            | TokenKind::Minus
+            | TokenKind::Star
+            | TokenKind::Percent
+            | TokenKind::Dot
+            | TokenKind::Equal
+            | TokenKind::NotEqual
+            | TokenKind::Less
+            | TokenKind::LessEqual
+            | TokenKind::Greater
+            | TokenKind::GreaterEqual
+            | TokenKind::StringCompare
+            | TokenKind::Spaceship
+            | TokenKind::And
+            | TokenKind::Or
+            | TokenKind::DefinedOr
+            | TokenKind::WordAnd
+            | TokenKind::WordOr
+    )
+    .then_some(token.text.as_ref())
 }
 
 fn indent_unit(config: &FormatConfig) -> String {
