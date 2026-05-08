@@ -1626,6 +1626,8 @@ fn is_fixable_perlcritic_policy(code: &str) -> bool {
             | "InputOutput::RequireThreeArgOpen"
             | "TestingAndDebugging::RequireUseStrict"
             | "TestingAndDebugging::RequireUseWarnings"
+            | "native.testing.require_use_strict"
+            | "native.testing.require_use_warnings"
             | "Variables::ProhibitUnusedVariables"
     )
 }

@@ -75,6 +75,24 @@ pub(super) fn fix_unused_variable(
     actions
 }
 
+pub(super) fn add_use_strict(diagnostic: &Diagnostic) -> Vec<CodeAction> {
+    vec![diagnostic_action(
+        diagnostic,
+        "Add 'use strict'",
+        CodeActionKind::QuickFix,
+        TextEdit { range: (0, 0), new_text: "use strict;\n".to_string() },
+    )]
+}
+
+pub(super) fn add_use_warnings(diagnostic: &Diagnostic) -> Vec<CodeAction> {
+    vec![diagnostic_action(
+        diagnostic,
+        "Add 'use warnings'",
+        CodeActionKind::QuickFix,
+        TextEdit { range: (0, 0), new_text: "use warnings;\n".to_string() },
+    )]
+}
+
 pub(super) fn fix_variable_shadowing(diagnostic: &Diagnostic) -> Vec<CodeAction> {
     let Some(var_name) = source_utils::extract_quoted_value(&diagnostic.message) else {
         return Vec::new();
