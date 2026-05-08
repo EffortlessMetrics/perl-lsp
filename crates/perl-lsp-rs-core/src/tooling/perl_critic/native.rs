@@ -213,6 +213,20 @@ impl NativeCriticRegistry {
 
         findings
     }
+
+    /// Run all registered rules and return current legacy violation values.
+    ///
+    /// This keeps native rule execution single-sourced while callers migrate
+    /// from `Violation` consumers to richer native finding/code-action data.
+    #[must_use]
+    pub fn check_violations(
+        &self,
+        ctx: &CriticContext<'_>,
+        file: impl Into<String>,
+    ) -> Vec<Violation> {
+        let file = file.into();
+        self.check(ctx).into_iter().map(|finding| finding.to_violation(file.clone())).collect()
+    }
 }
 
 /// Native rule that requires a file-level `use strict;` pragma.
@@ -633,5 +647,24 @@ mod tests {
         assert_eq!(findings.len(), 2);
         assert_eq!(findings[0].suppression_key, "native.testing.require_use_strict");
         assert_eq!(findings[1].suppression_key, "native.testing.require_use_warnings");
+    }
+
+    #[test]
+    fn native_critic_registry_maps_findings_to_legacy_violations() {
+        let ast = empty_program_node();
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new("dummy second", &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(DummyRule), Box::new(SecondDummyRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 2);
+        assert_eq!(violations[0].policy, "native.test.dummy");
+        assert_eq!(violations[0].description, "dummy finding");
+        assert_eq!(violations[0].file, "lib/App.pm");
+        assert_eq!(violations[1].policy, "native.test.second");
+        assert_eq!(violations[1].description, "second finding");
+        assert_eq!(violations[1].file, "lib/App.pm");
     }
 }
