@@ -130,9 +130,12 @@ This section is the migration receipt for what has landed versus what remains st
 
 - **Typed reference-edge global index:** not landed; typed-reference behavior is constrained to fixture/regression banks rather than a provider-facing global index.
 - **Canonical producer wiring into `FileFactShard`:** partial; declarations are present but workspace-wide shard population from all canonical producers is not yet complete.
-- **Compiler-path import/export ownership:** semantic `ImportSpec`, `ExportSet`,
-  and `visible_symbols_at` proof exists, but [#8244](https://github.com/EffortlessMetrics/perl-lsp/issues/8244)
-  tracks canonical compiler-substrate ownership.
+- **Compiler-path import/export ownership:** canonical HIR `ImportSpec` and
+  `ExportSet` projections are fixture-backed under
+  [#8244](https://github.com/EffortlessMetrics/perl-lsp/issues/8244).
+  [#8264](https://github.com/EffortlessMetrics/perl-lsp/issues/8264)
+  tracks the remaining `visible_symbols_at` proof over those compiler facts
+  before provider cutover.
 - **Provider cutover:** tracked separately in
   [provider_cutover.md](status/provider_cutover.md) and [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197).
 
