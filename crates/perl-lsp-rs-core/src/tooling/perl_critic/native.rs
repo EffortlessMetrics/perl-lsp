@@ -5,7 +5,7 @@
 //! subprocess-backed Perl::Critic adapter and built-in fallback so callers can
 //! migrate rule-by-rule without changing runtime behavior in one large step.
 
-use super::{CriticConfig, Severity, Violation};
+use super::{CriticConfig, Severity, Violation, insertion_range};
 use perl_parser_core::Node;
 use perl_parser_core::position::Range;
 use serde::{Deserialize, Serialize};
@@ -205,6 +205,70 @@ impl NativeCriticRegistry {
     }
 }
 
+/// Native rule that requires a file-level `use strict;` pragma.
+///
+/// This is the first built-in rule expressed through the native critic
+/// contract. It deliberately does not replace the existing legacy built-in
+/// analyzer yet; callers can opt into it through `NativeCriticRegistry` while
+/// runtime diagnostic migration remains incremental.
+pub struct RequireUseStrictRule;
+
+impl CriticRule for RequireUseStrictRule {
+    fn id(&self) -> &'static str {
+        "native.testing.require_use_strict"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Syntax
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Harsh
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        if has_use_statement(ctx.source, "strict") {
+            return;
+        }
+
+        let range = insertion_range();
+        out.push(CriticFinding {
+            rule_id: self.id().to_string(),
+            category: self.category(),
+            severity: self.default_severity(),
+            range,
+            message: "Code does not use strict".to_string(),
+            explanation: "Always use strict to catch common mistakes".to_string(),
+            suppression_key: self.id().to_string(),
+            related: Vec::new(),
+            fix: Some(CriticFix {
+                title: "Add 'use strict'".to_string(),
+                safety: FixSafety::Safe,
+                edits: vec![CriticTextEdit { range, new_text: "use strict;\n".to_string() }],
+            }),
+        });
+    }
+}
+
+fn has_use_statement(content: &str, feature: &str) -> bool {
+    content.lines().any(|line| has_use_statement_line(line, feature))
+}
+
+fn has_use_statement_line(line: &str, feature: &str) -> bool {
+    let code_portion = line.split('#').next().unwrap_or_default();
+    let mut tokens = code_portion.split_whitespace();
+    let Some(first) = tokens.next() else {
+        return false;
+    };
+    if first != "use" {
+        return false;
+    }
+    let Some(module) = tokens.next() else {
+        return false;
+    };
+    module.trim_end_matches(';') == feature
+}
+
 /// Build an empty AST node for tests that only exercise rule contract plumbing.
 #[cfg(test)]
 fn empty_program_node() -> Node {
@@ -399,5 +463,44 @@ mod tests {
         assert_eq!(registry.rule_ids(), vec!["native.test.second"]);
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].category, CriticCategory::Maintainability);
+    }
+
+    #[test]
+    fn native_require_use_strict_rule_emits_safe_fix_when_missing() {
+        let ast = empty_program_node();
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new("my $x = 1;\n", &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(RequireUseStrictRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.testing.require_use_strict");
+        assert_eq!(finding.category, CriticCategory::Syntax);
+        assert_eq!(finding.severity, Severity::Harsh);
+        assert_eq!(finding.message, "Code does not use strict");
+        assert_eq!(finding.suppression_key, "native.testing.require_use_strict");
+
+        let fix = finding.fix.as_ref().expect("missing strict should have a safe fix");
+        assert_eq!(fix.title, "Add 'use strict'");
+        assert_eq!(fix.safety, FixSafety::Safe);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].range, insertion_range());
+        assert_eq!(fix.edits[0].new_text, "use strict;\n");
+    }
+
+    #[test]
+    fn native_require_use_strict_rule_accepts_exact_pragma_only() {
+        let ast = empty_program_node();
+        let config = CriticConfig::default();
+        let exact_ctx = CriticContext::new("use strict;\nmy $x = 1;\n", &ast, &config);
+        let similar_ctx = CriticContext::new("use strictures;\nmy $x = 1;\n", &ast, &config);
+        let commented_ctx = CriticContext::new("# use strict;\nmy $x = 1;\n", &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(RequireUseStrictRule)]);
+
+        assert!(registry.check(&exact_ctx).is_empty());
+        assert_eq!(registry.check(&similar_ctx).len(), 1);
+        assert_eq!(registry.check(&commented_ctx).len(), 1);
     }
 }
