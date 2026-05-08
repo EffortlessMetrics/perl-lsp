@@ -322,8 +322,8 @@ max = 12
 Configuration import commands should be explicit and report gaps:
 
 ```bash
-perllsp config import-perltidy .perltidyrc
-perllsp config import-perlcritic .perlcriticrc
+perl-lsp config import-perltidy .perltidyrc
+perl-lsp config import-perlcritic .perlcriticrc
 ```
 
 Import output must classify every setting:
