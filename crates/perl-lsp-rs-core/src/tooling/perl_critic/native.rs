@@ -169,6 +169,16 @@ impl NativeCriticRegistry {
         Self { rules }
     }
 
+    /// Create the default recommended native critic registry.
+    ///
+    /// This is the opt-in bundle for callers migrating from ad hoc built-in
+    /// policy execution to the native rule contract. Keep ordering stable so
+    /// diagnostics and receipts are deterministic.
+    #[must_use]
+    pub fn recommended() -> Self {
+        Self::with_rules(vec![Box::new(RequireUseStrictRule), Box::new(RequireUseWarningsRule)])
+    }
+
     /// Add a rule to the registry.
     pub fn add_rule(&mut self, rule: Box<dyn CriticRule>) {
         self.rules.push(rule);
@@ -605,5 +615,23 @@ mod tests {
         assert_eq!(findings.len(), 2);
         assert_eq!(findings[0].rule_id, "native.testing.require_use_strict");
         assert_eq!(findings[1].rule_id, "native.testing.require_use_warnings");
+    }
+
+    #[test]
+    fn native_recommended_registry_contains_initial_policy_bundle() {
+        let ast = empty_program_node();
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new("my $x = 1;\n", &ast, &config);
+        let registry = NativeCriticRegistry::recommended();
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(
+            registry.rule_ids(),
+            vec!["native.testing.require_use_strict", "native.testing.require_use_warnings"]
+        );
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].suppression_key, "native.testing.require_use_strict");
+        assert_eq!(findings[1].suppression_key, "native.testing.require_use_warnings");
     }
 }
