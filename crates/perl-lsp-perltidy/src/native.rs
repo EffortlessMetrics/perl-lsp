@@ -8,6 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 const PARSE_ERROR_CODE: &str = "native.format.parse_error";
+const PARSE_PRESERVATION_CODE: &str = "native.format.parse_preservation";
 const LITERAL_PRESERVE_CODE: &str = "native.format.literal_preserve_region";
 
 /// Native formatter document tree.
@@ -401,9 +402,10 @@ pub trait PerlFormatter {
 
 /// Parse-gated Rust-native Perl formatter.
 ///
-/// This initial engine deliberately performs no syntax layout rewrites. It is
-/// the safety boundary that future native formatter passes should compose with:
-/// source must parse cleanly before any native formatting edit is allowed.
+/// This initial engine performs only deliberately small syntax layout rewrites
+/// and is the safety boundary that future native formatter passes should compose
+/// with: source and formatted output must both parse cleanly before any native
+/// formatting edit is returned.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NativeFormatter;
 
@@ -450,6 +452,19 @@ impl NativeFormatter {
         Ok(())
     }
 
+    fn format_safe_subset(source: &str) -> String {
+        let mut formatted = String::with_capacity(source.len());
+
+        for line in source.split_inclusive('\n') {
+            let (body, line_ending) = split_line_ending(line);
+            formatted
+                .push_str(&format_simple_lexical_line(body).unwrap_or_else(|| body.to_string()));
+            formatted.push_str(line_ending);
+        }
+
+        formatted
+    }
+
     fn apply_final_newline(source: &str, config: &FormatConfig) -> String {
         match config.final_newline {
             FinalNewline::Preserve => source.to_string(),
@@ -474,7 +489,19 @@ impl PerlFormatter for NativeFormatter {
             return result;
         }
 
-        FormatResult::replace_document(source, Self::apply_final_newline(source, config))
+        let formatted = Self::apply_final_newline(&Self::format_safe_subset(source), config);
+        if let Err(diagnostic) = Self::validate_clean_parse(&formatted) {
+            let mut result = FormatResult::unchanged(source);
+            result.diagnostics.push(FormatDiagnostic::new(
+                PARSE_PRESERVATION_CODE,
+                FormatDiagnosticSeverity::Warning,
+                diagnostic.range,
+                "native formatting skipped because formatted output did not parse cleanly",
+            ));
+            return result;
+        }
+
+        FormatResult::replace_document(source, formatted)
     }
 
     fn format_range(&self, source: &str, _range: TextRange, config: &FormatConfig) -> FormatResult {
@@ -494,6 +521,97 @@ impl PerlFormatter for NativeFormatter {
 
 fn utf16_len(s: &str) -> usize {
     s.chars().map(|ch| if ch as u32 >= 0x10000 { 2 } else { 1 }).sum()
+}
+
+fn split_line_ending(line: &str) -> (&str, &str) {
+    if let Some(body) = line.strip_suffix("\r\n") {
+        (body, "\r\n")
+    } else if let Some(body) = line.strip_suffix('\n') {
+        (body, "\n")
+    } else {
+        (line, "")
+    }
+}
+
+fn format_simple_lexical_line(line: &str) -> Option<String> {
+    let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
+    let (indent, body) = line.split_at(indent_len);
+    if body.is_empty() || body.contains('#') {
+        return None;
+    }
+
+    let mut stream = perl_parser_core::TokenStream::new(body);
+    let mut tokens = Vec::new();
+    loop {
+        let token = stream.next().ok()?;
+        if token.kind == perl_parser_core::TokenKind::Eof {
+            break;
+        }
+        tokens.push(token);
+    }
+
+    let formatted = format_simple_lexical_tokens(&tokens)?;
+    Some(format!("{indent}{formatted}"))
+}
+
+fn format_simple_lexical_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    let keyword = match tokens.first()?.kind {
+        TokenKind::My => "my",
+        TokenKind::Our => "our",
+        TokenKind::State => "state",
+        _ => return None,
+    };
+
+    let semicolon = tokens.last()?;
+    if semicolon.kind != TokenKind::Semicolon {
+        return None;
+    }
+
+    let (variable, next_index) = format_variable_tokens(tokens, 1)?;
+    let semicolon_index = tokens.len() - 1;
+    if next_index == semicolon_index {
+        Some(format!("{keyword} {variable};"))
+    } else if next_index + 2 == semicolon_index && tokens[next_index].kind == TokenKind::Assign {
+        let value = simple_value_text(&tokens[next_index + 1])?;
+        Some(format!("{keyword} {variable} = {value};"))
+    } else {
+        None
+    }
+}
+
+fn format_variable_tokens(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+) -> Option<(String, usize)> {
+    use perl_parser_core::TokenKind;
+
+    let first = tokens.get(start)?;
+    if first.kind == TokenKind::Identifier
+        && first.text.chars().next().is_some_and(|ch| matches!(ch, '$' | '@' | '%'))
+    {
+        return Some((first.text.to_string(), start + 1));
+    }
+
+    let sigil = first;
+    let name = tokens.get(start + 1)?;
+    if !matches!(sigil.kind, TokenKind::ScalarSigil | TokenKind::ArraySigil | TokenKind::HashSigil)
+    {
+        return None;
+    }
+    if name.kind != TokenKind::Identifier {
+        return None;
+    }
+
+    Some((format!("{}{}", sigil.text, name.text), start + 2))
+}
+
+fn simple_value_text(token: &perl_parser_core::Token) -> Option<&str> {
+    use perl_parser_core::TokenKind;
+
+    matches!(token.kind, TokenKind::Number | TokenKind::String | TokenKind::Identifier)
+        .then_some(token.text.as_ref())
 }
 
 fn literal_preserve_region(source: &str) -> Option<&'static str> {
