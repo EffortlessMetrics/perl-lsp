@@ -25,9 +25,10 @@ use super::model::{
 /// records local scope, stash, and compile-environment side graphs, but it does
 /// not change provider behavior.
 pub fn lower_ast(ast: &Node) -> HirFile {
-    let mut lowerer = Lowerer::new(ast.location);
+    let pragma_environment = CompileTimePragmaEnvironment::build(ast);
+    let mut lowerer = Lowerer::new(ast.location, pragma_environment);
     lowerer.visit(ast, RecoveryConfidence::Parsed);
-    lowerer.record_pragma_state_facts(ast);
+    lowerer.record_pragma_state_facts();
     lowerer.finish()
 }
 
@@ -38,11 +39,12 @@ struct Lowerer {
     scope_graph: ScopeGraph,
     stash_graph: StashGraph,
     compile_environment: CompileEnvironment,
+    pragma_environment: CompileTimePragmaEnvironment,
     scope_stack: Vec<HirScopeId>,
 }
 
 impl Lowerer {
-    fn new(file_range: SourceLocation) -> Self {
+    fn new(file_range: SourceLocation, pragma_environment: CompileTimePragmaEnvironment) -> Self {
         let mut scope_graph = ScopeGraph::default();
         let file_scope = HirScopeId::from_index(0);
         scope_graph.scopes.push(ScopeFrame {
@@ -60,6 +62,7 @@ impl Lowerer {
             scope_graph,
             stash_graph: StashGraph::default(),
             compile_environment: CompileEnvironment::default(),
+            pragma_environment,
             scope_stack: vec![file_scope],
         }
     }
@@ -465,6 +468,31 @@ impl Lowerer {
                     self.record_assignment_stash_effect(lhs, rhs, node.location, confidence);
                 }
                 self.visit_children(node, confidence);
+            }
+            NodeKind::Unary { op, operand } => {
+                if is_symbolic_reference_deref_op(op)
+                    && !self.strict_refs_enabled_at(node.location.start)
+                {
+                    let reason = "symbolic reference dereference is not statically known";
+                    let item_id = self.push_item(
+                        node,
+                        None,
+                        confidence,
+                        HirKind::DynamicBoundary(DynamicBoundary {
+                            kind: DynamicBoundaryKind::SymbolicReferenceDeref,
+                            reason: reason.to_string(),
+                        }),
+                        self.package_context.clone(),
+                        Some(self.current_scope()),
+                    );
+                    self.record_compile_environment_boundary(
+                        CompileEnvironmentBoundaryKind::SymbolicReferenceDeref,
+                        node.location,
+                        Some(item_id),
+                        reason,
+                    );
+                }
+                self.visit(operand, confidence);
             }
             NodeKind::Eval { block } => {
                 if !matches!(block.kind, NodeKind::Block { .. }) {
@@ -1027,9 +1055,9 @@ impl Lowerer {
         });
     }
 
-    fn record_pragma_state_facts(&mut self, ast: &Node) {
-        let environment = CompileTimePragmaEnvironment::build(ast);
-        for entry in environment.map().entries() {
+    fn record_pragma_state_facts(&mut self) {
+        let entries = self.pragma_environment.map().entries().to_vec();
+        for entry in entries {
             let range = SourceLocation::new(entry.range.start, entry.range.end);
             if self.is_dynamic_pragma_offset(range.start) {
                 continue;
@@ -1045,6 +1073,10 @@ impl Lowerer {
                 package_context,
             ));
         }
+    }
+
+    fn strict_refs_enabled_at(&self, offset: usize) -> bool {
+        self.pragma_environment.snapshot_at(offset).state().strict_refs
     }
 
     fn is_dynamic_pragma_offset(&self, offset: usize) -> bool {
@@ -1746,6 +1778,10 @@ fn is_bareword_like(value: &str) -> bool {
 
 fn contains_interpolation_marker(value: &str) -> bool {
     value.contains('$') || value.contains('@') || value.contains('%')
+}
+
+fn is_symbolic_reference_deref_op(op: &str) -> bool {
+    matches!(op, "${}" | "@{}" | "%{}" | "&{}" | "*{}")
 }
 
 fn pragma_state_fact(
