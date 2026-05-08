@@ -204,6 +204,30 @@ fn native_formatter_expands_simple_until_blocks() {
 }
 
 #[test]
+fn native_formatter_expands_simple_if_else_blocks() {
+    let formatter = NativeFormatter::new();
+    let source = "if($ok){return 1;}else{return 0;}\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "if ($ok) {\n    return 1;\n} else {\n    return 0;\n}\n");
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn native_formatter_expands_simple_unless_else_blocks() {
+    let formatter = NativeFormatter::new();
+    let source = "unless($ok){return 0;}else{return 1;}\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "unless ($ok) {\n    return 0;\n} else {\n    return 1;\n}\n");
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_range_formatter_formats_selected_simple_subroutine_line() {
     let formatter = NativeFormatter::new();
     let source = "my$x=1;\nsub answer{our@y;return@y;}\n";
@@ -261,4 +285,22 @@ fn native_range_formatter_formats_selected_simple_unless_line() {
     assert_eq!(result.edits.len(), 1);
     assert_eq!(result.edits[0].range, range);
     assert_eq!(result.edits[0].new_text, "unless ($ok) {\n    return $x;\n}");
+}
+
+#[test]
+fn native_range_formatter_formats_selected_simple_if_else_line() {
+    let formatter = NativeFormatter::new();
+    let source = "my$x=1;\nif($ok){return 1;}else{return 0;}\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 33));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        "my$x=1;\nif ($ok) {\n    return 1;\n} else {\n    return 0;\n}\n"
+    );
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(result.edits[0].new_text, "if ($ok) {\n    return 1;\n} else {\n    return 0;\n}");
 }
