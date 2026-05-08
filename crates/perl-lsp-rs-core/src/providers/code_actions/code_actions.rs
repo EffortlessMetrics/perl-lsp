@@ -217,13 +217,13 @@ impl CodeActionsProvider {
                     c if c == DiagnosticCode::TwoArgOpen.as_str()
                         || c == "native.io.two_arg_open" =>
                     {
-                        actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
+                        actions.extend(quick_fixes::fix_two_arg_open(&self.source, &qf_diag));
                     }
                     // Perl::Critic policy aliases for two-arg open.
                     "InputOutput::ProhibitTwoArgOpen"
                     | "InputOutput::RequireBriefOpen"
                     | "InputOutput::RequireThreeArgOpen" => {
-                        actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
+                        actions.extend(quick_fixes::fix_two_arg_open(&self.source, &qf_diag));
                     }
                     // Perl::Critic/native critic policies for missing strict/warnings.
                     "TestingAndDebugging::RequireUseStrict"
@@ -668,7 +668,7 @@ mod tests {
             .iter()
             .find(|action| action.title.contains("three-argument open()"))
             .expect("native two-arg open diagnostic should produce a quick fix");
-        assert_eq!(fix.edit.changes[0].new_text, "open(my $fh, '<', $filename)");
+        assert_eq!(fix.edit.changes[0].new_text, "open(my $fh, '<', $path)");
     }
 
     #[test]

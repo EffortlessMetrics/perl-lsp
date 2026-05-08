@@ -352,11 +352,73 @@ pub(super) fn fix_bareword_filehandle(diagnostic: &Diagnostic) -> Vec<CodeAction
     )]
 }
 
-pub(super) fn fix_two_arg_open(diagnostic: &Diagnostic) -> Vec<CodeAction> {
+pub(super) fn fix_two_arg_open(
+    provider: &CodeActionsProvider,
+    diagnostic: &Diagnostic,
+) -> Vec<CodeAction> {
+    let Some(new_text) = two_arg_open_replacement(provider.source(), diagnostic.range) else {
+        return Vec::new();
+    };
+
     vec![diagnostic_action(
         diagnostic,
         "Convert to three-argument open() for safety",
         CodeActionKind::QuickFix,
-        TextEdit { range: diagnostic.range, new_text: "open(my $fh, '<', $filename)".to_string() },
+        TextEdit { range: diagnostic.range, new_text },
     )]
+}
+
+fn two_arg_open_replacement(source: &str, range: (usize, usize)) -> Option<String> {
+    let snippet = source.get(range.0..range.1)?.trim();
+    let call = snippet.trim_end_matches(';').trim();
+    let body = call.strip_prefix("open")?.trim_start();
+    let body = body.strip_prefix('(')?.strip_suffix(')')?;
+    let (handle, path) = split_two_top_level_args(body)?;
+
+    Some(format!("open({}, '<', {})", handle.trim(), path.trim()))
+}
+
+fn split_two_top_level_args(input: &str) -> Option<(&str, &str)> {
+    let mut depth = 0usize;
+    let mut quote = None;
+    let mut escaped = false;
+    let mut split = None;
+
+    for (idx, ch) in input.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if let Some(quote_char) = quote {
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == quote_char {
+                quote = None;
+            }
+            continue;
+        }
+
+        match ch {
+            '\'' | '"' | '`' => quote = Some(ch),
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                if split.replace(idx).is_some() {
+                    return None;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let idx = split?;
+    let first = &input[..idx];
+    let second = &input[idx + 1..];
+
+    if first.trim().is_empty() || second.trim().is_empty() {
+        return None;
+    }
+
+    Some((first, second))
 }

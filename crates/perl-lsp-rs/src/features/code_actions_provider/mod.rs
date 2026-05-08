@@ -124,7 +124,7 @@ impl CodeActionsProvider {
                     || c == "two-arg-open"
                     || c == "native.io.two_arg_open" =>
             {
-                fixes::fix_two_arg_open(diagnostic)
+                fixes::fix_two_arg_open(self, diagnostic)
             }
             Some(code) if code.starts_with("parse-error-") => {
                 fixes::fix_parse_error(self, diagnostic, code)
@@ -691,7 +691,7 @@ mod tests {
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].title, "Convert to three-argument open() for safety");
         assert_eq!(actions[0].edit.range, (0, 19));
-        assert_eq!(actions[0].edit.new_text, "open(my $fh, '<', $filename)");
+        assert_eq!(actions[0].edit.new_text, "open(my $fh, '<', $path)");
     }
 
     // ── Quick-fix: unused parameter ─────────────────────────────────────

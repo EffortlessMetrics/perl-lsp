@@ -876,8 +876,18 @@ fn bareword_filehandle_finding(
     }
 }
 
-fn two_arg_open_finding(rule: &TwoArgOpenRule, source: &str, call: &Node) -> CriticFinding {
+fn two_arg_open_finding(
+    rule: &TwoArgOpenRule,
+    source: &str,
+    call: &Node,
+    open_args: &[Node],
+) -> CriticFinding {
     let range = range_for_byte_span(source, call.location.start, call.location.end);
+    let fix = two_arg_open_fix_text(source, open_args).map(|new_text| CriticFix {
+        title: "Convert to three-argument open() for safety".to_string(),
+        safety: FixSafety::Suggested,
+        edits: vec![CriticTextEdit { range, new_text }],
+    });
 
     CriticFinding {
         rule_id: rule.id().to_string(),
@@ -888,15 +898,23 @@ fn two_arg_open_finding(rule: &TwoArgOpenRule, source: &str, call: &Node) -> Cri
         explanation: "Two-argument open combines mode and filename, which can allow shell interpretation when the filename is derived from input. Use three-argument open with a separate mode.".to_string(),
         suppression_key: rule.id().to_string(),
         related: Vec::new(),
-        fix: Some(CriticFix {
-            title: "Convert to three-argument open() for safety".to_string(),
-            safety: FixSafety::Suggested,
-            edits: vec![CriticTextEdit {
-                range,
-                new_text: "open(my $fh, '<', $filename)".to_string(),
-            }],
-        }),
+        fix,
     }
+}
+
+fn two_arg_open_fix_text(source: &str, open_args: &[Node]) -> Option<String> {
+    let [handle, path] = open_args else {
+        return None;
+    };
+
+    let handle_text = source.get(handle.location.start..handle.location.end)?.trim();
+    let path_text = source.get(path.location.start..path.location.end)?.trim();
+
+    if handle_text.is_empty() || path_text.is_empty() {
+        return None;
+    }
+
+    Some(format!("open({handle_text}, '<', {path_text})"))
 }
 
 fn duplicate_lexical_finding(
@@ -1031,9 +1049,11 @@ fn collect_two_arg_open_findings(
 ) {
     if let NodeKind::FunctionCall { name, args } = &node.kind
         && name == "open"
-        && effective_call_args(args).len() == 2
     {
-        out.push(two_arg_open_finding(rule, source, node));
+        let open_args = effective_call_args(args);
+        if open_args.len() == 2 {
+            out.push(two_arg_open_finding(rule, source, node, open_args));
+        }
     }
 
     for child in node.children() {
@@ -1793,7 +1813,7 @@ mod tests {
         assert_eq!(fix.safety, FixSafety::Suggested);
         assert_eq!(fix.edits.len(), 1);
         assert_eq!(fix.edits[0].range, finding.range);
-        assert_eq!(fix.edits[0].new_text, "open(my $fh, '<', $filename)");
+        assert_eq!(fix.edits[0].new_text, "open(my $fh, '<', $path)");
     }
 
     #[test]
