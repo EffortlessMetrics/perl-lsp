@@ -38,9 +38,13 @@ Do not use a silent `#[allow]`. If a lint needs repo-wide temporary treatment, a
 
 ## Planned Rust upgrades
 
+The Rust 1.95 / 0.14.0 rollout is mapped in [docs/ci/perl-lsp-rust-1.95-rollout.md](ci/perl-lsp-rust-1.95-rollout.md). The current repository state remains Rust 2024, workspace MSRV 1.93, pinned toolchain 1.93.1, and release line 0.13.4 until the dedicated implementation PRs land.
+
 The ledger tracks planned Rust 1.94 and 1.95 flips before the workspace MSRV moves. `cargo xtask check-lint-policy` verifies that planned lints are present in the ledger and not activated ahead of the MSRV bump.
 
-The current workspace remains on the MSRV recorded in `Cargo.toml` and `policy/clippy-lints.toml`; the Rust 1.93 toolchain ratchet is intentionally left to a dedicated follow-up lane because toolchain changes affect CI, documentation, and release policy together.
+The workspace still has a known mismatch between the target no-carveout posture and `clippy.toml`'s `allow-unwrap-in-tests = true`. Removing that carveout is a dedicated policy PR after the MSRV/toolchain bump; the compatibility spike, MSRV bump, release bump, and test-carveout cleanup must stay separate.
+
+The `collapsible_if` broad allow remains debt. It should move through ledgered cleanup or explicit exceptions rather than disappearing inside a Rust 1.95 compatibility or release-prep PR.
 
 ## Local check
 

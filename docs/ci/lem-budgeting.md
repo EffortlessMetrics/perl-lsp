@@ -7,6 +7,10 @@ on the same axis regardless of which runner type or OS the work runs on.
 > operating thesis and [verification-ladder.md](verification-ladder.md) for which lanes
 > sit at which cost band.
 
+## Rust 1.95 rollout note
+
+The Rust 1.95 / 0.14.0 rollout should tune the existing LEM, lane, risk-pack, receipt, and CI-actuals control plane rather than introduce a parallel process. Do not hard-enforce learned LEM estimates below the existing 125 LEM ceiling until actuals have been calibrated. Skipped lanes should be reported as skipped by policy, not as passed.
+
 ---
 
 ## Definition
