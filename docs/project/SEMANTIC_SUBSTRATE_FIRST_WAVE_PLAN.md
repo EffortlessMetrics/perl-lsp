@@ -103,7 +103,13 @@ safe_delete_plan(entity)
 5. Definition-candidate multimap behind compatibility APIs.
 6. Typed reference-edge global index behind compatibility APIs.
 
-## Wave 2 Implementation Status (as of 2026-04-30)
+## Wave 2 Implementation Status
+
+This section is historical migration context. Current compiler-substrate state
+is tracked in [COMPILER_CAPABILITY_STATUS.md](COMPILER_CAPABILITY_STATUS.md)
+and [compiler_facts.md](status/compiler_facts.md). Current semantic proof rows
+are tracked in [semantic_scorecard.md](status/semantic_scorecard.md) and
+[semantic_shadow_compare.md](status/semantic_shadow_compare.md).
 
 This section is the migration receipt for what has landed versus what remains staged.
 
@@ -114,16 +120,21 @@ This section is the migration receipt for what has landed versus what remains st
 - **Fact shard write-through:** `FileFactShard` struct and write-through storage in `WorkspaceIndex` are landed; workspace populates shards on index. Legacy symbol/reference indexes remain the source of truth for providers. (PR #7357)
 - **Definition candidate multimap:** `DefinitionCandidate` multimap behind compatibility APIs is landed with deterministic sort and incremental removal. (PR #7360)
 - **Shadow-compare receipt:** design/test rail is landed (`semantic_shadow_compare.rs`); no provider cutover or production shadow-read gating is enabled. (PR #7366)
-- **Scorecard v1:** fixture harness and baseline-pending semantic scorecard are landed; metric rows are intentionally `baseline_pending` until full adapter/index plumbing is wired. (PR #7367)
+- **Scorecard v1:** fixture harness and semantic scorecard are landed. Current
+  fact counts and readiness rows are generated in
+  [semantic_scorecard.md](status/semantic_scorecard.md). (PR #7367)
 - **`SymbolRef -> OccurrenceFact` adapter:** landed in `perl-symbol`; phase-1 `SymbolRef` forms can emit canonical `OccurrenceFact`/`AnchorFact` with neutral unresolved handling. (PR #7444)
 - **`ExportInfo -> ExportSet` adapter:** landed in `perl-semantic-analyzer` with deterministic adapter tests.
 
-### Still staged
+### Still staged or superseded by compiler-substrate tracking
 
 - **Typed reference-edge global index:** not landed; typed-reference behavior is constrained to fixture/regression banks rather than a provider-facing global index.
 - **Canonical producer wiring into `FileFactShard`:** partial; declarations are present but workspace-wide shard population from all canonical producers is not yet complete.
-- **Scorecard real/nonzero fact rows:** not landed; scorecard remains baseline-pending rather than emitted-fact counts.
-- **Fixture-backed shadow compare execution:** not landed; receipt schema exists but execution is not yet fixture-backed for core workspace queries.
+- **Compiler-path import/export ownership:** semantic `ImportSpec`, `ExportSet`,
+  and `visible_symbols_at` proof exists, but [#8244](https://github.com/EffortlessMetrics/perl-lsp/issues/8244)
+  tracks canonical compiler-substrate ownership.
+- **Provider cutover:** tracked separately in
+  [provider_cutover.md](status/provider_cutover.md) and [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197).
 
 ### Explicit non-goals for current Wave 2 state
 
@@ -176,12 +187,17 @@ Interpret failures explicitly as one of: real regression, stale expected output,
 
 ## Wave 3 (User-Visible Cutover Staging)
 
-1. `ImportSpec` extraction.
-2. `VisibleSymbols` query implementation.
-3. Completion consumes `VisibleSymbols` behind a feature flag.
-4. Undefined diagnostics consume `VisibleSymbols` behind a feature flag.
+The Wave 3 fact and query rail has moved from speculative plan to fixture-backed
+semantic proof:
 
-Wave 3 should start by landing `ImportSpec` extraction and a concrete `visible_symbols_at(...)` query surface, then stage provider adoption behind feature flags.
+1. `ImportSpec` extraction exists.
+2. `ExportSet` facts exist.
+3. `visible_symbols_at(...)` exists and is scorecarded.
+4. Semantic shadow compare tracks definition/reference regressions.
+
+The remaining Wave 3 work is provider cutover discipline: fact-source tracing,
+per-provider shadow proof, real-workspace coverage, and fallback behavior before
+normal LSP providers depend on new compiler facts.
 
 ## Out of Scope for First Wave
 
