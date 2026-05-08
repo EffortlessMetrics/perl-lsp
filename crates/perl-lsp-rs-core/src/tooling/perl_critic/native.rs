@@ -240,6 +240,7 @@ impl NativeCriticRegistry {
             Box::new(UnusedParameterRule),
             Box::new(DuplicateLexicalDeclarationRule),
             Box::new(ShadowedLexicalVariableRule),
+            Box::new(ParameterShadowsGlobalRule),
         ])
     }
 
@@ -562,6 +563,39 @@ impl CriticRule for ShadowedLexicalVariableRule {
     }
 }
 
+/// Native rule that reports subroutine parameters that shadow package-level (`our`) variables.
+///
+/// This rule delegates detection to the semantic scope analyzer so native critic diagnostics
+/// reuse the same binding facts as existing scope analysis while exposing a stable native
+/// policy ID.
+pub struct ParameterShadowsGlobalRule;
+
+impl CriticRule for ParameterShadowsGlobalRule {
+    fn id(&self) -> &'static str {
+        "native.variables.parameter_shadows_global"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Semantic
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        let pragma_map = PragmaTracker::build(ctx.ast);
+        let issues = ScopeAnalyzer::new().analyze(ctx.ast, ctx.source, &pragma_map);
+
+        out.extend(
+            issues
+                .into_iter()
+                .filter(|issue| issue.kind == IssueKind::ParameterShadowsGlobal)
+                .map(|issue| parameter_shadows_global_finding(self, ctx.source, &issue)),
+        );
+    }
+}
+
 fn unused_lexical_finding(
     rule: &UnusedLexicalVariableRule,
     source: &str,
@@ -664,6 +698,36 @@ fn shadowed_lexical_finding(
     }
 }
 
+fn parameter_shadows_global_finding(
+    rule: &ParameterShadowsGlobalRule,
+    source: &str,
+    issue: &ScopeIssue,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, issue.range.0, issue.range.1);
+    let replacement = parameter_shadows_global_name(&issue.variable_name);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!(
+            "Parameter '{}' shadows a package-level variable from outer scope",
+            issue.variable_name
+        ),
+        explanation: "Rename the parameter to avoid shadowing the package-level variable; \
+                      shadowing makes the outer variable inaccessible inside the subroutine."
+            .to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix: Some(CriticFix {
+            title: format!("Rename to '{replacement}'"),
+            safety: FixSafety::Suggested,
+            edits: vec![CriticTextEdit { range, new_text: replacement }],
+        }),
+    }
+}
+
 fn duplicate_my_fix(source: &str, variable_start: usize) -> Option<CriticFix> {
     let (start, end) = duplicate_my_span(source, variable_start)?;
 
@@ -694,6 +758,11 @@ fn duplicate_my_span(source: &str, variable_start: usize) -> Option<(usize, usiz
 fn shadowed_lexical_name(name: &str) -> String {
     let (sigil, base_name) = split_sigil(name);
     format!("{sigil}inner_{base_name}")
+}
+
+fn parameter_shadows_global_name(name: &str) -> String {
+    let (sigil, base_name) = split_sigil(name);
+    format!("{sigil}local_{base_name}")
 }
 
 fn prefixed_unused_name(name: &str) -> String {
@@ -1078,7 +1147,8 @@ mod tests {
                 "native.variables.unused_lexical",
                 "native.variables.unused_parameter",
                 "native.variables.duplicate_lexical",
-                "native.variables.shadowed_lexical"
+                "native.variables.shadowed_lexical",
+                "native.variables.parameter_shadows_global"
             ]
         );
         assert_eq!(findings.len(), 2);
@@ -1456,6 +1526,98 @@ mod tests {
         assert_eq!(
             violations[0].explanation,
             "Rename the inner lexical variable or use the outer variable directly to avoid confusing scope shadowing."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
+    fn native_parameter_shadows_global_rule_reports_shadowing_parameter() {
+        let source = "use strict;\nuse warnings;\nmy $x = 10;\nsub process($x) {\n    print $x;\n}\nprint $x;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(ParameterShadowsGlobalRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(
+            findings.len(),
+            1,
+            "expected one finding for shadowing parameter, got {findings:?}"
+        );
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.variables.parameter_shadows_global");
+        assert_eq!(finding.category, CriticCategory::Semantic);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert_eq!(
+            finding.message,
+            "Parameter '$x' shadows a package-level variable from outer scope"
+        );
+        assert_eq!(finding.suppression_key, "native.variables.parameter_shadows_global");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$x");
+
+        let fix = finding.fix.as_ref().expect("parameter_shadows_global should offer a rename");
+        assert_eq!(fix.title, "Rename to '$local_x'");
+        assert_eq!(fix.safety, FixSafety::Suggested);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].new_text, "$local_x");
+    }
+
+    #[test]
+    fn native_parameter_shadows_global_rule_accepts_unique_parameter_names() {
+        let source = "use strict;\nuse warnings;\nmy $value = 10;\nsub process($other) {\n    print $other + $value;\n}\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(ParameterShadowsGlobalRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "unique parameter name should not shadow; got {findings:?}");
+    }
+
+    #[test]
+    fn native_parameter_shadows_global_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $x = 10;\nsub process($x) {\n    print $x;\n}\nprint $x;\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.variables.parameter_shadows_global".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(ParameterShadowsGlobalRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty(), "excluded rule must not fire");
+
+        let suppressed_source = "## no critic native.variables.parameter_shadows_global -- fixture\nuse strict;\nuse warnings;\nmy $x = 10;\nsub process($x) {\n    print $x;\n}\nprint $x;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty(), "suppressed rule must not fire");
+    }
+
+    #[test]
+    fn native_parameter_shadows_global_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $x = 10;\nsub process($x) {\n    print $x;\n}\nprint $x;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(ParameterShadowsGlobalRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.variables.parameter_shadows_global");
+        assert_eq!(
+            violations[0].description,
+            "Parameter '$x' shadows a package-level variable from outer scope"
+        );
+        assert_eq!(
+            violations[0].explanation,
+            "Rename the parameter to avoid shadowing the package-level variable; \
+             shadowing makes the outer variable inaccessible inside the subroutine."
         );
         assert_eq!(violations[0].severity, Severity::Stern);
         assert_eq!(violations[0].file, "lib/App.pm");
