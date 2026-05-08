@@ -239,6 +239,7 @@ impl NativeCriticRegistry {
             Box::new(RequireUseWarningsRule),
             Box::new(AssignmentInConditionRule),
             Box::new(BarewordFilehandleRule),
+            Box::new(TwoArgOpenRule),
             Box::new(UnusedLexicalVariableRule),
             Box::new(UnusedParameterRule),
             Box::new(DuplicateParameterRule),
@@ -483,6 +484,31 @@ impl CriticRule for BarewordFilehandleRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_bareword_filehandle_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports two-argument `open` calls.
+///
+/// The rule keeps the current native critic migration pattern: stable native
+/// policy ID, suppression/config filtering, violation bridge support, and
+/// quick-fix metadata while legacy/default critic behavior remains unchanged.
+pub struct TwoArgOpenRule;
+
+impl CriticRule for TwoArgOpenRule {
+    fn id(&self) -> &'static str {
+        "native.io.two_arg_open"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Security
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Harsh
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_two_arg_open_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -850,6 +876,47 @@ fn bareword_filehandle_finding(
     }
 }
 
+fn two_arg_open_finding(
+    rule: &TwoArgOpenRule,
+    source: &str,
+    call: &Node,
+    open_args: &[Node],
+) -> CriticFinding {
+    let range = range_for_byte_span(source, call.location.start, call.location.end);
+    let fix = two_arg_open_fix_text(source, open_args).map(|new_text| CriticFix {
+        title: "Convert to three-argument open() for safety".to_string(),
+        safety: FixSafety::Suggested,
+        edits: vec![CriticTextEdit { range, new_text }],
+    });
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: "Two-argument open should use an explicit mode".to_string(),
+        explanation: "Two-argument open combines mode and filename, which can allow shell interpretation when the filename is derived from input. Use three-argument open with a separate mode.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix,
+    }
+}
+
+fn two_arg_open_fix_text(source: &str, open_args: &[Node]) -> Option<String> {
+    let [handle, path] = open_args else {
+        return None;
+    };
+
+    let handle_text = source.get(handle.location.start..handle.location.end)?.trim();
+    let path_text = source.get(path.location.start..path.location.end)?.trim();
+
+    if handle_text.is_empty() || path_text.is_empty() {
+        return None;
+    }
+
+    Some(format!("open({handle_text}, '<', {path_text})"))
+}
+
 fn duplicate_lexical_finding(
     rule: &DuplicateLexicalDeclarationRule,
     source: &str,
@@ -959,11 +1026,7 @@ fn push_bareword_filehandle_finding(
         return;
     }
 
-    let open_args: &[Node] = if args.len() == 1 {
-        if let NodeKind::ArrayLiteral { elements } = &args[0].kind { elements } else { args }
-    } else {
-        args
-    };
+    let open_args = effective_call_args(args);
 
     let Some(handle) = open_args.first() else {
         return;
@@ -976,6 +1039,36 @@ fn push_bareword_filehandle_finding(
     }
 
     out.push(bareword_filehandle_finding(rule, source, handle, name));
+}
+
+fn collect_two_arg_open_findings(
+    rule: &TwoArgOpenRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    if let NodeKind::FunctionCall { name, args } = &node.kind
+        && name == "open"
+    {
+        let open_args = effective_call_args(args);
+        if open_args.len() == 2 {
+            out.push(two_arg_open_finding(rule, source, node, open_args));
+        }
+    }
+
+    for child in node.children() {
+        collect_two_arg_open_findings(rule, source, child, out);
+    }
+}
+
+fn effective_call_args(args: &[Node]) -> &[Node] {
+    if args.len() == 1
+        && let NodeKind::ArrayLiteral { elements } = &args[0].kind
+    {
+        return elements;
+    }
+
+    args
 }
 
 fn is_standard_filehandle(name: &str) -> bool {
@@ -1694,6 +1787,97 @@ mod tests {
     }
 
     #[test]
+    fn native_two_arg_open_rule_reports_two_arg_open() {
+        let source = "use strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, $path);\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(TwoArgOpenRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.io.two_arg_open");
+        assert_eq!(finding.category, CriticCategory::Security);
+        assert_eq!(finding.severity, Severity::Harsh);
+        assert_eq!(finding.message, "Two-argument open should use an explicit mode");
+        assert_eq!(finding.suppression_key, "native.io.two_arg_open");
+        assert_eq!(
+            &source[finding.range.start.byte..finding.range.end.byte],
+            "open(my $fh, $path)"
+        );
+
+        let fix = finding.fix.as_ref().expect("two-arg open should offer a safety fix");
+        assert_eq!(fix.title, "Convert to three-argument open() for safety");
+        assert_eq!(fix.safety, FixSafety::Suggested);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].range, finding.range);
+        assert_eq!(fix.edits[0].new_text, "open(my $fh, '<', $path)");
+    }
+
+    #[test]
+    fn native_two_arg_open_rule_accepts_three_arg_open() {
+        let source =
+            "use strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, '<', $path);\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(TwoArgOpenRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "three-argument open should be accepted");
+    }
+
+    #[test]
+    fn native_two_arg_open_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, $path);\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.io.two_arg_open".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(TwoArgOpenRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.io.two_arg_open -- trusted legacy filename\nuse strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, $path);\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+
+        let severity_config =
+            CriticConfig { severity: Severity::Stern as u8, ..Default::default() };
+        let severity_ctx = CriticContext::new(source, &ast, &severity_config);
+        assert!(registry.check(&severity_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_two_arg_open_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, $path);\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(TwoArgOpenRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.io.two_arg_open");
+        assert_eq!(violations[0].description, "Two-argument open should use an explicit mode");
+        assert_eq!(
+            violations[0].explanation,
+            "Two-argument open combines mode and filename, which can allow shell interpretation when the filename is derived from input. Use three-argument open with a separate mode."
+        );
+        assert_eq!(violations[0].severity, Severity::Harsh);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_recommended_registry_contains_initial_policy_bundle() {
         let source = "print 1;\n";
         let ast = parse_source(source);
@@ -1710,6 +1894,7 @@ mod tests {
                 "native.testing.require_use_warnings",
                 "native.common.assignment_in_condition",
                 "native.io.bareword_filehandle",
+                "native.io.two_arg_open",
                 "native.variables.unused_lexical",
                 "native.variables.unused_parameter",
                 "native.variables.duplicate_parameter",

@@ -1674,6 +1674,7 @@ fn is_fixable_perlcritic_policy(code: &str) -> bool {
             | "native.testing.require_use_strict"
             | "native.testing.require_use_warnings"
             | "native.io.bareword_filehandle"
+            | "native.io.two_arg_open"
             | "Variables::ProhibitUnusedVariables"
     )
 }
@@ -1836,7 +1837,7 @@ mod tests {
                     "uri": uri,
                     "languageId": "perl",
                     "version": 1,
-                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n"
+                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nprint $log_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n"
                 }
             })))
             .unwrap();
@@ -1870,6 +1871,14 @@ mod tests {
         assert!(
             text.contains("Bareword filehandle 'FH' should be lexical"),
             "native bareword filehandle finding should preserve rule message; got: {text:?}"
+        );
+        assert!(
+            text.contains("native.io.two_arg_open"),
+            "native critic engine should publish native two-arg open finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("Two-argument open should use an explicit mode"),
+            "native two-arg open finding should preserve rule message; got: {text:?}"
         );
         assert!(
             text.contains("native.variables.unused_lexical"),
@@ -1971,7 +1980,7 @@ mod tests {
                 "uri": uri,
                 "languageId": "perl",
                 "version": 1,
-                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n"
+                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nprint $log_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n"
             }
         })))?;
 
@@ -2020,6 +2029,15 @@ mod tests {
                         == Some("Bareword filehandle 'FH' should be lexical")
             }),
             "native critic engine should add native bareword filehandle finding to workspace diagnostics: {report}"
+        );
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag["code"].as_str() == Some("native.io.two_arg_open")
+                    && diag["source"].as_str() == Some("perl-lsp-critic")
+                    && diag["message"].as_str()
+                        == Some("Two-argument open should use an explicit mode")
+            }),
+            "native critic engine should add native two-arg open finding to workspace diagnostics: {report}"
         );
         assert!(
             diagnostics.iter().any(|diag| {
