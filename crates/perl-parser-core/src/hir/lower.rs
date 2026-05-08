@@ -3,14 +3,16 @@
 use crate::{Node, NodeKind, SourceLocation};
 
 use super::model::{
-    AstAnchor, HirFile, HirId, HirItem, HirKind, MethodDecl, PackageDecl, RecoveryConfidence,
-    RequireDecl, SubDecl, UseDecl, VariableBinding, VariableDecl,
+    AstAnchor, BarewordExpr, BlockShell, CallExpr, CallForm, DynamicBoundary, DynamicBoundaryKind,
+    HirFile, HirId, HirItem, HirKind, IndirectCallExpr, LiteralExpr, LiteralKind, MethodCallExpr,
+    MethodDecl, PackageDecl, RecoveryConfidence, RequireDecl, SubDecl, UseDecl, VariableBinding,
+    VariableDecl,
 };
 
 /// Lower a parser AST into first-slice HIR items.
 ///
 /// This is intentionally conservative: it emits only package, subroutine,
-/// method, use, require, and variable-declaration items, and it does not
+/// method, use, require, variable-declaration, and expression-shell items, and it does not
 /// perform scope, stash, import, or provider behavior changes.
 pub fn lower_ast(ast: &Node) -> HirFile {
     let mut lowerer = Lowerer::default();
@@ -32,7 +34,19 @@ impl Lowerer {
 
     fn visit(&mut self, node: &Node, confidence: RecoveryConfidence) {
         match &node.kind {
-            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+            NodeKind::Program { statements } => {
+                for statement in statements {
+                    self.visit(statement, confidence);
+                }
+            }
+            NodeKind::Block { statements } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::BlockShell(BlockShell { statement_count: statements.len() }),
+                    self.package_context.clone(),
+                );
                 for statement in statements {
                     self.visit(statement, confidence);
                 }
@@ -112,6 +126,180 @@ impl Lowerer {
                     }),
                     self.package_context.clone(),
                 );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::FunctionCall { name, args } => {
+                let form = if name == "->()" { CallForm::Coderef } else { CallForm::NamedFunction };
+                let arg_count = match form {
+                    CallForm::NamedFunction => args.len(),
+                    // The parser stores the dynamic callee as args[0] for coderef invocation.
+                    CallForm::Coderef => args.len().saturating_sub(1),
+                };
+                if name == "->()" {
+                    self.push_item(
+                        node,
+                        None,
+                        confidence,
+                        HirKind::DynamicBoundary(DynamicBoundary {
+                            kind: DynamicBoundaryKind::CoderefCall,
+                            reason: "coderef or dynamic callee invoked through ->()".to_string(),
+                        }),
+                        self.package_context.clone(),
+                    );
+                }
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::CallExpr(CallExpr { name: name.clone(), arg_count, form }),
+                    self.package_context.clone(),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::MethodCall { object, method, args } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::MethodCallExpr(MethodCallExpr {
+                        method: method.clone(),
+                        arg_count: args.len(),
+                        object_kind: object.kind.kind_name(),
+                    }),
+                    self.package_context.clone(),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::IndirectCall { method, object, args } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::IndirectCallExpr(IndirectCallExpr {
+                        method: method.clone(),
+                        arg_count: args.len(),
+                        object_kind: object.kind.kind_name(),
+                    }),
+                    self.package_context.clone(),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::Identifier { name } => {
+                self.push_item(
+                    node,
+                    Some(node.location),
+                    confidence,
+                    HirKind::BarewordExpr(BarewordExpr { name: name.clone() }),
+                    self.package_context.clone(),
+                );
+            }
+            NodeKind::Number { value } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::LiteralExpr(LiteralExpr {
+                        kind: LiteralKind::Number,
+                        value: Some(value.clone()),
+                        interpolated: None,
+                        element_count: None,
+                        pair_count: None,
+                    }),
+                    self.package_context.clone(),
+                );
+            }
+            NodeKind::String { value, interpolated } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::LiteralExpr(LiteralExpr {
+                        kind: LiteralKind::String,
+                        value: Some(value.clone()),
+                        interpolated: Some(*interpolated),
+                        element_count: None,
+                        pair_count: None,
+                    }),
+                    self.package_context.clone(),
+                );
+            }
+            NodeKind::Undef => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::LiteralExpr(LiteralExpr {
+                        kind: LiteralKind::Undef,
+                        value: None,
+                        interpolated: None,
+                        element_count: None,
+                        pair_count: None,
+                    }),
+                    self.package_context.clone(),
+                );
+            }
+            NodeKind::ArrayLiteral { elements } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::LiteralExpr(LiteralExpr {
+                        kind: LiteralKind::Array,
+                        value: None,
+                        interpolated: None,
+                        element_count: Some(elements.len()),
+                        pair_count: None,
+                    }),
+                    self.package_context.clone(),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::HashLiteral { pairs } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::LiteralExpr(LiteralExpr {
+                        kind: LiteralKind::Hash,
+                        value: None,
+                        interpolated: None,
+                        element_count: None,
+                        pair_count: Some(pairs.len()),
+                    }),
+                    self.package_context.clone(),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::Eval { block } => {
+                if !matches!(block.kind, NodeKind::Block { .. }) {
+                    self.push_item(
+                        node,
+                        None,
+                        confidence,
+                        HirKind::DynamicBoundary(DynamicBoundary {
+                            kind: DynamicBoundaryKind::EvalExpression,
+                            reason: "eval body is an expression rather than a parsed block"
+                                .to_string(),
+                        }),
+                        self.package_context.clone(),
+                    );
+                }
+                self.visit_children(node, confidence);
+            }
+            NodeKind::Do { block } => {
+                if !matches!(block.kind, NodeKind::Block { .. }) {
+                    self.push_item(
+                        node,
+                        None,
+                        confidence,
+                        HirKind::DynamicBoundary(DynamicBoundary {
+                            kind: DynamicBoundaryKind::DoExpression,
+                            reason: "do body is an expression rather than a parsed block"
+                                .to_string(),
+                        }),
+                        self.package_context.clone(),
+                    );
+                }
                 self.visit_children(node, confidence);
             }
             NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {

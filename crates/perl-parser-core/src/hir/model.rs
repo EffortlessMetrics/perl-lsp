@@ -101,6 +101,20 @@ pub enum HirKind {
     RequireDecl(RequireDecl),
     /// `my`, `our`, `state`, or `local` variable declaration.
     VariableDecl(VariableDecl),
+    /// Function-like call expression shell.
+    CallExpr(CallExpr),
+    /// Method-call expression shell.
+    MethodCallExpr(MethodCallExpr),
+    /// Indirect-object method-call expression shell.
+    IndirectCallExpr(IndirectCallExpr),
+    /// Bareword expression shell.
+    BarewordExpr(BarewordExpr),
+    /// Literal expression shell.
+    LiteralExpr(LiteralExpr),
+    /// Block expression shell without scope construction.
+    BlockShell(BlockShell),
+    /// Unsupported or intentionally dynamic Perl boundary.
+    DynamicBoundary(DynamicBoundary),
 }
 
 /// Package declaration HIR payload.
@@ -191,4 +205,120 @@ pub struct VariableBinding {
     pub name: String,
     /// Source range for the variable token.
     pub range: SourceLocation,
+}
+
+/// Function-like call shell payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct CallExpr {
+    /// Callee name, or parser sentinel for dynamic call forms.
+    pub name: String,
+    /// Number of parsed arguments.
+    pub arg_count: usize,
+    /// Parser-observed call shape.
+    pub form: CallForm,
+}
+
+/// Parser-observed call shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum CallForm {
+    /// A named function call such as `foo(...)`.
+    NamedFunction,
+    /// A coderef/dynamic callee call such as `$callback->(...)`.
+    Coderef,
+}
+
+/// Method-call shell payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct MethodCallExpr {
+    /// Method name.
+    pub method: String,
+    /// Number of parsed arguments.
+    pub arg_count: usize,
+    /// Parser AST kind for the receiver expression.
+    pub object_kind: &'static str,
+}
+
+/// Indirect-object call shell payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct IndirectCallExpr {
+    /// Method name.
+    pub method: String,
+    /// Number of parsed arguments.
+    pub arg_count: usize,
+    /// Parser AST kind for the receiver/class expression.
+    pub object_kind: &'static str,
+}
+
+/// Bareword expression shell payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct BarewordExpr {
+    /// Bareword text as parsed.
+    pub name: String,
+}
+
+/// Literal expression shell payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct LiteralExpr {
+    /// Literal category.
+    pub kind: LiteralKind,
+    /// Preserved value for compact scalar literals.
+    pub value: Option<String>,
+    /// Whether the literal can interpolate variables.
+    pub interpolated: Option<bool>,
+    /// Element count for aggregate literals.
+    pub element_count: Option<usize>,
+    /// Pair count for hash literals.
+    pub pair_count: Option<usize>,
+}
+
+/// Literal category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum LiteralKind {
+    /// Numeric literal.
+    Number,
+    /// String literal.
+    String,
+    /// `undef`.
+    Undef,
+    /// Array/list literal.
+    Array,
+    /// Hash literal.
+    Hash,
+}
+
+/// Block shell payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct BlockShell {
+    /// Number of parsed statements directly inside the block.
+    pub statement_count: usize,
+}
+
+/// Dynamic-boundary shell payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DynamicBoundary {
+    /// Boundary category.
+    pub kind: DynamicBoundaryKind,
+    /// Short human-readable reason for the boundary.
+    pub reason: String,
+}
+
+/// Dynamic-boundary category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum DynamicBoundaryKind {
+    /// Coderef/dynamic callee call through `->()`.
+    CoderefCall,
+    /// `eval` whose body is not a statically parsed block.
+    EvalExpression,
+    /// `do` whose body is not a statically parsed block.
+    DoExpression,
 }
