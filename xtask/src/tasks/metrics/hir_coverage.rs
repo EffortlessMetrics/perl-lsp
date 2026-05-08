@@ -156,6 +156,10 @@ fn row_for_ast_kind(ast_kind: &'static str) -> HirCoverageRow {
         "Eval" => {
             boundary(ast_kind, "Expression `eval` emits `DynamicBoundary`; block bodies traverse.")
         }
+        "Assignment" => boundary(
+            ast_kind,
+            "Typeglob assignment with a non-static RHS emits `DynamicBoundary`; other assignments traverse.",
+        ),
         "FunctionCall" => lowered(
             ast_kind,
             &["CallExpr", "DynamicBoundary", "RequireDecl"],
@@ -224,6 +228,10 @@ fn row_for_ast_kind(ast_kind: &'static str) -> HirCoverageRow {
         "PhaseBlock" => not_modeled(
             ast_kind,
             "No HIR shell yet; phase blocks contribute a ScopeGraph phase frame.",
+        ),
+        "Typeglob" => not_modeled(
+            ast_kind,
+            "No standalone HIR shell yet; typeglob assignments can contribute StashGraph slots or boundaries.",
         ),
         "Defer" => not_modeled(
             ast_kind,

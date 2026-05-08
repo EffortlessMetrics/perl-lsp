@@ -10,8 +10,10 @@ mod model;
 pub use lower::lower_ast;
 pub use model::{
     AstAnchor, BarewordExpr, Binding, BindingReference, BlockShell, CallExpr, CallForm,
-    DynamicBoundary, DynamicBoundaryKind, HirBindingId, HirFile, HirId, HirItem, HirKind,
-    HirScopeId, IndirectCallExpr, LiteralExpr, LiteralKind, MethodCallExpr, MethodDecl,
-    PackageDecl, RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind, StorageClass,
+    DynamicBoundary, DynamicBoundaryKind, GlobSlot, GlobSlotKind, GlobSlotSource, HirBindingId,
+    HirFile, HirId, HirItem, HirKind, HirScopeId, IndirectCallExpr, InheritanceSource, LiteralExpr,
+    LiteralKind, MethodCallExpr, MethodDecl, PackageDecl, PackageInheritanceEdge, PackageStash,
+    RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind, StashConfidence,
+    StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph, StashProvenance, StorageClass,
     SubDecl, UseDecl, VariableBinding, VariableDecl,
 };
