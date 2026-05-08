@@ -238,6 +238,7 @@ impl NativeCriticRegistry {
             Box::new(RequireUseStrictRule),
             Box::new(RequireUseWarningsRule),
             Box::new(AssignmentInConditionRule),
+            Box::new(BarewordFilehandleRule),
             Box::new(UnusedLexicalVariableRule),
             Box::new(UnusedParameterRule),
             Box::new(DuplicateParameterRule),
@@ -457,6 +458,31 @@ impl CriticRule for AssignmentInConditionRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_assignment_in_condition_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports bareword filehandles passed to `open`.
+///
+/// This mirrors the existing common-mistake and Perl::Critic policy surfaces
+/// while giving opt-in native critic users a stable rule ID, precise handle
+/// span, suppression key, and fix metadata.
+pub struct BarewordFilehandleRule;
+
+impl CriticRule for BarewordFilehandleRule {
+    fn id(&self) -> &'static str {
+        "native.io.bareword_filehandle"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Syntax
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_bareword_filehandle_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -793,6 +819,37 @@ fn assignment_in_condition_finding(
     }
 }
 
+fn bareword_filehandle_finding(
+    rule: &BarewordFilehandleRule,
+    source: &str,
+    handle: &Node,
+    handle_name: &str,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, handle.location.start, handle.location.end);
+    let lexical_name = bareword_filehandle_lexical_name(handle_name);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!("Bareword filehandle '{handle_name}' should be lexical"),
+        explanation: "Bareword filehandles are package globals and can be accidentally reused across scopes. Use lexical filehandles for safer IO.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix: Some(CriticFix {
+            title: format!(
+                "Replace bareword filehandle '{handle_name}' with lexical '{lexical_name}'"
+            ),
+            safety: FixSafety::Suggested,
+            edits: vec![CriticTextEdit {
+                range,
+                new_text: format!("my {lexical_name}"),
+            }],
+        }),
+    }
+}
+
 fn duplicate_lexical_finding(
     rule: &DuplicateLexicalDeclarationRule,
     source: &str,
@@ -874,6 +931,55 @@ fn collect_assignment_in_condition_findings(
     for child in node.children() {
         collect_assignment_in_condition_findings(rule, source, child, out);
     }
+}
+
+fn collect_bareword_filehandle_findings(
+    rule: &BarewordFilehandleRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    if let NodeKind::FunctionCall { name, args } = &node.kind {
+        push_bareword_filehandle_finding(rule, source, name, args, out);
+    }
+
+    for child in node.children() {
+        collect_bareword_filehandle_findings(rule, source, child, out);
+    }
+}
+
+fn push_bareword_filehandle_finding(
+    rule: &BarewordFilehandleRule,
+    source: &str,
+    function_name: &str,
+    args: &[Node],
+    out: &mut Vec<CriticFinding>,
+) {
+    if function_name != "open" {
+        return;
+    }
+
+    let open_args: &[Node] = if args.len() == 1 {
+        if let NodeKind::ArrayLiteral { elements } = &args[0].kind { elements } else { args }
+    } else {
+        args
+    };
+
+    let Some(handle) = open_args.first() else {
+        return;
+    };
+    let NodeKind::Identifier { name } = &handle.kind else {
+        return;
+    };
+    if open_args.len() < 2 || is_standard_filehandle(name) {
+        return;
+    }
+
+    out.push(bareword_filehandle_finding(rule, source, handle, name));
+}
+
+fn is_standard_filehandle(name: &str) -> bool {
+    matches!(name, "STDIN" | "STDOUT" | "STDERR" | "ARGV" | "ARGVOUT" | "DATA")
 }
 
 fn push_assignment_condition_finding(
@@ -1012,6 +1118,10 @@ fn prefixed_unused_name(name: &str) -> String {
         }
         _ => format!("_{name}"),
     }
+}
+
+fn bareword_filehandle_lexical_name(name: &str) -> String {
+    format!("${}_fh", name.to_lowercase())
 }
 
 fn split_sigil(name: &str) -> (&str, &str) {
@@ -1502,6 +1612,88 @@ mod tests {
     }
 
     #[test]
+    fn native_bareword_filehandle_rule_reports_open_bareword() {
+        let source = "use strict;\nuse warnings;\nopen(FH, '<', 'file.txt');\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(BarewordFilehandleRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.io.bareword_filehandle");
+        assert_eq!(finding.category, CriticCategory::Syntax);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert_eq!(finding.message, "Bareword filehandle 'FH' should be lexical");
+        assert_eq!(finding.suppression_key, "native.io.bareword_filehandle");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "FH");
+
+        let fix = finding.fix.as_ref().expect("bareword filehandle should offer lexical fix");
+        assert_eq!(fix.title, "Replace bareword filehandle 'FH' with lexical '$fh_fh'");
+        assert_eq!(fix.safety, FixSafety::Suggested);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].range, finding.range);
+        assert_eq!(fix.edits[0].new_text, "my $fh_fh");
+    }
+
+    #[test]
+    fn native_bareword_filehandle_rule_accepts_lexical_and_standard_filehandles() {
+        let source = "use strict;\nuse warnings;\nopen(my $fh, '<', 'file.txt');\nopen(STDOUT, '>', 'out.txt');\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(BarewordFilehandleRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "lexical and standard filehandles should be accepted");
+    }
+
+    #[test]
+    fn native_bareword_filehandle_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nopen(FH, '<', 'file.txt');\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.io.bareword_filehandle".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(BarewordFilehandleRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.io.bareword_filehandle -- legacy handle\nuse strict;\nuse warnings;\nopen(FH, '<', 'file.txt');\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_bareword_filehandle_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nopen(FH, '<', 'file.txt');\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(BarewordFilehandleRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.io.bareword_filehandle");
+        assert_eq!(violations[0].description, "Bareword filehandle 'FH' should be lexical");
+        assert_eq!(
+            violations[0].explanation,
+            "Bareword filehandles are package globals and can be accidentally reused across scopes. Use lexical filehandles for safer IO."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_recommended_registry_contains_initial_policy_bundle() {
         let source = "print 1;\n";
         let ast = parse_source(source);
@@ -1517,6 +1709,7 @@ mod tests {
                 "native.testing.require_use_strict",
                 "native.testing.require_use_warnings",
                 "native.common.assignment_in_condition",
+                "native.io.bareword_filehandle",
                 "native.variables.unused_lexical",
                 "native.variables.unused_parameter",
                 "native.variables.duplicate_parameter",

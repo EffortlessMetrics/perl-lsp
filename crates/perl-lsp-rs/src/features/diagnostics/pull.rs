@@ -1113,6 +1113,7 @@ fn is_fixable_diagnostic(code: &str) -> bool {
             | "TestingAndDebugging::RequireUseWarnings"
             | "native.testing.require_use_strict"
             | "native.testing.require_use_warnings"
+            | "native.io.bareword_filehandle"
             | "InputOutput::ProhibitBarewordFileHandles"
             | "InputOutput::RequireBriefOpen"
             | "InputOutput::RequireThreeArgOpen"
@@ -1348,7 +1349,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nif ($cond = 1) { print $cond; }\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n",
             None,
             &context,
             None,
@@ -1397,6 +1398,25 @@ mod tests {
             .ok_or("native assignment-in-condition data should be populated")?;
         assert_eq!(data["code"], "native.common.assignment_in_condition");
         assert_eq!(data["suppressionKey"], "native.common.assignment_in_condition");
+        assert_eq!(data["fixable"], true);
+
+        let bareword_filehandle = items
+            .iter()
+            .find(|diag| {
+                diag.code
+                    .as_ref()
+                    .is_some_and(|code| matches!(code, NumberOrString::String(value) if value == "native.io.bareword_filehandle"))
+            })
+            .ok_or("expected native bareword filehandle finding")?;
+        assert_eq!(bareword_filehandle.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(bareword_filehandle.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(bareword_filehandle.message, "Bareword filehandle 'FH' should be lexical");
+        let data = bareword_filehandle
+            .data
+            .as_ref()
+            .ok_or("native bareword filehandle data should be populated")?;
+        assert_eq!(data["code"], "native.io.bareword_filehandle");
+        assert_eq!(data["suppressionKey"], "native.io.bareword_filehandle");
         assert_eq!(data["fixable"], true);
 
         let unused = items

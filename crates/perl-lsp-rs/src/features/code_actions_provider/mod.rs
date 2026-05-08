@@ -112,6 +112,13 @@ impl CodeActionsProvider {
             {
                 fixes::fix_unquoted_bareword(self, diagnostic)
             }
+            Some(c)
+                if c == DiagnosticCode::BarewordFilehandle.as_str()
+                    || c == "bareword-filehandle"
+                    || c == "native.io.bareword_filehandle" =>
+            {
+                fixes::fix_bareword_filehandle(diagnostic)
+            }
             Some(code) if code.starts_with("parse-error-") => {
                 fixes::fix_parse_error(self, diagnostic, code)
             }
@@ -642,6 +649,24 @@ mod tests {
         assert_eq!(actions[1].title, "Keep assignment (add parentheses)");
         assert_eq!(actions[1].edit.range, (4, 10));
         assert_eq!(actions[1].edit.new_text, "($x = 5)");
+    }
+
+    #[test]
+    fn test_native_critic_bareword_filehandle_quick_fix() {
+        let diagnostic = make_diagnostic(
+            (5, 7),
+            DiagnosticSeverity::Warning,
+            "native.io.bareword_filehandle",
+            "Bareword filehandle 'FH' should be lexical",
+        );
+
+        let provider = CodeActionsProvider::new("open FH, $path;\n".to_string());
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Replace bareword filehandle 'FH' with lexical '$fh_fh'");
+        assert_eq!(actions[0].edit.range, (5, 7));
+        assert_eq!(actions[0].edit.new_text, "my $fh_fh");
     }
 
     // ── Quick-fix: unused parameter ─────────────────────────────────────
