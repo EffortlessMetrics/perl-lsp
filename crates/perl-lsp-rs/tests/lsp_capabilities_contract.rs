@@ -111,8 +111,8 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
         "executeCommandProvider must be advertised (implemented in v0.8.6)"
     );
 
-    // documentFormattingProvider is conditional on perltidy availability - that's OK
-    // It can be either true or null depending on environment
+    // documentFormattingProvider is native-first; capability shape is validated
+    // by the formatting-specific tests.
 
     Ok(())
 }

@@ -81,11 +81,9 @@ fn test_pragma_code_actions() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Test that formatting provider is advertised when perltidy is available
+/// Test that formatting provider is advertised through the native formatter.
 #[test]
 fn test_formatting_provider_capability() -> Result<(), Box<dyn std::error::Error>> {
-    let has_perltidy = perl_lsp::execute_command::command_exists("perltidy");
-
     let srv = LspServer::new();
 
     let init_req = JsonRpcRequest {
@@ -104,11 +102,7 @@ fn test_formatting_provider_capability() -> Result<(), Box<dyn std::error::Error
     let has_formatting =
         result["capabilities"]["documentFormattingProvider"].as_bool().unwrap_or(false);
 
-    // Formatting should only be advertised if perltidy is available
-    assert_eq!(
-        has_formatting, has_perltidy,
-        "documentFormattingProvider should match perltidy availability"
-    );
+    assert!(has_formatting, "documentFormattingProvider should be advertised natively");
 
     Ok(())
 }
