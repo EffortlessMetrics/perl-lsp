@@ -1,4 +1,4 @@
-use perl_parser_core::hir::{HirFile, HirKind, RecoveryConfidence, lower_ast};
+use perl_parser_core::hir::{HirFile, HirKind, RecoveryConfidence, ScopeGraph, lower_ast};
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 
 fn lower_source(source: &str) -> HirFile {
@@ -100,6 +100,64 @@ fn render_item(item: &perl_parser_core::hir::HirItem) -> String {
     )
 }
 
+fn render_scope_graph(graph: &ScopeGraph) -> String {
+    let mut lines = Vec::new();
+    lines.push("[scopes]".to_string());
+    for scope in &graph.scopes {
+        let parent =
+            scope.parent.map(|id| id.index().to_string()).unwrap_or_else(|| "<none>".to_string());
+        let package = scope.package_context.as_deref().unwrap_or("<none>");
+        lines.push(format!(
+            "{} {:?} parent={} pkg={}",
+            scope.id.index(),
+            scope.kind,
+            parent,
+            package
+        ));
+    }
+
+    lines.push("[bindings]".to_string());
+    for binding in &graph.bindings {
+        let shadows = binding
+            .shadows
+            .map(|id| id.index().to_string())
+            .unwrap_or_else(|| "<none>".to_string());
+        let package = binding.package_context.as_deref().unwrap_or("<none>");
+        let item = binding
+            .declaration_item
+            .map(|id| id.index().to_string())
+            .unwrap_or_else(|| "<none>".to_string());
+        lines.push(format!(
+            "{} {}{} {:?} scope={} pkg={} item={} shadows={}",
+            binding.id.index(),
+            binding.sigil,
+            binding.name,
+            binding.storage,
+            binding.scope_id.index(),
+            package,
+            item,
+            shadows
+        ));
+    }
+
+    lines.push("[references]".to_string());
+    for reference in &graph.references {
+        let target = reference
+            .resolved_binding
+            .map(|id| id.index().to_string())
+            .unwrap_or_else(|| "<unresolved>".to_string());
+        lines.push(format!(
+            "{}{} scope={} target={}",
+            reference.sigil,
+            reference.name,
+            reference.scope_id.index(),
+            target
+        ));
+    }
+
+    lines.join("\n")
+}
+
 #[test]
 fn hir_lowers_first_slice_constructs_with_stable_metadata() -> Result<(), Box<dyn std::error::Error>>
 {
@@ -113,16 +171,16 @@ fn hir_lowers_first_slice_constructs_with_stable_metadata() -> Result<(), Box<dy
 
     assert_eq!(
         render_hir(&file),
-        "0 PackageDecl My::Module pkg=My::Module recovery=Parsed anchor=Package via=name scope=<none>\n\
-         1 UseDecl List::Util args=qw(sum) filter=false pkg=My::Module recovery=Parsed anchor=Use via=node scope=<none>\n\
-         2 RequireDecl Other::Module args=1 pkg=My::Module recovery=Parsed anchor=FunctionCall via=node scope=<none>\n\
-         3 BarewordExpr Other::Module pkg=My::Module recovery=Parsed anchor=Identifier via=name scope=<none>\n\
-         4 SubDecl greet proto=true sig=false attrs=1 pkg=My::Module recovery=Parsed anchor=Subroutine via=name scope=<none>\n\
-         5 BlockShell statements=1 pkg=My::Module recovery=Parsed anchor=Block via=node scope=<none>\n\
-         6 LiteralExpr Number value=1 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=<none>\n\
-         7 MethodDecl run sig=false attrs=0 pkg=My::Module recovery=Parsed anchor=Method via=node scope=<none>\n\
-         8 BlockShell statements=1 pkg=My::Module recovery=Parsed anchor=Block via=node scope=<none>\n\
-         9 LiteralExpr Number value=1 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=<none>"
+        "0 PackageDecl My::Module pkg=My::Module recovery=Parsed anchor=Package via=name scope=1\n\
+         1 UseDecl List::Util args=qw(sum) filter=false pkg=My::Module recovery=Parsed anchor=Use via=node scope=1\n\
+         2 RequireDecl Other::Module args=1 pkg=My::Module recovery=Parsed anchor=FunctionCall via=node scope=1\n\
+         3 BarewordExpr Other::Module pkg=My::Module recovery=Parsed anchor=Identifier via=name scope=1\n\
+         4 SubDecl greet proto=true sig=false attrs=1 pkg=My::Module recovery=Parsed anchor=Subroutine via=name scope=2\n\
+         5 BlockShell statements=1 pkg=My::Module recovery=Parsed anchor=Block via=node scope=3\n\
+         6 LiteralExpr Number value=1 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=3\n\
+         7 MethodDecl run sig=false attrs=0 pkg=My::Module recovery=Parsed anchor=Method via=node scope=4\n\
+         8 BlockShell statements=1 pkg=My::Module recovery=Parsed anchor=Block via=node scope=5\n\
+         9 LiteralExpr Number value=1 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=5"
     );
 
     for (index, item) in file.items.iter().enumerate() {
@@ -131,12 +189,25 @@ fn hir_lowers_first_slice_constructs_with_stable_metadata() -> Result<(), Box<dy
         assert_eq!(item.range, item.anchor.range);
     }
 
+    assert_eq!(
+        render_scope_graph(&file.scope_graph),
+        "[scopes]\n\
+         0 File parent=<none> pkg=<none>\n\
+         1 Package parent=0 pkg=My::Module\n\
+         2 Subroutine parent=1 pkg=My::Module\n\
+         3 Block parent=2 pkg=My::Module\n\
+         4 Method parent=1 pkg=My::Module\n\
+         5 Block parent=4 pkg=My::Module\n\
+         [bindings]\n\
+         [references]"
+    );
+
     Ok(())
 }
 
 #[test]
-fn hir_lowers_variable_declarations_without_scope_cutover() -> Result<(), Box<dyn std::error::Error>>
-{
+fn hir_lowers_variable_declarations_with_scope_graph_without_provider_cutover()
+-> Result<(), Box<dyn std::error::Error>> {
     let file = lower_source(
         "package My::Module;\n\
          my $scalar = 1;\n\
@@ -150,23 +221,40 @@ fn hir_lowers_variable_declarations_without_scope_cutover() -> Result<(), Box<dy
 
     assert_eq!(
         render_hir(&file),
-        "0 PackageDecl My::Module pkg=My::Module recovery=Parsed anchor=Package via=name scope=<none>\n\
-         1 VariableDecl my vars=$scalar attrs=0 init=true list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>\n\
-         2 LiteralExpr Number value=1 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=<none>\n\
-         3 VariableDecl our vars=@EXPORT_OK attrs=0 init=false list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>\n\
-         4 VariableDecl state vars=%cache attrs=0 init=false list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>\n\
-         5 VariableDecl local vars=$temp attrs=0 init=true list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>\n\
-         6 LiteralExpr Undef value=<none> interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Undef via=node scope=<none>\n\
-         7 VariableDecl local vars=*FH attrs=0 init=false list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>\n\
-         8 VariableDecl my vars=$first,@rest attrs=0 init=true list=true pkg=My::Module recovery=Parsed anchor=VariableListDeclaration via=node scope=<none>\n\
-         9 LiteralExpr Undef value=<none> interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Undef via=node scope=<none>\n\
-         10 CallExpr open args=1 form=NamedFunction pkg=My::Module recovery=Parsed anchor=FunctionCall via=node scope=<none>\n\
-         11 LiteralExpr Array value=<none> interp=<none> elements=3 pairs=<none> pkg=My::Module recovery=Parsed anchor=ArrayLiteral via=node scope=<none>\n\
-         12 VariableDecl my vars=$fh attrs=0 init=false list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>\n\
-         13 LiteralExpr String value='<' interp=false elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=String via=node scope=<none>"
+        "0 PackageDecl My::Module pkg=My::Module recovery=Parsed anchor=Package via=name scope=1\n\
+         1 VariableDecl my vars=$scalar attrs=0 init=true list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=1\n\
+         2 LiteralExpr Number value=1 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=1\n\
+         3 VariableDecl our vars=@EXPORT_OK attrs=0 init=false list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=1\n\
+         4 VariableDecl state vars=%cache attrs=0 init=false list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=1\n\
+         5 VariableDecl local vars=$temp attrs=0 init=true list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=1\n\
+         6 LiteralExpr Undef value=<none> interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Undef via=node scope=1\n\
+         7 VariableDecl local vars=*FH attrs=0 init=false list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=1\n\
+         8 VariableDecl my vars=$first,@rest attrs=0 init=true list=true pkg=My::Module recovery=Parsed anchor=VariableListDeclaration via=node scope=1\n\
+         9 LiteralExpr Undef value=<none> interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Undef via=node scope=1\n\
+         10 CallExpr open args=1 form=NamedFunction pkg=My::Module recovery=Parsed anchor=FunctionCall via=node scope=1\n\
+         11 LiteralExpr Array value=<none> interp=<none> elements=3 pairs=<none> pkg=My::Module recovery=Parsed anchor=ArrayLiteral via=node scope=1\n\
+         12 VariableDecl my vars=$fh attrs=0 init=false list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=1\n\
+         13 LiteralExpr String value='<' interp=false elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=String via=node scope=1"
     );
 
-    assert!(file.items.iter().all(|item| item.scope_context.is_none()));
+    assert_eq!(
+        render_scope_graph(&file.scope_graph),
+        "[scopes]\n\
+         0 File parent=<none> pkg=<none>\n\
+         1 Package parent=0 pkg=My::Module\n\
+         [bindings]\n\
+         0 $scalar LexicalMy scope=1 pkg=My::Module item=1 shadows=<none>\n\
+         1 @EXPORT_OK PackageOur scope=1 pkg=My::Module item=3 shadows=<none>\n\
+         2 %cache LexicalState scope=1 pkg=My::Module item=4 shadows=<none>\n\
+         3 $temp LocalizedPackage scope=1 pkg=My::Module item=5 shadows=<none>\n\
+         4 *FH LocalizedPackage scope=1 pkg=My::Module item=7 shadows=<none>\n\
+         5 $first LexicalMy scope=1 pkg=My::Module item=8 shadows=<none>\n\
+         6 @rest LexicalMy scope=1 pkg=My::Module item=8 shadows=<none>\n\
+         7 $fh LexicalMy scope=1 pkg=My::Module item=12 shadows=<none>\n\
+         [references]\n\
+         @_ scope=1 target=<unresolved>\n\
+         $path scope=1 target=<unresolved>"
+    );
 
     Ok(())
 }
@@ -188,31 +276,95 @@ fn hir_lowers_expression_shells_without_provider_cutover() -> Result<(), Box<dyn
 
     assert_eq!(
         render_hir(&file),
-        "0 PackageDecl My::Module pkg=My::Module recovery=Parsed anchor=Package via=name scope=<none>\n\
-         1 CallExpr helper args=3 form=NamedFunction pkg=My::Module recovery=Parsed anchor=FunctionCall via=node scope=<none>\n\
-         2 LiteralExpr Number value=42 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=<none>\n\
-         3 LiteralExpr String value=\"x\" interp=true elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=String via=node scope=<none>\n\
-         4 MethodCallExpr method args=1 object=Variable pkg=My::Module recovery=Parsed anchor=MethodCall via=node scope=<none>\n\
-         5 IndirectCallExpr new args=1 object=Identifier pkg=My::Module recovery=Parsed anchor=IndirectCall via=node scope=<none>\n\
-         6 BarewordExpr Widget pkg=My::Module recovery=Parsed anchor=Identifier via=name scope=<none>\n\
-         7 LiteralExpr Number value=1 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=<none>\n\
-         8 DynamicBoundary CoderefCall reason=coderef or dynamic callee invoked through ->() pkg=My::Module recovery=Parsed anchor=FunctionCall via=node scope=<none>\n\
-         9 CallExpr ->() args=1 form=Coderef pkg=My::Module recovery=Parsed anchor=FunctionCall via=node scope=<none>\n\
-         10 LiteralExpr Number value=42 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=<none>\n\
-         11 CallExpr grep args=2 form=NamedFunction pkg=My::Module recovery=Parsed anchor=FunctionCall via=node scope=<none>\n\
-         12 BlockShell statements=1 pkg=My::Module recovery=Parsed anchor=Block via=node scope=<none>\n\
-         13 MethodCallExpr ok args=0 object=Variable pkg=My::Module recovery=Parsed anchor=MethodCall via=node scope=<none>\n\
-         14 DynamicBoundary EvalExpression reason=eval body is an expression rather than a parsed block pkg=My::Module recovery=Parsed anchor=Eval via=node scope=<none>\n\
-         15 DynamicBoundary DoExpression reason=do body is an expression rather than a parsed block pkg=My::Module recovery=Parsed anchor=Do via=node scope=<none>\n\
-         16 VariableDecl my vars=$settings attrs=0 init=true list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>\n\
-         17 LiteralExpr Hash value=<none> interp=<none> elements=<none> pairs=2 pkg=My::Module recovery=Parsed anchor=HashLiteral via=node scope=<none>\n\
-         18 LiteralExpr String value=foo interp=false elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=String via=node scope=<none>\n\
-         19 LiteralExpr Number value=1 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=<none>\n\
-         20 LiteralExpr String value=bar interp=false elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=String via=node scope=<none>\n\
-         21 LiteralExpr String value=\"x\" interp=true elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=String via=node scope=<none>"
+        "0 PackageDecl My::Module pkg=My::Module recovery=Parsed anchor=Package via=name scope=1\n\
+         1 CallExpr helper args=3 form=NamedFunction pkg=My::Module recovery=Parsed anchor=FunctionCall via=node scope=1\n\
+         2 LiteralExpr Number value=42 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=1\n\
+         3 LiteralExpr String value=\"x\" interp=true elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=String via=node scope=1\n\
+         4 MethodCallExpr method args=1 object=Variable pkg=My::Module recovery=Parsed anchor=MethodCall via=node scope=1\n\
+         5 IndirectCallExpr new args=1 object=Identifier pkg=My::Module recovery=Parsed anchor=IndirectCall via=node scope=1\n\
+         6 BarewordExpr Widget pkg=My::Module recovery=Parsed anchor=Identifier via=name scope=1\n\
+         7 LiteralExpr Number value=1 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=1\n\
+         8 DynamicBoundary CoderefCall reason=coderef or dynamic callee invoked through ->() pkg=My::Module recovery=Parsed anchor=FunctionCall via=node scope=1\n\
+         9 CallExpr ->() args=1 form=Coderef pkg=My::Module recovery=Parsed anchor=FunctionCall via=node scope=1\n\
+         10 LiteralExpr Number value=42 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=1\n\
+         11 CallExpr grep args=2 form=NamedFunction pkg=My::Module recovery=Parsed anchor=FunctionCall via=node scope=1\n\
+         12 BlockShell statements=1 pkg=My::Module recovery=Parsed anchor=Block via=node scope=2\n\
+         13 MethodCallExpr ok args=0 object=Variable pkg=My::Module recovery=Parsed anchor=MethodCall via=node scope=2\n\
+         14 DynamicBoundary EvalExpression reason=eval body is an expression rather than a parsed block pkg=My::Module recovery=Parsed anchor=Eval via=node scope=1\n\
+         15 DynamicBoundary DoExpression reason=do body is an expression rather than a parsed block pkg=My::Module recovery=Parsed anchor=Do via=node scope=1\n\
+         16 VariableDecl my vars=$settings attrs=0 init=true list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=1\n\
+         17 LiteralExpr Hash value=<none> interp=<none> elements=<none> pairs=2 pkg=My::Module recovery=Parsed anchor=HashLiteral via=node scope=1\n\
+         18 LiteralExpr String value=foo interp=false elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=String via=node scope=1\n\
+         19 LiteralExpr Number value=1 interp=<none> elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=Number via=node scope=1\n\
+         20 LiteralExpr String value=bar interp=false elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=String via=node scope=1\n\
+         21 LiteralExpr String value=\"x\" interp=true elements=<none> pairs=<none> pkg=My::Module recovery=Parsed anchor=String via=node scope=1"
     );
 
-    assert!(file.items.iter().all(|item| item.scope_context.is_none()));
+    assert_eq!(
+        render_scope_graph(&file.scope_graph),
+        "[scopes]\n\
+         0 File parent=<none> pkg=<none>\n\
+         1 Package parent=0 pkg=My::Module\n\
+         2 Block parent=1 pkg=My::Module\n\
+         [bindings]\n\
+         0 $settings LexicalMy scope=1 pkg=My::Module item=16 shadows=<none>\n\
+         [references]\n\
+         $value scope=1 target=<unresolved>\n\
+         $self scope=1 target=<unresolved>\n\
+         $value scope=1 target=<unresolved>\n\
+         $callback scope=1 target=<unresolved>\n\
+         $_ scope=2 target=<unresolved>\n\
+         @items scope=1 target=<unresolved>\n\
+         $source scope=1 target=<unresolved>\n\
+         $file scope=1 target=<unresolved>"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_scope_graph_resolves_lexicals_and_marks_shadowing() -> Result<(), Box<dyn std::error::Error>>
+{
+    let file = lower_source(
+        "package My::Module;\n\
+         use feature 'signatures';\n\
+         my $value = 1;\n\
+         sub run ($param) {\n\
+             my $value = $param;\n\
+             our $shared;\n\
+             state $cache;\n\
+             local $temp;\n\
+             $value;\n\
+             $shared;\n\
+             $cache;\n\
+             $temp;\n\
+         }\n\
+         $value;\n",
+    );
+
+    assert_eq!(
+        render_scope_graph(&file.scope_graph),
+        "[scopes]\n\
+         0 File parent=<none> pkg=<none>\n\
+         1 Package parent=0 pkg=My::Module\n\
+         2 Subroutine parent=1 pkg=My::Module\n\
+         3 Signature parent=2 pkg=My::Module\n\
+         4 Block parent=3 pkg=My::Module\n\
+         [bindings]\n\
+         0 $value LexicalMy scope=1 pkg=My::Module item=2 shadows=<none>\n\
+         1 $param Parameter scope=3 pkg=My::Module item=<none> shadows=<none>\n\
+         2 $value LexicalMy scope=4 pkg=My::Module item=6 shadows=0\n\
+         3 $shared PackageOur scope=4 pkg=My::Module item=7 shadows=<none>\n\
+         4 $cache LexicalState scope=4 pkg=My::Module item=8 shadows=<none>\n\
+         5 $temp LocalizedPackage scope=4 pkg=My::Module item=9 shadows=<none>\n\
+         [references]\n\
+         $param scope=4 target=1\n\
+         $value scope=4 target=2\n\
+         $shared scope=4 target=3\n\
+         $cache scope=4 target=4\n\
+         $temp scope=4 target=5\n\
+         $value scope=1 target=0"
+    );
 
     Ok(())
 }
@@ -258,7 +410,7 @@ fn hir_marks_items_lowered_from_error_partials_as_recovered()
     assert_eq!(item.recovery_confidence, RecoveryConfidence::Recovered);
     assert_eq!(
         render_hir(&file),
-        "0 SubDecl broken proto=false sig=false attrs=0 pkg=<none> recovery=Recovered anchor=Subroutine via=name scope=<none>"
+        "0 SubDecl broken proto=false sig=false attrs=0 pkg=<none> recovery=Recovered anchor=Subroutine via=name scope=1"
     );
 
     Ok(())

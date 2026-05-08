@@ -144,9 +144,11 @@ fn row_for_ast_kind(ast_kind: &'static str) -> HirCoverageRow {
         "ArrayLiteral" => {
             lowered(ast_kind, &["LiteralExpr"], "Lowered as aggregate literal shell.")
         }
-        "Block" => {
-            lowered(ast_kind, &["BlockShell"], "Lowered as block shell; no scope graph yet.")
-        }
+        "Block" => lowered(
+            ast_kind,
+            &["BlockShell"],
+            "Lowered as block shell and contributes a ScopeGraph block frame.",
+        ),
         "Do" => boundary(
             ast_kind,
             "Non-block `do` forms emit `DynamicBoundary`; block bodies traverse.",
@@ -166,20 +168,36 @@ fn row_for_ast_kind(ast_kind: &'static str) -> HirCoverageRow {
         "IndirectCall" => {
             lowered(ast_kind, &["IndirectCallExpr"], "Lowered as indirect-object call shell.")
         }
-        "Method" => lowered(ast_kind, &["MethodDecl"], "Lowered as method declaration shell."),
+        "Method" => lowered(
+            ast_kind,
+            &["MethodDecl"],
+            "Lowered as method declaration shell and contributes a method scope frame.",
+        ),
         "MethodCall" => lowered(ast_kind, &["MethodCallExpr"], "Lowered as method-call shell."),
         "Number" => lowered(ast_kind, &["LiteralExpr"], "Lowered as numeric literal shell."),
-        "Package" => lowered(ast_kind, &["PackageDecl"], "Lowered and updates package context."),
+        "Package" => lowered(
+            ast_kind,
+            &["PackageDecl"],
+            "Lowered and updates package context plus package scope.",
+        ),
         "String" => lowered(ast_kind, &["LiteralExpr"], "Lowered as string literal shell."),
-        "Subroutine" => lowered(ast_kind, &["SubDecl"], "Lowered as sub declaration shell."),
+        "Subroutine" => lowered(
+            ast_kind,
+            &["SubDecl"],
+            "Lowered as sub declaration shell and contributes a subroutine scope frame.",
+        ),
         "Undef" => lowered(ast_kind, &["LiteralExpr"], "Lowered as undef literal shell."),
         "Use" => lowered(ast_kind, &["UseDecl"], "Lowered as use declaration shell."),
-        "VariableDeclaration" => {
-            lowered(ast_kind, &["VariableDecl"], "Lowered as single variable declaration shell.")
-        }
-        "VariableListDeclaration" => {
-            lowered(ast_kind, &["VariableDecl"], "Lowered as list variable declaration shell.")
-        }
+        "VariableDeclaration" => lowered(
+            ast_kind,
+            &["VariableDecl"],
+            "Lowered as single variable declaration shell and records ScopeGraph bindings.",
+        ),
+        "VariableListDeclaration" => lowered(
+            ast_kind,
+            &["VariableDecl"],
+            "Lowered as list variable declaration shell and records ScopeGraph bindings.",
+        ),
         "Error" => {
             skipped(ast_kind, "Recovered partials are traversed; raw error nodes emit no HIR.")
         }
@@ -189,14 +207,23 @@ fn row_for_ast_kind(ast_kind: &'static str) -> HirCoverageRow {
             skipped(ast_kind, "Parser recovery placeholder, intentionally no HIR item.")
         }
         "Program" => skipped(ast_kind, "Root wrapper is traversal-only."),
-        "Prototype" | "Signature" | "MandatoryParameter" | "NamedParameter"
-        | "OptionalParameter" | "SlurpyParameter" => skipped(
+        "Prototype" => skipped(ast_kind, "Captured as declaration metadata."),
+        "Signature" | "MandatoryParameter" | "NamedParameter" | "OptionalParameter"
+        | "SlurpyParameter" => skipped(
             ast_kind,
-            "Captured as declaration metadata or deferred to the future scope model.",
+            "Captured as ScopeGraph parameter binding metadata; no standalone HIR item.",
         ),
         "Variable" | "VariableWithAttributes" => skipped(
             ast_kind,
-            "Consumed by declaration lowering; reference facts wait for scope graph.",
+            "Consumed by declaration lowering or recorded as ScopeGraph references.",
+        ),
+        "Format" => not_modeled(
+            ast_kind,
+            "No HIR shell yet; format declarations contribute a ScopeGraph format frame.",
+        ),
+        "PhaseBlock" => not_modeled(
+            ast_kind,
+            "No HIR shell yet; phase blocks contribute a ScopeGraph phase frame.",
         ),
         "Defer" => not_modeled(
             ast_kind,
