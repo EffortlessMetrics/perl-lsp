@@ -97,6 +97,24 @@ of LEM is intentionally **not** part of this rollout.
 
 ---
 
+
+## Rust 1.95 rollout use
+
+The Rust 1.95 / `0.14.0` rollout uses the existing LEM, risk-pack, lane, and
+actuals control plane rather than adding a parallel process. The rollout map is
+[`perl-lsp-rust-1.95-rollout.md`](perl-lsp-rust-1.95-rollout.md).
+
+For the rollout, learned estimates remain a later tuning step:
+
+```text
+estimate = max(static_floor, p50_recent_actual * 1.15)
+warning = p90_recent_actual
+hard planning = p95_recent_actual
+```
+
+Do not hard-enforce learned estimates below the 125 LEM ceiling until actuals
+have been calibrated and surfaced in PR Plan summaries.
+
 ## What LEM is not
 
 - **Not a billing source.** GitHub usage and Blacksmith billing reports are authoritative.

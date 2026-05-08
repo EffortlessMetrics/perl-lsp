@@ -70,6 +70,25 @@ The suppression file is read by `ripr.toml`'s `[suppressions] path` setting.
 
 ---
 
+
+## Rust 1.95 rollout routing
+
+The Rust 1.95 / `0.14.0` rollout keeps `ripr` advisory. The rollout map is
+[`perl-lsp-rust-1.95-rollout.md`](perl-lsp-rust-1.95-rollout.md). During that
+work, `ripr` should remain the fast PR-time exposure filter rather than a
+mutation-testing replacement or branch-protection gate.
+
+Target routing for the later `ripr` tuning PR:
+
+- normal PRs run `ripr`, normal gates, and targeted mutation only when risk
+  warrants it;
+- nightly or explicit full-CI lanes own broad mutation work;
+- release readiness reports whether mutation/ripr evidence is clean enough to
+  ship;
+- docs-only and test-fixture-only changes may skip `ripr` unless a label forces
+  it;
+- skipped lanes must be reported as skipped by policy, not passed.
+
 ## Promotion path
 
 | PR | What happens |

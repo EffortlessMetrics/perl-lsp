@@ -42,6 +42,26 @@ The ledger tracks planned Rust 1.94 and 1.95 flips before the workspace MSRV mov
 
 The current workspace remains on the MSRV recorded in `Cargo.toml` and `policy/clippy-lints.toml`; the Rust 1.93 toolchain ratchet is intentionally left to a dedicated follow-up lane because toolchain changes affect CI, documentation, and release policy together.
 
+
+## Rust 1.95 rollout map
+
+The Rust 1.95 / `0.14.0` rollout is mapped in
+[`docs/ci/perl-lsp-rust-1.95-rollout.md`](ci/perl-lsp-rust-1.95-rollout.md).
+For that rollout, Clippy changes stay split across dedicated PRs:
+
+- the compatibility spike runs Rust 1.95 without changing MSRV or lint policy;
+- the MSRV/toolchain PR updates `Cargo.toml`, `rust-toolchain.toml`, `clippy.toml`,
+  and workflow toolchain references without removing the test unwrap carveout;
+- the Rust compiler lint-floor PR activates tracked rustc lints;
+- the Clippy ratchet PR measures and then activates clean or cheaply fixable
+  Rust 1.94/1.95 lints;
+- the test-carveout PR removes `allow-unwrap-in-tests = true` and adds a fallible
+  helper path before broader test migration work.
+
+The current mismatch is intentional and visible: `policy/clippy-lints.toml` still
+allows test carveouts while `Cargo.toml` denies `unwrap_used` and `expect_used` at
+the workspace level. Do not resolve that mismatch in the MSRV bump PR.
+
 ## Local check
 
 Run the policy gate before changing lint configuration:
