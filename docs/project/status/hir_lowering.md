@@ -23,7 +23,7 @@ AST kinds tracked: `69`. HIR construct kinds tracked: `13`.
 | `ArrayLiteral` | `lowered` | `LiteralExpr` | Lowered as aggregate literal shell. |
 | `Assignment` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Binary` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Block` | `lowered` | `BlockShell` | Lowered as block shell; no scope graph yet. |
+| `Block` | `lowered` | `BlockShell` | Lowered as block shell and contributes a ScopeGraph block frame. |
 | `Class` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `DataSection` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Default` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
@@ -36,7 +36,7 @@ AST kinds tracked: `69`. HIR construct kinds tracked: `13`.
 | `ExpressionStatement` | `intentionally_skipped` | - | Statement wrapper is traversal-only. |
 | `For` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Foreach` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Format` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Format` | `not_yet_modeled` | - | No HIR shell yet; format declarations contribute a ScopeGraph format frame. |
 | `FunctionCall` | `lowered` | `CallExpr`, `DynamicBoundary`, `RequireDecl` | `require` calls lower as `RequireDecl`; coderef calls add a dynamic boundary. |
 | `Given` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Glob` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
@@ -48,30 +48,30 @@ AST kinds tracked: `69`. HIR construct kinds tracked: `13`.
 | `IndirectCall` | `lowered` | `IndirectCallExpr` | Lowered as indirect-object call shell. |
 | `LabeledStatement` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `LoopControl` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `MandatoryParameter` | `intentionally_skipped` | - | Captured as declaration metadata or deferred to the future scope model. |
+| `MandatoryParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
 | `Match` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Method` | `lowered` | `MethodDecl` | Lowered as method declaration shell. |
+| `Method` | `lowered` | `MethodDecl` | Lowered as method declaration shell and contributes a method scope frame. |
 | `MethodCall` | `lowered` | `MethodCallExpr` | Lowered as method-call shell. |
 | `MissingBlock` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
 | `MissingExpression` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
 | `MissingIdentifier` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
 | `MissingStatement` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
-| `NamedParameter` | `intentionally_skipped` | - | Captured as declaration metadata or deferred to the future scope model. |
+| `NamedParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
 | `No` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Number` | `lowered` | `LiteralExpr` | Lowered as numeric literal shell. |
-| `OptionalParameter` | `intentionally_skipped` | - | Captured as declaration metadata or deferred to the future scope model. |
-| `Package` | `lowered` | `PackageDecl` | Lowered and updates package context. |
-| `PhaseBlock` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `OptionalParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
+| `Package` | `lowered` | `PackageDecl` | Lowered and updates package context plus package scope. |
+| `PhaseBlock` | `not_yet_modeled` | - | No HIR shell yet; phase blocks contribute a ScopeGraph phase frame. |
 | `Program` | `intentionally_skipped` | - | Root wrapper is traversal-only. |
-| `Prototype` | `intentionally_skipped` | - | Captured as declaration metadata or deferred to the future scope model. |
+| `Prototype` | `intentionally_skipped` | - | Captured as declaration metadata. |
 | `Readline` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Regex` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Return` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Signature` | `intentionally_skipped` | - | Captured as declaration metadata or deferred to the future scope model. |
-| `SlurpyParameter` | `intentionally_skipped` | - | Captured as declaration metadata or deferred to the future scope model. |
+| `Signature` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
+| `SlurpyParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
 | `StatementModifier` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `String` | `lowered` | `LiteralExpr` | Lowered as string literal shell. |
-| `Subroutine` | `lowered` | `SubDecl` | Lowered as sub declaration shell. |
+| `Subroutine` | `lowered` | `SubDecl` | Lowered as sub declaration shell and contributes a subroutine scope frame. |
 | `Substitution` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Ternary` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Tie` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
@@ -83,9 +83,9 @@ AST kinds tracked: `69`. HIR construct kinds tracked: `13`.
 | `UnknownRest` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
 | `Untie` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Use` | `lowered` | `UseDecl` | Lowered as use declaration shell. |
-| `Variable` | `intentionally_skipped` | - | Consumed by declaration lowering; reference facts wait for scope graph. |
-| `VariableDeclaration` | `lowered` | `VariableDecl` | Lowered as single variable declaration shell. |
-| `VariableListDeclaration` | `lowered` | `VariableDecl` | Lowered as list variable declaration shell. |
-| `VariableWithAttributes` | `intentionally_skipped` | - | Consumed by declaration lowering; reference facts wait for scope graph. |
+| `Variable` | `intentionally_skipped` | - | Consumed by declaration lowering or recorded as ScopeGraph references. |
+| `VariableDeclaration` | `lowered` | `VariableDecl` | Lowered as single variable declaration shell and records ScopeGraph bindings. |
+| `VariableListDeclaration` | `lowered` | `VariableDecl` | Lowered as list variable declaration shell and records ScopeGraph bindings. |
+| `VariableWithAttributes` | `intentionally_skipped` | - | Consumed by declaration lowering or recorded as ScopeGraph references. |
 | `When` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `While` | `not_yet_modeled` | - | No first-slice HIR shell yet. |

@@ -23,6 +23,48 @@ impl HirId {
     }
 }
 
+/// Stable identifier for a HIR scope frame within one lowered file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[non_exhaustive]
+pub struct HirScopeId {
+    index: u32,
+}
+
+impl HirScopeId {
+    /// Create a scope identifier from a zero-based lowering index.
+    #[inline]
+    pub const fn from_index(index: u32) -> Self {
+        Self { index }
+    }
+
+    /// Return the zero-based lowering index.
+    #[inline]
+    pub const fn index(self) -> u32 {
+        self.index
+    }
+}
+
+/// Stable identifier for a HIR binding within one lowered file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[non_exhaustive]
+pub struct HirBindingId {
+    index: u32,
+}
+
+impl HirBindingId {
+    /// Create a binding identifier from a zero-based lowering index.
+    #[inline]
+    pub const fn from_index(index: u32) -> Self {
+        Self { index }
+    }
+
+    /// Return the zero-based lowering index.
+    #[inline]
+    pub const fn index(self) -> u32 {
+        self.index
+    }
+}
+
 /// Parser AST location that produced a HIR item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -55,6 +97,8 @@ pub enum RecoveryConfidence {
 pub struct HirFile {
     /// Items lowered in stable depth-first source order.
     pub items: Vec<HirItem>,
+    /// Scope and binding graph lowered beside HIR items.
+    pub scope_graph: ScopeGraph,
 }
 
 impl HirFile {
@@ -81,8 +125,134 @@ pub struct HirItem {
     pub recovery_confidence: RecoveryConfidence,
     /// Package context known at lowering time.
     pub package_context: Option<String>,
-    /// Scope context placeholder for later scope-graph work.
-    pub scope_context: Option<HirId>,
+    /// Scope context known at lowering time.
+    pub scope_context: Option<HirScopeId>,
+}
+
+/// HIR-local scope graph for compiler-substrate proof.
+///
+/// The graph is intentionally parser-core-local. Later compiler fact export can
+/// map these ids to `perl-semantic-facts` ids without changing provider
+/// behavior in this first scope/pad slice.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct ScopeGraph {
+    /// Scope frames in stable creation order.
+    pub scopes: Vec<ScopeFrame>,
+    /// Bindings in stable declaration order.
+    pub bindings: Vec<Binding>,
+    /// Variable references observed while lowering.
+    pub references: Vec<BindingReference>,
+}
+
+impl ScopeGraph {
+    /// Return the root file scope, when present.
+    #[inline]
+    pub fn root_scope(&self) -> Option<&ScopeFrame> {
+        self.scopes.first()
+    }
+}
+
+/// One lexical/package scope frame.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ScopeFrame {
+    /// Stable scope id.
+    pub id: HirScopeId,
+    /// Parent scope id, absent for the file scope.
+    pub parent: Option<HirScopeId>,
+    /// Scope category.
+    pub kind: ScopeKind,
+    /// Source range covered by the scope.
+    pub range: SourceLocation,
+    /// Package context active for this scope, when known.
+    pub package_context: Option<String>,
+}
+
+/// Scope frame category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ScopeKind {
+    /// Whole-file root scope.
+    File,
+    /// Package context scope.
+    Package,
+    /// Plain block scope.
+    Block,
+    /// Subroutine pad scope.
+    Subroutine,
+    /// Method pad scope.
+    Method,
+    /// Signature parameter scope.
+    Signature,
+    /// Legacy `format` declaration scope.
+    Format,
+    /// Dynamic/string eval scope boundary.
+    EvalString,
+    /// Compile-time phase block scope, such as `BEGIN`.
+    PhaseBlock,
+}
+
+/// Compiler binding produced from a HIR declaration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Binding {
+    /// Stable binding id.
+    pub id: HirBindingId,
+    /// Scope that owns this binding.
+    pub scope_id: HirScopeId,
+    /// Variable sigil.
+    pub sigil: String,
+    /// Variable name without sigil.
+    pub name: String,
+    /// Source range of the binding declaration token.
+    pub range: SourceLocation,
+    /// Storage class represented by the declaration.
+    pub storage: StorageClass,
+    /// Package context active for this binding, when known.
+    pub package_context: Option<String>,
+    /// HIR item that declared this binding.
+    pub declaration_item: Option<HirId>,
+    /// Earlier visible binding shadowed by this declaration, when known.
+    pub shadows: Option<HirBindingId>,
+}
+
+/// Storage class represented by a binding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum StorageClass {
+    /// Lexical `my` variable.
+    LexicalMy,
+    /// Persistent lexical `state` variable.
+    LexicalState,
+    /// `our` package variable made lexically visible.
+    PackageOur,
+    /// `local` package variable localization.
+    LocalizedPackage,
+    /// Signature parameter binding.
+    Parameter,
+    /// Method invocant binding.
+    MethodInvocant,
+    /// Implicit lexical binding such as `$_`.
+    Implicit,
+    /// Package global observed without a lexical binding.
+    PackageGlobal,
+}
+
+/// Variable reference and its lexical binding resolution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct BindingReference {
+    /// Scope containing the reference.
+    pub scope_id: HirScopeId,
+    /// Variable sigil.
+    pub sigil: String,
+    /// Variable name without sigil.
+    pub name: String,
+    /// Source range for the reference token.
+    pub range: SourceLocation,
+    /// Resolved binding, if one was visible in the scope chain.
+    pub resolved_binding: Option<HirBindingId>,
 }
 
 /// First-slice HIR constructs.
