@@ -245,6 +245,8 @@ impl NativeCriticRegistry {
             Box::new(ParameterShadowsGlobalRule),
             Box::new(DuplicateLexicalDeclarationRule),
             Box::new(ShadowedLexicalVariableRule),
+            Box::new(CaptureVarWithoutRegexMatchRule),
+            Box::new(UndeclaredVariableRule),
         ])
     }
 
@@ -683,6 +685,75 @@ impl CriticRule for ShadowedLexicalVariableRule {
     }
 }
 
+/// Native rule that reports capture variables (`$1`, `$2`, …) used without a
+/// preceding regex match in the same scope.
+///
+/// This rule delegates capture-variable-tracking to the semantic scope analyzer
+/// so native critic diagnostics reuse existing control-flow facts while
+/// exposing a stable native policy ID.
+pub struct CaptureVarWithoutRegexMatchRule;
+
+impl CriticRule for CaptureVarWithoutRegexMatchRule {
+    fn id(&self) -> &'static str {
+        "native.regex.capture_without_match"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Semantic
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        let pragma_map = PragmaTracker::build(ctx.ast);
+        let issues = ScopeAnalyzer::new().analyze(ctx.ast, ctx.source, &pragma_map);
+
+        out.extend(
+            issues
+                .into_iter()
+                .filter(|issue| issue.kind == IssueKind::CaptureVarWithoutRegexMatch)
+                .map(|issue| capture_var_without_match_finding(self, ctx.source, &issue)),
+        );
+    }
+}
+
+/// Native rule that reports variables used without a prior `my`, `our`, or
+/// `local` declaration in scope.
+///
+/// This rule delegates undeclared-variable detection to the semantic scope
+/// analyzer so native critic diagnostics reuse the same binding facts as
+/// existing `use strict`-enforced diagnostics while exposing a stable native
+/// policy ID.
+pub struct UndeclaredVariableRule;
+
+impl CriticRule for UndeclaredVariableRule {
+    fn id(&self) -> &'static str {
+        "native.variables.undeclared"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Semantic
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        let pragma_map = PragmaTracker::build(ctx.ast);
+        let issues = ScopeAnalyzer::new().analyze(ctx.ast, ctx.source, &pragma_map);
+
+        out.extend(
+            issues
+                .into_iter()
+                .filter(|issue| issue.kind == IssueKind::UndeclaredVariable)
+                .map(|issue| undeclared_variable_finding(self, ctx.source, &issue)),
+        );
+    }
+}
+
 fn unused_lexical_finding(
     rule: &UnusedLexicalVariableRule,
     source: &str,
@@ -897,6 +968,55 @@ fn shadowed_lexical_finding(
             title: format!("Rename to '{replacement}'"),
             safety: FixSafety::Suggested,
             edits: vec![CriticTextEdit { range, new_text: replacement }],
+        }),
+    }
+}
+
+fn capture_var_without_match_finding(
+    rule: &CaptureVarWithoutRegexMatchRule,
+    source: &str,
+    issue: &ScopeIssue,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, issue.range.0, issue.range.1);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!(
+            "Capture variable '{}' used without a preceding regex match in scope",
+            issue.variable_name
+        ),
+        explanation: "Capture variables ($1, $2, …) are set by the most recent successful regex match. Using them without a match in scope may yield undef or stale values from an outer scope.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix: None,
+    }
+}
+
+fn undeclared_variable_finding(
+    rule: &UndeclaredVariableRule,
+    source: &str,
+    issue: &ScopeIssue,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, issue.range.0, issue.range.1);
+    let (sigil, bare) = split_sigil(&issue.variable_name);
+    let declared = format!("my {sigil}{bare}");
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!("Variable '{}' is used but not declared", issue.variable_name),
+        explanation: "Declare the variable with 'my', 'our', or 'local' before use. Under 'use strict' this is a compile-time error.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix: Some(CriticFix {
+            title: format!("Change to '{declared}'"),
+            safety: FixSafety::Suggested,
+            edits: vec![CriticTextEdit { range, new_text: declared }],
         }),
     }
 }
@@ -1715,7 +1835,9 @@ mod tests {
                 "native.variables.duplicate_parameter",
                 "native.variables.parameter_shadows_global",
                 "native.variables.duplicate_lexical",
-                "native.variables.shadowed_lexical"
+                "native.variables.shadowed_lexical",
+                "native.regex.capture_without_match",
+                "native.variables.undeclared",
             ]
         );
         assert_eq!(findings.len(), 2);
@@ -2263,6 +2385,181 @@ mod tests {
             violations[0].explanation,
             "Rename the inner lexical variable or use the outer variable directly to avoid confusing scope shadowing."
         );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    // -----------------------------------------------------------------------
+    // CaptureVarWithoutRegexMatchRule tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn native_capture_var_rule_reports_capture_used_without_match() {
+        let source = "use strict;\nuse warnings;\nmy $x = $1;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(CaptureVarWithoutRegexMatchRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.regex.capture_without_match");
+        assert_eq!(finding.category, CriticCategory::Semantic);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert!(
+            finding.message.contains("$1"),
+            "message should name the capture variable; got: {}",
+            finding.message
+        );
+        assert_eq!(finding.suppression_key, "native.regex.capture_without_match");
+        assert!(finding.fix.is_none(), "capture-without-match has no mechanical fix");
+    }
+
+    #[test]
+    fn native_capture_var_rule_accepts_capture_after_regex_match() {
+        let source = "use strict;\nuse warnings;\nif ('hello' =~ /(ell)/) { my $x = $1; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(CaptureVarWithoutRegexMatchRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(
+            findings.is_empty(),
+            "capture var after a match should not fire; got: {findings:?}"
+        );
+    }
+
+    #[test]
+    fn native_capture_var_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $x = $1;\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.regex.capture_without_match".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(CaptureVarWithoutRegexMatchRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.regex.capture_without_match -- fixture\nuse strict;\nuse warnings;\nmy $x = $1;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let default_config = CriticConfig::default();
+        let suppressed_ctx =
+            CriticContext::new(suppressed_source, &suppressed_ast, &default_config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_capture_var_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $x = $1;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(CaptureVarWithoutRegexMatchRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.regex.capture_without_match");
+        assert!(violations[0].description.contains("$1"));
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    // -----------------------------------------------------------------------
+    // UndeclaredVariableRule tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn native_undeclared_variable_rule_reports_undeclared_use() {
+        // UndeclaredVariable fires when use strict is active and a variable has no my/our/local.
+        let source = "use strict;\nuse warnings;\nprint $undeclared;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UndeclaredVariableRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.variables.undeclared");
+        assert_eq!(finding.category, CriticCategory::Semantic);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert!(
+            finding.message.contains("$undeclared"),
+            "message should name the variable; got: {}",
+            finding.message
+        );
+        assert_eq!(finding.suppression_key, "native.variables.undeclared");
+
+        let fix = finding.fix.as_ref().expect("undeclared variable should offer a declare fix");
+        assert_eq!(fix.safety, FixSafety::Suggested);
+        assert!(
+            fix.title.contains("my $undeclared"),
+            "fix should suggest 'my' declaration; got: {}",
+            fix.title
+        );
+    }
+
+    #[test]
+    fn native_undeclared_variable_rule_accepts_declared_variables() {
+        let source = "use strict;\nuse warnings;\nmy $declared = 1;\nprint $declared;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UndeclaredVariableRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "declared variables should not fire; got: {findings:?}");
+    }
+
+    #[test]
+    fn native_undeclared_variable_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nprint $undeclared;\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.variables.undeclared".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UndeclaredVariableRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.variables.undeclared -- fixture\nuse strict;\nuse warnings;\nprint $undeclared;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let default_config = CriticConfig::default();
+        let suppressed_ctx =
+            CriticContext::new(suppressed_source, &suppressed_ast, &default_config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_undeclared_variable_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nprint $undeclared;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UndeclaredVariableRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.variables.undeclared");
+        assert!(violations[0].description.contains("$undeclared"));
         assert_eq!(violations[0].severity, Severity::Stern);
         assert_eq!(violations[0].file, "lib/App.pm");
     }
