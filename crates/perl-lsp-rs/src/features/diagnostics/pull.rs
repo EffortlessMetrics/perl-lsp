@@ -1350,7 +1350,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nprint $log_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\neval $eval_code;\nprint $log_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n",
             None,
             &context,
             None,
@@ -1436,6 +1436,23 @@ mod tests {
         assert_eq!(data["code"], "native.io.two_arg_open");
         assert_eq!(data["suppressionKey"], "native.io.two_arg_open");
         assert_eq!(data["fixable"], true);
+
+        let string_eval = items
+            .iter()
+            .find(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.security.string_eval"),
+                )
+            })
+            .ok_or("expected native string eval finding")?;
+        assert_eq!(string_eval.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(string_eval.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(string_eval.message, "String eval is a security risk");
+        let data =
+            string_eval.data.as_ref().ok_or("native string eval data should be populated")?;
+        assert_eq!(data["code"], "native.security.string_eval");
+        assert_eq!(data["suppressionKey"], "native.security.string_eval");
+        assert_eq!(data["fixable"], false);
 
         let unused = items
             .iter()
