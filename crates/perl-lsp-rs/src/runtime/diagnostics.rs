@@ -1837,7 +1837,7 @@ mod tests {
                     "uri": uri,
                     "languageId": "perl",
                     "version": 1,
-                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\neval $eval_code;\nprint $log_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n"
+                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n"
                 }
             })))
             .unwrap();
@@ -1879,6 +1879,14 @@ mod tests {
         assert!(
             text.contains("Two-argument open should use an explicit mode"),
             "native two-arg open finding should preserve rule message; got: {text:?}"
+        );
+        assert!(
+            text.contains("native.io.pipe_open"),
+            "native critic engine should publish native pipe-open finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("Pipe-open executes a shell command"),
+            "native pipe-open finding should preserve rule message; got: {text:?}"
         );
         assert!(
             text.contains("native.security.string_eval"),
@@ -1988,7 +1996,7 @@ mod tests {
                 "uri": uri,
                 "languageId": "perl",
                 "version": 1,
-                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\neval $eval_code;\nprint $log_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n"
+                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond;\n"
             }
         })))?;
 
@@ -2046,6 +2054,14 @@ mod tests {
                         == Some("Two-argument open should use an explicit mode")
             }),
             "native critic engine should add native two-arg open finding to workspace diagnostics: {report}"
+        );
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag["code"].as_str() == Some("native.io.pipe_open")
+                    && diag["source"].as_str() == Some("perl-lsp-critic")
+                    && diag["message"].as_str() == Some("Pipe-open executes a shell command")
+            }),
+            "native critic engine should add native pipe-open finding to workspace diagnostics: {report}"
         );
         assert!(
             diagnostics.iter().any(|diag| {
