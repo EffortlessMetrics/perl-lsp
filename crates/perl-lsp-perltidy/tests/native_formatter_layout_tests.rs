@@ -61,6 +61,21 @@ fn native_formatter_formats_simple_call_expressions() {
 }
 
 #[test]
+fn native_formatter_formats_simple_list_literals() {
+    let formatter = NativeFormatter::new();
+    let source = "my@xs=(1,2,$y);\n$x=(foo(1),bar($y));\nreturn($x,3);\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        "my @xs = (1, 2, $y);\n$x = (foo(1), bar($y));\nreturn ($x, 3);\n"
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_preserves_indent_and_line_endings_for_simple_declarations() {
     let formatter = NativeFormatter::new();
     let source = "  my $x=1;\r\n\tour @y;\r\n";
@@ -174,6 +189,21 @@ fn native_range_formatter_formats_selected_simple_call_expression_line() {
     assert_eq!(result.edits.len(), 1);
     assert_eq!(result.edits[0].range, range);
     assert_eq!(result.edits[0].new_text, "my $x = foo($y, 1);");
+}
+
+#[test]
+fn native_range_formatter_formats_selected_simple_list_literal_line() {
+    let formatter = NativeFormatter::new();
+    let source = "my@xs=(1,2,$y);\nreturn($x,3);\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 13));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "my@xs=(1,2,$y);\nreturn ($x, 3);\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(result.edits[0].new_text, "return ($x, 3);");
 }
 
 #[test]
