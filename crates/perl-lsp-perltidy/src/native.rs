@@ -1003,6 +1003,10 @@ fn format_simple_atom_tokens(
         return Some((list, next_index));
     }
 
+    if let Some((hash, next_index)) = format_simple_hash_tokens(tokens, start) {
+        return Some((hash, next_index));
+    }
+
     let token = tokens.get(start)?;
     let value = simple_value_text(token)?;
     Some((value.to_string(), start + 1))
@@ -1081,6 +1085,65 @@ fn render_simple_list_doc(items: &[String]) -> String {
         parts.push(FormatDoc::text(item));
     }
     parts.push(FormatDoc::text(")"));
+    FormatDoc::group(parts).render(&FormatConfig::default())
+}
+
+fn format_simple_hash_tokens(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+) -> Option<(String, usize)> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.get(start)?.kind != TokenKind::LeftBrace {
+        return None;
+    }
+
+    let mut pairs = Vec::new();
+    let mut index = start + 1;
+    if tokens.get(index)?.kind == TokenKind::RightBrace {
+        return Some(("{}".to_string(), index + 1));
+    }
+
+    loop {
+        let key = format_simple_hash_key_token(tokens.get(index)?)?;
+        index += 1;
+        if tokens.get(index)?.kind != TokenKind::FatArrow {
+            return None;
+        }
+        index += 1;
+
+        let (value, next_index) = format_simple_atom_tokens(tokens, index)?;
+        pairs.push((key, value));
+        index = next_index;
+
+        match tokens.get(index)?.kind {
+            TokenKind::Comma => index += 1,
+            TokenKind::RightBrace => {
+                return Some((render_simple_hash_doc(&pairs), index + 1));
+            }
+            _ => return None,
+        }
+    }
+}
+
+fn format_simple_hash_key_token(token: &perl_parser_core::Token) -> Option<String> {
+    simple_value_text(token).map(str::to_string)
+}
+
+fn render_simple_hash_doc(pairs: &[(String, String)]) -> String {
+    let mut parts = vec![FormatDoc::text("{")];
+    for (index, (key, value)) in pairs.iter().enumerate() {
+        if index > 0 {
+            parts.push(FormatDoc::text(","));
+            parts.push(FormatDoc::Space);
+        }
+        parts.push(FormatDoc::text(key));
+        parts.push(FormatDoc::Space);
+        parts.push(FormatDoc::text("=>"));
+        parts.push(FormatDoc::Space);
+        parts.push(FormatDoc::text(value));
+    }
+    parts.push(FormatDoc::text("}"));
     FormatDoc::group(parts).render(&FormatConfig::default())
 }
 
