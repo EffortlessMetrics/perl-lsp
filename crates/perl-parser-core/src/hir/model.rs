@@ -99,6 +99,8 @@ pub enum HirKind {
     UseDecl(UseDecl),
     /// `require Module;` call recognized as a compile-time declaration shape.
     RequireDecl(RequireDecl),
+    /// `my`, `our`, `state`, or `local` variable declaration.
+    VariableDecl(VariableDecl),
 }
 
 /// Package declaration HIR payload.
@@ -161,4 +163,32 @@ pub struct RequireDecl {
     pub target: Option<String>,
     /// Number of parser arguments on the underlying function call.
     pub arg_count: usize,
+}
+
+/// Variable declaration HIR payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct VariableDecl {
+    /// Scope/storage declarator: `my`, `our`, `state`, or `local`.
+    pub declarator: String,
+    /// Variables statically visible in the declaration.
+    pub variables: Vec<VariableBinding>,
+    /// Number of parsed attributes on the declaration.
+    pub attribute_count: usize,
+    /// Whether the declaration has an initializer expression.
+    pub has_initializer: bool,
+    /// Whether this came from a list declaration.
+    pub is_list: bool,
+}
+
+/// One variable binding named by a declaration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct VariableBinding {
+    /// Variable sigil.
+    pub sigil: String,
+    /// Variable name without sigil.
+    pub name: String,
+    /// Source range for the variable token.
+    pub range: SourceLocation,
 }

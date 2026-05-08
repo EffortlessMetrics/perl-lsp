@@ -10,5 +10,5 @@ mod model;
 pub use lower::lower_ast;
 pub use model::{
     AstAnchor, HirFile, HirId, HirItem, HirKind, MethodDecl, PackageDecl, RecoveryConfidence,
-    RequireDecl, SubDecl, UseDecl,
+    RequireDecl, SubDecl, UseDecl, VariableBinding, VariableDecl,
 };
