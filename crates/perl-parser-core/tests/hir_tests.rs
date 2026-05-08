@@ -6,6 +6,7 @@ use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 use perl_semantic_facts::{
     Confidence, ExportSet, ExportTag, FileId, ImportKind, ImportSpec, ImportSymbols, Provenance,
 };
+use std::fs;
 
 fn lower_source(source: &str) -> HirFile {
     let mut parser = Parser::new(source);
@@ -319,6 +320,43 @@ fn render_module_resolution_candidates(
             candidate.request_kind,
             candidate.relative_path,
             candidate.status,
+            candidate.roots.len(),
+            package,
+            candidate.provenance,
+            candidate.confidence
+        ));
+
+        for root in candidate.roots {
+            lines.push(format!(
+                "root={} {:?} source={} candidate={} precedence={}",
+                root.path, root.kind, root.source, root.candidate_path, root.precedence
+            ));
+        }
+    }
+
+    lines.join("\n")
+}
+
+fn render_resolved_module_resolution_candidates(
+    environment: &CompileEnvironment,
+    supplied_roots: &[ModuleResolutionRoot],
+    path_exists: impl FnMut(&str) -> bool,
+) -> String {
+    let mut lines = Vec::new();
+    lines.push("[module-candidates]".to_string());
+
+    for candidate in environment.resolved_module_resolution_candidates(supplied_roots, path_exists)
+    {
+        let package = candidate.package_context.as_deref().unwrap_or("<none>");
+        let resolved_path = candidate.resolved_path.as_deref().unwrap_or("<none>");
+        lines.push(format!(
+            "request={} target={} kind={:?} rel={} status={:?} resolved={} roots={} pkg={} {:?} {:?}",
+            candidate.request_index,
+            candidate.target,
+            candidate.request_kind,
+            candidate.relative_path,
+            candidate.status,
+            resolved_path,
             candidate.roots.len(),
             package,
             candidate.provenance,
@@ -1035,6 +1073,107 @@ fn hir_module_resolution_candidate_facts_reject_path_traversal_targets()
     assert_eq!(
         render_module_resolution_candidates(&file.compile_environment, &supplied_roots),
         "[module-candidates]"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_module_resolution_outcomes_resolve_against_explicit_roots()
+-> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let workspace_root = dir.path().join("workspace");
+    let env_root = dir.path().join("envlib");
+    let system_root = dir.path().join("system");
+    let lexical_module = workspace_root.join("lib/Foo/Bar.pm");
+    let env_module = env_root.join("Env/Only.pm");
+
+    let lexical_parent =
+        lexical_module.parent().ok_or("expected lexical module parent directory")?;
+    fs::create_dir_all(lexical_parent)?;
+    fs::write(&lexical_module, "package Foo::Bar;\n1;\n")?;
+
+    let env_parent = env_module.parent().ok_or("expected env module parent directory")?;
+    fs::create_dir_all(env_parent)?;
+    fs::write(&env_module, "package Env::Only;\n1;\n")?;
+    fs::create_dir_all(&system_root)?;
+    let workspace_root = workspace_root.to_string_lossy().replace('\\', "/");
+    let env_root = env_root.to_string_lossy().replace('\\', "/");
+    let system_root = system_root.to_string_lossy().replace('\\', "/");
+
+    let file = lower_source(
+        "package Env::Demo;\n\
+         use lib 'lib';\n\
+         use Foo::Bar;\n\
+         require Env::Only;\n\
+         require Missing::Thing;\n\
+         require $dynamic;\n",
+    );
+    let supplied_roots = vec![
+        ModuleResolutionRoot::new(
+            workspace_root.clone(),
+            IncRootKind::Configured,
+            "workspace-include-paths",
+        ),
+        ModuleResolutionRoot::new(env_root.clone(), IncRootKind::Perl5Lib, "perl5lib-env"),
+        ModuleResolutionRoot::new(
+            system_root.clone(),
+            IncRootKind::SystemInc,
+            "interpreter-startup-inc",
+        ),
+    ];
+
+    assert_eq!(
+        render_resolved_module_resolution_candidates(
+            &file.compile_environment,
+            &supplied_roots,
+            |candidate| {
+                let path = if let Some(rest) = candidate.strip_prefix("lib/") {
+                    std::path::PathBuf::from(&workspace_root).join("lib").join(rest)
+                } else {
+                    std::path::PathBuf::from(candidate)
+                };
+                path.is_file()
+            },
+        ),
+        format!(
+            "[module-candidates]\n\
+             request=0 target=Foo::Bar kind=Use rel=Foo/Bar.pm status=Resolved resolved=lib/Foo/Bar.pm roots=4 pkg=Env::Demo ExactAst High\n\
+             root=lib UseLib source=use-lib-lexical candidate=lib/Foo/Bar.pm precedence=0\n\
+             root={workspace} Configured source=workspace-include-paths candidate={workspace}/Foo/Bar.pm precedence=1\n\
+             root={env} Perl5Lib source=perl5lib-env candidate={env}/Foo/Bar.pm precedence=2\n\
+             root={system} SystemInc source=interpreter-startup-inc candidate={system}/Foo/Bar.pm precedence=3\n\
+             request=1 target=Env::Only kind=Require rel=Env/Only.pm status=Resolved resolved={env}/Env/Only.pm roots=4 pkg=Env::Demo ExactAst High\n\
+             root=lib UseLib source=use-lib-lexical candidate=lib/Env/Only.pm precedence=0\n\
+             root={workspace} Configured source=workspace-include-paths candidate={workspace}/Env/Only.pm precedence=1\n\
+             root={env} Perl5Lib source=perl5lib-env candidate={env}/Env/Only.pm precedence=2\n\
+             root={system} SystemInc source=interpreter-startup-inc candidate={system}/Env/Only.pm precedence=3\n\
+             request=2 target=Missing::Thing kind=Require rel=Missing/Thing.pm status=NotFound resolved=<none> roots=4 pkg=Env::Demo ExactAst High\n\
+             root=lib UseLib source=use-lib-lexical candidate=lib/Missing/Thing.pm precedence=0\n\
+             root={workspace} Configured source=workspace-include-paths candidate={workspace}/Missing/Thing.pm precedence=1\n\
+             root={env} Perl5Lib source=perl5lib-env candidate={env}/Missing/Thing.pm precedence=2\n\
+             root={system} SystemInc source=interpreter-startup-inc candidate={system}/Missing/Thing.pm precedence=3",
+            workspace = workspace_root,
+            env = env_root,
+            system = system_root
+        )
+    );
+
+    assert_eq!(file.compile_environment.module_requests.len(), 4);
+    let outcome_facts =
+        file.compile_environment.resolved_module_resolution_candidates(&supplied_roots, |_| false);
+    assert!(
+        outcome_facts.iter().all(|candidate| {
+            candidate.directive_item.is_some() && candidate.range.end >= candidate.range.start
+        }),
+        "resolved/not-found outcome facts should preserve source anchors"
+    );
+    assert_eq!(
+        file.compile_environment
+            .resolved_module_resolution_candidates(&supplied_roots, |_| true)
+            .len(),
+        3,
+        "dynamic require must not produce fake resolution outcomes"
     );
 
     Ok(())

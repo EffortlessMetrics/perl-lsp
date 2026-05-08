@@ -702,6 +702,7 @@ impl CompileEnvironment {
                     relative_path,
                     roots: candidate_roots,
                     status,
+                    resolved_path: None,
                     range: request.range,
                     package_context: request.package_context.clone(),
                     provenance: request.provenance,
@@ -709,6 +710,37 @@ impl CompileEnvironment {
                 })
             })
             .collect()
+    }
+
+    /// Resolve static module candidate facts using a caller-supplied path predicate.
+    ///
+    /// This preserves the HIR layer's explicit boundary: the caller supplies
+    /// roots and the existence check, so parser-core still does not read
+    /// ambient process state or spawn Perl.
+    #[must_use]
+    pub fn resolved_module_resolution_candidates(
+        &self,
+        supplied_roots: &[ModuleResolutionRoot],
+        mut path_exists: impl FnMut(&str) -> bool,
+    ) -> Vec<ModuleResolutionCandidate> {
+        let mut candidates = self.module_resolution_candidates(supplied_roots);
+
+        for candidate in &mut candidates {
+            if candidate.status != ModuleResolutionCandidateStatus::CandidateBuilt {
+                continue;
+            }
+
+            if let Some(root) =
+                candidate.roots.iter().find(|root| path_exists(&root.candidate_path))
+            {
+                candidate.status = ModuleResolutionCandidateStatus::Resolved;
+                candidate.resolved_path = Some(root.candidate_path.clone());
+            } else {
+                candidate.status = ModuleResolutionCandidateStatus::NotFound;
+            }
+        }
+
+        candidates
     }
 
     fn candidate_roots_for_request(
@@ -999,6 +1031,8 @@ pub struct ModuleResolutionCandidate {
     pub roots: Vec<ModuleResolutionCandidateRoot>,
     /// Resolution status for this candidate packet.
     pub status: ModuleResolutionCandidateStatus,
+    /// Candidate path selected by the resolver, when a matching file exists.
+    pub resolved_path: Option<String>,
     /// Source range for the request.
     pub range: SourceLocation,
     /// Package context active at the request.
