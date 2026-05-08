@@ -1,5 +1,9 @@
 # @INC / Module Resolution Conformance
 
+This page tracks live LSP module-resolution behavior for provider consumers.
+It is distinct from HIR compiler-substrate module-request facts, which are
+tracked in [compiler_facts.md](compiler_facts.md) and [#8242](https://github.com/EffortlessMetrics/perl-lsp/issues/8242).
+
 Consumer-consistency matrix — verified end-to-end through all three LSP consumers
 (PL701 diagnostic, goto-definition, hover) for each `@INC` resolution mode.
 
@@ -48,7 +52,8 @@ Module lives at `/abs/path/to/lib/AbsoluteModule.pm`.
 
 Source-level pragma: `use lib 'lib';` before `use Module;`. The LSP extracts
 `use lib` and `no lib` operations in lexical order via
-`resolve_use_lib_paths_from_source()` (`crates/perl-module-resolution/src/use_lib.rs:147`).
+`resolve_use_lib_paths_from_source()` in
+`crates/perl-module/src/resolution/use_lib.rs`.
 
 ### `no lib` Cancellation
 
@@ -69,12 +74,26 @@ environment variable. Requires `usePerl5lib: true` in workspace config.
 
 ## Implementation Notes
 
-- Position-aware resolution is implemented in `crates/perl-module-resolution/src/use_lib.rs` via `resolve_use_lib_paths_from_source()` (lines 147-173).
-- The three LSP consumers all call either `resolve_module_to_path_with_doc()` or `resolve_module_path_with_uri()` from `crates/perl-lsp-rs/src/runtime/lifecycle/module_resolution.rs`.
+- Position-aware resolution is implemented in `crates/perl-module/src/resolution/use_lib.rs`.
+- Effective include-root assembly is shared through
+  `build_effective_inc_roots()` in `crates/perl-module/src/resolution/uri.rs`;
+  it preserves source labels for configured paths, lexical `use lib`, PERL5LIB,
+  and interpreter startup paths.
+- The three LSP consumers all call either `resolve_module_to_path_with_doc()` or
+  `resolve_module_path_with_uri()` from
+  `crates/perl-lsp-rs/src/runtime/lifecycle/module_resolution.rs`.
 - Consumer call sites:
-  - PL701 diagnostic: `crates/perl-lsp-rs/src/runtime/diagnostics.rs` — calls at lines 110, 280, 521
-  - goto-definition: `crates/perl-lsp-rs/src/runtime/language/navigation.rs` — call at line 966
-  - hover: `crates/perl-lsp-rs/src/runtime/language/hover.rs` — calls at lines 1100, 1118
+  - PL701 diagnostic: runtime diagnostics and pull-diagnostics paths
+  - goto-definition: runtime navigation path
+  - hover: runtime hover path
+
+## Compiler-Substrate Boundary
+
+HIR `CompileEnvironment` already records module requests and include-root facts.
+Static module requests currently remain deferred until [#8242](https://github.com/EffortlessMetrics/perl-lsp/issues/8242)
+adds candidate/path facts. That HIR lane must not read ambient environment or
+spawn Perl from parser lowering; callers provide configured, lexical,
+PERL5LIB-labeled, and system-labeled roots explicitly.
 
 ## Follow-up Scope (PR 2)
 

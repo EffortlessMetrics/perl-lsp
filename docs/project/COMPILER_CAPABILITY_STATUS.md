@@ -19,27 +19,29 @@ Capability states:
 | --- | --- |
 | `planned` | Issue-owned, no canonical implementation yet |
 | `fixture-backed` | Model has focused fixtures, no provider cutover |
+| `semantic-shadowed` | Existing semantic facts are scorecarded or shadowed, but canonical compiler-substrate ownership is still being consolidated |
 | `shadowed` | Provider impact is measured without changing live behavior |
 | `live` | Provider consumes the facts in normal LSP behavior |
 | `parked` | Known lane, intentionally not next |
 
 ## Capability Table
 
-| Capability | State | Owner issue | Next proof |
-| --- | --- | --- | --- |
-| Parser measurement control plane | `live` | [#4063](https://github.com/EffortlessMetrics/perl-lsp/issues/4063), [#6484](https://github.com/EffortlessMetrics/perl-lsp/issues/6484) | `cargo xtask metrics parser-accuracy --check`; `cargo xtask update-status --only parser --check` |
-| Compiler build-out umbrella | `planned` | [#8191](https://github.com/EffortlessMetrics/perl-lsp/issues/8191) | Child checklist stays current |
-| Compiler capability status surface | `live` | [#8205](https://github.com/EffortlessMetrics/perl-lsp/issues/8205) | Keep this page current after each compiler-substrate PR |
-| HIR lowering | `fixture-backed` | [#8224](https://github.com/EffortlessMetrics/perl-lsp/issues/8224) | [HIR lowering coverage](status/hir_lowering.md) tracks AST construct coverage; no provider cutover |
-| Scope and pad model | `fixture-backed initial` | [#8193](https://github.com/EffortlessMetrics/perl-lsp/issues/8193) | HIR `ScopeGraph` records scope frames, storage-classed bindings, lexical references, and shadowing; no provider cutover |
-| Package and stash model | `fixture-backed initial` | [#8194](https://github.com/EffortlessMetrics/perl-lsp/issues/8194) | HIR `StashGraph` records package stashes, glob slots, inheritance edges, and dynamic stash boundaries; no provider cutover |
-| Compile environment and module resolution | `fixture-backed initial` | [#8206](https://github.com/EffortlessMetrics/perl-lsp/issues/8206) | HIR `CompileEnvironment` records use/no/require directives, pragma effects, use-lib roots, module requests, phase blocks, and dynamic boundaries; module path resolution remains planned |
-| Import and export model | `planned` | [#3413](https://github.com/EffortlessMetrics/perl-lsp/issues/3413), [#3414](https://github.com/EffortlessMetrics/perl-lsp/issues/3414), [#3415](https://github.com/EffortlessMetrics/perl-lsp/issues/3415), [#3416](https://github.com/EffortlessMetrics/perl-lsp/issues/3416), [#3474](https://github.com/EffortlessMetrics/perl-lsp/issues/3474), [#7485](https://github.com/EffortlessMetrics/perl-lsp/issues/7485), [#7492](https://github.com/EffortlessMetrics/perl-lsp/issues/7492) | Canonical `ImportSpec` / `ExportSet` facts and visible-symbol proof |
-| Framework adapters | `planned` | [#8195](https://github.com/EffortlessMetrics/perl-lsp/issues/8195) | Generated-member facts with framework provenance |
-| Compile-time effect log | `planned` | [#8207](https://github.com/EffortlessMetrics/perl-lsp/issues/8207), [#3394](https://github.com/EffortlessMetrics/perl-lsp/issues/3394) | Effect records, dynamic-boundary facts, and constant/prototype fixtures |
-| Tooling IR / PIR | `planned` | [#8196](https://github.com/EffortlessMetrics/perl-lsp/issues/8196) | Context-aware PIR lowering fixtures |
-| Differential real-Perl oracle | `planned` | [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199) | Structured agreement receipt; no provider dependency |
-| Provider cutover | `planned` | [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) | Fact-source tracing, scorecards, and shadow comparison |
+| Capability | State | Owner issue | Evidence | Next proof |
+| --- | --- | --- | --- | --- |
+| Parser measurement control plane | `live` | [#4063](https://github.com/EffortlessMetrics/perl-lsp/issues/4063), [#6484](https://github.com/EffortlessMetrics/perl-lsp/issues/6484) | [Parser status](status/parser.md), [parser accuracy next](status/parser_accuracy_next.md) | `cargo xtask metrics parser-accuracy --check`; `cargo xtask update-status --only parser --check` |
+| Compiler build-out umbrella | `planned` | [#8191](https://github.com/EffortlessMetrics/perl-lsp/issues/8191) | [Compiler-backed roadmap](COMPILER_BACKED_LSP_ROADMAP.md) | Child checklist stays current |
+| Compiler capability status surface | `live` | [#8205](https://github.com/EffortlessMetrics/perl-lsp/issues/8205) | This page | Keep this page current after each compiler-substrate PR |
+| HIR lowering | `fixture-backed` | [#8224](https://github.com/EffortlessMetrics/perl-lsp/issues/8224) | [HIR lowering coverage](status/hir_lowering.md) | Keep AST construct coverage generated and current |
+| Scope and pad model | `fixture-backed` | [#8193](https://github.com/EffortlessMetrics/perl-lsp/issues/8193) | [Compiler facts](status/compiler_facts.md) | Broaden lexical reference and scope-shadow fixtures; no provider cutover |
+| Package and stash model | `fixture-backed` | [#8194](https://github.com/EffortlessMetrics/perl-lsp/issues/8194) | [Compiler facts](status/compiler_facts.md) | Broaden stash/typeglob/inheritance fixtures; no provider cutover |
+| Compile environment and module resolution | `fixture-backed` | [#8206](https://github.com/EffortlessMetrics/perl-lsp/issues/8206), [#8242](https://github.com/EffortlessMetrics/perl-lsp/issues/8242) | [Compiler facts](status/compiler_facts.md), [module resolution](status/module_resolution.md) | Module-resolution candidate facts without provider cutover |
+| Import and export model | `semantic-shadowed` | [#8244](https://github.com/EffortlessMetrics/perl-lsp/issues/8244) | [Semantic scorecard](status/semantic_scorecard.md), [semantic shadow compare](status/semantic_shadow_compare.md) | Canonical compiler `ImportSpec` / `ExportSet` ownership and visible-symbol proof |
+| Generated-member facts | `fixture-backed` | [#8195](https://github.com/EffortlessMetrics/perl-lsp/issues/8195) | [Semantic scorecard](status/semantic_scorecard.md) | Adapter registry before broad framework expansion |
+| Framework adapter registry | `planned` | [#8245](https://github.com/EffortlessMetrics/perl-lsp/issues/8245) | [Compiler facts](status/compiler_facts.md) | Exporter-family fact projection, no provider cutover |
+| Compile-time effect log | `planned` | [#8207](https://github.com/EffortlessMetrics/perl-lsp/issues/8207), [#3394](https://github.com/EffortlessMetrics/perl-lsp/issues/3394) | Roadmap only | Effect records, dynamic-boundary facts, and constant/prototype fixtures |
+| Tooling IR / PIR | `planned` | [#8196](https://github.com/EffortlessMetrics/perl-lsp/issues/8196) | Roadmap only | Context-aware PIR lowering fixtures |
+| Differential real-Perl oracle | `planned` | [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199) | Roadmap only | Structured agreement receipt; no provider dependency |
+| Provider cutover | `planned` | [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) | [Provider cutover](status/provider_cutover.md) | Fact-source tracing, scorecards, and shadow comparison |
 
 ## Stop Rules
 

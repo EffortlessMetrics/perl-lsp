@@ -137,11 +137,11 @@ and link the verification receipt there.
 | Compiler substrate umbrella | [#8191](https://github.com/EffortlessMetrics/perl-lsp/issues/8191) | Keep child issues current | [#7952](https://github.com/EffortlessMetrics/perl-lsp/issues/7952) | Child checklist and roadmap links stay current |
 | Capability status | [#8205](https://github.com/EffortlessMetrics/perl-lsp/issues/8205), [#4063](https://github.com/EffortlessMetrics/perl-lsp/issues/4063), [#6484](https://github.com/EffortlessMetrics/perl-lsp/issues/6484) | Keep [compiler capability status](COMPILER_CAPABILITY_STATUS.md) current without copying generated parser metrics | Parser accuracy receipts | Parser metrics/check/status commands stay green |
 | HIR | [#8224](https://github.com/EffortlessMetrics/perl-lsp/issues/8224) ([#8192](https://github.com/EffortlessMetrics/perl-lsp/issues/8192) baseline complete) | Keep HIR lowering coverage generated and current, no provider cutover | Parser AST anchors and first lowering fixtures | HIR snapshots, HIR coverage status, and local crate checks |
-| Scope and pad | [#8193](https://github.com/EffortlessMetrics/perl-lsp/issues/8193) | ScopeGraph and Binding model for local references | HIR baseline | Lexical resolution fixtures |
-| Package and stash | [#8194](https://github.com/EffortlessMetrics/perl-lsp/issues/8194) | PackageStash and glob-slot facts | HIR baseline, scope context | Stash/typeglob/inheritance fixtures |
-| Compile environment and module resolution | [#8206](https://github.com/EffortlessMetrics/perl-lsp/issues/8206) | Pragmas, features, `@INC`, and module-resolution facts | HIR, scope, stash | Compile-environment fixtures |
-| Imports and exports | [#3413](https://github.com/EffortlessMetrics/perl-lsp/issues/3413), [#3414](https://github.com/EffortlessMetrics/perl-lsp/issues/3414), [#3415](https://github.com/EffortlessMetrics/perl-lsp/issues/3415), [#3416](https://github.com/EffortlessMetrics/perl-lsp/issues/3416), [#3474](https://github.com/EffortlessMetrics/perl-lsp/issues/3474), [#7485](https://github.com/EffortlessMetrics/perl-lsp/issues/7485), [#7492](https://github.com/EffortlessMetrics/perl-lsp/issues/7492) | Canonical ImportSpec / ExportSet and visible symbols | Stash model, module resolution | Semantic scorecard and shadow compare |
-| Framework adapters | [#8195](https://github.com/EffortlessMetrics/perl-lsp/issues/8195) | Adapter registry and one generated-member family | HIR, stash, imports | Framework fixtures with provenance |
+| Scope and pad | [#8193](https://github.com/EffortlessMetrics/perl-lsp/issues/8193) | Expand lexical resolution proof without provider cutover | HIR baseline | Lexical resolution fixtures |
+| Package and stash | [#8194](https://github.com/EffortlessMetrics/perl-lsp/issues/8194) | Expand stash/typeglob/inheritance facts and workspace merge proof | HIR baseline, scope context | Stash/typeglob/inheritance fixtures |
+| Compile environment and module resolution | [#8206](https://github.com/EffortlessMetrics/perl-lsp/issues/8206), [#8242](https://github.com/EffortlessMetrics/perl-lsp/issues/8242) | HIR module-resolution candidate facts keyed to module requests | HIR, scope, stash, shared include-root builder | Compile-environment fixtures |
+| Imports and exports | [#8244](https://github.com/EffortlessMetrics/perl-lsp/issues/8244) | Canonical ImportSpec / ExportSet and visible symbols | Stash model, module resolution | Semantic scorecard and shadow compare |
+| Framework adapters | [#8195](https://github.com/EffortlessMetrics/perl-lsp/issues/8195), [#8245](https://github.com/EffortlessMetrics/perl-lsp/issues/8245) | Adapter registry and first Exporter-family fact projection | HIR, stash, imports | Framework fixtures with provenance |
 | Compile-time effects | [#8207](https://github.com/EffortlessMetrics/perl-lsp/issues/8207), [#3394](https://github.com/EffortlessMetrics/perl-lsp/issues/3394) | Effect log and dynamic-boundary packets | HIR, scope, stash, imports | Effect fixtures and dynamic-boundary proof |
 | Tooling IR / PIR | [#8196](https://github.com/EffortlessMetrics/perl-lsp/issues/8196) | PIR data model with context, no provider cutover | HIR, scope, stash | PIR lowering fixtures |
 | Differential oracle | [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199) ([#4389](https://github.com/EffortlessMetrics/perl-lsp/issues/4389) background) | Real-Perl conformance runner for proof lanes only | Fact schema and sandbox policy | Structured agreement receipt |
@@ -150,15 +150,15 @@ and link the verification receipt there.
 ## Immediate PR Sequence
 
 1. Keep [compiler capability status](COMPILER_CAPABILITY_STATUS.md) issue-owned
-   and visible without
-   copying generated parser metrics.
-2. Keep [HIR lowering coverage](status/hir_lowering.md) current as the
-   crate-local HIR baseline expands.
-3. Add ScopeGraph and Binding models for local lexical facts.
-4. Add PackageStash and glob-slot facts for explicit package symbols.
-5. Move scorecard-only import/export projections toward canonical
-   ImportSpec/ExportSet facts.
-6. Add fact-source tracing before any provider consumes the new compiler facts.
+   and visible without copying generated parser metrics.
+2. Finish [#8242](https://github.com/EffortlessMetrics/perl-lsp/issues/8242)
+   module-resolution candidate facts from HIR module requests.
+3. Move scorecard-only import/export projections toward canonical
+   [#8244](https://github.com/EffortlessMetrics/perl-lsp/issues/8244)
+   `ImportSpec` / `ExportSet` compiler facts.
+4. Add the [#8245](https://github.com/EffortlessMetrics/perl-lsp/issues/8245)
+   framework-adapter registry and first Exporter-family fact projection.
+5. Add fact-source tracing before any provider consumes the new compiler facts.
 
 ## Phase 0: Measurement Closeout To Capability Gaps
 

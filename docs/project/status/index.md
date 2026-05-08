@@ -22,6 +22,9 @@
 | Test counts & debt | [tests.md](tests.md) | Generator | Every merge |
 | Parser corpus & coverage | [parser.md](parser.md) | Generator | Every parser-touching merge |
 | HIR lowering coverage | [hir_lowering.md](hir_lowering.md) | Generator | Every HIR lowering merge |
+| Compiler fact substrate | [compiler_facts.md](compiler_facts.md) | Human | Compiler-substrate lane changes |
+| Provider cutover matrix | [provider_cutover.md](provider_cutover.md) | Human | Provider shadow/live state changes |
+| Module resolution conformance | [module_resolution.md](module_resolution.md) | Human | Module-resolution behavior or tracking changes |
 | Quality metrics | [quality.md](quality.md) | Generator | Every merge |
 | DAP debugger scorecard | [dap.md](dap.md) | Generator | Every DAP-touching merge |
 | Release readiness | [release.md](release.md) | Human | Ship readiness changes |
