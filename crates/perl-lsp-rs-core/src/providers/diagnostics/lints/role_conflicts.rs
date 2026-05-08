@@ -129,3 +129,221 @@ fn format_role_list(role_names: &[String]) -> String {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser::Parser;
+    use perl_semantic_analyzer::analysis::symbol::SymbolExtractor;
+    use perl_tdd_support::{must, must_some};
+
+    fn role_conflict_diags(source: &str) -> Vec<Diagnostic> {
+        let ast = must(Parser::new(source).parse());
+        let symbol_table = SymbolExtractor::new_with_source(source).extract(&ast);
+        let mut diagnostics = Vec::new();
+        check_role_conflicts(&ast, &symbol_table, &mut diagnostics);
+        diagnostics
+    }
+
+    fn has_code(diags: &[Diagnostic], code: &str) -> bool {
+        diags.iter().any(|d| d.code.as_deref() == Some(code))
+    }
+
+    #[test]
+    fn two_roles_with_same_method_fires_pl303() {
+        let source = r#"
+package MyRole::Greet;
+use Moo::Role;
+sub greet { return "hello" }
+
+package MyRole::Welcome;
+use Moo::Role;
+sub greet { return "welcome" }
+
+package MyClass;
+use Moo;
+with 'MyRole::Greet', 'MyRole::Welcome';
+"#;
+        let diags = role_conflict_diags(source);
+        assert!(
+            has_code(&diags, "PL303"),
+            "two roles with same method should fire PL303: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn class_overriding_conflicting_method_suppresses_pl303() {
+        let source = r#"
+package MyRole::Greet;
+use Moo::Role;
+sub greet { return "hello" }
+
+package MyRole::Welcome;
+use Moo::Role;
+sub greet { return "welcome" }
+
+package MyClass;
+use Moo;
+with 'MyRole::Greet', 'MyRole::Welcome';
+sub greet { return "my custom greeting" }
+"#;
+        let diags = role_conflict_diags(source);
+        assert!(
+            !has_code(&diags, "PL303"),
+            "class providing its own `greet` should suppress PL303: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn roles_with_non_overlapping_methods_no_pl303() {
+        let source = r#"
+package MyRole::Greet;
+use Moo::Role;
+sub greet { return "hello" }
+
+package MyRole::Farewell;
+use Moo::Role;
+sub farewell { return "goodbye" }
+
+package MyClass;
+use Moo;
+with 'MyRole::Greet', 'MyRole::Farewell';
+"#;
+        let diags = role_conflict_diags(source);
+        assert!(
+            !has_code(&diags, "PL303"),
+            "non-overlapping role methods should not fire PL303: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn single_role_consumed_no_pl303() {
+        let source = r#"
+package MyRole::Greet;
+use Moo::Role;
+sub greet { return "hello" }
+
+package MyClass;
+use Moo;
+with 'MyRole::Greet';
+"#;
+        let diags = role_conflict_diags(source);
+        assert!(
+            !has_code(&diags, "PL303"),
+            "single role consumption should not fire PL303: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn three_roles_all_with_same_method_fires_pl303() {
+        let source = r#"
+package MyRole::A;
+use Moo::Role;
+sub process { return "A" }
+
+package MyRole::B;
+use Moo::Role;
+sub process { return "B" }
+
+package MyRole::C;
+use Moo::Role;
+sub process { return "C" }
+
+package MyClass;
+use Moo;
+with 'MyRole::A', 'MyRole::B', 'MyRole::C';
+"#;
+        let diags = role_conflict_diags(source);
+        assert!(
+            has_code(&diags, "PL303"),
+            "three roles with the same method should fire PL303: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn diagnostic_message_names_conflicting_method() {
+        let source = r#"
+package MyRole::A;
+use Moo::Role;
+sub run { 1 }
+
+package MyRole::B;
+use Moo::Role;
+sub run { 1 }
+
+package MyClass;
+use Moo;
+with 'MyRole::A', 'MyRole::B';
+"#;
+        let diags = role_conflict_diags(source);
+        let pl303 = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL303")));
+        let msg = &pl303.message;
+        assert!(msg.contains("run"), "message should name the conflicting method `run`: {msg}");
+    }
+
+    #[test]
+    fn class_without_any_roles_no_pl303() {
+        let source = r#"
+package MyClass;
+use Moo;
+sub greet { "hello" }
+"#;
+        let diags = role_conflict_diags(source);
+        assert!(!has_code(&diags, "PL303"), "class with no roles should not fire PL303: {diags:?}");
+    }
+
+    #[test]
+    fn plain_package_without_oo_framework_no_pl303() {
+        let source = r#"
+package MyPackage;
+sub greet { "hello" }
+"#;
+        let diags = role_conflict_diags(source);
+        assert!(
+            !has_code(&diags, "PL303"),
+            "plain package without Moo/Moose should not fire PL303: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn pl303_diagnostic_includes_suggestion() {
+        let source = r#"
+package MyRole::A;
+use Moo::Role;
+sub handle { 1 }
+
+package MyRole::B;
+use Moo::Role;
+sub handle { 1 }
+
+package MyClass;
+use Moo;
+with 'MyRole::A', 'MyRole::B';
+"#;
+        let diags = role_conflict_diags(source);
+        let pl303 = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL303")));
+        assert!(pl303.suggestion.is_some(), "PL303 should include a resolution suggestion");
+    }
+
+    #[test]
+    fn moose_role_conflict_also_fires_pl303() {
+        let source = r#"
+package MyRole::A;
+use Moose::Role;
+sub serialize { 1 }
+
+package MyRole::B;
+use Moose::Role;
+sub serialize { 1 }
+
+package MyClass;
+use Moose;
+with 'MyRole::A', 'MyRole::B';
+"#;
+        let diags = role_conflict_diags(source);
+        assert!(
+            has_code(&diags, "PL303"),
+            "Moose::Role conflict should also fire PL303: {diags:?}"
+        );
+    }
+}

@@ -169,7 +169,7 @@ mod tests {
     use super::*;
     use perl_parser_core::parser::Parser;
     use perl_semantic_analyzer::analysis::symbol::SymbolExtractor;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     fn common_mistakes_diags(source: &str) -> Vec<Diagnostic> {
         let ast = must(Parser::new(source).parse());
@@ -203,6 +203,84 @@ mod tests {
         assert!(
             diags.iter().all(|d| d.code.as_deref() != Some("PL400")),
             "STDOUT handle should not be flagged as PL400: {diags:?}"
+        );
+    }
+
+    // --- PL403: assignment in condition ---
+
+    #[test]
+    fn assignment_in_if_condition_fires_pl403() {
+        let diags = common_mistakes_diags("my $x; if ($x = 5) { }");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL403")),
+            "assignment in `if` condition should fire PL403: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn comparison_in_if_condition_no_pl403() {
+        let diags = common_mistakes_diags("my $x = 0; if ($x == 5) { }");
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL403")),
+            "comparison in `if` condition should not fire PL403: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn assignment_in_while_condition_fires_pl403() {
+        let diags = common_mistakes_diags("my $line; while ($line = 'data') { last; }");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL403")),
+            "assignment in `while` condition should fire PL403: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn string_comparison_in_if_no_pl403() {
+        let diags = common_mistakes_diags(r#"my $s = ""; if ($s eq "hello") { }"#);
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL403")),
+            "string eq comparison should not fire PL403: {diags:?}"
+        );
+    }
+
+    // --- PL404: numeric comparison with potentially undefined value ---
+
+    #[test]
+    fn numeric_compare_with_explicit_undef_fires_pl404() {
+        let diags = common_mistakes_diags("if (undef == 5) { }");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL404")),
+            "numeric comparison with `undef` should fire PL404: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn numeric_compare_with_undef_not_equal_fires_pl404() {
+        let diags = common_mistakes_diags("if (undef != 0) { }");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL404")),
+            "!= comparison with `undef` should fire PL404: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn numeric_compare_with_declared_scalar_no_pl404() {
+        let diags = common_mistakes_diags("my $x = 10; if ($x == 5) { }");
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL404")),
+            "numeric compare with declared scalar should not fire PL404: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn pl403_diagnostic_suggests_double_equals() {
+        let diags = common_mistakes_diags("my $x; if ($x = 5) { }");
+        let pl403 = must_some(diags.iter().find(|d| d.code.as_deref() == Some("PL403")));
+        let suggestion = pl403.suggestion.as_deref().unwrap_or("");
+        assert!(
+            suggestion.contains("==") || suggestion.contains("eq"),
+            "PL403 suggestion should mention '==' or 'eq': {suggestion}"
         );
     }
 }
