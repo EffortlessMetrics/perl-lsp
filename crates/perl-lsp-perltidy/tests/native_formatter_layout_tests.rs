@@ -1,4 +1,6 @@
-use perl_lsp_perltidy::{FinalNewline, FormatConfig, NativeFormatter, PerlFormatter};
+use perl_lsp_perltidy::{
+    FinalNewline, FormatConfig, NativeFormatter, PerlFormatter, TextPosition, TextRange,
+};
 
 #[test]
 fn native_formatter_formats_simple_lexical_declarations() {
@@ -64,6 +66,37 @@ fn native_formatter_combines_simple_layout_with_final_newline_policy() {
     let result = formatter.format_document("my $x=1;", &config);
 
     assert_eq!(result.formatted, "my $x = 1;\n");
+}
+
+#[test]
+fn native_range_formatter_formats_only_selected_simple_declaration_line() {
+    let formatter = NativeFormatter::new();
+    let source = "my$x=1;\nmy$y=2;\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 7));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "my$x=1;\nmy $y = 2;\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(
+        result.edits[0].range,
+        TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 7))
+    );
+    assert_eq!(result.edits[0].new_text, "my $y = 2;");
+}
+
+#[test]
+fn native_range_formatter_treats_end_line_at_character_zero_as_exclusive() {
+    let formatter = NativeFormatter::new();
+    let source = "my$x=1;\nmy$y=2;\n";
+    let range = TextRange::new(TextPosition::new(0, 0), TextPosition::new(1, 0));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert_eq!(result.formatted, "my $x = 1;\nmy$y=2;\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].new_text, "my $x = 1;");
 }
 
 #[test]
