@@ -18,7 +18,7 @@
 //!   with source [`VisibleSymbolSource::ExportTag`]
 
 use perl_semantic_facts::{
-    Confidence, EntityKind, FileId, ImportKind, ImportSymbols, ScopeId, VisibleSymbol,
+    EntityKind, FileId, ImportKind, ImportSpec, ImportSymbols, ScopeId, VisibleSymbol,
     VisibleSymbolContext, VisibleSymbolSource,
 };
 
@@ -54,7 +54,7 @@ pub fn visible_symbols_at(
     collect_local_package(&mut result, shard);
 
     // ── 3–5. Import-derived visibility ──
-    collect_import_visibility(&mut result, file_id, import_export_index);
+    collect_import_visibility(&mut result, file_id, byte_offset, import_export_index);
 
     // ── 6. Constants (use constant) ──
     collect_constants(&mut result, shard);
@@ -150,15 +150,20 @@ fn collect_local_package(result: &mut Vec<VisibleSymbol>, shard: &FileFactShard)
 /// - `UseEmpty` → suppress defaults (skip)
 /// - `Use` (bare) → DefaultExport from `@EXPORT`
 /// - `UseTag` + `Tags(tags)` → ExportTag from `%EXPORT_TAGS`
-/// - `RequireThenImport` + `Explicit(names)` → ExplicitImport
+/// - `RequireThenImport` + `Explicit(names)` / `Mixed { names, .. }` → ExplicitImport
 fn collect_import_visibility(
     result: &mut Vec<VisibleSymbol>,
     file_id: FileId,
+    byte_offset: u32,
     import_export_index: &ImportExportIndex,
 ) {
     let imports = import_export_index.get_imports_for_file(file_id);
 
     for import in imports {
+        if import.span_start_byte.is_some_and(|start| start > byte_offset) {
+            continue;
+        }
+
         let context = VisibleSymbolContext::new(
             Some(import.module.clone()),
             import.anchor_id,
@@ -168,17 +173,8 @@ fn collect_import_visibility(
         match import.kind {
             ImportKind::UseExplicitList => {
                 // `use Foo qw(a b)` → make explicit names visible.
-                if let ImportSymbols::Explicit(ref names) = import.symbols {
-                    for name in names {
-                        result.push(VisibleSymbol {
-                            name: name.clone(),
-                            entity_id: None,
-                            source: VisibleSymbolSource::ExplicitImport,
-                            confidence: Confidence::High,
-                            context: Some(context.clone()),
-                        });
-                    }
-                }
+                collect_explicit_import_names(result, import, &context);
+                collect_import_tags(result, import, import_export_index, &context);
             }
 
             ImportKind::UseEmpty => {
@@ -203,42 +199,13 @@ fn collect_import_visibility(
 
             ImportKind::UseTag => {
                 // `use Foo ':tag'` → make tag members visible.
-                if let ImportSymbols::Tags(ref tag_names) = import.symbols {
-                    if let Some(export_set) =
-                        import_export_index.get_exports_for_module(&import.module)
-                    {
-                        for tag_name in tag_names {
-                            for tag in &export_set.tags {
-                                if tag.name == *tag_name {
-                                    for member in &tag.members {
-                                        result.push(VisibleSymbol {
-                                            name: member.clone(),
-                                            entity_id: None,
-                                            source: VisibleSymbolSource::ExportTag,
-                                            confidence: export_set.confidence,
-                                            context: Some(context.clone()),
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                collect_import_tags(result, import, import_export_index, &context);
             }
 
             ImportKind::RequireThenImport => {
                 // `require Foo; Foo->import(qw(x y))` → explicit names.
-                if let ImportSymbols::Explicit(ref names) = import.symbols {
-                    for name in names {
-                        result.push(VisibleSymbol {
-                            name: name.clone(),
-                            entity_id: None,
-                            source: VisibleSymbolSource::ExplicitImport,
-                            confidence: import.confidence,
-                            context: Some(context.clone()),
-                        });
-                    }
-                }
+                collect_explicit_import_names(result, import, &context);
+                collect_import_tags(result, import, import_export_index, &context);
             }
 
             ImportKind::UseConstant | ImportKind::Require | ImportKind::DynamicRequire => {
@@ -252,6 +219,62 @@ fn collect_import_visibility(
                 // known (ImportSymbols::Dynamic), so no specific symbols can be
                 // added to visibility here.  The dynamic_callable_may_be_visible_at
                 // query handles suppression at diagnostic time.
+            }
+        }
+    }
+}
+
+fn collect_explicit_import_names(
+    result: &mut Vec<VisibleSymbol>,
+    import: &ImportSpec,
+    context: &VisibleSymbolContext,
+) {
+    let names = match &import.symbols {
+        ImportSymbols::Explicit(names) => names.as_slice(),
+        ImportSymbols::Mixed { names, .. } => names.as_slice(),
+        _ => return,
+    };
+
+    for name in names {
+        result.push(VisibleSymbol {
+            name: name.clone(),
+            entity_id: None,
+            source: VisibleSymbolSource::ExplicitImport,
+            confidence: import.confidence,
+            context: Some(context.clone()),
+        });
+    }
+}
+
+fn collect_import_tags(
+    result: &mut Vec<VisibleSymbol>,
+    import: &ImportSpec,
+    import_export_index: &ImportExportIndex,
+    context: &VisibleSymbolContext,
+) {
+    let tag_names = match &import.symbols {
+        ImportSymbols::Tags(tags) => tags.as_slice(),
+        ImportSymbols::Mixed { tags, .. } => tags.as_slice(),
+        _ => return,
+    };
+
+    let Some(export_set) = import_export_index.get_exports_for_module(&import.module) else {
+        return;
+    };
+
+    for tag_name in tag_names {
+        for tag in &export_set.tags {
+            if tag.name != *tag_name {
+                continue;
+            }
+            for member in &tag.members {
+                result.push(VisibleSymbol {
+                    name: member.clone(),
+                    entity_id: None,
+                    source: VisibleSymbolSource::ExportTag,
+                    confidence: export_set.confidence,
+                    context: Some(context.clone()),
+                });
             }
         }
     }
@@ -307,6 +330,7 @@ fn bare_name(qualified: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_parser_core::{Parser, hir::lower_ast};
     use perl_semantic_facts::{
         AnchorFact, AnchorId, Confidence, EntityFact, EntityId, EntityKind, ExportSet, ExportTag,
         ImportKind, ImportSpec, ImportSymbols, Provenance, ScopeId,
@@ -473,6 +497,210 @@ mod tests {
             module_name: Some("Foo".to_string()),
             anchor_id: Some(AnchorId(500)),
         }
+    }
+
+    fn lower_hir_source(source: &str) -> perl_parser_core::hir::HirFile {
+        let mut parser = Parser::new(source);
+        let output = parser.parse_with_recovery();
+        lower_ast(&output.ast)
+    }
+
+    fn visible_symbol<'a>(
+        symbols: &'a [VisibleSymbol],
+        name: &str,
+        source: VisibleSymbolSource,
+    ) -> Result<&'a VisibleSymbol, Box<dyn std::error::Error>> {
+        symbols
+            .iter()
+            .find(|symbol| symbol.name == name && symbol.source == source)
+            .ok_or_else(|| format!("expected visible symbol {name} from {source:?}").into())
+    }
+
+    fn visible_names(symbols: &[VisibleSymbol]) -> Vec<&str> {
+        symbols.iter().map(|symbol| symbol.name.as_str()).collect()
+    }
+
+    #[test]
+    fn canonical_hir_import_export_facts_drive_ordered_visible_symbols()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let exporter = lower_hir_source(
+            "package HIR::Exporter;\n\
+             our @EXPORT = qw(defaulted);\n\
+             our @EXPORT_OK = qw(optional);\n\
+             our %EXPORT_TAGS = (all => [qw(defaulted optional tagged)]);\n",
+        );
+        let importer_source = "package HIR::Consumer;\n\
+             before_import();\n\
+             use HIR::Exporter qw(optional :all);\n\
+             optional();\n\
+             defaulted();\n\
+             tagged();\n";
+        let importer = lower_hir_source(importer_source);
+        let importer_file_id = FileId(91);
+        let shard = empty_shard(importer_file_id);
+        let mut index = ImportExportIndex::new();
+
+        let export_sets = exporter.stash_graph.export_sets();
+        let export_set = export_sets
+            .iter()
+            .find(|set| set.module_name.as_deref() == Some("HIR::Exporter"))
+            .ok_or("expected HIR::Exporter export set")?
+            .clone();
+        assert_eq!(export_set.provenance, Provenance::ExactAst);
+        assert_eq!(export_set.confidence, Confidence::High);
+        assert!(export_set.anchor_id.is_some(), "HIR export facts should preserve source anchor");
+        index.add_module_exports("file:///lib/HIR/Exporter.pm", "HIR::Exporter", export_set);
+
+        let import_specs = importer.compile_environment.import_specs(importer_file_id);
+        let import = import_specs
+            .iter()
+            .find(|spec| spec.module == "HIR::Exporter")
+            .ok_or("expected HIR::Exporter import spec")?;
+        assert_eq!(
+            import.symbols,
+            ImportSymbols::Mixed {
+                tags: vec!["all".to_string()],
+                names: vec!["optional".to_string()],
+            }
+        );
+        assert!(import.anchor_id.is_some(), "HIR import facts should preserve source anchor");
+        assert!(import.span_start_byte.is_some(), "HIR import facts should preserve order anchor");
+        index.add_file_imports("file:///lib/HIR/Consumer.pm", importer_file_id, import_specs);
+
+        let import_start = importer_source
+            .find("use HIR::Exporter")
+            .ok_or("expected import directive in fixture")? as u32;
+        let before_import = visible_symbols_at(
+            importer_file_id,
+            import_start.saturating_sub(1),
+            None,
+            &shard,
+            &index,
+        );
+        let before_names = visible_names(&before_import);
+        assert!(
+            !before_names.contains(&"optional")
+                && !before_names.contains(&"defaulted")
+                && !before_names.contains(&"tagged"),
+            "imports must not be visible before the HIR import directive: {before_names:?}"
+        );
+
+        let after_import =
+            importer_source.find("tagged();").ok_or("expected post-import call in fixture")? as u32;
+        let symbols = visible_symbols_at(importer_file_id, after_import, None, &shard, &index);
+        let optional = visible_symbol(&symbols, "optional", VisibleSymbolSource::ExplicitImport)?;
+        let optional_context = optional.context.as_ref().ok_or("expected optional context")?;
+        assert_eq!(optional_context.source_module.as_deref(), Some("HIR::Exporter"));
+        assert!(optional_context.source_import_anchor_id.is_some());
+
+        let defaulted = visible_symbol(&symbols, "defaulted", VisibleSymbolSource::ExportTag)?;
+        let defaulted_context = defaulted.context.as_ref().ok_or("expected defaulted context")?;
+        assert_eq!(defaulted_context.source_module.as_deref(), Some("HIR::Exporter"));
+        assert!(defaulted_context.source_export_anchor_id.is_some());
+
+        let tagged = visible_symbol(&symbols, "tagged", VisibleSymbolSource::ExportTag)?;
+        let tagged_context = tagged.context.as_ref().ok_or("expected tagged context")?;
+        assert_eq!(tagged_context.source_module.as_deref(), Some("HIR::Exporter"));
+        assert!(tagged_context.source_import_anchor_id.is_some());
+
+        Ok(())
+    }
+
+    #[test]
+    fn canonical_hir_empty_import_does_not_invent_default_visibility()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let exporter = lower_hir_source(
+            "package HIR::Empty;\n\
+             our @EXPORT = qw(defaulted);\n",
+        );
+        let importer_source = "package HIR::Consumer;\n\
+             use HIR::Empty ();\n\
+             defaulted();\n";
+        let importer = lower_hir_source(importer_source);
+        let importer_file_id = FileId(92);
+        let shard = empty_shard(importer_file_id);
+        let mut index = ImportExportIndex::new();
+
+        let export_set = exporter
+            .stash_graph
+            .export_sets()
+            .into_iter()
+            .find(|set| set.module_name.as_deref() == Some("HIR::Empty"))
+            .ok_or("expected HIR::Empty export set")?;
+        index.add_module_exports("file:///lib/HIR/Empty.pm", "HIR::Empty", export_set);
+
+        let import_specs = importer.compile_environment.import_specs(importer_file_id);
+        let import = import_specs
+            .iter()
+            .find(|spec| spec.module == "HIR::Empty")
+            .ok_or("expected HIR::Empty import spec")?;
+        assert_eq!(import.kind, ImportKind::UseEmpty);
+        assert_eq!(import.symbols, ImportSymbols::None);
+        index.add_file_imports("file:///lib/HIR/Consumer.pm", importer_file_id, import_specs);
+
+        let after_import = importer_source
+            .find("defaulted();")
+            .ok_or("expected post-import call in fixture")? as u32;
+        let symbols = visible_symbols_at(importer_file_id, after_import, None, &shard, &index);
+        let names = visible_names(&symbols);
+        assert!(!names.contains(&"defaulted"), "empty import should suppress defaults: {names:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn canonical_hir_dynamic_import_and_export_boundaries_fail_closed()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let exporter = lower_hir_source(
+            "package HIR::Dynamic;\n\
+             our @EXPORT = @runtime;\n",
+        );
+        let importer_source = "package HIR::Consumer;\n\
+             use HIR::Dynamic @names;\n\
+             require $runtime;\n\
+             runtime_symbol();\n";
+        let importer = lower_hir_source(importer_source);
+        let importer_file_id = FileId(93);
+        let shard = empty_shard(importer_file_id);
+        let mut index = ImportExportIndex::new();
+
+        assert!(
+            exporter.stash_graph.export_sets().is_empty(),
+            "dynamic export declarations must not produce exact ExportSet facts"
+        );
+        assert!(
+            exporter
+                .stash_graph
+                .dynamic_boundaries
+                .iter()
+                .any(|boundary| boundary.reason.contains("non-static")),
+            "dynamic export declarations should leave a dynamic-boundary fact"
+        );
+
+        let import_specs = importer.compile_environment.import_specs(importer_file_id);
+        assert!(
+            import_specs.iter().any(|spec| {
+                spec.module == "HIR::Dynamic"
+                    && spec.symbols == ImportSymbols::Dynamic
+                    && spec.provenance == Provenance::DynamicBoundary
+            }),
+            "dynamic import args should become a dynamic ImportSpec"
+        );
+        assert!(
+            import_specs.iter().any(|spec| spec.kind == ImportKind::DynamicRequire),
+            "dynamic require should become a DynamicRequire ImportSpec"
+        );
+        index.add_file_imports("file:///lib/HIR/Consumer.pm", importer_file_id, import_specs);
+
+        let after_import = importer_source
+            .find("runtime_symbol();")
+            .ok_or("expected post-import call in fixture")? as u32;
+        let symbols = visible_symbols_at(importer_file_id, after_import, None, &shard, &index);
+        let names = visible_names(&symbols);
+        assert!(
+            !names.contains(&"runtime_symbol"),
+            "dynamic import/export facts must fail closed instead of inventing visibility: {names:?}"
+        );
+        Ok(())
     }
 
     // ── Local package scope ──
@@ -763,6 +991,57 @@ mod tests {
 
         let x = x_sym.ok_or("expected x")?;
         assert_eq!(x.source, VisibleSymbolSource::ExplicitImport);
+        Ok(())
+    }
+
+    #[test]
+    fn require_then_import_mixed_symbols_include_names_and_tags()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let file_id = FileId(1);
+        let shard = empty_shard(file_id);
+        let mut index = ImportExportIndex::new();
+
+        let export_set = ExportSet {
+            module_name: Some("Bar".to_string()),
+            default_exports: Vec::new(),
+            optional_exports: Vec::new(),
+            tags: vec![ExportTag { name: "all".to_string(), members: vec!["tagged".to_string()] }],
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+            anchor_id: Some(AnchorId(201)),
+        };
+        index.add_module_exports("file:///lib/Bar.pm", "Bar", export_set);
+
+        let import = ImportSpec {
+            module: "Bar".to_string(),
+            kind: ImportKind::RequireThenImport,
+            symbols: ImportSymbols::Mixed {
+                names: vec!["named".to_string()],
+                tags: vec!["all".to_string()],
+            },
+            provenance: Provenance::ExactAst,
+            confidence: Confidence::High,
+            file_id: Some(file_id),
+            anchor_id: Some(AnchorId(104)),
+            scope_id: None,
+            span_start_byte: None,
+        };
+        index.add_file_imports("file:///lib/Main.pm", file_id, vec![import]);
+
+        let symbols = visible_symbols_at(file_id, 0, None, &shard, &index);
+
+        assert!(
+            symbols.iter().any(|symbol| symbol.name == "named"
+                && symbol.source == VisibleSymbolSource::ExplicitImport),
+            "mixed require+import should expose explicit names"
+        );
+        assert!(
+            symbols
+                .iter()
+                .any(|symbol| symbol.name == "tagged"
+                    && symbol.source == VisibleSymbolSource::ExportTag),
+            "mixed require+import should expose tag members"
+        );
         Ok(())
     }
 
