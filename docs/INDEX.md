@@ -102,6 +102,7 @@ Decision records, project status, and planning documents.
 - [Feature Governance](project/FEATURE_GOVERNANCE.md)
 - [Metric Stack](project/metrics/README.md) — contributor-facing summary of the layered scorecard model and the ratchet
 - [Latency Caps SLO Spec](specs/LATENCY_CAPS_SLO_SPEC.md)
+- [Native Formatter and Critic Replacement Contract](specs/NATIVE_FORMATTER_CRITIC_REPLACEMENT.md)
 - [Release Candidate Baseline](specs/RELEASE_CANDIDATE_BASELINE.md)
 
 ### Historical Analyses
