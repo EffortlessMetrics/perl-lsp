@@ -337,3 +337,17 @@ pub(super) fn fix_unquoted_bareword(
 
     actions
 }
+
+pub(super) fn fix_bareword_filehandle(diagnostic: &Diagnostic) -> Vec<CodeAction> {
+    let Some(handle_name) = source_utils::extract_quoted_value(&diagnostic.message) else {
+        return Vec::new();
+    };
+    let lexical_name = format!("${}_fh", handle_name.to_lowercase());
+
+    vec![diagnostic_action(
+        diagnostic,
+        format!("Replace bareword filehandle '{}' with lexical '{}'", handle_name, lexical_name),
+        CodeActionKind::QuickFix,
+        TextEdit { range: diagnostic.range, new_text: format!("my {lexical_name}") },
+    )]
+}

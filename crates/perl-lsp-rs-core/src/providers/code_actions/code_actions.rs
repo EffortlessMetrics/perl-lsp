@@ -204,7 +204,9 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_variable_shadowing(&qf_diag));
                     }
                     // PL400: Bareword filehandle
-                    c if c == DiagnosticCode::BarewordFilehandle.as_str() => {
+                    c if c == DiagnosticCode::BarewordFilehandle.as_str()
+                        || c == "native.io.bareword_filehandle" =>
+                    {
                         actions.extend(quick_fixes::fix_bareword_filehandle(&qf_diag));
                     }
                     // Perl::Critic policy alias for bareword filehandle.
@@ -615,6 +617,31 @@ mod tests {
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
 
         assert!(actions.iter().any(|a| a.title.contains("three-argument open() for safety")));
+    }
+
+    #[test]
+    fn test_native_bareword_filehandle_alias_produces_quick_fix() {
+        let source = "open FH, $path;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![Diagnostic {
+            range: (5, 7),
+            severity: DiagnosticSeverity::Warning,
+            code: Some("native.io.bareword_filehandle".to_string()),
+            message: "Bareword filehandle 'FH' should be lexical".to_string(),
+            suggestion: None,
+            related_information: Vec::new(),
+            tags: Vec::new(),
+        }];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let fix = actions
+            .iter()
+            .find(|action| action.title.contains("bareword filehandle"))
+            .expect("native bareword filehandle diagnostic should produce a quick fix");
+        assert_eq!(fix.edit.changes[0].new_text, "my $fh_fh");
     }
 
     #[test]
