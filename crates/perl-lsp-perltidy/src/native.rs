@@ -465,6 +465,41 @@ impl NativeFormatter {
         formatted
     }
 
+    fn format_safe_subset_range(source: &str, range: TextRange) -> (String, Vec<TextEdit>) {
+        let mut formatted = String::with_capacity(source.len());
+        let mut edits = Vec::new();
+
+        for (line_index, line) in source.split_inclusive('\n').enumerate() {
+            let line_index = line_index as u32;
+            let (body, line_ending) = split_line_ending(line);
+            let formatted_body = if range_includes_line(range, line_index) {
+                format_simple_lexical_line(body)
+            } else {
+                None
+            };
+
+            if let Some(formatted_line) = formatted_body {
+                if formatted_line != body {
+                    edits.push(TextEdit::new(
+                        TextRange::new(
+                            TextPosition::new(line_index, 0),
+                            TextPosition::new(line_index, utf16_len(body) as u32),
+                        ),
+                        formatted_line.clone(),
+                    ));
+                    formatted.push_str(&formatted_line);
+                } else {
+                    formatted.push_str(body);
+                }
+            } else {
+                formatted.push_str(body);
+            }
+            formatted.push_str(line_ending);
+        }
+
+        (formatted, edits)
+    }
+
     fn apply_final_newline(source: &str, config: &FormatConfig) -> String {
         match config.final_newline {
             FinalNewline::Preserve => source.to_string(),
@@ -504,7 +539,7 @@ impl PerlFormatter for NativeFormatter {
         FormatResult::replace_document(source, formatted)
     }
 
-    fn format_range(&self, source: &str, _range: TextRange, config: &FormatConfig) -> FormatResult {
+    fn format_range(&self, source: &str, range: TextRange, config: &FormatConfig) -> FormatResult {
         if matches!(config.mode, FormatterMode::Off) {
             return FormatResult::unchanged(source);
         }
@@ -515,7 +550,19 @@ impl PerlFormatter for NativeFormatter {
             return result;
         }
 
-        FormatResult::unchanged(source)
+        let (formatted, edits) = Self::format_safe_subset_range(source, range);
+        if let Err(diagnostic) = Self::validate_clean_parse(&formatted) {
+            let mut result = FormatResult::unchanged(source);
+            result.diagnostics.push(FormatDiagnostic::new(
+                PARSE_PRESERVATION_CODE,
+                FormatDiagnosticSeverity::Warning,
+                diagnostic.range,
+                "native range formatting skipped because formatted output did not parse cleanly",
+            ));
+            return result;
+        }
+
+        FormatResult { formatted, changed: !edits.is_empty(), edits, diagnostics: Vec::new() }
     }
 }
 
@@ -531,6 +578,11 @@ fn split_line_ending(line: &str) -> (&str, &str) {
     } else {
         (line, "")
     }
+}
+
+fn range_includes_line(range: TextRange, line: u32) -> bool {
+    line >= range.start.line
+        && (line < range.end.line || line == range.end.line && range.end.character > 0)
 }
 
 fn format_simple_lexical_line(line: &str) -> Option<String> {
