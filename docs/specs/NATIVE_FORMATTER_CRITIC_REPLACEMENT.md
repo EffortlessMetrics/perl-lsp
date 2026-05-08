@@ -399,6 +399,12 @@ The command runs the native formatter over curated fixtures, verifies expected
 output, idempotence, and parse preservation, and writes JSON receipts under
 `target/receipts/format/`.
 
+Fixtures that intentionally exercise unsafe literal-preserve surfaces can add a
+`*.expected-diagnostics.txt` sidecar with one expected diagnostic code per line.
+Those fixtures must leave the source unchanged, keep idempotence, and match the
+declared diagnostic codes; the receipt reports them as explicit bailouts rather
+than treating all formatter diagnostics as failures.
+
 Formatter metrics:
 
 ```text

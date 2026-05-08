@@ -34,6 +34,9 @@ struct NativeFormatFixturesReceipt {
     idempotent_count: usize,
     parse_preserved_count: usize,
     diagnostics_count: usize,
+    bailout_count: usize,
+    expected_diagnostics_fixture_count: usize,
+    expected_diagnostics_match_count: usize,
     fixtures: Vec<NativeFormatFixtureResult>,
     passed: bool,
 }
@@ -55,14 +58,18 @@ struct NativeFormatMetricReceipt {
 struct NativeFormatFixtureResult {
     path: String,
     expected_path: Option<String>,
+    expected_diagnostics_path: Option<String>,
     changed: bool,
     edit_count: usize,
     diagnostic_codes: Vec<String>,
+    expected_diagnostic_codes: Vec<String>,
     expected_matched: bool,
+    expected_diagnostics_matched: bool,
     idempotent: bool,
     source_parse_clean: bool,
     formatted_parse_clean: bool,
     parse_preserved: bool,
+    bailout: bool,
     passed: bool,
 }
 
@@ -100,6 +107,17 @@ pub fn check(config: NativeFormatCheckConfig) -> Result<()> {
         idempotent_count: results.iter().filter(|result| result.idempotent).count(),
         parse_preserved_count: results.iter().filter(|result| result.parse_preserved).count(),
         diagnostics_count: results.iter().map(|result| result.diagnostic_codes.len()).sum(),
+        bailout_count: results.iter().filter(|result| result.bailout).count(),
+        expected_diagnostics_fixture_count: results
+            .iter()
+            .filter(|result| result.expected_diagnostics_path.is_some())
+            .count(),
+        expected_diagnostics_match_count: results
+            .iter()
+            .filter(|result| {
+                result.expected_diagnostics_path.is_some() && result.expected_diagnostics_matched
+            })
+            .count(),
         passed: failed_count == 0,
         fixtures: results,
     };
@@ -179,38 +197,69 @@ fn check_fixture(
         ),
         None => None,
     };
+    let expected_diagnostics_path = expected_diagnostics_path_for(fixture);
+    let expected_diagnostic_codes =
+        match expected_diagnostics_path.as_ref().filter(|path| path.exists()) {
+            Some(path) => read_expected_diagnostic_codes(path)?,
+            None => Vec::new(),
+        };
 
     let result = formatter.format_document(&source, config);
     let second = formatter.format_document(&result.formatted, config);
     let expected_matched = expected.as_ref().is_none_or(|expected| expected == &result.formatted);
-    let source_parse_clean = parses_cleanly(&source);
-    let formatted_parse_clean = parses_cleanly(&result.formatted);
-    let idempotent =
-        second.formatted == result.formatted && !second.changed && second.diagnostics.is_empty();
-    let parse_preserved =
-        source_parse_clean && formatted_parse_clean && !has_parse_preservation_diagnostic(&result);
     let diagnostic_codes =
         result.diagnostics.iter().map(|diagnostic| diagnostic.code.clone()).collect::<Vec<_>>();
+    let second_diagnostic_codes =
+        second.diagnostics.iter().map(|diagnostic| diagnostic.code.clone()).collect::<Vec<_>>();
+    let expected_diagnostics_matched = diagnostic_codes == expected_diagnostic_codes;
+    let expects_diagnostics = expected_diagnostics_path.as_ref().is_some_and(|path| path.exists());
+    let source_parse_clean = parses_cleanly(&source);
+    let formatted_parse_clean = parses_cleanly(&result.formatted);
+    let idempotent = second.formatted == result.formatted
+        && !second.changed
+        && if expects_diagnostics {
+            second_diagnostic_codes == diagnostic_codes
+        } else {
+            second.diagnostics.is_empty()
+        };
+    let bailout = expects_diagnostics
+        && !result.changed
+        && result.edits.is_empty()
+        && result.formatted == source;
+    let parse_preserved = if expects_diagnostics {
+        result.formatted == source && !has_parse_preservation_diagnostic(&result)
+    } else {
+        source_parse_clean && formatted_parse_clean && !has_parse_preservation_diagnostic(&result)
+    };
     let passed = expected_matched
         && idempotent
         && parse_preserved
-        && source_parse_clean
-        && formatted_parse_clean
-        && diagnostic_codes.is_empty();
+        && expected_diagnostics_matched
+        && if expects_diagnostics {
+            bailout
+        } else {
+            source_parse_clean && formatted_parse_clean && diagnostic_codes.is_empty()
+        };
 
     Ok(NativeFormatFixtureResult {
         path: fixture.display().to_string(),
         expected_path: expected_path
             .filter(|path| path.exists())
             .map(|path| path.display().to_string()),
+        expected_diagnostics_path: expected_diagnostics_path
+            .filter(|path| path.exists())
+            .map(|path| path.display().to_string()),
         changed: result.changed,
         edit_count: result.edits.len(),
         diagnostic_codes,
+        expected_diagnostic_codes,
         expected_matched,
+        expected_diagnostics_matched,
         idempotent,
         source_parse_clean,
         formatted_parse_clean,
         parse_preserved,
+        bailout,
         passed,
     })
 }
@@ -218,6 +267,22 @@ fn check_fixture(
 fn expected_path_for(path: &Path) -> Option<PathBuf> {
     let stem = path.file_stem()?.to_str()?;
     Some(path.with_file_name(format!("{stem}.expected.pl")))
+}
+
+fn expected_diagnostics_path_for(path: &Path) -> Option<PathBuf> {
+    let stem = path.file_stem()?.to_str()?;
+    Some(path.with_file_name(format!("{stem}.expected-diagnostics.txt")))
+}
+
+fn read_expected_diagnostic_codes(path: &Path) -> Result<Vec<String>> {
+    let raw =
+        fs::read_to_string(path).wrap_err_with(|| format!("failed to read {}", path.display()))?;
+    Ok(raw
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(ToOwned::to_owned)
+        .collect())
 }
 
 fn parses_cleanly(source: &str) -> bool {
@@ -302,6 +367,39 @@ mod tests {
         )?)?;
         assert_eq!(idempotence["kind"], "native_format_idempotence");
         assert_eq!(idempotence["passed"], true);
+
+        Ok(())
+    }
+
+    #[test]
+    fn native_format_check_accepts_expected_literal_preserve_bailouts() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let fixtures = temp.path().join("fixtures");
+        let receipts = temp.path().join("receipts");
+        fs::create_dir_all(&fixtures)?;
+        let source = "=pod\n\n=head1 NAME\n\n=cut\n\nmy $x = 1;\n";
+        fs::write(fixtures.join("pod.pl"), source)?;
+        fs::write(fixtures.join("pod.expected.pl"), source)?;
+        fs::write(
+            fixtures.join("pod.expected-diagnostics.txt"),
+            "native.format.literal_preserve_region\n",
+        )?;
+
+        check(NativeFormatCheckConfig { fixtures, receipt_dir: receipts.clone() })?;
+
+        let fixture_receipt: Value = serde_json::from_str(&fs::read_to_string(
+            receipts.join("native-format-fixtures.json"),
+        )?)?;
+        assert_eq!(fixture_receipt["fixture_count"], 1);
+        assert_eq!(fixture_receipt["passed"], true);
+        assert_eq!(fixture_receipt["bailout_count"], 1);
+        assert_eq!(fixture_receipt["expected_diagnostics_fixture_count"], 1);
+        assert_eq!(fixture_receipt["expected_diagnostics_match_count"], 1);
+        assert_eq!(
+            fixture_receipt["fixtures"][0]["diagnostic_codes"][0],
+            "native.format.literal_preserve_region"
+        );
+        assert_eq!(fixture_receipt["fixtures"][0]["bailout"], true);
 
         Ok(())
     }
