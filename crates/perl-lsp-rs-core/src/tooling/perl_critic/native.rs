@@ -1196,7 +1196,7 @@ fn is_pipe_two_arg_string(node: &Node) -> bool {
     match &node.kind {
         NodeKind::String { value, .. } => {
             let trimmed = value.trim_matches(['"', '\'']);
-            trimmed.starts_with('|')
+            trimmed.starts_with('|') || trimmed.ends_with('|')
         }
         _ => false,
     }
@@ -2052,7 +2052,7 @@ mod tests {
 
     #[test]
     fn native_pipe_open_rule_reports_pipe_open_forms() {
-        let source = "use strict;\nuse warnings;\nopen(my $read_fh, '-|', 'ls');\nopen(my $write_fh, '|-', 'cat');\nopen(FH, '|cmd');\n";
+        let source = "use strict;\nuse warnings;\nopen(my $read_fh, '-|', 'ls');\nopen(my $write_fh, '|-', 'cat');\nopen(FH, '|cmd');\nopen(my $legacy_read_fh, 'cat |');\n";
         let ast = parse_source(source);
         let config = CriticConfig::default();
         let ctx = CriticContext::new(source, &ast, &config);
@@ -2060,7 +2060,7 @@ mod tests {
 
         let findings = registry.check(&ctx);
 
-        assert_eq!(findings.len(), 3);
+        assert_eq!(findings.len(), 4);
         for finding in &findings {
             assert_eq!(finding.rule_id, "native.io.pipe_open");
             assert_eq!(finding.category, CriticCategory::Security);
@@ -2080,6 +2080,10 @@ mod tests {
         assert_eq!(
             &source[findings[2].range.start.byte..findings[2].range.end.byte],
             "open(FH, '|cmd')"
+        );
+        assert_eq!(
+            &source[findings[3].range.start.byte..findings[3].range.end.byte],
+            "open(my $legacy_read_fh, 'cat |')"
         );
     }
 
