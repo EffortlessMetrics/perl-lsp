@@ -370,9 +370,22 @@ pub(super) fn fix_two_arg_open(
 
 fn two_arg_open_replacement(source: &str, range: (usize, usize)) -> Option<String> {
     let snippet = source.get(range.0..range.1)?.trim();
-    let call = snippet.trim_end_matches(';').trim();
+    parse_two_arg_open_call(snippet).or_else(|| {
+        let start = range.0.min(source.len());
+        let line_start = source[..start].rfind('\n').map_or(0, |idx| idx + 1);
+        let line_end = source[start..].find('\n').map_or(source.len(), |offset| start + offset);
+        parse_two_arg_open_call(&source[line_start..line_end])
+    })
+}
+
+fn parse_two_arg_open_call(snippet: &str) -> Option<String> {
+    let call = snippet.trim().trim_end_matches(';').trim();
     let body = call.strip_prefix("open")?.trim_start();
-    let body = body.strip_prefix('(')?.strip_suffix(')')?;
+    let body = if let Some(parenthesized) = body.strip_prefix('(') {
+        parenthesized.strip_suffix(')')?
+    } else {
+        body
+    };
     let (handle, path) = split_two_top_level_args(body)?;
 
     Some(format!("open({}, '<', {})", handle.trim(), path.trim()))
