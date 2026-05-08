@@ -3,7 +3,7 @@
 use crate::SourceLocation;
 use perl_semantic_facts::{
     AnchorId, Confidence, ExportSet, ExportTag, FileId, ImportKind, ImportSpec, ImportSymbols,
-    Provenance, ScopeId,
+    Provenance, ScopeId, VisibleSymbol, VisibleSymbolContext, VisibleSymbolSource,
 };
 use std::collections::BTreeMap;
 
@@ -115,6 +115,15 @@ impl HirFile {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
+    }
+
+    /// Project framework-adapter facts using the default registry.
+    ///
+    /// This is a compiler-substrate proof surface only. It does not change LSP
+    /// provider behavior.
+    #[must_use]
+    pub fn framework_facts(&self) -> FrameworkFactGraph {
+        FrameworkAdapterRegistry::default().project_file(self)
     }
 }
 
@@ -973,6 +982,233 @@ impl PragmaStateFact {
     #[must_use]
     pub fn has_feature(&self, feature: &str) -> bool {
         self.features.iter().any(|name| name == feature)
+    }
+}
+
+/// Registry for compiler-substrate framework adapters.
+///
+/// Adapters consume HIR/stash/import compiler facts and emit more compiler
+/// facts. They must not directly special-case diagnostics, completion, hover,
+/// or navigation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct FrameworkAdapterRegistry {
+    adapters: Vec<FrameworkAdapterKind>,
+}
+
+impl Default for FrameworkAdapterRegistry {
+    fn default() -> Self {
+        Self { adapters: vec![FrameworkAdapterKind::ExporterFamily] }
+    }
+}
+
+impl FrameworkAdapterRegistry {
+    /// Create a registry with an explicit adapter set.
+    #[must_use]
+    pub fn new(adapters: Vec<FrameworkAdapterKind>) -> Self {
+        Self { adapters }
+    }
+
+    /// Return the adapter kinds enabled in this registry.
+    #[must_use]
+    pub fn adapters(&self) -> &[FrameworkAdapterKind] {
+        &self.adapters
+    }
+
+    /// Project framework compiler facts from a lowered HIR file.
+    #[must_use]
+    pub fn project_file(&self, file: &HirFile) -> FrameworkFactGraph {
+        let mut graph = FrameworkFactGraph::default();
+
+        for adapter in &self.adapters {
+            match adapter {
+                FrameworkAdapterKind::ExporterFamily => {
+                    project_exporter_family_facts(file, &mut graph);
+                }
+            }
+        }
+
+        graph
+    }
+}
+
+/// Framework adapter kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum FrameworkAdapterKind {
+    /// Exporter and Exporter::Tiny-style export declarations.
+    ExporterFamily,
+}
+
+/// Facts emitted by framework adapters.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct FrameworkFactGraph {
+    /// Framework-exported symbol facts in stable source order.
+    pub exported_symbols: Vec<FrameworkExportedSymbolFact>,
+    /// Dynamic or unsupported framework boundaries in stable source order.
+    pub dynamic_boundaries: Vec<FrameworkDynamicBoundaryFact>,
+}
+
+/// One framework-exported symbol fact.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct FrameworkExportedSymbolFact {
+    /// Adapter that emitted this fact.
+    pub adapter: FrameworkAdapterKind,
+    /// Package declaring the export.
+    pub package: String,
+    /// Exported symbol name.
+    pub name: String,
+    /// Export relationship represented by this fact.
+    pub kind: FrameworkExportedSymbolKind,
+    /// Tag name when this is a `%EXPORT_TAGS` member.
+    pub tag_name: Option<String>,
+    /// Source range for the export declaration.
+    pub range: SourceLocation,
+    /// HIR item that produced the export declaration, when available.
+    pub declaration_item: Option<HirId>,
+    /// Backing visible-symbol fact for provider-shadow proof.
+    pub visible_symbol: VisibleSymbol,
+    /// Source declaration provenance.
+    pub source_provenance: Provenance,
+    /// Source declaration confidence.
+    pub source_confidence: Confidence,
+    /// Adapter fact provenance.
+    pub provenance: Provenance,
+    /// Adapter fact confidence.
+    pub confidence: Confidence,
+}
+
+/// Export relationship represented by a framework fact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum FrameworkExportedSymbolKind {
+    /// Symbol exported by default via `@EXPORT`.
+    Default,
+    /// Symbol available for explicit import via `@EXPORT_OK`.
+    Optional,
+    /// Symbol included in a `%EXPORT_TAGS` tag.
+    TagMember,
+}
+
+/// Dynamic or unsupported framework-adapter boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct FrameworkDynamicBoundaryFact {
+    /// Adapter that emitted this boundary.
+    pub adapter: FrameworkAdapterKind,
+    /// Package affected by the boundary, when known.
+    pub package: Option<String>,
+    /// Symbol affected by the boundary, when statically known.
+    pub symbol: Option<String>,
+    /// Source range for the boundary.
+    pub range: SourceLocation,
+    /// HIR item that also records this boundary, when available.
+    pub boundary_item: Option<HirId>,
+    /// Boundary category.
+    pub kind: StashDynamicBoundaryKind,
+    /// Short reason for status/proof output.
+    pub reason: String,
+    /// Adapter fact provenance.
+    pub provenance: Provenance,
+    /// Adapter fact confidence.
+    pub confidence: Confidence,
+}
+
+fn project_exporter_family_facts(file: &HirFile, graph: &mut FrameworkFactGraph) {
+    for declaration in &file.stash_graph.export_declarations {
+        match declaration.kind {
+            ExportDeclarationKind::Default => {
+                project_exported_symbols_from_declaration(
+                    declaration,
+                    FrameworkExportedSymbolKind::Default,
+                    None,
+                    graph,
+                );
+            }
+            ExportDeclarationKind::Optional => {
+                project_exported_symbols_from_declaration(
+                    declaration,
+                    FrameworkExportedSymbolKind::Optional,
+                    None,
+                    graph,
+                );
+            }
+            ExportDeclarationKind::Tag => {
+                project_exported_symbols_from_declaration(
+                    declaration,
+                    FrameworkExportedSymbolKind::TagMember,
+                    declaration.tag_name.as_deref(),
+                    graph,
+                );
+            }
+        }
+    }
+
+    for boundary in &file.stash_graph.dynamic_boundaries {
+        if boundary.kind != StashDynamicBoundaryKind::DynamicExportDeclaration {
+            continue;
+        }
+        graph.dynamic_boundaries.push(FrameworkDynamicBoundaryFact {
+            adapter: FrameworkAdapterKind::ExporterFamily,
+            package: boundary.package.clone(),
+            symbol: boundary.symbol.clone(),
+            range: boundary.range,
+            boundary_item: boundary.boundary_item,
+            kind: boundary.kind,
+            reason: boundary.reason.clone(),
+            provenance: Provenance::DynamicBoundary,
+            confidence: Confidence::Low,
+        });
+    }
+}
+
+fn project_exported_symbols_from_declaration(
+    declaration: &ExportDeclaration,
+    kind: FrameworkExportedSymbolKind,
+    tag_name: Option<&str>,
+    graph: &mut FrameworkFactGraph,
+) {
+    for symbol in &declaration.symbols {
+        graph.exported_symbols.push(FrameworkExportedSymbolFact {
+            adapter: FrameworkAdapterKind::ExporterFamily,
+            package: declaration.package.clone(),
+            name: symbol.clone(),
+            kind,
+            tag_name: tag_name.map(str::to_string),
+            range: declaration.range,
+            declaration_item: declaration.declaration_item,
+            visible_symbol: visible_symbol_for_export(declaration, symbol, kind),
+            source_provenance: stash_provenance_to_fact(declaration.provenance),
+            source_confidence: stash_confidence_to_fact(declaration.confidence),
+            provenance: Provenance::FrameworkSynthesis,
+            confidence: Confidence::Medium,
+        });
+    }
+}
+
+fn visible_symbol_for_export(
+    declaration: &ExportDeclaration,
+    symbol: &str,
+    kind: FrameworkExportedSymbolKind,
+) -> VisibleSymbol {
+    let source = match kind {
+        FrameworkExportedSymbolKind::Default => VisibleSymbolSource::DefaultExport,
+        FrameworkExportedSymbolKind::Optional => VisibleSymbolSource::ExplicitImport,
+        FrameworkExportedSymbolKind::TagMember => VisibleSymbolSource::ExportTag,
+    };
+
+    VisibleSymbol {
+        name: symbol.to_string(),
+        entity_id: None,
+        source,
+        confidence: Confidence::Medium,
+        context: Some(VisibleSymbolContext::new(
+            Some(declaration.package.clone()),
+            None,
+            Some(AnchorId(declaration.range.start as u64)),
+        )),
     }
 }
 

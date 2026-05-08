@@ -1,7 +1,8 @@
 use perl_parser_core::hir::{
     CompileConfidence, CompileEnvironment, CompileEnvironmentBoundaryKind, CompileProvenance,
-    HirFile, HirKind, IncRootKind, ModuleResolutionRoot, PragmaArgumentKind, RecoveryConfidence,
-    ScopeGraph, StashGraph, lower_ast,
+    FrameworkAdapterKind, FrameworkAdapterRegistry, FrameworkExportedSymbolKind, HirFile, HirKind,
+    IncRootKind, ModuleResolutionRoot, PragmaArgumentKind, RecoveryConfidence, ScopeGraph,
+    StashGraph, lower_ast,
 };
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 use perl_semantic_facts::{
@@ -372,6 +373,54 @@ fn render_resolved_module_resolution_candidates(
                 root.path, root.kind, root.source, root.candidate_path, root.precedence
             ));
         }
+    }
+
+    lines.join("\n")
+}
+
+fn render_framework_facts(file: &HirFile) -> String {
+    let graph = file.framework_facts();
+    let mut lines = Vec::new();
+
+    lines.push("[exports]".to_string());
+    for fact in &graph.exported_symbols {
+        let tag = fact.tag_name.as_deref().unwrap_or("<none>");
+        let context = fact
+            .visible_symbol
+            .context
+            .as_ref()
+            .and_then(|context| context.source_module.as_deref())
+            .unwrap_or("<none>");
+        lines.push(format!(
+            "{:?} {}::{} {:?} tag={} visible={:?} ctx={} source={:?}/{:?} fact={:?}/{:?}",
+            fact.adapter,
+            fact.package,
+            fact.name,
+            fact.kind,
+            tag,
+            fact.visible_symbol.source,
+            context,
+            fact.source_provenance,
+            fact.source_confidence,
+            fact.provenance,
+            fact.confidence
+        ));
+    }
+
+    lines.push("[boundaries]".to_string());
+    for boundary in &graph.dynamic_boundaries {
+        let package = boundary.package.as_deref().unwrap_or("<unknown>");
+        let symbol = boundary.symbol.as_deref().unwrap_or("<unknown>");
+        lines.push(format!(
+            "{:?} {}::{} {:?} {:?}/{:?} reason={}",
+            boundary.adapter,
+            package,
+            symbol,
+            boundary.kind,
+            boundary.provenance,
+            boundary.confidence,
+            boundary.reason
+        ));
     }
 
     lines.join("\n")
@@ -871,6 +920,59 @@ fn hir_stash_graph_projects_export_sets_from_static_declarations()
 }
 
 #[test]
+fn hir_framework_adapter_registry_projects_exporter_family_facts()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(
+        "package Export::One;\n\
+         use Exporter ();\n\
+         our @EXPORT = qw(default_one default_two);\n\
+         our @EXPORT_OK = ('optional_one', \"optional_two\");\n\
+         our %EXPORT_TAGS = (\n\
+             all => [qw(default_one default_two optional_one optional_two)],\n\
+         );\n\
+         package Export::TinyDemo;\n\
+         use Exporter::Tiny qw(import);\n\
+         our @EXPORT_OK = qw(tiny_optional);\n",
+    );
+
+    let registry = FrameworkAdapterRegistry::default();
+    assert_eq!(registry.adapters(), &[FrameworkAdapterKind::ExporterFamily]);
+
+    assert_eq!(
+        render_framework_facts(&file),
+        "[exports]\n\
+         ExporterFamily Export::One::default_one Default tag=<none> visible=DefaultExport ctx=Export::One source=ExactAst/High fact=FrameworkSynthesis/Medium\n\
+         ExporterFamily Export::One::default_two Default tag=<none> visible=DefaultExport ctx=Export::One source=ExactAst/High fact=FrameworkSynthesis/Medium\n\
+         ExporterFamily Export::One::optional_one Optional tag=<none> visible=ExplicitImport ctx=Export::One source=ExactAst/High fact=FrameworkSynthesis/Medium\n\
+         ExporterFamily Export::One::optional_two Optional tag=<none> visible=ExplicitImport ctx=Export::One source=ExactAst/High fact=FrameworkSynthesis/Medium\n\
+         ExporterFamily Export::One::default_one TagMember tag=all visible=ExportTag ctx=Export::One source=ExactAst/High fact=FrameworkSynthesis/Medium\n\
+         ExporterFamily Export::One::default_two TagMember tag=all visible=ExportTag ctx=Export::One source=ExactAst/High fact=FrameworkSynthesis/Medium\n\
+         ExporterFamily Export::One::optional_one TagMember tag=all visible=ExportTag ctx=Export::One source=ExactAst/High fact=FrameworkSynthesis/Medium\n\
+         ExporterFamily Export::One::optional_two TagMember tag=all visible=ExportTag ctx=Export::One source=ExactAst/High fact=FrameworkSynthesis/Medium\n\
+         ExporterFamily Export::TinyDemo::tiny_optional Optional tag=<none> visible=ExplicitImport ctx=Export::TinyDemo source=ExactAst/High fact=FrameworkSynthesis/Medium\n\
+         [boundaries]"
+    );
+
+    let graph = registry.project_file(&file);
+    let optional = graph
+        .exported_symbols
+        .iter()
+        .find(|fact| fact.name == "optional_one")
+        .ok_or("expected optional_one framework fact")?;
+    assert_eq!(optional.kind, FrameworkExportedSymbolKind::Optional);
+    assert!(optional.declaration_item.is_some(), "framework fact should preserve HIR source item");
+    let context =
+        optional.visible_symbol.context.as_ref().ok_or("expected visible symbol context")?;
+    assert_eq!(context.source_module.as_deref(), Some("Export::One"));
+    assert!(
+        context.source_export_anchor_id.is_some(),
+        "visible symbol should preserve export anchor"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn hir_stash_graph_fails_closed_for_dynamic_export_declarations()
 -> Result<(), Box<dyn std::error::Error>> {
     let file = lower_source(
@@ -896,6 +998,40 @@ fn hir_stash_graph_fails_closed_for_dynamic_export_declarations()
         })
         .count();
     assert_eq!(dynamic_export_boundaries, 2);
+
+    Ok(())
+}
+
+#[test]
+fn hir_framework_adapter_registry_fails_closed_for_dynamic_exporter_shapes()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(
+        "package Dynamic::Exports;\n\
+         use Exporter 'import';\n\
+         our @EXPORT = @runtime;\n\
+         our @EXPORT_OK = qw(stable_optional);\n\
+         our %EXPORT_TAGS = (all => $runtime);\n",
+    );
+
+    assert_eq!(
+        render_framework_facts(&file),
+        "[exports]\n\
+         ExporterFamily Dynamic::Exports::stable_optional Optional tag=<none> visible=ExplicitImport ctx=Dynamic::Exports source=ExactAst/High fact=FrameworkSynthesis/Medium\n\
+         [boundaries]\n\
+         ExporterFamily Dynamic::Exports::EXPORT DynamicExportDeclaration DynamicBoundary/Low reason=export declaration has non-static members\n\
+         ExporterFamily Dynamic::Exports::EXPORT_TAGS DynamicExportDeclaration DynamicBoundary/Low reason=export tag declaration has non-static members"
+    );
+
+    let graph = file.framework_facts();
+    assert_eq!(graph.exported_symbols.len(), 1);
+    assert_eq!(graph.dynamic_boundaries.len(), 2);
+    assert!(
+        graph.dynamic_boundaries.iter().all(|boundary| {
+            boundary.provenance == Provenance::DynamicBoundary
+                && boundary.confidence == Confidence::Low
+        }),
+        "dynamic Exporter shapes should stay fail-closed"
+    );
 
     Ok(())
 }
