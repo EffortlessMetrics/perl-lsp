@@ -591,7 +591,7 @@ fn range_includes_line(range: TextRange, line: u32) -> bool {
 }
 
 fn format_simple_line(line: &str, config: &FormatConfig) -> Option<String> {
-    format_simple_if_line(line, config)
+    format_simple_control_block_line(line, config)
         .or_else(|| format_simple_subroutine_line(line, config))
         .or_else(|| format_simple_lexical_line(line))
 }
@@ -638,7 +638,7 @@ fn format_simple_subroutine_line(line: &str, config: &FormatConfig) -> Option<St
     Some(formatted)
 }
 
-fn format_simple_if_line(line: &str, config: &FormatConfig) -> Option<String> {
+fn format_simple_control_block_line(line: &str, config: &FormatConfig) -> Option<String> {
     let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
     let (indent, body) = line.split_at(indent_len);
     if body.is_empty() || body.contains('#') {
@@ -655,7 +655,7 @@ fn format_simple_if_line(line: &str, config: &FormatConfig) -> Option<String> {
         tokens.push(token);
     }
 
-    format_simple_if_tokens(&tokens, indent, config)
+    format_simple_control_block_tokens(&tokens, indent, config)
 }
 
 fn format_simple_subroutine_tokens(
@@ -699,7 +699,7 @@ fn format_simple_subroutine_tokens(
     Some(formatted)
 }
 
-fn format_simple_if_tokens(
+fn format_simple_control_block_tokens(
     tokens: &[perl_parser_core::Token],
     indent: &str,
     config: &FormatConfig,
@@ -709,7 +709,12 @@ fn format_simple_if_tokens(
     if tokens.len() < 6 {
         return None;
     }
-    if tokens[0].kind != TokenKind::If || tokens[1].kind != TokenKind::LeftParen {
+    let keyword = match tokens[0].kind {
+        TokenKind::If => "if",
+        TokenKind::While => "while",
+        _ => return None,
+    };
+    if tokens[1].kind != TokenKind::LeftParen {
         return None;
     }
 
@@ -724,7 +729,7 @@ fn format_simple_if_tokens(
     let body_tokens = &tokens[next_index + 2..tokens.len() - 1];
     let statements = format_simple_statement_block(body_tokens)?;
     let body_indent = format!("{indent}{}", indent_unit(config));
-    let mut formatted = format!("{indent}if ({condition}) {{");
+    let mut formatted = format!("{indent}{keyword} ({condition}) {{");
 
     if statements.is_empty() {
         formatted.push('\n');
