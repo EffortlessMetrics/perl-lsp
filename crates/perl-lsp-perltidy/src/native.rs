@@ -875,7 +875,7 @@ fn format_simple_lexical_tokens(tokens: &[perl_parser_core::Token]) -> Option<St
         return None;
     }
 
-    let (variable, next_index) = format_variable_tokens(tokens, 1)?;
+    let (variable, next_index) = format_lexical_target_tokens(tokens, 1)?;
     let semicolon_index = tokens.len() - 1;
     if next_index == semicolon_index {
         Some(format!("{keyword} {variable};"))
@@ -884,6 +884,44 @@ fn format_simple_lexical_tokens(tokens: &[perl_parser_core::Token]) -> Option<St
         Some(format!("{keyword} {variable} = {value};"))
     } else {
         None
+    }
+}
+
+fn format_lexical_target_tokens(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+) -> Option<(String, usize)> {
+    format_variable_list_tokens(tokens, start).or_else(|| format_variable_tokens(tokens, start))
+}
+
+fn format_variable_list_tokens(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+) -> Option<(String, usize)> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.get(start)?.kind != TokenKind::LeftParen {
+        return None;
+    }
+
+    let mut variables = Vec::new();
+    let mut index = start + 1;
+    if tokens.get(index)?.kind == TokenKind::RightParen {
+        return Some(("()".to_string(), index + 1));
+    }
+
+    loop {
+        let (variable, next_index) = format_variable_tokens(tokens, index)?;
+        variables.push(variable);
+        index = next_index;
+
+        match tokens.get(index)?.kind {
+            TokenKind::Comma => index += 1,
+            TokenKind::RightParen => {
+                return Some((format!("({})", variables.join(", ")), index + 1));
+            }
+            _ => return None,
+        }
     }
 }
 
