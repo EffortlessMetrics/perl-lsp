@@ -701,24 +701,13 @@ fn format_simple_subroutine_tokens(
     let body_tokens = &tokens[3..tokens.len() - 1];
     let statements = format_simple_statement_block(body_tokens)?;
     let body_indent = format!("{indent}{}", indent_unit(config));
-    let mut formatted = format!("{indent}sub {} {{", tokens[1].text);
-
-    if statements.is_empty() {
-        formatted.push('\n');
-        formatted.push_str(indent);
-        formatted.push('}');
-        return Some(formatted);
-    }
-
-    for statement in statements {
-        formatted.push('\n');
-        formatted.push_str(&body_indent);
-        formatted.push_str(&statement);
-    }
-    formatted.push('\n');
-    formatted.push_str(indent);
-    formatted.push('}');
-    Some(formatted)
+    Some(render_simple_block_doc(
+        format!("{indent}sub {} {{", tokens[1].text),
+        &statements,
+        indent,
+        &body_indent,
+        config,
+    ))
 }
 
 fn format_simple_control_block_tokens(
@@ -763,42 +752,55 @@ fn format_simple_control_block_tokens(
     }
 
     let body_indent = format!("{indent}{}", indent_unit(config));
-    let mut formatted = format!("{indent}{keyword} ({condition}) {{");
-
-    if statements.is_empty() {
-        formatted.push('\n');
-        formatted.push_str(indent);
-        formatted.push('}');
-    } else {
-        for statement in statements {
-            formatted.push('\n');
-            formatted.push_str(&body_indent);
-            formatted.push_str(&statement);
-        }
-        formatted.push('\n');
-        formatted.push_str(indent);
-        formatted.push('}');
-    }
+    let mut formatted = render_simple_block_doc(
+        format!("{indent}{keyword} ({condition}) {{"),
+        &statements,
+        indent,
+        &body_indent,
+        config,
+    );
 
     if let Some(else_statements) = else_statements {
-        formatted.push_str(" else {");
-        if else_statements.is_empty() {
-            formatted.push('\n');
-            formatted.push_str(indent);
-            formatted.push('}');
-            return Some(formatted);
-        }
-
-        for statement in else_statements {
-            formatted.push('\n');
-            formatted.push_str(&body_indent);
-            formatted.push_str(&statement);
-        }
-        formatted.push('\n');
-        formatted.push_str(indent);
-        formatted.push('}');
+        formatted.push_str(&render_simple_else_doc(&else_statements, indent, &body_indent, config));
     }
     Some(formatted)
+}
+
+fn render_simple_block_doc(
+    header: String,
+    statements: &[String],
+    indent: &str,
+    body_indent: &str,
+    config: &FormatConfig,
+) -> String {
+    let mut parts = vec![FormatDoc::text(header)];
+    push_simple_block_body_docs(&mut parts, statements, indent, body_indent);
+    FormatDoc::group(parts).render(config)
+}
+
+fn render_simple_else_doc(
+    statements: &[String],
+    indent: &str,
+    body_indent: &str,
+    config: &FormatConfig,
+) -> String {
+    let mut parts = vec![FormatDoc::text(" else {")];
+    push_simple_block_body_docs(&mut parts, statements, indent, body_indent);
+    FormatDoc::group(parts).render(config)
+}
+
+fn push_simple_block_body_docs(
+    parts: &mut Vec<FormatDoc>,
+    statements: &[String],
+    indent: &str,
+    body_indent: &str,
+) {
+    for statement in statements {
+        parts.push(FormatDoc::HardLine);
+        parts.push(FormatDoc::text(format!("{body_indent}{statement}")));
+    }
+    parts.push(FormatDoc::HardLine);
+    parts.push(FormatDoc::text(format!("{indent}}}")));
 }
 
 fn format_simple_else_branch(
