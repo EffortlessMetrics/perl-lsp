@@ -1060,19 +1060,43 @@ fn format_simple_method_call_tokens(
 ) -> Option<(String, usize)> {
     use perl_parser_core::TokenKind;
 
-    let (receiver, mut index) = format_variable_tokens(tokens, start)?;
-    if tokens.get(index)?.kind != TokenKind::Arrow {
-        return None;
-    }
-    index += 1;
+    let (mut expression, mut index) = format_variable_tokens(tokens, start)?;
+    let mut saw_method = false;
 
-    let method = tokens.get(index)?;
-    if method.kind != TokenKind::Identifier || tokens.get(index + 1)?.kind != TokenKind::LeftParen {
+    loop {
+        if tokens.get(index)?.kind != TokenKind::Arrow {
+            break;
+        }
+        let (method_call, next_index) =
+            format_simple_method_call_segment(tokens, index, &expression)?;
+        expression = method_call;
+        index = next_index;
+        saw_method = true;
+    }
+
+    saw_method.then_some((expression, index))
+}
+
+fn format_simple_method_call_segment(
+    tokens: &[perl_parser_core::Token],
+    arrow_index: usize,
+    receiver: &str,
+) -> Option<(String, usize)> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.get(arrow_index)?.kind != TokenKind::Arrow {
         return None;
     }
-    index += 2;
+
+    let method = tokens.get(arrow_index + 1)?;
+    if method.kind != TokenKind::Identifier
+        || tokens.get(arrow_index + 2)?.kind != TokenKind::LeftParen
+    {
+        return None;
+    }
 
     let mut args = Vec::new();
+    let mut index = arrow_index + 3;
     if tokens.get(index)?.kind == TokenKind::RightParen {
         return Some((format!("{receiver}->{}()", method.text), index + 1));
     }
@@ -1086,7 +1110,7 @@ fn format_simple_method_call_tokens(
             TokenKind::Comma => index += 1,
             TokenKind::RightParen => {
                 return Some((
-                    render_simple_method_call_doc(&receiver, method.text.as_ref(), &args),
+                    render_simple_method_call_doc(receiver, method.text.as_ref(), &args),
                     index + 1,
                 ));
             }
