@@ -1608,6 +1608,7 @@ version = "0.13.4"
 name = "perl-lsp-perltidy"
 version = "0.13.4"
 dependencies = [
+ "perl-parser-core",
  "perl-subprocess-runtime",
  "perl-tdd-support",
  "serde",
