@@ -145,6 +145,66 @@ pub trait CriticRule: Send + Sync {
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>);
 }
 
+/// Registry for Rust-native critic rules.
+///
+/// The registry is intentionally small orchestration: it owns rule instances,
+/// runs them against a shared context, and returns their findings in registry
+/// order. Runtime diagnostic wiring can build on this without each caller
+/// needing to know how native rules are stored or executed.
+#[derive(Default)]
+pub struct NativeCriticRegistry {
+    rules: Vec<Box<dyn CriticRule>>,
+}
+
+impl NativeCriticRegistry {
+    /// Create an empty native critic registry.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a registry from prebuilt rules.
+    #[must_use]
+    pub fn with_rules(rules: Vec<Box<dyn CriticRule>>) -> Self {
+        Self { rules }
+    }
+
+    /// Add a rule to the registry.
+    pub fn add_rule(&mut self, rule: Box<dyn CriticRule>) {
+        self.rules.push(rule);
+    }
+
+    /// Number of rules in the registry.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.rules.len()
+    }
+
+    /// Whether the registry has no rules.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.rules.is_empty()
+    }
+
+    /// Stable IDs for registered rules, in execution order.
+    #[must_use]
+    pub fn rule_ids(&self) -> Vec<&'static str> {
+        self.rules.iter().map(|rule| rule.id()).collect()
+    }
+
+    /// Run all registered rules and return collected findings.
+    #[must_use]
+    pub fn check(&self, ctx: &CriticContext<'_>) -> Vec<CriticFinding> {
+        let mut findings = Vec::new();
+
+        for rule in &self.rules {
+            rule.check(ctx, &mut findings);
+        }
+
+        findings
+    }
+}
+
 /// Build an empty AST node for tests that only exercise rule contract plumbing.
 #[cfg(test)]
 fn empty_program_node() -> Node {
@@ -185,6 +245,41 @@ mod tests {
                     },
                     message: "dummy finding".to_string(),
                     explanation: "dummy explanation".to_string(),
+                    suppression_key: self.id().to_string(),
+                    related: Vec::new(),
+                    fix: None,
+                });
+            }
+        }
+    }
+
+    struct SecondDummyRule;
+
+    impl CriticRule for SecondDummyRule {
+        fn id(&self) -> &'static str {
+            "native.test.second"
+        }
+
+        fn category(&self) -> CriticCategory {
+            CriticCategory::Maintainability
+        }
+
+        fn default_severity(&self) -> Severity {
+            Severity::Cruel
+        }
+
+        fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+            if ctx.source.contains("second") {
+                out.push(CriticFinding {
+                    rule_id: self.id().to_string(),
+                    category: self.category(),
+                    severity: self.default_severity(),
+                    range: Range {
+                        start: Position { byte: 6, line: 0, column: 6 },
+                        end: Position { byte: 12, line: 0, column: 12 },
+                    },
+                    message: "second finding".to_string(),
+                    explanation: "second explanation".to_string(),
                     suppression_key: self.id().to_string(),
                     related: Vec::new(),
                     fix: None,
@@ -269,5 +364,40 @@ mod tests {
         assert_eq!(violation.severity, Severity::Stern);
         assert_eq!(violation.range, finding.range);
         assert_eq!(violation.file, "lib/App.pm");
+    }
+
+    #[test]
+    fn native_critic_registry_runs_rules_in_order() {
+        let ast = empty_program_node();
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new("dummy second", &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(DummyRule), Box::new(SecondDummyRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(registry.len(), 2);
+        assert!(!registry.is_empty());
+        assert_eq!(registry.rule_ids(), vec!["native.test.dummy", "native.test.second"]);
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].rule_id, "native.test.dummy");
+        assert_eq!(findings[1].rule_id, "native.test.second");
+    }
+
+    #[test]
+    fn native_critic_registry_can_be_extended_incrementally() {
+        let ast = empty_program_node();
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new("second", &ast, &config);
+        let mut registry = NativeCriticRegistry::new();
+
+        assert!(registry.is_empty());
+        registry.add_rule(Box::new(SecondDummyRule));
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(registry.rule_ids(), vec!["native.test.second"]);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].category, CriticCategory::Maintainability);
     }
 }
