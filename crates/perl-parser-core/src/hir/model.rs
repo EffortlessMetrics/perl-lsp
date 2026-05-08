@@ -1,6 +1,9 @@
 //! HIR data model.
 
 use crate::SourceLocation;
+use perl_semantic_facts::{
+    AnchorId, Confidence, FileId, ImportKind, ImportSpec, ImportSymbols, Provenance, ScopeId,
+};
 
 /// Stable identifier for a HIR item within one lowered file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -465,6 +468,18 @@ pub struct CompileEnvironment {
 }
 
 impl CompileEnvironment {
+    /// Project HIR compile directives into canonical import facts.
+    ///
+    /// This is a compiler-substrate projection only. It does not inspect the
+    /// filesystem, execute Perl, or change workspace/LSP provider behavior.
+    #[must_use]
+    pub fn import_specs(&self, file_id: FileId) -> Vec<ImportSpec> {
+        self.directives
+            .iter()
+            .filter_map(|directive| import_spec_from_directive(directive, file_id))
+            .collect()
+    }
+
     /// Build module-resolution candidate facts from static module requests.
     ///
     /// The HIR layer records lexical include-root effects and module requests,
@@ -931,6 +946,293 @@ pub enum CompileConfidence {
     Medium,
     /// Low-confidence dynamic-boundary fact.
     Low,
+}
+
+fn import_spec_from_directive(directive: &CompileDirective, file_id: FileId) -> Option<ImportSpec> {
+    match directive.action {
+        CompileDirectiveAction::Use => {
+            let module = directive.module.as_deref()?;
+            if is_version_pragma(module) {
+                return None;
+            }
+            if module == "constant" {
+                return Some(classify_constant_import(directive, file_id));
+            }
+
+            let (kind, symbols, provenance, confidence) =
+                classify_import_args(&directive.args, module, directive.range);
+            Some(import_spec(
+                module.to_string(),
+                kind,
+                symbols,
+                provenance,
+                confidence,
+                directive,
+                file_id,
+            ))
+        }
+        CompileDirectiveAction::Require => {
+            let (module, kind, symbols, provenance, confidence) =
+                if let Some(module) = directive.module.as_ref() {
+                    (
+                        module.clone(),
+                        ImportKind::Require,
+                        ImportSymbols::Default,
+                        Provenance::ExactAst,
+                        Confidence::High,
+                    )
+                } else {
+                    (
+                        String::new(),
+                        ImportKind::DynamicRequire,
+                        ImportSymbols::Dynamic,
+                        Provenance::DynamicBoundary,
+                        Confidence::Low,
+                    )
+                };
+            Some(import_spec(module, kind, symbols, provenance, confidence, directive, file_id))
+        }
+        CompileDirectiveAction::No => None,
+    }
+}
+
+fn import_spec(
+    module: String,
+    kind: ImportKind,
+    symbols: ImportSymbols,
+    provenance: Provenance,
+    confidence: Confidence,
+    directive: &CompileDirective,
+    file_id: FileId,
+) -> ImportSpec {
+    ImportSpec {
+        module,
+        kind,
+        symbols,
+        provenance,
+        confidence,
+        file_id: Some(file_id),
+        anchor_id: Some(AnchorId(directive.range.start as u64)),
+        scope_id: directive.scope_id.map(|id| ScopeId(id.index() as u64)),
+        span_start_byte: Some(directive.range.start as u32),
+    }
+}
+
+fn classify_import_args(
+    args: &[String],
+    module: &str,
+    range: SourceLocation,
+) -> (ImportKind, ImportSymbols, Provenance, Confidence) {
+    if args.is_empty() {
+        let bare_len = "use ".len() + module.len() + 1;
+        let span_len = range.end.saturating_sub(range.start);
+        if span_len > bare_len {
+            return (
+                ImportKind::UseEmpty,
+                ImportSymbols::None,
+                Provenance::ExactAst,
+                Confidence::High,
+            );
+        }
+        return (ImportKind::Use, ImportSymbols::Default, Provenance::ExactAst, Confidence::High);
+    }
+
+    let mut explicit_names = Vec::new();
+    let mut tags = Vec::new();
+    let mut has_dynamic_arg = false;
+
+    for arg in args {
+        let trimmed = arg.trim();
+        if trimmed == "=>" || trimmed == "," || trimmed == "\\" {
+            continue;
+        }
+
+        if let Some(inner) = parse_qw_content(trimmed) {
+            collect_qw_import_words(inner, &mut explicit_names, &mut tags);
+            continue;
+        }
+
+        let was_quoted = is_quoted(trimmed);
+        let unquoted = unquote(trimmed);
+        if !was_quoted && looks_like_dynamic_import_arg(unquoted) {
+            has_dynamic_arg = true;
+            continue;
+        }
+
+        if let Some(tag) = unquoted.strip_prefix(':') {
+            tags.push(tag.to_string());
+            continue;
+        }
+
+        if looks_like_symbol_name(unquoted) {
+            explicit_names.push(unquoted.to_string());
+        }
+    }
+
+    if has_dynamic_arg {
+        return (
+            ImportKind::UseExplicitList,
+            ImportSymbols::Dynamic,
+            Provenance::DynamicBoundary,
+            Confidence::Low,
+        );
+    }
+
+    if !tags.is_empty() && explicit_names.is_empty() {
+        return (
+            ImportKind::UseTag,
+            ImportSymbols::Tags(tags),
+            Provenance::ExactAst,
+            Confidence::High,
+        );
+    }
+
+    if !tags.is_empty() && !explicit_names.is_empty() {
+        return (
+            ImportKind::UseExplicitList,
+            ImportSymbols::Mixed { tags, names: explicit_names },
+            Provenance::ExactAst,
+            Confidence::High,
+        );
+    }
+
+    if !explicit_names.is_empty() {
+        return (
+            ImportKind::UseExplicitList,
+            ImportSymbols::Explicit(explicit_names),
+            Provenance::ExactAst,
+            Confidence::High,
+        );
+    }
+
+    (ImportKind::UseEmpty, ImportSymbols::None, Provenance::ExactAst, Confidence::High)
+}
+
+fn classify_constant_import(directive: &CompileDirective, file_id: FileId) -> ImportSpec {
+    let mut constant_names = Vec::new();
+    let args = &directive.args;
+
+    if args.first().map(String::as_str) == Some("{") {
+        let mut index = 1;
+        while index < args.len() {
+            let token = args[index].trim();
+            if token == "}" || token == "=>" || token == "," {
+                index += 1;
+                continue;
+            }
+            if index + 1 < args.len() && args[index + 1].trim() == "=>" {
+                constant_names.push(unquote(token).to_string());
+                index += 3;
+            } else {
+                index += 1;
+            }
+        }
+    } else if let Some(inner) = args.first().and_then(|arg| parse_qw_content(arg.trim())) {
+        constant_names.extend(inner.split_whitespace().map(str::to_string));
+    } else if let Some(name) = args.first() {
+        let trimmed = unquote(name.trim());
+        if looks_like_constant_name(trimmed) {
+            constant_names.push(trimmed.to_string());
+        }
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    constant_names.retain(|name| seen.insert(name.clone()));
+
+    let symbols = if constant_names.is_empty() {
+        ImportSymbols::None
+    } else {
+        ImportSymbols::Explicit(constant_names)
+    };
+
+    import_spec(
+        "constant".to_string(),
+        ImportKind::UseConstant,
+        symbols,
+        Provenance::ExactAst,
+        Confidence::High,
+        directive,
+        file_id,
+    )
+}
+
+fn collect_qw_import_words(inner: &str, explicit_names: &mut Vec<String>, tags: &mut Vec<String>) {
+    for word in inner.split_whitespace() {
+        if let Some(tag) = word.strip_prefix(':') {
+            tags.push(tag.to_string());
+        } else {
+            explicit_names.push(word.to_string());
+        }
+    }
+}
+
+fn is_version_pragma(module: &str) -> bool {
+    if module.chars().next().is_some_and(|character| character.is_ascii_digit()) {
+        return true;
+    }
+    module.starts_with('v')
+        && module.len() > 1
+        && module[1..].chars().all(|character| character.is_ascii_digit() || character == '.')
+}
+
+fn parse_qw_content(value: &str) -> Option<&str> {
+    let rest = value.strip_prefix("qw")?.trim_start();
+    let mut chars = rest.chars();
+    let open = chars.next()?;
+    let close = match open {
+        '(' => ')',
+        '[' => ']',
+        '{' => '}',
+        '<' => '>',
+        other => other,
+    };
+    let inner_start = open.len_utf8();
+    let inner_end = rest.len().checked_sub(close.len_utf8())?;
+    if inner_start > inner_end || !rest.ends_with(close) {
+        return None;
+    }
+    Some(&rest[inner_start..inner_end])
+}
+
+fn is_quoted(value: &str) -> bool {
+    (value.starts_with('\'') && value.ends_with('\''))
+        || (value.starts_with('"') && value.ends_with('"'))
+}
+
+fn unquote(value: &str) -> &str {
+    if is_quoted(value) && value.len() >= 2 { &value[1..value.len() - 1] } else { value }
+}
+
+fn looks_like_dynamic_import_arg(value: &str) -> bool {
+    value.starts_with('$')
+        || value.starts_with('@')
+        || value.starts_with('%')
+        || value.starts_with('&')
+        || value.starts_with('*')
+}
+
+fn looks_like_symbol_name(value: &str) -> bool {
+    let value = unquote(value);
+    if value.is_empty() {
+        return false;
+    }
+    if value.starts_with(':') {
+        return true;
+    }
+    value
+        .chars()
+        .next()
+        .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+}
+
+fn looks_like_constant_name(value: &str) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+    value
+        .chars()
+        .next()
+        .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
 }
 
 fn module_target_to_relative_path(target: &str) -> Option<String> {
