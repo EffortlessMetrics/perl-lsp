@@ -183,6 +183,12 @@ impl CodeActionsProvider {
                     {
                         actions.extend(quick_fixes::fix_unused_parameter(&qf_diag));
                     }
+                    // PL107: Duplicate parameter
+                    c if c == DiagnosticCode::DuplicateParameter.as_str()
+                        || c == "native.variables.duplicate_parameter" =>
+                    {
+                        actions.extend(quick_fixes::fix_duplicate_parameter(&qf_diag));
+                    }
                     // PL104: Variable shadowing
                     c if c == DiagnosticCode::VariableShadowing.as_str()
                         || c == "native.variables.shadowed_lexical" =>
@@ -703,6 +709,39 @@ mod tests {
                         && edit.location.end == start + "$unused".len()
                         && edit.new_text == "_$unused"
                 })
+        }));
+    }
+
+    #[test]
+    fn test_native_critic_policy_alias_for_duplicate_parameter() {
+        let source = "use strict;\nuse warnings;\nsub helper($arg, $arg) { return $arg; }\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let start = source.find(", $arg").unwrap() + ", ".len();
+        let diagnostics = vec![Diagnostic {
+            range: (start, start + "$arg".len()),
+            severity: DiagnosticSeverity::Error,
+            code: Some("native.variables.duplicate_parameter".to_string()),
+            message: "Parameter '$arg' appears more than once in this signature".to_string(),
+            suggestion: None,
+            related_information: Vec::new(),
+            tags: Vec::new(),
+        }];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(actions.iter().any(|action| {
+            action.title == "Remove duplicate parameter '$arg'"
+                && action.edit.changes.iter().any(|edit| {
+                    edit.location.start == start
+                        && edit.location.end == start + "$arg".len()
+                        && edit.new_text.is_empty()
+                })
+        }));
+        assert!(actions.iter().any(|action| {
+            action.title == "Rename duplicate to '$arg_2'"
+                && action.edit.changes.iter().any(|edit| edit.new_text == "$arg_2")
         }));
     }
 

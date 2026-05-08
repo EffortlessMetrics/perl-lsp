@@ -105,6 +105,12 @@ fn mark_intentionally_unused(name: &str) -> String {
     }
 }
 
+fn split_sigil(name: &str) -> (&str, &str) {
+    let bare = name.trim_start_matches(['$', '@', '%', '&', '*']);
+    let sigil_len = name.len() - bare.len();
+    (&name[..sigil_len], bare)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -642,6 +648,42 @@ pub fn fix_unused_parameter(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> 
     }
 
     actions
+}
+
+/// Fix duplicate parameter by removing or renaming the repeated binding.
+pub fn fix_duplicate_parameter(diagnostic: &QuickFixDiagnostic) -> Vec<CodeAction> {
+    let Some(param_name) = diagnostic.message.split('\'').nth(1) else {
+        return Vec::new();
+    };
+    let (sigil, base_name) = split_sigil(param_name);
+    let new_name = format!("{sigil}{base_name}_2");
+
+    vec![
+        CodeAction {
+            title: format!("Remove duplicate parameter '{}'", param_name),
+            kind: CodeActionKind::QuickFix,
+            diagnostics: vec![DiagnosticCode::DuplicateParameter.as_str().to_string()],
+            edit: CodeActionEdit {
+                changes: vec![TextEdit {
+                    location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                    new_text: String::new(),
+                }],
+            },
+            is_preferred: true,
+        },
+        CodeAction {
+            title: format!("Rename duplicate to '{}'", new_name),
+            kind: CodeActionKind::QuickFix,
+            diagnostics: vec![DiagnosticCode::DuplicateParameter.as_str().to_string()],
+            edit: CodeActionEdit {
+                changes: vec![TextEdit {
+                    location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                    new_text: new_name,
+                }],
+            },
+            is_preferred: false,
+        },
+    ]
 }
 
 /// Suggest portable shebang line

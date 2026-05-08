@@ -81,7 +81,8 @@ impl CodeActionsProvider {
             }
             Some(c)
                 if c == DiagnosticCode::DuplicateParameter.as_str()
-                    || c == "duplicate-parameter" =>
+                    || c == "duplicate-parameter"
+                    || c == "native.variables.duplicate_parameter" =>
             {
                 fixes::fix_duplicate_parameter(diagnostic)
             }
@@ -535,6 +536,26 @@ mod tests {
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
 
         assert_eq!(actions[1].edit.new_text, "@vals_2");
+    }
+
+    #[test]
+    fn test_native_critic_duplicate_parameter_quick_fix() {
+        let diagnostic = make_diagnostic(
+            (30, 34),
+            DiagnosticSeverity::Error,
+            "native.variables.duplicate_parameter",
+            "Parameter '$arg' appears more than once in this signature",
+        );
+
+        let provider = CodeActionsProvider::new(String::new());
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert_eq!(actions.len(), 2);
+        assert_eq!(actions[0].title, "Remove duplicate parameter '$arg'");
+        assert_eq!(actions[0].edit.range, (30, 34));
+        assert_eq!(actions[0].edit.new_text, "");
+        assert_eq!(actions[1].title, "Rename duplicate to '$arg_2'");
+        assert_eq!(actions[1].edit.new_text, "$arg_2");
     }
 
     // ── Quick-fix: parameter shadows global ─────────────────────────────
