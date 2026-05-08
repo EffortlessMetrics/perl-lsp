@@ -516,12 +516,8 @@ impl LspServer {
                 source_path.as_deref(),
             );
 
-            // Add Perl::Critic built-in analysis
-            let built_in_analyzer = BuiltInAnalyzer::new();
-            let violations = built_in_analyzer.analyze(ast, &text);
-            for violation in violations {
-                diagnostics.push(builtin_violation_to_diagnostic(&violation));
-            }
+            // Add configured policy critic diagnostics.
+            self.collect_policy_critic_diagnostics(ast, &text, &mut diagnostics);
 
             // Add external perlcritic diagnostics (opt-in)
             self.collect_external_perlcritic_diagnostics(uri, &text, &mut diagnostics);
@@ -559,8 +555,8 @@ impl LspServer {
                             InternalDiagnosticSeverity::Information => 3,
                             InternalDiagnosticSeverity::Hint => 4,
                         },
-                        "code": d.code,
-                        "source": "perl-parser",
+                        "code": d.code.clone(),
+                        "source": push_diagnostic_source(d.code.as_deref()),
                         "message": d.message,
                     });
                     if !d.tags.is_empty() {
@@ -1150,6 +1146,9 @@ impl LspServer {
                     source_path.as_deref(),
                 );
 
+                // Add native critic diagnostics when explicitly selected.
+                self.collect_native_critic_diagnostics(ast, &doc.text, &mut diagnostics);
+
                 // Add external perlcritic diagnostics (opt-in)
                 self.collect_external_perlcritic_diagnostics(uri_str, &doc.text, &mut diagnostics);
 
@@ -1368,6 +1367,52 @@ impl LspServer {
         }
 
         Ok(Some(json!({ "items": items })))
+    }
+
+    fn collect_policy_critic_diagnostics(
+        &self,
+        ast: &std::sync::Arc<perl_parser::ast::Node>,
+        doc_text: &str,
+        diagnostics: &mut Vec<InternalDiagnostic>,
+    ) {
+        let critic_engine = { self.config.lock().critic_engine };
+        match critic_engine {
+            perl_lsp_rs_core::config::CriticEngine::Legacy => {
+                let built_in_analyzer = BuiltInAnalyzer::new();
+                let violations = built_in_analyzer.analyze(ast, doc_text);
+                diagnostics.extend(violations.iter().map(builtin_violation_to_diagnostic));
+            }
+            perl_lsp_rs_core::config::CriticEngine::Native => {
+                self.collect_native_critic_diagnostics(ast, doc_text, diagnostics);
+            }
+        }
+    }
+
+    fn collect_native_critic_diagnostics(
+        &self,
+        ast: &std::sync::Arc<perl_parser::ast::Node>,
+        doc_text: &str,
+        diagnostics: &mut Vec<InternalDiagnostic>,
+    ) {
+        let (critic_engine, severity, profile) = {
+            let cfg = self.config.lock();
+            (cfg.critic_engine, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+        };
+        if critic_engine != perl_lsp_rs_core::config::CriticEngine::Native {
+            return;
+        }
+
+        let critic_config = crate::perl_critic::CriticConfig {
+            severity: severity.clamp(1, 5),
+            profile,
+            ..crate::perl_critic::CriticConfig::default()
+        };
+        let critic_context =
+            crate::perl_critic::CriticContext::new(doc_text, ast.as_ref(), &critic_config);
+        let registry = crate::perl_critic::NativeCriticRegistry::recommended();
+
+        diagnostics
+            .extend(registry.check(&critic_context).into_iter().map(native_finding_to_diagnostic));
     }
 
     /// Collect external perlcritic diagnostics if the feature is enabled.
@@ -1634,6 +1679,7 @@ fn is_fixable_perlcritic_policy(code: &str) -> bool {
 
 fn diagnostic_source(code: Option<&str>) -> &'static str {
     match code {
+        Some(code) if code.starts_with("native.") => "perl-lsp-critic",
         Some(code) if code.contains("::") && DiagnosticCode::parse_code(code).is_none() => {
             "perlcritic"
         }
@@ -1641,21 +1687,45 @@ fn diagnostic_source(code: Option<&str>) -> &'static str {
     }
 }
 
+fn push_diagnostic_source(code: Option<&str>) -> &'static str {
+    match code {
+        Some(code) if code.starts_with("native.") => "perl-lsp-critic",
+        _ => "perl-parser",
+    }
+}
+
+fn native_finding_to_diagnostic(finding: crate::perl_critic::CriticFinding) -> InternalDiagnostic {
+    InternalDiagnostic {
+        range: (finding.range.start.byte, finding.range.end.byte),
+        severity: critic_severity_to_internal(finding.severity),
+        code: Some(finding.rule_id),
+        message: finding.message,
+        related_information: Vec::new(),
+        tags: Vec::new(),
+        suggestion: None,
+    }
+}
+
+fn critic_severity_to_internal(
+    severity: crate::perl_critic::Severity,
+) -> InternalDiagnosticSeverity {
+    match severity {
+        crate::perl_critic::Severity::Gentle => InternalDiagnosticSeverity::Error,
+        crate::perl_critic::Severity::Stern | crate::perl_critic::Severity::Harsh => {
+            InternalDiagnosticSeverity::Warning
+        }
+        crate::perl_critic::Severity::Cruel => InternalDiagnosticSeverity::Information,
+        crate::perl_critic::Severity::Brutal => InternalDiagnosticSeverity::Hint,
+    }
+}
+
 /// Convert a built-in analyzer violation to an internal diagnostic.
 fn builtin_violation_to_diagnostic(
     violation: &crate::perl_critic::Violation,
 ) -> InternalDiagnostic {
-    let lsp_severity = violation.severity.to_diagnostic_severity();
-    let internal_severity = match lsp_severity {
-        lsp_types::DiagnosticSeverity::ERROR => InternalDiagnosticSeverity::Error,
-        lsp_types::DiagnosticSeverity::WARNING => InternalDiagnosticSeverity::Warning,
-        lsp_types::DiagnosticSeverity::INFORMATION => InternalDiagnosticSeverity::Information,
-        lsp_types::DiagnosticSeverity::HINT => InternalDiagnosticSeverity::Hint,
-        _ => InternalDiagnosticSeverity::Hint,
-    };
     InternalDiagnostic {
         range: (violation.range.start.byte, violation.range.end.byte),
-        severity: internal_severity,
+        severity: critic_severity_to_internal(violation.severity),
         code: Some(violation.policy.clone()),
         message: violation.description.clone(),
         related_information: Vec::new(),
@@ -1752,6 +1822,130 @@ mod tests {
             text.contains("publishDiagnostics"),
             "pre-advanced generation must not suppress publish (guard must not false-positive); got: {text:?}"
         );
+    }
+
+    #[test]
+    fn native_critic_engine_publishes_native_policy_diagnostics() {
+        let (server, buf) = make_server_with_capture();
+        server.test_configure_critic_engine(perl_lsp_rs_core::config::CriticEngine::Native);
+        let uri = "file:///native_critic_push_test.pl";
+        server
+            .test_handle_did_open(Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $x = 1;\n"
+                }
+            })))
+            .unwrap();
+
+        server.publish_diagnostics(uri);
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes).unwrap_or_default();
+        assert!(
+            text.contains("native.testing.require_use_strict"),
+            "native critic engine should publish native strict finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("native.testing.require_use_warnings"),
+            "native critic engine should publish native warnings finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("\"source\":\"perl-lsp-critic\""),
+            "native critic diagnostics should use perl-lsp-critic source; got: {text:?}"
+        );
+        assert!(
+            !text.contains("TestingAndDebugging::RequireUseStrict"),
+            "native critic engine should not publish legacy built-in critic policy IDs; got: {text:?}"
+        );
+    }
+
+    #[test]
+    fn legacy_critic_engine_keeps_legacy_policy_diagnostics_for_push() {
+        let (server, buf) = make_server_with_capture();
+        let uri = "file:///legacy_critic_push_test.pl";
+        server
+            .test_handle_did_open(Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $x = 1;\n"
+                }
+            })))
+            .unwrap();
+
+        server.publish_diagnostics(uri);
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes).unwrap_or_default();
+        assert!(
+            text.contains("TestingAndDebugging::RequireUseStrict"),
+            "legacy critic engine should keep built-in strict policy ID; got: {text:?}"
+        );
+        assert!(
+            !text.contains("native.testing.require_use_strict"),
+            "legacy critic engine should not publish native policy IDs by default; got: {text:?}"
+        );
+    }
+
+    #[test]
+    fn native_critic_engine_adds_native_workspace_diagnostics()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (server, _buf) = make_server_with_capture();
+        server.test_configure_critic_engine(perl_lsp_rs_core::config::CriticEngine::Native);
+        let uri = "file:///native_critic_workspace_test.pl";
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $x = 1;\n"
+            }
+        })))?;
+
+        let report = server
+            .handle_workspace_diagnostic(Some(json!({
+                "identifier": "perl-lsp",
+                "previousResultIds": []
+            })))?
+            .ok_or("workspace diagnostic response missing")?;
+        let items = report["items"].as_array().ok_or("workspace diagnostic items missing")?;
+        let file_report = items
+            .iter()
+            .find(|item| item["uri"].as_str() == Some(uri))
+            .ok_or("workspace diagnostic report missing opened document")?;
+        let diagnostics =
+            file_report["items"].as_array().ok_or("workspace diagnostic report missing items")?;
+
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag["code"].as_str() == Some("native.testing.require_use_strict")
+                    && diag["source"].as_str() == Some("perl-lsp-critic")
+            }),
+            "native critic engine should add native strict finding to workspace diagnostics: {report}"
+        );
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag["code"].as_str() == Some("native.testing.require_use_warnings")
+                    && diag["source"].as_str() == Some("perl-lsp-critic")
+            }),
+            "native critic engine should add native warnings finding to workspace diagnostics: {report}"
+        );
+        assert!(
+            !diagnostics.iter().any(|diag| {
+                diag["code"].as_str() == Some("TestingAndDebugging::RequireUseStrict")
+            }),
+            "native critic workspace diagnostics should not publish legacy built-in policy IDs: {report}"
+        );
+
+        Ok(())
     }
 
     /// Positive case: `publish_parse_errors_fast` must immediately emit a

@@ -287,6 +287,11 @@ impl LspServer {
         cfg.perlcritic_profile = profile;
     }
 
+    /// Configure the critic engine directly for test purposes.
+    pub fn test_configure_critic_engine(&self, engine: perl_lsp_rs_core::config::CriticEngine) {
+        self.config.lock().critic_engine = engine;
+    }
+
     /// Test-only entrypoint for LSP `textDocument/inlineCompletion`.
     ///
     /// Exercises inline completion functionality in tests.
