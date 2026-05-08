@@ -1111,6 +1111,8 @@ fn is_fixable_diagnostic(code: &str) -> bool {
         code,
         "TestingAndDebugging::RequireUseStrict"
             | "TestingAndDebugging::RequireUseWarnings"
+            | "native.testing.require_use_strict"
+            | "native.testing.require_use_warnings"
             | "InputOutput::ProhibitBarewordFileHandles"
             | "InputOutput::RequireBriefOpen"
             | "InputOutput::RequireThreeArgOpen"

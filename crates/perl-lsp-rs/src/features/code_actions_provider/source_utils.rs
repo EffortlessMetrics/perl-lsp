@@ -3,6 +3,13 @@
 use super::CodeActionsProvider;
 
 pub(super) fn ranges_overlap(r1: (usize, usize), r2: (usize, usize)) -> bool {
+    if r1.0 == r1.1 {
+        return r2.0 <= r1.0 && r1.0 <= r2.1;
+    }
+    if r2.0 == r2.1 {
+        return r1.0 <= r2.0 && r2.0 <= r1.1;
+    }
+
     r1.0 < r2.1 && r2.0 < r1.1
 }
 

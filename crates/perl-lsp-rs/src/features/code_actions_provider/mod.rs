@@ -62,6 +62,8 @@ impl CodeActionsProvider {
             Some(c) if c == DiagnosticCode::UnusedVariable.as_str() || c == "unused-variable" => {
                 fixes::fix_unused_variable(self, diagnostic)
             }
+            Some("native.testing.require_use_strict") => fixes::add_use_strict(diagnostic),
+            Some("native.testing.require_use_warnings") => fixes::add_use_warnings(diagnostic),
             Some(c)
                 if c == DiagnosticCode::VariableShadowing.as_str() || c == "variable-shadowing" =>
             {
@@ -310,6 +312,34 @@ mod tests {
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].title, "Rename to '$_unused' (mark as intentionally unused)");
+    }
+
+    #[test]
+    fn test_native_critic_strict_warnings_quick_fixes() {
+        let provider = CodeActionsProvider::new("print 'hello';\n".to_string());
+        let diagnostics = vec![
+            make_diagnostic(
+                (0, 0),
+                DiagnosticSeverity::Warning,
+                "native.testing.require_use_strict",
+                "Code does not use strict",
+            ),
+            make_diagnostic(
+                (0, 0),
+                DiagnosticSeverity::Warning,
+                "native.testing.require_use_warnings",
+                "Code does not use warnings",
+            ),
+        ];
+
+        let actions = provider.get_code_actions((0, 1), &diagnostics);
+
+        assert!(actions.iter().any(|action| {
+            action.title == "Add 'use strict'" && action.edit.new_text == "use strict;\n"
+        }));
+        assert!(actions.iter().any(|action| {
+            action.title == "Add 'use warnings'" && action.edit.new_text == "use warnings;\n"
+        }));
     }
 
     // ── Quick-fix: variable shadowing ───────────────────────────────────

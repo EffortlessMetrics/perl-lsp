@@ -200,11 +200,13 @@ impl CodeActionsProvider {
                     | "InputOutput::RequireThreeArgOpen" => {
                         actions.extend(quick_fixes::fix_two_arg_open(&qf_diag));
                     }
-                    // Perl::Critic policies for missing strict/warnings.
-                    "TestingAndDebugging::RequireUseStrict" => {
+                    // Perl::Critic/native critic policies for missing strict/warnings.
+                    "TestingAndDebugging::RequireUseStrict"
+                    | "native.testing.require_use_strict" => {
                         actions.extend(quick_fixes::add_use_strict());
                     }
-                    "TestingAndDebugging::RequireUseWarnings" => {
+                    "TestingAndDebugging::RequireUseWarnings"
+                    | "native.testing.require_use_warnings" => {
                         actions.extend(quick_fixes::add_use_warnings());
                     }
                     // Perl::Critic policy alias for unused variables.
@@ -605,6 +607,39 @@ mod tests {
         assert!(actions.iter().any(|a| a.title == "Add 'use strict'"));
         assert!(actions.iter().any(|a| a.title == "Add 'use warnings'"));
         assert!(actions.iter().any(|a| a.title.contains("Remove unused variable")));
+    }
+
+    #[test]
+    fn test_native_critic_policy_aliases_for_strict_and_warnings() {
+        let source = "print 'hello';\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![
+            Diagnostic {
+                range: (0, 0),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("native.testing.require_use_strict".to_string()),
+                message: "Code does not use strict".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+            Diagnostic {
+                range: (0, 0),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("native.testing.require_use_warnings".to_string()),
+                message: "Code does not use warnings".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            },
+        ];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(actions.iter().any(|a| a.title == "Add 'use strict'"));
+        assert!(actions.iter().any(|a| a.title == "Add 'use warnings'"));
     }
 
     #[test]
