@@ -66,7 +66,9 @@ impl CodeActionsProvider {
             Some("native.testing.require_use_strict") => fixes::add_use_strict(diagnostic),
             Some("native.testing.require_use_warnings") => fixes::add_use_warnings(diagnostic),
             Some(c)
-                if c == DiagnosticCode::VariableShadowing.as_str() || c == "variable-shadowing" =>
+                if c == DiagnosticCode::VariableShadowing.as_str()
+                    || c == "variable-shadowing"
+                    || c == "native.variables.shadowed_lexical" =>
             {
                 fixes::fix_variable_shadowing(diagnostic)
             }
@@ -407,6 +409,24 @@ mod tests {
         assert_eq!(actions[0].title, "Rename shadowing variable to '$inner_foo'");
         assert_eq!(actions[1].title, "Rename shadowing variable to '$local_foo'");
         assert_eq!(actions[2].title, "Rename shadowing variable to '$foo_2'");
+    }
+
+    #[test]
+    fn test_native_critic_shadowed_lexical_quick_fix() {
+        let diagnostic = make_diagnostic(
+            (20, 26),
+            DiagnosticSeverity::Warning,
+            "native.variables.shadowed_lexical",
+            "Lexical variable '$value' shadows an outer declaration",
+        );
+
+        let provider = CodeActionsProvider::new(String::new());
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert_eq!(actions.len(), 3);
+        assert_eq!(actions[0].title, "Rename shadowing variable to '$inner_value'");
+        assert_eq!(actions[1].title, "Rename shadowing variable to '$local_value'");
+        assert_eq!(actions[2].title, "Rename shadowing variable to '$value_2'");
     }
 
     #[test]

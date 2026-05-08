@@ -1835,7 +1835,7 @@ mod tests {
                     "uri": uri,
                     "languageId": "perl",
                     "version": 1,
-                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nprint $x;\n"
+                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nprint $x + $shadow;\n"
                 }
             })))
             .unwrap();
@@ -1869,6 +1869,14 @@ mod tests {
         assert!(
             text.contains("Lexical variable '$x' is declared more than once in the same scope"),
             "native duplicate lexical finding should preserve rule message; got: {text:?}"
+        );
+        assert!(
+            text.contains("native.variables.shadowed_lexical"),
+            "native critic engine should publish native shadowed lexical finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("Lexical variable '$shadow' shadows an outer declaration"),
+            "native shadowed lexical finding should preserve rule message; got: {text:?}"
         );
         assert!(
             text.contains("\"source\":\"perl-lsp-critic\""),
@@ -1922,7 +1930,7 @@ mod tests {
                 "uri": uri,
                 "languageId": "perl",
                 "version": 1,
-                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nprint $x;\n"
+                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nprint $x + $shadow;\n"
             }
         })))?;
 
@@ -1973,6 +1981,15 @@ mod tests {
                         )
             }),
             "native critic engine should add native duplicate lexical finding to workspace diagnostics: {report}"
+        );
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag["code"].as_str() == Some("native.variables.shadowed_lexical")
+                    && diag["source"].as_str() == Some("perl-lsp-critic")
+                    && diag["message"].as_str()
+                        == Some("Lexical variable '$shadow' shadows an outer declaration")
+            }),
+            "native critic engine should add native shadowed lexical finding to workspace diagnostics: {report}"
         );
         assert!(
             !diagnostics.iter().any(|diag| {

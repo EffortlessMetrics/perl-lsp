@@ -182,7 +182,9 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_unused_parameter(&qf_diag));
                     }
                     // PL104: Variable shadowing
-                    c if c == DiagnosticCode::VariableShadowing.as_str() => {
+                    c if c == DiagnosticCode::VariableShadowing.as_str()
+                        || c == "native.variables.shadowed_lexical" =>
+                    {
                         actions.extend(quick_fixes::fix_variable_shadowing(&qf_diag));
                     }
                     // PL400: Bareword filehandle
@@ -701,6 +703,35 @@ mod tests {
             edit.location.start == source.rfind("my $dup").unwrap()
                 && edit.location.end == start
                 && edit.new_text.is_empty()
+        }));
+    }
+
+    #[test]
+    fn test_native_critic_policy_alias_for_shadowed_lexical() {
+        let source = "use strict;\nuse warnings;\nmy $value = 1;\n{ my $value = 2; }\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let start = source.rfind("$value").unwrap();
+        let diagnostics = vec![Diagnostic {
+            range: (start, start + "$value".len()),
+            severity: DiagnosticSeverity::Warning,
+            code: Some("native.variables.shadowed_lexical".to_string()),
+            message: "Lexical variable '$value' shadows an outer declaration".to_string(),
+            suggestion: None,
+            related_information: Vec::new(),
+            tags: Vec::new(),
+        }];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(actions.iter().any(|action| {
+            action.title == "Rename to '$value_inner'"
+                && action.edit.changes.iter().any(|edit| edit.new_text == "$value_inner")
+        }));
+        assert!(actions.iter().any(|action| {
+            action.title == "Rename to '$value_local'"
+                && action.edit.changes.iter().any(|edit| edit.new_text == "$value_local")
         }));
     }
 
