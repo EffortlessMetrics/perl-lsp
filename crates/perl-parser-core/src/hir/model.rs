@@ -99,6 +99,8 @@ pub struct HirFile {
     pub items: Vec<HirItem>,
     /// Scope and binding graph lowered beside HIR items.
     pub scope_graph: ScopeGraph,
+    /// Package stash graph lowered beside HIR items.
+    pub stash_graph: StashGraph,
 }
 
 impl HirFile {
@@ -253,6 +255,189 @@ pub struct BindingReference {
     pub range: SourceLocation,
     /// Resolved binding, if one was visible in the scope chain.
     pub resolved_binding: Option<HirBindingId>,
+}
+
+/// HIR-local package stash graph for compiler-substrate proof.
+///
+/// This graph is intentionally parser-core-local. It records package/stash
+/// facts with provenance and confidence, but no LSP provider consumes it yet.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct StashGraph {
+    /// Package stashes in stable first-seen order.
+    pub packages: Vec<PackageStash>,
+    /// Inheritance edges in stable source order.
+    pub inheritance_edges: Vec<PackageInheritanceEdge>,
+    /// Dynamic stash boundaries in stable source order.
+    pub dynamic_boundaries: Vec<StashDynamicBoundary>,
+}
+
+/// One Perl package stash.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PackageStash {
+    /// Package name.
+    pub package: String,
+    /// Source range that first established this package.
+    pub range: SourceLocation,
+    /// HIR item that first established this package, when available.
+    pub declaration_item: Option<HirId>,
+    /// Symbol slots observed for this package.
+    pub slots: Vec<GlobSlot>,
+    /// How this stash fact was produced.
+    pub provenance: StashProvenance,
+    /// Confidence in this stash fact.
+    pub confidence: StashConfidence,
+}
+
+/// One slot inside a Perl typeglob.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct GlobSlot {
+    /// Symbol name without sigil.
+    pub name: String,
+    /// Slot category.
+    pub kind: GlobSlotKind,
+    /// Source range for the declaration or mutation that produced this slot.
+    pub range: SourceLocation,
+    /// HIR item that produced this slot, when available.
+    pub declaration_item: Option<HirId>,
+    /// Source shape that produced this slot.
+    pub source: GlobSlotSource,
+    /// Static alias target, when this slot is an alias.
+    pub alias_target: Option<String>,
+    /// How this slot fact was produced.
+    pub provenance: StashProvenance,
+    /// Confidence in this slot fact.
+    pub confidence: StashConfidence,
+}
+
+/// Perl typeglob slot category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum GlobSlotKind {
+    /// Scalar slot: `$Package::name`.
+    Scalar,
+    /// Array slot: `@Package::name`.
+    Array,
+    /// Hash slot: `%Package::name`.
+    Hash,
+    /// Code slot: `Package::name()`.
+    Code,
+    /// IO slot / filehandle slot.
+    Io,
+    /// Format slot.
+    Format,
+}
+
+/// Source shape that populated a glob slot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum GlobSlotSource {
+    /// `package` declaration.
+    PackageDeclaration,
+    /// `sub` declaration.
+    SubDeclaration,
+    /// `method` declaration.
+    MethodDeclaration,
+    /// `our` declaration.
+    OurDeclaration,
+    /// Legacy `format` declaration.
+    FormatDeclaration,
+    /// `use constant` compile-time declaration.
+    ConstantDeclaration,
+    /// Package variable assignment such as `@ISA = ...`.
+    PackageAssignment,
+    /// Static typeglob alias assignment.
+    TypeglobAlias,
+}
+
+/// Provenance for HIR-local stash facts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum StashProvenance {
+    /// Fact came directly from parser AST syntax.
+    ExactAst,
+    /// Fact came from a simple compile-time desugaring such as `use parent`.
+    DesugaredAst,
+    /// Fact came from conservative dynamic-boundary classification.
+    DynamicBoundary,
+}
+
+/// Confidence for HIR-local stash facts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum StashConfidence {
+    /// High-confidence exact or simple desugared fact.
+    High,
+    /// Medium-confidence static interpretation.
+    Medium,
+    /// Low-confidence dynamic-boundary fact.
+    Low,
+}
+
+/// Inheritance edge established by `@ISA`, `use parent`, or `use base`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PackageInheritanceEdge {
+    /// Package inheriting from the target.
+    pub from_package: String,
+    /// Parent package.
+    pub to_package: String,
+    /// Source range for the edge.
+    pub range: SourceLocation,
+    /// HIR item that produced this edge, when available.
+    pub declaration_item: Option<HirId>,
+    /// Source shape that produced this edge.
+    pub source: InheritanceSource,
+    /// How this edge fact was produced.
+    pub provenance: StashProvenance,
+    /// Confidence in this edge fact.
+    pub confidence: StashConfidence,
+}
+
+/// Source shape that established an inheritance edge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum InheritanceSource {
+    /// `our @ISA = ...`.
+    IsaAssignment,
+    /// `use parent ...`.
+    UseParent,
+    /// `use base ...`.
+    UseBase,
+}
+
+/// Dynamic stash mutation boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct StashDynamicBoundary {
+    /// Package affected by the boundary, when known.
+    pub package: Option<String>,
+    /// Symbol affected by the boundary, when statically known.
+    pub symbol: Option<String>,
+    /// Source range for the boundary.
+    pub range: SourceLocation,
+    /// HIR item that also records this boundary, when available.
+    pub boundary_item: Option<HirId>,
+    /// Boundary category.
+    pub kind: StashDynamicBoundaryKind,
+    /// Short reason for status/proof output.
+    pub reason: String,
+    /// How this boundary fact was produced.
+    pub provenance: StashProvenance,
+    /// Confidence in this boundary fact.
+    pub confidence: StashConfidence,
+}
+
+/// Dynamic stash boundary category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum StashDynamicBoundaryKind {
+    /// Stash/typeglob assignment with a non-static RHS.
+    DynamicStashMutation,
+    /// `AUTOLOAD` makes method lookup dynamic for this package.
+    Autoload,
 }
 
 /// First-slice HIR constructs.
@@ -513,4 +698,8 @@ pub enum DynamicBoundaryKind {
     EvalExpression,
     /// `do` whose body is not a statically parsed block.
     DoExpression,
+    /// Stash/typeglob assignment whose effect cannot be modeled statically.
+    DynamicStashMutation,
+    /// `AUTOLOAD` declaration introduces dynamic method dispatch.
+    Autoload,
 }

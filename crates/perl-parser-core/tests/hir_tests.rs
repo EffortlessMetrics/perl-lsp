@@ -1,4 +1,6 @@
-use perl_parser_core::hir::{HirFile, HirKind, RecoveryConfidence, ScopeGraph, lower_ast};
+use perl_parser_core::hir::{
+    HirFile, HirKind, RecoveryConfidence, ScopeGraph, StashGraph, lower_ast,
+};
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 
 fn lower_source(source: &str) -> HirFile {
@@ -152,6 +154,63 @@ fn render_scope_graph(graph: &ScopeGraph) -> String {
             reference.name,
             reference.scope_id.index(),
             target
+        ));
+    }
+
+    lines.join("\n")
+}
+
+fn render_stash_graph(graph: &StashGraph) -> String {
+    let mut lines = Vec::new();
+    lines.push("[packages]".to_string());
+    for package in &graph.packages {
+        let item = package
+            .declaration_item
+            .map(|id| id.index().to_string())
+            .unwrap_or_else(|| "<none>".to_string());
+        lines.push(format!(
+            "{} item={} {:?} {:?}",
+            package.package, item, package.provenance, package.confidence
+        ));
+    }
+
+    lines.push("[slots]".to_string());
+    for package in &graph.packages {
+        for slot in &package.slots {
+            let target = slot.alias_target.as_deref().unwrap_or("<none>");
+            lines.push(format!(
+                "{}::{} {:?} {:?} {:?} {:?} target={}",
+                package.package,
+                slot.name,
+                slot.kind,
+                slot.source,
+                slot.provenance,
+                slot.confidence,
+                target
+            ));
+        }
+    }
+
+    lines.push("[inheritance]".to_string());
+    for edge in &graph.inheritance_edges {
+        lines.push(format!(
+            "{} -> {} {:?} {:?} {:?}",
+            edge.from_package, edge.to_package, edge.source, edge.provenance, edge.confidence
+        ));
+    }
+
+    lines.push("[boundaries]".to_string());
+    for boundary in &graph.dynamic_boundaries {
+        let package = boundary.package.as_deref().unwrap_or("<unknown>");
+        let symbol = boundary.symbol.as_deref().unwrap_or("<unknown>");
+        lines.push(format!(
+            "{}::{} {:?} {:?} {:?} reason={}",
+            package,
+            symbol,
+            boundary.kind,
+            boundary.provenance,
+            boundary.confidence,
+            boundary.reason
         ));
     }
 
@@ -364,6 +423,89 @@ fn hir_scope_graph_resolves_lexicals_and_marks_shadowing() -> Result<(), Box<dyn
          $cache scope=4 target=4\n\
          $temp scope=4 target=5\n\
          $value scope=1 target=0"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_stash_graph_records_package_slots_inheritance_and_dynamic_boundaries()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(
+        "package Child;\n\
+         our @ISA = qw(Base::One Base::Two);\n\
+         @Other::ISA = 'Other::Base';\n\
+         use parent 'Parent::Base';\n\
+         use base qw(Exporter Local::Base);\n\
+         use constant PI => 3.14;\n\
+         use constant LABEL => 'foo';\n\
+         sub ANSWER () { 42; }\n\
+         sub foo { 1; }\n\
+         method run { 1; }\n\
+         our $VERSION;\n\
+         our @EXPORT_OK;\n\
+         our %CACHE;\n\
+         *alias = \\&foo;\n\
+         *dynamic = $target;\n\
+         sub AUTOLOAD { our $AUTOLOAD; }\n",
+    );
+
+    assert_eq!(
+        render_stash_graph(&file.stash_graph),
+        "[packages]\n\
+         Child item=0 ExactAst High\n\
+         Base::One item=<none> ExactAst High\n\
+         Base::Two item=<none> ExactAst High\n\
+         Other item=<none> ExactAst High\n\
+         Other::Base item=<none> ExactAst High\n\
+         Parent::Base item=<none> ExactAst High\n\
+         Exporter item=<none> ExactAst High\n\
+         Local::Base item=<none> ExactAst High\n\
+         [slots]\n\
+         Child::ISA Array OurDeclaration ExactAst High target=<none>\n\
+         Child::PI Code ConstantDeclaration DesugaredAst High target=<none>\n\
+         Child::LABEL Code ConstantDeclaration DesugaredAst High target=<none>\n\
+         Child::ANSWER Code ConstantDeclaration ExactAst High target=<none>\n\
+         Child::foo Code SubDeclaration ExactAst High target=<none>\n\
+         Child::run Code MethodDeclaration ExactAst High target=<none>\n\
+         Child::VERSION Scalar OurDeclaration ExactAst High target=<none>\n\
+         Child::EXPORT_OK Array OurDeclaration ExactAst High target=<none>\n\
+         Child::CACHE Hash OurDeclaration ExactAst High target=<none>\n\
+         Child::alias Code TypeglobAlias ExactAst Medium target=foo\n\
+         Child::AUTOLOAD Code SubDeclaration ExactAst High target=<none>\n\
+         Child::AUTOLOAD Scalar OurDeclaration ExactAst High target=<none>\n\
+         Other::ISA Array PackageAssignment ExactAst High target=<none>\n\
+         [inheritance]\n\
+         Child -> Base::One IsaAssignment ExactAst High\n\
+         Child -> Base::Two IsaAssignment ExactAst High\n\
+         Other -> Other::Base IsaAssignment ExactAst High\n\
+         Child -> Parent::Base UseParent DesugaredAst High\n\
+         Child -> Exporter UseBase DesugaredAst High\n\
+         Child -> Local::Base UseBase DesugaredAst High\n\
+         [boundaries]\n\
+         Child::dynamic DynamicStashMutation DynamicBoundary Low reason=typeglob assignment has a non-static RHS\n\
+         Child::AUTOLOAD Autoload DynamicBoundary Low reason=AUTOLOAD declaration makes method dispatch dynamic"
+    );
+
+    assert!(
+        file.items.iter().any(|item| {
+            matches!(
+                &item.kind,
+                HirKind::DynamicBoundary(boundary)
+                    if boundary.reason == "typeglob assignment has a non-static RHS"
+            )
+        }),
+        "dynamic typeglob mutation should emit a HIR dynamic boundary"
+    );
+    assert!(
+        file.items.iter().any(|item| {
+            matches!(
+                &item.kind,
+                HirKind::DynamicBoundary(boundary)
+                    if boundary.reason == "AUTOLOAD declaration makes method dispatch dynamic"
+            )
+        }),
+        "AUTOLOAD should emit a HIR dynamic boundary"
     );
 
     Ok(())

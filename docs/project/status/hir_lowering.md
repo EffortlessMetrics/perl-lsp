@@ -10,9 +10,9 @@ This status tracks parser AST construct coverage for the crate-local HIR baselin
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | `lowered` | 16 | Emits one or more HIR items today. |
-| `dynamic_boundary` | 2 | Emits an explicit dynamic-boundary HIR item for unsupported static truth. |
+| `dynamic_boundary` | 3 | Emits an explicit dynamic-boundary HIR item for unsupported static truth. |
 | `intentionally_skipped` | 16 | Traversal, metadata, or recovery placeholder; no standalone HIR item expected. |
-| `not_yet_modeled` | 35 | Parser AST construct exists, but HIR has no shell yet. |
+| `not_yet_modeled` | 34 | Parser AST construct exists, but HIR has no shell yet. |
 
 AST kinds tracked: `69`. HIR construct kinds tracked: `13`.
 
@@ -21,7 +21,7 @@ AST kinds tracked: `69`. HIR construct kinds tracked: `13`.
 | AST NodeKind | Status | HIR kinds | Note |
 | --- | --- | --- | --- |
 | `ArrayLiteral` | `lowered` | `LiteralExpr` | Lowered as aggregate literal shell. |
-| `Assignment` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Assignment` | `dynamic_boundary` | `DynamicBoundary` | Typeglob assignment with a non-static RHS emits `DynamicBoundary`; other assignments traverse. |
 | `Binary` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Block` | `lowered` | `BlockShell` | Lowered as block shell and contributes a ScopeGraph block frame. |
 | `Class` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
@@ -77,7 +77,7 @@ AST kinds tracked: `69`. HIR construct kinds tracked: `13`.
 | `Tie` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Transliteration` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Try` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Typeglob` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `Typeglob` | `not_yet_modeled` | - | No standalone HIR shell yet; typeglob assignments can contribute StashGraph slots or boundaries. |
 | `Unary` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
 | `Undef` | `lowered` | `LiteralExpr` | Lowered as undef literal shell. |
 | `UnknownRest` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
