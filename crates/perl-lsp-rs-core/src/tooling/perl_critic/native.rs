@@ -238,6 +238,7 @@ impl NativeCriticRegistry {
             Box::new(RequireUseWarningsRule),
             Box::new(UnusedLexicalVariableRule),
             Box::new(DuplicateLexicalDeclarationRule),
+            Box::new(ShadowedLexicalVariableRule),
         ])
     }
 
@@ -494,6 +495,39 @@ impl CriticRule for DuplicateLexicalDeclarationRule {
     }
 }
 
+/// Native rule that reports lexical variables that shadow outer declarations.
+///
+/// This rule delegates shadowing detection to the semantic scope analyzer so
+/// native critic diagnostics reuse existing scope facts while exposing a stable
+/// native policy ID.
+pub struct ShadowedLexicalVariableRule;
+
+impl CriticRule for ShadowedLexicalVariableRule {
+    fn id(&self) -> &'static str {
+        "native.variables.shadowed_lexical"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Semantic
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        let pragma_map = PragmaTracker::build(ctx.ast);
+        let issues = ScopeAnalyzer::new().analyze(ctx.ast, ctx.source, &pragma_map);
+
+        out.extend(
+            issues
+                .into_iter()
+                .filter(|issue| issue.kind == IssueKind::VariableShadowing)
+                .map(|issue| shadowed_lexical_finding(self, ctx.source, &issue)),
+        );
+    }
+}
+
 fn unused_lexical_finding(
     rule: &UnusedLexicalVariableRule,
     source: &str,
@@ -545,6 +579,31 @@ fn duplicate_lexical_finding(
     }
 }
 
+fn shadowed_lexical_finding(
+    rule: &ShadowedLexicalVariableRule,
+    source: &str,
+    issue: &ScopeIssue,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, issue.range.0, issue.range.1);
+    let replacement = shadowed_lexical_name(&issue.variable_name);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!("Lexical variable '{}' shadows an outer declaration", issue.variable_name),
+        explanation: "Rename the inner lexical variable or use the outer variable directly to avoid confusing scope shadowing.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix: Some(CriticFix {
+            title: format!("Rename to '{replacement}'"),
+            safety: FixSafety::Suggested,
+            edits: vec![CriticTextEdit { range, new_text: replacement }],
+        }),
+    }
+}
+
 fn duplicate_my_fix(source: &str, variable_start: usize) -> Option<CriticFix> {
     let (start, end) = duplicate_my_span(source, variable_start)?;
 
@@ -572,6 +631,11 @@ fn duplicate_my_span(source: &str, variable_start: usize) -> Option<(usize, usiz
     }
 }
 
+fn shadowed_lexical_name(name: &str) -> String {
+    let (sigil, base_name) = split_sigil(name);
+    format!("{sigil}inner_{base_name}")
+}
+
 fn prefixed_unused_name(name: &str) -> String {
     let mut chars = name.chars();
     match chars.next() {
@@ -581,6 +645,12 @@ fn prefixed_unused_name(name: &str) -> String {
         }
         _ => format!("_{name}"),
     }
+}
+
+fn split_sigil(name: &str) -> (&str, &str) {
+    let bare = name.trim_start_matches(['$', '@', '%', '&', '*']);
+    let sigil_len = name.len() - bare.len();
+    (&name[..sigil_len], bare)
 }
 
 fn has_use_statement(content: &str, feature: &str) -> bool {
@@ -946,7 +1016,8 @@ mod tests {
                 "native.testing.require_use_strict",
                 "native.testing.require_use_warnings",
                 "native.variables.unused_lexical",
-                "native.variables.duplicate_lexical"
+                "native.variables.duplicate_lexical",
+                "native.variables.shadowed_lexical"
             ]
         );
         assert_eq!(findings.len(), 2);
@@ -1155,6 +1226,95 @@ mod tests {
             "Remove the duplicate lexical declarator or assign to the existing lexical variable."
         );
         assert_eq!(violations[0].severity, Severity::Gentle);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
+    fn native_shadowed_lexical_rule_reports_inner_shadowing() {
+        let source = "use strict;\nuse warnings;\nmy $value = 1;\n{ my $value = 2; print $value; }\nprint $value;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(ShadowedLexicalVariableRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.variables.shadowed_lexical");
+        assert_eq!(finding.category, CriticCategory::Semantic);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert_eq!(finding.message, "Lexical variable '$value' shadows an outer declaration");
+        assert_eq!(finding.suppression_key, "native.variables.shadowed_lexical");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$value");
+
+        let fix = finding.fix.as_ref().expect("shadowed lexical should offer a rename");
+        assert_eq!(fix.title, "Rename to '$inner_value'");
+        assert_eq!(fix.safety, FixSafety::Suggested);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].range, finding.range);
+        assert_eq!(fix.edits[0].new_text, "$inner_value");
+    }
+
+    #[test]
+    fn native_shadowed_lexical_rule_accepts_unique_nested_lexicals() {
+        let source = "use strict;\nuse warnings;\nmy $outer = 1;\n{ my $inner = 2; print $inner; }\nprint $outer;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(ShadowedLexicalVariableRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "unique nested lexicals should not be shadowing findings");
+    }
+
+    #[test]
+    fn native_shadowed_lexical_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $value = 1;\n{ my $value = 2; print $value; }\nprint $value;\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.variables.shadowed_lexical".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(ShadowedLexicalVariableRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.variables.shadowed_lexical -- fixture\nuse strict;\nuse warnings;\nmy $value = 1;\n{ my $value = 2; print $value; }\nprint $value;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_shadowed_lexical_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $value = 1;\n{ my $value = 2; print $value; }\nprint $value;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(ShadowedLexicalVariableRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.variables.shadowed_lexical");
+        assert_eq!(
+            violations[0].description,
+            "Lexical variable '$value' shadows an outer declaration"
+        );
+        assert_eq!(
+            violations[0].explanation,
+            "Rename the inner lexical variable or use the outer variable directly to avoid confusing scope shadowing."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
         assert_eq!(violations[0].file, "lib/App.pm");
     }
 

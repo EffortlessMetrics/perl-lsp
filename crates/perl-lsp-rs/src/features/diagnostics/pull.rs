@@ -1348,7 +1348,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nprint $x;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nprint $x + $shadow;\n",
             None,
             &context,
             None,
@@ -1414,6 +1414,23 @@ mod tests {
             duplicate.data.as_ref().ok_or("native duplicate lexical data should be populated")?;
         assert_eq!(data["code"], "native.variables.duplicate_lexical");
         assert_eq!(data["suppressionKey"], "native.variables.duplicate_lexical");
+        assert_eq!(data["fixable"], true);
+
+        let shadowed = items
+            .iter()
+            .find(|diag| {
+                diag.code
+                    .as_ref()
+                    .is_some_and(|code| matches!(code, NumberOrString::String(value) if value == "native.variables.shadowed_lexical"))
+            })
+            .ok_or("expected native shadowed lexical finding")?;
+        assert_eq!(shadowed.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(shadowed.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(shadowed.message, "Lexical variable '$shadow' shadows an outer declaration");
+        let data =
+            shadowed.data.as_ref().ok_or("native shadowed lexical data should be populated")?;
+        assert_eq!(data["code"], "native.variables.shadowed_lexical");
+        assert_eq!(data["suppressionKey"], "native.variables.shadowed_lexical");
         assert_eq!(data["fixable"], true);
         Ok(())
     }
