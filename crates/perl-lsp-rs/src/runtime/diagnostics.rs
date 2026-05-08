@@ -94,9 +94,14 @@ impl PullDiagnosticsOrchestrator {
     /// Build context from LspServer state.
     pub fn build_context(&self, server: &LspServer, uri: &str) -> PullDiagnosticsContext {
         // Get config values
-        let (perlcritic_enabled, perlcritic_severity, perlcritic_profile) = {
+        let (perlcritic_enabled, perlcritic_severity, perlcritic_profile, critic_engine) = {
             let cfg = server.config.lock();
-            (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+            (
+                cfg.perlcritic_enabled,
+                cfg.perlcritic_severity,
+                cfg.perlcritic_profile.clone(),
+                cfg.critic_engine,
+            )
         };
 
         let profile =
@@ -129,6 +134,7 @@ impl PullDiagnosticsOrchestrator {
             perlcritic_enabled,
             perlcritic_severity: perlcritic_severity.into(),
             perlcritic_profile: profile,
+            critic_engine,
             workspace_root,
             include_paths,
             markup_message_support,
@@ -149,17 +155,18 @@ impl PullDiagnosticsOrchestrator {
         use perl_lsp_rs_core::tooling::perl_critic::{CriticAnalyzer, CriticConfig};
 
         // Check config
-        let (enabled, severity, profile, theme) = {
+        let (enabled, severity, profile, theme, critic_engine) = {
             let cfg = server.config.lock();
             (
                 cfg.perlcritic_enabled,
                 cfg.perlcritic_severity,
                 cfg.perlcritic_profile.clone(),
                 cfg.perlcritic_theme.clone(),
+                cfg.critic_engine,
             )
         };
 
-        if !enabled {
+        if !enabled || critic_engine == perl_lsp_rs_core::config::CriticEngine::Native {
             return;
         }
 
@@ -1390,16 +1397,17 @@ impl LspServer {
         diagnostics: &mut Vec<InternalDiagnostic>,
     ) {
         // Check config: perlcritic must be explicitly enabled (opt-in)
-        let (enabled, severity, profile, theme) = {
+        let (enabled, severity, profile, theme, critic_engine) = {
             let cfg = self.config.lock();
             (
                 cfg.perlcritic_enabled,
                 cfg.perlcritic_severity,
                 cfg.perlcritic_profile.clone(),
                 cfg.perlcritic_theme.clone(),
+                cfg.critic_engine,
             )
         };
-        if !enabled {
+        if !enabled || critic_engine == perl_lsp_rs_core::config::CriticEngine::Native {
             return;
         }
         let profile = profile.and_then(|profile| (!profile.trim().is_empty()).then_some(profile));
