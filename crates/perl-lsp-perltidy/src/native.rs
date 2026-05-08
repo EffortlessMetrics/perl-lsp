@@ -591,7 +591,9 @@ fn range_includes_line(range: TextRange, line: u32) -> bool {
 }
 
 fn format_simple_line(line: &str, config: &FormatConfig) -> Option<String> {
-    format_simple_subroutine_line(line, config).or_else(|| format_simple_lexical_line(line))
+    format_simple_if_line(line, config)
+        .or_else(|| format_simple_subroutine_line(line, config))
+        .or_else(|| format_simple_lexical_line(line))
 }
 
 fn format_simple_lexical_line(line: &str) -> Option<String> {
@@ -636,6 +638,26 @@ fn format_simple_subroutine_line(line: &str, config: &FormatConfig) -> Option<St
     Some(formatted)
 }
 
+fn format_simple_if_line(line: &str, config: &FormatConfig) -> Option<String> {
+    let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
+    let (indent, body) = line.split_at(indent_len);
+    if body.is_empty() || body.contains('#') {
+        return None;
+    }
+
+    let mut stream = perl_parser_core::TokenStream::new(body);
+    let mut tokens = Vec::new();
+    loop {
+        let token = stream.next().ok()?;
+        if token.kind == perl_parser_core::TokenKind::Eof {
+            break;
+        }
+        tokens.push(token);
+    }
+
+    format_simple_if_tokens(&tokens, indent, config)
+}
+
 fn format_simple_subroutine_tokens(
     tokens: &[perl_parser_core::Token],
     indent: &str,
@@ -658,6 +680,51 @@ fn format_simple_subroutine_tokens(
     let statements = format_simple_statement_block(body_tokens)?;
     let body_indent = format!("{indent}{}", indent_unit(config));
     let mut formatted = format!("{indent}sub {} {{", tokens[1].text);
+
+    if statements.is_empty() {
+        formatted.push('\n');
+        formatted.push_str(indent);
+        formatted.push('}');
+        return Some(formatted);
+    }
+
+    for statement in statements {
+        formatted.push('\n');
+        formatted.push_str(&body_indent);
+        formatted.push_str(&statement);
+    }
+    formatted.push('\n');
+    formatted.push_str(indent);
+    formatted.push('}');
+    Some(formatted)
+}
+
+fn format_simple_if_tokens(
+    tokens: &[perl_parser_core::Token],
+    indent: &str,
+    config: &FormatConfig,
+) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.len() < 6 {
+        return None;
+    }
+    if tokens[0].kind != TokenKind::If || tokens[1].kind != TokenKind::LeftParen {
+        return None;
+    }
+
+    let (condition, next_index) = format_simple_condition_tokens(tokens, 2)?;
+    if tokens.get(next_index)?.kind != TokenKind::RightParen
+        || tokens.get(next_index + 1)?.kind != TokenKind::LeftBrace
+        || tokens.last()?.kind != TokenKind::RightBrace
+    {
+        return None;
+    }
+
+    let body_tokens = &tokens[next_index + 2..tokens.len() - 1];
+    let statements = format_simple_statement_block(body_tokens)?;
+    let body_indent = format!("{indent}{}", indent_unit(config));
+    let mut formatted = format!("{indent}if ({condition}) {{");
 
     if statements.is_empty() {
         formatted.push('\n');
@@ -780,6 +847,19 @@ fn format_simple_return_tokens(tokens: &[perl_parser_core::Token]) -> Option<Str
     }
 
     None
+}
+
+fn format_simple_condition_tokens(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+) -> Option<(String, usize)> {
+    if let Some((variable, next_index)) = format_variable_tokens(tokens, start) {
+        return Some((variable, next_index));
+    }
+
+    let token = tokens.get(start)?;
+    let value = simple_value_text(token)?;
+    Some((value.to_string(), start + 1))
 }
 
 fn indent_unit(config: &FormatConfig) -> String {
