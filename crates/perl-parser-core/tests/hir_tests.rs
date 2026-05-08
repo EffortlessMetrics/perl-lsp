@@ -1,5 +1,5 @@
 use perl_parser_core::hir::{
-    HirFile, HirKind, RecoveryConfidence, ScopeGraph, StashGraph, lower_ast,
+    CompileEnvironment, HirFile, HirKind, RecoveryConfidence, ScopeGraph, StashGraph, lower_ast,
 };
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 
@@ -211,6 +211,88 @@ fn render_stash_graph(graph: &StashGraph) -> String {
             boundary.provenance,
             boundary.confidence,
             boundary.reason
+        ));
+    }
+
+    lines.join("\n")
+}
+
+fn render_compile_environment(environment: &CompileEnvironment) -> String {
+    let mut lines = Vec::new();
+    lines.push("[directives]".to_string());
+    for directive in &environment.directives {
+        let module = directive.module.as_deref().unwrap_or("<dynamic>");
+        let package = directive.package_context.as_deref().unwrap_or("<none>");
+        let scope = directive
+            .scope_id
+            .map(|id| id.index().to_string())
+            .unwrap_or_else(|| "<none>".to_string());
+        lines.push(format!(
+            "{:?} {} {:?} args={} scope={} pkg={} {:?} {:?}",
+            directive.action,
+            module,
+            directive.kind,
+            directive.args.join(","),
+            scope,
+            package,
+            directive.provenance,
+            directive.confidence
+        ));
+    }
+
+    lines.push("[pragmas]".to_string());
+    for effect in &environment.pragma_effects {
+        let package = effect.package_context.as_deref().unwrap_or("<none>");
+        lines.push(format!(
+            "{} enabled={} args={} pkg={} {:?} {:?}",
+            effect.pragma,
+            effect.enabled,
+            effect.args.join(","),
+            package,
+            effect.provenance,
+            effect.confidence
+        ));
+    }
+
+    lines.push("[inc]".to_string());
+    for root in &environment.inc_roots {
+        let package = root.package_context.as_deref().unwrap_or("<none>");
+        lines.push(format!(
+            "{} {:?} {:?} pkg={} {:?} {:?}",
+            root.path, root.action, root.kind, package, root.provenance, root.confidence
+        ));
+    }
+
+    lines.push("[modules]".to_string());
+    for request in &environment.module_requests {
+        let target = request.target.as_deref().unwrap_or("<dynamic>");
+        let package = request.package_context.as_deref().unwrap_or("<none>");
+        lines.push(format!(
+            "{} {:?} {:?} pkg={} {:?} {:?}",
+            target,
+            request.kind,
+            request.resolution,
+            package,
+            request.provenance,
+            request.confidence
+        ));
+    }
+
+    lines.push("[phase-blocks]".to_string());
+    for phase in &environment.phase_blocks {
+        let package = phase.package_context.as_deref().unwrap_or("<none>");
+        lines.push(format!(
+            "{:?} pkg={} {:?} {:?}",
+            phase.phase, package, phase.provenance, phase.confidence
+        ));
+    }
+
+    lines.push("[boundaries]".to_string());
+    for boundary in &environment.dynamic_boundaries {
+        let package = boundary.package_context.as_deref().unwrap_or("<none>");
+        lines.push(format!(
+            "{:?} pkg={} {:?} {:?} reason={}",
+            boundary.kind, package, boundary.provenance, boundary.confidence, boundary.reason
         ));
     }
 
@@ -506,6 +588,71 @@ fn hir_stash_graph_records_package_slots_inheritance_and_dynamic_boundaries()
             )
         }),
         "AUTOLOAD should emit a HIR dynamic boundary"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_compile_environment_records_directives_without_provider_cutover()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(
+        "package Env::Demo;\n\
+         use strict;\n\
+         use warnings qw(all);\n\
+         use feature 'signatures';\n\
+         no warnings 'once';\n\
+         use lib qw(lib t/lib);\n\
+         no lib 'legacy/lib';\n\
+         use parent 'Base::Class';\n\
+         use constant ANSWER => 42;\n\
+         require Other::Module;\n\
+         require $dynamic;\n\
+         BEGIN { require Runtime::Thing; }\n",
+    );
+
+    assert_eq!(
+        render_compile_environment(&file.compile_environment),
+        "[directives]\n\
+         Use strict Strict args= scope=1 pkg=Env::Demo ExactAst High\n\
+         Use warnings Warnings args=qw(all) scope=1 pkg=Env::Demo ExactAst High\n\
+         Use feature Feature args='signatures' scope=1 pkg=Env::Demo ExactAst High\n\
+         No warnings Warnings args='once' scope=1 pkg=Env::Demo ExactAst High\n\
+         Use lib Lib args=qw(lib t/lib) scope=1 pkg=Env::Demo ExactAst High\n\
+         No lib Lib args='legacy/lib' scope=1 pkg=Env::Demo ExactAst High\n\
+         Use parent Inheritance args='Base::Class' scope=1 pkg=Env::Demo ExactAst High\n\
+         Use constant Constant args=ANSWER,42 scope=1 pkg=Env::Demo ExactAst High\n\
+         Require Other::Module Module args= scope=1 pkg=Env::Demo ExactAst High\n\
+         Require <dynamic> Dynamic args= scope=1 pkg=Env::Demo ExactAst High\n\
+         Require Runtime::Thing Module args= scope=3 pkg=Env::Demo ExactAst High\n\
+         [pragmas]\n\
+         strict enabled=true args= pkg=Env::Demo ExactAst High\n\
+         warnings enabled=true args=qw(all) pkg=Env::Demo ExactAst High\n\
+         feature enabled=true args='signatures' pkg=Env::Demo ExactAst High\n\
+         warnings enabled=false args='once' pkg=Env::Demo ExactAst High\n\
+         [inc]\n\
+         lib Add UseLib pkg=Env::Demo ExactAst High\n\
+         t/lib Add UseLib pkg=Env::Demo ExactAst High\n\
+         legacy/lib Remove UseLib pkg=Env::Demo ExactAst High\n\
+         [modules]\n\
+         parent Use Deferred pkg=Env::Demo ExactAst High\n\
+         Base::Class Parent Deferred pkg=Env::Demo ExactAst High\n\
+         constant Use Deferred pkg=Env::Demo ExactAst High\n\
+         Other::Module Require Deferred pkg=Env::Demo ExactAst High\n\
+         <dynamic> Require Dynamic pkg=Env::Demo ExactAst Low\n\
+         Runtime::Thing Require Deferred pkg=Env::Demo ExactAst High\n\
+         [phase-blocks]\n\
+         Begin pkg=Env::Demo ExactAst High\n\
+         [boundaries]\n\
+         DynamicRequire pkg=Env::Demo DynamicBoundary Low reason=require target is not statically known\n\
+         PhaseBlockExecution pkg=Env::Demo DynamicBoundary Low reason=phase block compile-time execution is recorded but not evaluated"
+    );
+
+    assert!(
+        !file.items.iter().any(
+            |item| matches!(&item.kind, HirKind::CallExpr(expr) if expr.name == "provider_cutover")
+        ),
+        "compile-environment facts must not imply live provider cutover"
     );
 
     Ok(())

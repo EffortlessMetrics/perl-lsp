@@ -4,9 +4,13 @@ use crate::{Node, NodeKind, SourceLocation};
 
 use super::model::{
     AstAnchor, BarewordExpr, Binding, BindingReference, BlockShell, CallExpr, CallForm,
-    DynamicBoundary, DynamicBoundaryKind, GlobSlot, GlobSlotKind, GlobSlotSource, HirBindingId,
-    HirFile, HirId, HirItem, HirKind, HirScopeId, IndirectCallExpr, InheritanceSource, LiteralExpr,
-    LiteralKind, MethodCallExpr, MethodDecl, PackageDecl, PackageInheritanceEdge, PackageStash,
+    CompileConfidence, CompileDirective, CompileDirectiveAction, CompileDirectiveKind,
+    CompileEnvironment, CompileEnvironmentBoundary, CompileEnvironmentBoundaryKind, CompilePhase,
+    CompilePhaseBlock, CompileProvenance, DynamicBoundary, DynamicBoundaryKind, GlobSlot,
+    GlobSlotKind, GlobSlotSource, HirBindingId, HirFile, HirId, HirItem, HirKind, HirScopeId,
+    IncRootAction, IncRootFact, IncRootKind, IndirectCallExpr, InheritanceSource, LiteralExpr,
+    LiteralKind, MethodCallExpr, MethodDecl, ModuleRequest, ModuleRequestKind,
+    ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash, PragmaEffect,
     RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind, StashConfidence,
     StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph, StashProvenance, StorageClass,
     SubDecl, UseDecl, VariableBinding, VariableDecl,
@@ -16,8 +20,8 @@ use super::model::{
 ///
 /// This is intentionally conservative: it emits only package, subroutine,
 /// method, use, require, variable-declaration, and expression-shell items. It
-/// records a local scope graph, but it does not perform stash, import, or
-/// provider behavior changes.
+/// records local scope, stash, and compile-environment side graphs, but it does
+/// not change provider behavior.
 pub fn lower_ast(ast: &Node) -> HirFile {
     let mut lowerer = Lowerer::new(ast.location);
     lowerer.visit(ast, RecoveryConfidence::Parsed);
@@ -30,6 +34,7 @@ struct Lowerer {
     package_context: Option<String>,
     scope_graph: ScopeGraph,
     stash_graph: StashGraph,
+    compile_environment: CompileEnvironment,
     scope_stack: Vec<HirScopeId>,
 }
 
@@ -51,12 +56,18 @@ impl Lowerer {
             package_context: None,
             scope_graph,
             stash_graph: StashGraph::default(),
+            compile_environment: CompileEnvironment::default(),
             scope_stack: vec![file_scope],
         }
     }
 
     fn finish(self) -> HirFile {
-        HirFile { items: self.items, scope_graph: self.scope_graph, stash_graph: self.stash_graph }
+        HirFile {
+            items: self.items,
+            scope_graph: self.scope_graph,
+            stash_graph: self.stash_graph,
+            compile_environment: self.compile_environment,
+        }
     }
 
     fn visit(&mut self, node: &Node, confidence: RecoveryConfidence) {
@@ -244,20 +255,54 @@ impl Lowerer {
                     self.package_context.clone(),
                     Some(self.current_scope()),
                 );
+                self.record_compile_directive(
+                    CompileDirectiveAction::Use,
+                    Some(module.clone()),
+                    args.clone(),
+                    node.location,
+                    Some(item_id),
+                    compile_directive_kind(module),
+                );
+                self.record_use_compile_effects(module, args, node.location, Some(item_id));
                 self.record_use_stash_effects(module, args, node.location, item_id);
             }
+            NodeKind::No { module, args, has_filter_risk: _ } => {
+                self.record_compile_directive(
+                    CompileDirectiveAction::No,
+                    Some(module.clone()),
+                    args.clone(),
+                    node.location,
+                    None,
+                    compile_directive_kind(module),
+                );
+                self.record_no_compile_effects(module, args, node.location);
+            }
             NodeKind::FunctionCall { name, args } if name == "require" => {
-                self.push_item(
+                let target = require_target(args.first());
+                let item_id = self.push_item(
                     node,
                     None,
                     confidence,
                     HirKind::RequireDecl(RequireDecl {
-                        target: require_target(args.first()),
+                        target: target.clone(),
                         arg_count: args.len(),
                     }),
                     self.package_context.clone(),
                     Some(self.current_scope()),
                 );
+                self.record_compile_directive(
+                    CompileDirectiveAction::Require,
+                    target.clone(),
+                    Vec::new(),
+                    node.location,
+                    Some(item_id),
+                    if target.is_some() {
+                        CompileDirectiveKind::Module
+                    } else {
+                        CompileDirectiveKind::Dynamic
+                    },
+                );
+                self.record_require_compile_effect(target, node.location, Some(item_id));
                 self.visit_children(node, confidence);
             }
             NodeKind::FunctionCall { name, args } => {
@@ -511,12 +556,13 @@ impl Lowerer {
             NodeKind::Variable { sigil, name } => {
                 self.record_reference(sigil, name, node.location);
             }
-            NodeKind::PhaseBlock { phase: _, block, .. } => {
+            NodeKind::PhaseBlock { phase, block, .. } => {
                 self.enter_scope(
                     ScopeKind::PhaseBlock,
                     node.location,
                     self.package_context.clone(),
                 );
+                self.record_phase_block(phase, node.location);
                 self.visit(block, confidence);
                 self.exit_scope();
             }
@@ -808,6 +854,244 @@ impl Lowerer {
                 }
             }
         }
+    }
+
+    fn record_compile_directive(
+        &mut self,
+        action: CompileDirectiveAction,
+        module: Option<String>,
+        args: Vec<String>,
+        range: SourceLocation,
+        item_id: Option<HirId>,
+        kind: CompileDirectiveKind,
+    ) {
+        self.compile_environment.directives.push(CompileDirective {
+            action,
+            module,
+            args,
+            range,
+            item_id,
+            scope_id: Some(self.current_scope()),
+            package_context: self.package_context.clone(),
+            kind,
+            provenance: CompileProvenance::ExactAst,
+            confidence: CompileConfidence::High,
+        });
+    }
+
+    fn record_use_compile_effects(
+        &mut self,
+        module: &str,
+        args: &[String],
+        range: SourceLocation,
+        item_id: Option<HirId>,
+    ) {
+        match module {
+            "strict" | "warnings" | "feature" => {
+                self.record_pragma_effect(module, true, args, range, item_id);
+            }
+            "lib" => {
+                self.record_inc_root_effects(args, IncRootAction::Add, range, item_id);
+            }
+            "parent" => {
+                self.record_module_request(
+                    Some(module.to_string()),
+                    ModuleRequestKind::Use,
+                    range,
+                    item_id,
+                );
+                for parent in static_package_args(args) {
+                    self.record_module_request(
+                        Some(parent),
+                        ModuleRequestKind::Parent,
+                        range,
+                        item_id,
+                    );
+                }
+            }
+            "base" => {
+                self.record_module_request(
+                    Some(module.to_string()),
+                    ModuleRequestKind::Use,
+                    range,
+                    item_id,
+                );
+                for parent in static_package_args(args) {
+                    self.record_module_request(
+                        Some(parent),
+                        ModuleRequestKind::Base,
+                        range,
+                        item_id,
+                    );
+                }
+            }
+            _ => {
+                self.record_module_request(
+                    Some(module.to_string()),
+                    ModuleRequestKind::Use,
+                    range,
+                    item_id,
+                );
+            }
+        }
+    }
+
+    fn record_no_compile_effects(&mut self, module: &str, args: &[String], range: SourceLocation) {
+        match module {
+            "strict" | "warnings" | "feature" => {
+                self.record_pragma_effect(module, false, args, range, None);
+            }
+            "lib" => {
+                self.record_inc_root_effects(args, IncRootAction::Remove, range, None);
+            }
+            _ => {}
+        }
+    }
+
+    fn record_require_compile_effect(
+        &mut self,
+        target: Option<String>,
+        range: SourceLocation,
+        item_id: Option<HirId>,
+    ) {
+        let status = if target.is_some() {
+            ModuleResolutionStatus::Deferred
+        } else {
+            ModuleResolutionStatus::Dynamic
+        };
+        self.compile_environment.module_requests.push(ModuleRequest {
+            target: target.clone(),
+            kind: ModuleRequestKind::Require,
+            range,
+            directive_item: item_id,
+            scope_id: Some(self.current_scope()),
+            package_context: self.package_context.clone(),
+            resolution: status,
+            provenance: CompileProvenance::ExactAst,
+            confidence: if target.is_some() {
+                CompileConfidence::High
+            } else {
+                CompileConfidence::Low
+            },
+        });
+        if target.is_none() {
+            self.record_compile_environment_boundary(
+                CompileEnvironmentBoundaryKind::DynamicRequire,
+                range,
+                item_id,
+                "require target is not statically known",
+            );
+        }
+    }
+
+    fn record_pragma_effect(
+        &mut self,
+        pragma: &str,
+        enabled: bool,
+        args: &[String],
+        range: SourceLocation,
+        item_id: Option<HirId>,
+    ) {
+        self.compile_environment.pragma_effects.push(PragmaEffect {
+            pragma: pragma.to_string(),
+            enabled,
+            args: args.to_vec(),
+            range,
+            directive_item: item_id,
+            scope_id: Some(self.current_scope()),
+            package_context: self.package_context.clone(),
+            provenance: CompileProvenance::ExactAst,
+            confidence: CompileConfidence::High,
+        });
+    }
+
+    fn record_inc_root_effects(
+        &mut self,
+        args: &[String],
+        action: IncRootAction,
+        range: SourceLocation,
+        item_id: Option<HirId>,
+    ) {
+        let paths = static_path_args(args);
+        if paths.is_empty() {
+            self.record_compile_environment_boundary(
+                CompileEnvironmentBoundaryKind::DynamicIncRoot,
+                range,
+                item_id,
+                "include root arguments are not statically known",
+            );
+            return;
+        }
+
+        for path in paths {
+            self.compile_environment.inc_roots.push(IncRootFact {
+                path,
+                action,
+                kind: IncRootKind::UseLib,
+                range,
+                directive_item: item_id,
+                scope_id: Some(self.current_scope()),
+                package_context: self.package_context.clone(),
+                provenance: CompileProvenance::ExactAst,
+                confidence: CompileConfidence::High,
+            });
+        }
+    }
+
+    fn record_module_request(
+        &mut self,
+        target: Option<String>,
+        kind: ModuleRequestKind,
+        range: SourceLocation,
+        item_id: Option<HirId>,
+    ) {
+        self.compile_environment.module_requests.push(ModuleRequest {
+            target,
+            kind,
+            range,
+            directive_item: item_id,
+            scope_id: Some(self.current_scope()),
+            package_context: self.package_context.clone(),
+            resolution: ModuleResolutionStatus::Deferred,
+            provenance: CompileProvenance::ExactAst,
+            confidence: CompileConfidence::High,
+        });
+    }
+
+    fn record_phase_block(&mut self, phase: &str, range: SourceLocation) {
+        self.compile_environment.phase_blocks.push(CompilePhaseBlock {
+            phase: compile_phase(phase),
+            range,
+            scope_id: Some(self.current_scope()),
+            package_context: self.package_context.clone(),
+            provenance: CompileProvenance::ExactAst,
+            confidence: CompileConfidence::High,
+        });
+        self.record_compile_environment_boundary(
+            CompileEnvironmentBoundaryKind::PhaseBlockExecution,
+            range,
+            None,
+            "phase block compile-time execution is recorded but not evaluated",
+        );
+    }
+
+    fn record_compile_environment_boundary(
+        &mut self,
+        kind: CompileEnvironmentBoundaryKind,
+        range: SourceLocation,
+        item_id: Option<HirId>,
+        reason: &str,
+    ) {
+        self.compile_environment.dynamic_boundaries.push(CompileEnvironmentBoundary {
+            kind,
+            range,
+            boundary_item: item_id,
+            scope_id: Some(self.current_scope()),
+            package_context: self.package_context.clone(),
+            reason: reason.to_string(),
+            provenance: CompileProvenance::DynamicBoundary,
+            confidence: CompileConfidence::Low,
+        });
     }
 
     fn record_use_stash_effects(
@@ -1122,6 +1406,51 @@ fn static_package_args(args: &[String]) -> Vec<String> {
         .flat_map(|arg| static_names_from_arg(arg))
         .filter(|arg| arg != "-norequire")
         .collect()
+}
+
+fn static_path_args(args: &[String]) -> Vec<String> {
+    args.iter()
+        .flat_map(|arg| {
+            let trimmed = arg.trim();
+            if let Some(inner) =
+                trimmed.strip_prefix("qw(").and_then(|value| value.strip_suffix(')'))
+            {
+                return inner
+                    .split_whitespace()
+                    .map(clean_static_path)
+                    .filter(|path| !path.is_empty())
+                    .collect::<Vec<_>>();
+            }
+            vec![clean_static_path(trimmed)].into_iter().filter(|path| !path.is_empty()).collect()
+        })
+        .collect()
+}
+
+fn clean_static_path(path: &str) -> String {
+    path.trim().trim_matches(',').trim_matches('"').trim_matches('\'').to_string()
+}
+
+fn compile_directive_kind(module: &str) -> CompileDirectiveKind {
+    match module {
+        "strict" => CompileDirectiveKind::Strict,
+        "warnings" => CompileDirectiveKind::Warnings,
+        "feature" => CompileDirectiveKind::Feature,
+        "lib" => CompileDirectiveKind::Lib,
+        "parent" | "base" => CompileDirectiveKind::Inheritance,
+        "constant" => CompileDirectiveKind::Constant,
+        _ => CompileDirectiveKind::Module,
+    }
+}
+
+fn compile_phase(phase: &str) -> CompilePhase {
+    match phase {
+        "BEGIN" => CompilePhase::Begin,
+        "UNITCHECK" => CompilePhase::UnitCheck,
+        "CHECK" => CompilePhase::Check,
+        "INIT" => CompilePhase::Init,
+        "END" => CompilePhase::End,
+        _ => CompilePhase::Unknown,
+    }
 }
 
 fn constant_names_from_use_args(args: &[String]) -> Vec<String> {

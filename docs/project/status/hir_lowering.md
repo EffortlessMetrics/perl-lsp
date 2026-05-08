@@ -11,8 +11,8 @@ This status tracks parser AST construct coverage for the crate-local HIR baselin
 | --- | ---: | --- |
 | `lowered` | 16 | Emits one or more HIR items today. |
 | `dynamic_boundary` | 3 | Emits an explicit dynamic-boundary HIR item for unsupported static truth. |
-| `intentionally_skipped` | 16 | Traversal, metadata, or recovery placeholder; no standalone HIR item expected. |
-| `not_yet_modeled` | 34 | Parser AST construct exists, but HIR has no shell yet. |
+| `intentionally_skipped` | 18 | Traversal, metadata, or recovery placeholder; no standalone HIR item expected. |
+| `not_yet_modeled` | 32 | Parser AST construct exists, but HIR has no shell yet. |
 
 AST kinds tracked: `69`. HIR construct kinds tracked: `13`.
 
@@ -57,11 +57,11 @@ AST kinds tracked: `69`. HIR construct kinds tracked: `13`.
 | `MissingIdentifier` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
 | `MissingStatement` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
 | `NamedParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
-| `No` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
+| `No` | `intentionally_skipped` | - | `no` directives record CompileEnvironment facts; no standalone HIR item yet. |
 | `Number` | `lowered` | `LiteralExpr` | Lowered as numeric literal shell. |
 | `OptionalParameter` | `intentionally_skipped` | - | Captured as ScopeGraph parameter binding metadata; no standalone HIR item. |
 | `Package` | `lowered` | `PackageDecl` | Lowered and updates package context plus package scope. |
-| `PhaseBlock` | `not_yet_modeled` | - | No HIR shell yet; phase blocks contribute a ScopeGraph phase frame. |
+| `PhaseBlock` | `intentionally_skipped` | - | Phase blocks record CompileEnvironment phase facts and contribute a ScopeGraph phase frame. |
 | `Program` | `intentionally_skipped` | - | Root wrapper is traversal-only. |
 | `Prototype` | `intentionally_skipped` | - | Captured as declaration metadata. |
 | `Readline` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
@@ -82,7 +82,7 @@ AST kinds tracked: `69`. HIR construct kinds tracked: `13`.
 | `Undef` | `lowered` | `LiteralExpr` | Lowered as undef literal shell. |
 | `UnknownRest` | `intentionally_skipped` | - | Parser recovery placeholder, intentionally no HIR item. |
 | `Untie` | `not_yet_modeled` | - | No first-slice HIR shell yet. |
-| `Use` | `lowered` | `UseDecl` | Lowered as use declaration shell. |
+| `Use` | `lowered` | `UseDecl` | Lowered as use declaration shell and records CompileEnvironment directive facts. |
 | `Variable` | `intentionally_skipped` | - | Consumed by declaration lowering or recorded as ScopeGraph references. |
 | `VariableDeclaration` | `lowered` | `VariableDecl` | Lowered as single variable declaration shell and records ScopeGraph bindings. |
 | `VariableListDeclaration` | `lowered` | `VariableDecl` | Lowered as list variable declaration shell and records ScopeGraph bindings. |

@@ -101,6 +101,8 @@ pub struct HirFile {
     pub scope_graph: ScopeGraph,
     /// Package stash graph lowered beside HIR items.
     pub stash_graph: StashGraph,
+    /// Compile-environment facts lowered beside HIR items.
+    pub compile_environment: CompileEnvironment,
 }
 
 impl HirFile {
@@ -438,6 +440,302 @@ pub enum StashDynamicBoundaryKind {
     DynamicStashMutation,
     /// `AUTOLOAD` makes method lookup dynamic for this package.
     Autoload,
+}
+
+/// HIR-local compile environment for compiler-substrate proof.
+///
+/// This model records compile-time directives, pragma state changes, include
+/// roots, module requests, phase blocks, and dynamic boundaries without
+/// changing LSP provider behavior.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct CompileEnvironment {
+    /// `use`, `no`, and `require` directives in stable source order.
+    pub directives: Vec<CompileDirective>,
+    /// Pragma or feature effects in stable source order.
+    pub pragma_effects: Vec<PragmaEffect>,
+    /// Include-root effects such as `use lib` and `no lib`.
+    pub inc_roots: Vec<IncRootFact>,
+    /// Static and dynamic module requests observed in the file.
+    pub module_requests: Vec<ModuleRequest>,
+    /// Compile-time phase blocks observed in source order.
+    pub phase_blocks: Vec<CompilePhaseBlock>,
+    /// Unsupported or dynamic compile-environment boundaries.
+    pub dynamic_boundaries: Vec<CompileEnvironmentBoundary>,
+}
+
+/// One compile-time directive.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct CompileDirective {
+    /// Directive action.
+    pub action: CompileDirectiveAction,
+    /// Module or pragma name.
+    pub module: Option<String>,
+    /// Static arguments captured by the parser.
+    pub args: Vec<String>,
+    /// Source range for the directive.
+    pub range: SourceLocation,
+    /// HIR item attached to this directive, when one exists.
+    pub item_id: Option<HirId>,
+    /// Scope containing the directive.
+    pub scope_id: Option<HirScopeId>,
+    /// Package context active at the directive.
+    pub package_context: Option<String>,
+    /// Directive classification.
+    pub kind: CompileDirectiveKind,
+    /// How this fact was produced.
+    pub provenance: CompileProvenance,
+    /// Confidence in this fact.
+    pub confidence: CompileConfidence,
+}
+
+/// Compile-time directive action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum CompileDirectiveAction {
+    /// `use Module ...`.
+    Use,
+    /// `no Module ...`.
+    No,
+    /// `require Module`.
+    Require,
+}
+
+/// Compile-time directive classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum CompileDirectiveKind {
+    /// `strict` pragma.
+    Strict,
+    /// `warnings` pragma.
+    Warnings,
+    /// `feature` pragma.
+    Feature,
+    /// `lib` include-path pragma.
+    Lib,
+    /// Inheritance helper such as `parent` or `base`.
+    Inheritance,
+    /// Constant declaration helper.
+    Constant,
+    /// Ordinary module load/import directive.
+    Module,
+    /// Dynamic or unsupported directive shape.
+    Dynamic,
+}
+
+/// Pragma or feature state change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PragmaEffect {
+    /// Pragma name.
+    pub pragma: String,
+    /// Whether the pragma is being enabled (`use`) or disabled (`no`).
+    pub enabled: bool,
+    /// Static arguments captured by the parser.
+    pub args: Vec<String>,
+    /// Source range for the effect.
+    pub range: SourceLocation,
+    /// Directive that produced this effect.
+    pub directive_item: Option<HirId>,
+    /// Scope containing the effect.
+    pub scope_id: Option<HirScopeId>,
+    /// Package context active at the effect.
+    pub package_context: Option<String>,
+    /// How this fact was produced.
+    pub provenance: CompileProvenance,
+    /// Confidence in this fact.
+    pub confidence: CompileConfidence,
+}
+
+/// Include-root effect.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct IncRootFact {
+    /// Include root path as written after static cleanup.
+    pub path: String,
+    /// Whether the root is added or removed.
+    pub action: IncRootAction,
+    /// Source of the include root.
+    pub kind: IncRootKind,
+    /// Source range for the effect.
+    pub range: SourceLocation,
+    /// Directive that produced this effect.
+    pub directive_item: Option<HirId>,
+    /// Scope containing the effect.
+    pub scope_id: Option<HirScopeId>,
+    /// Package context active at the effect.
+    pub package_context: Option<String>,
+    /// How this fact was produced.
+    pub provenance: CompileProvenance,
+    /// Confidence in this fact.
+    pub confidence: CompileConfidence,
+}
+
+/// Include-root action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum IncRootAction {
+    /// Add an include root.
+    Add,
+    /// Remove an include root.
+    Remove,
+}
+
+/// Include-root source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum IncRootKind {
+    /// Root came from `use lib` / `no lib`.
+    UseLib,
+    /// Root came from configured include paths.
+    Configured,
+    /// Root came from `PERL5LIB`.
+    Perl5Lib,
+    /// Root came from system `@INC`.
+    SystemInc,
+}
+
+/// Module load request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ModuleRequest {
+    /// Static target, when known.
+    pub target: Option<String>,
+    /// Source shape that requested the module.
+    pub kind: ModuleRequestKind,
+    /// Source range for the request.
+    pub range: SourceLocation,
+    /// Directive that produced this request.
+    pub directive_item: Option<HirId>,
+    /// Scope containing the request.
+    pub scope_id: Option<HirScopeId>,
+    /// Package context active at the request.
+    pub package_context: Option<String>,
+    /// Static resolution status for this first slice.
+    pub resolution: ModuleResolutionStatus,
+    /// How this fact was produced.
+    pub provenance: CompileProvenance,
+    /// Confidence in this fact.
+    pub confidence: CompileConfidence,
+}
+
+/// Source shape for a module load request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ModuleRequestKind {
+    /// `use Module`.
+    Use,
+    /// `require Module`.
+    Require,
+    /// `use parent`.
+    Parent,
+    /// `use base`.
+    Base,
+}
+
+/// Static module-resolution status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ModuleResolutionStatus {
+    /// Static module target was recorded, but path resolution is intentionally deferred.
+    Deferred,
+    /// Module target is dynamic and cannot be resolved statically.
+    Dynamic,
+}
+
+/// Compile-time phase block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct CompilePhaseBlock {
+    /// Phase kind.
+    pub phase: CompilePhase,
+    /// Source range for the block.
+    pub range: SourceLocation,
+    /// Scope containing the block.
+    pub scope_id: Option<HirScopeId>,
+    /// Package context active at the block.
+    pub package_context: Option<String>,
+    /// How this fact was produced.
+    pub provenance: CompileProvenance,
+    /// Confidence in this fact.
+    pub confidence: CompileConfidence,
+}
+
+/// Perl compile/runtime phase.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum CompilePhase {
+    /// `BEGIN`.
+    Begin,
+    /// `UNITCHECK`.
+    UnitCheck,
+    /// `CHECK`.
+    Check,
+    /// `INIT`.
+    Init,
+    /// `END`.
+    End,
+    /// Unknown phase spelling.
+    Unknown,
+}
+
+/// Dynamic compile-environment boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct CompileEnvironmentBoundary {
+    /// Boundary category.
+    pub kind: CompileEnvironmentBoundaryKind,
+    /// Source range for the boundary.
+    pub range: SourceLocation,
+    /// HIR item that also records this boundary, when available.
+    pub boundary_item: Option<HirId>,
+    /// Scope containing the boundary.
+    pub scope_id: Option<HirScopeId>,
+    /// Package context active at the boundary.
+    pub package_context: Option<String>,
+    /// Short reason for status/proof output.
+    pub reason: String,
+    /// How this fact was produced.
+    pub provenance: CompileProvenance,
+    /// Confidence in this fact.
+    pub confidence: CompileConfidence,
+}
+
+/// Dynamic compile-environment boundary category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum CompileEnvironmentBoundaryKind {
+    /// `require` target could not be determined statically.
+    DynamicRequire,
+    /// Include-root effect is dynamic or unsupported.
+    DynamicIncRoot,
+    /// Phase block contains compile-time execution that is not evaluated here.
+    PhaseBlockExecution,
+}
+
+/// Provenance for HIR-local compile-environment facts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum CompileProvenance {
+    /// Fact came directly from parser AST syntax.
+    ExactAst,
+    /// Fact came from a simple compile-time desugaring.
+    DesugaredAst,
+    /// Fact came from conservative dynamic-boundary classification.
+    DynamicBoundary,
+}
+
+/// Confidence for HIR-local compile-environment facts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum CompileConfidence {
+    /// High-confidence exact or simple desugared fact.
+    High,
+    /// Medium-confidence static interpretation.
+    Medium,
+    /// Low-confidence dynamic-boundary fact.
+    Low,
 }
 
 /// First-slice HIR constructs.

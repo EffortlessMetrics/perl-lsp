@@ -10,9 +10,13 @@ mod model;
 pub use lower::lower_ast;
 pub use model::{
     AstAnchor, BarewordExpr, Binding, BindingReference, BlockShell, CallExpr, CallForm,
-    DynamicBoundary, DynamicBoundaryKind, GlobSlot, GlobSlotKind, GlobSlotSource, HirBindingId,
-    HirFile, HirId, HirItem, HirKind, HirScopeId, IndirectCallExpr, InheritanceSource, LiteralExpr,
-    LiteralKind, MethodCallExpr, MethodDecl, PackageDecl, PackageInheritanceEdge, PackageStash,
+    CompileConfidence, CompileDirective, CompileDirectiveAction, CompileDirectiveKind,
+    CompileEnvironment, CompileEnvironmentBoundary, CompileEnvironmentBoundaryKind, CompilePhase,
+    CompilePhaseBlock, CompileProvenance, DynamicBoundary, DynamicBoundaryKind, GlobSlot,
+    GlobSlotKind, GlobSlotSource, HirBindingId, HirFile, HirId, HirItem, HirKind, HirScopeId,
+    IncRootAction, IncRootFact, IncRootKind, IndirectCallExpr, InheritanceSource, LiteralExpr,
+    LiteralKind, MethodCallExpr, MethodDecl, ModuleRequest, ModuleRequestKind,
+    ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash, PragmaEffect,
     RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind, StashConfidence,
     StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph, StashProvenance, StorageClass,
     SubDecl, UseDecl, VariableBinding, VariableDecl,
