@@ -1348,7 +1348,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nprint $x + $shadow;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nprint $x + $shadow;\n",
             None,
             &context,
             None,
@@ -1394,6 +1394,25 @@ mod tests {
         let data = unused.data.as_ref().ok_or("native unused lexical data should be populated")?;
         assert_eq!(data["code"], "native.variables.unused_lexical");
         assert_eq!(data["suppressionKey"], "native.variables.unused_lexical");
+        assert_eq!(data["fixable"], true);
+
+        let unused_parameter = items
+            .iter()
+            .find(|diag| {
+                diag.code
+                    .as_ref()
+                    .is_some_and(|code| matches!(code, NumberOrString::String(value) if value == "native.variables.unused_parameter"))
+            })
+            .ok_or("expected native unused parameter finding")?;
+        assert_eq!(unused_parameter.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(unused_parameter.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(unused_parameter.message, "Parameter '$unused_param' is never used");
+        let data = unused_parameter
+            .data
+            .as_ref()
+            .ok_or("native unused parameter data should be populated")?;
+        assert_eq!(data["code"], "native.variables.unused_parameter");
+        assert_eq!(data["suppressionKey"], "native.variables.unused_parameter");
         assert_eq!(data["fixable"], true);
 
         let duplicate = items

@@ -16,6 +16,7 @@ pub use native::{
     CriticSuppression, CriticSuppressionMap, CriticSuppressionScope, CriticTextEdit,
     DuplicateLexicalDeclarationRule, FixSafety, NativeCriticRegistry, RequireUseStrictRule,
     RequireUseWarningsRule, ShadowedLexicalVariableRule, UnusedLexicalVariableRule,
+    UnusedParameterRule,
 };
 pub use quick_fix::{QuickFix, TextEdit};
 pub use types::{CriticConfig, Severity, Violation};
