@@ -113,6 +113,61 @@ impl CriticFinding {
     }
 }
 
+/// Scope covered by a native critic suppression directive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CriticSuppressionScope {
+    /// Suppression applies to the whole file.
+    File,
+}
+
+/// Parsed native critic suppression directive.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CriticSuppression {
+    /// Suppressed rule ID.
+    pub rule_id: String,
+    /// Scope covered by this directive.
+    pub scope: CriticSuppressionScope,
+    /// Zero-based line where the directive appears.
+    pub line: usize,
+    /// Optional human reason after `--`.
+    pub reason: Option<String>,
+}
+
+/// Parsed native critic suppressions for a source file.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CriticSuppressionMap {
+    suppressions: Vec<CriticSuppression>,
+}
+
+impl CriticSuppressionMap {
+    /// Parse native critic suppression directives from source text.
+    #[must_use]
+    pub fn from_source(source: &str) -> Self {
+        let suppressions = source
+            .lines()
+            .enumerate()
+            .flat_map(|(line, text)| parse_suppression_line(line, text))
+            .collect();
+
+        Self { suppressions }
+    }
+
+    /// Parsed suppression records.
+    #[must_use]
+    pub fn suppressions(&self) -> &[CriticSuppression] {
+        &self.suppressions
+    }
+
+    /// Whether this map suppresses a native critic finding.
+    #[must_use]
+    pub fn suppresses(&self, finding: &CriticFinding) -> bool {
+        self.suppressions.iter().any(|suppression| {
+            suppression.rule_id == finding.rule_id || suppression.rule_id == finding.suppression_key
+        })
+    }
+}
+
 /// Native critic rule context.
 pub struct CriticContext<'a> {
     /// Source text being analyzed.
@@ -211,7 +266,8 @@ impl NativeCriticRegistry {
             rule.check(ctx, &mut findings);
         }
 
-        findings
+        let suppressions = CriticSuppressionMap::from_source(ctx.source);
+        findings.into_iter().filter(|finding| !suppressions.suppresses(finding)).collect()
     }
 
     /// Run all registered rules and return current legacy violation values.
@@ -227,6 +283,36 @@ impl NativeCriticRegistry {
         let file = file.into();
         self.check(ctx).into_iter().map(|finding| finding.to_violation(file.clone())).collect()
     }
+}
+
+fn parse_suppression_line(line: usize, text: &str) -> Vec<CriticSuppression> {
+    const NO_CRITIC: &str = "## no critic ";
+    const NO_NATIVE_CRITIC: &str = "## no perl-lsp-critic ";
+
+    let trimmed = text.trim_start();
+    let Some(rest) =
+        trimmed.strip_prefix(NO_CRITIC).or_else(|| trimmed.strip_prefix(NO_NATIVE_CRITIC))
+    else {
+        return Vec::new();
+    };
+
+    let (rules, reason) = rest.split_once("--").map_or((rest, None), |(rules, reason)| {
+        let reason = reason.trim();
+        (rules, (!reason.is_empty()).then(|| reason.to_string()))
+    });
+
+    rules
+        .split(|ch: char| ch == ',' || ch.is_whitespace())
+        .filter_map(|rule_id| {
+            let rule_id = rule_id.trim();
+            (!rule_id.is_empty()).then(|| CriticSuppression {
+                rule_id: rule_id.to_string(),
+                scope: CriticSuppressionScope::File,
+                line,
+                reason: reason.clone(),
+            })
+        })
+        .collect()
 }
 
 /// Native rule that requires a file-level `use strict;` pragma.
@@ -666,5 +752,59 @@ mod tests {
         assert_eq!(violations[1].policy, "native.test.second");
         assert_eq!(violations[1].description, "second finding");
         assert_eq!(violations[1].file, "lib/App.pm");
+    }
+
+    #[test]
+    fn native_critic_suppression_map_parses_directives_and_reasons() {
+        let source = "\
+## no critic native.testing.require_use_strict -- generated legacy file
+## no perl-lsp-critic native.testing.require_use_warnings,native.test.second
+my $x = 1;
+";
+
+        let suppressions = CriticSuppressionMap::from_source(source);
+
+        assert_eq!(suppressions.suppressions().len(), 3);
+        assert_eq!(suppressions.suppressions()[0].rule_id, "native.testing.require_use_strict");
+        assert_eq!(suppressions.suppressions()[0].scope, CriticSuppressionScope::File);
+        assert_eq!(suppressions.suppressions()[0].line, 0);
+        assert_eq!(suppressions.suppressions()[0].reason.as_deref(), Some("generated legacy file"));
+        assert_eq!(suppressions.suppressions()[1].rule_id, "native.testing.require_use_warnings");
+        assert_eq!(suppressions.suppressions()[2].rule_id, "native.test.second");
+    }
+
+    #[test]
+    fn native_critic_registry_filters_suppressed_findings() {
+        let ast = empty_program_node();
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(
+            "## no critic native.testing.require_use_strict -- legacy file\nmy $x = 1;\n",
+            &ast,
+            &config,
+        );
+        let registry = NativeCriticRegistry::recommended();
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "native.testing.require_use_warnings");
+    }
+
+    #[test]
+    fn native_critic_registry_filters_suppressed_violations() {
+        let ast = empty_program_node();
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(
+            "## no perl-lsp-critic native.testing.require_use_warnings\nmy $x = 1;\n",
+            &ast,
+            &config,
+        );
+        let registry = NativeCriticRegistry::recommended();
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.testing.require_use_strict");
+        assert_eq!(violations[0].file, "lib/App.pm");
     }
 }
