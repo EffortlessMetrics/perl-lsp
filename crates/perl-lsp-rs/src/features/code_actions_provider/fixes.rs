@@ -130,8 +130,29 @@ pub(super) fn fix_variable_redeclaration(
             CodeActionKind::QuickFix,
             TextEdit { range: (range.0, range.0 + 3), new_text: String::new() },
         )]
+    } else if let Some(my_range) = find_duplicate_my_span(provider.source(), range.0) {
+        vec![diagnostic_action(
+            diagnostic,
+            "Remove redundant 'my'",
+            CodeActionKind::QuickFix,
+            TextEdit { range: my_range, new_text: String::new() },
+        )]
     } else {
         Vec::new()
+    }
+}
+
+fn find_duplicate_my_span(source: &str, variable_start: usize) -> Option<(usize, usize)> {
+    let variable_start = variable_start.min(source.len());
+    let line_start = source[..variable_start].rfind('\n').map_or(0, |pos| pos + 1);
+    let before_var = &source[line_start..variable_start];
+    let my_offset = before_var.rfind("my ")?;
+
+    if before_var[my_offset + 3..].chars().all(char::is_whitespace) {
+        let start = line_start + my_offset;
+        Some((start, start + 3))
+    } else {
+        None
     }
 }
 

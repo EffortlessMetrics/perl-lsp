@@ -72,7 +72,8 @@ impl CodeActionsProvider {
             }
             Some(c)
                 if c == DiagnosticCode::VariableRedeclaration.as_str()
-                    || c == "variable-redeclaration" =>
+                    || c == "variable-redeclaration"
+                    || c == "native.variables.duplicate_lexical" =>
             {
                 fixes::fix_variable_redeclaration(self, diagnostic)
             }
@@ -366,6 +367,26 @@ mod tests {
                 && action.edit.range == diagnostic.range
                 && action.edit.new_text == "$_unused"
         }));
+    }
+
+    #[test]
+    fn test_native_critic_duplicate_lexical_quick_fix() {
+        let source = "use strict;\nuse warnings;\nmy $dup = 1;\nmy $dup = 2;\n".to_string();
+        let provider = CodeActionsProvider::new(source.clone());
+        let start = must_some(source.rfind("$dup"));
+        let diagnostic = make_diagnostic(
+            (start, start + "$dup".len()),
+            DiagnosticSeverity::Error,
+            "native.variables.duplicate_lexical",
+            "Lexical variable '$dup' is declared more than once in the same scope",
+        );
+
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Remove redundant 'my'");
+        assert_eq!(actions[0].edit.range, (source.rfind("my $dup").unwrap(), start));
+        assert_eq!(actions[0].edit.new_text, "");
     }
 
     // ── Quick-fix: variable shadowing ───────────────────────────────────
