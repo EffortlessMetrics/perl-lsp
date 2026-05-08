@@ -41,7 +41,7 @@ Capability states:
 | Compile-time effect log | `fixture-backed` | [#8207](https://github.com/EffortlessMetrics/perl-lsp/issues/8207), [#3394](https://github.com/EffortlessMetrics/perl-lsp/issues/3394), [#8293](https://github.com/EffortlessMetrics/perl-lsp/issues/8293), [#8294](https://github.com/EffortlessMetrics/perl-lsp/issues/8294) | `crates/perl-parser-core/tests/hir_tests.rs`, [#8291](https://github.com/EffortlessMetrics/perl-lsp/pull/8291), [#8297](https://github.com/EffortlessMetrics/perl-lsp/pull/8297), [#8300](https://github.com/EffortlessMetrics/perl-lsp/pull/8300) | HIR effect-log, symbolic-ref boundary, and selected differential-oracle proof slices are complete; provider use remains gated by [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) |
 | Tooling IR / PIR | `planned` | [#8196](https://github.com/EffortlessMetrics/perl-lsp/issues/8196) | Roadmap only | Context-aware PIR lowering fixtures |
 | Differential real-Perl oracle | `planned` | [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199) | Roadmap only | Structured agreement receipt; no provider dependency |
-| Provider cutover | `planned` | [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) | [Provider cutover](status/provider_cutover.md) | Fact-source tracing, scorecards, and shadow comparison |
+| Provider cutover | `shadowed` | [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197) | [Provider cutover](status/provider_cutover.md), [semantic shadow compare](status/semantic_shadow_compare.md), [#8305](https://github.com/EffortlessMetrics/perl-lsp/pull/8305) | Diagnostics false-positive / false-negative fixture receipts with fact-source traces; then per-provider proof before live cutover |
 
 ## Stop Rules
 
