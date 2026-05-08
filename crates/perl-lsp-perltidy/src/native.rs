@@ -452,20 +452,24 @@ impl NativeFormatter {
         Ok(())
     }
 
-    fn format_safe_subset(source: &str) -> String {
+    fn format_safe_subset(source: &str, config: &FormatConfig) -> String {
         let mut formatted = String::with_capacity(source.len());
 
         for line in source.split_inclusive('\n') {
             let (body, line_ending) = split_line_ending(line);
             formatted
-                .push_str(&format_simple_lexical_line(body).unwrap_or_else(|| body.to_string()));
+                .push_str(&format_simple_line(body, config).unwrap_or_else(|| body.to_string()));
             formatted.push_str(line_ending);
         }
 
         formatted
     }
 
-    fn format_safe_subset_range(source: &str, range: TextRange) -> (String, Vec<TextEdit>) {
+    fn format_safe_subset_range(
+        source: &str,
+        range: TextRange,
+        config: &FormatConfig,
+    ) -> (String, Vec<TextEdit>) {
         let mut formatted = String::with_capacity(source.len());
         let mut edits = Vec::new();
 
@@ -473,7 +477,7 @@ impl NativeFormatter {
             let line_index = line_index as u32;
             let (body, line_ending) = split_line_ending(line);
             let formatted_body = if range_includes_line(range, line_index) {
-                format_simple_lexical_line(body)
+                format_simple_line(body, config)
             } else {
                 None
             };
@@ -524,7 +528,8 @@ impl PerlFormatter for NativeFormatter {
             return result;
         }
 
-        let formatted = Self::apply_final_newline(&Self::format_safe_subset(source), config);
+        let formatted =
+            Self::apply_final_newline(&Self::format_safe_subset(source, config), config);
         if let Err(diagnostic) = Self::validate_clean_parse(&formatted) {
             let mut result = FormatResult::unchanged(source);
             result.diagnostics.push(FormatDiagnostic::new(
@@ -550,7 +555,7 @@ impl PerlFormatter for NativeFormatter {
             return result;
         }
 
-        let (formatted, edits) = Self::format_safe_subset_range(source, range);
+        let (formatted, edits) = Self::format_safe_subset_range(source, range, config);
         if let Err(diagnostic) = Self::validate_clean_parse(&formatted) {
             let mut result = FormatResult::unchanged(source);
             result.diagnostics.push(FormatDiagnostic::new(
@@ -585,6 +590,10 @@ fn range_includes_line(range: TextRange, line: u32) -> bool {
         && (line < range.end.line || line == range.end.line && range.end.character > 0)
 }
 
+fn format_simple_line(line: &str, config: &FormatConfig) -> Option<String> {
+    format_simple_subroutine_line(line, config).or_else(|| format_simple_lexical_line(line))
+}
+
 fn format_simple_lexical_line(line: &str) -> Option<String> {
     let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
     let (indent, body) = line.split_at(indent_len);
@@ -604,6 +613,94 @@ fn format_simple_lexical_line(line: &str) -> Option<String> {
 
     let formatted = format_simple_lexical_tokens(&tokens)?;
     Some(format!("{indent}{formatted}"))
+}
+
+fn format_simple_subroutine_line(line: &str, config: &FormatConfig) -> Option<String> {
+    let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
+    let (indent, body) = line.split_at(indent_len);
+    if body.is_empty() || body.contains('#') {
+        return None;
+    }
+
+    let mut stream = perl_parser_core::TokenStream::new(body);
+    let mut tokens = Vec::new();
+    loop {
+        let token = stream.next().ok()?;
+        if token.kind == perl_parser_core::TokenKind::Eof {
+            break;
+        }
+        tokens.push(token);
+    }
+
+    let formatted = format_simple_subroutine_tokens(&tokens, indent, config)?;
+    Some(formatted)
+}
+
+fn format_simple_subroutine_tokens(
+    tokens: &[perl_parser_core::Token],
+    indent: &str,
+    config: &FormatConfig,
+) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.len() < 4 {
+        return None;
+    }
+    if tokens[0].kind != TokenKind::Sub
+        || tokens[1].kind != TokenKind::Identifier
+        || tokens[2].kind != TokenKind::LeftBrace
+        || tokens.last()?.kind != TokenKind::RightBrace
+    {
+        return None;
+    }
+
+    let body_tokens = &tokens[3..tokens.len() - 1];
+    let statements = format_simple_statement_block(body_tokens)?;
+    let body_indent = format!("{indent}{}", indent_unit(config));
+    let mut formatted = format!("{indent}sub {} {{", tokens[1].text);
+
+    if statements.is_empty() {
+        formatted.push('\n');
+        formatted.push_str(indent);
+        formatted.push('}');
+        return Some(formatted);
+    }
+
+    for statement in statements {
+        formatted.push('\n');
+        formatted.push_str(&body_indent);
+        formatted.push_str(&statement);
+    }
+    formatted.push('\n');
+    formatted.push_str(indent);
+    formatted.push('}');
+    Some(formatted)
+}
+
+fn format_simple_statement_block(tokens: &[perl_parser_core::Token]) -> Option<Vec<String>> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.is_empty() {
+        return Some(Vec::new());
+    }
+
+    let mut statements = Vec::new();
+    let mut start = 0;
+    for (idx, token) in tokens.iter().enumerate() {
+        if token.kind != TokenKind::Semicolon {
+            continue;
+        }
+
+        let statement_tokens = &tokens[start..=idx];
+        statements.push(format_simple_statement_tokens(statement_tokens)?);
+        start = idx + 1;
+    }
+
+    (start == tokens.len()).then_some(statements)
+}
+
+fn format_simple_statement_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
+    format_simple_lexical_tokens(tokens).or_else(|| format_simple_return_tokens(tokens))
 }
 
 fn format_simple_lexical_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
@@ -657,6 +754,36 @@ fn format_variable_tokens(
     }
 
     Some((format!("{}{}", sigil.text, name.text), start + 2))
+}
+
+fn format_simple_return_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.first()?.kind != TokenKind::Return || tokens.last()?.kind != TokenKind::Semicolon {
+        return None;
+    }
+
+    let semicolon_index = tokens.len() - 1;
+    if semicolon_index == 1 {
+        return Some("return;".to_string());
+    }
+
+    if let Some((variable, next_index)) = format_variable_tokens(tokens, 1)
+        && next_index == semicolon_index
+    {
+        return Some(format!("return {variable};"));
+    }
+
+    if semicolon_index == 2 {
+        let value = simple_value_text(&tokens[1])?;
+        return Some(format!("return {value};"));
+    }
+
+    None
+}
+
+fn indent_unit(config: &FormatConfig) -> String {
+    if config.use_tabs { "\t".to_string() } else { " ".repeat(config.indent_width as usize) }
 }
 
 fn simple_value_text(token: &perl_parser_core::Token) -> Option<&str> {
