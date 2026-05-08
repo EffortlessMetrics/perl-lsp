@@ -26,6 +26,7 @@ pub mod clean;
 pub mod compare;
 #[cfg(feature = "parser-tasks")]
 pub mod compare_parsers;
+pub mod compiler_oracle;
 #[cfg(feature = "legacy")]
 pub mod corpus;
 pub mod corpus_audit;
