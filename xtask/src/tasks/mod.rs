@@ -65,6 +65,7 @@ pub mod memory_trends;
 pub mod merge_ready;
 pub mod methodology_gate;
 pub mod metrics;
+pub mod native_format;
 pub mod parse_rust;
 pub mod parser_corpus_sweep;
 pub mod parser_matrix;

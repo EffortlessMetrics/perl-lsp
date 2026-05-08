@@ -388,6 +388,17 @@ native-format-preservation-matrix.json
 native-format-perltidy-compat.json
 ```
 
+The initial fixture, idempotence, and parse-preservation receipts are produced
+locally with:
+
+```bash
+cargo xtask native-format check
+```
+
+The command runs the native formatter over curated fixtures, verifies expected
+output, idempotence, and parse preservation, and writes JSON receipts under
+`target/receipts/format/`.
+
 Formatter metrics:
 
 ```text

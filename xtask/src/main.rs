@@ -487,6 +487,12 @@ enum Commands {
         command: MemoryTrendsCommand,
     },
 
+    /// Check native formatter fixtures and emit receipts.
+    NativeFormat {
+        #[command(subcommand)]
+        command: NativeFormatCommand,
+    },
+
     /// Run production security hardening checks.
     SecurityHardening,
 
@@ -1816,6 +1822,20 @@ enum MemoryTrendsCommand {
 }
 
 #[derive(Subcommand)]
+enum NativeFormatCommand {
+    /// Run native formatter fixture checks and write JSON receipts.
+    Check {
+        /// Directory containing native formatter fixtures.
+        #[arg(long, default_value = "crates/perl-lsp-perltidy/tests/fixtures/native_formatter")]
+        fixtures: PathBuf,
+
+        /// Directory for native formatter receipts.
+        #[arg(long, default_value = "target/receipts/format")]
+        receipt_dir: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum DevexCommand {
     /// Plan the cheapest correct local proof commands for the current diff.
     Plan {
@@ -2149,6 +2169,14 @@ fn main() -> Result<()> {
                     history_dirs,
                     baseline,
                     output,
+                })
+            }
+        },
+        Commands::NativeFormat { command } => match command {
+            NativeFormatCommand::Check { fixtures, receipt_dir } => {
+                native_format::check(native_format::NativeFormatCheckConfig {
+                    fixtures,
+                    receipt_dir,
                 })
             }
         },
