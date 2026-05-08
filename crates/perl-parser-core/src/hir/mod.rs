@@ -19,8 +19,8 @@ pub use model::{
     ModuleRequestKind, ModuleResolutionCacheInvalidation, ModuleResolutionCacheKey,
     ModuleResolutionCacheRootKey, ModuleResolutionCandidate, ModuleResolutionCandidatePathState,
     ModuleResolutionCandidateRoot, ModuleResolutionCandidateStatus, ModuleResolutionRoot,
-    ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash, PragmaEffect,
-    RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind, StashConfidence,
-    StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph, StashProvenance, StorageClass,
-    SubDecl, UseDecl, VariableBinding, VariableDecl,
+    ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash, PragmaArgumentKind,
+    PragmaEffect, PragmaStateFact, RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph,
+    ScopeKind, StashConfidence, StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph,
+    StashProvenance, StorageClass, SubDecl, UseDecl, VariableBinding, VariableDecl,
 };

@@ -644,6 +644,8 @@ pub struct CompileEnvironment {
     pub directives: Vec<CompileDirective>,
     /// Pragma or feature effects in stable source order.
     pub pragma_effects: Vec<PragmaEffect>,
+    /// Effective strict/warnings/feature state facts in source order.
+    pub pragma_state_facts: Vec<PragmaStateFact>,
     /// Include-root effects such as `use lib` and `no lib`.
     pub inc_roots: Vec<IncRootFact>,
     /// Static and dynamic module requests observed in the file.
@@ -655,6 +657,19 @@ pub struct CompileEnvironment {
 }
 
 impl CompileEnvironment {
+    /// Effective pragma state facts in source order.
+    #[must_use]
+    pub fn pragma_state_facts(&self) -> &[PragmaStateFact] {
+        &self.pragma_state_facts
+    }
+
+    /// Return the latest effective pragma state fact at or before `offset`.
+    #[must_use]
+    pub fn pragma_state_at(&self, offset: usize) -> Option<&PragmaStateFact> {
+        let idx = self.pragma_state_facts.partition_point(|fact| fact.range.start <= offset);
+        if idx > 0 { self.pragma_state_facts.get(idx - 1) } else { None }
+    }
+
     /// Project HIR compile directives into canonical import facts.
     ///
     /// This is a compiler-substrate projection only. It does not inspect the
@@ -881,8 +896,10 @@ pub struct PragmaEffect {
     pub pragma: String,
     /// Whether the pragma is being enabled (`use`) or disabled (`no`).
     pub enabled: bool,
-    /// Static arguments captured by the parser.
+    /// Static, normalized categories or feature names captured by the parser.
     pub args: Vec<String>,
+    /// Whether this effect applies broadly or to listed categories/features.
+    pub argument_kind: PragmaArgumentKind,
     /// Source range for the effect.
     pub range: SourceLocation,
     /// Directive that produced this effect.
@@ -895,6 +912,68 @@ pub struct PragmaEffect {
     pub provenance: CompileProvenance,
     /// Confidence in this fact.
     pub confidence: CompileConfidence,
+}
+
+/// Static pragma argument shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PragmaArgumentKind {
+    /// No arguments were supplied, so the pragma transition applies broadly.
+    Broad,
+    /// Static category, warning, or feature names were supplied.
+    Categories,
+}
+
+/// Effective strict/warnings/feature state after a compile-time transition.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PragmaStateFact {
+    /// Source range for the transition that produced this state.
+    pub range: SourceLocation,
+    /// Stable source anchor for this transition.
+    pub anchor_id: AnchorId,
+    /// Directive that produced this state, when HIR has one.
+    pub directive_item: Option<HirId>,
+    /// Scope containing this transition.
+    pub scope_id: Option<HirScopeId>,
+    /// Package context active at this transition.
+    pub package_context: Option<String>,
+    /// Effective `strict vars` state.
+    pub strict_vars: bool,
+    /// Effective `strict subs` state.
+    pub strict_subs: bool,
+    /// Effective `strict refs` state.
+    pub strict_refs: bool,
+    /// Effective global warnings state.
+    pub warnings: bool,
+    /// Warning categories explicitly disabled in this state.
+    pub disabled_warning_categories: Vec<String>,
+    /// Effective feature names in this state.
+    pub features: Vec<String>,
+    /// How this fact was produced.
+    pub provenance: CompileProvenance,
+    /// Confidence in this fact.
+    pub confidence: CompileConfidence,
+}
+
+impl PragmaStateFact {
+    /// Whether all strict categories are active in this state.
+    #[must_use]
+    pub fn strict_enabled(&self) -> bool {
+        self.strict_vars && self.strict_subs && self.strict_refs
+    }
+
+    /// Whether warnings are active for a category in this state.
+    #[must_use]
+    pub fn warning_active(&self, category: &str) -> bool {
+        self.warnings && !self.disabled_warning_categories.iter().any(|name| name == category)
+    }
+
+    /// Whether a feature is active in this state.
+    #[must_use]
+    pub fn has_feature(&self, feature: &str) -> bool {
+        self.features.iter().any(|name| name == feature)
+    }
 }
 
 /// Include-root effect.
@@ -1261,6 +1340,8 @@ pub struct CompileEnvironmentBoundary {
 pub enum CompileEnvironmentBoundaryKind {
     /// `require` target could not be determined statically.
     DynamicRequire,
+    /// Pragma or feature arguments could not be determined statically.
+    DynamicPragmaArgs,
     /// Include-root effect is dynamic or unsupported.
     DynamicIncRoot,
     /// Phase block contains compile-time execution that is not evaluated here.

@@ -1,10 +1,12 @@
 use perl_parser_core::hir::{
-    CompileEnvironment, HirFile, HirKind, IncRootKind, ModuleResolutionRoot, RecoveryConfidence,
+    CompileConfidence, CompileEnvironment, CompileEnvironmentBoundaryKind, CompileProvenance,
+    HirFile, HirKind, IncRootKind, ModuleResolutionRoot, PragmaArgumentKind, RecoveryConfidence,
     ScopeGraph, StashGraph, lower_ast,
 };
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 use perl_semantic_facts::{
-    Confidence, ExportSet, ExportTag, FileId, ImportKind, ImportSpec, ImportSymbols, Provenance,
+    AnchorId, Confidence, ExportSet, ExportTag, FileId, ImportKind, ImportSpec, ImportSymbols,
+    Provenance,
 };
 use std::fs;
 
@@ -249,9 +251,10 @@ fn render_compile_environment(environment: &CompileEnvironment) -> String {
     for effect in &environment.pragma_effects {
         let package = effect.package_context.as_deref().unwrap_or("<none>");
         lines.push(format!(
-            "{} enabled={} args={} pkg={} {:?} {:?}",
+            "{} enabled={} kind={:?} args={} pkg={} {:?} {:?}",
             effect.pragma,
             effect.enabled,
+            effect.argument_kind,
             effect.args.join(","),
             package,
             effect.provenance,
@@ -930,10 +933,10 @@ fn hir_compile_environment_records_directives_without_provider_cutover()
          Require <dynamic> Dynamic args= scope=1 pkg=Env::Demo ExactAst High\n\
          Require Runtime::Thing Module args= scope=3 pkg=Env::Demo ExactAst High\n\
          [pragmas]\n\
-         strict enabled=true args= pkg=Env::Demo ExactAst High\n\
-         warnings enabled=true args=qw(all) pkg=Env::Demo ExactAst High\n\
-         feature enabled=true args='signatures' pkg=Env::Demo ExactAst High\n\
-         warnings enabled=false args='once' pkg=Env::Demo ExactAst High\n\
+         strict enabled=true kind=Broad args= pkg=Env::Demo ExactAst High\n\
+         warnings enabled=true kind=Categories args=all pkg=Env::Demo ExactAst High\n\
+         feature enabled=true kind=Categories args=signatures pkg=Env::Demo ExactAst High\n\
+         warnings enabled=false kind=Categories args=once pkg=Env::Demo ExactAst High\n\
          [inc]\n\
          lib Add UseLib pkg=Env::Demo ExactAst High\n\
          t/lib Add UseLib pkg=Env::Demo ExactAst High\n\
@@ -957,6 +960,105 @@ fn hir_compile_environment_records_directives_without_provider_cutover()
             |item| matches!(&item.kind, HirKind::CallExpr(expr) if expr.name == "provider_cutover")
         ),
         "compile-environment facts must not imply live provider cutover"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_compile_environment_proves_scoped_pragma_state_facts()
+-> Result<(), Box<dyn std::error::Error>> {
+    let source = "package Env::Scoped;\n\
+         use strict;\n\
+         use warnings;\n\
+         use feature 'say';\n\
+         {\n\
+             no strict 'refs';\n\
+             no warnings 'once';\n\
+             no feature 'say';\n\
+             my $inside = 1;\n\
+         }\n\
+         my $outside = 1;\n\
+         use strict $dynamic;\n";
+    let file = lower_source(source);
+    let environment = &file.compile_environment;
+
+    let strict_offset = source.find("use strict;").ok_or("expected outer strict directive")?;
+    let no_strict_offset = source.find("no strict 'refs';").ok_or("expected no strict")?;
+    let inside_offset = source.find("my $inside").ok_or("expected inner marker")?;
+    let outside_offset = source.find("my $outside").ok_or("expected outer marker")?;
+    let dynamic_offset =
+        source.find("use strict $dynamic").ok_or("expected dynamic strict directive")?;
+
+    let strict_effect = environment
+        .pragma_effects
+        .iter()
+        .find(|effect| effect.range.start == strict_offset && effect.pragma == "strict")
+        .ok_or("expected broad strict effect")?;
+    assert_eq!(strict_effect.argument_kind, PragmaArgumentKind::Broad);
+    assert!(strict_effect.args.is_empty());
+    assert_eq!(strict_effect.provenance, CompileProvenance::ExactAst);
+    assert_eq!(strict_effect.confidence, CompileConfidence::High);
+
+    let no_strict_effect = environment
+        .pragma_effects
+        .iter()
+        .find(|effect| effect.range.start == no_strict_offset && effect.pragma == "strict")
+        .ok_or("expected category strict effect")?;
+    assert_eq!(no_strict_effect.argument_kind, PragmaArgumentKind::Categories);
+    assert_eq!(no_strict_effect.args, vec!["refs".to_string()]);
+    assert_eq!(no_strict_effect.range.start, no_strict_offset);
+    assert!(strict_effect.range.start < no_strict_effect.range.start);
+
+    let after_strict = environment
+        .pragma_state_at(strict_offset)
+        .ok_or("expected state after strict directive")?;
+    assert_eq!(after_strict.anchor_id, AnchorId(strict_offset as u64));
+    assert_eq!(after_strict.package_context.as_deref(), Some("Env::Scoped"));
+    assert!(after_strict.scope_id.is_some());
+    assert!(after_strict.strict_enabled());
+    assert_eq!(after_strict.provenance, CompileProvenance::ExactAst);
+    assert_eq!(after_strict.confidence, CompileConfidence::High);
+
+    let inside_state =
+        environment.pragma_state_at(inside_offset).ok_or("expected inner scoped pragma state")?;
+    assert!(inside_state.strict_vars);
+    assert!(inside_state.strict_subs);
+    assert!(!inside_state.strict_refs);
+    assert!(inside_state.warnings);
+    assert!(!inside_state.warning_active("once"));
+    assert!(!inside_state.has_feature("say"));
+    assert!(
+        inside_state.disabled_warning_categories.iter().any(|category| category == "once"),
+        "category-specific no warnings should be visible in the state fact"
+    );
+
+    let outside_state = environment
+        .pragma_state_at(outside_offset)
+        .ok_or("expected restored outer pragma state")?;
+    assert!(outside_state.strict_enabled());
+    assert!(outside_state.warning_active("once"));
+    assert!(outside_state.has_feature("say"));
+
+    assert!(
+        !environment.pragma_state_facts().iter().any(|fact| fact.range.start == dynamic_offset),
+        "dynamic pragma arguments must not produce a confirmed state fact"
+    );
+    let dynamic_boundary = environment
+        .dynamic_boundaries
+        .iter()
+        .find(|boundary| boundary.kind == CompileEnvironmentBoundaryKind::DynamicPragmaArgs)
+        .ok_or("expected dynamic pragma boundary")?;
+    assert_eq!(dynamic_boundary.range.start, dynamic_offset);
+    assert_eq!(dynamic_boundary.package_context.as_deref(), Some("Env::Scoped"));
+    assert_eq!(dynamic_boundary.provenance, CompileProvenance::DynamicBoundary);
+    assert_eq!(dynamic_boundary.confidence, CompileConfidence::Low);
+
+    assert!(
+        !file.items.iter().any(
+            |item| matches!(&item.kind, HirKind::CallExpr(expr) if expr.name == "provider_cutover")
+        ),
+        "compile-environment state facts must not imply live provider cutover"
     );
 
     Ok(())

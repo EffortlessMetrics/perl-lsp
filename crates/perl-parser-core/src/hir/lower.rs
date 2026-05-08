@@ -1,6 +1,8 @@
 //! AST-to-HIR lowering.
 
 use crate::{Node, NodeKind, SourceLocation};
+use perl_pragma::{CompileTimePragmaEnvironment, PragmaSnapshot};
+use perl_semantic_facts::AnchorId;
 
 use super::model::{
     AstAnchor, BarewordExpr, Binding, BindingReference, BlockShell, CallExpr, CallForm,
@@ -11,9 +13,9 @@ use super::model::{
     HirItem, HirKind, HirScopeId, IncRootAction, IncRootFact, IncRootKind, IndirectCallExpr,
     InheritanceSource, LiteralExpr, LiteralKind, MethodCallExpr, MethodDecl, ModuleRequest,
     ModuleRequestKind, ModuleResolutionStatus, PackageDecl, PackageInheritanceEdge, PackageStash,
-    PragmaEffect, RecoveryConfidence, RequireDecl, ScopeFrame, ScopeGraph, ScopeKind,
-    StashConfidence, StashDynamicBoundary, StashDynamicBoundaryKind, StashGraph, StashProvenance,
-    StorageClass, SubDecl, UseDecl, VariableBinding, VariableDecl,
+    PragmaArgumentKind, PragmaEffect, PragmaStateFact, RecoveryConfidence, RequireDecl, ScopeFrame,
+    ScopeGraph, ScopeKind, StashConfidence, StashDynamicBoundary, StashDynamicBoundaryKind,
+    StashGraph, StashProvenance, StorageClass, SubDecl, UseDecl, VariableBinding, VariableDecl,
 };
 
 /// Lower a parser AST into first-slice HIR items.
@@ -25,6 +27,7 @@ use super::model::{
 pub fn lower_ast(ast: &Node) -> HirFile {
     let mut lowerer = Lowerer::new(ast.location);
     lowerer.visit(ast, RecoveryConfidence::Parsed);
+    lowerer.record_pragma_state_facts(ast);
     lowerer.finish()
 }
 
@@ -1000,10 +1003,21 @@ impl Lowerer {
         range: SourceLocation,
         item_id: Option<HirId>,
     ) {
+        let Some((argument_kind, args)) = static_pragma_args(pragma, args) else {
+            self.record_compile_environment_boundary(
+                CompileEnvironmentBoundaryKind::DynamicPragmaArgs,
+                range,
+                item_id,
+                "pragma arguments are not statically known",
+            );
+            return;
+        };
+
         self.compile_environment.pragma_effects.push(PragmaEffect {
             pragma: pragma.to_string(),
             enabled,
-            args: args.to_vec(),
+            args,
+            argument_kind,
             range,
             directive_item: item_id,
             scope_id: Some(self.current_scope()),
@@ -1011,6 +1025,70 @@ impl Lowerer {
             provenance: CompileProvenance::ExactAst,
             confidence: CompileConfidence::High,
         });
+    }
+
+    fn record_pragma_state_facts(&mut self, ast: &Node) {
+        let environment = CompileTimePragmaEnvironment::build(ast);
+        for entry in environment.map().entries() {
+            let range = SourceLocation::new(entry.range.start, entry.range.end);
+            if self.is_dynamic_pragma_offset(range.start) {
+                continue;
+            }
+
+            let (directive_item, scope_id, package_context) =
+                self.compile_environment_metadata_at(range.start);
+            self.compile_environment.pragma_state_facts.push(pragma_state_fact(
+                range,
+                &entry.snapshot,
+                directive_item,
+                scope_id,
+                package_context,
+            ));
+        }
+    }
+
+    fn is_dynamic_pragma_offset(&self, offset: usize) -> bool {
+        self.compile_environment.dynamic_boundaries.iter().any(|boundary| {
+            boundary.kind == CompileEnvironmentBoundaryKind::DynamicPragmaArgs
+                && boundary.range.start == offset
+        })
+    }
+
+    fn compile_environment_metadata_at(
+        &self,
+        offset: usize,
+    ) -> (Option<HirId>, Option<HirScopeId>, Option<String>) {
+        if let Some(effect) = self
+            .compile_environment
+            .pragma_effects
+            .iter()
+            .find(|effect| effect.range.start == offset)
+        {
+            return (effect.directive_item, effect.scope_id, effect.package_context.clone());
+        }
+
+        if let Some(directive) = self
+            .compile_environment
+            .directives
+            .iter()
+            .find(|directive| directive.range.start == offset)
+        {
+            return (directive.item_id, directive.scope_id, directive.package_context.clone());
+        }
+
+        if let Some(scope) = self.innermost_scope_at(offset) {
+            return (None, Some(scope.id), scope.package_context.clone());
+        }
+
+        (None, None, self.package_context.clone())
+    }
+
+    fn innermost_scope_at(&self, offset: usize) -> Option<&ScopeFrame> {
+        self.scope_graph
+            .scopes
+            .iter()
+            .filter(|scope| scope.range.start <= offset && offset <= scope.range.end)
+            .max_by_key(|scope| (scope.range.start, scope.id.index()))
     }
 
     fn record_inc_root_effects(
@@ -1668,6 +1746,89 @@ fn is_bareword_like(value: &str) -> bool {
 
 fn contains_interpolation_marker(value: &str) -> bool {
     value.contains('$') || value.contains('@') || value.contains('%')
+}
+
+fn pragma_state_fact(
+    range: SourceLocation,
+    snapshot: &PragmaSnapshot,
+    directive_item: Option<HirId>,
+    scope_id: Option<HirScopeId>,
+    package_context: Option<String>,
+) -> PragmaStateFact {
+    let state = snapshot.state();
+    PragmaStateFact {
+        range,
+        anchor_id: AnchorId(range.start as u64),
+        directive_item,
+        scope_id,
+        package_context,
+        strict_vars: state.strict_vars,
+        strict_subs: state.strict_subs,
+        strict_refs: state.strict_refs,
+        warnings: state.warnings,
+        disabled_warning_categories: state.disabled_warning_categories.clone(),
+        features: state.features.iter().map(|feature| (*feature).to_string()).collect(),
+        provenance: CompileProvenance::ExactAst,
+        confidence: CompileConfidence::High,
+    }
+}
+
+fn static_pragma_args(pragma: &str, args: &[String]) -> Option<(PragmaArgumentKind, Vec<String>)> {
+    if args.is_empty() {
+        return Some((PragmaArgumentKind::Broad, Vec::new()));
+    }
+
+    let mut normalized = Vec::new();
+    for arg in args {
+        for item in static_pragma_arg_items(arg)? {
+            if !is_valid_static_pragma_arg(pragma, &item) {
+                return None;
+            }
+            normalized.push(item);
+        }
+    }
+
+    if normalized.is_empty() { None } else { Some((PragmaArgumentKind::Categories, normalized)) }
+}
+
+fn static_pragma_arg_items(arg: &str) -> Option<Vec<String>> {
+    let trimmed = arg.trim().trim_matches(',');
+    if trimmed.is_empty() || contains_interpolation_marker(trimmed) {
+        return None;
+    }
+
+    let unquoted = trimmed.trim_matches('"').trim_matches('\'');
+    let body = if let Some(inner) =
+        unquoted.strip_prefix("qw(").and_then(|value| value.strip_suffix(')'))
+    {
+        inner
+    } else {
+        unquoted
+    };
+
+    let items = body.split_whitespace().map(clean_static_pragma_arg).collect::<Option<Vec<_>>>()?;
+    if items.is_empty() { None } else { Some(items) }
+}
+
+fn clean_static_pragma_arg(arg: &str) -> Option<String> {
+    let cleaned = arg.trim().trim_matches(',').trim_matches('"').trim_matches('\'');
+    if cleaned.is_empty() || contains_interpolation_marker(cleaned) {
+        return None;
+    }
+    if cleaned.chars().any(|ch| {
+        matches!(ch, '(' | ')' | '[' | ']' | '{' | '}' | '\\' | ';' | '=' | '>' | '<' | '&' | '*')
+    }) {
+        return None;
+    }
+    Some(cleaned.to_string())
+}
+
+fn is_valid_static_pragma_arg(pragma: &str, arg: &str) -> bool {
+    match pragma {
+        "strict" => matches!(arg, "vars" | "subs" | "refs"),
+        "warnings" | "feature" => true,
+        _ => false,
+    }
 }
 
 fn static_package_args(args: &[String]) -> Vec<String> {
