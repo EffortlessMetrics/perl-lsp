@@ -10,6 +10,10 @@ oracle-aware than coverage, far cheaper than mutation testing.
 
 ---
 
+## Rust 1.95 rollout note
+
+During the Rust 1.95 / 0.14.0 rollout, `ripr` remains advisory. The rollout map in [perl-lsp-rust-1.95-rollout.md](perl-lsp-rust-1.95-rollout.md) keeps normal PRs on ripr plus existing gates, reserves mutation testing for targeted/nightly/release lanes, and calls out routing follow-up work for docs-only and fixture-only changes.
+
 ## What ripr does
 
 For each changed Rust function, ripr asks the mutation-testing-shaped question

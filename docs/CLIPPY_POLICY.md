@@ -40,7 +40,9 @@ Do not use a silent `#[allow]`. If a lint needs repo-wide temporary treatment, a
 
 The ledger tracks planned Rust 1.94 and 1.95 flips before the workspace MSRV moves. `cargo xtask check-lint-policy` verifies that planned lints are present in the ledger and not activated ahead of the MSRV bump.
 
-The current workspace remains on the MSRV recorded in `Cargo.toml` and `policy/clippy-lints.toml`; the Rust 1.93 toolchain ratchet is intentionally left to a dedicated follow-up lane because toolchain changes affect CI, documentation, and release policy together.
+The Rust 1.95 / 0.14.0 rollout is mapped in [`docs/ci/perl-lsp-rust-1.95-rollout.md`](ci/perl-lsp-rust-1.95-rollout.md). The current workspace remains on the MSRV recorded in `Cargo.toml`, `clippy.toml`, and `policy/clippy-lints.toml` until the dedicated MSRV/toolchain PR lands. The compatibility spike comes first; it must not also activate lint floors, remove test carveouts, reset no-panic baselines, or bump the release version.
+
+The legacy `allow-unwrap-in-tests = true` setting in `clippy.toml` is a known mismatch with the target panic-free test posture. It stays visible as policy debt until the dedicated no-test-carveout PR removes it and adds fallible helper paths for later test-suite burndown work.
 
 ## Local check
 
