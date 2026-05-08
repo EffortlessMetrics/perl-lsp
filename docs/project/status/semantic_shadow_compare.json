@@ -1,10 +1,10 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "measured_at": "deterministic-fixture-baseline",
   "subsystem": "semantic_shadow_compare",
   "receipts": [
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "query": "find_definition",
       "input": {
         "symbol": "Foo::bar"
@@ -26,10 +26,23 @@
       "verdict": "same",
       "notes": [
         "definition exact match fixture"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Definition",
+          "source": "CompilerFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
       ]
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "query": "find_references",
       "input": {
         "symbol": "Foo::bar"
@@ -52,10 +65,23 @@
       "verdict": "improved",
       "notes": [
         "reference improved count fixture"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "References",
+          "source": "SemanticFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
       ]
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "query": "count_usages",
       "input": {
         "symbol": "Foo::bar"
@@ -73,10 +99,23 @@
       "verdict": "regression",
       "notes": [
         "count regression sentinel fixture"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "References",
+          "source": "SemanticFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
       ]
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "query": "visible_symbols",
       "input": {
         "symbol": "Foo::bar"
@@ -100,10 +139,23 @@
       "verdict": "ambiguous",
       "notes": [
         "visible symbol ambiguity fixture"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Completion",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
       ]
     },
     {
-      "schema_version": 1,
+      "schema_version": 2,
       "query": "hover",
       "input": {
         "symbol": "Foo::bar"
@@ -123,6 +175,19 @@
       "verdict": "unavailable",
       "notes": [
         "unavailable fact-backed hover fixture"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Hover",
+          "source": "Fallback",
+          "provenance": "SearchFallback",
+          "confidence": "Low",
+          "freshness": "NotApplicable",
+          "fallback_state": "Unavailable",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
       ]
     }
   ],

@@ -13,8 +13,9 @@ use perl_semantic_facts::{
     ExportSet, ExportTag, FileId, GeneratedMember, GeneratedMemberKind, ImportKind, ImportSpec,
     ImportSymbols, OccurrenceFact, OccurrenceId, OccurrenceKind, PackageEdge, PackageEdgeKind,
     PackageKind, PackageNode, PlanBlocker, PlanBlockerReason, PlanWarning, PlannedEdit,
-    PlannedEditCategory, Provenance, RenamePlan, SafeDeletePlan, ScopeId, ValueShape,
-    VisibleSymbol, VisibleSymbolContext, VisibleSymbolSource,
+    PlannedEditCategory, Provenance, ProviderFactFreshness, ProviderFactSourceKind,
+    ProviderFactTrace, ProviderFallbackState, ProviderSurface, RenamePlan, SafeDeletePlan, ScopeId,
+    ValueShape, VisibleSymbol, VisibleSymbolContext, VisibleSymbolSource,
 };
 
 // ── Scenario 1: Goto-Definition Provider — Candidate Ranking ──────────────
@@ -897,6 +898,58 @@ fn given_mixed_package_nodes_when_filtering_by_kind_then_classes_and_roles_separ
     assert_eq!(externals.len(), 1);
     assert_eq!(classes[0].name, "App::Model");
     assert_eq!(roles[0].name, "Role::Printable");
+}
+
+// ── Scenario 17: Provider Fact Trace — Cutover Proof ─────────────────
+
+/// Given a provider answer sourced from shadowed compiler facts,
+/// when the answer is traced,
+/// then the trace records provider surface, fact source, provenance, confidence,
+/// freshness, and fallback state without changing provider behavior.
+#[test]
+fn given_provider_answer_when_traced_then_source_provenance_and_fallback_are_explicit() {
+    let trace = ProviderFactTrace::new(
+        ProviderSurface::Completion,
+        ProviderFactSourceKind::CompilerFact,
+        Provenance::ImportExportInference,
+        Confidence::High,
+        ProviderFactFreshness::Fresh,
+        ProviderFallbackState::Shadow,
+        Some("fixture-source-sha".to_string()),
+        Some(AnchorId(17)),
+        Some(1),
+    );
+
+    assert_eq!(trace.surface, ProviderSurface::Completion);
+    assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+    assert_eq!(trace.provenance, Provenance::ImportExportInference);
+    assert_eq!(trace.confidence, Confidence::High);
+    assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+    assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+    assert_eq!(trace.anchor_id, Some(AnchorId(17)));
+}
+
+/// Given a provider blocks an unsafe refactor because of a dynamic boundary,
+/// when the blocker is traced,
+/// then the trace records the dynamic-boundary source and blocked state.
+#[test]
+fn given_dynamic_boundary_blocker_when_traced_then_provider_source_is_blocked() {
+    let trace = ProviderFactTrace::new(
+        ProviderSurface::Rename,
+        ProviderFactSourceKind::DynamicBoundary,
+        Provenance::DynamicBoundary,
+        Confidence::Low,
+        ProviderFactFreshness::Fresh,
+        ProviderFallbackState::Blocked,
+        None,
+        Some(AnchorId(18)),
+        Some(1),
+    );
+
+    assert_eq!(trace.surface, ProviderSurface::Rename);
+    assert_eq!(trace.source, ProviderFactSourceKind::DynamicBoundary);
+    assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+    assert_eq!(trace.anchor_id, Some(AnchorId(18)));
 }
 
 // ── Scenario 17: ExportSet — Tag-Based Resolution ─────────────────────────

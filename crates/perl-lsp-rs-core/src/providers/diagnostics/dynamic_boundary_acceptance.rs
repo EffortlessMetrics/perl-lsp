@@ -33,6 +33,7 @@ mod tests {
     use perl_workspace::semantic::queries::{
         DynamicCallableEvidence, QueryContext, SemanticQueries,
     };
+    use perl_workspace::semantic_shadow_compare::SEMANTIC_SHADOW_COMPARE_RECEIPT_SCHEMA_VERSION;
 
     // ── Configurable SemanticQueries stub ──
 
@@ -512,12 +513,16 @@ mod tests {
     }
 
     #[test]
-    fn dynamic_scope_receipt_schema_version_is_one() -> Result<(), Box<dyn std::error::Error>> {
+    fn dynamic_scope_receipt_uses_current_schema_version() -> Result<(), Box<dyn std::error::Error>>
+    {
         let stub = DynamicBoundaryStub::empty_in_dynamic_scope();
         let outcome =
             diagnostics_undefined_symbol_cutover(true, &stub, "test_sym", FileId(1), None, 0, true);
 
-        assert_eq!(outcome.receipt.schema_version, 1, "receipt schema version should be 1");
+        assert_eq!(
+            outcome.receipt.schema_version, SEMANTIC_SHADOW_COMPARE_RECEIPT_SCHEMA_VERSION,
+            "receipt schema version should match semantic shadow compare"
+        );
         Ok(())
     }
 

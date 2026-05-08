@@ -618,6 +618,126 @@ pub enum ValueShape {
     },
 }
 
+// ── Provider Fact-Source Tracing ─────────────────────────────────────
+
+/// LSP provider surface that consumed or considered a semantic fact.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum ProviderSurface {
+    Diagnostics,
+    Completion,
+    Hover,
+    Definition,
+    References,
+    Rename,
+    SafeDelete,
+    WorkspaceSymbols,
+    SemanticTokens,
+}
+
+/// Coarse source class for a provider answer.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum ProviderFactSourceKind {
+    /// Parser tokens or AST shape.
+    ParserSyntax,
+    /// Legacy workspace index or provider-local data.
+    LegacyWorkspace,
+    /// Canonical semantic fact graph.
+    SemanticFact,
+    /// Rust compiler-substrate fact.
+    CompilerFact,
+    /// Framework adapter projection.
+    FrameworkAdapter,
+    /// Dynamic-boundary fact used to avoid false precision.
+    DynamicBoundary,
+    /// Fallback behavior because no stronger fact was available.
+    Fallback,
+    /// Source is intentionally unknown or unavailable.
+    Unknown,
+}
+
+/// Freshness state for a provider fact source.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum ProviderFactFreshness {
+    Fresh,
+    Stale,
+    Unknown,
+    NotApplicable,
+}
+
+/// How a provider used a traced fact source.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum ProviderFallbackState {
+    /// Primary answer path used this source.
+    Primary,
+    /// Source was measured but not used for live behavior.
+    Shadow,
+    /// Provider fell back from a stronger unavailable source.
+    Fallback,
+    /// Source existed but could not answer this request.
+    Unavailable,
+    /// Source blocked an unsafe provider action.
+    Blocked,
+}
+
+/// Source/provenance trace for a provider answer.
+///
+/// This is an additive contract for provider cutover proof. It lets providers
+/// report where an answer came from before any broad provider behavior change.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderFactTrace {
+    /// Provider surface that produced the answer.
+    pub surface: ProviderSurface,
+    /// Coarse source class used by the provider.
+    pub source: ProviderFactSourceKind,
+    /// Semantic provenance for the underlying fact, when known.
+    pub provenance: Provenance,
+    /// Confidence in the underlying fact or fallback.
+    pub confidence: Confidence,
+    /// Freshness of the underlying fact relative to the request.
+    pub freshness: ProviderFactFreshness,
+    /// Whether this source drove live behavior, shadow proof, fallback, or a blocker.
+    pub fallback_state: ProviderFallbackState,
+    /// Optional stable source hash used by the producer.
+    pub source_hash: Option<String>,
+    /// Optional semantic anchor used by the producer.
+    pub anchor_id: Option<AnchorId>,
+    /// Optional fact/model version used by the producer.
+    pub model_version: Option<u32>,
+}
+
+impl ProviderFactTrace {
+    /// Construct a new provider fact trace.
+    #[allow(clippy::too_many_arguments)] // mirrors the public trace fields 1-to-1
+    pub fn new(
+        surface: ProviderSurface,
+        source: ProviderFactSourceKind,
+        provenance: Provenance,
+        confidence: Confidence,
+        freshness: ProviderFactFreshness,
+        fallback_state: ProviderFallbackState,
+        source_hash: Option<String>,
+        anchor_id: Option<AnchorId>,
+        model_version: Option<u32>,
+    ) -> Self {
+        Self {
+            surface,
+            source,
+            provenance,
+            confidence,
+            freshness,
+            fallback_state,
+            source_hash,
+            anchor_id,
+            model_version,
+        }
+    }
+}
+
 // ── Rename and Safe Delete Plans ────────────────────────────────────
 
 /// A conservative rename plan enumerating affected occurrences and blockers.
@@ -1145,6 +1265,114 @@ mod tests {
         let serialized = serde_json::to_string(&candidate)?;
         let decoded: DefinitionCandidate = serde_json::from_str(&serialized)?;
         assert_eq!(decoded, candidate);
+        Ok(())
+    }
+
+    /// ProviderFactTrace round-trips through JSON with source hash and model version.
+    #[test]
+    fn provider_fact_trace_roundtrips_through_json() -> Result<(), serde_json::Error> {
+        let trace = ProviderFactTrace::new(
+            ProviderSurface::Completion,
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::ImportExportInference,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+            ProviderFallbackState::Shadow,
+            Some("fixture-source-sha".to_string()),
+            Some(AnchorId(10)),
+            Some(1),
+        );
+
+        let serialized = serde_json::to_string(&trace)?;
+        let decoded: ProviderFactTrace = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, trace);
+        Ok(())
+    }
+
+    /// ProviderFactTrace keeps null freshness metadata explicit when unavailable.
+    #[test]
+    fn provider_fact_trace_optional_metadata_roundtrips() -> Result<(), serde_json::Error> {
+        let trace = ProviderFactTrace::new(
+            ProviderSurface::Diagnostics,
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::NotApplicable,
+            ProviderFallbackState::Fallback,
+            None,
+            None,
+            None,
+        );
+
+        let serialized = serde_json::to_string(&trace)?;
+        let decoded: ProviderFactTrace = serde_json::from_str(&serialized)?;
+        assert_eq!(decoded, trace);
+        assert!(
+            serialized.contains("\"source_hash\":null")
+                && serialized.contains("\"anchor_id\":null")
+                && serialized.contains("\"model_version\":null"),
+            "optional trace metadata should remain explicit for downstream consumers"
+        );
+        Ok(())
+    }
+
+    /// Provider trace enums round-trip through JSON for every current variant.
+    #[test]
+    fn provider_fact_trace_enums_roundtrip_through_json() -> Result<(), serde_json::Error> {
+        for surface in [
+            ProviderSurface::Diagnostics,
+            ProviderSurface::Completion,
+            ProviderSurface::Hover,
+            ProviderSurface::Definition,
+            ProviderSurface::References,
+            ProviderSurface::Rename,
+            ProviderSurface::SafeDelete,
+            ProviderSurface::WorkspaceSymbols,
+            ProviderSurface::SemanticTokens,
+        ] {
+            let serialized = serde_json::to_string(&surface)?;
+            let decoded: ProviderSurface = serde_json::from_str(&serialized)?;
+            assert_eq!(decoded, surface);
+        }
+
+        for source in [
+            ProviderFactSourceKind::ParserSyntax,
+            ProviderFactSourceKind::LegacyWorkspace,
+            ProviderFactSourceKind::SemanticFact,
+            ProviderFactSourceKind::CompilerFact,
+            ProviderFactSourceKind::FrameworkAdapter,
+            ProviderFactSourceKind::DynamicBoundary,
+            ProviderFactSourceKind::Fallback,
+            ProviderFactSourceKind::Unknown,
+        ] {
+            let serialized = serde_json::to_string(&source)?;
+            let decoded: ProviderFactSourceKind = serde_json::from_str(&serialized)?;
+            assert_eq!(decoded, source);
+        }
+
+        for freshness in [
+            ProviderFactFreshness::Fresh,
+            ProviderFactFreshness::Stale,
+            ProviderFactFreshness::Unknown,
+            ProviderFactFreshness::NotApplicable,
+        ] {
+            let serialized = serde_json::to_string(&freshness)?;
+            let decoded: ProviderFactFreshness = serde_json::from_str(&serialized)?;
+            assert_eq!(decoded, freshness);
+        }
+
+        for fallback_state in [
+            ProviderFallbackState::Primary,
+            ProviderFallbackState::Shadow,
+            ProviderFallbackState::Fallback,
+            ProviderFallbackState::Unavailable,
+            ProviderFallbackState::Blocked,
+        ] {
+            let serialized = serde_json::to_string(&fallback_state)?;
+            let decoded: ProviderFallbackState = serde_json::from_str(&serialized)?;
+            assert_eq!(decoded, fallback_state);
+        }
+
         Ok(())
     }
 

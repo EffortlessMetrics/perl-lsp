@@ -1,5 +1,10 @@
 use serde::{Deserialize, Serialize};
 
+use perl_semantic_facts::ProviderFactTrace;
+
+/// Current semantic shadow-compare receipt schema version.
+pub const SEMANTIC_SHADOW_COMPARE_RECEIPT_SCHEMA_VERSION: u32 = 2;
+
 /// Deterministic verdict for semantic shadow compare receipts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -79,6 +84,8 @@ pub struct SemanticShadowCompareReceipt {
     pub verdict: ShadowCompareVerdict,
     /// Additional notes for operators.
     pub notes: Vec<String>,
+    /// Typed fact-source traces for provider cutover proof.
+    pub fact_source_traces: Vec<ProviderFactTrace>,
 }
 
 impl SemanticShadowCompareReceipt {
@@ -90,8 +97,36 @@ impl SemanticShadowCompareReceipt {
         new_result: ShadowResultSummary,
         notes: Vec<String>,
     ) -> Self {
+        Self::from_summaries_with_fact_source_traces(
+            query,
+            input,
+            old_result,
+            new_result,
+            notes,
+            Vec::new(),
+        )
+    }
+
+    /// Build a deterministic receipt with typed provider fact-source traces.
+    pub fn from_summaries_with_fact_source_traces(
+        query: ShadowQueryName,
+        input: ShadowQueryInput,
+        old_result: ShadowResultSummary,
+        new_result: ShadowResultSummary,
+        notes: Vec<String>,
+        fact_source_traces: Vec<ProviderFactTrace>,
+    ) -> Self {
         let verdict = classify_verdict(&old_result, &new_result);
-        Self { schema_version: 1, query, input, old_result, new_result, verdict, notes }
+        Self {
+            schema_version: SEMANTIC_SHADOW_COMPARE_RECEIPT_SCHEMA_VERSION,
+            query,
+            input,
+            old_result,
+            new_result,
+            verdict,
+            notes,
+            fact_source_traces,
+        }
     }
 }
 
@@ -154,7 +189,7 @@ mod tests {
 
         let got: serde_json::Value = serde_json::to_value(&receipt)?;
         let expected = serde_json::json!({
-            "schema_version": 1,
+            "schema_version": 2,
             "query": "find_references",
             "input": {"symbol": "My::pkg::f"},
             "old_result": {
@@ -168,7 +203,64 @@ mod tests {
                 "identities": ["a.pm:1:1", "c.pm:9:9"]
             },
             "verdict": "ambiguous",
-            "notes": ["fixture=h1"]
+            "notes": ["fixture=h1"],
+            "fact_source_traces": []
+        });
+        assert_eq!(got, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn receipt_json_shape_includes_provider_fact_source_traces()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let trace = ProviderFactTrace::new(
+            perl_semantic_facts::ProviderSurface::Definition,
+            perl_semantic_facts::ProviderFactSourceKind::CompilerFact,
+            perl_semantic_facts::Provenance::SemanticAnalyzer,
+            perl_semantic_facts::Confidence::High,
+            perl_semantic_facts::ProviderFactFreshness::Fresh,
+            perl_semantic_facts::ProviderFallbackState::Shadow,
+            Some("fixture-source-sha".to_string()),
+            Some(perl_semantic_facts::AnchorId(10)),
+            Some(1),
+        );
+        let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
+            ShadowQueryName::FindDefinition,
+            ShadowQueryInput { symbol: "Foo::bar".to_string() },
+            summarize_identities(Some(vec!["lib/Foo.pm:10:5".to_string()])),
+            summarize_identities(Some(vec!["lib/Foo.pm:10:5".to_string()])),
+            vec!["fact-source trace fixture".to_string()],
+            vec![trace],
+        );
+
+        let got: serde_json::Value = serde_json::to_value(&receipt)?;
+        let expected = serde_json::json!({
+            "schema_version": 2,
+            "query": "find_definition",
+            "input": {"symbol": "Foo::bar"},
+            "old_result": {
+                "available": true,
+                "match_count": 1,
+                "identities": ["lib/Foo.pm:10:5"]
+            },
+            "new_result": {
+                "available": true,
+                "match_count": 1,
+                "identities": ["lib/Foo.pm:10:5"]
+            },
+            "verdict": "same",
+            "notes": ["fact-source trace fixture"],
+            "fact_source_traces": [{
+                "surface": "Definition",
+                "source": "CompilerFact",
+                "provenance": "SemanticAnalyzer",
+                "confidence": "High",
+                "freshness": "Fresh",
+                "fallback_state": "Shadow",
+                "source_hash": "fixture-source-sha",
+                "anchor_id": 10,
+                "model_version": 1
+            }]
         });
         assert_eq!(got, expected);
         Ok(())
@@ -327,7 +419,7 @@ mod tests {
 
         let got: serde_json::Value = serde_json::to_value(&receipt)?;
         let expected = serde_json::json!({
-            "schema_version": 1,
+            "schema_version": 2,
             "query": "visible_symbols",
             "input": {"symbol": "my_func"},
             "old_result": {
@@ -341,7 +433,8 @@ mod tests {
                 "identities": ["a.pm:1:1", "b.pm:2:2"]
             },
             "verdict": "improved",
-            "notes": []
+            "notes": [],
+            "fact_source_traces": []
         });
         assert_eq!(got, expected);
         Ok(())

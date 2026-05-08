@@ -347,7 +347,10 @@ mod tests {
         let result = safe_delete_shadow(true, &queries, EntityId(1), "test");
 
         assert_eq!(result.receipt.query, ShadowQueryName::SafeDeletePlan);
-        assert_eq!(result.receipt.schema_version, 1);
+        assert_eq!(
+            result.receipt.schema_version,
+            perl_workspace::semantic_shadow_compare::SEMANTIC_SHADOW_COMPARE_RECEIPT_SCHEMA_VERSION
+        );
         Ok(())
     }
 

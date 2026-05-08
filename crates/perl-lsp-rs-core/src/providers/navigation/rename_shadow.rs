@@ -394,7 +394,10 @@ mod tests {
         let result = rename_shadow(true, &queries, EntityId(1), "new");
 
         assert_eq!(result.receipt.query, ShadowQueryName::RenamePlan);
-        assert_eq!(result.receipt.schema_version, 1);
+        assert_eq!(
+            result.receipt.schema_version,
+            perl_workspace::semantic_shadow_compare::SEMANTIC_SHADOW_COMPARE_RECEIPT_SCHEMA_VERSION
+        );
         Ok(())
     }
 
