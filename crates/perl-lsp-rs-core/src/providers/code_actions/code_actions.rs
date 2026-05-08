@@ -294,7 +294,7 @@ mod tests {
     use super::*;
     use crate::providers::diagnostics::DiagnosticSeverity;
     use perl_parser_core::Parser;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     /// Create a diagnostic with byte offsets
     fn make_diagnostic(start: usize, end: usize, code: &str, msg: &str) -> Diagnostic {
@@ -669,6 +669,56 @@ mod tests {
             .find(|action| action.title.contains("three-argument open()"))
             .expect("native two-arg open diagnostic should produce a quick fix");
         assert_eq!(fix.edit.changes[0].new_text, "open(my $fh, '<', $path)");
+    }
+
+    #[test]
+    fn test_legacy_two_arg_open_alias_range_only_open_edits_whole_call() {
+        let source = "open FH, $path;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![Diagnostic {
+            range: (0, 4),
+            severity: DiagnosticSeverity::Warning,
+            code: Some("InputOutput::RequireThreeArgOpen".to_string()),
+            message: "Two-argument open should use an explicit mode".to_string(),
+            suggestion: None,
+            related_information: Vec::new(),
+            tags: Vec::new(),
+        }];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        let fix =
+            must_some(actions.iter().find(|action| action.title.contains("three-argument open()")));
+        assert_eq!(fix.edit.changes[0].location.start, 0);
+        assert_eq!(fix.edit.changes[0].location.end, "open FH, $path".len());
+        assert_eq!(fix.edit.changes[0].new_text, "open(FH, '<', $path)");
+    }
+
+    #[test]
+    fn test_legacy_two_arg_open_alias_range_only_open_rejects_ambiguous_line_fallback() {
+        for source in ["open FH, $path; # legacy\n", "open FH, $path; close FH;\n"] {
+            let mut parser = Parser::new(source);
+            let ast = must(parser.parse());
+            let diagnostics = vec![Diagnostic {
+                range: (0, 4),
+                severity: DiagnosticSeverity::Warning,
+                code: Some("InputOutput::RequireThreeArgOpen".to_string()),
+                message: "Two-argument open should use an explicit mode".to_string(),
+                suggestion: None,
+                related_information: Vec::new(),
+                tags: Vec::new(),
+            }];
+
+            let provider = CodeActionsProvider::new(source.to_string());
+            let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+            assert!(
+                actions.iter().all(|action| !action.title.contains("three-argument open()")),
+                "ambiguous fallback should not produce a two-arg open fix for {source:?}"
+            );
+        }
     }
 
     #[test]

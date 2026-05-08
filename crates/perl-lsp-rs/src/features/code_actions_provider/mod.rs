@@ -694,6 +694,44 @@ mod tests {
         assert_eq!(actions[0].edit.new_text, "open(my $fh, '<', $path)");
     }
 
+    #[test]
+    fn test_legacy_two_arg_open_range_only_open_edits_whole_call() {
+        let diagnostic = make_diagnostic(
+            (0, 4),
+            DiagnosticSeverity::Warning,
+            "two-arg-open",
+            "Two-argument open should use an explicit mode",
+        );
+
+        let provider = CodeActionsProvider::new("open FH, $path;\n".to_string());
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Convert to three-argument open() for safety");
+        assert_eq!(actions[0].edit.range, (0, "open FH, $path".len()));
+        assert_eq!(actions[0].edit.new_text, "open(FH, '<', $path)");
+    }
+
+    #[test]
+    fn test_legacy_two_arg_open_range_only_open_rejects_ambiguous_line_fallback() {
+        let diagnostic = make_diagnostic(
+            (0, 4),
+            DiagnosticSeverity::Warning,
+            "two-arg-open",
+            "Two-argument open should use an explicit mode",
+        );
+
+        for source in ["open FH, $path; # legacy\n", "open FH, $path; close FH;\n"] {
+            let provider = CodeActionsProvider::new(source.to_string());
+            let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+            assert!(
+                actions.is_empty(),
+                "ambiguous fallback should not produce a fix for {source:?}"
+            );
+        }
+    }
+
     // ── Quick-fix: unused parameter ─────────────────────────────────────
 
     #[test]
