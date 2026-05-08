@@ -25,6 +25,7 @@ fn tooling_module_exposes_native_critic_contract() {
     let _: Option<perl_critic::CriticFix> = None;
     let _: Option<perl_critic::NativeCriticRegistry> = None;
     let _: Option<perl_critic::RequireUseStrictRule> = None;
+    let _: Option<perl_critic::RequireUseWarningsRule> = None;
 }
 
 #[test]

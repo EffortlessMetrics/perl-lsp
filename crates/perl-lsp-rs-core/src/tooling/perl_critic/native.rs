@@ -250,6 +250,49 @@ impl CriticRule for RequireUseStrictRule {
     }
 }
 
+/// Native rule that requires a file-level `use warnings;` pragma.
+///
+/// Like [`RequireUseStrictRule`], this is exposed through the native critic
+/// contract without replacing the existing legacy built-in analyzer yet.
+pub struct RequireUseWarningsRule;
+
+impl CriticRule for RequireUseWarningsRule {
+    fn id(&self) -> &'static str {
+        "native.testing.require_use_warnings"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Syntax
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Harsh
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        if has_use_statement(ctx.source, "warnings") {
+            return;
+        }
+
+        let range = insertion_range();
+        out.push(CriticFinding {
+            rule_id: self.id().to_string(),
+            category: self.category(),
+            severity: self.default_severity(),
+            range,
+            message: "Code does not use warnings".to_string(),
+            explanation: "Always use warnings to catch potential issues".to_string(),
+            suppression_key: self.id().to_string(),
+            related: Vec::new(),
+            fix: Some(CriticFix {
+                title: "Add 'use warnings'".to_string(),
+                safety: FixSafety::Safe,
+                edits: vec![CriticTextEdit { range, new_text: "use warnings;\n".to_string() }],
+            }),
+        });
+    }
+}
+
 fn has_use_statement(content: &str, feature: &str) -> bool {
     content.lines().any(|line| has_use_statement_line(line, feature))
 }
@@ -502,5 +545,65 @@ mod tests {
         assert!(registry.check(&exact_ctx).is_empty());
         assert_eq!(registry.check(&similar_ctx).len(), 1);
         assert_eq!(registry.check(&commented_ctx).len(), 1);
+    }
+
+    #[test]
+    fn native_require_use_warnings_rule_emits_safe_fix_when_missing() {
+        let ast = empty_program_node();
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new("use strict;\nmy $x = 1;\n", &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(RequireUseWarningsRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.testing.require_use_warnings");
+        assert_eq!(finding.category, CriticCategory::Syntax);
+        assert_eq!(finding.severity, Severity::Harsh);
+        assert_eq!(finding.message, "Code does not use warnings");
+        assert_eq!(finding.suppression_key, "native.testing.require_use_warnings");
+
+        let fix = finding.fix.as_ref().expect("missing warnings should have a safe fix");
+        assert_eq!(fix.title, "Add 'use warnings'");
+        assert_eq!(fix.safety, FixSafety::Safe);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].range, insertion_range());
+        assert_eq!(fix.edits[0].new_text, "use warnings;\n");
+    }
+
+    #[test]
+    fn native_require_use_warnings_rule_accepts_exact_pragma_only() {
+        let ast = empty_program_node();
+        let config = CriticConfig::default();
+        let exact_ctx = CriticContext::new("use warnings;\nmy $x = 1;\n", &ast, &config);
+        let similar_ctx = CriticContext::new("use warningsx;\nmy $x = 1;\n", &ast, &config);
+        let commented_ctx = CriticContext::new("# use warnings;\nmy $x = 1;\n", &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(RequireUseWarningsRule)]);
+
+        assert!(registry.check(&exact_ctx).is_empty());
+        assert_eq!(registry.check(&similar_ctx).len(), 1);
+        assert_eq!(registry.check(&commented_ctx).len(), 1);
+    }
+
+    #[test]
+    fn native_strict_and_warnings_rules_run_together_in_order() {
+        let ast = empty_program_node();
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new("my $x = 1;\n", &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![
+            Box::new(RequireUseStrictRule),
+            Box::new(RequireUseWarningsRule),
+        ]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(
+            registry.rule_ids(),
+            vec!["native.testing.require_use_strict", "native.testing.require_use_warnings"]
+        );
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].rule_id, "native.testing.require_use_strict");
+        assert_eq!(findings[1].rule_id, "native.testing.require_use_warnings");
     }
 }
