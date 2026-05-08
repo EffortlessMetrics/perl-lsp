@@ -1348,7 +1348,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nprint $x + $shadow;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nprint $x + $shadow;\n",
             None,
             &context,
             None,
@@ -1413,6 +1413,28 @@ mod tests {
             .ok_or("native unused parameter data should be populated")?;
         assert_eq!(data["code"], "native.variables.unused_parameter");
         assert_eq!(data["suppressionKey"], "native.variables.unused_parameter");
+        assert_eq!(data["fixable"], true);
+
+        let duplicate_parameter = items
+            .iter()
+            .find(|diag| {
+                diag.code
+                    .as_ref()
+                    .is_some_and(|code| matches!(code, NumberOrString::String(value) if value == "native.variables.duplicate_parameter"))
+            })
+            .ok_or("expected native duplicate parameter finding")?;
+        assert_eq!(duplicate_parameter.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(duplicate_parameter.severity, Some(LspDiagnosticSeverity::ERROR));
+        assert_eq!(
+            duplicate_parameter.message,
+            "Parameter '$dup_param' appears more than once in this signature"
+        );
+        let data = duplicate_parameter
+            .data
+            .as_ref()
+            .ok_or("native duplicate parameter data should be populated")?;
+        assert_eq!(data["code"], "native.variables.duplicate_parameter");
+        assert_eq!(data["suppressionKey"], "native.variables.duplicate_parameter");
         assert_eq!(data["fixable"], true);
 
         let duplicate = items

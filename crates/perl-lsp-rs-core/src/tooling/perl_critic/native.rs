@@ -238,6 +238,7 @@ impl NativeCriticRegistry {
             Box::new(RequireUseWarningsRule),
             Box::new(UnusedLexicalVariableRule),
             Box::new(UnusedParameterRule),
+            Box::new(DuplicateParameterRule),
             Box::new(DuplicateLexicalDeclarationRule),
             Box::new(ShadowedLexicalVariableRule),
         ])
@@ -496,6 +497,39 @@ impl CriticRule for UnusedParameterRule {
     }
 }
 
+/// Native rule that reports subroutine parameters repeated in one signature.
+///
+/// This rule delegates duplicate-parameter detection to the semantic scope
+/// analyzer so native critic diagnostics reuse existing signature facts while
+/// exposing a stable native policy ID.
+pub struct DuplicateParameterRule;
+
+impl CriticRule for DuplicateParameterRule {
+    fn id(&self) -> &'static str {
+        "native.variables.duplicate_parameter"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Semantic
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Gentle
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        let pragma_map = PragmaTracker::build(ctx.ast);
+        let issues = ScopeAnalyzer::new().analyze(ctx.ast, ctx.source, &pragma_map);
+
+        out.extend(
+            issues
+                .into_iter()
+                .filter(|issue| issue.kind == IssueKind::DuplicateParameter)
+                .map(|issue| duplicate_parameter_finding(self, ctx.source, &issue)),
+        );
+    }
+}
+
 /// Native rule that reports lexical variables declared more than once in a scope.
 ///
 /// This rule delegates redeclaration detection to the semantic scope analyzer so
@@ -613,6 +647,36 @@ fn unused_parameter_finding(
     }
 }
 
+fn duplicate_parameter_finding(
+    rule: &DuplicateParameterRule,
+    source: &str,
+    issue: &ScopeIssue,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, issue.range.0, issue.range.1);
+    let replacement = numbered_duplicate_name(&issue.variable_name);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!(
+            "Parameter '{}' appears more than once in this signature",
+            issue.variable_name
+        ),
+        explanation:
+            "Remove the duplicate parameter or rename it so every signature binding is unique."
+                .to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix: Some(CriticFix {
+            title: format!("Rename duplicate parameter to '{replacement}'"),
+            safety: FixSafety::Suggested,
+            edits: vec![CriticTextEdit { range, new_text: replacement }],
+        }),
+    }
+}
+
 fn duplicate_lexical_finding(
     rule: &DuplicateLexicalDeclarationRule,
     source: &str,
@@ -694,6 +758,11 @@ fn duplicate_my_span(source: &str, variable_start: usize) -> Option<(usize, usiz
 fn shadowed_lexical_name(name: &str) -> String {
     let (sigil, base_name) = split_sigil(name);
     format!("{sigil}inner_{base_name}")
+}
+
+fn numbered_duplicate_name(name: &str) -> String {
+    let (sigil, base_name) = split_sigil(name);
+    format!("{sigil}{base_name}_2")
 }
 
 fn prefixed_unused_name(name: &str) -> String {
@@ -1077,6 +1146,7 @@ mod tests {
                 "native.testing.require_use_warnings",
                 "native.variables.unused_lexical",
                 "native.variables.unused_parameter",
+                "native.variables.duplicate_parameter",
                 "native.variables.duplicate_lexical",
                 "native.variables.shadowed_lexical"
             ]
@@ -1277,6 +1347,92 @@ mod tests {
             "Use the parameter or prefix it with '_' to mark it intentionally unused."
         );
         assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
+    fn native_duplicate_parameter_rule_reports_repeated_signature_parameter() {
+        let source = "use strict;\nuse warnings;\nsub helper($arg, $arg) { return $arg; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(DuplicateParameterRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.variables.duplicate_parameter");
+        assert_eq!(finding.category, CriticCategory::Semantic);
+        assert_eq!(finding.severity, Severity::Gentle);
+        assert_eq!(finding.message, "Parameter '$arg' appears more than once in this signature");
+        assert_eq!(finding.suppression_key, "native.variables.duplicate_parameter");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$arg");
+
+        let fix = finding.fix.as_ref().expect("duplicate parameter should offer rename");
+        assert_eq!(fix.title, "Rename duplicate parameter to '$arg_2'");
+        assert_eq!(fix.safety, FixSafety::Suggested);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].range, finding.range);
+        assert_eq!(fix.edits[0].new_text, "$arg_2");
+    }
+
+    #[test]
+    fn native_duplicate_parameter_rule_accepts_unique_parameters() {
+        let source =
+            "use strict;\nuse warnings;\nsub helper($left, $right) { return $left + $right; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(DuplicateParameterRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "unique parameters should be accepted");
+    }
+
+    #[test]
+    fn native_duplicate_parameter_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nsub helper($arg, $arg) { return $arg; }\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.variables.duplicate_parameter".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(DuplicateParameterRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no perl-lsp-critic native.variables.duplicate_parameter -- fixture\nuse strict;\nuse warnings;\nsub helper($arg, $arg) { return $arg; }\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_duplicate_parameter_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nsub helper($arg, $arg) { return $arg; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(DuplicateParameterRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.variables.duplicate_parameter");
+        assert_eq!(
+            violations[0].description,
+            "Parameter '$arg' appears more than once in this signature"
+        );
+        assert_eq!(
+            violations[0].explanation,
+            "Remove the duplicate parameter or rename it so every signature binding is unique."
+        );
+        assert_eq!(violations[0].severity, Severity::Gentle);
         assert_eq!(violations[0].file, "lib/App.pm");
     }
 
