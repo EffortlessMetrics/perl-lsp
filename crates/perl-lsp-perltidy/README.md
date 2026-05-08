@@ -8,6 +8,7 @@ replacement lane.
 ## Features
 
 - `PerlFormatter` trait and native `FormatResult` / edit / diagnostic model
+- `FormatDoc` document IR for deterministic native pretty-printing
 - `PerlTidyConfig` for serializable formatter configuration
 - `PerlTidyFormatter` for subprocess-backed formatting with memoized results
 - `BuiltInFormatter` fallback for environments without `perltidy`
