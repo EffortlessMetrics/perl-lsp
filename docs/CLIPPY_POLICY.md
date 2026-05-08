@@ -36,6 +36,21 @@ fn generated_table_lookup(table: &[usize], index: usize) -> usize {
 
 Do not use a silent `#[allow]`. If a lint needs repo-wide temporary treatment, add a scoped entry to `policy/clippy-debt.toml` with `lint`, `path`, `owner`, `reason`, and `expires`.
 
+## Rust 1.95 rollout checkpoint
+
+The Rust 1.95 / 0.14.0 rollout is mapped in [perl-lsp-rust-1.95-rollout.md](ci/perl-lsp-rust-1.95-rollout.md). The documentation PR does not change `Cargo.toml`, `rust-toolchain.toml`, `clippy.toml`, or workflow pins.
+
+Current policy facts to preserve until their dedicated implementation PRs:
+
+- Workspace metadata remains edition 2024, version 0.13.4, and MSRV 1.93.
+- `rust-toolchain.toml` remains pinned to 1.93.1.
+- `clippy.toml` remains on MSRV 1.93 and still carries `allow-unwrap-in-tests = true`.
+- Root hard bans already deny `unwrap_used`, `expect_used`, `panic`, `todo`, `unimplemented`, and `dbg_macro`.
+- `collapsible_if = "allow"` remains explicit debt until a cleanup/exception-ledger PR handles it.
+- Rust 1.93 rustc lints and Rust 1.94/1.95 Clippy lints stay tracked or planned in `policy/clippy-lints.toml` until the dedicated activation PRs.
+
+The target posture after the rollout is Rust 1.95.0, no Clippy test carveout, active compiler lint floor, and measured Clippy 1.94/1.95 ratchets.
+
 ## Planned Rust upgrades
 
 The ledger tracks planned Rust 1.94 and 1.95 flips before the workspace MSRV moves. `cargo xtask check-lint-policy` verifies that planned lints are present in the ledger and not activated ahead of the MSRV bump.

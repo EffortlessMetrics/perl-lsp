@@ -97,6 +97,12 @@ of LEM is intentionally **not** part of this rollout.
 
 ---
 
+## Rust 1.95 rollout checkpoint
+
+The Rust 1.95 / 0.14.0 rollout uses the existing LEM, risk-pack, lane, receipt, and CI-actuals foundation. It does not add a new process layer in the documentation PR. Later rollout PRs may tune estimates from actuals using the documented model, but they must not hard-enforce learned estimates below the 125 LEM ceiling before enough actuals are calibrated.
+
+See [perl-lsp-rust-1.95-rollout.md](perl-lsp-rust-1.95-rollout.md) for the full rollout ladder.
+
 ## What LEM is not
 
 - **Not a billing source.** GitHub usage and Blacksmith billing reports are authoritative.

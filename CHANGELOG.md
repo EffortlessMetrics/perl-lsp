@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+
+- Documented the Rust 1.95 / 0.14.0 rollout plan. The implementation remains split across dedicated follow-up PRs for compatibility probing, MSRV/toolchain changes, lint ratchets, no-panic policy, file policy, CI routing, and release preparation.
+
 ## [0.13.4] - 2026-05-07
 
 Release notes: [v0.13.4](docs/releases/v0.13.4.md)
