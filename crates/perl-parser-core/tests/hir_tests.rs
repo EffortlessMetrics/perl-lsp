@@ -39,6 +39,22 @@ fn render_item(item: &perl_parser_core::hir::HirItem) -> String {
             let target = decl.target.as_deref().unwrap_or("<dynamic>");
             format!("RequireDecl {target} args={}", decl.arg_count)
         }
+        HirKind::VariableDecl(decl) => {
+            let variables = decl
+                .variables
+                .iter()
+                .map(|variable| format!("{}{}", variable.sigil, variable.name))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!(
+                "VariableDecl {} vars={} attrs={} init={} list={}",
+                decl.declarator,
+                variables,
+                decl.attribute_count,
+                decl.has_initializer,
+                decl.is_list
+            )
+        }
         _ => "UnknownFutureHirKind".to_string(),
     };
     format!(
@@ -74,6 +90,37 @@ fn hir_lowers_first_slice_constructs_with_stable_metadata() -> Result<(), Box<dy
         assert!(item.range.end >= item.range.start, "HIR item range should be ordered: {:?}", item);
         assert_eq!(item.range, item.anchor.range);
     }
+
+    Ok(())
+}
+
+#[test]
+fn hir_lowers_variable_declarations_without_scope_cutover() -> Result<(), Box<dyn std::error::Error>>
+{
+    let file = lower_source(
+        "package My::Module;\n\
+         my $scalar = 1;\n\
+         our @EXPORT_OK;\n\
+         state %cache;\n\
+         local $temp = undef;\n\
+         local *FH;\n\
+         my ($first, undef, @rest) = @_;\n\
+         open(my $fh, '<', $path);\n",
+    );
+
+    assert_eq!(
+        render_hir(&file),
+        "0 PackageDecl My::Module pkg=My::Module recovery=Parsed anchor=Package via=name scope=<none>\n\
+         1 VariableDecl my vars=$scalar attrs=0 init=true list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>\n\
+         2 VariableDecl our vars=@EXPORT_OK attrs=0 init=false list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>\n\
+         3 VariableDecl state vars=%cache attrs=0 init=false list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>\n\
+         4 VariableDecl local vars=$temp attrs=0 init=true list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>\n\
+         5 VariableDecl local vars=*FH attrs=0 init=false list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>\n\
+         6 VariableDecl my vars=$first,@rest attrs=0 init=true list=true pkg=My::Module recovery=Parsed anchor=VariableListDeclaration via=node scope=<none>\n\
+         7 VariableDecl my vars=$fh attrs=0 init=false list=false pkg=My::Module recovery=Parsed anchor=VariableDeclaration via=name scope=<none>"
+    );
+
+    assert!(file.items.iter().all(|item| item.scope_context.is_none()));
 
     Ok(())
 }

@@ -4,14 +4,14 @@ use crate::{Node, NodeKind, SourceLocation};
 
 use super::model::{
     AstAnchor, HirFile, HirId, HirItem, HirKind, MethodDecl, PackageDecl, RecoveryConfidence,
-    RequireDecl, SubDecl, UseDecl,
+    RequireDecl, SubDecl, UseDecl, VariableBinding, VariableDecl,
 };
 
 /// Lower a parser AST into first-slice HIR items.
 ///
 /// This is intentionally conservative: it emits only package, subroutine,
-/// method, use, and require items, and it does not perform scope, stash, import,
-/// or provider behavior changes.
+/// method, use, require, and variable-declaration items, and it does not
+/// perform scope, stash, import, or provider behavior changes.
 pub fn lower_ast(ast: &Node) -> HirFile {
     let mut lowerer = Lowerer::default();
     lowerer.visit(ast, RecoveryConfidence::Parsed);
@@ -114,6 +114,44 @@ impl Lowerer {
                 );
                 self.visit_children(node, confidence);
             }
+            NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
+                let (variables, has_embedded_initializer) = variable_decl_bindings(variable);
+                self.push_item(
+                    node,
+                    variables.first().map(|binding| binding.range),
+                    confidence,
+                    HirKind::VariableDecl(VariableDecl {
+                        declarator: declarator.clone(),
+                        variables,
+                        attribute_count: attributes.len(),
+                        has_initializer: initializer.is_some() || has_embedded_initializer,
+                        is_list: false,
+                    }),
+                    self.package_context.clone(),
+                );
+                self.visit_children(node, confidence);
+            }
+            NodeKind::VariableListDeclaration {
+                declarator,
+                variables,
+                attributes,
+                initializer,
+            } => {
+                self.push_item(
+                    node,
+                    None,
+                    confidence,
+                    HirKind::VariableDecl(VariableDecl {
+                        declarator: declarator.clone(),
+                        variables: variables.iter().filter_map(variable_binding).collect(),
+                        attribute_count: attributes.len(),
+                        has_initializer: initializer.is_some(),
+                        is_list: true,
+                    }),
+                    self.package_context.clone(),
+                );
+                self.visit_children(node, confidence);
+            }
             NodeKind::Error { partial: Some(partial), .. } => {
                 self.visit(partial, RecoveryConfidence::Recovered);
             }
@@ -157,11 +195,34 @@ impl Lowerer {
     }
 }
 
+fn variable_decl_bindings(node: &Node) -> (Vec<VariableBinding>, bool) {
+    match &node.kind {
+        NodeKind::Assignment { lhs, .. } => (variable_binding(lhs).into_iter().collect(), true),
+        NodeKind::VariableWithAttributes { variable, .. } => variable_decl_bindings(variable),
+        _ => (variable_binding(node).into_iter().collect(), false),
+    }
+}
+
 fn require_target(argument: Option<&Node>) -> Option<String> {
     match argument.map(|node| &node.kind) {
         Some(NodeKind::Identifier { name })
         | Some(NodeKind::String { value: name, .. })
         | Some(NodeKind::Typeglob { name }) => Some(name.clone()),
+        _ => None,
+    }
+}
+
+fn variable_binding(node: &Node) -> Option<VariableBinding> {
+    match &node.kind {
+        NodeKind::Variable { sigil, name } => {
+            Some(VariableBinding { sigil: sigil.clone(), name: name.clone(), range: node.location })
+        }
+        NodeKind::VariableWithAttributes { variable, .. } => variable_binding(variable),
+        NodeKind::Typeglob { name } => Some(VariableBinding {
+            sigil: "*".to_string(),
+            name: name.clone(),
+            range: node.location,
+        }),
         _ => None,
     }
 }
