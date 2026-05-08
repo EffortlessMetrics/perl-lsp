@@ -13,7 +13,7 @@ pub use analyzer::{CriticAnalyzer, hash_content};
 pub use built_in::{BuiltInAnalyzer, Policy};
 pub use native::{
     CriticCategory, CriticContext, CriticFinding, CriticFix, CriticRelatedInformation, CriticRule,
-    CriticTextEdit, FixSafety, NativeCriticRegistry,
+    CriticTextEdit, FixSafety, NativeCriticRegistry, RequireUseStrictRule,
 };
 pub use quick_fix::{QuickFix, TextEdit};
 pub use types::{CriticConfig, Severity, Violation};
