@@ -263,11 +263,18 @@ impl NativeCriticRegistry {
         let mut findings = Vec::new();
 
         for rule in &self.rules {
+            if !rule_enabled(rule.as_ref(), ctx.config) {
+                continue;
+            }
             rule.check(ctx, &mut findings);
         }
 
         let suppressions = CriticSuppressionMap::from_source(ctx.source);
-        findings.into_iter().filter(|finding| !suppressions.suppresses(finding)).collect()
+        findings
+            .into_iter()
+            .filter(|finding| severity_enabled(finding.severity, ctx.config))
+            .filter(|finding| !suppressions.suppresses(finding))
+            .collect()
     }
 
     /// Run all registered rules and return current legacy violation values.
@@ -283,6 +290,18 @@ impl NativeCriticRegistry {
         let file = file.into();
         self.check(ctx).into_iter().map(|finding| finding.to_violation(file.clone())).collect()
     }
+}
+
+fn rule_enabled(rule: &dyn CriticRule, config: &CriticConfig) -> bool {
+    let id = rule.id();
+    let included = config.include.is_empty() || config.include.iter().any(|policy| policy == id);
+    let excluded = config.exclude.iter().any(|policy| policy == id);
+
+    included && !excluded
+}
+
+fn severity_enabled(severity: Severity, config: &CriticConfig) -> bool {
+    severity as u8 >= config.severity
 }
 
 fn parse_suppression_line(line: usize, text: &str) -> Vec<CriticSuppression> {
@@ -505,6 +524,10 @@ mod tests {
         }
     }
 
+    fn config_with_minimum_severity(severity: u8) -> CriticConfig {
+        CriticConfig { severity, ..Default::default() }
+    }
+
     #[test]
     fn native_critic_rule_contract_emits_stable_finding_shape() {
         let ast = empty_program_node();
@@ -586,7 +609,7 @@ mod tests {
     #[test]
     fn native_critic_registry_runs_rules_in_order() {
         let ast = empty_program_node();
-        let config = CriticConfig::default();
+        let config = config_with_minimum_severity(1);
         let ctx = CriticContext::new("dummy second", &ast, &config);
         let registry =
             NativeCriticRegistry::with_rules(vec![Box::new(DummyRule), Box::new(SecondDummyRule)]);
@@ -604,7 +627,7 @@ mod tests {
     #[test]
     fn native_critic_registry_can_be_extended_incrementally() {
         let ast = empty_program_node();
-        let config = CriticConfig::default();
+        let config = config_with_minimum_severity(1);
         let ctx = CriticContext::new("second", &ast, &config);
         let mut registry = NativeCriticRegistry::new();
 
@@ -738,7 +761,7 @@ mod tests {
     #[test]
     fn native_critic_registry_maps_findings_to_legacy_violations() {
         let ast = empty_program_node();
-        let config = CriticConfig::default();
+        let config = config_with_minimum_severity(1);
         let ctx = CriticContext::new("dummy second", &ast, &config);
         let registry =
             NativeCriticRegistry::with_rules(vec![Box::new(DummyRule), Box::new(SecondDummyRule)]);
@@ -752,6 +775,40 @@ mod tests {
         assert_eq!(violations[1].policy, "native.test.second");
         assert_eq!(violations[1].description, "second finding");
         assert_eq!(violations[1].file, "lib/App.pm");
+    }
+
+    #[test]
+    fn native_critic_registry_honors_include_and_exclude_config() {
+        let ast = empty_program_node();
+        let config = CriticConfig {
+            severity: 1,
+            include: vec!["native.test.dummy".to_string()],
+            exclude: vec!["native.test.second".to_string()],
+            ..Default::default()
+        };
+        let ctx = CriticContext::new("dummy second", &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(DummyRule), Box::new(SecondDummyRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "native.test.dummy");
+    }
+
+    #[test]
+    fn native_critic_registry_honors_minimum_severity_config() {
+        let ast = empty_program_node();
+        let config = CriticConfig { severity: 3, ..Default::default() };
+        let ctx = CriticContext::new("dummy second", &ast, &config);
+        let registry =
+            NativeCriticRegistry::with_rules(vec![Box::new(DummyRule), Box::new(SecondDummyRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "native.test.dummy");
+        assert_eq!(findings[0].severity, Severity::Harsh);
     }
 
     #[test]
