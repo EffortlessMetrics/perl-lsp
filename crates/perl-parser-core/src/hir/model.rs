@@ -117,6 +117,29 @@ impl HirFile {
         self.items.is_empty()
     }
 
+    /// Project compile-time effects using the default model metadata.
+    ///
+    /// This is a compiler-substrate proof surface only. It links existing HIR
+    /// facts to the state mutations that produced them without changing LSP
+    /// provider behavior.
+    #[must_use]
+    pub fn compile_effects(&self) -> Vec<CompileEffect> {
+        self.compile_effects_with_source_hash(None)
+    }
+
+    /// Project compile-time effects and attach a caller-supplied source hash.
+    ///
+    /// Parser-core does not own a source database, so persisted workspace
+    /// callers can pass the source hash they use for freshness. Fixture-only
+    /// callers may use [`HirFile::compile_effects`].
+    #[must_use]
+    pub fn compile_effects_with_source_hash(
+        &self,
+        source_hash: Option<String>,
+    ) -> Vec<CompileEffect> {
+        compile_effects_from_file(self, source_hash)
+    }
+
     /// Project framework-adapter facts using the default registry.
     ///
     /// This is a compiler-substrate proof surface only. It does not change LSP
@@ -145,6 +168,603 @@ pub struct HirItem {
     pub package_context: Option<String>,
     /// Scope context known at lowering time.
     pub scope_context: Option<HirScopeId>,
+}
+
+/// Current HIR compile-effect model version.
+pub const COMPILE_EFFECT_MODEL_VERSION: u32 = 1;
+
+/// One Rust-modeled Perl compile-time effect.
+///
+/// Effects connect source constructs to compiler state mutations and the
+/// semantic fact categories emitted from those mutations. They are proof data
+/// for compiler-substrate work and do not change provider behavior.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct CompileEffect {
+    /// Stable ordinal after source-order sorting.
+    pub ordinal: u32,
+    /// Effect category.
+    pub kind: CompileEffectKind,
+    /// Source construct category.
+    pub source_kind: CompileEffectSourceKind,
+    /// Semantic fact category emitted by this effect.
+    pub fact_kind: CompileEffectFactKind,
+    /// Human-readable fact name.
+    pub fact_name: Option<String>,
+    /// Source range for the effect.
+    pub range: SourceLocation,
+    /// HIR item that produced this effect, when available.
+    pub source_item: Option<HirId>,
+    /// Scope containing this effect, when known.
+    pub scope_id: Option<HirScopeId>,
+    /// Package context active at the effect, when known.
+    pub package_context: Option<String>,
+    /// Source anchor of the emitted fact, when available.
+    pub fact_anchor_id: Option<AnchorId>,
+    /// Dynamic-boundary reason, when this effect records unsupported behavior.
+    pub dynamic_reason: Option<String>,
+    /// Caller-supplied source hash used for freshness, when available.
+    pub source_hash: Option<String>,
+    /// Compile-effect model version.
+    pub model_version: u32,
+    /// How this effect was produced.
+    pub provenance: CompileProvenance,
+    /// Confidence in this effect.
+    pub confidence: CompileConfidence,
+}
+
+/// Compiler state mutation represented by an effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum CompileEffectKind {
+    /// Declare a package/stash.
+    DeclarePackage,
+    /// Declare a subroutine code slot.
+    DeclareSub,
+    /// Declare a method code slot.
+    DeclareMethod,
+    /// Declare a lexical or package binding.
+    DeclareBinding,
+    /// Set effective pragma or feature state.
+    SetPragmaState,
+    /// Add an include path.
+    AddIncludePath,
+    /// Remove an include path.
+    RemoveIncludePath,
+    /// Record a module load or resolution request.
+    RequestModule,
+    /// Record an import-symbol relationship.
+    ImportSymbols,
+    /// Assign an inheritance edge.
+    AssignInheritance,
+    /// Assign a simple typeglob alias.
+    AssignGlobAlias,
+    /// Define a constant-like code slot.
+    DefineConstant,
+    /// Register a prototype-bearing subroutine.
+    RegisterPrototype,
+    /// Emit a dynamic-boundary fact instead of guessing.
+    EmitDynamicBoundary,
+}
+
+/// Source construct that produced a compile effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum CompileEffectSourceKind {
+    /// `package` declaration.
+    PackageDecl,
+    /// `sub` declaration.
+    SubDecl,
+    /// `method` declaration.
+    MethodDecl,
+    /// Variable declaration.
+    VariableDecl,
+    /// `use` directive.
+    UseDirective,
+    /// `no` directive.
+    NoDirective,
+    /// `require` directive.
+    RequireDirective,
+    /// Compile-time phase block.
+    PhaseBlock,
+    /// Assignment expression.
+    Assignment,
+    /// Typeglob assignment.
+    TypeglobAssignment,
+    /// Derived HIR scope graph fact.
+    ScopeGraph,
+    /// Derived HIR stash graph fact.
+    StashGraph,
+    /// Derived compile-environment fact.
+    CompileEnvironment,
+}
+
+/// Semantic fact category emitted by a compile effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum CompileEffectFactKind {
+    /// Package fact.
+    Package,
+    /// Subroutine fact.
+    Sub,
+    /// Method fact.
+    Method,
+    /// Binding fact.
+    Binding,
+    /// Pragma-state fact.
+    PragmaState,
+    /// Include-root fact.
+    IncludeRoot,
+    /// Module-request fact.
+    ModuleRequest,
+    /// Import specification fact.
+    ImportSpec,
+    /// Inheritance edge fact.
+    InheritanceEdge,
+    /// Glob slot fact.
+    GlobSlot,
+    /// Constant fact.
+    Constant,
+    /// Prototype fact.
+    Prototype,
+    /// Dynamic-boundary fact.
+    DynamicBoundary,
+}
+
+#[derive(Debug)]
+struct CompileEffectEntry {
+    source_order: u32,
+    effect: CompileEffect,
+}
+
+fn compile_effects_from_file(file: &HirFile, source_hash: Option<String>) -> Vec<CompileEffect> {
+    let mut entries = Vec::new();
+    let mut next_order = 0;
+
+    for item in &file.items {
+        push_item_effects(item, &source_hash, &mut entries, &mut next_order);
+    }
+    for binding in &file.scope_graph.bindings {
+        push_compile_effect(
+            &mut entries,
+            &mut next_order,
+            CompileEffectSeed {
+                kind: CompileEffectKind::DeclareBinding,
+                source_kind: CompileEffectSourceKind::ScopeGraph,
+                fact_kind: CompileEffectFactKind::Binding,
+                fact_name: Some(format!("{}{}", binding.sigil, binding.name)),
+                range: binding.range,
+                source_item: binding.declaration_item,
+                scope_id: Some(binding.scope_id),
+                package_context: binding.package_context.clone(),
+                fact_anchor_id: Some(AnchorId(binding.range.start as u64)),
+                dynamic_reason: None,
+                source_hash: source_hash.clone(),
+                provenance: CompileProvenance::ExactAst,
+                confidence: CompileConfidence::High,
+            },
+        );
+    }
+    for fact in &file.compile_environment.pragma_state_facts {
+        push_compile_effect(
+            &mut entries,
+            &mut next_order,
+            CompileEffectSeed {
+                kind: CompileEffectKind::SetPragmaState,
+                source_kind: CompileEffectSourceKind::CompileEnvironment,
+                fact_kind: CompileEffectFactKind::PragmaState,
+                fact_name: Some("strict/warnings/feature".to_string()),
+                range: fact.range,
+                source_item: fact.directive_item,
+                scope_id: fact.scope_id,
+                package_context: fact.package_context.clone(),
+                fact_anchor_id: Some(fact.anchor_id),
+                dynamic_reason: None,
+                source_hash: source_hash.clone(),
+                provenance: fact.provenance,
+                confidence: fact.confidence,
+            },
+        );
+    }
+    for root in &file.compile_environment.inc_roots {
+        let kind = match root.action {
+            IncRootAction::Add => CompileEffectKind::AddIncludePath,
+            IncRootAction::Remove => CompileEffectKind::RemoveIncludePath,
+        };
+        push_compile_effect(
+            &mut entries,
+            &mut next_order,
+            CompileEffectSeed {
+                kind,
+                source_kind: match root.action {
+                    IncRootAction::Add => CompileEffectSourceKind::UseDirective,
+                    IncRootAction::Remove => CompileEffectSourceKind::NoDirective,
+                },
+                fact_kind: CompileEffectFactKind::IncludeRoot,
+                fact_name: Some(root.path.clone()),
+                range: root.range,
+                source_item: root.directive_item,
+                scope_id: root.scope_id,
+                package_context: root.package_context.clone(),
+                fact_anchor_id: Some(AnchorId(root.range.start as u64)),
+                dynamic_reason: None,
+                source_hash: source_hash.clone(),
+                provenance: root.provenance,
+                confidence: root.confidence,
+            },
+        );
+    }
+    for request in &file.compile_environment.module_requests {
+        push_compile_effect(
+            &mut entries,
+            &mut next_order,
+            CompileEffectSeed {
+                kind: CompileEffectKind::RequestModule,
+                source_kind: module_request_source_kind(request.kind),
+                fact_kind: CompileEffectFactKind::ModuleRequest,
+                fact_name: request.target.clone().or_else(|| Some("<dynamic>".to_string())),
+                range: request.range,
+                source_item: request.directive_item,
+                scope_id: request.scope_id,
+                package_context: request.package_context.clone(),
+                fact_anchor_id: Some(AnchorId(request.range.start as u64)),
+                dynamic_reason: None,
+                source_hash: source_hash.clone(),
+                provenance: request.provenance,
+                confidence: request.confidence,
+            },
+        );
+    }
+    for spec in file.compile_environment.import_specs(FileId(0)) {
+        push_compile_effect(
+            &mut entries,
+            &mut next_order,
+            CompileEffectSeed {
+                kind: CompileEffectKind::ImportSymbols,
+                source_kind: import_spec_source_kind(&spec),
+                fact_kind: CompileEffectFactKind::ImportSpec,
+                fact_name: Some(spec.module.clone()),
+                range: SourceLocation::new(
+                    spec.span_start_byte.unwrap_or_default() as usize,
+                    spec.span_start_byte.unwrap_or_default() as usize,
+                ),
+                source_item: None,
+                scope_id: spec.scope_id.map(|scope| HirScopeId::from_index(scope.0 as u32)),
+                package_context: None,
+                fact_anchor_id: spec.anchor_id,
+                dynamic_reason: None,
+                source_hash: source_hash.clone(),
+                provenance: fact_provenance_to_compile(spec.provenance),
+                confidence: fact_confidence_to_compile(spec.confidence),
+            },
+        );
+    }
+    for edge in &file.stash_graph.inheritance_edges {
+        push_compile_effect(
+            &mut entries,
+            &mut next_order,
+            CompileEffectSeed {
+                kind: CompileEffectKind::AssignInheritance,
+                source_kind: CompileEffectSourceKind::StashGraph,
+                fact_kind: CompileEffectFactKind::InheritanceEdge,
+                fact_name: Some(format!("{}->{}", edge.from_package, edge.to_package)),
+                range: edge.range,
+                source_item: edge.declaration_item,
+                scope_id: None,
+                package_context: Some(edge.from_package.clone()),
+                fact_anchor_id: Some(AnchorId(edge.range.start as u64)),
+                dynamic_reason: None,
+                source_hash: source_hash.clone(),
+                provenance: stash_provenance_to_compile(edge.provenance),
+                confidence: stash_confidence_to_compile(edge.confidence),
+            },
+        );
+    }
+    for package in &file.stash_graph.packages {
+        for slot in &package.slots {
+            push_slot_effects(package, slot, &source_hash, &mut entries, &mut next_order);
+        }
+    }
+    for boundary in &file.compile_environment.dynamic_boundaries {
+        push_compile_effect(
+            &mut entries,
+            &mut next_order,
+            CompileEffectSeed {
+                kind: CompileEffectKind::EmitDynamicBoundary,
+                source_kind: compile_boundary_source_kind(boundary.kind),
+                fact_kind: CompileEffectFactKind::DynamicBoundary,
+                fact_name: Some(format!("{:?}", boundary.kind)),
+                range: boundary.range,
+                source_item: boundary.boundary_item,
+                scope_id: boundary.scope_id,
+                package_context: boundary.package_context.clone(),
+                fact_anchor_id: Some(AnchorId(boundary.range.start as u64)),
+                dynamic_reason: Some(boundary.reason.clone()),
+                source_hash: source_hash.clone(),
+                provenance: boundary.provenance,
+                confidence: boundary.confidence,
+            },
+        );
+    }
+    for boundary in &file.stash_graph.dynamic_boundaries {
+        push_compile_effect(
+            &mut entries,
+            &mut next_order,
+            CompileEffectSeed {
+                kind: CompileEffectKind::EmitDynamicBoundary,
+                source_kind: CompileEffectSourceKind::StashGraph,
+                fact_kind: CompileEffectFactKind::DynamicBoundary,
+                fact_name: boundary.symbol.clone(),
+                range: boundary.range,
+                source_item: boundary.boundary_item,
+                scope_id: None,
+                package_context: boundary.package.clone(),
+                fact_anchor_id: Some(AnchorId(boundary.range.start as u64)),
+                dynamic_reason: Some(boundary.reason.clone()),
+                source_hash: source_hash.clone(),
+                provenance: stash_provenance_to_compile(boundary.provenance),
+                confidence: stash_confidence_to_compile(boundary.confidence),
+            },
+        );
+    }
+
+    entries.sort_by_key(|entry| (entry.effect.range.start, entry.source_order));
+    entries
+        .into_iter()
+        .enumerate()
+        .map(|(ordinal, mut entry)| {
+            entry.effect.ordinal = ordinal as u32;
+            entry.effect
+        })
+        .collect()
+}
+
+fn push_item_effects(
+    item: &HirItem,
+    source_hash: &Option<String>,
+    entries: &mut Vec<CompileEffectEntry>,
+    next_order: &mut u32,
+) {
+    match &item.kind {
+        HirKind::PackageDecl(decl) => {
+            push_compile_effect(
+                entries,
+                next_order,
+                CompileEffectSeed {
+                    kind: CompileEffectKind::DeclarePackage,
+                    source_kind: CompileEffectSourceKind::PackageDecl,
+                    fact_kind: CompileEffectFactKind::Package,
+                    fact_name: Some(decl.name.clone()),
+                    range: item.range,
+                    source_item: Some(item.id),
+                    scope_id: item.scope_context,
+                    package_context: Some(decl.name.clone()),
+                    fact_anchor_id: Some(AnchorId(item.range.start as u64)),
+                    dynamic_reason: None,
+                    source_hash: source_hash.clone(),
+                    provenance: CompileProvenance::ExactAst,
+                    confidence: CompileConfidence::High,
+                },
+            );
+        }
+        HirKind::SubDecl(decl) => {
+            let Some(name) = &decl.name else {
+                return;
+            };
+            push_compile_effect(
+                entries,
+                next_order,
+                CompileEffectSeed {
+                    kind: CompileEffectKind::DeclareSub,
+                    source_kind: CompileEffectSourceKind::SubDecl,
+                    fact_kind: CompileEffectFactKind::Sub,
+                    fact_name: Some(name.clone()),
+                    range: item.range,
+                    source_item: Some(item.id),
+                    scope_id: item.scope_context,
+                    package_context: item.package_context.clone(),
+                    fact_anchor_id: Some(AnchorId(item.range.start as u64)),
+                    dynamic_reason: None,
+                    source_hash: source_hash.clone(),
+                    provenance: CompileProvenance::ExactAst,
+                    confidence: CompileConfidence::High,
+                },
+            );
+            if decl.has_prototype {
+                push_compile_effect(
+                    entries,
+                    next_order,
+                    CompileEffectSeed {
+                        kind: CompileEffectKind::RegisterPrototype,
+                        source_kind: CompileEffectSourceKind::SubDecl,
+                        fact_kind: CompileEffectFactKind::Prototype,
+                        fact_name: Some(name.clone()),
+                        range: item.range,
+                        source_item: Some(item.id),
+                        scope_id: item.scope_context,
+                        package_context: item.package_context.clone(),
+                        fact_anchor_id: Some(AnchorId(item.range.start as u64)),
+                        dynamic_reason: None,
+                        source_hash: source_hash.clone(),
+                        provenance: CompileProvenance::ExactAst,
+                        confidence: CompileConfidence::High,
+                    },
+                );
+            }
+        }
+        HirKind::MethodDecl(decl) => {
+            push_compile_effect(
+                entries,
+                next_order,
+                CompileEffectSeed {
+                    kind: CompileEffectKind::DeclareMethod,
+                    source_kind: CompileEffectSourceKind::MethodDecl,
+                    fact_kind: CompileEffectFactKind::Method,
+                    fact_name: Some(decl.name.clone()),
+                    range: item.range,
+                    source_item: Some(item.id),
+                    scope_id: item.scope_context,
+                    package_context: item.package_context.clone(),
+                    fact_anchor_id: Some(AnchorId(item.range.start as u64)),
+                    dynamic_reason: None,
+                    source_hash: source_hash.clone(),
+                    provenance: CompileProvenance::ExactAst,
+                    confidence: CompileConfidence::High,
+                },
+            );
+        }
+        _ => {}
+    }
+}
+
+fn push_slot_effects(
+    package: &PackageStash,
+    slot: &GlobSlot,
+    source_hash: &Option<String>,
+    entries: &mut Vec<CompileEffectEntry>,
+    next_order: &mut u32,
+) {
+    let (kind, fact_kind) = match slot.source {
+        GlobSlotSource::TypeglobAlias => {
+            (CompileEffectKind::AssignGlobAlias, CompileEffectFactKind::GlobSlot)
+        }
+        GlobSlotSource::ConstantDeclaration => {
+            (CompileEffectKind::DefineConstant, CompileEffectFactKind::Constant)
+        }
+        _ => return,
+    };
+
+    push_compile_effect(
+        entries,
+        next_order,
+        CompileEffectSeed {
+            kind,
+            source_kind: match slot.source {
+                GlobSlotSource::TypeglobAlias => CompileEffectSourceKind::TypeglobAssignment,
+                _ => CompileEffectSourceKind::StashGraph,
+            },
+            fact_kind,
+            fact_name: Some(format!("{}::{}", package.package, slot.name)),
+            range: slot.range,
+            source_item: slot.declaration_item,
+            scope_id: None,
+            package_context: Some(package.package.clone()),
+            fact_anchor_id: Some(AnchorId(slot.range.start as u64)),
+            dynamic_reason: None,
+            source_hash: source_hash.clone(),
+            provenance: stash_provenance_to_compile(slot.provenance),
+            confidence: stash_confidence_to_compile(slot.confidence),
+        },
+    );
+}
+
+#[derive(Debug)]
+struct CompileEffectSeed {
+    kind: CompileEffectKind,
+    source_kind: CompileEffectSourceKind,
+    fact_kind: CompileEffectFactKind,
+    fact_name: Option<String>,
+    range: SourceLocation,
+    source_item: Option<HirId>,
+    scope_id: Option<HirScopeId>,
+    package_context: Option<String>,
+    fact_anchor_id: Option<AnchorId>,
+    dynamic_reason: Option<String>,
+    source_hash: Option<String>,
+    provenance: CompileProvenance,
+    confidence: CompileConfidence,
+}
+
+fn push_compile_effect(
+    entries: &mut Vec<CompileEffectEntry>,
+    next_order: &mut u32,
+    seed: CompileEffectSeed,
+) {
+    let order = *next_order;
+    *next_order += 1;
+    entries.push(CompileEffectEntry {
+        source_order: order,
+        effect: CompileEffect {
+            ordinal: 0,
+            kind: seed.kind,
+            source_kind: seed.source_kind,
+            fact_kind: seed.fact_kind,
+            fact_name: seed.fact_name,
+            range: seed.range,
+            source_item: seed.source_item,
+            scope_id: seed.scope_id,
+            package_context: seed.package_context,
+            fact_anchor_id: seed.fact_anchor_id,
+            dynamic_reason: seed.dynamic_reason,
+            source_hash: seed.source_hash,
+            model_version: COMPILE_EFFECT_MODEL_VERSION,
+            provenance: seed.provenance,
+            confidence: seed.confidence,
+        },
+    });
+}
+
+fn module_request_source_kind(kind: ModuleRequestKind) -> CompileEffectSourceKind {
+    match kind {
+        ModuleRequestKind::Require => CompileEffectSourceKind::RequireDirective,
+        _ => CompileEffectSourceKind::UseDirective,
+    }
+}
+
+fn import_spec_source_kind(spec: &ImportSpec) -> CompileEffectSourceKind {
+    match spec.kind {
+        ImportKind::Require | ImportKind::DynamicRequire => {
+            CompileEffectSourceKind::RequireDirective
+        }
+        _ => CompileEffectSourceKind::UseDirective,
+    }
+}
+
+fn compile_boundary_source_kind(kind: CompileEnvironmentBoundaryKind) -> CompileEffectSourceKind {
+    match kind {
+        CompileEnvironmentBoundaryKind::DynamicRequire => CompileEffectSourceKind::RequireDirective,
+        CompileEnvironmentBoundaryKind::DynamicPragmaArgs
+        | CompileEnvironmentBoundaryKind::DynamicIncRoot => CompileEffectSourceKind::UseDirective,
+        CompileEnvironmentBoundaryKind::PhaseBlockExecution => CompileEffectSourceKind::PhaseBlock,
+    }
+}
+
+fn stash_provenance_to_compile(provenance: StashProvenance) -> CompileProvenance {
+    match provenance {
+        StashProvenance::ExactAst => CompileProvenance::ExactAst,
+        StashProvenance::DesugaredAst => CompileProvenance::DesugaredAst,
+        StashProvenance::DynamicBoundary => CompileProvenance::DynamicBoundary,
+    }
+}
+
+fn stash_confidence_to_compile(confidence: StashConfidence) -> CompileConfidence {
+    match confidence {
+        StashConfidence::High => CompileConfidence::High,
+        StashConfidence::Medium => CompileConfidence::Medium,
+        StashConfidence::Low => CompileConfidence::Low,
+    }
+}
+
+fn fact_provenance_to_compile(provenance: Provenance) -> CompileProvenance {
+    match provenance {
+        Provenance::ExactAst => CompileProvenance::ExactAst,
+        Provenance::DesugaredAst
+        | Provenance::SemanticAnalyzer
+        | Provenance::FrameworkSynthesis
+        | Provenance::ImportExportInference
+        | Provenance::PragmaInference => CompileProvenance::DesugaredAst,
+        Provenance::NameHeuristic | Provenance::SearchFallback | Provenance::DynamicBoundary => {
+            CompileProvenance::DynamicBoundary
+        }
+    }
+}
+
+fn fact_confidence_to_compile(confidence: Confidence) -> CompileConfidence {
+    match confidence {
+        Confidence::High => CompileConfidence::High,
+        Confidence::Medium => CompileConfidence::Medium,
+        Confidence::Low => CompileConfidence::Low,
+    }
 }
 
 /// HIR-local scope graph for compiler-substrate proof.

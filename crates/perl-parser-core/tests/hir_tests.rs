@@ -1,5 +1,6 @@
 use perl_parser_core::hir::{
-    CompileConfidence, CompileEnvironment, CompileEnvironmentBoundaryKind, CompileProvenance,
+    COMPILE_EFFECT_MODEL_VERSION, CompileConfidence, CompileEffectFactKind, CompileEffectKind,
+    CompileEffectSourceKind, CompileEnvironment, CompileEnvironmentBoundaryKind, CompileProvenance,
     FrameworkAdapterKind, FrameworkAdapterRegistry, FrameworkExportedSymbolKind, HirFile, HirKind,
     IncRootKind, ModuleResolutionRoot, PragmaArgumentKind, RecoveryConfidence, ScopeGraph,
     StashGraph, lower_ast,
@@ -424,6 +425,48 @@ fn render_framework_facts(file: &HirFile) -> String {
     }
 
     lines.join("\n")
+}
+
+fn render_compile_effects(file: &HirFile) -> String {
+    file.compile_effects_with_source_hash(Some("fixture-source-sha".to_string()))
+        .into_iter()
+        .filter(|effect| {
+            matches!(
+                effect.kind,
+                CompileEffectKind::DeclarePackage
+                    | CompileEffectKind::SetPragmaState
+                    | CompileEffectKind::AddIncludePath
+                    | CompileEffectKind::RequestModule
+                    | CompileEffectKind::ImportSymbols
+                    | CompileEffectKind::AssignInheritance
+                    | CompileEffectKind::AssignGlobAlias
+                    | CompileEffectKind::DefineConstant
+                    | CompileEffectKind::RegisterPrototype
+                    | CompileEffectKind::EmitDynamicBoundary
+            )
+        })
+        .map(|effect| {
+            let name = effect.fact_name.as_deref().unwrap_or("<none>");
+            let package = effect.package_context.as_deref().unwrap_or("<none>");
+            let reason = effect.dynamic_reason.as_deref().unwrap_or("<none>");
+            let hash = effect.source_hash.as_deref().unwrap_or("<none>");
+            format!(
+                "{} {:?} source={:?} fact={:?} name={} pkg={} model={} hash={} {:?}/{:?} reason={}",
+                effect.ordinal,
+                effect.kind,
+                effect.source_kind,
+                effect.fact_kind,
+                name,
+                package,
+                effect.model_version,
+                hash,
+                effect.provenance,
+                effect.confidence,
+                reason
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn find_import_spec<'a>(
@@ -1096,6 +1139,148 @@ fn hir_compile_environment_records_directives_without_provider_cutover()
             |item| matches!(&item.kind, HirKind::CallExpr(expr) if expr.name == "provider_cutover")
         ),
         "compile-environment facts must not imply live provider cutover"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn hir_compile_effect_log_links_source_mutations_facts_and_boundaries()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(
+        "package Effect::Demo;\n\
+         use strict;\n\
+         use lib 'lib';\n\
+         use parent 'Base::Class';\n\
+         use constant ANSWER => 42;\n\
+         require Foo::Bar;\n\
+         require $dynamic;\n\
+         sub proto ($) { 1; }\n\
+         sub literal () { 1; }\n\
+         method run { 1; }\n\
+         our @ISA = qw(Local::Base);\n\
+         *alias = \\&proto;\n\
+         *dynamic = $target;\n\
+         BEGIN { require Runtime::Thing; }\n",
+    );
+
+    let effects = file.compile_effects_with_source_hash(Some("fixture-source-sha".to_string()));
+    assert!(
+        effects.iter().all(|effect| {
+            effect.model_version == COMPILE_EFFECT_MODEL_VERSION
+                && effect.source_hash.as_deref() == Some("fixture-source-sha")
+        }),
+        "effect log should carry model version and caller source hash"
+    );
+    assert!(
+        effects.windows(2).all(|pair| pair[0].ordinal < pair[1].ordinal),
+        "compile effects should have stable sorted ordinals"
+    );
+
+    let has_effect = |kind: CompileEffectKind,
+                      source_kind: CompileEffectSourceKind,
+                      fact_kind: CompileEffectFactKind,
+                      name: &str| {
+        effects.iter().any(|effect| {
+            effect.kind == kind
+                && effect.source_kind == source_kind
+                && effect.fact_kind == fact_kind
+                && effect.fact_name.as_deref() == Some(name)
+        })
+    };
+
+    assert!(has_effect(
+        CompileEffectKind::DeclarePackage,
+        CompileEffectSourceKind::PackageDecl,
+        CompileEffectFactKind::Package,
+        "Effect::Demo"
+    ));
+    assert!(has_effect(
+        CompileEffectKind::SetPragmaState,
+        CompileEffectSourceKind::CompileEnvironment,
+        CompileEffectFactKind::PragmaState,
+        "strict/warnings/feature"
+    ));
+    assert!(has_effect(
+        CompileEffectKind::AddIncludePath,
+        CompileEffectSourceKind::UseDirective,
+        CompileEffectFactKind::IncludeRoot,
+        "lib"
+    ));
+    assert!(has_effect(
+        CompileEffectKind::RequestModule,
+        CompileEffectSourceKind::UseDirective,
+        CompileEffectFactKind::ModuleRequest,
+        "Base::Class"
+    ));
+    assert!(has_effect(
+        CompileEffectKind::ImportSymbols,
+        CompileEffectSourceKind::UseDirective,
+        CompileEffectFactKind::ImportSpec,
+        "constant"
+    ));
+    assert!(has_effect(
+        CompileEffectKind::AssignInheritance,
+        CompileEffectSourceKind::StashGraph,
+        CompileEffectFactKind::InheritanceEdge,
+        "Effect::Demo->Base::Class"
+    ));
+    assert!(has_effect(
+        CompileEffectKind::AssignInheritance,
+        CompileEffectSourceKind::StashGraph,
+        CompileEffectFactKind::InheritanceEdge,
+        "Effect::Demo->Local::Base"
+    ));
+    assert!(has_effect(
+        CompileEffectKind::DefineConstant,
+        CompileEffectSourceKind::StashGraph,
+        CompileEffectFactKind::Constant,
+        "Effect::Demo::ANSWER"
+    ));
+    assert!(has_effect(
+        CompileEffectKind::DefineConstant,
+        CompileEffectSourceKind::StashGraph,
+        CompileEffectFactKind::Constant,
+        "Effect::Demo::literal"
+    ));
+    assert!(has_effect(
+        CompileEffectKind::RegisterPrototype,
+        CompileEffectSourceKind::SubDecl,
+        CompileEffectFactKind::Prototype,
+        "proto"
+    ));
+    assert!(has_effect(
+        CompileEffectKind::AssignGlobAlias,
+        CompileEffectSourceKind::TypeglobAssignment,
+        CompileEffectFactKind::GlobSlot,
+        "Effect::Demo::alias"
+    ));
+
+    let boundary_reasons = effects
+        .iter()
+        .filter(|effect| effect.kind == CompileEffectKind::EmitDynamicBoundary)
+        .filter_map(|effect| effect.dynamic_reason.as_deref())
+        .collect::<Vec<_>>();
+    assert!(boundary_reasons.contains(&"require target is not statically known"));
+    assert!(boundary_reasons.contains(&"typeglob assignment has a non-static RHS"));
+    assert!(
+        boundary_reasons
+            .contains(&"phase block compile-time execution is recorded but not evaluated")
+    );
+    assert!(
+        effects.iter().filter(|effect| effect.kind == CompileEffectKind::EmitDynamicBoundary).all(
+            |effect| {
+                effect.provenance == CompileProvenance::DynamicBoundary
+                    && effect.confidence == CompileConfidence::Low
+            }
+        ),
+        "unsupported compile-time behavior should stay fail-closed"
+    );
+
+    let rendered = render_compile_effects(&file);
+    assert!(
+        rendered.contains("EmitDynamicBoundary"),
+        "rendered effect proof should expose dynamic-boundary rows"
     );
 
     Ok(())
