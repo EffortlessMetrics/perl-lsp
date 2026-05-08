@@ -999,6 +999,10 @@ fn format_simple_atom_tokens(
         return Some((call, next_index));
     }
 
+    if let Some((list, next_index)) = format_simple_list_tokens(tokens, start) {
+        return Some((list, next_index));
+    }
+
     let token = tokens.get(start)?;
     let value = simple_value_text(token)?;
     Some((value.to_string(), start + 1))
@@ -1034,6 +1038,50 @@ fn format_simple_call_tokens(
             _ => return None,
         }
     }
+}
+
+fn format_simple_list_tokens(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+) -> Option<(String, usize)> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.get(start)?.kind != TokenKind::LeftParen {
+        return None;
+    }
+
+    let mut items = Vec::new();
+    let mut index = start + 1;
+    if tokens.get(index)?.kind == TokenKind::RightParen {
+        return Some(("()".to_string(), index + 1));
+    }
+
+    loop {
+        let (item, next_index) = format_simple_atom_tokens(tokens, index)?;
+        items.push(item);
+        index = next_index;
+
+        match tokens.get(index)?.kind {
+            TokenKind::Comma => index += 1,
+            TokenKind::RightParen => {
+                return Some((render_simple_list_doc(&items), index + 1));
+            }
+            _ => return None,
+        }
+    }
+}
+
+fn render_simple_list_doc(items: &[String]) -> String {
+    let mut parts = vec![FormatDoc::text("(")];
+    for (index, item) in items.iter().enumerate() {
+        if index > 0 {
+            parts.push(FormatDoc::text(","));
+            parts.push(FormatDoc::Space);
+        }
+        parts.push(FormatDoc::text(item));
+    }
+    parts.push(FormatDoc::text(")"));
+    FormatDoc::group(parts).render(&FormatConfig::default())
 }
 
 fn simple_binary_operator_text(token: &perl_parser_core::Token) -> Option<&str> {
