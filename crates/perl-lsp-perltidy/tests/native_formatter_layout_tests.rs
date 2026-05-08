@@ -76,6 +76,21 @@ fn native_formatter_formats_simple_list_literals() {
 }
 
 #[test]
+fn native_formatter_formats_simple_hash_constructors() {
+    let formatter = NativeFormatter::new();
+    let source = "my$h={foo=>1,bar=>$x};\n$x={nested=>{ok=>1},list=>(1,2)};\nreturn{answer=>42};\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        "my $h = {foo => 1, bar => $x};\n$x = {nested => {ok => 1}, list => (1, 2)};\nreturn {answer => 42};\n"
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_preserves_indent_and_line_endings_for_simple_declarations() {
     let formatter = NativeFormatter::new();
     let source = "  my $x=1;\r\n\tour @y;\r\n";
@@ -204,6 +219,21 @@ fn native_range_formatter_formats_selected_simple_list_literal_line() {
     assert_eq!(result.edits.len(), 1);
     assert_eq!(result.edits[0].range, range);
     assert_eq!(result.edits[0].new_text, "return ($x, 3);");
+}
+
+#[test]
+fn native_range_formatter_formats_selected_simple_hash_constructor_line() {
+    let formatter = NativeFormatter::new();
+    let source = "my$h={foo=>1,bar=>$x};\nreturn{answer=>42};\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 19));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "my$h={foo=>1,bar=>$x};\nreturn {answer => 42};\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(result.edits[0].new_text, "return {answer => 42};");
 }
 
 #[test]
