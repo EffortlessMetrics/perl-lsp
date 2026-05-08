@@ -127,6 +127,51 @@ fn build_artifact() -> Artifact {
                 ProviderFallbackState::Unavailable,
             )],
         ),
+        receipt_from_identities(
+            ShadowQueryName::DiagnosticsCheck,
+            "imported_func",
+            Some(vec![]),
+            Some(vec!["false_positive_removed:imported_func"]),
+            "diagnostics shadow fixture: legacy=warn compiler_fact=suppress via ImportSpec/ExportSet; false_positive_delta=-1; false_negative_delta=0",
+            vec![trace(
+                ProviderSurface::Diagnostics,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::ImportExportInference,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::DiagnosticsCheck,
+            "genuinely_missing",
+            Some(vec!["warn:genuinely_missing"]),
+            Some(vec!["warn:genuinely_missing"]),
+            "diagnostics shadow fixture: compiler facts preserve exact undefined-symbol warning; false_positive_delta=0; false_negative_delta=0",
+            vec![trace(
+                ProviderSurface::Diagnostics,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::DiagnosticsCheck,
+            "symbolic_ref_boundary",
+            Some(vec![]),
+            Some(vec!["dynamic_boundary_blocked:symbolic_ref_boundary"]),
+            "diagnostics shadow fixture: legacy=warn compiler_fact=dynamic-boundary-blocked for symbolic ref; false_positive_delta=-1; false_negative_delta=0",
+            vec![trace(
+                ProviderSurface::Diagnostics,
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
     ];
 
     let verdict_counts = count_verdicts(&receipts);
@@ -342,8 +387,8 @@ mod tests {
     fn artifact_includes_required_verdict_rows() {
         let artifact = build_artifact();
         assert_eq!(artifact.schema_version, 3);
-        assert_eq!(artifact.verdict_counts.get("same"), Some(&1));
-        assert_eq!(artifact.verdict_counts.get("improved"), Some(&1));
+        assert_eq!(artifact.verdict_counts.get("same"), Some(&2));
+        assert_eq!(artifact.verdict_counts.get("improved"), Some(&3));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("unavailable"), Some(&1));
@@ -351,6 +396,8 @@ mod tests {
         assert_eq!(artifact.release_readiness_verdict_counts.get("improved"), Some(&1));
         assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&1));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&2));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&1));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("unavailable"), Some(&1));
@@ -377,6 +424,8 @@ mod tests {
         assert!(markdown.contains("| schema-fixture | CountUsages"));
         assert!(markdown.contains("## Fact Source Traces"));
         assert!(markdown.contains("| release-readiness | FindDefinition | Definition | CompilerFact | SemanticAnalyzer | High | Fresh | Shadow |"));
+        assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | High | Fresh | Shadow |"));
+        assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
     }
 
     #[test]
