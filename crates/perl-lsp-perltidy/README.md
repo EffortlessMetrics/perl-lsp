@@ -1,9 +1,13 @@
 # perl-lsp-perltidy
 
-Standalone SRP microcrate for `perltidy`-based Perl formatting integration.
+Standalone SRP microcrate for Perl formatting integration. The existing
+`PerlTidyFormatter` remains a subprocess-backed compatibility adapter; the
+`native` module defines the Rust-native formatter contract for the native-first
+replacement lane.
 
 ## Features
 
+- `PerlFormatter` trait and native `FormatResult` / edit / diagnostic model
 - `PerlTidyConfig` for serializable formatter configuration
 - `PerlTidyFormatter` for subprocess-backed formatting with memoized results
 - `BuiltInFormatter` fallback for environments without `perltidy`

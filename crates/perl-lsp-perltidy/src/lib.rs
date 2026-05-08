@@ -16,6 +16,13 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
+pub mod native;
+
+pub use native::{
+    FinalNewline, FormatConfig, FormatDiagnostic, FormatDiagnosticSeverity, FormatResult,
+    FormatterMode, PerlFormatter, TextEdit, TextPosition, TextRange,
+};
+
 /// Configuration for perltidy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerlTidyConfig {
