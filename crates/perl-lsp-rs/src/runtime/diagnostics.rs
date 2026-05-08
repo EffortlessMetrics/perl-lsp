@@ -1835,7 +1835,7 @@ mod tests {
                     "uri": uri,
                     "languageId": "perl",
                     "version": 1,
-                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nprint $x + $shadow;\n"
+                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nprint $x + $shadow;\n"
                 }
             })))
             .unwrap();
@@ -1861,6 +1861,14 @@ mod tests {
         assert!(
             text.contains("Lexical variable '$unused' is declared but never used"),
             "native unused lexical finding should preserve rule message; got: {text:?}"
+        );
+        assert!(
+            text.contains("native.variables.unused_parameter"),
+            "native critic engine should publish native unused parameter finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("Parameter '$unused_param' is never used"),
+            "native unused parameter finding should preserve rule message; got: {text:?}"
         );
         assert!(
             text.contains("native.variables.duplicate_lexical"),
@@ -1930,7 +1938,7 @@ mod tests {
                 "uri": uri,
                 "languageId": "perl",
                 "version": 1,
-                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nprint $x + $shadow;\n"
+                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nprint $x + $shadow;\n"
             }
         })))?;
 
@@ -1970,6 +1978,14 @@ mod tests {
                         == Some("Lexical variable '$unused' is declared but never used")
             }),
             "native critic engine should add native unused lexical finding to workspace diagnostics: {report}"
+        );
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag["code"].as_str() == Some("native.variables.unused_parameter")
+                    && diag["source"].as_str() == Some("perl-lsp-critic")
+                    && diag["message"].as_str() == Some("Parameter '$unused_param' is never used")
+            }),
+            "native critic engine should add native unused parameter finding to workspace diagnostics: {report}"
         );
         assert!(
             diagnostics.iter().any(|diag| {

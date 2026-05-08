@@ -237,6 +237,7 @@ impl NativeCriticRegistry {
             Box::new(RequireUseStrictRule),
             Box::new(RequireUseWarningsRule),
             Box::new(UnusedLexicalVariableRule),
+            Box::new(UnusedParameterRule),
             Box::new(DuplicateLexicalDeclarationRule),
             Box::new(ShadowedLexicalVariableRule),
         ])
@@ -462,6 +463,39 @@ impl CriticRule for UnusedLexicalVariableRule {
     }
 }
 
+/// Native rule that reports subroutine parameters declared but never read.
+///
+/// This rule delegates parameter-use reasoning to the semantic scope analyzer
+/// so native critic diagnostics reuse the same signature facts as existing
+/// PL108 diagnostics.
+pub struct UnusedParameterRule;
+
+impl CriticRule for UnusedParameterRule {
+    fn id(&self) -> &'static str {
+        "native.variables.unused_parameter"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Semantic
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        let pragma_map = PragmaTracker::build(ctx.ast);
+        let issues = ScopeAnalyzer::new().analyze(ctx.ast, ctx.source, &pragma_map);
+
+        out.extend(
+            issues
+                .into_iter()
+                .filter(|issue| issue.kind == IssueKind::UnusedParameter)
+                .map(|issue| unused_parameter_finding(self, ctx.source, &issue)),
+        );
+    }
+}
+
 /// Native rule that reports lexical variables declared more than once in a scope.
 ///
 /// This rule delegates redeclaration detection to the semantic scope analyzer so
@@ -543,6 +577,32 @@ fn unused_lexical_finding(
         range,
         message: format!("Lexical variable '{}' is declared but never used", issue.variable_name),
         explanation: "Remove the lexical variable, use it, or prefix it with '_' to mark it intentionally unused.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix: Some(CriticFix {
+            title: format!("Rename to '{unused_name}'"),
+            safety: FixSafety::Suggested,
+            edits: vec![CriticTextEdit { range, new_text: unused_name }],
+        }),
+    }
+}
+
+fn unused_parameter_finding(
+    rule: &UnusedParameterRule,
+    source: &str,
+    issue: &ScopeIssue,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, issue.range.0, issue.range.1);
+    let unused_name = prefixed_unused_name(&issue.variable_name);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!("Parameter '{}' is never used", issue.variable_name),
+        explanation: "Use the parameter or prefix it with '_' to mark it intentionally unused."
+            .to_string(),
         suppression_key: rule.id().to_string(),
         related: Vec::new(),
         fix: Some(CriticFix {
@@ -1016,6 +1076,7 @@ mod tests {
                 "native.testing.require_use_strict",
                 "native.testing.require_use_warnings",
                 "native.variables.unused_lexical",
+                "native.variables.unused_parameter",
                 "native.variables.duplicate_lexical",
                 "native.variables.shadowed_lexical"
             ]
@@ -1132,6 +1193,88 @@ mod tests {
         assert_eq!(
             violations[0].explanation,
             "Remove the lexical variable, use it, or prefix it with '_' to mark it intentionally unused."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
+    fn native_unused_parameter_rule_reports_unread_signature_parameter() {
+        let source = "use strict;\nuse warnings;\nsub helper($used, $unused) { return $used; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnusedParameterRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.variables.unused_parameter");
+        assert_eq!(finding.category, CriticCategory::Semantic);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert_eq!(finding.message, "Parameter '$unused' is never used");
+        assert_eq!(finding.suppression_key, "native.variables.unused_parameter");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$unused");
+
+        let fix = finding.fix.as_ref().expect("unused parameter should offer an intent marker");
+        assert_eq!(fix.title, "Rename to '$_unused'");
+        assert_eq!(fix.safety, FixSafety::Suggested);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].range, finding.range);
+        assert_eq!(fix.edits[0].new_text, "$_unused");
+    }
+
+    #[test]
+    fn native_unused_parameter_rule_accepts_used_and_intentionally_unused_parameters() {
+        let source = "use strict;\nuse warnings;\nsub helper($used, $_ignored) { return $used; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnusedParameterRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "used and underscore-prefixed parameters should be accepted");
+    }
+
+    #[test]
+    fn native_unused_parameter_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nsub helper($used, $unused) { return $used; }\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.variables.unused_parameter".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnusedParameterRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.variables.unused_parameter -- fixture\nuse strict;\nuse warnings;\nsub helper($used, $unused) { return $used; }\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_unused_parameter_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nsub helper($used, $unused) { return $used; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnusedParameterRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.variables.unused_parameter");
+        assert_eq!(violations[0].description, "Parameter '$unused' is never used");
+        assert_eq!(
+            violations[0].explanation,
+            "Use the parameter or prefix it with '_' to mark it intentionally unused."
         );
         assert_eq!(violations[0].severity, Severity::Stern);
         assert_eq!(violations[0].file, "lib/App.pm");

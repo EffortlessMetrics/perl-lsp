@@ -91,7 +91,11 @@ impl CodeActionsProvider {
             {
                 fixes::fix_parameter_shadowing(diagnostic)
             }
-            Some(c) if c == DiagnosticCode::UnusedParameter.as_str() || c == "unused-parameter" => {
+            Some(c)
+                if c == DiagnosticCode::UnusedParameter.as_str()
+                    || c == "unused-parameter"
+                    || c == "native.variables.unused_parameter" =>
+            {
                 fixes::fix_unused_parameter(diagnostic)
             }
             Some(c)
@@ -587,6 +591,24 @@ mod tests {
         assert_eq!(actions.len(), 1);
         assert!(actions[0].title.contains("$_self"));
         assert!(actions[0].title.contains("mark as intentionally unused"));
+    }
+
+    #[test]
+    fn test_native_critic_unused_parameter_quick_fix() {
+        let diagnostic = make_diagnostic(
+            (20, 27),
+            DiagnosticSeverity::Warning,
+            "native.variables.unused_parameter",
+            "Parameter '$unused' is never used",
+        );
+
+        let provider = CodeActionsProvider::new(String::new());
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Rename to '$_unused' (mark as intentionally unused)");
+        assert_eq!(actions[0].edit.range, (20, 27));
+        assert_eq!(actions[0].edit.new_text, "$_unused");
     }
 
     #[test]
