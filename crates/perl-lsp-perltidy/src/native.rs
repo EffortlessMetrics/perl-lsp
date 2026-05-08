@@ -7,6 +7,9 @@
 
 use serde::{Deserialize, Serialize};
 
+const PARSE_ERROR_CODE: &str = "native.format.parse_error";
+const LITERAL_PRESERVE_CODE: &str = "native.format.literal_preserve_region";
+
 /// Native formatter document tree.
 ///
 /// This is the small, lossless-friendly formatting IR from the replacement
@@ -396,6 +399,172 @@ pub trait PerlFormatter {
     fn format_range(&self, source: &str, range: TextRange, config: &FormatConfig) -> FormatResult;
 }
 
+/// Parse-gated Rust-native Perl formatter.
+///
+/// This initial engine deliberately performs no syntax layout rewrites. It is
+/// the safety boundary that future native formatter passes should compose with:
+/// source must parse cleanly before any native formatting edit is allowed.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NativeFormatter;
+
+impl NativeFormatter {
+    /// Create a parse-gated native formatter.
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn validate_clean_parse(source: &str) -> Result<(), FormatDiagnostic> {
+        if let Some(kind) = literal_preserve_region(source) {
+            return Err(FormatDiagnostic::new(
+                LITERAL_PRESERVE_CODE,
+                FormatDiagnosticSeverity::Warning,
+                None,
+                format!("native formatting skipped because {kind} preservation is not enabled yet"),
+            ));
+        }
+
+        let mut parser = perl_parser_core::Parser::new(source);
+        let output = parser.parse_with_recovery();
+
+        if output.terminated_early {
+            return Err(FormatDiagnostic::new(
+                PARSE_ERROR_CODE,
+                FormatDiagnosticSeverity::Warning,
+                None,
+                "native formatting skipped because parsing terminated early",
+            ));
+        }
+
+        if let Some(error) = output.diagnostics.first() {
+            return Err(FormatDiagnostic::new(
+                PARSE_ERROR_CODE,
+                FormatDiagnosticSeverity::Warning,
+                error.location().map(|offset| TextRange::at_byte_offset(source, offset)),
+                format!(
+                    "native formatting skipped because the source does not parse cleanly: {error}"
+                ),
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn apply_final_newline(source: &str, config: &FormatConfig) -> String {
+        match config.final_newline {
+            FinalNewline::Preserve => source.to_string(),
+            FinalNewline::Insert => {
+                let trimmed = source.trim_end_matches(['\n', '\r']);
+                format!("{trimmed}\n")
+            }
+            FinalNewline::Trim => source.trim_end_matches(['\n', '\r']).to_string(),
+        }
+    }
+}
+
+impl PerlFormatter for NativeFormatter {
+    fn format_document(&self, source: &str, config: &FormatConfig) -> FormatResult {
+        if matches!(config.mode, FormatterMode::Off) {
+            return FormatResult::unchanged(source);
+        }
+
+        if let Err(diagnostic) = Self::validate_clean_parse(source) {
+            let mut result = FormatResult::unchanged(source);
+            result.diagnostics.push(diagnostic);
+            return result;
+        }
+
+        FormatResult::replace_document(source, Self::apply_final_newline(source, config))
+    }
+
+    fn format_range(&self, source: &str, _range: TextRange, config: &FormatConfig) -> FormatResult {
+        if matches!(config.mode, FormatterMode::Off) {
+            return FormatResult::unchanged(source);
+        }
+
+        if let Err(diagnostic) = Self::validate_clean_parse(source) {
+            let mut result = FormatResult::unchanged(source);
+            result.diagnostics.push(diagnostic);
+            return result;
+        }
+
+        FormatResult::unchanged(source)
+    }
+}
+
 fn utf16_len(s: &str) -> usize {
     s.chars().map(|ch| if ch as u32 >= 0x10000 { 2 } else { 1 }).sum()
+}
+
+fn literal_preserve_region(source: &str) -> Option<&'static str> {
+    for line in source.lines() {
+        let trimmed = line.trim_start();
+        if is_pod_start(trimmed) {
+            return Some("POD");
+        }
+        if matches!(trimmed, "__DATA__" | "__END__") {
+            return Some("DATA section");
+        }
+        if contains_likely_heredoc_start(line) {
+            return Some("heredoc");
+        }
+    }
+    None
+}
+
+fn is_pod_start(trimmed_line: &str) -> bool {
+    matches!(
+        trimmed_line.split_whitespace().next(),
+        Some(
+            "=pod"
+                | "=head1"
+                | "=head2"
+                | "=head3"
+                | "=head4"
+                | "=over"
+                | "=item"
+                | "=back"
+                | "=begin"
+                | "=end"
+                | "=for"
+                | "=encoding"
+                | "=cut"
+        )
+    )
+}
+
+fn contains_likely_heredoc_start(line: &str) -> bool {
+    let Some((_, after_marker)) = line.split_once("<<") else {
+        return false;
+    };
+    if after_marker.starts_with('<') {
+        return false;
+    }
+
+    let after_indent = after_marker.trim_start();
+    let marker = after_indent.strip_prefix('~').unwrap_or(after_indent).trim_start();
+    let marker = marker.strip_prefix(['\'', '"', '`']).unwrap_or(marker);
+    marker.chars().next().is_some_and(|ch| ch == '_' || ch.is_ascii_alphabetic())
+}
+
+impl TextRange {
+    fn at_byte_offset(source: &str, offset: usize) -> Self {
+        let clamped = offset.min(source.len());
+        let mut line = 0_u32;
+        let mut line_start = 0_usize;
+
+        for (idx, ch) in source.char_indices() {
+            if idx >= clamped {
+                break;
+            }
+            if ch == '\n' {
+                line += 1;
+                line_start = idx + ch.len_utf8();
+            }
+        }
+
+        let character = utf16_len(&source[line_start..clamped]) as u32;
+        let position = TextPosition::new(line, character);
+        Self::new(position, position)
+    }
 }

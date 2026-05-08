@@ -20,7 +20,7 @@ pub mod native;
 
 pub use native::{
     FinalNewline, FormatConfig, FormatDiagnostic, FormatDiagnosticSeverity, FormatDoc,
-    FormatResult, FormatterMode, PerlFormatter, TextEdit, TextPosition, TextRange,
+    FormatResult, FormatterMode, NativeFormatter, PerlFormatter, TextEdit, TextPosition, TextRange,
 };
 
 /// Configuration for perltidy.

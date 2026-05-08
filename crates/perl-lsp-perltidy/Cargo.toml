@@ -17,6 +17,7 @@ categories = ["development-tools", "text-editors"]
 doctest = false
 
 [dependencies]
+perl-parser-core = { workspace = true }
 perl-subprocess-runtime = { workspace = true }
 serde = { workspace = true }
 
