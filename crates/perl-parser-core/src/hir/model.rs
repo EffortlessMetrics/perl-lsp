@@ -464,6 +464,121 @@ pub struct CompileEnvironment {
     pub dynamic_boundaries: Vec<CompileEnvironmentBoundary>,
 }
 
+impl CompileEnvironment {
+    /// Build module-resolution candidate facts from static module requests.
+    ///
+    /// The HIR layer records lexical include-root effects and module requests,
+    /// but it does not read process environment, inspect the filesystem, or
+    /// depend on the downstream `perl-module` resolver. Callers provide
+    /// configured, `PERL5LIB`, and system roots explicitly; this method combines
+    /// them with source-order lexical `use lib` roots active at each request.
+    #[must_use]
+    pub fn module_resolution_candidates(
+        &self,
+        supplied_roots: &[ModuleResolutionRoot],
+    ) -> Vec<ModuleResolutionCandidate> {
+        self.module_requests
+            .iter()
+            .enumerate()
+            .filter_map(|(request_index, request)| {
+                let target = request.target.as_ref()?;
+                let normalized_target = normalize_module_target(target);
+                let relative_path = module_target_to_relative_path(&normalized_target)?;
+                let candidate_roots =
+                    self.candidate_roots_for_request(request, &relative_path, supplied_roots);
+                let status = if candidate_roots.is_empty() {
+                    ModuleResolutionCandidateStatus::NotFound
+                } else {
+                    ModuleResolutionCandidateStatus::CandidateBuilt
+                };
+
+                Some(ModuleResolutionCandidate {
+                    request_index,
+                    directive_item: request.directive_item,
+                    request_kind: request.kind,
+                    target: normalized_target,
+                    relative_path,
+                    roots: candidate_roots,
+                    status,
+                    range: request.range,
+                    package_context: request.package_context.clone(),
+                    provenance: request.provenance,
+                    confidence: request.confidence,
+                })
+            })
+            .collect()
+    }
+
+    fn candidate_roots_for_request(
+        &self,
+        request: &ModuleRequest,
+        relative_path: &str,
+        supplied_roots: &[ModuleResolutionRoot],
+    ) -> Vec<ModuleResolutionCandidateRoot> {
+        let active_lexical_roots = self.active_lexical_roots_for_request(request);
+        active_lexical_roots
+            .iter()
+            .map(|root| ModuleResolutionRoot {
+                path: root.path.clone(),
+                kind: root.kind,
+                source: root.source.clone(),
+            })
+            .chain(supplied_roots.iter().cloned())
+            .enumerate()
+            .map(|(precedence, root)| ModuleResolutionCandidateRoot {
+                path: root.path.clone(),
+                kind: root.kind,
+                source: root.source,
+                candidate_path: join_candidate_path(&root.path, relative_path),
+                precedence,
+            })
+            .collect()
+    }
+
+    fn active_lexical_roots_for_request(&self, request: &ModuleRequest) -> Vec<ActiveLexicalRoot> {
+        let mut active = Vec::new();
+
+        for (order, root) in self.inc_roots.iter().enumerate() {
+            if root.range.start > request.range.start {
+                continue;
+            }
+            if root.kind != IncRootKind::UseLib {
+                continue;
+            }
+
+            match root.action {
+                IncRootAction::Add => {
+                    active.push(ActiveLexicalRoot {
+                        path: root.path.clone(),
+                        kind: root.kind,
+                        source: "use-lib-lexical".to_string(),
+                        range_start: root.range.start,
+                        order,
+                    });
+                }
+                IncRootAction::Remove => {
+                    active.retain(|active_root| active_root.path != root.path);
+                }
+            }
+        }
+
+        active.sort_by(|left, right| {
+            right.range_start.cmp(&left.range_start).then_with(|| left.order.cmp(&right.order))
+        });
+
+        active
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ActiveLexicalRoot {
+    path: String,
+    kind: IncRootKind,
+    source: String,
+    range_start: usize,
+    order: usize,
+}
+
 /// One compile-time directive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -596,6 +711,26 @@ pub enum IncRootKind {
     SystemInc,
 }
 
+/// Caller-supplied include root for module-resolution candidate facts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ModuleResolutionRoot {
+    /// Include root path as configured or observed by the caller.
+    pub path: String,
+    /// Root source category.
+    pub kind: IncRootKind,
+    /// Human-readable source label for diagnostics/status output.
+    pub source: String,
+}
+
+impl ModuleResolutionRoot {
+    /// Create an explicit include root for module candidate projection.
+    #[must_use]
+    pub fn new(path: impl Into<String>, kind: IncRootKind, source: impl Into<String>) -> Self {
+        Self { path: path.into(), kind, source: source.into() }
+    }
+}
+
 /// Module load request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -642,6 +777,66 @@ pub enum ModuleResolutionStatus {
     Deferred,
     /// Module target is dynamic and cannot be resolved statically.
     Dynamic,
+}
+
+/// Derived module-resolution candidate fact keyed to a HIR module request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ModuleResolutionCandidate {
+    /// Zero-based request index in [`CompileEnvironment::module_requests`].
+    pub request_index: usize,
+    /// Directive HIR item that produced this request.
+    pub directive_item: Option<HirId>,
+    /// Source shape that requested the module.
+    pub request_kind: ModuleRequestKind,
+    /// Static module target.
+    pub target: String,
+    /// Relative module path, for example `Foo/Bar.pm`.
+    pub relative_path: String,
+    /// Ordered candidate roots considered for this request.
+    pub roots: Vec<ModuleResolutionCandidateRoot>,
+    /// Resolution status for this candidate packet.
+    pub status: ModuleResolutionCandidateStatus,
+    /// Source range for the request.
+    pub range: SourceLocation,
+    /// Package context active at the request.
+    pub package_context: Option<String>,
+    /// How this fact was produced.
+    pub provenance: CompileProvenance,
+    /// Confidence in this fact.
+    pub confidence: CompileConfidence,
+}
+
+/// A single candidate root/path pair for a static module request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ModuleResolutionCandidateRoot {
+    /// Include root path as configured or observed by the caller.
+    pub path: String,
+    /// Root source category.
+    pub kind: IncRootKind,
+    /// Human-readable source label.
+    pub source: String,
+    /// Candidate module path under this root.
+    pub candidate_path: String,
+    /// Search precedence; lower values are searched first.
+    pub precedence: usize,
+}
+
+/// Static resolution state for a module candidate packet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ModuleResolutionCandidateStatus {
+    /// Candidate paths were built but not resolved against the filesystem.
+    CandidateBuilt,
+    /// Dynamic module target cannot produce candidate paths.
+    Dynamic,
+    /// Static request has no roots to search.
+    NotFound,
+    /// Downstream resolver found a matching module.
+    Resolved,
+    /// Downstream resolver exhausted its timeout budget.
+    TimedOut,
 }
 
 /// Compile-time phase block.
@@ -736,6 +931,40 @@ pub enum CompileConfidence {
     Medium,
     /// Low-confidence dynamic-boundary fact.
     Low,
+}
+
+fn module_target_to_relative_path(target: &str) -> Option<String> {
+    let relative_path =
+        if target.ends_with(".pm") || target.ends_with(".pl") || target.contains(['/', '\\']) {
+            target.replace('\\', "/")
+        } else {
+            let canonical = target.replace('\'', "::");
+            format!("{}.pm", canonical.replace("::", "/"))
+        };
+
+    is_safe_relative_module_path(&relative_path).then_some(relative_path)
+}
+
+fn normalize_module_target(target: &str) -> String {
+    target.trim().trim_matches('"').trim_matches('\'').to_string()
+}
+
+fn is_safe_relative_module_path(path: &str) -> bool {
+    if path.is_empty() || path.starts_with('/') || path.contains(':') {
+        return false;
+    }
+
+    path.split('/').all(|segment| !matches!(segment, "" | "." | ".."))
+}
+
+fn join_candidate_path(root: &str, relative_path: &str) -> String {
+    let normalized_root = root.replace('\\', "/");
+    let trimmed_root = normalized_root.trim_end_matches('/');
+    if trimmed_root.is_empty() {
+        relative_path.to_string()
+    } else {
+        format!("{trimmed_root}/{relative_path}")
+    }
 }
 
 /// First-slice HIR constructs.
