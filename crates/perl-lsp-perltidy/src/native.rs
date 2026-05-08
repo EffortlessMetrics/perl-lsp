@@ -855,6 +855,7 @@ fn format_simple_statement_tokens(tokens: &[perl_parser_core::Token]) -> Option<
     format_simple_lexical_tokens(tokens)
         .or_else(|| format_simple_return_tokens(tokens))
         .or_else(|| format_simple_assignment_tokens(tokens))
+        .or_else(|| format_simple_expression_statement_tokens(tokens))
 }
 
 fn format_simple_lexical_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
@@ -943,6 +944,18 @@ fn format_simple_assignment_tokens(tokens: &[perl_parser_core::Token]) -> Option
     Some(format!("{variable} = {value};"))
 }
 
+fn format_simple_expression_statement_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.last()?.kind != TokenKind::Semicolon {
+        return None;
+    }
+
+    let semicolon_index = tokens.len() - 1;
+    let (call, next_index) = format_simple_call_tokens(tokens, 0)?;
+    (next_index == semicolon_index).then(|| format!("{call};"))
+}
+
 fn format_simple_condition_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
@@ -980,9 +993,45 @@ fn format_simple_atom_tokens(
         return Some((variable, next_index));
     }
 
+    if let Some((call, next_index)) = format_simple_call_tokens(tokens, start) {
+        return Some((call, next_index));
+    }
+
     let token = tokens.get(start)?;
     let value = simple_value_text(token)?;
     Some((value.to_string(), start + 1))
+}
+
+fn format_simple_call_tokens(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+) -> Option<(String, usize)> {
+    use perl_parser_core::TokenKind;
+
+    let name = tokens.get(start)?;
+    if name.kind != TokenKind::Identifier || tokens.get(start + 1)?.kind != TokenKind::LeftParen {
+        return None;
+    }
+
+    let mut args = Vec::new();
+    let mut index = start + 2;
+    if tokens.get(index)?.kind == TokenKind::RightParen {
+        return Some((format!("{}()", name.text), index + 1));
+    }
+
+    loop {
+        let (arg, next_index) = format_simple_atom_tokens(tokens, index)?;
+        args.push(arg);
+        index = next_index;
+
+        match tokens.get(index)?.kind {
+            TokenKind::Comma => index += 1,
+            TokenKind::RightParen => {
+                return Some((format!("{}({})", name.text, args.join(", ")), index + 1));
+            }
+            _ => return None,
+        }
+    }
 }
 
 fn simple_binary_operator_text(token: &perl_parser_core::Token) -> Option<&str> {
