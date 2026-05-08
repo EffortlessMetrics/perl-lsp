@@ -723,13 +723,23 @@ fn format_simple_control_block_tokens(
     let (condition, next_index) = format_simple_condition_tokens(tokens, 2)?;
     if tokens.get(next_index)?.kind != TokenKind::RightParen
         || tokens.get(next_index + 1)?.kind != TokenKind::LeftBrace
-        || tokens.last()?.kind != TokenKind::RightBrace
     {
         return None;
     }
 
-    let body_tokens = &tokens[next_index + 2..tokens.len() - 1];
+    let body_start = next_index + 2;
+    let body_end = tokens[body_start..]
+        .iter()
+        .position(|token| token.kind == TokenKind::RightBrace)
+        .map(|offset| body_start + offset)?;
+    let body_tokens = &tokens[body_start..body_end];
     let statements = format_simple_statement_block(body_tokens)?;
+    let else_statements = format_simple_else_branch(tokens, body_end, keyword)?;
+
+    if else_statements.is_none() && body_end + 1 != tokens.len() {
+        return None;
+    }
+
     let body_indent = format!("{indent}{}", indent_unit(config));
     let mut formatted = format!("{indent}{keyword} ({condition}) {{");
 
@@ -737,18 +747,64 @@ fn format_simple_control_block_tokens(
         formatted.push('\n');
         formatted.push_str(indent);
         formatted.push('}');
-        return Some(formatted);
+    } else {
+        for statement in statements {
+            formatted.push('\n');
+            formatted.push_str(&body_indent);
+            formatted.push_str(&statement);
+        }
+        formatted.push('\n');
+        formatted.push_str(indent);
+        formatted.push('}');
     }
 
-    for statement in statements {
+    if let Some(else_statements) = else_statements {
+        formatted.push_str(" else {");
+        if else_statements.is_empty() {
+            formatted.push('\n');
+            formatted.push_str(indent);
+            formatted.push('}');
+            return Some(formatted);
+        }
+
+        for statement in else_statements {
+            formatted.push('\n');
+            formatted.push_str(&body_indent);
+            formatted.push_str(&statement);
+        }
         formatted.push('\n');
-        formatted.push_str(&body_indent);
-        formatted.push_str(&statement);
+        formatted.push_str(indent);
+        formatted.push('}');
     }
-    formatted.push('\n');
-    formatted.push_str(indent);
-    formatted.push('}');
     Some(formatted)
+}
+
+fn format_simple_else_branch(
+    tokens: &[perl_parser_core::Token],
+    body_end: usize,
+    keyword: &str,
+) -> Option<Option<Vec<String>>> {
+    use perl_parser_core::TokenKind;
+
+    let next = body_end + 1;
+    if next == tokens.len() {
+        return Some(None);
+    }
+
+    if !matches!(keyword, "if" | "unless") {
+        return None;
+    }
+    if tokens.get(next)?.kind != TokenKind::Else
+        || tokens.get(next + 1)?.kind != TokenKind::LeftBrace
+        || tokens.last()?.kind != TokenKind::RightBrace
+    {
+        return None;
+    }
+
+    let else_body_start = next + 2;
+    let else_body_tokens = &tokens[else_body_start..tokens.len() - 1];
+    let statements = format_simple_statement_block(else_body_tokens)?;
+    Some(Some(statements))
 }
 
 fn format_simple_statement_block(tokens: &[perl_parser_core::Token]) -> Option<Vec<String>> {
