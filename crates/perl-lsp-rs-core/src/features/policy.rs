@@ -81,17 +81,12 @@ impl FeatureProfile {
         }
     }
 
-    /// Convert this policy into runtime `BuildFlags` that include
-    /// per-tool availability effects.
-    pub fn runtime_flags(self, has_perltidy: bool) -> BuildFlags {
-        let mut flags = self.build_flags();
-
-        // Perltidy availability gates formatting at runtime regardless of
-        // the compile-time default in the build profile.
-        flags.formatting = has_perltidy;
-        flags.range_formatting = has_perltidy;
-
-        flags
+    /// Convert this policy into runtime `BuildFlags`.
+    pub fn runtime_flags(self, _has_perltidy: bool) -> BuildFlags {
+        // Native formatting is built into the server. Perltidy availability is
+        // still detected for the external compatibility adapter, but it no
+        // longer gates whether formatting capabilities can be advertised.
+        self.build_flags()
     }
 
     /// Convert this policy into server advertised features.
@@ -248,7 +243,7 @@ mod tests {
         assert_eq!(flags, expected);
     }
 
-    // ── runtime_flags with perltidy ─────────────────────────────────
+    // ── runtime_flags with native formatting ────────────────────────
 
     #[test]
     fn runtime_flags_enables_formatting_when_perltidy_available() {
@@ -258,10 +253,13 @@ mod tests {
     }
 
     #[test]
-    fn runtime_flags_disables_formatting_without_perltidy() {
+    fn runtime_flags_keeps_formatting_enabled_without_perltidy() {
         let flags = FeatureProfile::Production.runtime_flags(false);
-        assert!(!flags.formatting, "formatting should be off without perltidy");
-        assert!(!flags.range_formatting, "range_formatting should be off without perltidy");
+        assert!(flags.formatting, "native formatting should be enabled without perltidy");
+        assert!(
+            flags.range_formatting,
+            "native range formatting should be enabled without perltidy"
+        );
     }
 
     // ── flags_for_profile / flags_for_runtime ───────────────────────
@@ -483,21 +481,24 @@ mod tests {
     }
 
     #[test]
-    fn runtime_flags_no_perltidy_disables_formatting_for_production() {
+    fn runtime_flags_no_perltidy_keeps_native_formatting_for_production() {
         let base = FeatureProfile::Production.build_flags();
         let runtime = FeatureProfile::Production.runtime_flags(false);
         assert!(base.formatting, "build_flags should enable formatting");
-        assert!(!runtime.formatting, "runtime(false) should disable formatting");
-        assert!(!runtime.range_formatting, "runtime(false) should disable range_formatting");
+        assert!(runtime.formatting, "runtime(false) should keep native formatting enabled");
+        assert!(
+            runtime.range_formatting,
+            "runtime(false) should keep native range_formatting enabled"
+        );
     }
 
     #[test]
-    fn runtime_advertised_features_without_perltidy_disables_formatting() {
+    fn runtime_advertised_features_without_perltidy_keeps_native_formatting() {
         let adv = FeatureProfile::Production.runtime_advertised_features(false);
-        assert!(!adv.formatting, "production without perltidy should not advertise formatting");
+        assert!(adv.formatting, "production without perltidy should advertise native formatting");
         assert!(
-            !adv.range_formatting,
-            "production without perltidy should not advertise range_formatting"
+            adv.range_formatting,
+            "production without perltidy should advertise native range_formatting"
         );
     }
 

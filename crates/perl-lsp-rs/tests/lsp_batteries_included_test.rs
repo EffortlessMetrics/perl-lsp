@@ -32,7 +32,7 @@ fn test_formatting_capability_advertised() -> Result<(), Box<dyn std::error::Err
 
     // Verify formatting is advertised
     if let Some(formatting_provider) = capabilities.get("documentFormattingProvider") {
-        // Formatting is conditional on perltidy availability; when present it should be a valid
+        // Formatting is provided natively; when advertised it should be a valid
         // capability payload.
         assert!(
             formatting_provider.is_boolean() || formatting_provider.is_object(),
@@ -40,7 +40,7 @@ fn test_formatting_capability_advertised() -> Result<(), Box<dyn std::error::Err
         );
     }
 
-    // Range formatting follows the same tool-availability gating as full-document formatting.
+    // Range formatting follows the same native capability shape as full-document formatting.
     if let Some(range_formatting_provider) = capabilities.get("documentRangeFormattingProvider") {
         assert!(
             range_formatting_provider.is_boolean() || range_formatting_provider.is_object(),

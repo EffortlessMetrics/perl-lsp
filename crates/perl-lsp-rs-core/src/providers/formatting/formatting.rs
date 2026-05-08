@@ -1,7 +1,10 @@
-//! Code formatting support using Perl::Tidy for Perl parsing workflow pipeline.
+//! Code formatting support for Perl parsing workflow pipeline.
 
 pub use crate::providers::formatting_types::{
     FormatPosition, FormatRange, FormatTextEdit, FormattedDocument, FormattingOptions,
+};
+use crate::tooling::perltidy::{
+    FinalNewline, FormatConfig, NativeFormatter, PerlFormatter, TextPosition, TextRange,
 };
 
 /// Re-export PerlTidyConfig from perl-lsp-perltidy for convenience.
@@ -52,7 +55,7 @@ impl FormattingError {
     }
 }
 
-/// Code formatter using perltidy.
+/// Code formatter using native formatting with an external perltidy adapter.
 pub struct FormattingProvider<R> {
     /// Subprocess runtime for executing perltidy.
     runtime: R,
@@ -90,12 +93,8 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
     ) -> Result<FormattedDocument, FormattingError> {
         let formatted = match self.run_perltidy(content, options) {
             Ok(formatted) => formatted,
-            Err(FormattingError::PerltidyNotFound(message)) => {
-                let rust_only_formatted = apply_lsp_whitespace_options(content, options);
-                if rust_only_formatted == content {
-                    return Err(FormattingError::PerltidyNotFound(message));
-                }
-                rust_only_formatted
+            Err(FormattingError::PerltidyNotFound(_)) => {
+                return Ok(native_format_document(content, options));
             }
             Err(other) => return Err(other),
         };
@@ -136,18 +135,8 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
         let text_to_format = lines[start_line..=end_line].join("\n");
         let formatted = match self.run_perltidy(&text_to_format, options) {
             Ok(formatted) => formatted,
-            Err(FormattingError::PerltidyNotFound(message)) => {
-                // `text_to_format` is a line-joined fragment (no surrounding newlines).
-                // `apply_lsp_whitespace_options` may append a trailing '\n' when
-                // `insert_final_newline` is true; strip it here so the LSP edit
-                // `new_text` does not inject an extra blank line into the document
-                // (the range replacement already sits between existing newlines).
-                let raw = apply_lsp_whitespace_options(&text_to_format, options);
-                let rust_only_formatted = raw.trim_end_matches('\n').to_string();
-                if rust_only_formatted == text_to_format {
-                    return Err(FormattingError::PerltidyNotFound(message));
-                }
-                rust_only_formatted
+            Err(FormattingError::PerltidyNotFound(_)) => {
+                return Ok(native_format_range(content, range, options));
             }
             Err(other) => return Err(other),
         };
@@ -243,6 +232,130 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
     }
 }
 
+fn native_format_document(content: &str, options: &FormattingOptions) -> FormattedDocument {
+    let config = native_format_config(options, true);
+    let result = NativeFormatter::new().format_document(content, &config);
+    if result.diagnostics.is_empty() {
+        let formatted = apply_lsp_whitespace_options(&result.formatted, options);
+        if formatted != result.formatted {
+            return FormattedDocument {
+                text: formatted.clone(),
+                edits: vec![FormatTextEdit {
+                    range: FormatRange::whole_document(content),
+                    new_text: formatted,
+                }],
+            };
+        }
+
+        return FormattedDocument {
+            text: result.formatted,
+            edits: result.edits.into_iter().map(native_edit_to_format_edit).collect(),
+        };
+    }
+
+    let formatted = apply_lsp_whitespace_options(content, options);
+    if formatted == content {
+        FormattedDocument { text: content.to_string(), edits: vec![] }
+    } else {
+        FormattedDocument {
+            text: formatted.clone(),
+            edits: vec![FormatTextEdit {
+                range: FormatRange::whole_document(content),
+                new_text: formatted,
+            }],
+        }
+    }
+}
+
+fn native_format_range(
+    content: &str,
+    range: &FormatRange,
+    options: &FormattingOptions,
+) -> FormattedDocument {
+    let native_range = TextRange::new(
+        TextPosition::new(range.start.line, range.start.character),
+        TextPosition::new(range.end.line, range.end.character),
+    );
+    let result = NativeFormatter::new().format_range(
+        content,
+        native_range,
+        &native_format_config(options, false),
+    );
+    if result.diagnostics.is_empty() {
+        if result.edits.is_empty() {
+            return whitespace_range_fallback(content, range, options);
+        }
+
+        return FormattedDocument {
+            text: result.formatted,
+            edits: result.edits.into_iter().map(native_edit_to_format_edit).collect(),
+        };
+    }
+
+    whitespace_range_fallback(content, range, options)
+}
+
+fn native_format_config(options: &FormattingOptions, allow_final_newline: bool) -> FormatConfig {
+    FormatConfig {
+        indent_width: options.tab_size,
+        use_tabs: !options.insert_spaces,
+        final_newline: if allow_final_newline {
+            if options.trim_final_newlines.unwrap_or(false) {
+                FinalNewline::Trim
+            } else if options.insert_final_newline.unwrap_or(false) {
+                FinalNewline::Insert
+            } else {
+                FinalNewline::Preserve
+            }
+        } else {
+            FinalNewline::Preserve
+        },
+        ..FormatConfig::default()
+    }
+}
+
+fn native_edit_to_format_edit(edit: crate::tooling::perltidy::TextEdit) -> FormatTextEdit {
+    FormatTextEdit {
+        range: FormatRange::new(
+            FormatPosition::new(edit.range.start.line, edit.range.start.character),
+            FormatPosition::new(edit.range.end.line, edit.range.end.character),
+        ),
+        new_text: edit.new_text,
+    }
+}
+
+fn whitespace_range_fallback(
+    content: &str,
+    range: &FormatRange,
+    options: &FormattingOptions,
+) -> FormattedDocument {
+    let lines: Vec<&str> = content.lines().collect();
+    let start_line = range.start.line as usize;
+    let end_line = (range.end.line as usize).min(lines.len().saturating_sub(1));
+
+    if start_line >= lines.len() || end_line < start_line {
+        return FormattedDocument { text: content.to_string(), edits: vec![] };
+    }
+
+    let text_to_format = lines[start_line..=end_line].join("\n");
+    let raw = apply_lsp_whitespace_options(&text_to_format, options);
+    let formatted = raw.trim_end_matches('\n').to_string();
+    if formatted == text_to_format {
+        return FormattedDocument { text: content.to_string(), edits: vec![] };
+    }
+
+    FormattedDocument {
+        text: content.to_string(),
+        edits: vec![FormatTextEdit {
+            range: FormatRange::new(
+                FormatPosition::new(start_line as u32, 0),
+                FormatPosition::new(end_line as u32, utf16_len(lines[end_line]) as u32),
+            ),
+            new_text: formatted,
+        }],
+    }
+}
+
 fn apply_lsp_whitespace_options(content: &str, options: &FormattingOptions) -> String {
     let mut output = content.to_string();
 
@@ -297,24 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn format_document_uses_rust_whitespace_fallback_when_perltidy_missing() -> Result<()> {
-        let provider = FormattingProvider::new(MissingPerltidyRuntime);
-        let options = FormattingOptions {
-            tab_size: 4,
-            insert_spaces: true,
-            trim_trailing_whitespace: Some(true),
-            insert_final_newline: Some(true),
-            trim_final_newlines: Some(true),
-        };
-
-        let formatted = provider.format_document("my $x = 1;   \n\n\n", &options)?;
-        assert_eq!(formatted.edits.len(), 1);
-        assert_eq!(formatted.edits[0].new_text, "my $x = 1;\n");
-        Ok(())
-    }
-
-    #[test]
-    fn format_document_keeps_perltidy_not_found_error_when_no_rust_fallback_changes() {
+    fn format_document_uses_native_formatter_when_perltidy_missing() -> Result<()> {
         let provider = FormattingProvider::new(MissingPerltidyRuntime);
         let options = FormattingOptions {
             tab_size: 4,
@@ -324,12 +420,48 @@ mod tests {
             trim_final_newlines: None,
         };
 
-        let result = provider.format_document("my $x = 1;\n", &options);
-        assert!(matches!(result, Err(FormattingError::PerltidyNotFound(_))));
+        let formatted = provider.format_document("my$x=1;\n", &options)?;
+        assert_eq!(formatted.edits.len(), 1);
+        assert_eq!(formatted.edits[0].new_text, "my $x = 1;\n");
+        Ok(())
     }
 
     #[test]
-    fn format_range_uses_rust_whitespace_fallback_when_perltidy_missing() -> Result<()> {
+    fn format_document_returns_empty_edits_when_native_formatter_has_no_changes() -> Result<()> {
+        let provider = FormattingProvider::new(MissingPerltidyRuntime);
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: None,
+            insert_final_newline: None,
+            trim_final_newlines: None,
+        };
+
+        let result = provider.format_document("my $x = 1;\n", &options)?;
+        assert!(result.edits.is_empty());
+        assert_eq!(result.text, "my $x = 1;\n");
+        Ok(())
+    }
+
+    #[test]
+    fn format_document_falls_back_to_lsp_whitespace_when_native_declines() -> Result<()> {
+        let provider = FormattingProvider::new(MissingPerltidyRuntime);
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(true),
+            insert_final_newline: Some(false),
+            trim_final_newlines: None,
+        };
+
+        let formatted = provider.format_document("=pod\n\n=cut\n\nmy $x = 1;   \n", &options)?;
+        assert_eq!(formatted.edits.len(), 1);
+        assert_eq!(formatted.edits[0].new_text, "=pod\n\n=cut\n\nmy $x = 1;\n");
+        Ok(())
+    }
+
+    #[test]
+    fn format_range_uses_native_formatter_when_perltidy_missing() -> Result<()> {
         let provider = FormattingProvider::new(MissingPerltidyRuntime);
         let options = FormattingOptions {
             tab_size: 4,
@@ -342,7 +474,7 @@ mod tests {
 
         let formatted = provider.format_range(
             "line1
-my $x = 1;   
+my$x=1;
 line3
 ",
             &range,
@@ -380,7 +512,7 @@ line3
     }
 
     #[test]
-    fn format_range_keeps_perltidy_not_found_error_when_no_rust_fallback_changes() {
+    fn format_range_returns_empty_edits_when_native_formatter_has_no_changes() -> Result<()> {
         let provider = FormattingProvider::new(MissingPerltidyRuntime);
         let options = FormattingOptions {
             tab_size: 4,
@@ -396,8 +528,9 @@ line3
 ",
             &range,
             &options,
-        );
-        assert!(matches!(result, Err(FormattingError::PerltidyNotFound(_))));
+        )?;
+        assert!(result.edits.is_empty());
+        Ok(())
     }
 
     #[test]
