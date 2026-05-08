@@ -62,6 +62,7 @@ impl CodeActionsProvider {
             Some(c) if c == DiagnosticCode::UnusedVariable.as_str() || c == "unused-variable" => {
                 fixes::fix_unused_variable(self, diagnostic)
             }
+            Some("native.variables.unused_lexical") => fixes::fix_unused_variable(self, diagnostic),
             Some("native.testing.require_use_strict") => fixes::add_use_strict(diagnostic),
             Some("native.testing.require_use_warnings") => fixes::add_use_warnings(diagnostic),
             Some(c)
@@ -339,6 +340,31 @@ mod tests {
         }));
         assert!(actions.iter().any(|action| {
             action.title == "Add 'use warnings'" && action.edit.new_text == "use warnings;\n"
+        }));
+    }
+
+    #[test]
+    fn test_native_critic_unused_lexical_quick_fix() {
+        let source = "use strict;\nuse warnings;\nmy $unused = 1;\n".to_string();
+        let provider = CodeActionsProvider::new(source.clone());
+        let start = must_some(source.find("$unused"));
+        let diagnostic = make_diagnostic(
+            (start, start + "$unused".len()),
+            DiagnosticSeverity::Warning,
+            "native.variables.unused_lexical",
+            "Lexical variable '$unused' is declared but never used",
+        );
+
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert!(actions.iter().any(|action| {
+            action.title == "Remove unused variable '$unused'"
+                && action.edit.range == (source.find("my $unused").unwrap(), source.len())
+        }));
+        assert!(actions.iter().any(|action| {
+            action.title == "Rename to '$_unused' (mark as intentionally unused)"
+                && action.edit.range == diagnostic.range
+                && action.edit.new_text == "$_unused"
         }));
     }
 

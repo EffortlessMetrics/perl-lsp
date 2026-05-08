@@ -7,7 +7,9 @@
 
 use super::{CriticConfig, Severity, Violation, insertion_range};
 use perl_parser_core::Node;
-use perl_parser_core::position::Range;
+use perl_parser_core::position::{Position, Range};
+use perl_pragma::PragmaTracker;
+use perl_semantic_analyzer::scope_analyzer::{IssueKind, ScopeAnalyzer, ScopeIssue};
 use serde::{Deserialize, Serialize};
 
 /// Native critic rule category.
@@ -231,7 +233,11 @@ impl NativeCriticRegistry {
     /// diagnostics and receipts are deterministic.
     #[must_use]
     pub fn recommended() -> Self {
-        Self::with_rules(vec![Box::new(RequireUseStrictRule), Box::new(RequireUseWarningsRule)])
+        Self::with_rules(vec![
+            Box::new(RequireUseStrictRule),
+            Box::new(RequireUseWarningsRule),
+            Box::new(UnusedLexicalVariableRule),
+        ])
     }
 
     /// Add a rule to the registry.
@@ -422,6 +428,74 @@ impl CriticRule for RequireUseWarningsRule {
     }
 }
 
+/// Native rule that reports lexical variables declared but never read.
+///
+/// This rule delegates scope reasoning to the existing semantic analyzer so the
+/// native critic path reuses the same declaration/use facts as core diagnostics.
+pub struct UnusedLexicalVariableRule;
+
+impl CriticRule for UnusedLexicalVariableRule {
+    fn id(&self) -> &'static str {
+        "native.variables.unused_lexical"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Semantic
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        let pragma_map = PragmaTracker::build(ctx.ast);
+        let issues = ScopeAnalyzer::new().analyze(ctx.ast, ctx.source, &pragma_map);
+
+        out.extend(
+            issues
+                .into_iter()
+                .filter(|issue| issue.kind == IssueKind::UnusedVariable)
+                .map(|issue| unused_lexical_finding(self, ctx.source, &issue)),
+        );
+    }
+}
+
+fn unused_lexical_finding(
+    rule: &UnusedLexicalVariableRule,
+    source: &str,
+    issue: &ScopeIssue,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, issue.range.0, issue.range.1);
+    let unused_name = prefixed_unused_name(&issue.variable_name);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!("Lexical variable '{}' is declared but never used", issue.variable_name),
+        explanation: "Remove the lexical variable, use it, or prefix it with '_' to mark it intentionally unused.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix: Some(CriticFix {
+            title: format!("Rename to '{unused_name}'"),
+            safety: FixSafety::Suggested,
+            edits: vec![CriticTextEdit { range, new_text: unused_name }],
+        }),
+    }
+}
+
+fn prefixed_unused_name(name: &str) -> String {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(sigil @ ('$' | '@' | '%' | '&' | '*')) => {
+            let rest = chars.as_str();
+            format!("{sigil}_{rest}")
+        }
+        _ => format!("_{name}"),
+    }
+}
+
 fn has_use_statement(content: &str, feature: &str) -> bool {
     content.lines().any(|line| has_use_statement_line(line, feature))
 }
@@ -441,6 +515,29 @@ fn has_use_statement_line(line: &str, feature: &str) -> bool {
     module.trim_end_matches(';') == feature
 }
 
+fn range_for_byte_span(content: &str, start: usize, end: usize) -> Range {
+    let start = start.min(content.len());
+    let end = end.min(content.len()).max(start);
+    let start_position = position_for_byte_offset(content, start);
+    let end_position = position_for_byte_offset(content, end);
+
+    Range { start: start_position, end: end_position }
+}
+
+fn position_for_byte_offset(content: &str, offset: usize) -> Position {
+    let offset = offset.min(content.len());
+    let prefix = &content[..offset];
+    let line = prefix.bytes().filter(|byte| *byte == b'\n').count();
+    let line_start = prefix.rfind('\n').map_or(0, |idx| idx + 1);
+    let column = content[line_start..offset].chars().count();
+
+    Position { byte: offset, line: usize_to_u32(line), column: usize_to_u32(column) }
+}
+
+fn usize_to_u32(value: usize) -> u32 {
+    value.min(u32::MAX as usize) as u32
+}
+
 /// Build an empty AST node for tests that only exercise rule contract plumbing.
 #[cfg(test)]
 fn empty_program_node() -> Node {
@@ -452,6 +549,7 @@ fn empty_program_node() -> Node {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_parser::Parser;
     use perl_parser_core::position::{Position, Range};
 
     struct DummyRule;
@@ -526,6 +624,11 @@ mod tests {
 
     fn config_with_minimum_severity(severity: u8) -> CriticConfig {
         CriticConfig { severity, ..Default::default() }
+    }
+
+    fn parse_source(source: &str) -> Node {
+        let mut parser = Parser::new(source);
+        parser.parse().expect("test source should parse")
     }
 
     #[test]
@@ -742,20 +845,137 @@ mod tests {
 
     #[test]
     fn native_recommended_registry_contains_initial_policy_bundle() {
-        let ast = empty_program_node();
+        let source = "print 1;\n";
+        let ast = parse_source(source);
         let config = CriticConfig::default();
-        let ctx = CriticContext::new("my $x = 1;\n", &ast, &config);
+        let ctx = CriticContext::new(source, &ast, &config);
         let registry = NativeCriticRegistry::recommended();
 
         let findings = registry.check(&ctx);
 
         assert_eq!(
             registry.rule_ids(),
-            vec!["native.testing.require_use_strict", "native.testing.require_use_warnings"]
+            vec![
+                "native.testing.require_use_strict",
+                "native.testing.require_use_warnings",
+                "native.variables.unused_lexical"
+            ]
         );
         assert_eq!(findings.len(), 2);
         assert_eq!(findings[0].suppression_key, "native.testing.require_use_strict");
         assert_eq!(findings[1].suppression_key, "native.testing.require_use_warnings");
+    }
+
+    #[test]
+    fn native_unused_lexical_rule_reports_declared_but_unread_variable() {
+        let source = "use strict;\nuse warnings;\nmy $unused = 1;\nprint 1;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnusedLexicalVariableRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.variables.unused_lexical");
+        assert_eq!(finding.category, CriticCategory::Semantic);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert_eq!(finding.message, "Lexical variable '$unused' is declared but never used");
+        assert_eq!(finding.suppression_key, "native.variables.unused_lexical");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$unused");
+
+        let fix = finding.fix.as_ref().expect("unused lexical should offer an intent marker");
+        assert_eq!(fix.title, "Rename to '$_unused'");
+        assert_eq!(fix.safety, FixSafety::Suggested);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].range, finding.range);
+        assert_eq!(fix.edits[0].new_text, "$_unused");
+    }
+
+    #[test]
+    fn native_unused_lexical_rule_accepts_used_and_intentionally_unused_variables() {
+        let source = "use strict;\nuse warnings;\nmy $used = 1;\nmy $_ignored = 2;\nprint $used;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnusedLexicalVariableRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "used and underscore-prefixed variables should be accepted");
+    }
+
+    #[test]
+    fn native_unused_lexical_rule_reports_multiple_sigils() {
+        let source = "use strict;\nuse warnings;\nmy @items = (1, 2);\nmy %seen = ();\nprint 1;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnusedLexicalVariableRule)]);
+
+        let findings = registry.check(&ctx);
+        let names = findings
+            .iter()
+            .map(|finding| &source[finding.range.start.byte..finding.range.end.byte])
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["@items", "%seen"]);
+        assert_eq!(
+            findings
+                .iter()
+                .map(|finding| finding.fix.as_ref().expect("fix").edits[0].new_text.as_str())
+                .collect::<Vec<_>>(),
+            vec!["@_items", "%_seen"]
+        );
+    }
+
+    #[test]
+    fn native_unused_lexical_rule_composes_with_config_and_suppressions() {
+        let ast = parse_source("use strict;\nuse warnings;\nmy $unused = 1;\n");
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.variables.unused_lexical".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(
+            "use strict;\nuse warnings;\nmy $unused = 1;\n",
+            &ast,
+            &excluded_config,
+        );
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnusedLexicalVariableRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.variables.unused_lexical -- legacy fixture\nuse strict;\nuse warnings;\nmy $unused = 1;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_unused_lexical_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $unused = 1;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnusedLexicalVariableRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.variables.unused_lexical");
+        assert_eq!(
+            violations[0].description,
+            "Lexical variable '$unused' is declared but never used"
+        );
+        assert_eq!(
+            violations[0].explanation,
+            "Remove the lexical variable, use it, or prefix it with '_' to mark it intentionally unused."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
     }
 
     #[test]
