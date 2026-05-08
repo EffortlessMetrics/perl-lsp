@@ -5,7 +5,7 @@
 //! subprocess-backed Perl::Critic adapter and built-in fallback so callers can
 //! migrate rule-by-rule without changing runtime behavior in one large step.
 
-use super::{CriticConfig, Severity};
+use super::{CriticConfig, Severity, Violation};
 use perl_parser_core::Node;
 use perl_parser_core::position::Range;
 use serde::{Deserialize, Serialize};
@@ -92,6 +92,25 @@ pub struct CriticFinding {
     pub related: Vec<CriticRelatedInformation>,
     /// Optional fix.
     pub fix: Option<CriticFix>,
+}
+
+impl CriticFinding {
+    /// Convert this native finding into the existing violation shape.
+    ///
+    /// This is the bridge that lets native rules flow through current LSP,
+    /// execute-command, and diagnostic consumers while those consumers still
+    /// expect `Violation` values.
+    #[must_use]
+    pub fn to_violation(&self, file: impl Into<String>) -> Violation {
+        Violation {
+            policy: self.rule_id.clone(),
+            description: self.message.clone(),
+            explanation: self.explanation.clone(),
+            severity: self.severity,
+            range: self.range,
+            file: file.into(),
+        }
+    }
 }
 
 /// Native critic rule context.
@@ -223,5 +242,32 @@ mod tests {
         assert_eq!(value["category"], "style");
         assert_eq!(value["fix"]["safety"], "safe");
         assert_eq!(value["fix"]["edits"][0]["new_text"], "x");
+    }
+
+    #[test]
+    fn native_critic_finding_converts_to_legacy_violation_shape() {
+        let finding = CriticFinding {
+            rule_id: "native.variables.unused_lexical".to_string(),
+            category: CriticCategory::Semantic,
+            severity: Severity::Stern,
+            range: Range {
+                start: Position { byte: 10, line: 1, column: 4 },
+                end: Position { byte: 12, line: 1, column: 6 },
+            },
+            message: "unused lexical variable".to_string(),
+            explanation: "remove or use the lexical variable".to_string(),
+            suppression_key: "native.variables.unused_lexical".to_string(),
+            related: Vec::new(),
+            fix: None,
+        };
+
+        let violation = finding.to_violation("lib/App.pm");
+
+        assert_eq!(violation.policy, "native.variables.unused_lexical");
+        assert_eq!(violation.description, "unused lexical variable");
+        assert_eq!(violation.explanation, "remove or use the lexical variable");
+        assert_eq!(violation.severity, Severity::Stern);
+        assert_eq!(violation.range, finding.range);
+        assert_eq!(violation.file, "lib/App.pm");
     }
 }
