@@ -2,8 +2,10 @@
 
 use crate::SourceLocation;
 use perl_semantic_facts::{
-    AnchorId, Confidence, FileId, ImportKind, ImportSpec, ImportSymbols, Provenance, ScopeId,
+    AnchorId, Confidence, ExportSet, ExportTag, FileId, ImportKind, ImportSpec, ImportSymbols,
+    Provenance, ScopeId,
 };
+use std::collections::BTreeMap;
 
 /// Stable identifier for a HIR item within one lowered file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -273,8 +275,157 @@ pub struct StashGraph {
     pub packages: Vec<PackageStash>,
     /// Inheritance edges in stable source order.
     pub inheritance_edges: Vec<PackageInheritanceEdge>,
+    /// Static Exporter-style declarations in stable source order.
+    pub export_declarations: Vec<ExportDeclaration>,
     /// Dynamic stash boundaries in stable source order.
     pub dynamic_boundaries: Vec<StashDynamicBoundary>,
+}
+
+impl StashGraph {
+    /// Project static HIR/stash export declarations into canonical export facts.
+    ///
+    /// This is a compiler-substrate projection only. It does not execute Perl,
+    /// inspect the filesystem, or change workspace/LSP provider behavior.
+    #[must_use]
+    pub fn export_sets(&self) -> Vec<ExportSet> {
+        let mut builders = BTreeMap::<String, ExportSetBuilder>::new();
+
+        for declaration in &self.export_declarations {
+            let builder = builders.entry(declaration.package.clone()).or_insert_with(|| {
+                ExportSetBuilder::new(
+                    declaration.package.clone(),
+                    declaration.range,
+                    stash_provenance_to_fact(declaration.provenance),
+                    stash_confidence_to_fact(declaration.confidence),
+                )
+            });
+            builder.absorb(declaration);
+        }
+
+        builders.into_values().map(ExportSetBuilder::into_export_set).collect()
+    }
+}
+
+#[derive(Debug)]
+struct ExportSetBuilder {
+    module_name: String,
+    anchor_range: SourceLocation,
+    default_exports: Vec<String>,
+    optional_exports: Vec<String>,
+    tags: BTreeMap<String, Vec<String>>,
+    provenance: Provenance,
+    confidence: Confidence,
+}
+
+impl ExportSetBuilder {
+    fn new(
+        module_name: String,
+        anchor_range: SourceLocation,
+        provenance: Provenance,
+        confidence: Confidence,
+    ) -> Self {
+        Self {
+            module_name,
+            anchor_range,
+            default_exports: Vec::new(),
+            optional_exports: Vec::new(),
+            tags: BTreeMap::new(),
+            provenance,
+            confidence,
+        }
+    }
+
+    fn absorb(&mut self, declaration: &ExportDeclaration) {
+        if declaration.range.start < self.anchor_range.start {
+            self.anchor_range = declaration.range;
+        }
+        self.provenance =
+            combine_provenance(self.provenance, stash_provenance_to_fact(declaration.provenance));
+        self.confidence =
+            combine_confidence(self.confidence, stash_confidence_to_fact(declaration.confidence));
+
+        match declaration.kind {
+            ExportDeclarationKind::Default => {
+                self.default_exports.extend(declaration.symbols.iter().cloned());
+            }
+            ExportDeclarationKind::Optional => {
+                self.optional_exports.extend(declaration.symbols.iter().cloned());
+            }
+            ExportDeclarationKind::Tag => {
+                if let Some(tag_name) = &declaration.tag_name {
+                    self.tags
+                        .entry(tag_name.clone())
+                        .or_default()
+                        .extend(declaration.symbols.iter().cloned());
+                }
+            }
+        }
+    }
+
+    fn into_export_set(mut self) -> ExportSet {
+        sort_dedup(&mut self.default_exports);
+        sort_dedup(&mut self.optional_exports);
+
+        let tags = self
+            .tags
+            .into_iter()
+            .map(|(name, mut members)| {
+                sort_dedup(&mut members);
+                ExportTag { name, members }
+            })
+            .collect();
+
+        ExportSet {
+            default_exports: self.default_exports,
+            optional_exports: self.optional_exports,
+            tags,
+            provenance: self.provenance,
+            confidence: self.confidence,
+            module_name: Some(self.module_name),
+            anchor_id: Some(AnchorId(self.anchor_range.start as u64)),
+        }
+    }
+}
+
+fn sort_dedup(values: &mut Vec<String>) {
+    values.sort();
+    values.dedup();
+}
+
+fn combine_provenance(current: Provenance, next: Provenance) -> Provenance {
+    if current == Provenance::DynamicBoundary || next == Provenance::DynamicBoundary {
+        Provenance::DynamicBoundary
+    } else if current == Provenance::ImportExportInference
+        || next == Provenance::ImportExportInference
+    {
+        Provenance::ImportExportInference
+    } else {
+        current
+    }
+}
+
+fn combine_confidence(current: Confidence, next: Confidence) -> Confidence {
+    match (current, next) {
+        (Confidence::Low, _) | (_, Confidence::Low) => Confidence::Low,
+        (Confidence::Medium, _) | (_, Confidence::Medium) => Confidence::Medium,
+        (Confidence::High, Confidence::High) => Confidence::High,
+    }
+}
+
+fn stash_provenance_to_fact(provenance: StashProvenance) -> Provenance {
+    match provenance {
+        StashProvenance::ExactAst => Provenance::ExactAst,
+        StashProvenance::DesugaredAst => Provenance::DesugaredAst,
+        StashProvenance::DynamicBoundary => Provenance::DynamicBoundary,
+    }
+}
+
+fn stash_confidence_to_fact(confidence: StashConfidence) -> Confidence {
+    match confidence {
+        StashConfidence::High => Confidence::High,
+        StashConfidence::Medium => Confidence::Medium,
+        StashConfidence::Low => Confidence::Low,
+    }
 }
 
 /// One Perl package stash.
@@ -413,6 +564,40 @@ pub enum InheritanceSource {
     UseBase,
 }
 
+/// Static Exporter-style declaration observed in a package stash.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ExportDeclaration {
+    /// Package declaring the export list.
+    pub package: String,
+    /// Export declaration category.
+    pub kind: ExportDeclarationKind,
+    /// Tag name for `%EXPORT_TAGS` entries.
+    pub tag_name: Option<String>,
+    /// Static exported symbols.
+    pub symbols: Vec<String>,
+    /// Source range for the declaration.
+    pub range: SourceLocation,
+    /// HIR item that produced this declaration, when available.
+    pub declaration_item: Option<HirId>,
+    /// How this export declaration was produced.
+    pub provenance: StashProvenance,
+    /// Confidence in this export declaration.
+    pub confidence: StashConfidence,
+}
+
+/// Export declaration category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ExportDeclarationKind {
+    /// `@EXPORT`.
+    Default,
+    /// `@EXPORT_OK`.
+    Optional,
+    /// `%EXPORT_TAGS`.
+    Tag,
+}
+
 /// Dynamic stash mutation boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -441,6 +626,8 @@ pub struct StashDynamicBoundary {
 pub enum StashDynamicBoundaryKind {
     /// Stash/typeglob assignment with a non-static RHS.
     DynamicStashMutation,
+    /// Export declaration has a non-static member list or tag shape.
+    DynamicExportDeclaration,
     /// `AUTOLOAD` makes method lookup dynamic for this package.
     Autoload,
 }
