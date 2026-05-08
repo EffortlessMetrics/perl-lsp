@@ -90,10 +90,12 @@ environment variable. Requires `usePerl5lib: true` in workspace config.
 ## Compiler-Substrate Boundary
 
 HIR `CompileEnvironment` already records module requests and include-root facts.
-Static module requests currently remain deferred until [#8242](https://github.com/EffortlessMetrics/perl-lsp/issues/8242)
-adds candidate/path facts. That HIR lane must not read ambient environment or
-spawn Perl from parser lowering; callers provide configured, lexical,
-PERL5LIB-labeled, and system-labeled roots explicitly.
+Static module requests now produce HIR candidate facts through
+[#8242](https://github.com/EffortlessMetrics/perl-lsp/issues/8242). That HIR
+lane does not read ambient environment or spawn Perl from parser lowering;
+callers provide configured, lexical, PERL5LIB-labeled, and system-labeled roots
+explicitly. Runtime consumers still own filesystem-backed resolution and LSP
+provider behavior.
 
 ## Follow-up Scope (PR 2)
 
