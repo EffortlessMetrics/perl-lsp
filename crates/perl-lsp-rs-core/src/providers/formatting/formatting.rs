@@ -4,7 +4,8 @@ pub use crate::providers::formatting_types::{
     FormatPosition, FormatRange, FormatTextEdit, FormattedDocument, FormattingOptions,
 };
 use crate::tooling::perltidy::{
-    FinalNewline, FormatConfig, NativeFormatter, PerlFormatter, TextPosition, TextRange,
+    FinalNewline, FormatConfig, FormatterMode, NativeFormatter, PerlFormatter, TextPosition,
+    TextRange,
 };
 
 /// Re-export PerlTidyConfig from perl-lsp-perltidy for convenience.
@@ -63,12 +64,14 @@ pub struct FormattingProvider<R> {
     perltidy_path: Option<String>,
     /// Optional perltidy configuration.
     perltidy_config: Option<PerlTidyConfig>,
+    /// Formatting engine selected for this provider.
+    mode: FormatterMode,
 }
 
 impl<R> FormattingProvider<R> {
     /// Create a new formatting provider with the given runtime.
     pub fn new(runtime: R) -> Self {
-        Self { runtime, perltidy_path: None, perltidy_config: None }
+        Self { runtime, perltidy_path: None, perltidy_config: None, mode: FormatterMode::Native }
     }
 
     /// Set a custom perltidy path.
@@ -82,35 +85,30 @@ impl<R> FormattingProvider<R> {
         self.perltidy_config = Some(config);
         self
     }
+
+    /// Select the formatter engine.
+    pub fn with_formatter_mode(mut self, mode: FormatterMode) -> Self {
+        self.mode = mode;
+        self
+    }
 }
 
 impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
-    /// Format the entire Perl script document with perltidy integration.
+    /// Format the entire Perl script document.
     pub fn format_document(
         &self,
         content: &str,
         options: &FormattingOptions,
     ) -> Result<FormattedDocument, FormattingError> {
-        let formatted = match self.run_perltidy(content, options) {
-            Ok(formatted) => formatted,
-            Err(FormattingError::PerltidyNotFound(_)) => {
-                return Ok(native_format_document(content, options));
+        match self.mode {
+            FormatterMode::Native | FormatterMode::Compat => {
+                Ok(native_format_document(content, options))
             }
-            Err(other) => return Err(other),
-        };
-        let formatted = apply_lsp_whitespace_options(&formatted, options);
-
-        if formatted == content {
-            return Ok(FormattedDocument { text: formatted, edits: vec![] });
+            FormatterMode::ExternalLegacy => self.format_document_with_perltidy(content, options),
+            FormatterMode::Off => {
+                Ok(FormattedDocument { text: content.to_string(), edits: vec![] })
+            }
         }
-
-        Ok(FormattedDocument {
-            text: formatted.clone(),
-            edits: vec![FormatTextEdit {
-                range: FormatRange::whole_document(content),
-                new_text: formatted,
-            }],
-        })
     }
 
     /// Format a specific range in the document.
@@ -132,28 +130,61 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
             return Ok(FormattedDocument { text: content.to_string(), edits: vec![] });
         }
 
-        let text_to_format = lines[start_line..=end_line].join("\n");
-        let formatted = match self.run_perltidy(&text_to_format, options) {
-            Ok(formatted) => formatted,
-            Err(FormattingError::PerltidyNotFound(_)) => {
-                return Ok(native_format_range(content, range, options));
+        match self.mode {
+            FormatterMode::Native | FormatterMode::Compat => {
+                Ok(native_format_range(content, range, options))
             }
-            Err(other) => return Err(other),
-        };
+            FormatterMode::ExternalLegacy => {
+                self.format_range_with_perltidy(content, options, &lines, start_line, end_line)
+            }
+            FormatterMode::Off => {
+                Ok(FormattedDocument { text: content.to_string(), edits: vec![] })
+            }
+        }
+    }
+
+    fn format_document_with_perltidy(
+        &self,
+        content: &str,
+        options: &FormattingOptions,
+    ) -> Result<FormattedDocument, FormattingError> {
+        let formatted =
+            apply_lsp_whitespace_options(&self.run_perltidy(content, options)?, options);
+
+        if formatted == content {
+            return Ok(FormattedDocument { text: formatted, edits: vec![] });
+        }
+
+        Ok(FormattedDocument {
+            text: formatted.clone(),
+            edits: vec![FormatTextEdit {
+                range: FormatRange::whole_document(content),
+                new_text: formatted,
+            }],
+        })
+    }
+
+    fn format_range_with_perltidy(
+        &self,
+        content: &str,
+        options: &FormattingOptions,
+        lines: &[&str],
+        start_line: usize,
+        end_line: usize,
+    ) -> Result<FormattedDocument, FormattingError> {
+        let text_to_format = lines[start_line..=end_line].join("\n");
+        let formatted = self.run_perltidy(&text_to_format, options)?;
 
         if formatted == text_to_format {
             return Ok(FormattedDocument { text: content.to_string(), edits: vec![] });
         }
 
-        let start_char = 0;
-        let end_char = utf16_len(lines[end_line]) as u32;
-
         Ok(FormattedDocument {
             text: content.to_string(),
             edits: vec![FormatTextEdit {
                 range: FormatRange::new(
-                    FormatPosition::new(start_line as u32, start_char),
-                    FormatPosition::new(end_line as u32, end_char),
+                    FormatPosition::new(start_line as u32, 0),
+                    FormatPosition::new(end_line as u32, utf16_len(lines[end_line]) as u32),
                 ),
                 new_text: formatted,
             }],
@@ -409,6 +440,23 @@ mod tests {
         }
     }
 
+    struct FakePerltidyRuntime;
+
+    impl SubprocessRuntime for FakePerltidyRuntime {
+        fn run_command(
+            &self,
+            _program: &str,
+            _args: &[&str],
+            _stdin: Option<&[u8]>,
+        ) -> std::result::Result<SubprocessOutput, SubprocessError> {
+            Ok(SubprocessOutput {
+                stdout: b"my $external = 1;\n".to_vec(),
+                stderr: Vec::new(),
+                status_code: 0,
+            })
+        }
+    }
+
     #[test]
     fn format_document_uses_native_formatter_when_perltidy_missing() -> Result<()> {
         let provider = FormattingProvider::new(MissingPerltidyRuntime);
@@ -424,6 +472,42 @@ mod tests {
         assert_eq!(formatted.edits.len(), 1);
         assert_eq!(formatted.edits[0].new_text, "my $x = 1;\n");
         Ok(())
+    }
+
+    #[test]
+    fn format_document_external_legacy_uses_perltidy_adapter() -> Result<()> {
+        let provider = FormattingProvider::new(FakePerltidyRuntime)
+            .with_formatter_mode(FormatterMode::ExternalLegacy);
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: None,
+            insert_final_newline: None,
+            trim_final_newlines: None,
+        };
+
+        let formatted = provider.format_document("my$x=1;\n", &options)?;
+        assert_eq!(formatted.edits.len(), 1);
+        assert_eq!(formatted.edits[0].new_text, "my $external = 1;\n");
+        Ok(())
+    }
+
+    #[test]
+    fn format_document_external_legacy_reports_missing_perltidy() {
+        let provider = FormattingProvider::new(MissingPerltidyRuntime)
+            .with_formatter_mode(FormatterMode::ExternalLegacy);
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: None,
+            insert_final_newline: None,
+            trim_final_newlines: None,
+        };
+
+        let error = provider
+            .format_document("my$x=1;\n", &options)
+            .expect_err("explicit external legacy mode must report missing perltidy");
+        assert_eq!(error.error_kind(), "perltidy_not_found");
     }
 
     #[test]
