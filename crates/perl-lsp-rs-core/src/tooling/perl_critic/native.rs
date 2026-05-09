@@ -1398,8 +1398,8 @@ fn push_unchecked_open_close_statement_finding(
     out: &mut Vec<CriticFinding>,
 ) {
     match &expression.kind {
-        NodeKind::FunctionCall { name, args } if is_open_close_call(name) => {
-            if !args.iter().any(node_contains_error_check) {
+        NodeKind::FunctionCall { name, .. } if is_open_close_call(name) => {
+            if !has_trailing_error_check(source, expression) {
                 out.push(unchecked_open_close_finding(rule, source, expression, name));
             }
         }
@@ -1411,15 +1411,26 @@ fn is_open_close_call(name: &str) -> bool {
     matches!(name, "open" | "close")
 }
 
-fn is_error_checked_operator(op: &str) -> bool {
-    matches!(op, "or" | "||")
+fn has_trailing_error_check(source: &str, call_node: &Node) -> bool {
+    let Some(call_text) = source.get(call_node.location.start..call_node.location.end) else {
+        return false;
+    };
+    let Some(close_paren) = call_text.trim_end().rfind(')') else {
+        return false;
+    };
+    let trailing = call_text[close_paren + 1..].trim_start();
+    starts_with_error_check_operator(trailing)
 }
 
-fn node_contains_error_check(node: &Node) -> bool {
-    match &node.kind {
-        NodeKind::Binary { op, .. } if is_error_checked_operator(op) => true,
-        _ => node.children().iter().any(|child| node_contains_error_check(child)),
-    }
+fn starts_with_error_check_operator(text: &str) -> bool {
+    text.strip_prefix("||").is_some()
+        || text
+            .strip_prefix("or")
+            .is_some_and(|rest| rest.chars().next().is_none_or(|ch| !is_identifier_continue(ch)))
+}
+
+fn is_identifier_continue(ch: char) -> bool {
+    ch == '_' || ch.is_ascii_alphanumeric()
 }
 
 fn is_pipe_open_args(open_args: &[Node]) -> bool {
@@ -2495,7 +2506,7 @@ mod tests {
 
     #[test]
     fn native_unchecked_open_close_rule_accepts_or_die_checks() {
-        let source = "use strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, '<', $path) or die $!;\nclose($fh) || die $!;\n";
+        let source = "use strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, '<', $path) or die $!;\nclose($fh) || die $!;\nopen(my $compact_fh, '<', $path)||die $!;\nclose($compact_fh)||die $!;\n";
         let ast = parse_source(source);
         let config = CriticConfig::default();
         let ctx = CriticContext::new(source, &ast, &config);
@@ -2504,6 +2515,21 @@ mod tests {
         let findings = registry.check(&ctx);
 
         assert!(findings.is_empty(), "open/close guarded by error paths should be accepted");
+    }
+
+    #[test]
+    fn native_unchecked_open_close_rule_reports_argument_level_error_checks() {
+        let source = "use strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, '<', $path || die 'missing path');\nclose($fh || die 'missing handle');\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UncheckedOpenCloseRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].message, "open() return value should be checked");
+        assert_eq!(findings[1].message, "close() return value should be checked");
     }
 
     #[test]
