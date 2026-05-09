@@ -20,8 +20,10 @@
 //!   Dynamic/Unavailable → explain dynamic boundary.
 
 use perl_semantic_facts::{
-    Confidence, DefinitionCandidate, DefinitionRankReason, EntityFact, EntityKind, FileId,
-    OccurrenceFact, OccurrenceKind, Provenance, ScopeId, VisibleSymbol, VisibleSymbolSource,
+    AnchorId, Confidence, DefinitionCandidate, DefinitionRankReason, EntityFact, EntityKind,
+    FileId, OccurrenceFact, OccurrenceKind, Provenance, ProviderFactFreshness,
+    ProviderFactSourceKind, ProviderFactTrace, ProviderFallbackState, ProviderSurface, ScopeId,
+    VisibleSymbol, VisibleSymbolSource,
 };
 use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
 use perl_workspace::semantic_shadow_compare::{
@@ -74,12 +76,18 @@ pub fn hover_shadow<Q: SemanticQueries>(
     let new_summary = semantic_hover_to_summary(entity_occ.as_ref(), &visible, symbol);
 
     // ── Build receipt ──
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::Hover,
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
         Vec::new(),
+        hover_fact_source_traces(
+            entity_occ.as_ref(),
+            &visible,
+            symbol,
+            ProviderFallbackState::Shadow,
+        ),
     );
 
     tracing::debug!(
@@ -166,18 +174,25 @@ pub fn hover_cutover<Q: SemanticQueries>(
     // ── Legacy path (for fallback and receipt) ──
     let old_summary = legacy_hover_to_summary(legacy_hover_text.as_deref());
 
+    // ── Classify result ──
+    let result = classify_hover_result(
+        entity_occ.clone(),
+        &visible,
+        &definitions,
+        symbol,
+        legacy_hover_text,
+    );
+    let fallback_state = hover_result_fallback_state(&result);
+
     // ── Build receipt ──
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::Hover,
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
         Vec::new(),
+        hover_fact_source_traces(entity_occ.as_ref(), &visible, symbol, fallback_state),
     );
-
-    // ── Classify result ──
-    let result =
-        classify_hover_result(entity_occ, &visible, &definitions, symbol, legacy_hover_text);
 
     tracing::debug!(
         symbol = %symbol,
@@ -295,6 +310,14 @@ fn build_exact_explanation(
         parts.push(origin);
     }
 
+    if let Some(vis) = visible {
+        let (_source, visible_provenance, _state) =
+            hover_visible_trace_shape(vis, ProviderFallbackState::Primary);
+        if visible_provenance != entity.provenance || vis.confidence != entity.confidence {
+            parts.push(visible_fact_source_phrase(vis));
+        }
+    }
+
     // Provenance and confidence
     if entity.provenance != Provenance::ExactAst {
         parts.push(format!(
@@ -373,6 +396,8 @@ fn build_visible_symbol_explanation(vis: &VisibleSymbol, symbol: &str) -> HoverE
     if let Some(origin) = visible_origin_phrase(vis) {
         parts.push(origin);
     }
+
+    parts.push(visible_fact_source_phrase(vis));
 
     HoverExplanation { markdown: parts.join("\n\n") }
 }
@@ -508,6 +533,157 @@ fn visible_origin_phrase(vis: &VisibleSymbol) -> Option<String> {
     Some(phrase)
 }
 
+fn visible_fact_source_phrase(vis: &VisibleSymbol) -> String {
+    let (_source, provenance, _state) =
+        hover_visible_trace_shape(vis, ProviderFallbackState::Primary);
+    format!("Source: {} ({})", provenance_label(provenance), confidence_label(vis.confidence))
+}
+
+fn hover_result_fallback_state(result: &HoverCutoverResult) -> ProviderFallbackState {
+    match result {
+        HoverCutoverResult::Exact(_) => ProviderFallbackState::Primary,
+        HoverCutoverResult::Ambiguous(_) | HoverCutoverResult::LegacyFallback(_) => {
+            ProviderFallbackState::Fallback
+        }
+        HoverCutoverResult::DynamicBoundary(_) => ProviderFallbackState::Blocked,
+    }
+}
+
+fn hover_fact_source_traces(
+    entity_occ: Option<&(EntityFact, OccurrenceFact)>,
+    visible: &[VisibleSymbol],
+    symbol: &str,
+    fallback_state: ProviderFallbackState,
+) -> Vec<ProviderFactTrace> {
+    let mut traces = Vec::new();
+
+    if let Some((entity, occurrence)) = entity_occ {
+        let (source, provenance, state) =
+            hover_entity_trace_shape(entity, occurrence, fallback_state);
+        traces.push(ProviderFactTrace::new(
+            ProviderSurface::Hover,
+            source,
+            provenance,
+            entity.confidence,
+            ProviderFactFreshness::Fresh,
+            state,
+            None,
+            entity.anchor_id,
+            Some(1),
+        ));
+    }
+
+    for symbol_fact in visible.iter().filter(|visible_symbol| visible_symbol.name == symbol) {
+        let (source, provenance, state) = hover_visible_trace_shape(symbol_fact, fallback_state);
+        traces.push(ProviderFactTrace::new(
+            ProviderSurface::Hover,
+            source,
+            provenance,
+            symbol_fact.confidence,
+            ProviderFactFreshness::Fresh,
+            state,
+            None,
+            hover_visible_anchor(symbol_fact),
+            Some(1),
+        ));
+    }
+
+    if traces.is_empty() {
+        traces.push(ProviderFactTrace::new(
+            ProviderSurface::Hover,
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::NotApplicable,
+            fallback_state,
+            None,
+            None,
+            Some(1),
+        ));
+    }
+
+    traces
+}
+
+fn hover_entity_trace_shape(
+    entity: &EntityFact,
+    occurrence: &OccurrenceFact,
+    fallback_state: ProviderFallbackState,
+) -> (ProviderFactSourceKind, Provenance, ProviderFallbackState) {
+    if entity.provenance == Provenance::DynamicBoundary
+        || occurrence.provenance == Provenance::DynamicBoundary
+        || matches!(
+            occurrence.kind,
+            OccurrenceKind::DynamicBoundary | OccurrenceKind::TypeglobReference
+        )
+    {
+        return (
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            ProviderFallbackState::Blocked,
+        );
+    }
+
+    match entity.provenance {
+        Provenance::FrameworkSynthesis => (
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            fallback_state,
+        ),
+        Provenance::ImportExportInference => (
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::ImportExportInference,
+            fallback_state,
+        ),
+        Provenance::NameHeuristic | Provenance::SearchFallback => {
+            (ProviderFactSourceKind::Fallback, entity.provenance, ProviderFallbackState::Fallback)
+        }
+        _ => (ProviderFactSourceKind::SemanticFact, entity.provenance, fallback_state),
+    }
+}
+
+fn hover_visible_trace_shape(
+    visible: &VisibleSymbol,
+    fallback_state: ProviderFallbackState,
+) -> (ProviderFactSourceKind, Provenance, ProviderFallbackState) {
+    match visible.source {
+        VisibleSymbolSource::ExplicitImport
+        | VisibleSymbolSource::DefaultExport
+        | VisibleSymbolSource::ExportTag => (
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::ImportExportInference,
+            fallback_state,
+        ),
+        VisibleSymbolSource::Generated => (
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            fallback_state,
+        ),
+        VisibleSymbolSource::DynamicUnknown => (
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            ProviderFallbackState::Blocked,
+        ),
+        VisibleSymbolSource::External => (
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            ProviderFallbackState::Fallback,
+        ),
+        VisibleSymbolSource::LocalLexical
+        | VisibleSymbolSource::LocalPackage
+        | VisibleSymbolSource::Constant => {
+            (ProviderFactSourceKind::SemanticFact, Provenance::SemanticAnalyzer, fallback_state)
+        }
+    }
+}
+
+fn hover_visible_anchor(visible: &VisibleSymbol) -> Option<AnchorId> {
+    visible
+        .context
+        .as_ref()
+        .and_then(|context| context.source_import_anchor_id.or(context.source_export_anchor_id))
+}
+
 fn definition_rank_reason_label(reason: &DefinitionRankReason) -> String {
     match reason {
         DefinitionRankReason::ExactQualifiedName => "ranked by exact qualified name".to_string(),
@@ -574,7 +750,8 @@ mod tests {
     use perl_semantic_facts::{
         AnchorId, Confidence, DefinitionCandidate, DefinitionRank, DefinitionRankReason,
         EntityFact, EntityId, EntityKind, FileId, OccurrenceFact, OccurrenceId, OccurrenceKind,
-        Provenance, RenamePlan, SafeDeletePlan, ScopeId, VisibleSymbol, VisibleSymbolContext,
+        Provenance, ProviderFactFreshness, ProviderFactSourceKind, ProviderFallbackState,
+        ProviderSurface, RenamePlan, SafeDeletePlan, ScopeId, VisibleSymbol, VisibleSymbolContext,
         VisibleSymbolSource,
     };
     use perl_workspace::semantic::queries::{
@@ -786,6 +963,28 @@ mod tests {
         )
     }
 
+    fn assert_single_hover_trace(
+        outcome: &HoverCutoverOutcome,
+        source: ProviderFactSourceKind,
+        provenance: Provenance,
+        confidence: Confidence,
+        freshness: ProviderFactFreshness,
+        fallback_state: ProviderFallbackState,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let traces = outcome.receipt.fact_source_traces.as_slice();
+        let [trace] = traces else {
+            return Err(format!("expected one hover fact trace, got {}", traces.len()).into());
+        };
+
+        assert_eq!(trace.surface, ProviderSurface::Hover);
+        assert_eq!(trace.source, source);
+        assert_eq!(trace.provenance, provenance);
+        assert_eq!(trace.confidence, confidence);
+        assert_eq!(trace.freshness, freshness);
+        assert_eq!(trace.fallback_state, fallback_state);
+        Ok(())
+    }
+
     // ── Shadow mode tests ──
 
     #[test]
@@ -922,6 +1121,76 @@ mod tests {
     }
 
     #[test]
+    fn hover_compiler_provenance_traces_import_primary_path()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let ctx = VisibleSymbolContext::new(Some("Foo::Module".to_string()), None, None);
+        let vis =
+            make_visible("bar", VisibleSymbolSource::ExplicitImport, Confidence::High, Some(ctx));
+        let queries =
+            StubSemanticQueries { symbol_at_result: None, visible_symbols_result: vec![vis] };
+
+        let outcome = hover_cutover(None, &queries, "bar", FileId(1), 10, None);
+
+        match &outcome.result {
+            HoverCutoverResult::Exact(explanation) => {
+                assert!(explanation.markdown.contains("Imported from `Foo::Module`"));
+                assert!(
+                    explanation
+                        .markdown
+                        .contains("Source: import/export inference (high confidence)")
+                );
+            }
+            other => return Err(format!("expected Exact, got {:?}", other).into()),
+        }
+        assert_single_hover_trace(
+            &outcome,
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::ImportExportInference,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+            ProviderFallbackState::Primary,
+        )
+    }
+
+    #[test]
+    fn hover_compiler_provenance_avoids_duplicate_source_labels()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let entity = make_entity(
+            "bar",
+            EntityKind::Subroutine,
+            Provenance::ImportExportInference,
+            Confidence::High,
+        );
+        let occ = make_occurrence(
+            OccurrenceKind::Call,
+            Provenance::ImportExportInference,
+            Confidence::High,
+        );
+        let ctx = VisibleSymbolContext::new(Some("Foo::Module".to_string()), None, None);
+        let vis =
+            make_visible("bar", VisibleSymbolSource::ExplicitImport, Confidence::High, Some(ctx));
+        let queries = StubSemanticQueries {
+            symbol_at_result: Some((entity, occ)),
+            visible_symbols_result: vec![vis],
+        };
+
+        let outcome = hover_cutover(None, &queries, "bar", FileId(1), 10, None);
+
+        match &outcome.result {
+            HoverCutoverResult::Exact(explanation) => {
+                assert_eq!(explanation.markdown.matches("Source:").count(), 1);
+                assert!(
+                    explanation
+                        .markdown
+                        .contains("Source: import/export inference (high confidence)")
+                );
+            }
+            other => return Err(format!("expected Exact, got {:?}", other).into()),
+        }
+        Ok(())
+    }
+
+    #[test]
     fn cutover_dynamic_boundary_explains_boundary() -> Result<(), Box<dyn std::error::Error>> {
         let entity = make_entity(
             "dyn_sub",
@@ -949,6 +1218,33 @@ mod tests {
             other => return Err(format!("expected DynamicBoundary, got {:?}", other).into()),
         }
         Ok(())
+    }
+
+    #[test]
+    fn hover_compiler_provenance_traces_dynamic_boundary_blocked_path()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let vis =
+            make_visible("dyn_sym", VisibleSymbolSource::DynamicUnknown, Confidence::Low, None);
+        let queries =
+            StubSemanticQueries { symbol_at_result: None, visible_symbols_result: vec![vis] };
+
+        let outcome = hover_cutover(None, &queries, "dyn_sym", FileId(1), 10, None);
+
+        match &outcome.result {
+            HoverCutoverResult::DynamicBoundary(explanation) => {
+                assert!(explanation.markdown.contains("Dynamic boundary"));
+                assert!(explanation.markdown.contains("dyn_sym"));
+            }
+            other => return Err(format!("expected DynamicBoundary, got {:?}", other).into()),
+        }
+        assert_single_hover_trace(
+            &outcome,
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            Confidence::Low,
+            ProviderFactFreshness::Fresh,
+            ProviderFallbackState::Blocked,
+        )
     }
 
     #[test]
@@ -1065,6 +1361,37 @@ mod tests {
             other => return Err(format!("expected LegacyFallback, got {:?}", other).into()),
         }
         Ok(())
+    }
+
+    #[test]
+    fn hover_compiler_provenance_falls_back_when_no_compiler_fact()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let queries =
+            StubSemanticQueries { symbol_at_result: None, visible_symbols_result: vec![] };
+
+        let outcome = hover_cutover(
+            Some("legacy hover".to_string()),
+            &queries,
+            "unknown",
+            FileId(1),
+            10,
+            None,
+        );
+
+        match &outcome.result {
+            HoverCutoverResult::LegacyFallback(text) => {
+                assert_eq!(text.as_deref(), Some("legacy hover"));
+            }
+            other => return Err(format!("expected LegacyFallback, got {:?}", other).into()),
+        }
+        assert_single_hover_trace(
+            &outcome,
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::NotApplicable,
+            ProviderFallbackState::Fallback,
+        )
     }
 
     #[test]
@@ -1245,6 +1572,45 @@ mod tests {
             other => return Err(format!("expected Exact, got {:?}", other).into()),
         }
         Ok(())
+    }
+
+    #[test]
+    fn hover_compiler_provenance_traces_generated_primary_path()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let entity = make_entity(
+            "x",
+            EntityKind::GeneratedMember,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+        );
+        let occ = make_occurrence(
+            OccurrenceKind::Call,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+        );
+        let queries = StubSemanticQueries {
+            symbol_at_result: Some((entity, occ)),
+            visible_symbols_result: vec![],
+        };
+
+        let outcome = hover_cutover(None, &queries, "x", FileId(1), 10, None);
+
+        match &outcome.result {
+            HoverCutoverResult::Exact(explanation) => {
+                assert!(explanation.markdown.contains("Generated member"));
+                assert!(explanation.markdown.contains("framework synthesis"));
+                assert!(explanation.markdown.contains("medium confidence"));
+            }
+            other => return Err(format!("expected Exact, got {:?}", other).into()),
+        }
+        assert_single_hover_trace(
+            &outcome,
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            ProviderFallbackState::Primary,
+        )
     }
 
     // ── Summary helper tests ──
