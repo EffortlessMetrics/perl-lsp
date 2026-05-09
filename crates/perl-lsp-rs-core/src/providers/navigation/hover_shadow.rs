@@ -267,7 +267,10 @@ fn classify_hover_result(
             let all_dynamic =
                 matching_visible.iter().all(|v| v.source == VisibleSymbolSource::DynamicUnknown);
             if all_dynamic {
-                let explanation = build_dynamic_visible_explanation(symbol);
+                let Some(vis) = matching_visible.first().copied() else {
+                    return HoverCutoverResult::LegacyFallback(legacy_text);
+                };
+                let explanation = build_dynamic_visible_explanation(vis, symbol);
                 return HoverCutoverResult::DynamicBoundary(explanation);
             }
 
@@ -277,7 +280,9 @@ fn classify_hover_result(
             }
 
             // Single visible symbol — build explanation from it
-            let vis = matching_visible[0];
+            let Some(vis) = matching_visible.first().copied() else {
+                return HoverCutoverResult::LegacyFallback(legacy_text);
+            };
             let explanation = build_visible_symbol_explanation(vis, symbol);
             HoverCutoverResult::Exact(explanation)
         }
@@ -320,10 +325,13 @@ fn build_exact_explanation(
 
     // Provenance and confidence
     if entity.provenance != Provenance::ExactAst {
-        parts.push(format!(
-            "Source: {} ({})",
-            provenance_label(entity.provenance),
-            confidence_label(entity.confidence)
+        let (source, provenance, _state) =
+            hover_entity_trace_shape(entity, occurrence, ProviderFallbackState::Primary);
+        parts.push(fact_source_phrase(
+            source,
+            provenance,
+            entity.confidence,
+            ProviderFactFreshness::Fresh,
         ));
     }
 
@@ -352,7 +360,11 @@ fn build_ambiguous_explanation(
         let source_label = visible_source_label(&vis.source);
         let module_info =
             vis.context.as_ref().and_then(|c| c.source_module.as_deref()).unwrap_or("unknown");
-        parts.push(format!("- `{}` via {source_label} from `{module_info}`", vis.name));
+        parts.push(format!(
+            "- `{}` via {source_label} from `{module_info}` ({})",
+            vis.name,
+            visible_fact_source_phrase(vis)
+        ));
     }
 
     if !definitions.is_empty() {
@@ -377,11 +389,18 @@ fn build_dynamic_boundary_explanation(
     symbol: &str,
 ) -> HoverExplanation {
     let kind_label = entity_kind_label(entity.kind);
+    let source = fact_source_phrase(
+        ProviderFactSourceKind::DynamicBoundary,
+        Provenance::DynamicBoundary,
+        entity.confidence,
+        ProviderFactFreshness::Fresh,
+    );
     let markdown = format!(
         "**{kind_label}** `{symbol}`\n\n\
          ⚠️ Dynamic boundary — this symbol crosses a dynamic Perl construct \
          (string eval, symbolic dereference, AUTOLOAD, or runtime require). \
-         Static analysis cannot fully resolve this reference."
+         Static analysis cannot fully resolve this reference.\n\n\
+         {source}"
     );
     HoverExplanation { markdown }
 }
@@ -422,11 +441,13 @@ fn build_ambiguous_visible_explanation(
 }
 
 /// Build a hover explanation for dynamic-only visible symbols.
-fn build_dynamic_visible_explanation(symbol: &str) -> HoverExplanation {
+fn build_dynamic_visible_explanation(vis: &VisibleSymbol, symbol: &str) -> HoverExplanation {
+    let source = visible_fact_source_phrase(vis);
     let markdown = format!(
         "**Symbol** `{symbol}`\n\n\
          ⚠️ Dynamic boundary — this symbol originates from a dynamic source. \
-         Static analysis cannot determine its definition."
+         Static analysis cannot determine its definition.\n\n\
+         {source}"
     );
     HoverExplanation { markdown }
 }
@@ -498,6 +519,45 @@ fn confidence_label(conf: Confidence) -> &'static str {
     }
 }
 
+/// Human-readable label for a [`ProviderFactSourceKind`].
+fn provider_source_label(source: ProviderFactSourceKind) -> &'static str {
+    match source {
+        ProviderFactSourceKind::ParserSyntax => "parser syntax",
+        ProviderFactSourceKind::SemanticFact => "semantic fact",
+        ProviderFactSourceKind::CompilerFact => "compiler fact",
+        ProviderFactSourceKind::FrameworkAdapter => "framework adapter",
+        ProviderFactSourceKind::DynamicBoundary => "dynamic boundary",
+        ProviderFactSourceKind::Fallback => "fallback",
+        ProviderFactSourceKind::Unknown => "unknown",
+        _ => "unknown",
+    }
+}
+
+/// Human-readable label for a [`ProviderFactFreshness`].
+fn freshness_label(freshness: ProviderFactFreshness) -> &'static str {
+    match freshness {
+        ProviderFactFreshness::Fresh => "fresh",
+        ProviderFactFreshness::Stale => "stale",
+        ProviderFactFreshness::NotApplicable => "not applicable",
+        _ => "unknown freshness",
+    }
+}
+
+fn fact_source_phrase(
+    source: ProviderFactSourceKind,
+    provenance: Provenance,
+    confidence: Confidence,
+    freshness: ProviderFactFreshness,
+) -> String {
+    format!(
+        "Source: {} / {} ({}, {})",
+        provider_source_label(source),
+        provenance_label(provenance),
+        confidence_label(confidence),
+        freshness_label(freshness)
+    )
+}
+
 /// Human-readable label for a [`VisibleSymbolSource`].
 fn visible_source_label(source: &VisibleSymbolSource) -> &'static str {
     match source {
@@ -534,9 +594,9 @@ fn visible_origin_phrase(vis: &VisibleSymbol) -> Option<String> {
 }
 
 fn visible_fact_source_phrase(vis: &VisibleSymbol) -> String {
-    let (_source, provenance, _state) =
+    let (source, provenance, _state) =
         hover_visible_trace_shape(vis, ProviderFallbackState::Primary);
-    format!("Source: {} ({})", provenance_label(provenance), confidence_label(vis.confidence))
+    fact_source_phrase(source, provenance, vis.confidence, ProviderFactFreshness::Fresh)
 }
 
 fn hover_result_fallback_state(result: &HoverCutoverResult) -> ProviderFallbackState {
@@ -1134,11 +1194,9 @@ mod tests {
         match &outcome.result {
             HoverCutoverResult::Exact(explanation) => {
                 assert!(explanation.markdown.contains("Imported from `Foo::Module`"));
-                assert!(
-                    explanation
-                        .markdown
-                        .contains("Source: import/export inference (high confidence)")
-                );
+                assert!(explanation.markdown.contains(
+                    "Source: compiler fact / import/export inference (high confidence, fresh)"
+                ));
             }
             other => return Err(format!("expected Exact, got {:?}", other).into()),
         }
@@ -1179,11 +1237,9 @@ mod tests {
         match &outcome.result {
             HoverCutoverResult::Exact(explanation) => {
                 assert_eq!(explanation.markdown.matches("Source:").count(), 1);
-                assert!(
-                    explanation
-                        .markdown
-                        .contains("Source: import/export inference (high confidence)")
-                );
+                assert!(explanation.markdown.contains(
+                    "Source: compiler fact / import/export inference (high confidence, fresh)"
+                ));
             }
             other => return Err(format!("expected Exact, got {:?}", other).into()),
         }

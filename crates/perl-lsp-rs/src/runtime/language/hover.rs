@@ -5,6 +5,10 @@
 use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
+use perl_lsp_rs_core::providers::navigation::hover_shadow::{
+    HoverCutoverOutcome, HoverCutoverResult, hover_cutover,
+};
+use perl_semantic_facts::ProviderFactSourceKind;
 
 mod hover_extracted;
 #[cfg(test)]
@@ -12,6 +16,13 @@ mod hover_tests;
 mod regex_hover;
 
 use hover_extracted::HoverExtracted;
+
+#[derive(Debug, Clone)]
+struct LiveHoverCompilerContext {
+    uri: String,
+    symbol: String,
+    byte_offset: u32,
+}
 
 impl LspServer {
     /// Handle textDocument/hover request for symbol information display
@@ -46,14 +57,17 @@ impl LspServer {
             self.ensure_latest(uri, req_version)?;
 
             // Phase 1: Extract hover info under document lock
-            let extracted = {
+            let (extracted, live_compiler_context) = {
                 let documents = self.documents_guard();
                 if let Some(doc) = self.get_document(&documents, uri) {
+                    let offset = self.pos16_to_offset(doc, line, character);
+                    let live_compiler_context =
+                        Self::live_hover_compiler_context(uri, &doc.text, offset);
                     if let Some(ast) = &doc.ast {
-                        let offset = self.pos16_to_offset(doc, line, character);
-
                         // Check for `use Module` at this offset first
-                        if let Some(module_name) = Self::find_use_module_at_offset(ast, offset) {
+                        let extracted = if let Some(module_name) =
+                            Self::find_use_module_at_offset(ast, offset)
+                        {
                             // If the module is a known pragma, return pragma docs immediately
                             // without doing module file resolution.
                             if let Some(pragma_hover) = Self::build_pragma_hover(&module_name) {
@@ -78,20 +92,27 @@ impl LspServer {
                             )
                         } else {
                             self.extract_symbol_hover(uri, ast, &doc.text, offset)
-                        }
+                        };
+                        (extracted, live_compiler_context)
                     } else {
-                        let offset = self.pos16_to_offset(doc, line, character);
-                        Self::extract_token_hover(uri, &doc.text, offset)
+                        (Self::extract_token_hover(uri, &doc.text, offset), live_compiler_context)
                     }
                 } else {
-                    HoverExtracted::None
+                    (HoverExtracted::None, None)
                 }
             };
             // Document lock released here
 
             // Phase 2: Resolve module or return pre-built hover
             match extracted {
-                HoverExtracted::Complete(value) => return Ok(Some(value)),
+                HoverExtracted::Complete(value) => {
+                    if let Some(compiler_hover) =
+                        self.try_live_compiler_hover(Some(&value), live_compiler_context.as_ref())
+                    {
+                        return Ok(Some(compiler_hover));
+                    }
+                    return Ok(Some(value));
+                }
                 HoverExtracted::UseModule(module_name, doc_text, doc_uri, doc_offset) => {
                     return Ok(Some(self.build_module_hover(
                         &module_name,
@@ -121,11 +142,105 @@ impl LspServer {
                 }
                 #[cfg(not(feature = "workspace"))]
                 HoverExtracted::InheritedMethod(..) => {}
-                HoverExtracted::None => {}
+                HoverExtracted::None => {
+                    if let Some(compiler_hover) =
+                        self.try_live_compiler_hover(None, live_compiler_context.as_ref())
+                    {
+                        return Ok(Some(compiler_hover));
+                    }
+                }
             }
         }
 
         Ok(Some(json!(null)))
+    }
+
+    fn live_hover_compiler_context(
+        uri: &str,
+        text: &str,
+        offset: usize,
+    ) -> Option<LiveHoverCompilerContext> {
+        let symbol = Self::get_token_at_position_static(text, offset);
+        if symbol.is_empty() {
+            return None;
+        }
+
+        let byte_offset = u32::try_from(offset).ok()?;
+        Some(LiveHoverCompilerContext { uri: uri.to_string(), symbol, byte_offset })
+    }
+
+    fn try_live_compiler_hover(
+        &self,
+        legacy_value: Option<&Value>,
+        context: Option<&LiveHoverCompilerContext>,
+    ) -> Option<Value> {
+        let context = context?;
+        let legacy_text = legacy_value.and_then(Self::hover_value_markdown);
+
+        #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
+        {
+            let _ = (legacy_text, context);
+            None
+        }
+
+        #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+        {
+            let workspace_index = self.workspace_index()?;
+            let outcome = workspace_index.with_semantic_queries_for_uri(
+                &context.uri,
+                |file_id, queries| {
+                    hover_cutover(
+                        legacy_text.clone(),
+                        &queries,
+                        &context.symbol,
+                        file_id,
+                        context.byte_offset,
+                        None,
+                    )
+                },
+            )?;
+
+            if !Self::hover_outcome_uses_live_compiler_facts(&outcome) {
+                return None;
+            }
+
+            match outcome.result {
+                HoverCutoverResult::Exact(explanation)
+                | HoverCutoverResult::Ambiguous(explanation)
+                | HoverCutoverResult::DynamicBoundary(explanation) => {
+                    Some(Self::hover_markdown_value(explanation.markdown))
+                }
+                HoverCutoverResult::LegacyFallback(_) => None,
+            }
+        }
+    }
+
+    fn hover_outcome_uses_live_compiler_facts(outcome: &HoverCutoverOutcome) -> bool {
+        outcome.receipt.fact_source_traces.iter().any(|trace| {
+            matches!(
+                trace.source,
+                ProviderFactSourceKind::CompilerFact
+                    | ProviderFactSourceKind::FrameworkAdapter
+                    | ProviderFactSourceKind::DynamicBoundary
+            )
+        })
+    }
+
+    fn hover_value_markdown(value: &Value) -> Option<String> {
+        let contents = value.get("contents")?;
+        if let Some(markdown) = contents.as_str() {
+            return Some(markdown.to_string());
+        }
+        contents.get("value").and_then(Value::as_str).map(str::to_string)
+    }
+
+    fn hover_markdown_value(markdown: String) -> Value {
+        json!({
+            "contents": {
+                "kind": "markdown",
+                "value": markdown,
+            },
+        })
     }
 
     fn method_modifier_description(modifier_kind: &str) -> &'static str {
