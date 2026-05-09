@@ -7,12 +7,6 @@
 | Metric | Value |
 | --- | ---: |
 | Fixture count | 24 |
-| Fixture receipt present | yes |
-| Fixture passed count | 24 |
-| Fixture failed count | 0 |
-| Idempotent count | 24 |
-| Parse-preserved count | 24 |
-| Literal-preserve bailout count | 3 |
 
 ## Critic
 

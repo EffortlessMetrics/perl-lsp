@@ -207,12 +207,6 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
 | Metric | Value |
 | --- | ---: |
 | Fixture count | {} |
-| Fixture receipt present | {} |
-| Fixture passed count | {} |
-| Fixture failed count | {} |
-| Idempotent count | {} |
-| Parse-preserved count | {} |
-| Literal-preserve bailout count | {} |
 
 ## Critic
 
@@ -233,12 +227,6 @@ Fixable native rules:
 {}
 "#,
         formatter.fixture_count,
-        yes_no(formatter.format_receipt_present),
-        display_optional(formatter.fixture_passed_count),
-        display_optional(formatter.fixture_failed_count),
-        display_optional(formatter.idempotent_count),
-        display_optional(formatter.parse_preserved_count),
-        display_optional(formatter.bailout_count),
         critic.native_rule_count,
         critic.rules_with_suppression,
         critic.rules_with_fixes,
@@ -249,14 +237,6 @@ Fixable native rules:
         bullet_list(&critic.native_rules),
         bullet_list(&critic.fixable_rules),
     )
-}
-
-fn display_optional(value: Option<usize>) -> String {
-    value.map_or_else(|| "unknown".to_string(), |value| value.to_string())
-}
-
-fn yes_no(value: bool) -> &'static str {
-    if value { "yes" } else { "no" }
 }
 
 fn bullet_list(items: &[String]) -> String {
@@ -302,10 +282,13 @@ mod tests {
         )?;
         let receipt = receipts.join("native-tooling-status.json");
         let markdown = receipts.join("native-tooling-status.md");
+        let missing_receipt = receipts.join("missing-native-format-fixtures.json");
+        let missing_status_receipt = receipts.join("native-tooling-status-missing.json");
+        let missing_markdown = receipts.join("native-tooling-status-missing.md");
 
         status(NativeToolingStatusConfig {
-            format_fixtures: fixtures,
-            format_receipt,
+            format_fixtures: fixtures.clone(),
+            format_receipt: format_receipt.clone(),
             receipt: receipt.clone(),
             markdown: Some(markdown.clone()),
         })?;
@@ -329,7 +312,22 @@ mod tests {
         assert!(markdown.contains("# Native Tooling Status"));
         assert!(!markdown.contains("Generated at:"));
         assert!(!markdown.contains("Commit:"));
+        assert!(!markdown.contains("Fixture receipt present"));
+        assert!(!markdown.contains("Fixture passed count"));
+        assert!(!markdown.contains("unknown"));
         assert!(markdown.contains("native.io.unchecked_open_close"));
+
+        status(NativeToolingStatusConfig {
+            format_fixtures: fixtures,
+            format_receipt: missing_receipt,
+            receipt: missing_status_receipt.clone(),
+            markdown: Some(missing_markdown.clone()),
+        })?;
+
+        let missing_value: Value =
+            serde_json::from_str(&fs::read_to_string(missing_status_receipt)?)?;
+        assert_eq!(missing_value["formatter"]["format_receipt_present"], false);
+        assert_eq!(fs::read_to_string(missing_markdown)?, markdown);
 
         Ok(())
     }
