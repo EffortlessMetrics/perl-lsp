@@ -1673,6 +1673,7 @@ fn is_fixable_perlcritic_policy(code: &str) -> bool {
             | "TestingAndDebugging::RequireUseWarnings"
             | "native.testing.require_use_strict"
             | "native.testing.require_use_warnings"
+            | "native.common.undef_comparison"
             | "native.io.bareword_filehandle"
             | "native.io.two_arg_open"
             | "Variables::ProhibitUnusedVariables"
@@ -1837,7 +1838,7 @@ mod tests {
                     "uri": uri,
                     "languageId": "perl",
                     "version": 1,
-                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nsystem($path);\nexec('ls', '-la');\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n"
+                    "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nif ($path == undef) { print $path; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nsystem($path);\nexec('ls', '-la');\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n"
                 }
             })))
             .unwrap();
@@ -1863,6 +1864,14 @@ mod tests {
         assert!(
             text.contains("Assignment in condition - did you mean '=='?"),
             "native assignment-in-condition finding should preserve rule message; got: {text:?}"
+        );
+        assert!(
+            text.contains("native.common.undef_comparison"),
+            "native critic engine should publish native undef-comparison finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("Using '==' with undef -- use defined() to check first"),
+            "native undef-comparison finding should preserve rule message; got: {text:?}"
         );
         assert!(
             text.contains("native.io.bareword_filehandle"),
@@ -2028,7 +2037,7 @@ mod tests {
                 "uri": uri,
                 "languageId": "perl",
                 "version": 1,
-                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nsystem($path);\nexec('ls', '-la');\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n"
+                "text": "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nif ($path == undef) { print $path; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nsystem($path);\nexec('ls', '-la');\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n"
             }
         })))?;
 
@@ -2068,6 +2077,15 @@ mod tests {
                         == Some("Assignment in condition - did you mean '=='?")
             }),
             "native critic engine should add native assignment-in-condition finding to workspace diagnostics: {report}"
+        );
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag["code"].as_str() == Some("native.common.undef_comparison")
+                    && diag["source"].as_str() == Some("perl-lsp-critic")
+                    && diag["message"].as_str()
+                        == Some("Using '==' with undef -- use defined() to check first")
+            }),
+            "native critic engine should add native undef-comparison finding to workspace diagnostics: {report}"
         );
         assert!(
             diagnostics.iter().any(|diag| {

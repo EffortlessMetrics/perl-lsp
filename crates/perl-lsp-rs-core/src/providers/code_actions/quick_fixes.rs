@@ -424,6 +424,61 @@ pub fn fix_numeric_undef(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec<C
     actions
 }
 
+/// Fix explicit numeric comparison with `undef` from native critic.
+pub fn fix_native_undef_comparison(
+    source: &str,
+    diagnostic: &QuickFixDiagnostic,
+) -> Vec<CodeAction> {
+    let Some(replacement) =
+        native_undef_comparison_replacement(&source[diagnostic.range.0..diagnostic.range.1])
+    else {
+        return Vec::new();
+    };
+
+    vec![CodeAction {
+        title: "Use defined() check".to_string(),
+        kind: CodeActionKind::QuickFix,
+        diagnostics: vec!["native.common.undef_comparison".to_string()],
+        edit: CodeActionEdit {
+            changes: vec![TextEdit {
+                location: SourceLocation { start: diagnostic.range.0, end: diagnostic.range.1 },
+                new_text: replacement,
+            }],
+        },
+        is_preferred: true,
+    }]
+}
+
+fn native_undef_comparison_replacement(text: &str) -> Option<String> {
+    if let Some((left, right)) = text.split_once("==") {
+        return native_defined_replacement(left, right, true);
+    }
+    if let Some((left, right)) = text.split_once("!=") {
+        return native_defined_replacement(left, right, false);
+    }
+
+    None
+}
+
+fn native_defined_replacement(left: &str, right: &str, equal: bool) -> Option<String> {
+    let left = left.trim();
+    let right = right.trim();
+    let compared = if left == "undef" {
+        right
+    } else if right == "undef" {
+        left
+    } else {
+        return None;
+    };
+    if compared.is_empty() {
+        return None;
+    }
+
+    let replacement =
+        if equal { format!("!defined({compared})") } else { format!("defined({compared})") };
+    Some(replacement)
+}
+
 /// Fix unquoted bareword by quoting or declaring as filehandle
 ///
 /// Provides three options for fixing bareword issues under strict mode:

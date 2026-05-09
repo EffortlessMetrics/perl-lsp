@@ -77,6 +77,9 @@ impl CodeActionsProvider {
             {
                 fixes::fix_deprecated_defined(self, diagnostic)
             }
+            Some("native.common.undef_comparison") => {
+                fixes::fix_native_undef_comparison(self, diagnostic)
+            }
             Some("native.testing.require_use_strict") => fixes::add_use_strict(diagnostic),
             Some("native.testing.require_use_warnings") => fixes::add_use_warnings(diagnostic),
             Some(c)
@@ -701,6 +704,25 @@ mod tests {
         assert_eq!(actions[0].title, "Replace with '%seen'");
         assert_eq!(actions[0].edit.range, (4, 18));
         assert_eq!(actions[0].edit.new_text, "%seen");
+    }
+
+    #[test]
+    fn test_native_critic_undef_comparison_quick_fix() {
+        let source = "if ($value == undef) { print $value; }";
+        let diagnostic = make_diagnostic(
+            (4, 19),
+            DiagnosticSeverity::Warning,
+            "native.common.undef_comparison",
+            "Using '==' with undef -- use defined() to check first",
+        );
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Use defined() check");
+        assert_eq!(actions[0].edit.range, (4, 19));
+        assert_eq!(actions[0].edit.new_text, "!defined($value)");
     }
 
     #[test]
