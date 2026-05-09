@@ -136,6 +136,69 @@ fn native_formatter_formats_simple_method_call_chains() {
 }
 
 #[test]
+fn native_formatter_wraps_simple_calls_lists_and_hashes_by_line_width() {
+    let formatter = NativeFormatter::new();
+    let config = FormatConfig { line_width: 18, indent_width: 2, ..FormatConfig::default() };
+    let source = concat!(
+        "my$result=foo($alpha,$beta,$gamma);\n",
+        "my@items=($alpha,$beta,$gamma);\n",
+        "my$hash={alpha=>$alpha,beta=>$beta};\n",
+        "return $object->wrap($alpha,$beta,$gamma);\n",
+    );
+
+    let result = formatter.format_document(source, &config);
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        concat!(
+            "my $result = foo(\n",
+            "  $alpha,\n",
+            "  $beta,\n",
+            "  $gamma\n",
+            ");\n",
+            "my @items = (\n",
+            "  $alpha,\n",
+            "  $beta,\n",
+            "  $gamma\n",
+            ");\n",
+            "my $hash = {\n",
+            "  alpha => $alpha,\n",
+            "  beta => $beta\n",
+            "};\n",
+            "return $object->wrap(\n",
+            "  $alpha,\n",
+            "  $beta,\n",
+            "  $gamma\n",
+            ");\n",
+        )
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn native_formatter_wraps_delimited_expression_when_statement_prefix_exceeds_width() {
+    let formatter = NativeFormatter::new();
+    let config = FormatConfig { line_width: 30, indent_width: 2, ..FormatConfig::default() };
+    let source = "my$long_variable_name=foo($a,$b);\nreturn foo($a,$b);\n";
+
+    let result = formatter.format_document(source, &config);
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        concat!(
+            "my $long_variable_name = foo(\n",
+            "  $a,\n",
+            "  $b\n",
+            ");\n",
+            "return foo($a, $b);\n",
+        )
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_preserves_indent_and_line_endings_for_simple_declarations() {
     let formatter = NativeFormatter::new();
     let source = "  my $x=1;\r\n\tour @y;\r\n";
@@ -327,6 +390,35 @@ fn native_range_formatter_formats_selected_simple_method_chain_line() {
     assert_eq!(result.edits.len(), 1);
     assert_eq!(result.edits[0].range, range);
     assert_eq!(result.edits[0].new_text, "return $obj->find($id)->wrap({ok => 1});");
+}
+
+#[test]
+fn native_range_formatter_wraps_selected_simple_call_line_by_width() {
+    let formatter = NativeFormatter::new();
+    let source = "$x=1;\nreturn $object->wrap($alpha,$beta,$gamma);\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 42));
+    let config = FormatConfig { line_width: 18, indent_width: 2, ..FormatConfig::default() };
+
+    let result = formatter.format_range(source, range, &config);
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        concat!(
+            "$x=1;\n",
+            "return $object->wrap(\n",
+            "  $alpha,\n",
+            "  $beta,\n",
+            "  $gamma\n",
+            ");\n",
+        )
+    );
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(
+        result.edits[0].new_text,
+        "return $object->wrap(\n  $alpha,\n  $beta,\n  $gamma\n);"
+    );
 }
 
 #[test]
