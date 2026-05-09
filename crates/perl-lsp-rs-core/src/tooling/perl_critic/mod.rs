@@ -16,7 +16,7 @@ pub use native::{
     CriticRelatedInformation, CriticRule, CriticSuppression, CriticSuppressionMap,
     CriticSuppressionScope, CriticTextEdit, DeprecatedDefinedRule, DuplicateLexicalDeclarationRule,
     DuplicateParameterRule, FixSafety, NativeCriticRegistry, ParameterShadowsGlobalRule,
-    PrintfFormatArityRule, RequireUseStrictRule, RequireUseWarningsRule,
+    PrintfFormatArityRule, RequirePodSectionsRule, RequireUseStrictRule, RequireUseWarningsRule,
     ShadowedLexicalVariableRule, StaleDollarAtRule, UndefComparisonRule, UnreachableCodeRule,
     UnusedLexicalVariableRule, UnusedParameterRule,
 };

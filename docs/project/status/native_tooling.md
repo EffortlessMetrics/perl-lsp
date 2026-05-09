@@ -26,19 +26,19 @@
 
 | Metric | Value |
 | --- | ---: |
-| Native rule count | 26 |
-| Rules with suppressions | 26 |
+| Native rule count | 27 |
+| Rules with suppressions | 27 |
 | Rules with fixes | 14 |
-| Pull diagnostics coverage | 26 |
-| Push diagnostics coverage | 26 |
-| Workspace diagnostics coverage | 26 |
-| Violation bridge coverage | 26 |
+| Pull diagnostics coverage | 27 |
+| Push diagnostics coverage | 27 |
+| Workspace diagnostics coverage | 27 |
+| Violation bridge coverage | 27 |
 | Perlcritic compatibility items | 12 |
 | Perlcritic compatibility native-equivalent | 5 |
 | Perlcritic compatibility native-superset | 2 |
-| Perlcritic compatibility approximated | 1 |
+| Perlcritic compatibility approximated | 2 |
 | Perlcritic compatibility unsupported-safe | 1 |
-| Perlcritic compatibility external-only | 3 |
+| Perlcritic compatibility external-only | 2 |
 
 Native rules:
 - `native.testing.require_use_strict`
@@ -67,6 +67,7 @@ Native rules:
 - `native.variables.undeclared`
 - `native.variables.uninitialized`
 - `native.syntax.unquoted_bareword`
+- `native.documentation.require_pod_sections`
 
 Fixable native rules:
 - `native.common.assignment_in_condition`

@@ -722,6 +722,11 @@ fn perlcritic_policy_native_mapping(
             "approximated",
             "native critic has duplicate and shadowing rules but not a single combined perlcritic policy",
         )),
+        "Documentation::RequirePodSections" => Some((
+            "native.documentation.require_pod_sections",
+            "approximated",
+            "native critic checks required NAME/DESCRIPTION sections when a file already contains POD",
+        )),
         _ => None,
     }
 }
@@ -1057,15 +1062,15 @@ color = 1
         assert_eq!(receipt["item_count"], 12);
         assert_eq!(receipt["native_equivalent_count"], 5);
         assert_eq!(receipt["native_superset_count"], 2);
-        assert_eq!(receipt["approximated_count"], 1);
+        assert_eq!(receipt["approximated_count"], 2);
         assert_eq!(receipt["unsupported_safe_count"], 1);
-        assert_eq!(receipt["external_only_count"], 3);
+        assert_eq!(receipt["external_only_count"], 2);
         assert_eq!(receipt["items"][0]["classification"], "native_equivalent");
         assert_eq!(receipt["items"][2]["name"], "exclude");
         assert_eq!(receipt["items"][5]["native_rule"], "native.io.two_arg_open");
         assert_eq!(receipt["items"][6]["native_rule"], "native.io.unchecked_open_close");
         assert_eq!(receipt["items"][8]["classification"], "approximated");
-        assert_eq!(receipt["items"][9]["classification"], "external_only");
+        assert_eq!(receipt["items"][9]["classification"], "approximated");
         assert_eq!(receipt["items"][11]["name"], "color");
 
         let summary = fs::read_to_string(receipts.join("perlcritic-compat.md"))?;
@@ -1075,9 +1080,7 @@ color = 1
         ));
         assert!(summary.contains("| policy | `InputOutput::ProhibitTwoArgOpen` |  | native_equivalent | native.io.two_arg_open |"));
         assert!(summary.contains("| policy | `InputOutput::RequireCheckedOpen` |  | native_superset | native.io.unchecked_open_close |"));
-        assert!(
-            summary.contains("| policy | `Documentation::RequirePodSections` |  | external_only |")
-        );
+        assert!(summary.contains("| policy | `Documentation::RequirePodSections` |  | approximated | native.documentation.require_pod_sections |"));
         assert!(summary.contains("| setting | `profile-strictness` | quiet | unsupported_safe |"));
         assert!(summary.contains("| setting | `color` | 1 | external_only |"));
 

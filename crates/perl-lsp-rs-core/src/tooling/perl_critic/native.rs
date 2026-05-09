@@ -262,6 +262,7 @@ impl NativeCriticRegistry {
             Box::new(UndeclaredVariableRule),
             Box::new(UninitializedVariableRule),
             Box::new(UnquotedBarewordRule),
+            Box::new(RequirePodSectionsRule),
         ])
     }
 
@@ -1135,6 +1136,38 @@ impl CriticRule for UnquotedBarewordRule {
     }
 }
 
+/// Native rule that checks required sections inside existing POD blocks.
+pub struct RequirePodSectionsRule;
+
+impl CriticRule for RequirePodSectionsRule {
+    fn id(&self) -> &'static str {
+        "native.documentation.require_pod_sections"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Documentation
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Harsh
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        out.extend(
+            missing_pod_sections(ctx.source)
+                .into_iter()
+                .map(|missing| require_pod_sections_finding(self, ctx.source, &missing)),
+        );
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MissingPodSection {
+    name: &'static str,
+    range_start: usize,
+    range_end: usize,
+}
+
 fn unused_lexical_finding(
     rule: &UnusedLexicalVariableRule,
     source: &str,
@@ -1655,6 +1688,32 @@ fn system_exec_finding(
         related: vec![CriticRelatedInformation {
             range,
             message: "List form avoids shell interpolation, but command execution still needs an explicit security review.".to_string(),
+        }],
+        fix: None,
+    }
+}
+
+fn require_pod_sections_finding(
+    rule: &RequirePodSectionsRule,
+    source: &str,
+    missing: &MissingPodSection,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, missing.range_start, missing.range_end);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!("POD is missing required =head1 {} section", missing.name),
+        explanation: format!(
+            "Native critic checks existing POD for required high-level sections. Add an =head1 {} section or suppress this documentation policy for generated or internal-only files.",
+            missing.name
+        ),
+        suppression_key: rule.id().to_string(),
+        related: vec![CriticRelatedInformation {
+            range,
+            message: "This POD block is missing a required documentation section.".to_string(),
         }],
         fix: None,
     }
@@ -2586,6 +2645,56 @@ fn has_use_statement_line(line: &str, feature: &str) -> bool {
         return false;
     };
     module.trim_end_matches(';') == feature
+}
+
+fn missing_pod_sections(source: &str) -> Vec<MissingPodSection> {
+    const REQUIRED: &[&str] = &["NAME", "DESCRIPTION"];
+
+    let mut has_pod = false;
+    let mut sections = Vec::new();
+    let mut first_pod_span = None;
+    let mut byte_offset = 0;
+
+    for line in source.split_inclusive('\n') {
+        let line_without_newline = line.trim_end_matches(['\r', '\n']);
+        let trimmed = line_without_newline.trim_start();
+
+        if let Some(section) = trimmed.strip_prefix("=head1") {
+            has_pod = true;
+            first_pod_span.get_or_insert((byte_offset, byte_offset + line_without_newline.len()));
+
+            let section_name = section
+                .split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .trim_end_matches(|ch: char| !ch.is_alphanumeric())
+                .to_ascii_uppercase();
+            if !section_name.is_empty() {
+                sections.push(section_name);
+            }
+        } else if trimmed.starts_with("=pod")
+            || trimmed.starts_with("=over")
+            || trimmed.starts_with("=item")
+            || trimmed.starts_with("=begin")
+        {
+            has_pod = true;
+            first_pod_span.get_or_insert((byte_offset, byte_offset + line_without_newline.len()));
+        }
+
+        byte_offset += line.len();
+    }
+
+    if !has_pod {
+        return Vec::new();
+    }
+
+    let (range_start, range_end) = first_pod_span.unwrap_or((0, source.len().min(1)));
+
+    REQUIRED
+        .iter()
+        .filter(|required| !sections.iter().any(|section| section == **required))
+        .map(|name| MissingPodSection { name, range_start, range_end })
+        .collect()
 }
 
 fn range_for_byte_span(content: &str, start: usize, end: usize) -> Range {
@@ -4266,6 +4375,86 @@ mod tests {
     }
 
     #[test]
+    fn native_require_pod_sections_rule_reports_incomplete_pod() {
+        let source =
+            "use strict;\nuse warnings;\n=head1 NAME\n\nApp::Demo - demo module\n\n=cut\n\n1;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(RequirePodSectionsRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.documentation.require_pod_sections");
+        assert_eq!(finding.category, CriticCategory::Documentation);
+        assert_eq!(finding.severity, Severity::Harsh);
+        assert_eq!(finding.message, "POD is missing required =head1 DESCRIPTION section");
+        assert_eq!(finding.suppression_key, "native.documentation.require_pod_sections");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "=head1 NAME");
+        assert!(finding.fix.is_none(), "documentation policy should not fabricate POD content");
+    }
+
+    #[test]
+    fn native_require_pod_sections_rule_accepts_complete_pod_and_files_without_pod() {
+        let complete_source = "use strict;\nuse warnings;\n=head1 NAME\n\nApp::Demo\n\n=head1 DESCRIPTION\n\nDemo.\n\n=cut\n\n1;\n";
+        let complete_ast = parse_source(complete_source);
+        let config = CriticConfig::default();
+        let complete_ctx = CriticContext::new(complete_source, &complete_ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(RequirePodSectionsRule)]);
+
+        assert!(registry.check(&complete_ctx).is_empty());
+
+        let no_pod_source = "use strict;\nuse warnings;\npackage App::Demo;\n1;\n";
+        let no_pod_ast = parse_source(no_pod_source);
+        let no_pod_ctx = CriticContext::new(no_pod_source, &no_pod_ast, &config);
+
+        assert!(
+            registry.check(&no_pod_ctx).is_empty(),
+            "native rule only checks existing POD sections to avoid noisy opt-in diagnostics"
+        );
+    }
+
+    #[test]
+    fn native_require_pod_sections_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\n=head1 NAME\n\nApp::Demo\n\n=cut\n\n1;\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.documentation.require_pod_sections".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(RequirePodSectionsRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.documentation.require_pod_sections -- generated docs\nuse strict;\nuse warnings;\n=head1 NAME\n\nApp::Demo\n\n=cut\n\n1;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_require_pod_sections_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\n=head1 DESCRIPTION\n\nDemo.\n\n=cut\n\n1;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(RequirePodSectionsRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.documentation.require_pod_sections");
+        assert_eq!(violations[0].description, "POD is missing required =head1 NAME section");
+        assert_eq!(violations[0].severity, Severity::Harsh);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_recommended_registry_contains_initial_policy_bundle() {
         let source = "print 1;\n";
         let ast = parse_source(source);
@@ -4303,7 +4492,8 @@ mod tests {
                 "native.regex.capture_without_match",
                 "native.variables.undeclared",
                 "native.variables.uninitialized",
-                "native.syntax.unquoted_bareword"
+                "native.syntax.unquoted_bareword",
+                "native.documentation.require_pod_sections"
             ]
         );
         assert_eq!(findings.len(), 2);
