@@ -21,7 +21,11 @@
 //! - **Req 22.8**: Rename cutover: Exact → allow; Ambiguous → block;
 //!   Dynamic/Unavailable → block.
 
-use perl_semantic_facts::{EntityId, PlanBlocker, PlannedEdit, RenamePlan};
+use perl_semantic_facts::{
+    Confidence, EntityId, PlanBlocker, PlanBlockerReason, PlannedEdit, Provenance,
+    ProviderFactFreshness, ProviderFactSourceKind, ProviderFactTrace, ProviderFallbackState,
+    ProviderSurface, RenamePlan,
+};
 use perl_workspace::semantic::queries::SemanticQueries;
 use perl_workspace::semantic_shadow_compare::{
     SemanticShadowCompareReceipt, ShadowQueryInput, ShadowQueryName, ShadowResultSummary,
@@ -70,12 +74,13 @@ pub fn rename_shadow<Q: SemanticQueries>(
     let new_summary = rename_plan_to_summary(&plan);
 
     // ── Build receipt ──
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::RenamePlan,
         ShadowQueryInput { symbol: new_name.to_string() },
         old_summary,
         new_summary,
         Vec::new(),
+        rename_plan_fact_source_traces(&plan, ProviderFallbackState::Shadow),
     );
 
     tracing::debug!(
@@ -161,12 +166,13 @@ pub fn rename_cutover<Q: SemanticQueries>(
     let old_summary = legacy_rename_to_summary(legacy_allowed);
 
     // ── Build receipt ──
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::RenamePlan,
         ShadowQueryInput { symbol: new_name.to_string() },
         old_summary,
         new_summary,
         Vec::new(),
+        rename_plan_fact_source_traces(&plan, ProviderFallbackState::Primary),
     );
 
     // ── Classify result ──
@@ -219,6 +225,108 @@ fn rename_plan_to_summary(plan: &RenamePlan) -> ShadowResultSummary {
     }
 
     summarize_identities(Some(identities))
+}
+
+fn rename_plan_fact_source_traces(
+    plan: &RenamePlan,
+    allowed_state: ProviderFallbackState,
+) -> Vec<ProviderFactTrace> {
+    let edit_state =
+        if plan.blockers.is_empty() { allowed_state } else { ProviderFallbackState::Unavailable };
+    let mut traces: Vec<ProviderFactTrace> = plan
+        .edits
+        .iter()
+        .map(|edit| edit_fact_trace(edit, edit_state))
+        .chain(plan.blockers.iter().map(blocker_fact_trace))
+        .collect();
+    if traces.is_empty() {
+        traces.push(ProviderFactTrace::new(
+            ProviderSurface::Rename,
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::NotApplicable,
+            ProviderFallbackState::Fallback,
+            Some("rename-plan".to_string()),
+            None,
+            Some(1),
+        ));
+    }
+    traces
+}
+
+fn edit_fact_trace(edit: &PlannedEdit, fallback_state: ProviderFallbackState) -> ProviderFactTrace {
+    ProviderFactTrace::new(
+        ProviderSurface::Rename,
+        ProviderFactSourceKind::SemanticFact,
+        Provenance::ExactAst,
+        Confidence::High,
+        ProviderFactFreshness::Fresh,
+        fallback_state,
+        Some("rename-plan".to_string()),
+        Some(edit.anchor_id),
+        Some(1),
+    )
+}
+
+fn blocker_fact_trace(blocker: &PlanBlocker) -> ProviderFactTrace {
+    let (source, provenance, confidence, freshness) = match blocker.reason {
+        PlanBlockerReason::DynamicBoundary => (
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+        ),
+        PlanBlockerReason::GeneratedMember => (
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+        ),
+        PlanBlockerReason::CrossModuleExport
+        | PlanBlockerReason::ImportedSymbol
+        | PlanBlockerReason::ExportedSymbol => (
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::ImportExportInference,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+        ),
+        PlanBlockerReason::AmbiguousReference => (
+            ProviderFactSourceKind::SemanticFact,
+            Provenance::NameHeuristic,
+            Confidence::Low,
+            ProviderFactFreshness::Fresh,
+        ),
+        PlanBlockerReason::ReferencesExist => (
+            ProviderFactSourceKind::SemanticFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+        ),
+        PlanBlockerReason::UnclassifiedOccurrence => (
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::Unknown,
+        ),
+        _ => (
+            ProviderFactSourceKind::Unknown,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::Unknown,
+        ),
+    };
+    ProviderFactTrace::new(
+        ProviderSurface::Rename,
+        source,
+        provenance,
+        confidence,
+        freshness,
+        ProviderFallbackState::Blocked,
+        Some("rename-plan".to_string()),
+        blocker.anchor_id,
+        Some(1),
+    )
 }
 
 /// Extension trait for [`PlannedEditCategory`] display labels.
@@ -334,6 +442,27 @@ mod tests {
         PlanBlocker::new(reason, None, format!("{reason:?} blocker"))
     }
 
+    fn first_trace<'a>(
+        receipt: &'a SemanticShadowCompareReceipt,
+    ) -> Result<&'a ProviderFactTrace, Box<dyn std::error::Error>> {
+        match receipt.fact_source_traces.first() {
+            Some(trace) => Ok(trace),
+            None => Err("missing fact-source trace".into()),
+        }
+    }
+
+    fn trace_for_source<'a>(
+        receipt: &'a SemanticShadowCompareReceipt,
+        source: ProviderFactSourceKind,
+    ) -> Result<&'a ProviderFactTrace, Box<dyn std::error::Error>> {
+        for trace in &receipt.fact_source_traces {
+            if trace.source == source {
+                return Ok(trace);
+            }
+        }
+        Err(format!("missing {source:?} trace").into())
+    }
+
     // ── Shadow mode tests ──
 
     #[test]
@@ -398,6 +527,134 @@ mod tests {
             result.receipt.schema_version,
             perl_workspace::semantic_shadow_compare::SEMANTIC_SHADOW_COMPARE_RECEIPT_SCHEMA_VERSION
         );
+        Ok(())
+    }
+
+    #[test]
+    fn rename_compiler_boundaries_exact_static_trace_allows_local_rename()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = RenamePlan::new(
+            EntityId(1),
+            "old_name".to_string(),
+            "new_name".to_string(),
+            vec![make_edit(10, PlannedEditCategory::Definition)],
+            vec![],
+            vec![],
+        );
+        let queries = StubSemanticQueries { rename_plan_result: plan };
+
+        let result = rename_shadow(true, &queries, EntityId(1), "new_name");
+        let trace = first_trace(&result.receipt)?;
+
+        assert_eq!(trace.surface, ProviderSurface::Rename);
+        assert_eq!(trace.source, ProviderFactSourceKind::SemanticFact);
+        assert_eq!(trace.provenance, Provenance::ExactAst);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+        assert_eq!(trace.anchor_id, Some(AnchorId(10)));
+        Ok(())
+    }
+
+    #[test]
+    fn rename_compiler_boundaries_dynamic_boundary_blocks_and_marks_edits_unavailable()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = RenamePlan::new(
+            EntityId(1),
+            "old_name".to_string(),
+            "new_name".to_string(),
+            vec![make_edit(10, PlannedEditCategory::Definition)],
+            vec![make_blocker(PlanBlockerReason::DynamicBoundary)],
+            vec![],
+        );
+        let queries = StubSemanticQueries { rename_plan_result: plan };
+
+        let outcome = rename_cutover(true, &queries, EntityId(1), "new_name");
+        let edit_trace = trace_for_source(&outcome.receipt, ProviderFactSourceKind::SemanticFact)?;
+        let blocker_trace =
+            trace_for_source(&outcome.receipt, ProviderFactSourceKind::DynamicBoundary)?;
+
+        match outcome.result {
+            RenameCutoverResult::Blocked { blockers, .. } => {
+                assert_eq!(blockers[0].reason, PlanBlockerReason::DynamicBoundary);
+            }
+            other => return Err(format!("expected Blocked, got {:?}", other).into()),
+        }
+        assert_eq!(edit_trace.fallback_state, ProviderFallbackState::Unavailable);
+        assert_eq!(blocker_trace.provenance, Provenance::DynamicBoundary);
+        assert_eq!(blocker_trace.confidence, Confidence::High);
+        assert_eq!(blocker_trace.fallback_state, ProviderFallbackState::Blocked);
+        Ok(())
+    }
+
+    #[test]
+    fn rename_compiler_boundaries_generated_member_uses_framework_trace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = RenamePlan::new(
+            EntityId(1),
+            "accessor".to_string(),
+            "renamed".to_string(),
+            vec![],
+            vec![make_blocker(PlanBlockerReason::GeneratedMember)],
+            vec![],
+        );
+        let queries = StubSemanticQueries { rename_plan_result: plan };
+
+        let outcome = rename_cutover(true, &queries, EntityId(1), "renamed");
+        let trace = first_trace(&outcome.receipt)?;
+
+        assert_eq!(trace.surface, ProviderSurface::Rename);
+        assert_eq!(trace.source, ProviderFactSourceKind::FrameworkAdapter);
+        assert_eq!(trace.provenance, Provenance::FrameworkSynthesis);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        Ok(())
+    }
+
+    #[test]
+    fn rename_compiler_boundaries_ambiguous_reference_is_low_confidence_blocker()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = RenamePlan::new(
+            EntityId(1),
+            "old_name".to_string(),
+            "new_name".to_string(),
+            vec![],
+            vec![make_blocker(PlanBlockerReason::AmbiguousReference)],
+            vec![],
+        );
+        let queries = StubSemanticQueries { rename_plan_result: plan };
+
+        let outcome = rename_cutover(true, &queries, EntityId(1), "new_name");
+        let trace = first_trace(&outcome.receipt)?;
+
+        assert_eq!(trace.source, ProviderFactSourceKind::SemanticFact);
+        assert_eq!(trace.provenance, Provenance::NameHeuristic);
+        assert_eq!(trace.confidence, Confidence::Low);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        Ok(())
+    }
+
+    #[test]
+    fn rename_compiler_boundaries_empty_plan_falls_back() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let plan = RenamePlan::new(
+            EntityId(1),
+            "old".to_string(),
+            "new".to_string(),
+            vec![],
+            vec![],
+            vec![],
+        );
+        let queries = StubSemanticQueries { rename_plan_result: plan };
+
+        let result = rename_shadow(true, &queries, EntityId(1), "new");
+        let trace = first_trace(&result.receipt)?;
+
+        assert_eq!(trace.surface, ProviderSurface::Rename);
+        assert_eq!(trace.source, ProviderFactSourceKind::Fallback);
+        assert_eq!(trace.provenance, Provenance::SearchFallback);
+        assert_eq!(trace.freshness, ProviderFactFreshness::NotApplicable);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Fallback);
         Ok(())
     }
 

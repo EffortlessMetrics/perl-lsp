@@ -890,13 +890,317 @@
           "model_version": 1
         }
       ]
+    },
+    {
+      "schema_version": 2,
+      "query": "rename_plan",
+      "input": {
+        "symbol": "rename_exact_static"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "edit:definition:anchor:1"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "edit:definition:anchor:1"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "rename boundary proof: exact static edit remains traceable as a fresh semantic fact"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Rename",
+          "source": "SemanticFact",
+          "provenance": "ExactAst",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "rename_plan",
+      "input": {
+        "symbol": "rename_dynamic_boundary"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "blocker:DynamicBoundary"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "blocker:DynamicBoundary"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "rename boundary proof: dynamic-boundary facts block unsafe edits instead of authorizing rename"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Rename",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "rename_plan",
+      "input": {
+        "symbol": "rename_stale_compiler_fact"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "blocker:StaleFact"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "blocker:StaleFact"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "rename boundary proof: stale compiler facts cannot authorize edits"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Rename",
+          "source": "CompilerFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "Low",
+          "freshness": "Stale",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "rename_plan",
+      "input": {
+        "symbol": "rename_low_confidence"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "blocker:AmbiguousReference"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "blocker:AmbiguousReference"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "rename boundary proof: ambiguous low-confidence facts remain blockers"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Rename",
+          "source": "SemanticFact",
+          "provenance": "NameHeuristic",
+          "confidence": "Low",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "safe_delete_plan",
+      "input": {
+        "symbol": "safe_delete_exact_static"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "safe_delete:allowed"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "safe_delete:allowed"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "safe-delete boundary proof: exact static no-reference plan remains traceable"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "SafeDelete",
+          "source": "SemanticFact",
+          "provenance": "ExactAst",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "safe_delete_plan",
+      "input": {
+        "symbol": "safe_delete_dynamic_boundary"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "blocker:DynamicBoundary"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "blocker:DynamicBoundary"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "safe-delete boundary proof: dynamic-boundary facts block unsafe deletion"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "SafeDelete",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "safe_delete_plan",
+      "input": {
+        "symbol": "safe_delete_generated_member"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "blocker:GeneratedMember"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "blocker:GeneratedMember"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "safe-delete boundary proof: framework-generated members block deletion unless a generator-aware plan exists"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "SafeDelete",
+          "source": "FrameworkAdapter",
+          "provenance": "FrameworkSynthesis",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "safe_delete_plan",
+      "input": {
+        "symbol": "safe_delete_stale_compiler_fact"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "blocker:StaleFact"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "blocker:StaleFact"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "safe-delete boundary proof: stale compiler facts cannot authorize deletion"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "SafeDelete",
+          "source": "CompilerFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "Low",
+          "freshness": "Stale",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
     }
   ],
   "verdict_counts": {
     "ambiguous": 2,
     "improved": 6,
     "regression": 1,
-    "same": 15,
+    "same": 23,
     "unavailable": 0
   },
   "release_readiness_verdict_counts": {
@@ -910,7 +1214,7 @@
     "ambiguous": 2,
     "improved": 5,
     "regression": 1,
-    "same": 6,
+    "same": 14,
     "unavailable": 0
   },
   "notes": "0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes."

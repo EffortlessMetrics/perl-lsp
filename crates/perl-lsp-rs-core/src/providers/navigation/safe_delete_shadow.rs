@@ -21,7 +21,11 @@
 //! - **Req 22.9**: Safe-delete cutover: Exact (no refs) → allow;
 //!   Ambiguous → block; Dynamic/Unavailable → block.
 
-use perl_semantic_facts::{EntityId, PlanBlocker, SafeDeletePlan};
+use perl_semantic_facts::{
+    Confidence, EntityId, PlanBlocker, PlanBlockerReason, Provenance, ProviderFactFreshness,
+    ProviderFactSourceKind, ProviderFactTrace, ProviderFallbackState, ProviderSurface,
+    SafeDeletePlan,
+};
 use perl_workspace::semantic::queries::SemanticQueries;
 use perl_workspace::semantic_shadow_compare::{
     SemanticShadowCompareReceipt, ShadowQueryInput, ShadowQueryName, ShadowResultSummary,
@@ -70,12 +74,13 @@ pub fn safe_delete_shadow<Q: SemanticQueries>(
     let new_summary = safe_delete_plan_to_summary(&plan);
 
     // ── Build receipt ──
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::SafeDeletePlan,
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
         Vec::new(),
+        safe_delete_plan_fact_source_traces(&plan, ProviderFallbackState::Shadow),
     );
 
     tracing::debug!(
@@ -156,12 +161,13 @@ pub fn safe_delete_cutover<Q: SemanticQueries>(
     let old_summary = legacy_safe_delete_to_summary(legacy_allowed);
 
     // ── Build receipt ──
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::SafeDeletePlan,
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
         Vec::new(),
+        safe_delete_plan_fact_source_traces(&plan, ProviderFallbackState::Primary),
     );
 
     // ── Classify result ──
@@ -214,6 +220,86 @@ fn safe_delete_plan_to_summary(plan: &SafeDeletePlan) -> ShadowResultSummary {
     }
 
     summarize_identities(Some(identities))
+}
+
+fn safe_delete_plan_fact_source_traces(
+    plan: &SafeDeletePlan,
+    allowed_state: ProviderFallbackState,
+) -> Vec<ProviderFactTrace> {
+    if plan.blockers.is_empty() {
+        return vec![ProviderFactTrace::new(
+            ProviderSurface::SafeDelete,
+            ProviderFactSourceKind::SemanticFact,
+            Provenance::ExactAst,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+            allowed_state,
+            Some("safe-delete-plan".to_string()),
+            None,
+            Some(1),
+        )];
+    }
+    plan.blockers.iter().map(blocker_fact_trace).collect()
+}
+
+fn blocker_fact_trace(blocker: &PlanBlocker) -> ProviderFactTrace {
+    let (source, provenance, confidence, freshness) = match blocker.reason {
+        PlanBlockerReason::DynamicBoundary => (
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+        ),
+        PlanBlockerReason::GeneratedMember => (
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+        ),
+        PlanBlockerReason::CrossModuleExport
+        | PlanBlockerReason::ImportedSymbol
+        | PlanBlockerReason::ExportedSymbol => (
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::ImportExportInference,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+        ),
+        PlanBlockerReason::AmbiguousReference => (
+            ProviderFactSourceKind::SemanticFact,
+            Provenance::NameHeuristic,
+            Confidence::Low,
+            ProviderFactFreshness::Fresh,
+        ),
+        PlanBlockerReason::ReferencesExist => (
+            ProviderFactSourceKind::SemanticFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+        ),
+        PlanBlockerReason::UnclassifiedOccurrence => (
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::Unknown,
+        ),
+        _ => (
+            ProviderFactSourceKind::Unknown,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::Unknown,
+        ),
+    };
+    ProviderFactTrace::new(
+        ProviderSurface::SafeDelete,
+        source,
+        provenance,
+        confidence,
+        freshness,
+        ProviderFallbackState::Blocked,
+        Some("safe-delete-plan".to_string()),
+        blocker.anchor_id,
+        Some(1),
+    )
 }
 
 #[cfg(test)]
@@ -303,6 +389,15 @@ mod tests {
         PlanBlocker::new(reason, Some(AnchorId(anchor_id)), format!("{reason:?} blocker"))
     }
 
+    fn first_trace<'a>(
+        receipt: &'a SemanticShadowCompareReceipt,
+    ) -> Result<&'a ProviderFactTrace, Box<dyn std::error::Error>> {
+        match receipt.fact_source_traces.first() {
+            Some(trace) => Ok(trace),
+            None => Err("missing fact-source trace".into()),
+        }
+    }
+
     // ── Shadow mode tests ──
 
     #[test]
@@ -351,6 +446,100 @@ mod tests {
             result.receipt.schema_version,
             perl_workspace::semantic_shadow_compare::SEMANTIC_SHADOW_COMPARE_RECEIPT_SCHEMA_VERSION
         );
+        Ok(())
+    }
+
+    #[test]
+    fn safe_delete_compiler_boundaries_exact_static_trace_allows_unreferenced_delete()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = SafeDeletePlan::new(EntityId(1), "my_sub".to_string(), vec![], vec![]);
+        let queries = StubSemanticQueries { safe_delete_plan_result: plan };
+
+        let result = safe_delete_shadow(true, &queries, EntityId(1), "my_sub");
+        let trace = first_trace(&result.receipt)?;
+
+        assert_eq!(trace.surface, ProviderSurface::SafeDelete);
+        assert_eq!(trace.source, ProviderFactSourceKind::SemanticFact);
+        assert_eq!(trace.provenance, Provenance::ExactAst);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+        Ok(())
+    }
+
+    #[test]
+    fn safe_delete_compiler_boundaries_dynamic_boundary_blocks_delete()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let blocker = make_blocker(PlanBlockerReason::DynamicBoundary);
+        let plan = SafeDeletePlan::new(EntityId(1), "dyn_sub".to_string(), vec![blocker], vec![]);
+        let queries = StubSemanticQueries { safe_delete_plan_result: plan };
+
+        let outcome = safe_delete_cutover(true, &queries, EntityId(1), "dyn_sub");
+        let trace = first_trace(&outcome.receipt)?;
+
+        match outcome.result {
+            SafeDeleteCutoverResult::Blocked { blockers } => {
+                assert_eq!(blockers[0].reason, PlanBlockerReason::DynamicBoundary);
+            }
+            other => return Err(format!("expected Blocked, got {:?}", other).into()),
+        }
+        assert_eq!(trace.surface, ProviderSurface::SafeDelete);
+        assert_eq!(trace.source, ProviderFactSourceKind::DynamicBoundary);
+        assert_eq!(trace.provenance, Provenance::DynamicBoundary);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        Ok(())
+    }
+
+    #[test]
+    fn safe_delete_compiler_boundaries_generated_member_uses_framework_trace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let blocker = make_blocker(PlanBlockerReason::GeneratedMember);
+        let plan = SafeDeletePlan::new(EntityId(1), "accessor".to_string(), vec![blocker], vec![]);
+        let queries = StubSemanticQueries { safe_delete_plan_result: plan };
+
+        let outcome = safe_delete_cutover(true, &queries, EntityId(1), "accessor");
+        let trace = first_trace(&outcome.receipt)?;
+
+        assert_eq!(trace.source, ProviderFactSourceKind::FrameworkAdapter);
+        assert_eq!(trace.provenance, Provenance::FrameworkSynthesis);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        Ok(())
+    }
+
+    #[test]
+    fn safe_delete_compiler_boundaries_import_export_blockers_use_compiler_trace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let blocker = make_blocker_with_anchor(PlanBlockerReason::ExportedSymbol, 42);
+        let plan = SafeDeletePlan::new(EntityId(1), "exported".to_string(), vec![blocker], vec![]);
+        let queries = StubSemanticQueries { safe_delete_plan_result: plan };
+
+        let outcome = safe_delete_cutover(true, &queries, EntityId(1), "exported");
+        let trace = first_trace(&outcome.receipt)?;
+
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::ImportExportInference);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.anchor_id, Some(AnchorId(42)));
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        Ok(())
+    }
+
+    #[test]
+    fn safe_delete_compiler_boundaries_ambiguous_reference_is_low_confidence_blocker()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let blocker = make_blocker(PlanBlockerReason::AmbiguousReference);
+        let plan = SafeDeletePlan::new(EntityId(1), "ambiguous".to_string(), vec![blocker], vec![]);
+        let queries = StubSemanticQueries { safe_delete_plan_result: plan };
+
+        let outcome = safe_delete_cutover(true, &queries, EntityId(1), "ambiguous");
+        let trace = first_trace(&outcome.receipt)?;
+
+        assert_eq!(trace.source, ProviderFactSourceKind::SemanticFact);
+        assert_eq!(trace.provenance, Provenance::NameHeuristic);
+        assert_eq!(trace.confidence, Confidence::Low);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
         Ok(())
     }
 

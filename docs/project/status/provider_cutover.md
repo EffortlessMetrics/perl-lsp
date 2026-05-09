@@ -11,8 +11,8 @@ fallback behavior and rollback proof.
 
 - Fact-source trace receipt wiring is in place through `ProviderFactTrace`
   entries in the semantic shadow compare receipt schema.
-- The current shadow receipt records twenty-four fact-source traces across definition,
-  references, completion, hover, and diagnostics surfaces.
+- The current shadow receipt records thirty-two fact-source traces across definition,
+  references, completion, hover, diagnostics, rename, and safe-delete surfaces.
 - Definition/reference shadow proof now records imported-symbol,
   framework-generated, dynamic-boundary, and low-confidence fallback candidate
   traces without changing live navigation behavior.
@@ -26,6 +26,10 @@ fallback behavior and rollback proof.
   generated visible-symbol facts. Ambiguous, low-confidence, and
   dynamic-boundary cases remain fallback or blocked instead of being silently
   suppressed.
+- Rename and safe-delete now have boundary-shadowed proof for exact static
+  allow decisions plus dynamic-boundary, stale compiler fact, low-confidence,
+  and generated-member blockers. These receipts do not broaden live refactor
+  behavior.
 - Other provider surfaces remain trace/proof infrastructure only until their
   own cutover proof lands.
 
@@ -38,8 +42,8 @@ fallback behavior and rollback proof.
 | Hover | `provenance-backed` | Hover cutover/shadow code labels imported, generated, dynamic-boundary, and fallback paths with fact-source traces and source/confidence text; broad live behavior remains gated | Real-workspace hover quality and runtime integration receipts before broader live cutover |
 | Definition / goto | `ranked-shadowed` | Definition shadow compare tracks imported, generated, dynamic-boundary, and low-confidence fallback candidate traces before live migration | Runtime integration and real-workspace quality receipts before any live navigation cutover |
 | References | `ranked-shadowed` | Reference shadow compare tracks imported, generated, dynamic-boundary, and low-confidence fallback occurrence traces before live migration | Reference precision/recall fixtures from real-workspace compiler facts |
-| Rename | `fixture-backed queries` | Rename plan semantic fixtures exist; broad live compiler cutover remains deferred | Dynamic-boundary blockers and unsafe-edit receipts |
-| Safe delete | `fixture-backed queries` | Safe-delete plan semantic fixtures exist; broad live compiler cutover remains deferred | Dynamic-boundary blockers and generated-member blockers |
+| Rename | `boundary-shadowed` | Rename plan receipts trace exact static edits, dynamic-boundary blockers, stale compiler facts, and low-confidence ambiguity before any live compiler-backed refactor behavior | Runtime blocker UX and real-workspace unsafe-edit receipts |
+| Safe delete | `boundary-shadowed` | Safe-delete receipts trace exact static allow decisions, dynamic-boundary blockers, framework-generated blockers, and stale compiler facts before any live compiler-backed refactor behavior | Runtime blocker UX and real-workspace unsafe-delete receipts |
 | Workspace symbols | `legacy workspace index` | Existing workspace index remains provider source | Compiler fact merge and source/freshness trace |
 | Semantic tokens | `syntax/legacy` | Parser/token facts remain source | Compiler facts only after token/span invariants are proven |
 
