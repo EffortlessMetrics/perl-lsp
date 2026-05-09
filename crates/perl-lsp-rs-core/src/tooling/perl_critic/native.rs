@@ -241,6 +241,7 @@ impl NativeCriticRegistry {
             Box::new(BarewordFilehandleRule),
             Box::new(TwoArgOpenRule),
             Box::new(PipeOpenRule),
+            Box::new(QxReadpipeRule),
             Box::new(BacktickExecRule),
             Box::new(StringEvalRule),
             Box::new(UnusedLexicalVariableRule),
@@ -538,6 +539,31 @@ impl CriticRule for PipeOpenRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_pipe_open_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports `qx` and `readpipe` command execution.
+///
+/// This complements the backtick rule with parser-confirmed quote-command and
+/// function-call forms. It stays diagnostic-only because replacing shell
+/// command execution safely requires user intent.
+pub struct QxReadpipeRule;
+
+impl CriticRule for QxReadpipeRule {
+    fn id(&self) -> &'static str {
+        "native.security.qx_readpipe"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Security
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Harsh
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_qx_readpipe_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -1038,6 +1064,25 @@ fn backtick_exec_finding(
     }
 }
 
+fn qx_readpipe_finding(rule: &QxReadpipeRule, source: &str, command_node: &Node) -> CriticFinding {
+    let range = range_for_byte_span(source, command_node.location.start, command_node.location.end);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: "qx/readpipe command execution detected".to_string(),
+        explanation: "qx and readpipe execute shell commands. Prefer explicit command argument lists or IPC modules when command execution is required.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: vec![CriticRelatedInformation {
+            range,
+            message: "Validate command arguments and avoid shell command execution when input may be user-controlled.".to_string(),
+        }],
+        fix: None,
+    }
+}
+
 fn string_eval_finding(rule: &StringEvalRule, source: &str, eval_node: &Node) -> CriticFinding {
     let range = range_for_byte_span(source, eval_node.location.start, eval_node.location.end);
 
@@ -1249,6 +1294,36 @@ fn is_pipe_two_arg_string(node: &Node) -> bool {
         }
         _ => false,
     }
+}
+
+fn collect_qx_readpipe_findings(
+    rule: &QxReadpipeRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    match &node.kind {
+        NodeKind::String { value, interpolated: true } if is_qx_string(value) => {
+            out.push(qx_readpipe_finding(rule, source, node));
+        }
+        NodeKind::FunctionCall { name, .. } if name == "readpipe" => {
+            out.push(qx_readpipe_finding(rule, source, node));
+        }
+        _ => {}
+    }
+
+    for child in node.children() {
+        collect_qx_readpipe_findings(rule, source, child, out);
+    }
+}
+
+fn is_qx_string(value: &str) -> bool {
+    let Some(rest) = value.strip_prefix("qx") else {
+        return false;
+    };
+    rest.chars().next().is_some_and(|delimiter| {
+        matches!(delimiter, '(' | '[' | '{' | '<' | '/' | '!' | '\'' | '"')
+    })
 }
 
 fn collect_backtick_exec_findings(
@@ -2217,6 +2292,93 @@ mod tests {
     }
 
     #[test]
+    fn native_qx_readpipe_rule_reports_qx_and_readpipe_forms() {
+        let source = "use strict;\nuse warnings;\nmy $date = qx(date);\nmy $listing = qx/ls -la/;\nmy $pipe = readpipe($date);\nprint $listing . $pipe;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(QxReadpipeRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 3);
+        for finding in &findings {
+            assert_eq!(finding.rule_id, "native.security.qx_readpipe");
+            assert_eq!(finding.category, CriticCategory::Security);
+            assert_eq!(finding.severity, Severity::Harsh);
+            assert_eq!(finding.message, "qx/readpipe command execution detected");
+            assert_eq!(finding.suppression_key, "native.security.qx_readpipe");
+            assert!(finding.fix.is_none(), "qx/readpipe replacement is not safe to automate");
+        }
+        assert_eq!(&source[findings[0].range.start.byte..findings[0].range.end.byte], "qx(date)");
+        assert_eq!(&source[findings[1].range.start.byte..findings[1].range.end.byte], "qx/ls -la/");
+        assert_eq!(
+            &source[findings[2].range.start.byte..findings[2].range.end.byte],
+            "readpipe($date)"
+        );
+    }
+
+    #[test]
+    fn native_qx_readpipe_rule_accepts_non_command_strings_and_calls() {
+        let source = "use strict;\nuse warnings;\nmy $text = 'qx(date)';\nmy $value = read_line($text);\nprint $value;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(QxReadpipeRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "ordinary strings and non-readpipe calls should be accepted");
+    }
+
+    #[test]
+    fn native_qx_readpipe_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $out = qx(date);\nprint $out;\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.security.qx_readpipe".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(QxReadpipeRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.security.qx_readpipe -- trusted command\nuse strict;\nuse warnings;\nmy $out = readpipe('date');\nprint $out;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+
+        let severity_config =
+            CriticConfig { severity: Severity::Stern as u8, ..Default::default() };
+        let severity_ctx = CriticContext::new(source, &ast, &severity_config);
+        assert!(registry.check(&severity_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_qx_readpipe_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $out = qx(date);\nprint $out;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(QxReadpipeRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.security.qx_readpipe");
+        assert_eq!(violations[0].description, "qx/readpipe command execution detected");
+        assert_eq!(
+            violations[0].explanation,
+            "qx and readpipe execute shell commands. Prefer explicit command argument lists or IPC modules when command execution is required."
+        );
+        assert_eq!(violations[0].severity, Severity::Harsh);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_backtick_exec_rule_reports_backtick_strings() {
         let source = "use strict;\nuse warnings;\nmy $out = `ls -la`;\n";
         let ast = parse_source(source);
@@ -2404,6 +2566,7 @@ mod tests {
                 "native.io.bareword_filehandle",
                 "native.io.two_arg_open",
                 "native.io.pipe_open",
+                "native.security.qx_readpipe",
                 "native.security.backtick_exec",
                 "native.security.string_eval",
                 "native.variables.unused_lexical",
