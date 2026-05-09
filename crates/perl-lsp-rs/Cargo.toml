@@ -57,6 +57,7 @@ perl-lsp-rs-core = { workspace = true, features = ["lsp-compat"] }
 # perl-lsp-performance absorbed into perl-lsp-rs-core::performance (Wave G3 step 5)
 perl-lsp-perltidy = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
+perl-semantic-facts = { workspace = true }
 perl-symbol = { workspace = true }
 perl-module = { workspace = true }
 perl-pod = { workspace = true }
@@ -130,8 +131,6 @@ perl-tdd-support = { workspace = true }
 parking_lot.workspace = true
 criterion.workspace = true
 perl-corpus = { workspace = true }
-# Needed by dynamic_diagnostics_suppression_tests for ImportSpec construction in cases 1-2.
-perl-semantic-facts = { workspace = true }
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/perl-lsp-{ version }-{ target }{ archive-suffix }"

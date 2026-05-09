@@ -14,6 +14,7 @@ mod common;
 mod semantic_hover_tests {
     use crate::common::test_utils::TestServerBuilder;
     use serde_json::Value;
+    use std::fs;
 
     /// Extract hover content from an LSP hover response.
     /// Returns the markdown value string for assertions.
@@ -458,6 +459,46 @@ my $circumference = 2 * PI * $radius;
                 "hover should show constant information, got: {c}"
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn hover_live_compiler_fact_labels_imported_symbol() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let module_dir = workspace.join("lib").join("My");
+        fs::create_dir_all(&module_dir)?;
+        fs::write(
+            module_dir.join("Exports.pm"),
+            "package My::Exports;\nuse Exporter 'import';\nour @EXPORT_OK = qw(exported);\nsub exported { 1 }\n1;\n",
+        )?;
+
+        let script = workspace.join("script.pl");
+        let code = "use lib 'lib';\nuse My::Exports qw(exported);\n\nmy $value = exported();\n";
+        fs::write(&script, code)?;
+
+        let workspace_path = workspace.to_str().ok_or("non-UTF-8 workspace path")?;
+        let script_uri =
+            url::Url::from_file_path(&script).map_err(|_| "invalid script file path")?;
+        let script_uri = script_uri.to_string();
+        let server = TestServerBuilder::new().with_workspace(workspace_path).build();
+        server.open_document(&script_uri, code);
+
+        let (line, character) = find_pos(code, "exported()", 3)?;
+        let response = server.get_hover(&script_uri, line, character);
+        let content =
+            hover_content(&response).ok_or("expected hover content for imported symbol")?;
+
+        assert!(
+            content.contains("Imported from `My::Exports`"),
+            "hover should show imported-symbol origin, got: {content}"
+        );
+        assert!(
+            content.contains(
+                "Source: compiler fact / import/export inference (high confidence, fresh)"
+            ),
+            "hover should show compiler fact provenance/confidence/freshness, got: {content}"
+        );
         Ok(())
     }
 }

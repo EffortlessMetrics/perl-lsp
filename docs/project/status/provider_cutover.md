@@ -23,6 +23,9 @@ fallback behavior and rollback proof.
 - Hover provenance proof now records imported-symbol, framework-generated,
   dynamic-boundary, and fallback paths with typed fact-source traces and source /
   confidence labels.
+- Hover now has a narrow live runtime slice for traced compiler fact,
+  framework-adapter, and dynamic-boundary hover paths. Legacy hover remains the
+  fallback when compiler facts are absent, stale, or only legacy-equivalent.
 - Diagnostics now have a narrow live cutover for high-confidence imported and
   generated visible-symbol facts. Ambiguous, low-confidence, and
   dynamic-boundary cases remain fallback or blocked instead of being silently
@@ -50,7 +53,7 @@ fallback behavior and rollback proof.
 | --- | --- | --- | --- |
 | Diagnostics | `partial live` | Existing semantic queries suppress selected dynamic false positives, plus high-confidence imported/generated visible-symbol facts; fallback diagnostics remain available | Broader false-positive / false-negative fixture receipts before any additional diagnostic families move live |
 | Completion | `partial live / shadowed` | Existing completion paths remain live; semantic-shadow fixtures trace compiler visible-symbol candidates, generated labels, rank deltas, and dynamic-boundary blockers | Ranking stability and real-workspace candidate quality before any broader live cutover |
-| Hover | `provenance-backed` | Hover cutover/shadow code labels imported, generated, dynamic-boundary, and fallback paths with fact-source traces and source/confidence text; broad live behavior remains gated | Real-workspace hover quality and runtime integration receipts before broader live cutover |
+| Hover | `partial live / provenance-backed` | Runtime hover uses compiler-fact cutover for traced compiler fact, framework-adapter, and dynamic-boundary paths when fresh workspace facts are available; legacy hover remains fallback; hover cutover/shadow code labels imported, generated, dynamic-boundary, and fallback paths with fact-source traces and source/confidence text | Real-workspace hover quality receipts before broader generated/dynamic expansion |
 | Definition / goto | `ranked-shadowed` | Definition shadow compare tracks imported, generated, dynamic-boundary, and low-confidence fallback candidate traces before live migration | Runtime integration and real-workspace quality receipts before any live navigation cutover |
 | References | `ranked-shadowed` | Reference shadow compare tracks imported, generated, dynamic-boundary, and low-confidence fallback occurrence traces before live migration | Reference precision/recall fixtures from real-workspace compiler facts |
 | Rename | `boundary-shadowed` | Rename plan receipts trace exact static edits, dynamic-boundary blockers, stale compiler facts, and low-confidence ambiguity before any live compiler-backed refactor behavior | Runtime blocker UX and real-workspace unsafe-edit receipts |
@@ -71,6 +74,7 @@ fallback behavior and rollback proof.
 ## Tracking
 
 - Provider cutover umbrella: [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197)
+- Hover live provenance slice: [#8369](https://github.com/EffortlessMetrics/perl-lsp/issues/8369)
 - Workspace-symbol source/freshness proof: [#8353](https://github.com/EffortlessMetrics/perl-lsp/issues/8353)
 - Document-symbol source/freshness proof: [#8359](https://github.com/EffortlessMetrics/perl-lsp/issues/8359)
 - Semantic-token source/freshness proof: [#8360](https://github.com/EffortlessMetrics/perl-lsp/issues/8360)
