@@ -378,6 +378,172 @@
     },
     {
       "schema_version": 2,
+      "query": "find_definition",
+      "input": {
+        "symbol": "navigation_definition_real_workspace_quality"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "lib/Real/Nav.pm:2:5"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 2,
+        "identities": [
+          "generated:Real::Nav::generated_accessor:virtual",
+          "lib/Real/Nav.pm:2:5"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "definition real-workspace quality receipt: legacy_candidates=1; compiler_fact_candidates=5; answer_candidates=2; rank_delta=+1; noise_delta=1; query_latency=not_measured_shadow_only; generated_labels=1; dynamic_boundary_blockers=1; stale_fact_blockers=1; blocked_candidates=2; no live navigation behavior change"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Definition",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        },
+        {
+          "surface": "Definition",
+          "source": "FrameworkAdapter",
+          "provenance": "FrameworkSynthesis",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        },
+        {
+          "surface": "Definition",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        },
+        {
+          "surface": "Definition",
+          "source": "CompilerFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "Low",
+          "freshness": "Stale",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        },
+        {
+          "surface": "Definition",
+          "source": "Fallback",
+          "provenance": "NameHeuristic",
+          "confidence": "Low",
+          "freshness": "Fresh",
+          "fallback_state": "Fallback",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "find_references",
+      "input": {
+        "symbol": "navigation_references_real_workspace_quality"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "script/app.pl:2:1"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 2,
+        "identities": [
+          "generated:Real::Nav::generated_accessor:virtual",
+          "script/app.pl:2:1"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "references real-workspace quality receipt: legacy_candidates=1; compiler_fact_candidates=5; answer_candidates=2; rank_delta=+1; noise_delta=1; query_latency=not_measured_shadow_only; generated_labels=1; dynamic_boundary_blockers=1; stale_fact_blockers=1; blocked_candidates=2; no live navigation behavior change"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "References",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        },
+        {
+          "surface": "References",
+          "source": "FrameworkAdapter",
+          "provenance": "FrameworkSynthesis",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        },
+        {
+          "surface": "References",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        },
+        {
+          "surface": "References",
+          "source": "CompilerFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "Low",
+          "freshness": "Stale",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        },
+        {
+          "surface": "References",
+          "source": "Fallback",
+          "provenance": "NameHeuristic",
+          "confidence": "Low",
+          "freshness": "Fresh",
+          "fallback_state": "Fallback",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
       "query": "count_usages",
       "input": {
         "symbol": "Foo::bar"
@@ -1747,14 +1913,14 @@
   ],
   "verdict_counts": {
     "ambiguous": 2,
-    "improved": 11,
+    "improved": 13,
     "regression": 1,
     "same": 32,
     "unavailable": 0
   },
   "release_readiness_verdict_counts": {
     "ambiguous": 0,
-    "improved": 1,
+    "improved": 3,
     "regression": 0,
     "same": 9,
     "unavailable": 0
