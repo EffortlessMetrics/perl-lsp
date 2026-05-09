@@ -31,12 +31,13 @@
 # include_paths = ["lib", "local/lib/perl5"]
 
 # ── [diagnostics] ────────────────────────────────────────────────────────────
-# Linting settings. perlcritic is opt-in and requires perlcritic installed.
+# Linting settings. Critic diagnostics are opt-in. With the default legacy
+# engine they require perlcritic installed; with [critic].engine = "native"
+# they use the Rust-native critic registry.
 
 [diagnostics]
 
-# Enable perlcritic diagnostics (default: false).
-# Requires `perlcritic` available on $PATH.
+# Enable critic diagnostics (default: false).
 #
 # perlcritic = false
 
@@ -45,6 +46,17 @@
 # Equivalent to `perlcritic --severity N`.
 #
 # perlcritic_severity = 3
+
+# ── [critic] ────────────────────────────────────────────────────────────────
+# Critic engine selection.
+
+[critic]
+
+# Engine values:
+#   legacy / perlcritic / external = Perl::Critic-compatible legacy path
+#   native                         = Rust-native critic rule registry
+#
+# engine = "legacy"
 
 # ── [features] ───────────────────────────────────────────────────────────────
 # LSP feature toggles.
@@ -58,17 +70,23 @@
 # inlay_hints = true
 
 # ── [formatting] ─────────────────────────────────────────────────────────────
-# Perltidy formatting configuration. All keys are optional.
+# Formatting configuration. All keys are optional. Native formatting is the
+# default engine; external perltidy remains available as compatibility mode.
 #
-# When `perltidy_profile` is set, it takes precedence and all other options
-# are ignored (perltidy reads everything from the profile file).
-
 [formatting]
-# Enable perltidy formatting (default: true).
+# Enable LSP formatting (default: true).
 # enabled = true
 
-# Path to a `.perltidyrc` profile file (optional).
-# When set, passes --profile=<path> to perltidy.
+# Formatter engine:
+#   native            = Rust-native formatter
+#   compat            = native formatter with compatibility-oriented defaults
+#   external-perltidy = shell out to perltidy compatibility adapter
+#   off               = disable formatting
+#
+# engine = "native"
+
+# Path to a `.perltidyrc` profile file (optional). Used by the external
+# perltidy adapter and native-tooling compatibility reports.
 # perltidy_profile = ".perltidyrc"
 
 # Maximum line length (default: 80).
