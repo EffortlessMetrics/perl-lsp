@@ -36,13 +36,13 @@
 
 | Metric | Value |
 | --- | ---: |
-| Native rule count | 27 |
-| Rules with suppressions | 27 |
+| Native rule count | 28 |
+| Rules with suppressions | 28 |
 | Rules with fixes | 14 |
-| Pull diagnostics coverage | 27 |
-| Push diagnostics coverage | 27 |
-| Workspace diagnostics coverage | 27 |
-| Violation bridge coverage | 27 |
+| Pull diagnostics coverage | 28 |
+| Push diagnostics coverage | 28 |
+| Workspace diagnostics coverage | 28 |
+| Violation bridge coverage | 28 |
 | Native critic check files | 65 |
 | Native critic check parse errors | 0 |
 | Native critic check rules run | 27 |
@@ -84,6 +84,7 @@ Native rules:
 - `native.variables.uninitialized`
 - `native.syntax.unquoted_bareword`
 - `native.documentation.require_pod_sections`
+- `native.syntax.prohibit_leading_zeros`
 
 Fixable native rules:
 - `native.common.assignment_in_condition`
