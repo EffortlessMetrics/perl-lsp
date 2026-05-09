@@ -1350,7 +1350,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nsystem($path);\nexec('ls', '-la');\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nprintf \"%s %s\", $path;\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nsystem($path);\nexec('ls', '-la');\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n",
             None,
             &context,
             None,
@@ -1400,6 +1400,28 @@ mod tests {
         assert_eq!(data["code"], "native.common.assignment_in_condition");
         assert_eq!(data["suppressionKey"], "native.common.assignment_in_condition");
         assert_eq!(data["fixable"], true);
+
+        let printf_format = items
+            .iter()
+            .find(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.common.printf_format_arity"),
+                )
+            })
+            .ok_or("expected native printf format arity finding")?;
+        assert_eq!(printf_format.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(printf_format.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(
+            printf_format.message,
+            "`printf` format string has 2 specifiers but 1 argument supplied"
+        );
+        let data = printf_format
+            .data
+            .as_ref()
+            .ok_or("native printf format arity data should be populated")?;
+        assert_eq!(data["code"], "native.common.printf_format_arity");
+        assert_eq!(data["suppressionKey"], "native.common.printf_format_arity");
+        assert_eq!(data["fixable"], false);
 
         let bareword_filehandle = items
             .iter()

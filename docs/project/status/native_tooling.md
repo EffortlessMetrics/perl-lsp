@@ -14,18 +14,19 @@
 
 | Metric | Value |
 | --- | ---: |
-| Native rule count | 17 |
-| Rules with suppressions | 17 |
+| Native rule count | 18 |
+| Rules with suppressions | 18 |
 | Rules with fixes | 11 |
-| Pull diagnostics coverage | 17 |
-| Push diagnostics coverage | 17 |
-| Workspace diagnostics coverage | 17 |
-| Violation bridge coverage | 17 |
+| Pull diagnostics coverage | 18 |
+| Push diagnostics coverage | 18 |
+| Workspace diagnostics coverage | 18 |
+| Violation bridge coverage | 18 |
 
 Native rules:
 - `native.testing.require_use_strict`
 - `native.testing.require_use_warnings`
 - `native.common.assignment_in_condition`
+- `native.common.printf_format_arity`
 - `native.io.bareword_filehandle`
 - `native.io.two_arg_open`
 - `native.io.pipe_open`
