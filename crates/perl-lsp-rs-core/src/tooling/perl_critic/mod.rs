@@ -15,10 +15,10 @@ pub use native::{
     AssignmentInConditionRule, CriticCategory, CriticContext, CriticFinding, CriticFix,
     CriticRelatedInformation, CriticRule, CriticSuppression, CriticSuppressionMap,
     CriticSuppressionScope, CriticTextEdit, DeprecatedDefinedRule, DuplicateLexicalDeclarationRule,
-    DuplicateParameterRule, FixSafety, NativeCriticRegistry, ParameterShadowsGlobalRule,
-    PrintfFormatArityRule, RequirePodSectionsRule, RequireUseStrictRule, RequireUseWarningsRule,
-    ShadowedLexicalVariableRule, StaleDollarAtRule, UndefComparisonRule, UnreachableCodeRule,
-    UnusedLexicalVariableRule, UnusedParameterRule,
+    DuplicateParameterRule, FixSafety, NativeCriticProfile, NativeCriticRegistry,
+    ParameterShadowsGlobalRule, PrintfFormatArityRule, RequirePodSectionsRule,
+    RequireUseStrictRule, RequireUseWarningsRule, ShadowedLexicalVariableRule, StaleDollarAtRule,
+    UndefComparisonRule, UnreachableCodeRule, UnusedLexicalVariableRule, UnusedParameterRule,
 };
 pub use quick_fix::{QuickFix, TextEdit};
 pub use types::{CriticConfig, Severity, Violation};

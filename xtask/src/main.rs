@@ -1903,7 +1903,11 @@ enum NativeCriticCommand {
         #[arg(long, default_value_t = 3)]
         severity: u8,
 
-        /// Native rule IDs to include. Empty means all recommended rules.
+        /// Native critic profile to run: recommended or strict.
+        #[arg(long, default_value = "recommended")]
+        profile: String,
+
+        /// Native rule IDs to include. Empty means all selected-profile rules.
         #[arg(long = "include")]
         include: Vec<String>,
 
@@ -2377,16 +2381,23 @@ fn main() -> Result<()> {
             }
         },
         Commands::NativeCritic { command } => match command {
-            NativeCriticCommand::Check { roots, severity, include, exclude, receipt, summary } => {
-                native_critic::check(native_critic::NativeCriticCheckConfig {
-                    roots,
-                    severity,
-                    include,
-                    exclude,
-                    receipt,
-                    summary,
-                })
-            }
+            NativeCriticCommand::Check {
+                roots,
+                profile,
+                severity,
+                include,
+                exclude,
+                receipt,
+                summary,
+            } => native_critic::check(native_critic::NativeCriticCheckConfig {
+                roots,
+                profile,
+                severity,
+                include,
+                exclude,
+                receipt,
+                summary,
+            }),
         },
         Commands::NativeTooling { command } => match command {
             NativeToolingCommand::Status {

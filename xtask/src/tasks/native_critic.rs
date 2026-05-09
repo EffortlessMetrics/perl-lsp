@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{Context, Result, eyre};
 use perl_lsp_rs_core::tooling::perl_critic::{
-    CriticConfig, CriticContext, CriticFinding, NativeCriticRegistry,
+    CriticConfig, CriticContext, CriticFinding, NativeCriticProfile, NativeCriticRegistry,
 };
 use perl_parser::Parser;
 use serde::Serialize;
@@ -19,9 +19,11 @@ const SCHEMA_VERSION: u32 = 1;
 pub struct NativeCriticCheckConfig {
     /// Files or directories containing Perl sources.
     pub roots: Vec<PathBuf>,
+    /// Native critic profile to run.
+    pub profile: String,
     /// Minimum native critic severity to report.
     pub severity: u8,
-    /// Native rule IDs to include. Empty means all recommended rules.
+    /// Native rule IDs to include. Empty means all selected-profile rules.
     pub include: Vec<String>,
     /// Native rule IDs to exclude.
     pub exclude: Vec<String>,
@@ -38,7 +40,7 @@ struct NativeCriticCheckReceipt {
     generated_at: DateTime<Utc>,
     commit: String,
     roots: Vec<String>,
-    profile: &'static str,
+    profile: String,
     engine: &'static str,
     severity: u8,
     include: Vec<String>,
@@ -77,13 +79,16 @@ pub fn check(config: NativeCriticCheckConfig) -> Result<()> {
         ));
     }
 
+    let profile = NativeCriticProfile::parse(&config.profile).ok_or_else(|| {
+        eyre!("unknown native critic profile '{}'; expected recommended or strict", config.profile)
+    })?;
     let critic_config = CriticConfig {
         severity: config.severity,
         include: config.include.clone(),
         exclude: config.exclude.clone(),
         ..CriticConfig::default()
     };
-    let registry = NativeCriticRegistry::recommended();
+    let registry = NativeCriticRegistry::for_profile(profile);
     let rule_ids = registry.rule_ids().into_iter().map(ToOwned::to_owned).collect::<Vec<_>>();
     let mut results = Vec::new();
 
@@ -109,7 +114,7 @@ pub fn check(config: NativeCriticCheckConfig) -> Result<()> {
         generated_at: Utc::now(),
         commit: current_commit(),
         roots: roots.iter().map(|root| root.display().to_string()).collect(),
-        profile: "recommended",
+        profile: profile.as_str().to_string(),
         engine: "native",
         severity: config.severity,
         include: config.include,
@@ -347,6 +352,7 @@ mod tests {
 
         check(NativeCriticCheckConfig {
             roots: vec![source],
+            profile: "strict".to_string(),
             severity: 1,
             include: vec!["native.variables.unused_lexical".to_string()],
             exclude: Vec::new(),
@@ -357,7 +363,7 @@ mod tests {
         let value: Value = serde_json::from_str(&fs::read_to_string(receipt)?)?;
         assert_eq!(value["kind"], "native_critic_check");
         assert_eq!(value["engine"], "native");
-        assert_eq!(value["profile"], "recommended");
+        assert_eq!(value["profile"], "strict");
         assert_eq!(value["files_checked"], 1);
         assert_eq!(value["rules_run"], 28);
         assert_eq!(value["findings_count"], 1);
@@ -383,6 +389,7 @@ mod tests {
 
         check(NativeCriticCheckConfig {
             roots: vec![source],
+            profile: "strict".to_string(),
             severity: 1,
             include: vec!["native.variables.unused_lexical".to_string()],
             exclude: Vec::new(),
@@ -398,6 +405,31 @@ mod tests {
     }
 
     #[test]
+    fn native_critic_check_profiles_lower_noise_recommended_rules() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let source = temp.path().join("App.pm");
+        fs::write(&source, "package App;\nsub run { my $unused = 1; return 1; }\n1;\n")?;
+        let receipt = temp.path().join("native-critic-check.json");
+        let summary = temp.path().join("native-critic-check.md");
+
+        check(NativeCriticCheckConfig {
+            roots: vec![source],
+            profile: "recommended".to_string(),
+            severity: 1,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            receipt: receipt.clone(),
+            summary,
+        })?;
+
+        let value: Value = serde_json::from_str(&fs::read_to_string(receipt)?)?;
+        assert_eq!(value["profile"], "recommended");
+        assert_eq!(value["rules_run"], 16);
+        assert_eq!(value["findings_by_rule"]["native.variables.unused_lexical"], Value::Null);
+        Ok(())
+    }
+
+    #[test]
     fn native_critic_check_keeps_false_positive_fixtures_clean() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let receipt = temp.path().join("native-critic-check.json");
@@ -408,6 +440,7 @@ mod tests {
 
         check(NativeCriticCheckConfig {
             roots: vec![fixture_root],
+            profile: "strict".to_string(),
             severity: 1,
             include: Vec::new(),
             exclude: Vec::new(),

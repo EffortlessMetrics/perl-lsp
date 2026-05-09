@@ -204,6 +204,36 @@ pub trait CriticRule: Send + Sync {
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>);
 }
 
+/// Native critic rule bundle used by receipt and readiness tooling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeCriticProfile {
+    /// Lower-noise candidate for eventual default/native recommended use.
+    Recommended,
+    /// Every registered native rule, useful for strict audits and rule coverage.
+    Strict,
+}
+
+impl NativeCriticProfile {
+    /// Parse a native critic profile token.
+    #[must_use]
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw {
+            "recommended" => Some(Self::Recommended),
+            "strict" => Some(Self::Strict),
+            _ => None,
+        }
+    }
+
+    /// Stable profile label for receipts.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Recommended => "recommended",
+            Self::Strict => "strict",
+        }
+    }
+}
+
 /// Registry for Rust-native critic rules.
 ///
 /// The registry is intentionally small orchestration: it owns rule instances,
@@ -235,6 +265,44 @@ impl NativeCriticRegistry {
     /// diagnostics and receipts are deterministic.
     #[must_use]
     pub fn recommended() -> Self {
+        Self::for_profile(NativeCriticProfile::Strict)
+    }
+
+    /// Create a native critic registry for a named profile.
+    ///
+    /// Runtime diagnostics still use `recommended()` for compatibility. The
+    /// explicit profile entry point lets receipts and readiness checks measure
+    /// lower-noise default candidates without changing the opt-in runtime path.
+    #[must_use]
+    pub fn for_profile(profile: NativeCriticProfile) -> Self {
+        match profile {
+            NativeCriticProfile::Recommended => Self::recommended_profile(),
+            NativeCriticProfile::Strict => Self::strict_profile(),
+        }
+    }
+
+    fn recommended_profile() -> Self {
+        Self::with_rules(vec![
+            Box::new(RequireUseStrictRule),
+            Box::new(RequireUseWarningsRule),
+            Box::new(AssignmentInConditionRule),
+            Box::new(PrintfFormatArityRule),
+            Box::new(DeprecatedDefinedRule),
+            Box::new(UndefComparisonRule),
+            Box::new(StaleDollarAtRule),
+            Box::new(UnreachableCodeRule),
+            Box::new(BarewordFilehandleRule),
+            Box::new(TwoArgOpenRule),
+            Box::new(PipeOpenRule),
+            Box::new(UncheckedOpenCloseRule),
+            Box::new(QxReadpipeRule),
+            Box::new(BacktickExecRule),
+            Box::new(StringEvalRule),
+            Box::new(SystemExecRule),
+        ])
+    }
+
+    fn strict_profile() -> Self {
         Self::with_rules(vec![
             Box::new(RequireUseStrictRule),
             Box::new(RequireUseWarningsRule),
@@ -3068,6 +3136,35 @@ mod tests {
         assert_eq!(registry.rule_ids(), vec!["native.test.second"]);
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].category, CriticCategory::Maintainability);
+    }
+
+    #[test]
+    fn native_critic_profiles_keep_recommended_lower_noise_than_strict() {
+        let recommended = NativeCriticRegistry::for_profile(NativeCriticProfile::Recommended);
+        let strict = NativeCriticRegistry::for_profile(NativeCriticProfile::Strict);
+        let recommended_ids = recommended.rule_ids();
+        let strict_ids = strict.rule_ids();
+
+        assert!(recommended_ids.contains(&"native.testing.require_use_strict"));
+        assert!(recommended_ids.contains(&"native.security.string_eval"));
+        assert!(recommended_ids.contains(&"native.io.two_arg_open"));
+        assert!(!recommended_ids.contains(&"native.variables.unused_lexical"));
+        assert!(!recommended_ids.contains(&"native.syntax.unquoted_bareword"));
+        assert!(recommended_ids.len() < strict_ids.len());
+        assert_eq!(strict_ids.len(), NativeCriticRegistry::recommended().len());
+    }
+
+    #[test]
+    fn native_critic_profile_parser_accepts_stable_labels() {
+        assert_eq!(
+            NativeCriticProfile::parse("recommended").map(NativeCriticProfile::as_str),
+            Some("recommended")
+        );
+        assert_eq!(
+            NativeCriticProfile::parse("strict").map(NativeCriticProfile::as_str),
+            Some("strict")
+        );
+        assert_eq!(NativeCriticProfile::parse("unknown"), None);
     }
 
     #[test]

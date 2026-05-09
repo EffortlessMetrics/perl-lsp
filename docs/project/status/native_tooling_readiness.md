@@ -17,7 +17,7 @@
 | formatter | perltidy compatibility has no external-only gaps | ready | true | options=8 supported=7 approximated=0 external_only=0 | map, approximate, or document remaining external-only perltidy options |
 | critic | native critic default | blocked | true | default perlcritic_enabled=false critic_engine=Legacy | keep native critic opt-in until recommended profile false-positive receipts are boring |
 | critic | native rule surface has LSP and bridge coverage | ready | true | rules=28 pull=28 push=28 workspace=28 bridge=28 | route every recommended rule through pull, push, workspace diagnostics, and violation bridge |
-| critic | native critic check receipt is parse-clean | ready | true | files=65 parse_errors=0 findings=187 fixable=173 | run `cargo xtask native-critic check` and fix parse errors before relying on critic receipts |
+| critic | native critic check receipt is parse-clean | ready | true | profile=recommended files=65 parse_errors=0 findings=112 fixable=110 | run `cargo xtask native-critic check` and fix parse errors before relying on critic receipts |
 | critic | native critic false-positive fixtures are clean | ready | true | files=6 parse_errors=0 findings=0 suppressed=0 | run the native critic false-positive fixture receipt and fix any emitted finding |
 | critic | native critic has fixes and suppression coverage | ready | true | rules=28 suppression=28 fixes=14 | add suppression/config/fix tests for new rules before enabling them in recommended profile |
 | critic | perlcritic compatibility has no external-only gaps | ready | true | items=12 equivalent=5 superset=2 approximated=3 external_only=0 | map high-value perlcritic policies or keep external mode documented for remaining policies |
