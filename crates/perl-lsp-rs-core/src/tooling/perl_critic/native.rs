@@ -2560,9 +2560,12 @@ mod tests {
         let other_include_ctx = CriticContext::new(source, &ast, &other_include_config);
         assert!(registry.check(&other_include_ctx).is_empty());
 
+        let config = CriticConfig::default();
+        let unsuppressed_ctx = CriticContext::new(source, &ast, &config);
+        assert_eq!(registry.check(&unsuppressed_ctx).len(), 1);
+
         let suppressed_source = "## no critic native.io.unchecked_open_close -- handled by caller\nuse strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, '<', $path);\n";
         let suppressed_ast = parse_source(suppressed_source);
-        let config = CriticConfig::default();
         let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
 
         assert!(registry.check(&suppressed_ctx).is_empty());
