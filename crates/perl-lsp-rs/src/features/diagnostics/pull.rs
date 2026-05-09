@@ -1354,7 +1354,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy @items = (1, 2);\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nif (defined @items) { print @items; }\nif ($path == undef) { print $path; }\neval { die $path; };\nif ($@) { warn $@; }\nprintf \"%s %s\", $path;\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nsystem($path);\nexec('ls', '-la');\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nsub unreachable_helper { return 1; my $dead_after_return = 2; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy @items = (1, 2);\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nif (defined @items) { print @items; }\nif ($path == undef) { print $path; }\neval { die $path; };\nif ($@) { warn $@; }\nprintf \"%s %s\", $path;\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nsystem($path);\nexec('ls', '-la');\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nsub unreachable_helper { return 1; my $dead_after_return = 2; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n=head1 NAME\n\nDemo\n\n=cut\n",
             None,
             &context,
             None,
@@ -1763,6 +1763,28 @@ mod tests {
         assert_eq!(data["code"], "native.variables.shadowed_lexical");
         assert_eq!(data["suppressionKey"], "native.variables.shadowed_lexical");
         assert_eq!(data["fixable"], true);
+
+        let require_pod_sections = items
+            .iter()
+            .find(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.documentation.require_pod_sections"),
+                )
+            })
+            .ok_or("expected native required POD sections finding")?;
+        assert_eq!(require_pod_sections.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(require_pod_sections.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(
+            require_pod_sections.message,
+            "POD is missing required =head1 DESCRIPTION section"
+        );
+        let data = require_pod_sections
+            .data
+            .as_ref()
+            .ok_or("native required POD sections data should be populated")?;
+        assert_eq!(data["code"], "native.documentation.require_pod_sections");
+        assert_eq!(data["suppressionKey"], "native.documentation.require_pod_sections");
+        assert_eq!(data["fixable"], false);
         Ok(())
     }
 
