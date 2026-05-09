@@ -244,6 +244,7 @@ impl NativeCriticRegistry {
             Box::new(QxReadpipeRule),
             Box::new(BacktickExecRule),
             Box::new(StringEvalRule),
+            Box::new(SystemExecRule),
             Box::new(UnusedLexicalVariableRule),
             Box::new(UnusedParameterRule),
             Box::new(DuplicateParameterRule),
@@ -614,6 +615,31 @@ impl CriticRule for StringEvalRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_string_eval_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports `system` and `exec` command execution.
+///
+/// This mirrors the existing security diagnostics through the native critic
+/// contract. The rule stays diagnostic-only because replacing process
+/// execution safely requires user intent.
+pub struct SystemExecRule;
+
+impl CriticRule for SystemExecRule {
+    fn id(&self) -> &'static str {
+        "native.security.system_exec"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Security
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Harsh
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_system_exec_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -1102,6 +1128,34 @@ fn string_eval_finding(rule: &StringEvalRule, source: &str, eval_node: &Node) ->
     }
 }
 
+fn system_exec_finding(
+    rule: &SystemExecRule,
+    source: &str,
+    call_node: &Node,
+    name: &str,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, call_node.location.start, call_node.location.end);
+    let message = match name {
+        "exec" => "exec() replaces the current process with a shell command",
+        _ => "system() executes a shell command",
+    };
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: message.to_string(),
+        explanation: "system and exec run external commands. Prefer explicit argument lists or IPC modules when command execution is required, and validate any user-controlled input.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: vec![CriticRelatedInformation {
+            range,
+            message: "List form avoids shell interpolation, but command execution still needs an explicit security review.".to_string(),
+        }],
+        fix: None,
+    }
+}
+
 fn duplicate_lexical_finding(
     rule: &DuplicateLexicalDeclarationRule,
     source: &str,
@@ -1368,6 +1422,23 @@ fn collect_string_eval_findings(
 
     for child in node.children() {
         collect_string_eval_findings(rule, source, child, out);
+    }
+}
+
+fn collect_system_exec_findings(
+    rule: &SystemExecRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    if let NodeKind::FunctionCall { name, .. } = &node.kind
+        && matches!(name.as_str(), "system" | "exec")
+    {
+        out.push(system_exec_finding(rule, source, node, name));
+    }
+
+    for child in node.children() {
+        collect_system_exec_findings(rule, source, child, out);
     }
 }
 
@@ -2548,6 +2619,106 @@ mod tests {
     }
 
     #[test]
+    fn native_system_exec_rule_reports_system_and_exec_forms() {
+        let source = "use strict;\nuse warnings;\nmy $cmd = 'ls';\nsystem($cmd);\nsystem('ls', '-la');\nexec($cmd);\nexec('ls', '-la');\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(SystemExecRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 4);
+        for finding in &findings {
+            assert_eq!(finding.rule_id, "native.security.system_exec");
+            assert_eq!(finding.category, CriticCategory::Security);
+            assert_eq!(finding.severity, Severity::Harsh);
+            assert_eq!(finding.suppression_key, "native.security.system_exec");
+            assert!(finding.fix.is_none(), "system/exec replacement is not safe to automate");
+        }
+        assert_eq!(findings[0].message, "system() executes a shell command");
+        assert_eq!(findings[1].message, "system() executes a shell command");
+        assert_eq!(findings[2].message, "exec() replaces the current process with a shell command");
+        assert_eq!(findings[3].message, "exec() replaces the current process with a shell command");
+        assert_eq!(
+            &source[findings[0].range.start.byte..findings[0].range.end.byte],
+            "system($cmd)"
+        );
+        assert_eq!(
+            &source[findings[1].range.start.byte..findings[1].range.end.byte],
+            "system('ls', '-la')"
+        );
+        assert_eq!(&source[findings[2].range.start.byte..findings[2].range.end.byte], "exec($cmd)");
+        assert_eq!(
+            &source[findings[3].range.start.byte..findings[3].range.end.byte],
+            "exec('ls', '-la')"
+        );
+    }
+
+    #[test]
+    fn native_system_exec_rule_accepts_non_command_calls() {
+        let source = "use strict;\nuse warnings;\nmy $system = 'name';\nmy $exec_ok = run_exec($system);\nprint $exec_ok;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(SystemExecRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(
+            findings.is_empty(),
+            "ordinary variables and non-system/exec calls should be accepted"
+        );
+    }
+
+    #[test]
+    fn native_system_exec_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $cmd = 'ls';\nsystem($cmd);\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.security.system_exec".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(SystemExecRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.security.system_exec -- trusted command\nuse strict;\nuse warnings;\nmy $cmd = 'ls';\nexec($cmd);\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+
+        let severity_config =
+            CriticConfig { severity: Severity::Stern as u8, ..Default::default() };
+        let severity_ctx = CriticContext::new(source, &ast, &severity_config);
+        assert!(registry.check(&severity_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_system_exec_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $cmd = 'ls';\nsystem($cmd);\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(SystemExecRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.security.system_exec");
+        assert_eq!(violations[0].description, "system() executes a shell command");
+        assert_eq!(
+            violations[0].explanation,
+            "system and exec run external commands. Prefer explicit argument lists or IPC modules when command execution is required, and validate any user-controlled input."
+        );
+        assert_eq!(violations[0].severity, Severity::Harsh);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_recommended_registry_contains_initial_policy_bundle() {
         let source = "print 1;\n";
         let ast = parse_source(source);
@@ -2569,6 +2740,7 @@ mod tests {
                 "native.security.qx_readpipe",
                 "native.security.backtick_exec",
                 "native.security.string_eval",
+                "native.security.system_exec",
                 "native.variables.unused_lexical",
                 "native.variables.unused_parameter",
                 "native.variables.duplicate_parameter",
