@@ -539,6 +539,30 @@ fn native_formatter_expands_simple_until_blocks() {
 }
 
 #[test]
+fn native_formatter_expands_simple_foreach_blocks() {
+    let formatter = NativeFormatter::new();
+    let source = "foreach my$item(@items){return$item;}\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "foreach my $item (@items) {\n    return $item;\n}\n");
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn native_formatter_expands_simple_for_foreach_alias_blocks() {
+    let formatter = NativeFormatter::new();
+    let source = "for$item(@items){return$item;}\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "for $item (@items) {\n    return $item;\n}\n");
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_expands_simple_if_else_blocks() {
     let formatter = NativeFormatter::new();
     let source = "if($ok){return 1;}else{return 0;}\n";
@@ -620,6 +644,21 @@ fn native_range_formatter_formats_selected_simple_unless_line() {
     assert_eq!(result.edits.len(), 1);
     assert_eq!(result.edits[0].range, range);
     assert_eq!(result.edits[0].new_text, "unless ($ok) {\n    return $x;\n}");
+}
+
+#[test]
+fn native_range_formatter_formats_selected_simple_foreach_line() {
+    let formatter = NativeFormatter::new();
+    let source = "my$x=1;\nforeach my$item(@items){return$item;}\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 37));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "my$x=1;\nforeach my $item (@items) {\n    return $item;\n}\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(result.edits[0].new_text, "foreach my $item (@items) {\n    return $item;\n}");
 }
 
 #[test]
