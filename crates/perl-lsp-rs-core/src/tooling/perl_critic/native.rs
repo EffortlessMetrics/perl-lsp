@@ -251,6 +251,8 @@ impl NativeCriticRegistry {
             Box::new(ParameterShadowsGlobalRule),
             Box::new(DuplicateLexicalDeclarationRule),
             Box::new(ShadowedLexicalVariableRule),
+            Box::new(UninitializedVariableRule),
+            Box::new(UnquotedBarewordRule),
         ])
     }
 
@@ -640,6 +642,72 @@ impl CriticRule for SystemExecRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_system_exec_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports variables accessed before any initializing assignment.
+///
+/// This rule delegates uninitialized-variable detection to the semantic scope
+/// analyzer so native critic diagnostics reuse existing binding facts while
+/// exposing a stable native policy ID.
+pub struct UninitializedVariableRule;
+
+impl CriticRule for UninitializedVariableRule {
+    fn id(&self) -> &'static str {
+        "native.variables.uninitialized"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Semantic
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        let pragma_map = PragmaTracker::build(ctx.ast);
+        let issues = ScopeAnalyzer::new().analyze(ctx.ast, ctx.source, &pragma_map);
+
+        out.extend(
+            issues
+                .into_iter()
+                .filter(|issue| issue.kind == IssueKind::UninitializedVariable)
+                .map(|issue| uninitialized_variable_finding(self, ctx.source, &issue)),
+        );
+    }
+}
+
+/// Native rule that reports barewords used where a string or identifier was expected.
+///
+/// This rule delegates bareword detection to the semantic scope analyzer so
+/// native critic diagnostics reuse existing strict-mode facts while exposing a
+/// stable native policy ID and a suggested quoting fix.
+pub struct UnquotedBarewordRule;
+
+impl CriticRule for UnquotedBarewordRule {
+    fn id(&self) -> &'static str {
+        "native.syntax.unquoted_bareword"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Syntax
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        let pragma_map = PragmaTracker::build(ctx.ast);
+        let issues = ScopeAnalyzer::new().analyze(ctx.ast, ctx.source, &pragma_map);
+
+        out.extend(
+            issues
+                .into_iter()
+                .filter(|issue| issue.kind == IssueKind::UnquotedBareword)
+                .map(|issue| unquoted_bareword_finding(self, ctx.source, &issue)),
+        );
     }
 }
 
@@ -1179,6 +1247,53 @@ fn duplicate_lexical_finding(
         suppression_key: rule.id().to_string(),
         related: Vec::new(),
         fix,
+    }
+}
+
+fn uninitialized_variable_finding(
+    rule: &UninitializedVariableRule,
+    source: &str,
+    issue: &ScopeIssue,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, issue.range.0, issue.range.1);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!("Variable '{}' used before initialization", issue.variable_name),
+        explanation:
+            "Assign a value to the variable before its first use to avoid unintended undef reads."
+                .to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix: None,
+    }
+}
+
+fn unquoted_bareword_finding(
+    rule: &UnquotedBarewordRule,
+    source: &str,
+    issue: &ScopeIssue,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, issue.range.0, issue.range.1);
+    let quoted = format!("\"{}\"", issue.variable_name);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!("Bareword '{}' not allowed under strict", issue.variable_name),
+        explanation: "Barewords are ambiguous under use strict. Quote the string explicitly, declare a filehandle, or import the symbol.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix: Some(CriticFix {
+            title: format!("Quote as {quoted}"),
+            safety: FixSafety::Suggested,
+            edits: vec![CriticTextEdit { range, new_text: quoted }],
+        }),
     }
 }
 
@@ -2751,7 +2866,9 @@ mod tests {
                 "native.variables.duplicate_parameter",
                 "native.variables.parameter_shadows_global",
                 "native.variables.duplicate_lexical",
-                "native.variables.shadowed_lexical"
+                "native.variables.shadowed_lexical",
+                "native.variables.uninitialized",
+                "native.syntax.unquoted_bareword"
             ]
         );
         assert_eq!(findings.len(), 2);
@@ -3298,6 +3415,161 @@ mod tests {
         assert_eq!(
             violations[0].explanation,
             "Rename the inner lexical variable or use the outer variable directly to avoid confusing scope shadowing."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
+    fn native_uninitialized_variable_rule_reports_use_before_init() {
+        let source = "use strict;\nuse warnings;\nmy $count;\nprint $count;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UninitializedVariableRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.variables.uninitialized");
+        assert_eq!(finding.category, CriticCategory::Semantic);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert_eq!(finding.message, "Variable '$count' used before initialization");
+        assert_eq!(finding.suppression_key, "native.variables.uninitialized");
+        assert!(finding.fix.is_none(), "uninitialized rule has no auto-fix");
+    }
+
+    #[test]
+    fn native_uninitialized_variable_rule_accepts_initialized_variables() {
+        let source = "use strict;\nuse warnings;\nmy $count = 0;\nprint $count;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UninitializedVariableRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "initialized variable should not produce a finding");
+    }
+
+    #[test]
+    fn native_uninitialized_variable_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $count;\nprint $count;\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.variables.uninitialized".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UninitializedVariableRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.variables.uninitialized -- legacy fixture\nuse strict;\nuse warnings;\nmy $count;\nprint $count;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_uninitialized_variable_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $count;\nprint $count;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UninitializedVariableRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.variables.uninitialized");
+        assert_eq!(violations[0].description, "Variable '$count' used before initialization");
+        assert_eq!(
+            violations[0].explanation,
+            "Assign a value to the variable before its first use to avoid unintended undef reads."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
+    fn native_unquoted_bareword_rule_reports_bareword_under_strict() {
+        let source = "use strict;\nuse warnings;\nmy $x = FOO;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnquotedBarewordRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.syntax.unquoted_bareword");
+        assert_eq!(finding.category, CriticCategory::Syntax);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert_eq!(finding.message, "Bareword 'FOO' not allowed under strict");
+        assert_eq!(finding.suppression_key, "native.syntax.unquoted_bareword");
+
+        let fix = finding.fix.as_ref().expect("unquoted bareword should offer a quoting fix");
+        assert_eq!(fix.title, "Quote as \"FOO\"");
+        assert_eq!(fix.safety, FixSafety::Suggested);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].new_text, "\"FOO\"");
+    }
+
+    #[test]
+    fn native_unquoted_bareword_rule_accepts_quoted_strings() {
+        let source = "use strict;\nuse warnings;\nmy $x = \"FOO\";\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnquotedBarewordRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "quoted string should not be a bareword finding");
+    }
+
+    #[test]
+    fn native_unquoted_bareword_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $x = FOO;\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.syntax.unquoted_bareword".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnquotedBarewordRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.syntax.unquoted_bareword -- legacy fixture\nuse strict;\nuse warnings;\nmy $x = FOO;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_unquoted_bareword_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $x = FOO;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnquotedBarewordRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.syntax.unquoted_bareword");
+        assert_eq!(violations[0].description, "Bareword 'FOO' not allowed under strict");
+        assert_eq!(
+            violations[0].explanation,
+            "Barewords are ambiguous under use strict. Quote the string explicitly, declare a filehandle, or import the symbol."
         );
         assert_eq!(violations[0].severity, Severity::Stern);
         assert_eq!(violations[0].file, "lib/App.pm");
