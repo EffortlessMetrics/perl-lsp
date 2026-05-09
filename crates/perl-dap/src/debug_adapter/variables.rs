@@ -289,6 +289,34 @@ impl DebugAdapter {
             };
         }
 
+        if contains_unquoted_statement_separator(value) {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setVariable".to_string(),
+                body: None,
+                message: Some(
+                    "setVariable: unsafe value rejected: statement separators are not allowed"
+                        .to_string(),
+                ),
+            };
+        }
+
+        if !is_safe_set_variable_value(value) {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setVariable".to_string(),
+                body: None,
+                message: Some(
+                    "setVariable: unsafe value rejected: only literal or simple variable-reference values are allowed"
+                        .to_string(),
+                ),
+            };
+        }
+
         let output_frame_markers = if let Some(ref mut session) =
             *lock_or_recover(&self.session, "debug_adapter.session")
         {
@@ -376,4 +404,74 @@ impl DebugAdapter {
             message: None,
         }
     }
+}
+
+fn contains_unquoted_statement_separator(value: &str) -> bool {
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut escaped = false;
+
+    for ch in value.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        match ch {
+            '\'' if !in_double_quote => in_single_quote = !in_single_quote,
+            '"' if !in_single_quote => in_double_quote = !in_double_quote,
+            ';' if !in_single_quote && !in_double_quote => return true,
+            _ => {}
+        }
+    }
+
+    false
+}
+
+fn is_safe_set_variable_value(value: &str) -> bool {
+    let value = value.trim();
+    value == "undef"
+        || is_quoted_literal(value)
+        || is_numeric_literal(value)
+        || is_valid_set_variable_name(value)
+}
+
+fn is_quoted_literal(value: &str) -> bool {
+    let Some(quote) = value.chars().next().filter(|ch| *ch == '\'' || *ch == '"') else {
+        return false;
+    };
+
+    let mut escaped = false;
+    for (idx, ch) in value.char_indices().skip(1) {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        if ch == quote {
+            return idx + ch.len_utf8() == value.len();
+        }
+    }
+
+    false
+}
+
+fn is_numeric_literal(value: &str) -> bool {
+    let normalized: String = value.chars().filter(|ch| *ch != '_').collect();
+    let has_digit = normalized.chars().any(|ch| ch.is_ascii_digit());
+    let allowed_chars = normalized
+        .chars()
+        .all(|ch| ch.is_ascii_digit() || matches!(ch, '+' | '-' | '.' | 'e' | 'E'));
+
+    has_digit && allowed_chars && normalized.parse::<f64>().is_ok()
 }
