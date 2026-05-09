@@ -617,11 +617,10 @@ fn check_lane_whitelist(root: &Path, issues: &mut Vec<LintIssue>) -> Result<()> 
                 level: "warning",
                 code: "LANE_WHITELIST_MISSING",
                 workflow: file_name.to_string(),
-                message: format!(
-                    "workflow has no `[[lane]]` entry in policy/ci-lane-whitelist.toml \
+                message: "workflow has no `[[lane]]` entry in policy/ci-lane-whitelist.toml \
                      (and is not in ALLOWLIST_WORKFLOW_LANE_MISSING). Add an entry or \
                      allowlist with reason."
-                ),
+                    .to_string(),
             });
         }
     }

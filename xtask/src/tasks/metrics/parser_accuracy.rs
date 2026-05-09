@@ -4140,7 +4140,7 @@ fn previous_variable_token_start(bytes: &[u8], index: usize) -> Option<usize> {
 }
 
 fn is_perl_name_boundary(byte: Option<u8>) -> bool {
-    byte.map_or(true, |byte| !is_perl_name_byte(byte))
+    byte.is_none_or(|byte| !is_perl_name_byte(byte))
 }
 
 fn is_perl_name_byte(byte: u8) -> bool {
