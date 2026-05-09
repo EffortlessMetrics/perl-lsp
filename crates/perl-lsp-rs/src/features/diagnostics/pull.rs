@@ -1350,7 +1350,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n",
             None,
             &context,
             None,
@@ -1470,6 +1470,23 @@ mod tests {
             .ok_or("native backtick execution data should be populated")?;
         assert_eq!(data["code"], "native.security.backtick_exec");
         assert_eq!(data["suppressionKey"], "native.security.backtick_exec");
+        assert_eq!(data["fixable"], false);
+
+        let qx_readpipe = items
+            .iter()
+            .find(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.security.qx_readpipe"),
+                )
+            })
+            .ok_or("expected native qx/readpipe finding")?;
+        assert_eq!(qx_readpipe.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(qx_readpipe.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(qx_readpipe.message, "qx/readpipe command execution detected");
+        let data =
+            qx_readpipe.data.as_ref().ok_or("native qx/readpipe data should be populated")?;
+        assert_eq!(data["code"], "native.security.qx_readpipe");
+        assert_eq!(data["suppressionKey"], "native.security.qx_readpipe");
         assert_eq!(data["fixable"], false);
 
         let string_eval = items
