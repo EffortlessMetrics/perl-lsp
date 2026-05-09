@@ -110,18 +110,17 @@ pub fn collect_token_health_metrics(root: &Path) -> TokenHealthMetrics {
         || "UNVERIFIED (token scorecard missing)".to_string(),
         |scorecard| {
             let mut keys = [
-                ("display_name_lookup", "display_name"),
-                ("token_kind_clone", "kind copy"),
-                ("token_allocation", "token alloc"),
+                ("token_kind_display_name", "display_name"),
+                ("token_kind_category_predicates", "category predicates"),
+                ("token_clone", "clone"),
+                ("token_new_short", "new short"),
+                ("token_new_long", "new long"),
+                ("lexer_to_parser_token_conversion", "lexer->parser"),
             ]
             .into_iter()
             .filter_map(|(key, label)| {
                 scorecard.metrics.get(key).map(|metric| {
-                    format!(
-                        "{label}: p50 {:.3} ms / p95 {:.3} ms",
-                        ns_to_ms(metric.median_ns),
-                        ns_to_ms(metric.p95_ns)
-                    )
+                    format!("{label}: p50 {} ns / p95 {} ns", metric.median_ns, metric.p95_ns)
                 })
             })
             .collect::<Vec<_>>();
@@ -321,10 +320,6 @@ fn token_category_counts(source: &str) -> std::collections::BTreeMap<&'static st
     counts
 }
 
-fn ns_to_ms(ns: u128) -> f64 {
-    ns as f64 / 1_000_000.0
-}
-
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
@@ -384,7 +379,10 @@ mod tests {
         }
         // Spot-check: known TokenCategory variants must NOT appear in the list.
         // These were incorrectly included before the brace-tracking boundary fix.
-        for spurious in &["Keyword", "Operator", "Delimiter", "Literal", "Identifier", "Special"] {
+        // `TokenKind::Identifier` is a legitimate token kind, so it is not a
+        // spurious category-name sentinel here even though `TokenCategory` also
+        // has an `Identifier` variant.
+        for spurious in &["Keyword", "Operator", "Delimiter", "Literal", "Special"] {
             assert!(
                 !variants.iter().any(|v| v == spurious),
                 "TokenCategory variant {spurious:?} must not appear in TokenKind variant list"
@@ -458,5 +456,35 @@ mod tests {
             "variant_count is {} but fixture expects 132; update token_metrics_fixture()",
             metrics.variant_count
         );
+    }
+
+    /// The committed token scorecard uses benchmark names emitted by
+    /// `crates/perl-token/benches/support/perf_scorecard.rs`. The status reader
+    /// must consume those names directly so parser status does not report token
+    /// performance as unverified when the artifact exists.
+    #[test]
+    fn collect_token_health_metrics_reads_committed_perf_scorecard_keys() {
+        let root = project_root().expect("project root");
+        let metrics = collect_token_health_metrics(&root);
+
+        assert!(
+            metrics.performance_row.starts_with("PASS ("),
+            "token performance row must be verified from committed scorecard; got: {}",
+            metrics.performance_row
+        );
+        for label in [
+            "category predicates",
+            "clone",
+            "display_name",
+            "lexer->parser",
+            "new long",
+            "new short",
+        ] {
+            assert!(
+                metrics.performance_row.contains(label),
+                "token performance row must include {label:?}; got: {}",
+                metrics.performance_row
+            );
+        }
     }
 }
