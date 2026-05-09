@@ -267,23 +267,135 @@
       "schema_version": 2,
       "query": "hover",
       "input": {
-        "symbol": "Foo::bar"
+        "symbol": "hover_imported_symbol"
       },
       "old_result": {
-        "available": false,
-        "match_count": 0,
-        "identities": []
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "hover:imported_symbol"
+        ]
       },
       "new_result": {
         "available": true,
         "match_count": 1,
         "identities": [
-          "hover:Foo::bar"
+          "hover:imported_symbol"
         ]
       },
-      "verdict": "unavailable",
+      "verdict": "same",
       "notes": [
-        "unavailable fact-backed hover fixture"
+        "hover provenance proof: imported symbol hover labels source/confidence/freshness without changing fallback behavior"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Hover",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Primary",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "hover",
+      "input": {
+        "symbol": "hover_generated_member"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "hover:generated_member"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "hover:generated_member"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "hover provenance proof: framework-generated member hover labels framework provenance and confidence"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Hover",
+          "source": "FrameworkAdapter",
+          "provenance": "FrameworkSynthesis",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Primary",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "hover",
+      "input": {
+        "symbol": "hover_dynamic_boundary"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "verdict": "same",
+      "notes": [
+        "hover provenance proof: dynamic-boundary hover explains uncertainty and stays blocked instead of inventing a definition"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Hover",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "hover",
+      "input": {
+        "symbol": "hover_fallback"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "hover:legacy"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "hover:legacy"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "hover provenance proof: missing compiler facts preserve legacy fallback with explicit fallback trace"
       ],
       "fact_source_traces": [
         {
@@ -292,7 +404,7 @@
           "provenance": "SearchFallback",
           "confidence": "Low",
           "freshness": "NotApplicable",
-          "fallback_state": "Unavailable",
+          "fallback_state": "Fallback",
           "source_hash": "deterministic-fixture",
           "anchor_id": 1,
           "model_version": 1
@@ -488,8 +600,8 @@
     "ambiguous": 2,
     "improved": 6,
     "regression": 1,
-    "same": 3,
-    "unavailable": 1
+    "same": 7,
+    "unavailable": 0
   },
   "release_readiness_verdict_counts": {
     "ambiguous": 0,
@@ -502,8 +614,8 @@
     "ambiguous": 2,
     "improved": 5,
     "regression": 1,
-    "same": 2,
-    "unavailable": 1
+    "same": 6,
+    "unavailable": 0
   },
   "notes": "0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes."
 }

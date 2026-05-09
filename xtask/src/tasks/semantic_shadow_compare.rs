@@ -159,17 +159,62 @@ fn build_artifact() -> Artifact {
         ),
         receipt_from_identities(
             ShadowQueryName::Hover,
-            "Foo::bar",
-            None,
-            Some(vec!["hover:Foo::bar"]),
-            "unavailable fact-backed hover fixture",
+            "hover_imported_symbol",
+            Some(vec!["hover:imported_symbol"]),
+            Some(vec!["hover:imported_symbol"]),
+            "hover provenance proof: imported symbol hover labels source/confidence/freshness without changing fallback behavior",
+            vec![trace(
+                ProviderSurface::Hover,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::ImportExportInference,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Primary,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::Hover,
+            "hover_generated_member",
+            Some(vec!["hover:generated_member"]),
+            Some(vec!["hover:generated_member"]),
+            "hover provenance proof: framework-generated member hover labels framework provenance and confidence",
+            vec![trace(
+                ProviderSurface::Hover,
+                ProviderFactSourceKind::FrameworkAdapter,
+                Provenance::FrameworkSynthesis,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Primary,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::Hover,
+            "hover_dynamic_boundary",
+            Some(vec![]),
+            Some(vec![]),
+            "hover provenance proof: dynamic-boundary hover explains uncertainty and stays blocked instead of inventing a definition",
+            vec![trace(
+                ProviderSurface::Hover,
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::Hover,
+            "hover_fallback",
+            Some(vec!["hover:legacy"]),
+            Some(vec!["hover:legacy"]),
+            "hover provenance proof: missing compiler facts preserve legacy fallback with explicit fallback trace",
             vec![trace(
                 ProviderSurface::Hover,
                 ProviderFactSourceKind::Fallback,
                 Provenance::SearchFallback,
                 Confidence::Low,
                 ProviderFactFreshness::NotApplicable,
-                ProviderFallbackState::Unavailable,
+                ProviderFallbackState::Fallback,
             )],
         ),
         receipt_from_identities(
@@ -462,20 +507,20 @@ mod tests {
     fn artifact_includes_required_verdict_rows() {
         let artifact = build_artifact();
         assert_eq!(artifact.schema_version, 3);
-        assert_eq!(artifact.verdict_counts.get("same"), Some(&3));
+        assert_eq!(artifact.verdict_counts.get("same"), Some(&7));
         assert_eq!(artifact.verdict_counts.get("improved"), Some(&6));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&2));
-        assert_eq!(artifact.verdict_counts.get("unavailable"), Some(&1));
+        assert_eq!(artifact.verdict_counts.get("unavailable"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("same"), Some(&1));
         assert_eq!(artifact.release_readiness_verdict_counts.get("improved"), Some(&1));
         assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&2));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&6));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&5));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&2));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("unavailable"), Some(&1));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("unavailable"), Some(&0));
         assert!(
             artifact.receipts.iter().all(|receipt| !receipt.fact_source_traces.is_empty()),
             "every deterministic shadow-compare receipt should carry fact-source trace proof"
@@ -505,6 +550,10 @@ mod tests {
         assert!(markdown.contains("| schema-fixture | CompletionVisibility | Completion | CompilerFact | ImportExportInference | High | Fresh | Shadow |"));
         assert!(markdown.contains("| schema-fixture | CompletionVisibility | Completion | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |"));
         assert!(markdown.contains("| schema-fixture | CompletionVisibility | Completion | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
+        assert!(markdown.contains("| schema-fixture | Hover | Hover | CompilerFact | ImportExportInference | High | Fresh | Primary |"));
+        assert!(markdown.contains("| schema-fixture | Hover | Hover | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Primary |"));
+        assert!(markdown.contains("| schema-fixture | Hover | Hover | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
+        assert!(markdown.contains("| schema-fixture | Hover | Hover | Fallback | SearchFallback | Low | NotApplicable | Fallback |"));
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | High | Fresh | Primary |"));
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | FrameworkSynthesis | High | Fresh | Primary |"));
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | Low | Fresh | Fallback |"));
