@@ -1898,6 +1898,21 @@ enum NativeToolingCommand {
         #[arg(long)]
         markdown: Option<PathBuf>,
     },
+
+    /// Classify a .perlcriticrc-style profile against native critic compatibility.
+    PerlcriticCompat {
+        /// Path to the `.perlcriticrc` profile to classify.
+        #[arg(long)]
+        profile: PathBuf,
+
+        /// Output JSON receipt path.
+        #[arg(long, default_value = "target/receipts/native-tooling/perlcritic-compat.json")]
+        receipt: PathBuf,
+
+        /// Output markdown summary path.
+        #[arg(long, default_value = "target/receipts/native-tooling/perlcritic-compat.md")]
+        summary: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2275,6 +2290,13 @@ fn main() -> Result<()> {
                 receipt,
                 markdown,
             }),
+            NativeToolingCommand::PerlcriticCompat { profile, receipt, summary } => {
+                native_tooling::perlcritic_compat(native_tooling::PerlcriticCompatConfig {
+                    profile,
+                    receipt,
+                    summary,
+                })
+            }
         },
         Commands::SecurityHardening => hardening::security_hardening(),
         Commands::PerformanceHardening => hardening::performance_hardening(),
