@@ -1,6 +1,6 @@
 use perl_lsp_perltidy::{
-    FinalNewline, FormatConfig, FormatDiagnosticSeverity, FormatResult, FormatterMode,
-    TextPosition, TextRange, TrailingComma,
+    BracePlacement, FinalNewline, FormatConfig, FormatDiagnosticSeverity, FormatResult,
+    FormatterMode, TextPosition, TextRange, TrailingComma,
 };
 
 #[test]
@@ -13,6 +13,7 @@ fn native_format_config_defaults_to_native_safe_profile() {
     assert!(!config.use_tabs);
     assert_eq!(config.final_newline, FinalNewline::Preserve);
     assert_eq!(config.trailing_comma, TrailingComma::Preserve);
+    assert_eq!(config.brace_placement, BracePlacement::SameLine);
 }
 
 #[test]

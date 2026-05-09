@@ -901,8 +901,8 @@ mod tests {
         fs::write(
             &format_perltidy_compat_receipt,
             r#"{
-  "option_count": 7,
-  "supported_count": 4,
+  "option_count": 8,
+  "supported_count": 5,
   "approximated_count": 1,
   "unsupported_safe_count": 1,
   "external_only_count": 1
@@ -958,8 +958,8 @@ mod tests {
         assert_eq!(value["formatter"]["corpus_unsupported_patterns_count"], 0);
         assert_eq!(value["formatter"]["corpus_passed"], true);
         assert_eq!(value["formatter"]["format_perltidy_compat_receipt_present"], true);
-        assert_eq!(value["formatter"]["perltidy_compat_option_count"], 7);
-        assert_eq!(value["formatter"]["perltidy_compat_supported_count"], 4);
+        assert_eq!(value["formatter"]["perltidy_compat_option_count"], 8);
+        assert_eq!(value["formatter"]["perltidy_compat_supported_count"], 5);
         assert_eq!(value["formatter"]["perltidy_compat_approximated_count"], 1);
         assert_eq!(value["formatter"]["perltidy_compat_unsupported_safe_count"], 1);
         assert_eq!(value["formatter"]["perltidy_compat_external_only_count"], 1);
@@ -996,8 +996,8 @@ mod tests {
         assert!(markdown.contains("| Corpus literal bailouts | 1 |"));
         assert!(markdown.contains("| Corpus unsupported diagnostics | 0 |"));
         assert!(markdown.contains("| Corpus passed | true |"));
-        assert!(markdown.contains("| Perltidy compatibility options | 7 |"));
-        assert!(markdown.contains("| Perltidy compatibility supported | 4 |"));
+        assert!(markdown.contains("| Perltidy compatibility options | 8 |"));
+        assert!(markdown.contains("| Perltidy compatibility supported | 5 |"));
         assert!(markdown.contains("| Perltidy compatibility approximated | 1 |"));
         assert!(markdown.contains("| Perltidy compatibility unsupported-safe | 1 |"));
         assert!(markdown.contains("| Perltidy compatibility external-only | 1 |"));

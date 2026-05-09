@@ -482,9 +482,9 @@ fn classify_perltidy_option(option: &str, value: Option<String>) -> PerltidyComp
             compat_result(
                 option,
                 value,
-                "external_only",
-                None,
-                "native formatter does not yet expose brace placement policy",
+                "supported",
+                Some("format.brace_placement"),
+                "maps to native formatter brace placement for supported simple block layouts",
             )
         }
         "-atc" | "--add-trailing-commas" | "-natc" | "--no-add-trailing-commas" => compat_result(
@@ -954,7 +954,7 @@ mod tests {
         let receipts = temp.path().join("receipts");
         fs::write(
             &profile,
-            "# common profile\n-l=100\n-i 2\n-nt\n-ce\n-q\n-atc\n--unknown-style\n",
+            "# common profile\n-l=100\n-i 2\n-nt\n-ce\n-q\n-atc\n-bl\n--unknown-style\n",
         )?;
 
         perltidy_compat(NativeFormatPerltidyCompatConfig {
@@ -967,8 +967,8 @@ mod tests {
             receipts.join("native-format-perltidy-compat.json"),
         )?)?;
         assert_eq!(receipt["kind"], "native_format_perltidy_compat");
-        assert_eq!(receipt["option_count"], 7);
-        assert_eq!(receipt["supported_count"], 4);
+        assert_eq!(receipt["option_count"], 8);
+        assert_eq!(receipt["supported_count"], 5);
         assert_eq!(receipt["approximated_count"], 1);
         assert_eq!(receipt["external_only_count"], 1);
         assert_eq!(receipt["unsupported_safe_count"], 1);
@@ -977,6 +977,8 @@ mod tests {
         assert_eq!(receipt["options"][4]["classification"], "unsupported_safe");
         assert_eq!(receipt["options"][5]["classification"], "supported");
         assert_eq!(receipt["options"][5]["native_field"], "format.trailing_comma");
+        assert_eq!(receipt["options"][6]["classification"], "supported");
+        assert_eq!(receipt["options"][6]["native_field"], "format.brace_placement");
 
         let summary = fs::read_to_string(receipts.join("native-format-perltidy-compat.md"))?;
         assert!(summary.contains("# Native Format Perltidy Compatibility"));

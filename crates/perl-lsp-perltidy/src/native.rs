@@ -197,6 +197,17 @@ pub enum TrailingComma {
     AddWhenWrapped,
 }
 
+/// Opening brace placement for supported native block layouts.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BracePlacement {
+    /// Keep the opening brace on the block header line.
+    #[default]
+    SameLine,
+    /// Place the opening brace on its own line at the block indentation.
+    NextLine,
+}
+
 /// Configuration shared by native formatter implementations.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FormatConfig {
@@ -212,6 +223,8 @@ pub struct FormatConfig {
     pub final_newline: FinalNewline,
     /// Trailing comma handling for wrapped delimited expressions.
     pub trailing_comma: TrailingComma,
+    /// Opening brace placement for supported block layouts.
+    pub brace_placement: BracePlacement,
 }
 
 impl Default for FormatConfig {
@@ -223,6 +236,7 @@ impl Default for FormatConfig {
             use_tabs: false,
             final_newline: FinalNewline::Preserve,
             trailing_comma: TrailingComma::Preserve,
+            brace_placement: BracePlacement::SameLine,
         }
     }
 }
@@ -1072,7 +1086,7 @@ fn render_simple_block_doc(
     body_indent: &str,
     config: &FormatConfig,
 ) -> String {
-    let mut parts = vec![FormatDoc::text(header)];
+    let mut parts = vec![FormatDoc::text(render_block_header(&header, indent, config))];
     push_simple_block_body_docs(&mut parts, statements, indent, body_indent);
     FormatDoc::group(parts).render(config)
 }
@@ -1083,7 +1097,7 @@ fn render_simple_else_doc(
     body_indent: &str,
     config: &FormatConfig,
 ) -> String {
-    let mut parts = vec![FormatDoc::text(" else {")];
+    let mut parts = vec![FormatDoc::text(render_block_header(" else {", indent, config))];
     push_simple_block_body_docs(&mut parts, statements, indent, body_indent);
     FormatDoc::group(parts).render(config)
 }
@@ -1095,7 +1109,8 @@ fn render_simple_elsif_doc(
     body_indent: &str,
     config: &FormatConfig,
 ) -> String {
-    let mut parts = vec![FormatDoc::text(format!(" elsif ({condition}) {{"))];
+    let header = format!(" elsif ({condition}) {{");
+    let mut parts = vec![FormatDoc::text(render_block_header(&header, indent, config))];
     push_simple_block_body_docs(&mut parts, statements, indent, body_indent);
     FormatDoc::group(parts).render(config)
 }
@@ -1106,9 +1121,19 @@ fn render_simple_continue_doc(
     body_indent: &str,
     config: &FormatConfig,
 ) -> String {
-    let mut parts = vec![FormatDoc::text(" continue {")];
+    let mut parts = vec![FormatDoc::text(render_block_header(" continue {", indent, config))];
     push_simple_block_body_docs(&mut parts, statements, indent, body_indent);
     FormatDoc::group(parts).render(config)
+}
+
+fn render_block_header(header: &str, indent: &str, config: &FormatConfig) -> String {
+    if config.brace_placement != BracePlacement::NextLine {
+        return header.to_string();
+    }
+
+    header
+        .strip_suffix(" {")
+        .map_or_else(|| header.to_string(), |prefix| format!("{prefix}\n{indent}{{"))
 }
 
 fn push_simple_block_body_docs(
