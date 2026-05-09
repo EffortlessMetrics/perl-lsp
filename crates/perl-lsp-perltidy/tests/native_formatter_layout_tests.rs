@@ -258,6 +258,24 @@ fn native_formatter_preserves_comment_lines_until_comment_aware_layout_exists() 
 }
 
 #[test]
+fn native_formatter_preserves_comment_matrix_until_comment_aware_layout_exists() {
+    let formatter = NativeFormatter::new();
+    let source = concat!(
+        "# leading file comment\n",
+        "my$x=1; # trailing assignment comment\n",
+        "if($x){ # trailing block opener comment\n",
+        "    return$x; # trailing return comment\n",
+        "}\n",
+    );
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(!result.changed);
+    assert_eq!(result.formatted, source);
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_combines_simple_layout_with_final_newline_policy() {
     let formatter = NativeFormatter::new();
     let config = FormatConfig { final_newline: FinalNewline::Insert, ..FormatConfig::default() };
