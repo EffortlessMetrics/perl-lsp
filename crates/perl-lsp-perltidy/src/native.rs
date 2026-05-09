@@ -771,11 +771,7 @@ fn format_simple_control_block_tokens(
         .map(|offset| body_start + offset)?;
     let body_tokens = &tokens[body_start..body_end];
     let statements = format_simple_statement_block(body_tokens, config)?;
-    let else_statements = format_simple_else_branch(tokens, body_end, keyword, config)?;
-
-    if else_statements.is_none() && body_end + 1 != tokens.len() {
-        return None;
-    }
+    let tail = format_simple_control_tail(tokens, body_end, keyword, config)?;
 
     let body_indent = format!("{indent}{}", indent_unit(config));
     let mut formatted = render_simple_block_doc(
@@ -786,7 +782,16 @@ fn format_simple_control_block_tokens(
         config,
     );
 
-    if let Some(else_statements) = else_statements {
+    for (condition, statements) in tail.elsif_branches {
+        formatted.push_str(&render_simple_elsif_doc(
+            &condition,
+            &statements,
+            indent,
+            &body_indent,
+            config,
+        ));
+    }
+    if let Some(else_statements) = tail.else_statements {
         formatted.push_str(&render_simple_else_doc(&else_statements, indent, &body_indent, config));
     }
     Some(formatted)
@@ -870,6 +875,18 @@ fn render_simple_else_doc(
     FormatDoc::group(parts).render(config)
 }
 
+fn render_simple_elsif_doc(
+    condition: &str,
+    statements: &[String],
+    indent: &str,
+    body_indent: &str,
+    config: &FormatConfig,
+) -> String {
+    let mut parts = vec![FormatDoc::text(format!(" elsif ({condition}) {{"))];
+    push_simple_block_body_docs(&mut parts, statements, indent, body_indent);
+    FormatDoc::group(parts).render(config)
+}
+
 fn push_simple_block_body_docs(
     parts: &mut Vec<FormatDoc>,
     statements: &[String],
@@ -884,33 +901,70 @@ fn push_simple_block_body_docs(
     parts.push(FormatDoc::text(format!("{indent}}}")));
 }
 
-fn format_simple_else_branch(
+struct SimpleControlTail {
+    elsif_branches: Vec<(String, Vec<String>)>,
+    else_statements: Option<Vec<String>>,
+}
+
+fn format_simple_control_tail(
     tokens: &[perl_parser_core::Token],
     body_end: usize,
     keyword: &str,
     config: &FormatConfig,
-) -> Option<Option<Vec<String>>> {
+) -> Option<SimpleControlTail> {
     use perl_parser_core::TokenKind;
 
-    let next = body_end + 1;
-    if next == tokens.len() {
-        return Some(None);
+    let mut index = body_end + 1;
+    let mut tail = SimpleControlTail { elsif_branches: Vec::new(), else_statements: None };
+    if index == tokens.len() {
+        return Some(tail);
     }
 
-    if !matches!(keyword, "if" | "unless") {
+    while tokens.get(index)?.kind == TokenKind::Elsif {
+        if keyword != "if" {
+            return None;
+        }
+        if tokens.get(index + 1)?.kind != TokenKind::LeftParen {
+            return None;
+        }
+
+        let (condition, next_index) = format_simple_condition_tokens(tokens, index + 2, config)?;
+        if tokens.get(next_index)?.kind != TokenKind::RightParen
+            || tokens.get(next_index + 1)?.kind != TokenKind::LeftBrace
+        {
+            return None;
+        }
+
+        let elsif_body_start = next_index + 2;
+        let elsif_body_end = tokens[elsif_body_start..]
+            .iter()
+            .position(|token| token.kind == TokenKind::RightBrace)
+            .map(|offset| elsif_body_start + offset)?;
+        let statements =
+            format_simple_statement_block(&tokens[elsif_body_start..elsif_body_end], config)?;
+        tail.elsif_branches.push((condition, statements));
+        index = elsif_body_end + 1;
+
+        if index == tokens.len() {
+            return Some(tail);
+        }
+    }
+
+    if tokens.get(index)?.kind != TokenKind::Else {
         return None;
     }
-    if tokens.get(next)?.kind != TokenKind::Else
-        || tokens.get(next + 1)?.kind != TokenKind::LeftBrace
+    if !matches!(keyword, "if" | "unless")
+        || tokens.get(index + 1)?.kind != TokenKind::LeftBrace
         || tokens.last()?.kind != TokenKind::RightBrace
     {
         return None;
     }
 
-    let else_body_start = next + 2;
+    let else_body_start = index + 2;
     let else_body_tokens = &tokens[else_body_start..tokens.len() - 1];
     let statements = format_simple_statement_block(else_body_tokens, config)?;
-    Some(Some(statements))
+    tail.else_statements = Some(statements);
+    Some(tail)
 }
 
 fn format_simple_statement_block(
