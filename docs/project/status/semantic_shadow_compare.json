@@ -493,6 +493,45 @@
       "schema_version": 2,
       "query": "completion_visibility",
       "input": {
+        "symbol": "completion_live_visible_import_candidates"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "legacy_helper"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 2,
+        "identities": [
+          "imported_func",
+          "legacy_helper"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "completion live visible-symbol slice: imported/exported compiler candidates are eligible for live completion; legacy_candidates=1; compiler_fact_candidates=2; rank_delta=+1; noise_delta=0; generated_promotions=0; dynamic_boundary_blockers=0"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Completion",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Primary",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "completion_visibility",
+      "input": {
         "symbol": "completion_generated_candidates"
       },
       "old_result": {
@@ -1624,7 +1663,7 @@
   ],
   "verdict_counts": {
     "ambiguous": 2,
-    "improved": 9,
+    "improved": 10,
     "regression": 1,
     "same": 32,
     "unavailable": 0
@@ -1638,7 +1677,7 @@
   },
   "schema_fixture_verdict_counts": {
     "ambiguous": 2,
-    "improved": 8,
+    "improved": 9,
     "regression": 1,
     "same": 23,
     "unavailable": 0

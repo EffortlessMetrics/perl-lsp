@@ -2,14 +2,14 @@
 
 Measured: `deterministic-fixture-baseline`
 
-Receipts: `44`
+Receipts: `45`
 
 ## Verdict Counts
 
 | Verdict | Count |
 |---|---:|
 | ambiguous | 2 |
-| improved | 9 |
+| improved | 10 |
 | regression | 1 |
 | same | 32 |
 | unavailable | 0 |
@@ -29,7 +29,7 @@ Receipts: `44`
 | Verdict | Count |
 |---|---:|
 | ambiguous | 2 |
-| improved | 8 |
+| improved | 9 |
 | regression | 1 |
 | same | 23 |
 | unavailable | 0 |
@@ -51,6 +51,7 @@ Receipts: `44`
 | schema-fixture | CountUsages | `Foo::bar` | regression | 4 | 3 |
 | schema-fixture | VisibleSymbols | `Foo::bar` | ambiguous | 2 | 2 |
 | schema-fixture | CompletionVisibility | `completion_import_candidates` | improved | 1 | 2 |
+| schema-fixture | CompletionVisibility | `completion_live_visible_import_candidates` | improved | 1 | 2 |
 | schema-fixture | CompletionVisibility | `completion_generated_candidates` | improved | 0 | 1 |
 | schema-fixture | CompletionVisibility | `completion_dynamic_boundary` | same | 0 | 0 |
 | schema-fixture | Hover | `hover_imported_symbol` | same | 1 | 1 |
@@ -100,6 +101,7 @@ Receipts: `44`
 | schema-fixture | CountUsages | References | SemanticFact | SemanticAnalyzer | Medium | Fresh | Shadow |
 | schema-fixture | VisibleSymbols | Completion | CompilerFact | ImportExportInference | Medium | Fresh | Shadow |
 | schema-fixture | CompletionVisibility | Completion | CompilerFact | ImportExportInference | High | Fresh | Shadow |
+| schema-fixture | CompletionVisibility | Completion | CompilerFact | ImportExportInference | High | Fresh | Primary |
 | schema-fixture | CompletionVisibility | Completion | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |
 | schema-fixture | CompletionVisibility | Completion | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
 | schema-fixture | Hover | Hover | CompilerFact | ImportExportInference | High | Fresh | Primary |

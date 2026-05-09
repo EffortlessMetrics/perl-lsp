@@ -2039,6 +2039,100 @@ sub bark { }
     Ok(())
 }
 
+#[test]
+fn live_completion_visible_symbol_slice_surfaces_explicit_import()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/lib/Tools.pm")?,
+        r#"package Tools;
+use Exporter 'import';
+our @EXPORT_OK = qw(alpha beta);
+sub alpha { }
+sub beta { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let importer_uri = Url::parse("file:///workspace/app.pl")?;
+    let code = r#"package App;
+use Tools qw(alpha);
+al"#;
+    index.index_file(importer_uri.clone(), code.to_string())?;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source(&ast, code, Some(index));
+    let completions =
+        provider.get_completions_with_path(code, code.len(), Some(importer_uri.as_str()));
+
+    let alpha = must_some(completions.iter().find(|item| item.label == "alpha"));
+    assert_eq!(alpha.insert_text.as_deref(), Some("alpha"));
+    assert_eq!(alpha.filter_text.as_deref(), Some("alpha"));
+    assert!(
+        must_some(alpha.sort_text.as_deref()).starts_with("2z_visible_"),
+        "visible-symbol completion should use the narrow live sort tier; got {:?}",
+        alpha.sort_text
+    );
+    let detail = must_some(alpha.detail.as_deref());
+    assert!(
+        detail.contains("imported from Tools") && detail.contains("compiler fact"),
+        "visible-symbol completion should label source/provenance in detail; got {detail:?}"
+    );
+    let documentation = must_some(alpha.documentation.as_deref());
+    assert!(
+        documentation.contains("Provenance: ImportExportInference")
+            && documentation.contains("Freshness: Fresh"),
+        "visible-symbol completion should document provenance and freshness; got {documentation:?}"
+    );
+    assert!(
+        !completions.iter().any(|item| item.label == "beta"),
+        "explicit import should not promote unimported optional export `beta`"
+    );
+    Ok(())
+}
+
+#[test]
+fn live_completion_visible_symbol_slice_respects_empty_import()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = Arc::new(WorkspaceIndex::new());
+    index.index_file(
+        Url::parse("file:///workspace/lib/Tools.pm")?,
+        r#"package Tools;
+use Exporter 'import';
+our @EXPORT = qw(alpha);
+sub alpha { }
+1;
+"#
+        .to_string(),
+    )?;
+
+    let importer_uri = Url::parse("file:///workspace/app_empty_import.pl")?;
+    let code = r#"package App;
+use Tools ();
+al"#;
+    index.index_file(importer_uri.clone(), code.to_string())?;
+
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source(&ast, code, Some(index));
+    let completions =
+        provider.get_completions_with_path(code, code.len(), Some(importer_uri.as_str()));
+
+    assert!(
+        !completions.iter().any(|item| {
+            item.label == "alpha"
+                && item
+                    .sort_text
+                    .as_deref()
+                    .is_some_and(|sort_text| sort_text.starts_with("2z_visible_"))
+        }),
+        "empty import should not promote default export `alpha` through the live visible-symbol path"
+    );
+    Ok(())
+}
+
 // -------------------------------------------------------------------------
 // Unknown-receiver bounded fallback (issue #7929, outcome A)
 //
