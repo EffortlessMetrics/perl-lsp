@@ -2,16 +2,16 @@
 
 Measured: `deterministic-fixture-baseline`
 
-Receipts: `36`
+Receipts: `40`
 
 ## Verdict Counts
 
 | Verdict | Count |
 |---|---:|
 | ambiguous | 2 |
-| improved | 7 |
+| improved | 8 |
 | regression | 1 |
-| same | 26 |
+| same | 29 |
 | unavailable | 0 |
 
 ## Release-Readiness Verdict Counts
@@ -29,9 +29,9 @@ Receipts: `36`
 | Verdict | Count |
 |---|---:|
 | ambiguous | 2 |
-| improved | 6 |
+| improved | 7 |
 | regression | 1 |
-| same | 17 |
+| same | 20 |
 | unavailable | 0 |
 
 ## Receipts
@@ -66,6 +66,10 @@ Receipts: `36`
 | schema-fixture | WorkspaceSymbols | `workspace_symbol_generated` | improved | 0 | 1 |
 | schema-fixture | WorkspaceSymbols | `workspace_symbol_dynamic_boundary` | same | 0 | 0 |
 | schema-fixture | WorkspaceSymbols | `workspace_symbol_stale_fact` | same | 0 | 0 |
+| schema-fixture | DocumentSymbols | `document_symbol_explicit` | same | 1 | 1 |
+| schema-fixture | DocumentSymbols | `document_symbol_generated` | improved | 0 | 1 |
+| schema-fixture | DocumentSymbols | `document_symbol_dynamic_boundary` | same | 0 | 0 |
+| schema-fixture | DocumentSymbols | `document_symbol_stale_fact` | same | 0 | 0 |
 | schema-fixture | RenamePlan | `rename_exact_static` | same | 1 | 1 |
 | schema-fixture | RenamePlan | `rename_dynamic_boundary` | same | 1 | 1 |
 | schema-fixture | RenamePlan | `rename_stale_compiler_fact` | same | 1 | 1 |
@@ -107,6 +111,10 @@ Receipts: `36`
 | schema-fixture | WorkspaceSymbols | WorkspaceSymbols | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |
 | schema-fixture | WorkspaceSymbols | WorkspaceSymbols | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
 | schema-fixture | WorkspaceSymbols | WorkspaceSymbols | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |
+| schema-fixture | DocumentSymbols | DocumentSymbols | ParserSyntax | ExactAst | High | Fresh | Shadow |
+| schema-fixture | DocumentSymbols | DocumentSymbols | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |
+| schema-fixture | DocumentSymbols | DocumentSymbols | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
+| schema-fixture | DocumentSymbols | DocumentSymbols | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |
 | schema-fixture | RenamePlan | Rename | SemanticFact | ExactAst | High | Fresh | Shadow |
 | schema-fixture | RenamePlan | Rename | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
 | schema-fixture | RenamePlan | Rename | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |

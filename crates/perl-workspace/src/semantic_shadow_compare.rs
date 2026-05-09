@@ -49,6 +49,8 @@ pub enum ShadowQueryName {
     Hover,
     /// Workspace-symbol provider query (SemanticQueries facade).
     WorkspaceSymbols,
+    /// Document-symbol provider query (SemanticQueries facade).
+    DocumentSymbols,
 }
 
 /// Canonical query input payload.
@@ -398,6 +400,9 @@ mod tests {
             (ShadowQueryName::SafeDeletePlan, "\"safe_delete_plan\""),
             (ShadowQueryName::CompletionVisibility, "\"completion_visibility\""),
             (ShadowQueryName::DiagnosticsCheck, "\"diagnostics_check\""),
+            (ShadowQueryName::Hover, "\"hover\""),
+            (ShadowQueryName::WorkspaceSymbols, "\"workspace_symbols\""),
+            (ShadowQueryName::DocumentSymbols, "\"document_symbols\""),
         ];
         for (variant, expected_json) in variants {
             let json = serde_json::to_string(&variant)?;
