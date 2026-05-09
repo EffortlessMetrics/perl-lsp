@@ -12,6 +12,7 @@ use std::process::Command;
 use walkdir::WalkDir;
 
 const SCHEMA_VERSION: u32 = 1;
+const LITERAL_PRESERVE_CODE: &str = "native.format.literal_preserve_region";
 
 /// Options for `cargo xtask native-tooling status`.
 pub struct NativeToolingStatusConfig {
@@ -39,13 +40,17 @@ struct NativeToolingStatusReceipt {
 struct FormatterStatus {
     fixture_root: String,
     fixture_count: usize,
+    expected_diagnostics_fixture_count: usize,
+    literal_preserve_fixture_count: usize,
     format_receipt: String,
     format_receipt_present: bool,
     fixture_passed_count: Option<usize>,
     fixture_failed_count: Option<usize>,
     idempotent_count: Option<usize>,
     parse_preserved_count: Option<usize>,
+    diagnostics_count: Option<usize>,
     bailout_count: Option<usize>,
+    expected_diagnostics_match_count: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -103,7 +108,7 @@ fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeTool
 }
 
 fn formatter_status(fixtures: &Path, format_receipt: &Path) -> Result<FormatterStatus> {
-    let fixture_count = WalkDir::new(fixtures)
+    let fixture_paths = WalkDir::new(fixtures)
         .into_iter()
         .filter_map(Result::ok)
         .filter(|entry| entry.file_type().is_file())
@@ -113,21 +118,62 @@ fn formatter_status(fixtures: &Path, format_receipt: &Path) -> Result<FormatterS
             path.extension().and_then(|ext| ext.to_str()) == Some("pl")
                 && !filename.ends_with(".expected.pl")
         })
-        .count();
+        .map(|entry| entry.into_path())
+        .collect::<Vec<_>>();
+    let fixture_count = fixture_paths.len();
+    let mut expected_diagnostics_fixture_count = 0;
+    let mut literal_preserve_fixture_count = 0;
+    for fixture in &fixture_paths {
+        let expected_diagnostics = expected_diagnostics_path_for(fixture);
+        if !expected_diagnostics.exists() {
+            continue;
+        }
+
+        expected_diagnostics_fixture_count += 1;
+        let diagnostic_codes = read_expected_diagnostic_codes(&expected_diagnostics)?;
+        if diagnostic_codes.iter().any(|code| code == LITERAL_PRESERVE_CODE) {
+            literal_preserve_fixture_count += 1;
+        }
+    }
 
     let receipt = if format_receipt.exists() { Some(read_json(format_receipt)?) } else { None };
 
     Ok(FormatterStatus {
         fixture_root: fixtures.display().to_string(),
         fixture_count,
+        expected_diagnostics_fixture_count,
+        literal_preserve_fixture_count,
         format_receipt: format_receipt.display().to_string(),
         format_receipt_present: receipt.is_some(),
         fixture_passed_count: optional_usize(&receipt, "passed_count"),
         fixture_failed_count: optional_usize(&receipt, "failed_count"),
         idempotent_count: optional_usize(&receipt, "idempotent_count"),
         parse_preserved_count: optional_usize(&receipt, "parse_preserved_count"),
+        diagnostics_count: optional_usize(&receipt, "diagnostics_count"),
         bailout_count: optional_usize(&receipt, "bailout_count"),
+        expected_diagnostics_match_count: optional_usize(
+            &receipt,
+            "expected_diagnostics_match_count",
+        ),
     })
+}
+
+fn expected_diagnostics_path_for(fixture: &Path) -> PathBuf {
+    fixture.with_file_name(format!(
+        "{}.expected-diagnostics.txt",
+        fixture.file_stem().and_then(|stem| stem.to_str()).unwrap_or_default()
+    ))
+}
+
+fn read_expected_diagnostic_codes(path: &Path) -> Result<Vec<String>> {
+    let raw =
+        fs::read_to_string(path).wrap_err_with(|| format!("failed to read {}", path.display()))?;
+    Ok(raw
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(ToOwned::to_owned)
+        .collect())
 }
 
 fn critic_status() -> Result<CriticStatus> {
@@ -207,6 +253,8 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
 | Metric | Value |
 | --- | ---: |
 | Fixture count | {} |
+| Expected diagnostic fixtures | {} |
+| Literal-preserve bailout fixtures | {} |
 
 ## Critic
 
@@ -227,6 +275,8 @@ Fixable native rules:
 {}
 "#,
         formatter.fixture_count,
+        formatter.expected_diagnostics_fixture_count,
+        formatter.literal_preserve_fixture_count,
         critic.native_rule_count,
         critic.rules_with_suppression,
         critic.rules_with_fixes,
@@ -268,6 +318,10 @@ mod tests {
         fs::create_dir_all(&receipts)?;
         fs::write(fixtures.join("simple.pl"), "my $x = 1;\n")?;
         fs::write(fixtures.join("simple.expected.pl"), "my $x = 1;\n")?;
+        fs::write(
+            fixtures.join("simple.expected-diagnostics.txt"),
+            "# expected formatter bailout\nnative.format.literal_preserve_region  \n",
+        )?;
         let format_receipt = receipts.join("native-format-fixtures.json");
         fs::write(
             &format_receipt,
@@ -276,7 +330,9 @@ mod tests {
   "failed_count": 0,
   "idempotent_count": 1,
   "parse_preserved_count": 1,
-  "bailout_count": 0
+  "diagnostics_count": 1,
+  "bailout_count": 1,
+  "expected_diagnostics_match_count": 1
 }
 "#,
         )?;
@@ -298,12 +354,18 @@ mod tests {
         assert!(value["generated_at"].as_str().is_some());
         assert!(value["commit"].as_str().is_some());
         assert_eq!(value["formatter"]["fixture_count"], 1);
+        assert_eq!(value["formatter"]["expected_diagnostics_fixture_count"], 1);
+        assert_eq!(value["formatter"]["literal_preserve_fixture_count"], 1);
         assert_eq!(value["formatter"]["format_receipt_present"], true);
+        assert_eq!(value["formatter"]["diagnostics_count"], 1);
+        assert_eq!(value["formatter"]["bailout_count"], 1);
+        assert_eq!(value["formatter"]["expected_diagnostics_match_count"], 1);
         assert!(value["critic"]["native_rule_count"].as_u64().unwrap_or_default() > 0);
+        let native_rules = value["critic"]["native_rules"]
+            .as_array()
+            .ok_or_else(|| eyre!("native_rules should be an array"))?;
         assert!(
-            value["critic"]["native_rules"]
-                .as_array()
-                .unwrap()
+            native_rules
                 .iter()
                 .any(|rule| { rule.as_str() == Some("native.io.unchecked_open_close") })
         );
@@ -315,6 +377,8 @@ mod tests {
         assert!(!markdown.contains("Fixture receipt present"));
         assert!(!markdown.contains("Fixture passed count"));
         assert!(!markdown.contains("unknown"));
+        assert!(markdown.contains("| Expected diagnostic fixtures | 1 |"));
+        assert!(markdown.contains("| Literal-preserve bailout fixtures | 1 |"));
         assert!(markdown.contains("native.io.unchecked_open_close"));
 
         status(NativeToolingStatusConfig {
