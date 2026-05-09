@@ -1,6 +1,6 @@
 use perl_lsp_perltidy::{
     BracePlacement, ElsePlacement, FinalNewline, FormatConfig, FormatDiagnosticSeverity,
-    FormatResult, FormatterMode, TextPosition, TextRange, TrailingComma,
+    FormatResult, FormatterMode, KeywordSpacing, TextPosition, TextRange, TrailingComma,
 };
 
 #[test]
@@ -15,6 +15,7 @@ fn native_format_config_defaults_to_native_safe_profile() {
     assert_eq!(config.trailing_comma, TrailingComma::Preserve);
     assert_eq!(config.brace_placement, BracePlacement::SameLine);
     assert_eq!(config.else_placement, ElsePlacement::Cuddled);
+    assert_eq!(config.keyword_spacing, KeywordSpacing::Space);
 }
 
 #[test]

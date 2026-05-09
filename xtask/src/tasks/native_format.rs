@@ -474,9 +474,9 @@ fn classify_perltidy_option(option: &str, value: Option<String>) -> PerltidyComp
         "-sok" | "--space-after-keyword" | "-nsok" | "--nospace-after-keyword" => compat_result(
             option,
             value,
-            "approximated",
-            None,
-            "native formatter currently normalizes supported keywords with spaces",
+            "supported",
+            Some("format.keyword_spacing"),
+            "maps to native formatter keyword spacing for supported simple control-flow headers",
         ),
         "-bl" | "--opening-brace-on-new-line" | "-bar" | "--opening-brace-always-on-right" => {
             compat_result(
@@ -954,7 +954,7 @@ mod tests {
         let receipts = temp.path().join("receipts");
         fs::write(
             &profile,
-            "# common profile\n-l=100\n-i 2\n-nt\n-ce\n-q\n-atc\n-bl\n--unknown-style\n",
+            "# common profile\n-l=100\n-i 2\n-nt\n-ce\n-nsok\n-q\n-atc\n-bl\n--unknown-style\n",
         )?;
 
         perltidy_compat(NativeFormatPerltidyCompatConfig {
@@ -967,8 +967,8 @@ mod tests {
             receipts.join("native-format-perltidy-compat.json"),
         )?)?;
         assert_eq!(receipt["kind"], "native_format_perltidy_compat");
-        assert_eq!(receipt["option_count"], 8);
-        assert_eq!(receipt["supported_count"], 6);
+        assert_eq!(receipt["option_count"], 9);
+        assert_eq!(receipt["supported_count"], 7);
         assert_eq!(receipt["approximated_count"], 0);
         assert_eq!(receipt["external_only_count"], 1);
         assert_eq!(receipt["unsupported_safe_count"], 1);
@@ -976,11 +976,13 @@ mod tests {
         assert_eq!(receipt["options"][1]["value"], "2");
         assert_eq!(receipt["options"][3]["classification"], "supported");
         assert_eq!(receipt["options"][3]["native_field"], "format.else_placement");
-        assert_eq!(receipt["options"][4]["classification"], "unsupported_safe");
-        assert_eq!(receipt["options"][5]["classification"], "supported");
-        assert_eq!(receipt["options"][5]["native_field"], "format.trailing_comma");
+        assert_eq!(receipt["options"][4]["classification"], "supported");
+        assert_eq!(receipt["options"][4]["native_field"], "format.keyword_spacing");
+        assert_eq!(receipt["options"][5]["classification"], "unsupported_safe");
         assert_eq!(receipt["options"][6]["classification"], "supported");
-        assert_eq!(receipt["options"][6]["native_field"], "format.brace_placement");
+        assert_eq!(receipt["options"][6]["native_field"], "format.trailing_comma");
+        assert_eq!(receipt["options"][7]["classification"], "supported");
+        assert_eq!(receipt["options"][7]["native_field"], "format.brace_placement");
 
         let summary = fs::read_to_string(receipts.join("native-format-perltidy-compat.md"))?;
         assert!(summary.contains("# Native Format Perltidy Compatibility"));

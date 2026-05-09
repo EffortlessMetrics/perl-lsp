@@ -1,6 +1,6 @@
 use perl_lsp_perltidy::{
-    BracePlacement, ElsePlacement, FinalNewline, FormatConfig, NativeFormatter, PerlFormatter,
-    TextPosition, TextRange, TrailingComma,
+    BracePlacement, ElsePlacement, FinalNewline, FormatConfig, KeywordSpacing, NativeFormatter,
+    PerlFormatter, TextPosition, TextRange, TrailingComma,
 };
 
 #[test]
@@ -612,6 +612,37 @@ fn native_formatter_places_else_tails_on_separate_lines_when_configured() {
             "}\n",
             "else {\n",
             "    return 1;\n",
+            "}\n",
+        )
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn native_formatter_compacts_keyword_condition_spacing_when_configured() {
+    let formatter = NativeFormatter::new();
+    let config =
+        FormatConfig { keyword_spacing: KeywordSpacing::Compact, ..FormatConfig::default() };
+    let source =
+        "if($a){return 1;}elsif($b){return 2;}else{return 3;}\nwhile($ok){next;}continue{last;}\n";
+
+    let result = formatter.format_document(source, &config);
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        concat!(
+            "if($a) {\n",
+            "    return 1;\n",
+            "} elsif($b) {\n",
+            "    return 2;\n",
+            "} else {\n",
+            "    return 3;\n",
+            "}\n",
+            "while($ok) {\n",
+            "    next;\n",
+            "} continue {\n",
+            "    last;\n",
             "}\n",
         )
     );
