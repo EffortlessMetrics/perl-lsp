@@ -593,8 +593,30 @@ fn range_includes_line(range: TextRange, line: u32) -> bool {
 fn format_simple_line(line: &str, config: &FormatConfig) -> Option<String> {
     format_simple_control_block_line(line, config)
         .or_else(|| format_simple_subroutine_line(line, config))
+        .or_else(|| format_simple_module_line(line, config))
         .or_else(|| format_simple_statement_line(line, config))
         .or_else(|| format_simple_lexical_line(line, config))
+}
+
+fn format_simple_module_line(line: &str, config: &FormatConfig) -> Option<String> {
+    let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
+    let (indent, body) = line.split_at(indent_len);
+    if body.is_empty() || body.contains('#') {
+        return None;
+    }
+
+    let mut stream = perl_parser_core::TokenStream::new(body);
+    let mut tokens = Vec::new();
+    loop {
+        let token = stream.next().ok()?;
+        if token.kind == perl_parser_core::TokenKind::Eof {
+            break;
+        }
+        tokens.push(token);
+    }
+
+    let formatted = format_simple_module_tokens(&tokens, config)?;
+    Some(format!("{indent}{formatted}"))
 }
 
 fn format_simple_lexical_line(line: &str, config: &FormatConfig) -> Option<String> {
@@ -924,6 +946,89 @@ fn format_simple_statement_tokens(
         .or_else(|| format_simple_return_tokens(tokens, config))
         .or_else(|| format_simple_assignment_tokens(tokens, config))
         .or_else(|| format_simple_expression_statement_tokens(tokens, config))
+}
+
+fn format_simple_module_tokens(
+    tokens: &[perl_parser_core::Token],
+    config: &FormatConfig,
+) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.last()?.kind != TokenKind::Semicolon {
+        return None;
+    }
+
+    match tokens.first()?.kind {
+        TokenKind::Package => format_simple_package_tokens(tokens, config),
+        TokenKind::Use => format_simple_import_tokens("use", tokens, 1, config),
+        TokenKind::No => format_simple_import_tokens("no", tokens, 1, config),
+        TokenKind::Identifier if tokens.first()?.text.as_ref() == "require" => {
+            format_simple_import_tokens("require", tokens, 1, config)
+        }
+        _ => None,
+    }
+}
+
+fn format_simple_package_tokens(
+    tokens: &[perl_parser_core::Token],
+    config: &FormatConfig,
+) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.len() < 3 || tokens.first()?.kind != TokenKind::Package {
+        return None;
+    }
+
+    let semicolon_index = tokens.len() - 1;
+    let name = tokens.get(1)?;
+    if name.kind != TokenKind::Identifier {
+        return None;
+    }
+
+    if semicolon_index == 2 {
+        return Some(format!("package {};", name.text));
+    }
+
+    let version = format_simple_module_args(tokens, 2, semicolon_index, config, "package ".len())?;
+    Some(format!("package {} {version};", name.text))
+}
+
+fn format_simple_import_tokens(
+    keyword: &str,
+    tokens: &[perl_parser_core::Token],
+    args_start: usize,
+    config: &FormatConfig,
+) -> Option<String> {
+    let semicolon_index = tokens.len() - 1;
+    let args = format_simple_module_args(
+        tokens,
+        args_start,
+        semicolon_index,
+        config,
+        keyword.chars().count() + 1,
+    )?;
+    Some(format!("{keyword} {args};"))
+}
+
+fn format_simple_module_args(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+    end: usize,
+    config: &FormatConfig,
+    start_column: usize,
+) -> Option<String> {
+    let mut parts = Vec::new();
+    let mut index = start;
+    let mut column = start_column;
+
+    while index < end {
+        let (part, next_index) = format_simple_atom_tokens(tokens, index, config, column)?;
+        column = advance_column(column, &part) + 1;
+        parts.push(part);
+        index = next_index;
+    }
+
+    (!parts.is_empty()).then(|| parts.join(" "))
 }
 
 fn format_simple_lexical_tokens(
