@@ -14,13 +14,13 @@
 
 | Metric | Value |
 | --- | ---: |
-| Native rule count | 20 |
-| Rules with suppressions | 20 |
+| Native rule count | 21 |
+| Rules with suppressions | 21 |
 | Rules with fixes | 13 |
-| Pull diagnostics coverage | 20 |
-| Push diagnostics coverage | 20 |
-| Workspace diagnostics coverage | 20 |
-| Violation bridge coverage | 20 |
+| Pull diagnostics coverage | 21 |
+| Push diagnostics coverage | 21 |
+| Workspace diagnostics coverage | 21 |
+| Violation bridge coverage | 21 |
 
 Native rules:
 - `native.testing.require_use_strict`
@@ -29,6 +29,7 @@ Native rules:
 - `native.common.printf_format_arity`
 - `native.common.deprecated_defined`
 - `native.common.undef_comparison`
+- `native.common.stale_dollar_at`
 - `native.io.bareword_filehandle`
 - `native.io.two_arg_open`
 - `native.io.pipe_open`

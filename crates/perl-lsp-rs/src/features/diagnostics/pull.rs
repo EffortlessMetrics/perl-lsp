@@ -1353,7 +1353,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy @items = (1, 2);\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nif (defined @items) { print @items; }\nif ($path == undef) { print $path; }\nprintf \"%s %s\", $path;\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nsystem($path);\nexec('ls', '-la');\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy @items = (1, 2);\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nif (defined @items) { print @items; }\nif ($path == undef) { print $path; }\neval { die $path; };\nif ($@) { warn $@; }\nprintf \"%s %s\", $path;\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nsystem($path);\nexec('ls', '-la');\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n",
             None,
             &context,
             None,
@@ -1466,6 +1466,25 @@ mod tests {
         assert_eq!(data["code"], "native.common.undef_comparison");
         assert_eq!(data["suppressionKey"], "native.common.undef_comparison");
         assert_eq!(data["fixable"], true);
+
+        let stale_dollar_at = items
+            .iter()
+            .find(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.common.stale_dollar_at"),
+                )
+            })
+            .ok_or("expected native stale-dollar-at finding")?;
+        assert_eq!(stale_dollar_at.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(stale_dollar_at.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(stale_dollar_at.message, "Checking $@ after eval can observe a stale error");
+        let data = stale_dollar_at
+            .data
+            .as_ref()
+            .ok_or("native stale-dollar-at data should be populated")?;
+        assert_eq!(data["code"], "native.common.stale_dollar_at");
+        assert_eq!(data["suppressionKey"], "native.common.stale_dollar_at");
+        assert_eq!(data["fixable"], false);
 
         let bareword_filehandle = items
             .iter()

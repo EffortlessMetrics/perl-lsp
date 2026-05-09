@@ -241,6 +241,7 @@ impl NativeCriticRegistry {
             Box::new(PrintfFormatArityRule),
             Box::new(DeprecatedDefinedRule),
             Box::new(UndefComparisonRule),
+            Box::new(StaleDollarAtRule),
             Box::new(BarewordFilehandleRule),
             Box::new(TwoArgOpenRule),
             Box::new(PipeOpenRule),
@@ -544,6 +545,32 @@ impl CriticRule for UndefComparisonRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_undef_comparison_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports unlocalized `$@` checks after block `eval`.
+///
+/// Checking `$@` after `eval` without localizing it can observe a stale or
+/// clobbered error value. This rule starts with the parser-confirmed
+/// `eval { ... }; if ($@) { ... }` family and leaves broader exception-flow
+/// analysis for later semantic rule slices.
+pub struct StaleDollarAtRule;
+
+impl CriticRule for StaleDollarAtRule {
+    fn id(&self) -> &'static str {
+        "native.common.stale_dollar_at"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Syntax
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_stale_dollar_at_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -1211,6 +1238,32 @@ fn undef_comparison_finding(
     }
 }
 
+fn stale_dollar_at_finding(
+    rule: &StaleDollarAtRule,
+    source: &str,
+    eval_node: &Node,
+    dollar_at_node: &Node,
+) -> CriticFinding {
+    let range =
+        range_for_byte_span(source, dollar_at_node.location.start, dollar_at_node.location.end);
+    let eval_range = range_for_byte_span(source, eval_node.location.start, eval_node.location.end);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: "Checking $@ after eval can observe a stale error".to_string(),
+        explanation: "The $@ variable is global and can retain or be clobbered by unrelated exception handling. Localize $@ around eval, or check the eval return value before inspecting the error.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: vec![CriticRelatedInformation {
+            range: eval_range,
+            message: "This eval should localize $@ or have its return value checked.".to_string(),
+        }],
+        fix: None,
+    }
+}
+
 fn bareword_filehandle_finding(
     rule: &BarewordFilehandleRule,
     source: &str,
@@ -1569,6 +1622,93 @@ fn collect_undef_comparison_findings(
     for child in node.children() {
         collect_undef_comparison_findings(rule, source, child, out);
     }
+}
+
+fn collect_stale_dollar_at_findings(
+    rule: &StaleDollarAtRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    match &node.kind {
+        NodeKind::Program { statements } | NodeKind::Block { statements } => {
+            collect_stale_dollar_at_in_statements(rule, source, statements, out);
+        }
+        _ => {}
+    }
+
+    for child in node.children() {
+        collect_stale_dollar_at_findings(rule, source, child, out);
+    }
+}
+
+fn collect_stale_dollar_at_in_statements(
+    rule: &StaleDollarAtRule,
+    source: &str,
+    statements: &[Node],
+    out: &mut Vec<CriticFinding>,
+) {
+    for (idx, statement) in statements.iter().enumerate() {
+        let Some(eval_node) = eval_statement_node(statement) else {
+            continue;
+        };
+        if idx > 0 && localizes_dollar_at(&statements[idx - 1]) {
+            continue;
+        }
+        let Some(next_statement) = statements.get(idx + 1) else {
+            continue;
+        };
+        if let Some(dollar_at) = condition_dollar_at_read(next_statement) {
+            out.push(stale_dollar_at_finding(rule, source, eval_node, dollar_at));
+        }
+    }
+}
+
+fn eval_statement_node(statement: &Node) -> Option<&Node> {
+    match &statement.kind {
+        NodeKind::ExpressionStatement { expression }
+            if matches!(&expression.kind, NodeKind::Eval { .. }) =>
+        {
+            Some(expression)
+        }
+        NodeKind::Eval { .. } => Some(statement),
+        _ => None,
+    }
+}
+
+fn localizes_dollar_at(statement: &Node) -> bool {
+    match &statement.kind {
+        NodeKind::VariableDeclaration { declarator, variable, .. } if declarator == "local" => {
+            is_dollar_at_variable(variable)
+        }
+        NodeKind::ExpressionStatement { expression } => localizes_dollar_at(expression),
+        _ => false,
+    }
+}
+
+fn condition_dollar_at_read(statement: &Node) -> Option<&Node> {
+    match &statement.kind {
+        NodeKind::If { condition, .. } | NodeKind::While { condition, .. } => {
+            first_dollar_at_variable(condition)
+        }
+        NodeKind::StatementModifier { condition, .. } => first_dollar_at_variable(condition),
+        _ => None,
+    }
+}
+
+fn first_dollar_at_variable(node: &Node) -> Option<&Node> {
+    if is_dollar_at_variable(node) {
+        return Some(node);
+    }
+
+    node.children().into_iter().find_map(first_dollar_at_variable)
+}
+
+fn is_dollar_at_variable(node: &Node) -> bool {
+    matches!(
+        &node.kind,
+        NodeKind::Variable { sigil, name } if sigil == "$" && name == "@"
+    )
 }
 
 fn push_printf_format_arity_finding(
@@ -2901,6 +3041,98 @@ mod tests {
     }
 
     #[test]
+    fn native_stale_dollar_at_rule_reports_if_check_after_unlocalized_eval() {
+        let source = "use strict;\nuse warnings;\neval { risky_call(); };\nif ($@) { warn $@; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(StaleDollarAtRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.common.stale_dollar_at");
+        assert_eq!(finding.category, CriticCategory::Syntax);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert_eq!(finding.message, "Checking $@ after eval can observe a stale error");
+        assert_eq!(finding.suppression_key, "native.common.stale_dollar_at");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$@");
+        assert_eq!(finding.related.len(), 1);
+        assert!(finding.fix.is_none());
+    }
+
+    #[test]
+    fn native_stale_dollar_at_rule_reports_statement_modifier_after_unlocalized_eval() {
+        let source = "use strict;\nuse warnings;\neval { risky_call(); };\nwarn $@ if $@;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(StaleDollarAtRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "native.common.stale_dollar_at");
+        assert_eq!(&source[findings[0].range.start.byte..findings[0].range.end.byte], "$@");
+    }
+
+    #[test]
+    fn native_stale_dollar_at_rule_accepts_localized_or_return_checked_eval() {
+        let source = "use strict;\nuse warnings;\n{\nlocal $@;\neval { risky_call(); };\nif ($@) { warn $@; }\n}\nmy $ok = eval { risky_call(); };\nif (!$ok) { warn 'failed'; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(StaleDollarAtRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "localized $@ and eval return checks should be accepted");
+    }
+
+    #[test]
+    fn native_stale_dollar_at_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\neval { risky_call(); };\nif ($@) { warn $@; }\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.common.stale_dollar_at".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(StaleDollarAtRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.common.stale_dollar_at -- legacy eval\nuse strict;\nuse warnings;\neval { risky_call(); };\nif ($@) { warn $@; }\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_stale_dollar_at_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\neval { risky_call(); };\nif ($@) { warn $@; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(StaleDollarAtRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.common.stale_dollar_at");
+        assert_eq!(violations[0].description, "Checking $@ after eval can observe a stale error");
+        assert_eq!(
+            violations[0].explanation,
+            "The $@ variable is global and can retain or be clobbered by unrelated exception handling. Localize $@ around eval, or check the eval return value before inspecting the error."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_bareword_filehandle_rule_reports_open_bareword() {
         let source = "use strict;\nuse warnings;\nopen(FH, '<', 'file.txt');\n";
         let ast = parse_source(source);
@@ -3668,6 +3900,7 @@ mod tests {
                 "native.common.printf_format_arity",
                 "native.common.deprecated_defined",
                 "native.common.undef_comparison",
+                "native.common.stale_dollar_at",
                 "native.io.bareword_filehandle",
                 "native.io.two_arg_open",
                 "native.io.pipe_open",
