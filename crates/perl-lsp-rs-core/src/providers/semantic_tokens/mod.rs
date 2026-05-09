@@ -17,8 +17,10 @@
 
 #[allow(clippy::module_inception)]
 mod semantic_tokens;
+mod semantic_tokens_shadow;
 
 pub use semantic_tokens::{EncodedToken, TokensLegend, collect_semantic_tokens, legend};
+pub use semantic_tokens_shadow::*;
 
 /// Semantic tokens provider for LSP
 ///

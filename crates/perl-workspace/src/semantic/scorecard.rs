@@ -351,6 +351,7 @@ fn query_name_key(query: ShadowQueryName) -> String {
         ShadowQueryName::Hover => "hover".to_string(),
         ShadowQueryName::WorkspaceSymbols => "workspace_symbols".to_string(),
         ShadowQueryName::DocumentSymbols => "document_symbols".to_string(),
+        ShadowQueryName::SemanticTokens => "semantic_tokens".to_string(),
     }
 }
 
@@ -688,10 +689,11 @@ mod tests {
         ));
         sc.add_receipt(make_receipt(ShadowQueryName::DiagnosticsCheck, ShadowCompareVerdict::Same));
         sc.add_receipt(make_receipt(ShadowQueryName::DocumentSymbols, ShadowCompareVerdict::Same));
+        sc.add_receipt(make_receipt(ShadowQueryName::SemanticTokens, ShadowCompareVerdict::Same));
 
         let report = sc.report();
         assert!(report.passed, "no regressions should pass");
-        assert_eq!(report.totals.total(), 8);
+        assert_eq!(report.totals.total(), 9);
 
         let vis = report.by_query.get("visible_symbols").ok_or("missing visible_symbols")?;
         assert_eq!(vis.same, 1);
@@ -717,6 +719,9 @@ mod tests {
 
         let ds = report.by_query.get("document_symbols").ok_or("missing document_symbols")?;
         assert_eq!(ds.same, 1);
+
+        let st = report.by_query.get("semantic_tokens").ok_or("missing semantic_tokens")?;
+        assert_eq!(st.same, 1);
 
         Ok(())
     }
@@ -1079,11 +1084,13 @@ mod tests {
         sc.add_receipt(make_receipt(ShadowQueryName::Hover, ShadowCompareVerdict::Same));
         // Document-symbol provider
         sc.add_receipt(make_receipt(ShadowQueryName::DocumentSymbols, ShadowCompareVerdict::Same));
+        // Semantic-token provider
+        sc.add_receipt(make_receipt(ShadowQueryName::SemanticTokens, ShadowCompareVerdict::Same));
 
         let report = sc.report();
         assert!(report.passed, "aggregate scorecard should pass with no regressions");
-        assert_eq!(report.totals.total(), 9, "all 9 receipts should be counted");
-        assert_eq!(report.totals.same, 7);
+        assert_eq!(report.totals.total(), 10, "all 10 receipts should be counted");
+        assert_eq!(report.totals.same, 8);
         assert_eq!(report.totals.improved, 2);
         assert_eq!(report.totals.regression, 0);
 
@@ -1096,6 +1103,7 @@ mod tests {
         assert!(report.by_query.contains_key("safe_delete_plan"));
         assert!(report.by_query.contains_key("hover"));
         assert!(report.by_query.contains_key("document_symbols"));
+        assert!(report.by_query.contains_key("semantic_tokens"));
         Ok(())
     }
 
