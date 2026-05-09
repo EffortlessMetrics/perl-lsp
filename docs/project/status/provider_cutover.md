@@ -59,6 +59,7 @@ fallback behavior and rollback proof.
 ## Tracking
 
 - Provider cutover umbrella: [#8197](https://github.com/EffortlessMetrics/perl-lsp/issues/8197)
+- Workspace-symbol source/freshness proof: [#8353](https://github.com/EffortlessMetrics/perl-lsp/issues/8353)
 - Fact-source trace receipt slice: [#8305](https://github.com/EffortlessMetrics/perl-lsp/pull/8305)
 - Compiler facts: [compiler_facts.md](compiler_facts.md)
 - Semantic scorecard: [semantic_scorecard.md](semantic_scorecard.md)
