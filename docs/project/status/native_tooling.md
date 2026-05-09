@@ -52,9 +52,9 @@
 | Perlcritic compatibility items | 12 |
 | Perlcritic compatibility native-equivalent | 5 |
 | Perlcritic compatibility native-superset | 2 |
-| Perlcritic compatibility approximated | 2 |
-| Perlcritic compatibility unsupported-safe | 1 |
-| Perlcritic compatibility external-only | 2 |
+| Perlcritic compatibility approximated | 3 |
+| Perlcritic compatibility unsupported-safe | 2 |
+| Perlcritic compatibility external-only | 0 |
 
 Native rules:
 - `native.testing.require_use_strict`
