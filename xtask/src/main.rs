@@ -1935,6 +1935,13 @@ enum NativeToolingCommand {
         #[arg(long, default_value = "target/receipts/native-tooling/perlcritic-compat.md")]
         summary: PathBuf,
     },
+
+    /// Verify native tooling defaults do not silently shell out.
+    CheckDefaults {
+        /// Repository root used for policy source checks.
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2329,6 +2336,9 @@ fn main() -> Result<()> {
                     receipt,
                     summary,
                 })
+            }
+            NativeToolingCommand::CheckDefaults { root } => {
+                native_tooling::check_defaults(native_tooling::NativeToolingDefaultsConfig { root })
             }
         },
         Commands::SecurityHardening => hardening::security_hardening(),
