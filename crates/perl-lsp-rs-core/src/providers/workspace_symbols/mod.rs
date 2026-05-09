@@ -71,6 +71,13 @@ use perl_parser_core::qualified_name::container_name;
 use perl_parser_core::{SourceLocation, ast::Node};
 use perl_position_tracking::{WireLocation, WireRange};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind};
+use perl_semantic_facts::{
+    AnchorId, Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind,
+    ProviderFactTrace, ProviderFallbackState, ProviderSurface,
+};
+use perl_workspace::semantic_shadow_compare::{
+    SemanticShadowCompareReceipt, ShadowQueryInput, ShadowQueryName, summarize_identities,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -89,6 +96,47 @@ pub struct WorkspaceSymbol {
     /// Optional containing package or class name for qualified symbols.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub container_name: Option<String>,
+}
+
+/// Compiler-fact candidate considered by the workspace-symbol shadow proof.
+///
+/// This is not a live workspace-symbol response type. It lets the provider
+/// compare the legacy workspace index against compiler facts and emit a typed
+/// fact-source trace before any runtime provider cutover.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct WorkspaceSymbolShadowCandidate {
+    /// Stable identity for deterministic receipt comparison.
+    pub identity: String,
+    /// Fact source that produced the candidate.
+    pub source: ProviderFactSourceKind,
+    /// Semantic provenance for the candidate.
+    pub provenance: Provenance,
+    /// Confidence in the candidate.
+    pub confidence: Confidence,
+    /// Freshness of the candidate relative to the request.
+    pub freshness: ProviderFactFreshness,
+    /// Whether the candidate is shadowed, fallback, or blocked.
+    pub fallback_state: ProviderFallbackState,
+    /// Optional source hash for fact freshness proof.
+    pub source_hash: Option<String>,
+    /// Optional semantic anchor for the candidate.
+    pub anchor_id: Option<AnchorId>,
+    /// Optional producer model version.
+    pub model_version: Option<u32>,
+}
+
+/// Workspace-symbol shadow proof result.
+///
+/// Callers should keep returning the legacy workspace-symbol result while this
+/// receipt is used for provider cutover proof.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct WorkspaceSymbolShadowResult {
+    /// Legacy symbols returned by the existing workspace index path.
+    pub legacy_symbols: Vec<WorkspaceSymbol>,
+    /// Shadow receipt comparing legacy symbols with compiler-fact candidates.
+    pub receipt: SemanticShadowCompareReceipt,
 }
 
 /// Internal symbol information used for indexing.
@@ -301,6 +349,99 @@ impl WorkspaceSymbolsProvider {
     }
 }
 
+/// Compare legacy workspace-symbol output against compiler-fact candidates.
+///
+/// This function is intentionally shadow-only: it returns the original legacy
+/// symbols unchanged and emits a receipt that records source, provenance,
+/// confidence, freshness, and fallback/blocker state for candidate facts.
+#[must_use]
+pub fn workspace_symbol_source_shadow(
+    legacy_symbols: Vec<WorkspaceSymbol>,
+    compiler_candidates: Vec<WorkspaceSymbolShadowCandidate>,
+    query: &str,
+) -> WorkspaceSymbolShadowResult {
+    let old_result =
+        summarize_identities(Some(legacy_symbols.iter().map(workspace_symbol_identity).collect()));
+    let new_result =
+        summarize_identities(Some(workspace_symbol_answer_identities(&compiler_candidates)));
+    let notes = vec![workspace_symbol_shadow_note(&legacy_symbols, &compiler_candidates)];
+    let fact_source_traces =
+        compiler_candidates.iter().map(workspace_symbol_candidate_trace).collect();
+
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
+        ShadowQueryName::WorkspaceSymbols,
+        ShadowQueryInput { symbol: query.to_string() },
+        old_result,
+        new_result,
+        notes,
+        fact_source_traces,
+    );
+
+    WorkspaceSymbolShadowResult { legacy_symbols, receipt }
+}
+
+fn workspace_symbol_identity(symbol: &WorkspaceSymbol) -> String {
+    let container = symbol.container_name.as_deref().map_or("<none>", |value| value);
+    format!(
+        "{}:{}:{}:{}:{}:{}",
+        symbol.name,
+        symbol.kind,
+        symbol.location.uri,
+        symbol.location.range.start.line,
+        symbol.location.range.start.character,
+        container
+    )
+}
+
+fn workspace_symbol_candidate_trace(
+    candidate: &WorkspaceSymbolShadowCandidate,
+) -> ProviderFactTrace {
+    ProviderFactTrace::new(
+        ProviderSurface::WorkspaceSymbols,
+        candidate.source,
+        candidate.provenance,
+        candidate.confidence,
+        candidate.freshness,
+        candidate.fallback_state,
+        candidate.source_hash.clone(),
+        candidate.anchor_id,
+        candidate.model_version,
+    )
+}
+
+fn workspace_symbol_answer_identities(
+    compiler_candidates: &[WorkspaceSymbolShadowCandidate],
+) -> Vec<String> {
+    compiler_candidates
+        .iter()
+        .filter(|candidate| {
+            matches!(
+                candidate.fallback_state,
+                ProviderFallbackState::Primary
+                    | ProviderFallbackState::Shadow
+                    | ProviderFallbackState::Fallback
+            )
+        })
+        .map(|candidate| candidate.identity.clone())
+        .collect()
+}
+
+fn workspace_symbol_shadow_note(
+    legacy_symbols: &[WorkspaceSymbol],
+    compiler_candidates: &[WorkspaceSymbolShadowCandidate],
+) -> String {
+    let blocked_count = compiler_candidates
+        .iter()
+        .filter(|candidate| candidate.fallback_state == ProviderFallbackState::Blocked)
+        .count();
+    format!(
+        "workspace-symbol shadow proof: legacy_candidates={}; compiler_fact_candidates={}; blocked_candidates={}; no live workspace-symbol behavior change",
+        legacy_symbols.len(),
+        compiler_candidates.len(),
+        blocked_count
+    )
+}
+
 // Symbol kind conversion is handled by perl_symbol::SymbolKind::to_lsp_kind()
 // Position conversion is handled by perl_position_tracking via WireRange::from_byte_offsets()
 // which correctly counts UTF-16 code units as required by the LSP protocol.
@@ -311,6 +452,7 @@ mod tests {
     use perl_parser_core::Parser;
     use perl_position_tracking::offset_to_utf16_line_col;
     use perl_tdd_support::must;
+    use perl_workspace::semantic_shadow_compare::ShadowCompareVerdict;
 
     #[test]
     fn test_workspace_symbols_search() {
@@ -359,6 +501,161 @@ sub baz {
         let results = provider.search("fb", &source_map);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "foobar");
+    }
+
+    #[test]
+    fn workspace_symbol_shadow_traces_fresh_compiler_fact() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let legacy = legacy_symbol("imported_func");
+        let identity = workspace_symbol_identity(&legacy);
+        let result = workspace_symbol_source_shadow(
+            vec![legacy],
+            vec![shadow_candidate(
+                &identity,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::ImportExportInference,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+            "imported",
+        );
+
+        assert_eq!(result.legacy_symbols.len(), 1);
+        assert_eq!(result.receipt.query, ShadowQueryName::WorkspaceSymbols);
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Same);
+        assert_eq!(result.receipt.old_result.match_count, 1);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.surface, ProviderSurface::WorkspaceSymbols);
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::ImportExportInference);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_symbol_shadow_labels_generated_candidates()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let result = workspace_symbol_source_shadow(
+            Vec::new(),
+            vec![shadow_candidate(
+                "generated:Foo::generated_accessor:virtual",
+                ProviderFactSourceKind::FrameworkAdapter,
+                Provenance::FrameworkSynthesis,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+            "generated",
+        );
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 0);
+        assert_eq!(result.receipt.new_result.match_count, 1);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::FrameworkAdapter);
+        assert_eq!(trace.provenance, Provenance::FrameworkSynthesis);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_symbol_shadow_blocks_dynamic_boundaries() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let result = workspace_symbol_source_shadow(
+            Vec::new(),
+            vec![shadow_candidate(
+                "blocker:symbolic_ref_boundary",
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Blocked,
+            )],
+            "dynamic",
+        );
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Same);
+        assert_eq!(result.receipt.new_result.match_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::DynamicBoundary);
+        assert_eq!(trace.provenance, Provenance::DynamicBoundary);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_symbol_shadow_blocks_stale_compiler_facts()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let result = workspace_symbol_source_shadow(
+            Vec::new(),
+            vec![shadow_candidate(
+                "stale:Foo::old_symbol",
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::Low,
+                ProviderFactFreshness::Stale,
+                ProviderFallbackState::Blocked,
+            )],
+            "stale",
+        );
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Same);
+        assert_eq!(result.receipt.new_result.match_count, 0);
+
+        let trace = first_trace(&result)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.confidence, Confidence::Low);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Stale);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        Ok(())
+    }
+
+    fn legacy_symbol(name: &str) -> WorkspaceSymbol {
+        WorkspaceSymbol {
+            name: name.to_string(),
+            kind: 12,
+            location: WireLocation::new("file:///lib/Foo.pm".to_string(), WireRange::default()),
+            container_name: Some("Foo".to_string()),
+        }
+    }
+
+    fn shadow_candidate(
+        identity: &str,
+        source: ProviderFactSourceKind,
+        provenance: Provenance,
+        confidence: Confidence,
+        freshness: ProviderFactFreshness,
+        fallback_state: ProviderFallbackState,
+    ) -> WorkspaceSymbolShadowCandidate {
+        WorkspaceSymbolShadowCandidate {
+            identity: identity.to_string(),
+            source,
+            provenance,
+            confidence,
+            freshness,
+            fallback_state,
+            source_hash: Some("fixture-source-sha".to_string()),
+            anchor_id: Some(AnchorId(1)),
+            model_version: Some(1),
+        }
+    }
+
+    fn first_trace(
+        result: &WorkspaceSymbolShadowResult,
+    ) -> Result<&ProviderFactTrace, Box<dyn std::error::Error>> {
+        result
+            .receipt
+            .fact_source_traces
+            .first()
+            .ok_or_else(|| "expected workspace-symbol fact-source trace".into())
     }
 
     #[test]
