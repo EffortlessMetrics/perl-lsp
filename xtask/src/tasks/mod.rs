@@ -66,6 +66,7 @@ pub mod memory_trends;
 pub mod merge_ready;
 pub mod methodology_gate;
 pub mod metrics;
+pub mod native_critic;
 pub mod native_format;
 pub mod native_tooling;
 pub mod parse_rust;

@@ -37,6 +37,12 @@ cargo xtask native-format check
 cargo xtask native-format corpus
 ```
 
+For native critic proof, run:
+
+```bash
+cargo xtask native-critic check
+```
+
 For compatibility reporting, run:
 
 ```bash
@@ -118,6 +124,11 @@ suppressions can use the native suppression prefix:
 ## no perl-lsp-critic native.variables.unused_lexical -- migration exception
 ```
 
+Use `cargo xtask native-critic check` to run the native recommended rule set
+over source files without involving editor diagnostics or the external
+`perlcritic` adapter. The command emits JSON and Markdown receipts with files
+checked, rules run, findings, suppressed findings, and fixable findings.
+
 ## Interpret Compatibility Results
 
 Compatibility receipts use these classifications:
@@ -152,6 +163,7 @@ include the relevant receipt commands in the proof packet:
 cargo xtask fmt
 cargo xtask native-format check
 cargo xtask native-format corpus
+cargo xtask native-critic check
 cargo xtask native-tooling status \
   --markdown docs/project/status/native_tooling.md
 cargo xtask native-tooling check-defaults
