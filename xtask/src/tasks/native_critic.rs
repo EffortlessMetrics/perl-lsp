@@ -416,7 +416,7 @@ mod tests {
         })?;
 
         let value: Value = serde_json::from_str(&fs::read_to_string(receipt)?)?;
-        assert_eq!(value["files_checked"], 3);
+        assert_eq!(value["files_checked"], 6);
         assert_eq!(value["files_with_parse_errors"], 0);
         assert_eq!(value["rules_run"], 28);
         assert_eq!(value["findings_count"], 0);

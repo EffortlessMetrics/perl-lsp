@@ -1132,6 +1132,7 @@ impl CriticRule for UnquotedBarewordRule {
             issues
                 .into_iter()
                 .filter(|issue| issue.kind == IssueKind::UnquotedBareword)
+                .filter(|issue| !bareword_is_fat_comma_key(ctx.source, issue))
                 .map(|issue| unquoted_bareword_finding(self, ctx.source, &issue)),
         );
     }
@@ -1898,6 +1899,10 @@ fn unquoted_bareword_finding(
             edits: vec![CriticTextEdit { range, new_text: quoted }],
         }),
     }
+}
+
+fn bareword_is_fat_comma_key(source: &str, issue: &ScopeIssue) -> bool {
+    source.get(issue.range.1..).is_some_and(|rest| rest.trim_start().starts_with("=>"))
 }
 
 fn collect_assignment_in_condition_findings(
@@ -5445,6 +5450,19 @@ mod tests {
         let findings = registry.check(&ctx);
 
         assert!(findings.is_empty(), "quoted strings should be accepted");
+    }
+
+    #[test]
+    fn native_unquoted_bareword_rule_accepts_fat_comma_keys() {
+        let source = "use strict;\nuse warnings;\nplan tests => 2;\nhas name => (is => 'ro');\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnquotedBarewordRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "fat-comma keys should be accepted as quoted strings");
     }
 
     #[test]
