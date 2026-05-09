@@ -51,6 +51,8 @@ pub enum ShadowQueryName {
     WorkspaceSymbols,
     /// Document-symbol provider query (SemanticQueries facade).
     DocumentSymbols,
+    /// Semantic-token provider query (SemanticQueries facade).
+    SemanticTokens,
 }
 
 /// Canonical query input payload.
@@ -403,6 +405,7 @@ mod tests {
             (ShadowQueryName::Hover, "\"hover\""),
             (ShadowQueryName::WorkspaceSymbols, "\"workspace_symbols\""),
             (ShadowQueryName::DocumentSymbols, "\"document_symbols\""),
+            (ShadowQueryName::SemanticTokens, "\"semantic_tokens\""),
         ];
         for (variant, expected_json) in variants {
             let json = serde_json::to_string(&variant)?;

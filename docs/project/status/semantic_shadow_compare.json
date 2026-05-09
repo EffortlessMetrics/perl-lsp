@@ -1177,6 +1177,148 @@
     },
     {
       "schema_version": 2,
+      "query": "semantic_tokens",
+      "input": {
+        "symbol": "semantic_token_explicit"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "token:keyword:package:0:0"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "token:keyword:package:0:0"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "semantic-token shadow proof: explicit parser/HIR classification matches legacy token identity without changing live provider behavior"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "SemanticTokens",
+          "source": "ParserSyntax",
+          "provenance": "ExactAst",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "semantic_tokens",
+      "input": {
+        "symbol": "semantic_token_compiler_classification"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "token:function:Foo::exported:virtual"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "semantic-token shadow proof: compiler-backed classification is labeled as fact-backed, not treated as a live token cutover"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "SemanticTokens",
+          "source": "CompilerFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "semantic_tokens",
+      "input": {
+        "symbol": "semantic_token_dynamic_boundary"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "verdict": "same",
+      "notes": [
+        "semantic-token shadow proof: dynamic-boundary facts block false token classification precision"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "SemanticTokens",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "semantic_tokens",
+      "input": {
+        "symbol": "semantic_token_stale_fact"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "verdict": "same",
+      "notes": [
+        "semantic-token shadow proof: stale compiler facts cannot authorize semantic-token classifications"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "SemanticTokens",
+          "source": "CompilerFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "Low",
+          "freshness": "Stale",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
       "query": "rename_plan",
       "input": {
         "symbol": "rename_exact_static"
@@ -1482,9 +1624,9 @@
   ],
   "verdict_counts": {
     "ambiguous": 2,
-    "improved": 8,
+    "improved": 9,
     "regression": 1,
-    "same": 29,
+    "same": 32,
     "unavailable": 0
   },
   "release_readiness_verdict_counts": {
@@ -1496,9 +1638,9 @@
   },
   "schema_fixture_verdict_counts": {
     "ambiguous": 2,
-    "improved": 7,
+    "improved": 8,
     "regression": 1,
-    "same": 20,
+    "same": 23,
     "unavailable": 0
   },
   "notes": "0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes."

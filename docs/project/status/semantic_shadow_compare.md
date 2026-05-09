@@ -2,16 +2,16 @@
 
 Measured: `deterministic-fixture-baseline`
 
-Receipts: `40`
+Receipts: `44`
 
 ## Verdict Counts
 
 | Verdict | Count |
 |---|---:|
 | ambiguous | 2 |
-| improved | 8 |
+| improved | 9 |
 | regression | 1 |
-| same | 29 |
+| same | 32 |
 | unavailable | 0 |
 
 ## Release-Readiness Verdict Counts
@@ -29,9 +29,9 @@ Receipts: `40`
 | Verdict | Count |
 |---|---:|
 | ambiguous | 2 |
-| improved | 7 |
+| improved | 8 |
 | regression | 1 |
-| same | 20 |
+| same | 23 |
 | unavailable | 0 |
 
 ## Receipts
@@ -70,6 +70,10 @@ Receipts: `40`
 | schema-fixture | DocumentSymbols | `document_symbol_generated` | improved | 0 | 1 |
 | schema-fixture | DocumentSymbols | `document_symbol_dynamic_boundary` | same | 0 | 0 |
 | schema-fixture | DocumentSymbols | `document_symbol_stale_fact` | same | 0 | 0 |
+| schema-fixture | SemanticTokens | `semantic_token_explicit` | same | 1 | 1 |
+| schema-fixture | SemanticTokens | `semantic_token_compiler_classification` | improved | 0 | 1 |
+| schema-fixture | SemanticTokens | `semantic_token_dynamic_boundary` | same | 0 | 0 |
+| schema-fixture | SemanticTokens | `semantic_token_stale_fact` | same | 0 | 0 |
 | schema-fixture | RenamePlan | `rename_exact_static` | same | 1 | 1 |
 | schema-fixture | RenamePlan | `rename_dynamic_boundary` | same | 1 | 1 |
 | schema-fixture | RenamePlan | `rename_stale_compiler_fact` | same | 1 | 1 |
@@ -115,6 +119,10 @@ Receipts: `40`
 | schema-fixture | DocumentSymbols | DocumentSymbols | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |
 | schema-fixture | DocumentSymbols | DocumentSymbols | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
 | schema-fixture | DocumentSymbols | DocumentSymbols | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |
+| schema-fixture | SemanticTokens | SemanticTokens | ParserSyntax | ExactAst | High | Fresh | Shadow |
+| schema-fixture | SemanticTokens | SemanticTokens | CompilerFact | SemanticAnalyzer | Medium | Fresh | Shadow |
+| schema-fixture | SemanticTokens | SemanticTokens | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
+| schema-fixture | SemanticTokens | SemanticTokens | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |
 | schema-fixture | RenamePlan | Rename | SemanticFact | ExactAst | High | Fresh | Shadow |
 | schema-fixture | RenamePlan | Rename | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
 | schema-fixture | RenamePlan | Rename | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |
