@@ -32,6 +32,8 @@ pub struct NativeToolingStatusConfig {
     pub critic_perlcritic_compat_receipt: PathBuf,
     /// Existing native critic check receipt, when available.
     pub critic_check_receipt: PathBuf,
+    /// Existing native critic false-positive fixture receipt, when available.
+    pub critic_false_positive_receipt: PathBuf,
     /// Output path for the native-tooling JSON receipt.
     pub receipt: PathBuf,
     /// Optional markdown status output path.
@@ -171,6 +173,14 @@ struct CriticStatus {
     critic_check_findings_count: Option<usize>,
     critic_check_suppressed_findings_count: Option<usize>,
     critic_check_fixable_findings_count: Option<usize>,
+    critic_false_positive_receipt: String,
+    critic_false_positive_receipt_present: bool,
+    critic_false_positive_files_checked: Option<usize>,
+    critic_false_positive_files_with_parse_errors: Option<usize>,
+    critic_false_positive_rules_run: Option<usize>,
+    critic_false_positive_findings_count: Option<usize>,
+    critic_false_positive_suppressed_findings_count: Option<usize>,
+    critic_false_positive_fixable_findings_count: Option<usize>,
     critic_perlcritic_compat_receipt: String,
     critic_perlcritic_compat_receipt_present: bool,
     perlcritic_compat_item_count: Option<usize>,
@@ -337,8 +347,11 @@ fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeTool
         &config.format_perltidy_compat_receipt,
         &config.format_config_receipt,
     )?;
-    let critic =
-        critic_status(&config.critic_perlcritic_compat_receipt, &config.critic_check_receipt)?;
+    let critic = critic_status(
+        &config.critic_perlcritic_compat_receipt,
+        &config.critic_check_receipt,
+        &config.critic_false_positive_receipt,
+    )?;
     Ok(NativeToolingStatusReceipt {
         kind: "native_tooling_status".to_string(),
         schema_version: SCHEMA_VERSION,
@@ -514,6 +527,36 @@ fn build_readiness_receipt(
             )
         ),
         "run `cargo xtask native-critic check` and fix parse errors before relying on critic receipts",
+    ));
+    criteria.push(readiness_criterion(
+        "critic",
+        "native critic false-positive fixtures are clean",
+        critic.critic_false_positive_files_checked.unwrap_or_default() > 0
+            && critic.critic_false_positive_files_with_parse_errors == Some(0)
+            && critic.critic_false_positive_findings_count == Some(0)
+            && critic.critic_false_positive_suppressed_findings_count == Some(0),
+        critic.critic_false_positive_receipt_present,
+        true,
+        format!(
+            "files={} parse_errors={} findings={} suppressed={}",
+            optional_metric(
+                critic.critic_false_positive_files_checked,
+                critic.critic_false_positive_receipt_present,
+            ),
+            optional_metric(
+                critic.critic_false_positive_files_with_parse_errors,
+                critic.critic_false_positive_receipt_present,
+            ),
+            optional_metric(
+                critic.critic_false_positive_findings_count,
+                critic.critic_false_positive_receipt_present,
+            ),
+            optional_metric(
+                critic.critic_false_positive_suppressed_findings_count,
+                critic.critic_false_positive_receipt_present,
+            )
+        ),
+        "run the native critic false-positive fixture receipt and fix any emitted finding",
     ));
     criteria.push(readiness_criterion(
         "critic",
@@ -823,6 +866,7 @@ fn read_expected_diagnostic_codes(path: &Path) -> Result<Vec<String>> {
 fn critic_status(
     critic_perlcritic_compat_receipt: &Path,
     critic_check_receipt: &Path,
+    critic_false_positive_receipt: &Path,
 ) -> Result<CriticStatus> {
     let registry = NativeCriticRegistry::recommended();
     let native_rules = registry.rule_ids().into_iter().map(ToOwned::to_owned).collect::<Vec<_>>();
@@ -841,6 +885,11 @@ fn critic_status(
     };
     let check_receipt =
         if critic_check_receipt.exists() { Some(read_json(critic_check_receipt)?) } else { None };
+    let false_positive_receipt = if critic_false_positive_receipt.exists() {
+        Some(read_json(critic_false_positive_receipt)?)
+    } else {
+        None
+    };
 
     Ok(CriticStatus {
         native_rule_count: native_rules.len(),
@@ -866,6 +915,29 @@ fn critic_status(
         ),
         critic_check_fixable_findings_count: optional_usize(
             &check_receipt,
+            "fixable_findings_count",
+        ),
+        critic_false_positive_receipt: critic_false_positive_receipt.display().to_string(),
+        critic_false_positive_receipt_present: false_positive_receipt.is_some(),
+        critic_false_positive_files_checked: optional_usize(
+            &false_positive_receipt,
+            "files_checked",
+        ),
+        critic_false_positive_files_with_parse_errors: optional_usize(
+            &false_positive_receipt,
+            "files_with_parse_errors",
+        ),
+        critic_false_positive_rules_run: optional_usize(&false_positive_receipt, "rules_run"),
+        critic_false_positive_findings_count: optional_usize(
+            &false_positive_receipt,
+            "findings_count",
+        ),
+        critic_false_positive_suppressed_findings_count: optional_usize(
+            &false_positive_receipt,
+            "suppressed_findings_count",
+        ),
+        critic_false_positive_fixable_findings_count: optional_usize(
+            &false_positive_receipt,
             "fixable_findings_count",
         ),
         critic_perlcritic_compat_receipt: critic_perlcritic_compat_receipt.display().to_string(),
@@ -1050,6 +1122,30 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
         critic.critic_check_fixable_findings_count,
         critic.critic_check_receipt_present,
     );
+    let critic_false_positive_files_checked = optional_metric(
+        critic.critic_false_positive_files_checked,
+        critic.critic_false_positive_receipt_present,
+    );
+    let critic_false_positive_parse_errors = optional_metric(
+        critic.critic_false_positive_files_with_parse_errors,
+        critic.critic_false_positive_receipt_present,
+    );
+    let critic_false_positive_rules_run = optional_metric(
+        critic.critic_false_positive_rules_run,
+        critic.critic_false_positive_receipt_present,
+    );
+    let critic_false_positive_findings = optional_metric(
+        critic.critic_false_positive_findings_count,
+        critic.critic_false_positive_receipt_present,
+    );
+    let critic_false_positive_suppressed = optional_metric(
+        critic.critic_false_positive_suppressed_findings_count,
+        critic.critic_false_positive_receipt_present,
+    );
+    let critic_false_positive_fixable = optional_metric(
+        critic.critic_false_positive_fixable_findings_count,
+        critic.critic_false_positive_receipt_present,
+    );
     let perlcritic_compat_items = optional_metric(
         critic.perlcritic_compat_item_count,
         critic.critic_perlcritic_compat_receipt_present,
@@ -1126,6 +1222,12 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
 | Native critic check findings | {} |
 | Native critic check suppressed | {} |
 | Native critic check fixable | {} |
+| Native critic false-positive files | {} |
+| Native critic false-positive parse errors | {} |
+| Native critic false-positive rules run | {} |
+| Native critic false-positive findings | {} |
+| Native critic false-positive suppressed | {} |
+| Native critic false-positive fixable | {} |
 | Perlcritic compatibility items | {} |
 | Perlcritic compatibility native-equivalent | {} |
 | Perlcritic compatibility native-superset | {} |
@@ -1177,6 +1279,12 @@ Fixable native rules:
         critic_check_findings,
         critic_check_suppressed,
         critic_check_fixable,
+        critic_false_positive_files_checked,
+        critic_false_positive_parse_errors,
+        critic_false_positive_rules_run,
+        critic_false_positive_findings,
+        critic_false_positive_suppressed,
+        critic_false_positive_fixable,
         perlcritic_compat_items,
         perlcritic_compat_native_equivalent,
         perlcritic_compat_native_superset,
@@ -1623,10 +1731,23 @@ mod tests {
             r#"{
   "files_checked": 3,
   "files_with_parse_errors": 0,
-  "rules_run": 27,
+  "rules_run": 28,
   "findings_count": 4,
   "suppressed_findings_count": 1,
   "fixable_findings_count": 2
+}
+"#,
+        )?;
+        let critic_false_positive_receipt = receipts.join("native-critic-false-positive.json");
+        fs::write(
+            &critic_false_positive_receipt,
+            r#"{
+  "files_checked": 3,
+  "files_with_parse_errors": 0,
+  "rules_run": 28,
+  "findings_count": 0,
+  "suppressed_findings_count": 0,
+  "fixable_findings_count": 0
 }
 "#,
         )?;
@@ -1644,6 +1765,7 @@ mod tests {
             format_config_receipt: format_config_receipt.clone(),
             critic_perlcritic_compat_receipt: critic_perlcritic_compat_receipt.clone(),
             critic_check_receipt: critic_check_receipt.clone(),
+            critic_false_positive_receipt: critic_false_positive_receipt.clone(),
             receipt: receipt.clone(),
             markdown: Some(markdown.clone()),
         })?;
@@ -1688,10 +1810,17 @@ mod tests {
         assert_eq!(value["critic"]["critic_check_receipt_present"], true);
         assert_eq!(value["critic"]["critic_check_files_checked"], 3);
         assert_eq!(value["critic"]["critic_check_files_with_parse_errors"], 0);
-        assert_eq!(value["critic"]["critic_check_rules_run"], 27);
+        assert_eq!(value["critic"]["critic_check_rules_run"], 28);
         assert_eq!(value["critic"]["critic_check_findings_count"], 4);
         assert_eq!(value["critic"]["critic_check_suppressed_findings_count"], 1);
         assert_eq!(value["critic"]["critic_check_fixable_findings_count"], 2);
+        assert_eq!(value["critic"]["critic_false_positive_receipt_present"], true);
+        assert_eq!(value["critic"]["critic_false_positive_files_checked"], 3);
+        assert_eq!(value["critic"]["critic_false_positive_files_with_parse_errors"], 0);
+        assert_eq!(value["critic"]["critic_false_positive_rules_run"], 28);
+        assert_eq!(value["critic"]["critic_false_positive_findings_count"], 0);
+        assert_eq!(value["critic"]["critic_false_positive_suppressed_findings_count"], 0);
+        assert_eq!(value["critic"]["critic_false_positive_fixable_findings_count"], 0);
         assert_eq!(value["critic"]["critic_perlcritic_compat_receipt_present"], true);
         assert_eq!(value["critic"]["perlcritic_compat_item_count"], 12);
         assert_eq!(value["critic"]["perlcritic_compat_native_equivalent_count"], 5);
@@ -1741,10 +1870,16 @@ mod tests {
         assert!(markdown.contains("| Config trailing comma | add-when-wrapped |"));
         assert!(markdown.contains("| Native critic check files | 3 |"));
         assert!(markdown.contains("| Native critic check parse errors | 0 |"));
-        assert!(markdown.contains("| Native critic check rules run | 27 |"));
+        assert!(markdown.contains("| Native critic check rules run | 28 |"));
         assert!(markdown.contains("| Native critic check findings | 4 |"));
         assert!(markdown.contains("| Native critic check suppressed | 1 |"));
         assert!(markdown.contains("| Native critic check fixable | 2 |"));
+        assert!(markdown.contains("| Native critic false-positive files | 3 |"));
+        assert!(markdown.contains("| Native critic false-positive parse errors | 0 |"));
+        assert!(markdown.contains("| Native critic false-positive rules run | 28 |"));
+        assert!(markdown.contains("| Native critic false-positive findings | 0 |"));
+        assert!(markdown.contains("| Native critic false-positive suppressed | 0 |"));
+        assert!(markdown.contains("| Native critic false-positive fixable | 0 |"));
         assert!(markdown.contains("| Perlcritic compatibility items | 12 |"));
         assert!(markdown.contains("| Perlcritic compatibility native-equivalent | 5 |"));
         assert!(markdown.contains("| Perlcritic compatibility native-superset | 2 |"));
@@ -1761,6 +1896,7 @@ mod tests {
             format_config_receipt,
             critic_perlcritic_compat_receipt,
             critic_check_receipt,
+            critic_false_positive_receipt,
             receipt: missing_status_receipt.clone(),
             markdown: Some(missing_markdown.clone()),
         })?;
@@ -1912,6 +2048,14 @@ color = 1
                 critic_check_findings_count: Some(1),
                 critic_check_suppressed_findings_count: Some(0),
                 critic_check_fixable_findings_count: Some(1),
+                critic_false_positive_receipt: "native-critic-false-positive.json".to_string(),
+                critic_false_positive_receipt_present: true,
+                critic_false_positive_files_checked: Some(2),
+                critic_false_positive_files_with_parse_errors: Some(0),
+                critic_false_positive_rules_run: Some(2),
+                critic_false_positive_findings_count: Some(0),
+                critic_false_positive_suppressed_findings_count: Some(0),
+                critic_false_positive_fixable_findings_count: Some(0),
                 critic_perlcritic_compat_receipt: "perlcritic-compat.json".to_string(),
                 critic_perlcritic_compat_receipt_present: true,
                 perlcritic_compat_item_count: Some(4),
@@ -1943,6 +2087,10 @@ color = 1
         assert!(criteria.iter().any(|criterion| {
             criterion["name"] == "native critic default" && criterion["status"] == "blocked"
         }));
+        assert!(criteria.iter().any(|criterion| {
+            criterion["name"] == "native critic false-positive fixtures are clean"
+                && criterion["status"] == "ready"
+        }));
 
         let markdown = fs::read_to_string(readiness_markdown)?;
         assert!(markdown.contains("# Native Tooling Readiness"));
@@ -1951,6 +2099,10 @@ color = 1
             "| formatter | perltidy compatibility has no external-only gaps | blocked |"
         ));
         assert!(markdown.contains("| critic | native critic default | blocked |"));
+        assert!(
+            markdown
+                .contains("| critic | native critic false-positive fixtures are clean | ready |")
+        );
         Ok(())
     }
 

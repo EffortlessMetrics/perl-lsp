@@ -1953,6 +1953,13 @@ enum NativeToolingCommand {
         #[arg(long, default_value = "target/receipts/native-tooling/native-critic-check.json")]
         critic_check_receipt: PathBuf,
 
+        /// Native critic false-positive fixture receipt to summarize.
+        #[arg(
+            long,
+            default_value = "target/receipts/native-tooling/native-critic-false-positive.json"
+        )]
+        critic_false_positive_receipt: PathBuf,
+
         /// Output path for native-tooling status JSON.
         #[arg(long, default_value = "target/receipts/native-tooling/status.json")]
         receipt: PathBuf,
@@ -2387,6 +2394,7 @@ fn main() -> Result<()> {
                 format_config_receipt,
                 critic_perlcritic_compat_receipt,
                 critic_check_receipt,
+                critic_false_positive_receipt,
                 receipt,
                 markdown,
             } => native_tooling::status(native_tooling::NativeToolingStatusConfig {
@@ -2397,6 +2405,7 @@ fn main() -> Result<()> {
                 format_config_receipt,
                 critic_perlcritic_compat_receipt,
                 critic_check_receipt,
+                critic_false_positive_receipt,
                 receipt,
                 markdown,
             }),
