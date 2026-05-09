@@ -202,6 +202,104 @@ fn build_artifact() -> Artifact {
                 ProviderFallbackState::Fallback,
             )],
         ),
+        receipt_from_identities(
+            ShadowQueryName::FindDefinition,
+            "navigation_definition_real_workspace_quality",
+            Some(vec!["lib/Real/Nav.pm:2:5"]),
+            Some(vec!["lib/Real/Nav.pm:2:5", "generated:Real::Nav::generated_accessor:virtual"]),
+            "definition real-workspace quality receipt: legacy_candidates=1; compiler_fact_candidates=5; answer_candidates=2; rank_delta=+1; noise_delta=1; query_latency=not_measured_shadow_only; generated_labels=1; dynamic_boundary_blockers=1; stale_fact_blockers=1; blocked_candidates=2; no live navigation behavior change",
+            vec![
+                trace(
+                    ProviderSurface::Definition,
+                    ProviderFactSourceKind::CompilerFact,
+                    Provenance::ImportExportInference,
+                    Confidence::High,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Shadow,
+                ),
+                trace(
+                    ProviderSurface::Definition,
+                    ProviderFactSourceKind::FrameworkAdapter,
+                    Provenance::FrameworkSynthesis,
+                    Confidence::Medium,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Shadow,
+                ),
+                trace(
+                    ProviderSurface::Definition,
+                    ProviderFactSourceKind::DynamicBoundary,
+                    Provenance::DynamicBoundary,
+                    Confidence::High,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Blocked,
+                ),
+                trace(
+                    ProviderSurface::Definition,
+                    ProviderFactSourceKind::CompilerFact,
+                    Provenance::SemanticAnalyzer,
+                    Confidence::Low,
+                    ProviderFactFreshness::Stale,
+                    ProviderFallbackState::Blocked,
+                ),
+                trace(
+                    ProviderSurface::Definition,
+                    ProviderFactSourceKind::Fallback,
+                    Provenance::NameHeuristic,
+                    Confidence::Low,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Fallback,
+                ),
+            ],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::FindReferences,
+            "navigation_references_real_workspace_quality",
+            Some(vec!["script/app.pl:2:1"]),
+            Some(vec!["script/app.pl:2:1", "generated:Real::Nav::generated_accessor:virtual"]),
+            "references real-workspace quality receipt: legacy_candidates=1; compiler_fact_candidates=5; answer_candidates=2; rank_delta=+1; noise_delta=1; query_latency=not_measured_shadow_only; generated_labels=1; dynamic_boundary_blockers=1; stale_fact_blockers=1; blocked_candidates=2; no live navigation behavior change",
+            vec![
+                trace(
+                    ProviderSurface::References,
+                    ProviderFactSourceKind::CompilerFact,
+                    Provenance::ImportExportInference,
+                    Confidence::High,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Shadow,
+                ),
+                trace(
+                    ProviderSurface::References,
+                    ProviderFactSourceKind::FrameworkAdapter,
+                    Provenance::FrameworkSynthesis,
+                    Confidence::Medium,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Shadow,
+                ),
+                trace(
+                    ProviderSurface::References,
+                    ProviderFactSourceKind::DynamicBoundary,
+                    Provenance::DynamicBoundary,
+                    Confidence::High,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Blocked,
+                ),
+                trace(
+                    ProviderSurface::References,
+                    ProviderFactSourceKind::CompilerFact,
+                    Provenance::SemanticAnalyzer,
+                    Confidence::Low,
+                    ProviderFactFreshness::Stale,
+                    ProviderFallbackState::Blocked,
+                ),
+                trace(
+                    ProviderSurface::References,
+                    ProviderFactSourceKind::Fallback,
+                    Provenance::NameHeuristic,
+                    Confidence::Low,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Fallback,
+                ),
+            ],
+        ),
         receipt_from_counts(
             ShadowQueryName::CountUsages,
             "Foo::bar",
@@ -996,12 +1094,12 @@ mod tests {
         let artifact = build_artifact();
         assert_eq!(artifact.schema_version, 3);
         assert_eq!(artifact.verdict_counts.get("same"), Some(&32));
-        assert_eq!(artifact.verdict_counts.get("improved"), Some(&11));
+        assert_eq!(artifact.verdict_counts.get("improved"), Some(&13));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&2));
         assert_eq!(artifact.verdict_counts.get("unavailable"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("same"), Some(&9));
-        assert_eq!(artifact.release_readiness_verdict_counts.get("improved"), Some(&1));
+        assert_eq!(artifact.release_readiness_verdict_counts.get("improved"), Some(&3));
         assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&23));
@@ -1106,11 +1204,19 @@ mod tests {
         assert!(markdown.contains("| release-readiness | FindDefinition | Definition | CompilerFact | ImportExportInference | High | Fresh | Shadow |"));
         assert!(markdown.contains("| release-readiness | FindDefinition | Definition | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |"));
         assert!(markdown.contains("| release-readiness | FindDefinition | Definition | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
+        assert!(markdown.contains("| release-readiness | FindDefinition | Definition | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |"));
         assert!(markdown.contains("| release-readiness | FindDefinition | Definition | Fallback | NameHeuristic | Low | Fresh | Fallback |"));
+        assert!(markdown.contains(
+            "| release-readiness | FindDefinition | `navigation_definition_real_workspace_quality` | improved | 1 | 2 |"
+        ));
         assert!(markdown.contains("| release-readiness | FindReferences | References | CompilerFact | ImportExportInference | High | Fresh | Shadow |"));
         assert!(markdown.contains("| release-readiness | FindReferences | References | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |"));
         assert!(markdown.contains("| release-readiness | FindReferences | References | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
+        assert!(markdown.contains("| release-readiness | FindReferences | References | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |"));
         assert!(markdown.contains("| release-readiness | FindReferences | References | Fallback | NameHeuristic | Low | Fresh | Fallback |"));
+        assert!(markdown.contains(
+            "| release-readiness | FindReferences | `navigation_references_real_workspace_quality` | improved | 1 | 2 |"
+        ));
     }
 
     #[test]

@@ -2,14 +2,14 @@
 
 Measured: `deterministic-fixture-baseline`
 
-Receipts: `46`
+Receipts: `48`
 
 ## Verdict Counts
 
 | Verdict | Count |
 |---|---:|
 | ambiguous | 2 |
-| improved | 11 |
+| improved | 13 |
 | regression | 1 |
 | same | 32 |
 | unavailable | 0 |
@@ -19,7 +19,7 @@ Receipts: `46`
 | Verdict | Count |
 |---|---:|
 | ambiguous | 0 |
-| improved | 1 |
+| improved | 3 |
 | regression | 0 |
 | same | 9 |
 | unavailable | 0 |
@@ -48,6 +48,8 @@ Receipts: `46`
 | release-readiness | FindReferences | `generated_accessor` | same | 1 | 1 |
 | release-readiness | FindReferences | `dynamic_symbol` | same | 0 | 0 |
 | release-readiness | FindReferences | `low_confidence_candidate` | same | 1 | 1 |
+| release-readiness | FindDefinition | `navigation_definition_real_workspace_quality` | improved | 1 | 2 |
+| release-readiness | FindReferences | `navigation_references_real_workspace_quality` | improved | 1 | 2 |
 | schema-fixture | CountUsages | `Foo::bar` | regression | 4 | 3 |
 | schema-fixture | VisibleSymbols | `Foo::bar` | ambiguous | 2 | 2 |
 | schema-fixture | CompletionVisibility | `completion_import_candidates` | improved | 1 | 2 |
@@ -98,6 +100,16 @@ Receipts: `46`
 | release-readiness | FindReferences | References | CompilerFact | ImportExportInference | High | Fresh | Shadow |
 | release-readiness | FindReferences | References | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |
 | release-readiness | FindReferences | References | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
+| release-readiness | FindReferences | References | Fallback | NameHeuristic | Low | Fresh | Fallback |
+| release-readiness | FindDefinition | Definition | CompilerFact | ImportExportInference | High | Fresh | Shadow |
+| release-readiness | FindDefinition | Definition | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |
+| release-readiness | FindDefinition | Definition | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
+| release-readiness | FindDefinition | Definition | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |
+| release-readiness | FindDefinition | Definition | Fallback | NameHeuristic | Low | Fresh | Fallback |
+| release-readiness | FindReferences | References | CompilerFact | ImportExportInference | High | Fresh | Shadow |
+| release-readiness | FindReferences | References | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |
+| release-readiness | FindReferences | References | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
+| release-readiness | FindReferences | References | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |
 | release-readiness | FindReferences | References | Fallback | NameHeuristic | Low | Fresh | Fallback |
 | schema-fixture | CountUsages | References | SemanticFact | SemanticAnalyzer | Medium | Fresh | Shadow |
 | schema-fixture | VisibleSymbols | Completion | CompilerFact | ImportExportInference | Medium | Fresh | Shadow |

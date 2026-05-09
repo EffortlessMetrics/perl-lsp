@@ -83,7 +83,7 @@ pub fn find_references_shadow<Q: SemanticQueries>(
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
-        Vec::new(),
+        vec![references_shadow_quality_note(&legacy_locations, &new_occurrences)],
         references_fact_source_traces(&new_occurrences, ProviderFallbackState::Shadow),
     );
 
@@ -278,6 +278,60 @@ fn references_fact_source_traces(
     traces
 }
 
+fn references_shadow_quality_note(
+    legacy_locations: &[Location],
+    occurrences: &[OccurrenceFact],
+) -> String {
+    let answer_count = references_answer_occurrence_count(occurrences);
+    let generated_label_count = occurrences
+        .iter()
+        .filter(|occurrence| {
+            occurrence.kind == OccurrenceKind::GeneratedUse
+                || occurrence.provenance == Provenance::FrameworkSynthesis
+        })
+        .count();
+    let dynamic_boundary_blockers =
+        occurrences.iter().filter(|occurrence| is_dynamic_boundary_occurrence(occurrence)).count();
+    let noise_delta = occurrences
+        .iter()
+        .filter(|occurrence| {
+            occurrence.confidence == Confidence::Low
+                || matches!(
+                    occurrence.provenance,
+                    Provenance::NameHeuristic | Provenance::SearchFallback
+                )
+        })
+        .count();
+
+    format!(
+        "references shadow proof: legacy_candidates={}; compiler_fact_candidates={}; answer_candidates={answer_count}; rank_delta={}; noise_delta={noise_delta}; generated_labels={generated_label_count}; dynamic_boundary_blockers={dynamic_boundary_blockers}; stale_fact_blockers=0; blocked_candidates={dynamic_boundary_blockers}; no live navigation behavior change",
+        legacy_locations.len(),
+        occurrences.len(),
+        signed_count_delta(legacy_locations.len(), answer_count)
+    )
+}
+
+fn references_answer_occurrence_count(occurrences: &[OccurrenceFact]) -> usize {
+    occurrences
+        .iter()
+        .filter(|occurrence| {
+            let (source, _, state) =
+                references_trace_shape(occurrence, ProviderFallbackState::Shadow);
+            state != ProviderFallbackState::Blocked
+                && source != ProviderFactSourceKind::Fallback
+                && occurrence.confidence != Confidence::Low
+        })
+        .count()
+}
+
+fn signed_count_delta(old_count: usize, new_count: usize) -> String {
+    if new_count >= old_count {
+        format!("+{}", new_count - old_count)
+    } else {
+        format!("-{}", old_count - new_count)
+    }
+}
+
 fn references_trace_shape(
     occurrence: &OccurrenceFact,
     fallback_state: ProviderFallbackState,
@@ -370,6 +424,7 @@ mod tests {
         DynamicCallableEvidence, QueryContext, SemanticQueries,
     };
     use perl_workspace::semantic_shadow_compare::ShadowCompareVerdict;
+    use url::Url;
 
     // ── Minimal SemanticQueries stub for testing ──
 
@@ -475,6 +530,24 @@ mod tests {
             Some(trace) => Ok(trace),
             None => Err("missing fact-source trace".into()),
         }
+    }
+
+    fn file_url(path: &str) -> Result<Url, Box<dyn std::error::Error>> {
+        Ok(Url::parse(&format!("file://{path}"))?)
+    }
+
+    fn build_real_workspace_references_index() -> Result<WorkspaceIndex, Box<dyn std::error::Error>>
+    {
+        let index = WorkspaceIndex::new();
+        index.index_file(
+            file_url("/lib/Real/Nav.pm")?,
+            "package Real::Nav;\nsub legacy_helper { 1 }\n1;\n".to_string(),
+        )?;
+        index.index_file(
+            file_url("/script/app.pl")?,
+            "use Real::Nav;\nReal::Nav::legacy_helper();\nlegacy_helper();\n".to_string(),
+        )?;
+        Ok(index)
     }
 
     // ── Shadow mode tests ──
@@ -885,6 +958,78 @@ mod tests {
         assert!(outcome.receipt.fact_source_traces.iter().any(|trace| {
             trace.source == ProviderFactSourceKind::Fallback
                 && trace.provenance == Provenance::NameHeuristic
+                && trace.confidence == Confidence::Low
+                && trace.fallback_state == ProviderFallbackState::Fallback
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn references_shadow_records_real_workspace_quality_receipt()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = build_real_workspace_references_index()?;
+        let imported = make_occurrence(
+            1,
+            10,
+            20,
+            OccurrenceKind::Reference,
+            Provenance::ImportExportInference,
+            Confidence::High,
+        );
+        let generated = make_occurrence(
+            2,
+            11,
+            20,
+            OccurrenceKind::GeneratedUse,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+        );
+        let dynamic = make_occurrence(
+            3,
+            12,
+            20,
+            OccurrenceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            Confidence::High,
+        );
+        let low_confidence = make_occurrence(
+            4,
+            13,
+            20,
+            OccurrenceKind::Reference,
+            Provenance::NameHeuristic,
+            Confidence::Low,
+        );
+        let queries = StubSemanticQueries {
+            references_result: vec![imported, generated, dynamic, low_confidence],
+        };
+
+        let result =
+            find_references_shadow(&index, &queries, "Real::Nav::legacy_helper", EntityId(20));
+
+        assert!(!result.legacy_result.is_empty(), "legacy workspace references should resolve");
+        assert_eq!(result.receipt.new_result.match_count, 4);
+        let note = result.receipt.notes.join(" ");
+        assert!(note.contains("compiler_fact_candidates=4"));
+        assert!(note.contains("answer_candidates=2"));
+        assert!(note.contains("noise_delta=1"));
+        assert!(note.contains("generated_labels=1"));
+        assert!(note.contains("dynamic_boundary_blockers=1"));
+        assert!(note.contains("stale_fact_blockers=0"));
+        assert!(note.contains("blocked_candidates=1"));
+        assert!(note.contains("no live navigation behavior change"));
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::FrameworkAdapter
+                && trace.provenance == Provenance::FrameworkSynthesis
+                && trace.fallback_state == ProviderFallbackState::Shadow
+        }));
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::DynamicBoundary
+                && trace.provenance == Provenance::DynamicBoundary
+                && trace.fallback_state == ProviderFallbackState::Blocked
+        }));
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::Fallback
                 && trace.confidence == Confidence::Low
                 && trace.fallback_state == ProviderFallbackState::Fallback
         }));
