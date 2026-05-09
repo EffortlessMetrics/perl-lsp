@@ -1854,6 +1854,20 @@ enum NativeFormatCommand {
         #[arg(long, default_value = "target/receipts/format/native-format-corpus-summary.md")]
         summary: PathBuf,
     },
+    /// Classify a .perltidyrc-style profile against native formatter compatibility.
+    PerltidyCompat {
+        /// Path to the `.perltidyrc` profile to classify.
+        #[arg(long)]
+        profile: PathBuf,
+
+        /// Output JSON receipt path.
+        #[arg(long, default_value = "target/receipts/format/native-format-perltidy-compat.json")]
+        receipt: PathBuf,
+
+        /// Output markdown summary path.
+        #[arg(long, default_value = "target/receipts/format/native-format-perltidy-compat.md")]
+        summary: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2229,6 +2243,13 @@ fn main() -> Result<()> {
             NativeFormatCommand::Corpus { roots, receipt, summary } => {
                 native_format::corpus(native_format::NativeFormatCorpusConfig {
                     roots,
+                    receipt,
+                    summary,
+                })
+            }
+            NativeFormatCommand::PerltidyCompat { profile, receipt, summary } => {
+                native_format::perltidy_compat(native_format::NativeFormatPerltidyCompatConfig {
+                    profile,
                     receipt,
                     summary,
                 })
