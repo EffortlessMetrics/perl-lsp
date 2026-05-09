@@ -157,7 +157,9 @@ impl CodeActionsProvider {
                         ));
                     }
                     // PL500: Deprecated defined()
-                    c if c == DiagnosticCode::DeprecatedDefined.as_str() => {
+                    c if c == DiagnosticCode::DeprecatedDefined.as_str()
+                        || c == "native.common.deprecated_defined" =>
+                    {
                         actions.extend(quick_fixes::fix_deprecated_defined(&self.source, &qf_diag));
                     }
                     // PL404: Numeric comparison with undef
@@ -394,6 +396,52 @@ mod tests {
         assert!(
             actions.iter().any(|a| a.title == "Keep assignment (add parentheses)"),
             "Expected native critic alias to offer intentional-assignment fix, got: {:?}",
+            actions
+        );
+    }
+
+    #[test]
+    fn test_native_deprecated_defined_alias_produces_quick_fix() {
+        let source = "if (defined @items) { print @items; }";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![make_diagnostic(
+            4,
+            18,
+            "native.common.deprecated_defined",
+            "Use of 'defined @items' is deprecated",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(
+            actions.iter().any(|a| a.title == "Replace with '@items'"
+                && a.edit.changes.iter().any(|edit| edit.new_text == "@items")),
+            "Expected native deprecated-defined alias to offer defined() removal, got: {:?}",
+            actions
+        );
+    }
+
+    #[test]
+    fn test_native_deprecated_defined_alias_normalizes_parenthesized_quick_fix() {
+        let source = "if (defined(%seen)) { print keys %seen; }";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![make_diagnostic(
+            4,
+            18,
+            "native.common.deprecated_defined",
+            "Use of 'defined %seen' is deprecated",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(
+            actions.iter().any(|a| a.title == "Replace with '%seen'"
+                && a.edit.changes.iter().any(|edit| edit.new_text == "%seen")),
+            "Expected native deprecated-defined alias to normalize parenthesized defined() removal, got: {:?}",
             actions
         );
     }

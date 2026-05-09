@@ -353,10 +353,11 @@ pub fn fix_deprecated_defined(source: &str, diagnostic: &QuickFixDiagnostic) -> 
         let arg_start = defined_start + 7; // "defined".len()
 
         // Find the argument
-        let arg_text = &source[arg_start..diagnostic.range.1].trim();
+        let raw_arg = source[arg_start..diagnostic.range.1].trim();
+        let arg_text = normalize_deprecated_defined_arg(raw_arg);
 
         actions.push(CodeAction {
-            title: format!("Replace with 'if ({})'", arg_text),
+            title: format!("Replace with '{}'", arg_text),
             kind: CodeActionKind::QuickFix,
             diagnostics: vec![DiagnosticCode::DeprecatedDefined.as_str().to_string()],
             edit: CodeActionEdit {
@@ -370,6 +371,14 @@ pub fn fix_deprecated_defined(source: &str, diagnostic: &QuickFixDiagnostic) -> 
     }
 
     actions
+}
+
+fn normalize_deprecated_defined_arg(raw_arg: &str) -> &str {
+    raw_arg
+        .strip_prefix('(')
+        .and_then(|inner| inner.strip_suffix(')'))
+        .map(str::trim)
+        .unwrap_or(raw_arg)
 }
 
 /// Fix numeric comparison with undef

@@ -14,7 +14,7 @@ pub use built_in::{BuiltInAnalyzer, Policy};
 pub use native::{
     AssignmentInConditionRule, CriticCategory, CriticContext, CriticFinding, CriticFix,
     CriticRelatedInformation, CriticRule, CriticSuppression, CriticSuppressionMap,
-    CriticSuppressionScope, CriticTextEdit, DuplicateLexicalDeclarationRule,
+    CriticSuppressionScope, CriticTextEdit, DeprecatedDefinedRule, DuplicateLexicalDeclarationRule,
     DuplicateParameterRule, FixSafety, NativeCriticRegistry, ParameterShadowsGlobalRule,
     PrintfFormatArityRule, RequireUseStrictRule, RequireUseWarningsRule,
     ShadowedLexicalVariableRule, UnusedLexicalVariableRule, UnusedParameterRule,
