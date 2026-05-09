@@ -412,6 +412,126 @@ fn build_artifact() -> Artifact {
                 ProviderFallbackState::Blocked,
             )],
         ),
+        receipt_from_identities(
+            ShadowQueryName::RenamePlan,
+            "rename_exact_static",
+            Some(vec!["edit:definition:anchor:1"]),
+            Some(vec!["edit:definition:anchor:1"]),
+            "rename boundary proof: exact static edit remains traceable as a fresh semantic fact",
+            vec![trace(
+                ProviderSurface::Rename,
+                ProviderFactSourceKind::SemanticFact,
+                Provenance::ExactAst,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::RenamePlan,
+            "rename_dynamic_boundary",
+            Some(vec!["blocker:DynamicBoundary"]),
+            Some(vec!["blocker:DynamicBoundary"]),
+            "rename boundary proof: dynamic-boundary facts block unsafe edits instead of authorizing rename",
+            vec![trace(
+                ProviderSurface::Rename,
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::RenamePlan,
+            "rename_stale_compiler_fact",
+            Some(vec!["blocker:StaleFact"]),
+            Some(vec!["blocker:StaleFact"]),
+            "rename boundary proof: stale compiler facts cannot authorize edits",
+            vec![trace(
+                ProviderSurface::Rename,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::Low,
+                ProviderFactFreshness::Stale,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::RenamePlan,
+            "rename_low_confidence",
+            Some(vec!["blocker:AmbiguousReference"]),
+            Some(vec!["blocker:AmbiguousReference"]),
+            "rename boundary proof: ambiguous low-confidence facts remain blockers",
+            vec![trace(
+                ProviderSurface::Rename,
+                ProviderFactSourceKind::SemanticFact,
+                Provenance::NameHeuristic,
+                Confidence::Low,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::SafeDeletePlan,
+            "safe_delete_exact_static",
+            Some(vec!["safe_delete:allowed"]),
+            Some(vec!["safe_delete:allowed"]),
+            "safe-delete boundary proof: exact static no-reference plan remains traceable",
+            vec![trace(
+                ProviderSurface::SafeDelete,
+                ProviderFactSourceKind::SemanticFact,
+                Provenance::ExactAst,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::SafeDeletePlan,
+            "safe_delete_dynamic_boundary",
+            Some(vec!["blocker:DynamicBoundary"]),
+            Some(vec!["blocker:DynamicBoundary"]),
+            "safe-delete boundary proof: dynamic-boundary facts block unsafe deletion",
+            vec![trace(
+                ProviderSurface::SafeDelete,
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::SafeDeletePlan,
+            "safe_delete_generated_member",
+            Some(vec!["blocker:GeneratedMember"]),
+            Some(vec!["blocker:GeneratedMember"]),
+            "safe-delete boundary proof: framework-generated members block deletion unless a generator-aware plan exists",
+            vec![trace(
+                ProviderSurface::SafeDelete,
+                ProviderFactSourceKind::FrameworkAdapter,
+                Provenance::FrameworkSynthesis,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::SafeDeletePlan,
+            "safe_delete_stale_compiler_fact",
+            Some(vec!["blocker:StaleFact"]),
+            Some(vec!["blocker:StaleFact"]),
+            "safe-delete boundary proof: stale compiler facts cannot authorize deletion",
+            vec![trace(
+                ProviderSurface::SafeDelete,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::Low,
+                ProviderFactFreshness::Stale,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
     ];
 
     let verdict_counts = count_verdicts(&receipts);
@@ -627,7 +747,7 @@ mod tests {
     fn artifact_includes_required_verdict_rows() {
         let artifact = build_artifact();
         assert_eq!(artifact.schema_version, 3);
-        assert_eq!(artifact.verdict_counts.get("same"), Some(&15));
+        assert_eq!(artifact.verdict_counts.get("same"), Some(&23));
         assert_eq!(artifact.verdict_counts.get("improved"), Some(&6));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&2));
@@ -636,7 +756,7 @@ mod tests {
         assert_eq!(artifact.release_readiness_verdict_counts.get("improved"), Some(&1));
         assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&6));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&14));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&5));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&2));
@@ -678,6 +798,14 @@ mod tests {
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | FrameworkSynthesis | High | Fresh | Primary |"));
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | Low | Fresh | Fallback |"));
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
+        assert!(markdown.contains("| schema-fixture | RenamePlan | Rename | SemanticFact | ExactAst | High | Fresh | Shadow |"));
+        assert!(markdown.contains("| schema-fixture | RenamePlan | Rename | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
+        assert!(markdown.contains("| schema-fixture | RenamePlan | Rename | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |"));
+        assert!(markdown.contains("| schema-fixture | RenamePlan | Rename | SemanticFact | NameHeuristic | Low | Fresh | Blocked |"));
+        assert!(markdown.contains("| schema-fixture | SafeDeletePlan | SafeDelete | SemanticFact | ExactAst | High | Fresh | Shadow |"));
+        assert!(markdown.contains("| schema-fixture | SafeDeletePlan | SafeDelete | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
+        assert!(markdown.contains("| schema-fixture | SafeDeletePlan | SafeDelete | FrameworkAdapter | FrameworkSynthesis | High | Fresh | Blocked |"));
+        assert!(markdown.contains("| schema-fixture | SafeDeletePlan | SafeDelete | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |"));
         assert!(markdown.contains("| release-readiness | FindDefinition | Definition | CompilerFact | ImportExportInference | High | Fresh | Shadow |"));
         assert!(markdown.contains("| release-readiness | FindDefinition | Definition | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |"));
         assert!(markdown.contains("| release-readiness | FindDefinition | Definition | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));

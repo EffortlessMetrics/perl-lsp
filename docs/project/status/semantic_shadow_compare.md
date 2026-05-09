@@ -2,7 +2,7 @@
 
 Measured: `deterministic-fixture-baseline`
 
-Receipts: `24`
+Receipts: `32`
 
 ## Verdict Counts
 
@@ -11,7 +11,7 @@ Receipts: `24`
 | ambiguous | 2 |
 | improved | 6 |
 | regression | 1 |
-| same | 15 |
+| same | 23 |
 | unavailable | 0 |
 
 ## Release-Readiness Verdict Counts
@@ -31,7 +31,7 @@ Receipts: `24`
 | ambiguous | 2 |
 | improved | 5 |
 | regression | 1 |
-| same | 6 |
+| same | 14 |
 | unavailable | 0 |
 
 ## Receipts
@@ -62,6 +62,14 @@ Receipts: `24`
 | schema-fixture | DiagnosticsCheck | `genuinely_missing` | same | 1 | 1 |
 | schema-fixture | DiagnosticsCheck | `ambiguous_import` | ambiguous | 1 | 1 |
 | schema-fixture | DiagnosticsCheck | `symbolic_ref_boundary` | improved | 0 | 1 |
+| schema-fixture | RenamePlan | `rename_exact_static` | same | 1 | 1 |
+| schema-fixture | RenamePlan | `rename_dynamic_boundary` | same | 1 | 1 |
+| schema-fixture | RenamePlan | `rename_stale_compiler_fact` | same | 1 | 1 |
+| schema-fixture | RenamePlan | `rename_low_confidence` | same | 1 | 1 |
+| schema-fixture | SafeDeletePlan | `safe_delete_exact_static` | same | 1 | 1 |
+| schema-fixture | SafeDeletePlan | `safe_delete_dynamic_boundary` | same | 1 | 1 |
+| schema-fixture | SafeDeletePlan | `safe_delete_generated_member` | same | 1 | 1 |
+| schema-fixture | SafeDeletePlan | `safe_delete_stale_compiler_fact` | same | 1 | 1 |
 
 ## Fact Source Traces
 
@@ -91,5 +99,13 @@ Receipts: `24`
 | schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | SemanticAnalyzer | High | Fresh | Primary |
 | schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | Low | Fresh | Fallback |
 | schema-fixture | DiagnosticsCheck | Diagnostics | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
+| schema-fixture | RenamePlan | Rename | SemanticFact | ExactAst | High | Fresh | Shadow |
+| schema-fixture | RenamePlan | Rename | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
+| schema-fixture | RenamePlan | Rename | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |
+| schema-fixture | RenamePlan | Rename | SemanticFact | NameHeuristic | Low | Fresh | Blocked |
+| schema-fixture | SafeDeletePlan | SafeDelete | SemanticFact | ExactAst | High | Fresh | Shadow |
+| schema-fixture | SafeDeletePlan | SafeDelete | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
+| schema-fixture | SafeDeletePlan | SafeDelete | FrameworkAdapter | FrameworkSynthesis | High | Fresh | Blocked |
+| schema-fixture | SafeDeletePlan | SafeDelete | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |
 
 0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes.
