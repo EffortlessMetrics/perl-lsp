@@ -24,7 +24,10 @@
 //! - **Req 22.3**: Exact → jump; Ambiguous → show candidates;
 //!   Dynamic/Unavailable → fall back to legacy.
 
-use perl_semantic_facts::{Confidence, DefinitionCandidate, Provenance};
+use perl_semantic_facts::{
+    Confidence, DefinitionCandidate, EntityKind, Provenance, ProviderFactFreshness,
+    ProviderFactSourceKind, ProviderFactTrace, ProviderFallbackState, ProviderSurface,
+};
 use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
 use perl_workspace::semantic_shadow_compare::{
     SemanticShadowCompareReceipt, ShadowQueryInput, ShadowQueryName, ShadowResultSummary,
@@ -75,12 +78,13 @@ pub fn goto_definition_shadow<Q: SemanticQueries>(
     let new_summary = semantic_candidates_to_summary(&new_candidates);
 
     // ── Build receipt ──
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::FindDefinition,
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
         Vec::new(),
+        definition_fact_source_traces(&new_candidates, ProviderFallbackState::Shadow),
     );
 
     tracing::debug!(
@@ -164,25 +168,28 @@ pub fn goto_definition_cutover<Q: SemanticQueries>(
     // Filter to usable candidates: exclude dynamic-boundary provenance and
     // low-confidence results that cannot drive a reliable jump.
     let usable: Vec<DefinitionCandidate> = all_candidates
-        .into_iter()
+        .iter()
         .filter(|c| c.provenance != Provenance::DynamicBoundary && c.confidence != Confidence::Low)
+        .cloned()
         .collect();
 
     // ── Legacy path (for fallback and receipt) ──
     let legacy_location = workspace_index.find_definition(symbol);
     let old_summary = legacy_location_to_summary(legacy_location.as_ref());
 
+    // ── Classify result ──
+    let result = classify_cutover_result(usable, legacy_location);
+    let fallback_state = definition_cutover_fallback_state(&result);
+
     // ── Build receipt ──
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::FindDefinition,
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
         Vec::new(),
+        definition_fact_source_traces(&all_candidates, fallback_state),
     );
-
-    // ── Classify result ──
-    let result = classify_cutover_result(usable, legacy_location);
 
     tracing::debug!(
         symbol = %symbol,
@@ -215,6 +222,100 @@ fn classify_cutover_result(
             }
         }
         _ => DefinitionCutoverResult::Ambiguous(usable),
+    }
+}
+
+fn definition_cutover_fallback_state(result: &DefinitionCutoverResult) -> ProviderFallbackState {
+    match result {
+        DefinitionCutoverResult::Exact(_) | DefinitionCutoverResult::Ambiguous(_) => {
+            ProviderFallbackState::Primary
+        }
+        DefinitionCutoverResult::LegacyFallback(_) => ProviderFallbackState::Fallback,
+    }
+}
+
+fn definition_fact_source_traces(
+    candidates: &[DefinitionCandidate],
+    fallback_state: ProviderFallbackState,
+) -> Vec<ProviderFactTrace> {
+    let mut traces: Vec<ProviderFactTrace> = candidates
+        .iter()
+        .map(|candidate| {
+            let (source, provenance, state) = definition_trace_shape(candidate, fallback_state);
+            ProviderFactTrace::new(
+                ProviderSurface::Definition,
+                source,
+                provenance,
+                candidate.confidence,
+                ProviderFactFreshness::Fresh,
+                state,
+                None,
+                Some(candidate.anchor_id),
+                Some(1),
+            )
+        })
+        .collect();
+
+    if traces.is_empty() {
+        traces.push(ProviderFactTrace::new(
+            ProviderSurface::Definition,
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::NotApplicable,
+            ProviderFallbackState::Fallback,
+            None,
+            None,
+            Some(1),
+        ));
+    }
+
+    traces
+}
+
+fn definition_trace_shape(
+    candidate: &DefinitionCandidate,
+    fallback_state: ProviderFallbackState,
+) -> (ProviderFactSourceKind, Provenance, ProviderFallbackState) {
+    if candidate.provenance == Provenance::DynamicBoundary {
+        return (
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            ProviderFallbackState::Blocked,
+        );
+    }
+
+    match candidate.provenance {
+        Provenance::FrameworkSynthesis => (
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            fallback_state,
+        ),
+        Provenance::ImportExportInference | Provenance::PragmaInference => {
+            (ProviderFactSourceKind::CompilerFact, candidate.provenance, fallback_state)
+        }
+        Provenance::NameHeuristic | Provenance::SearchFallback => (
+            ProviderFactSourceKind::Fallback,
+            candidate.provenance,
+            ProviderFallbackState::Fallback,
+        ),
+        Provenance::ExactAst | Provenance::DesugaredAst | Provenance::SemanticAnalyzer
+            if candidate.kind == EntityKind::GeneratedMember =>
+        {
+            (
+                ProviderFactSourceKind::FrameworkAdapter,
+                Provenance::FrameworkSynthesis,
+                fallback_state,
+            )
+        }
+        Provenance::ExactAst | Provenance::DesugaredAst | Provenance::SemanticAnalyzer => {
+            (ProviderFactSourceKind::SemanticFact, candidate.provenance, fallback_state)
+        }
+        Provenance::DynamicBoundary => (
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            ProviderFallbackState::Blocked,
+        ),
     }
 }
 
@@ -464,6 +565,39 @@ mod tests {
         )
     }
 
+    fn make_candidate_with_trace_fields(
+        name: &str,
+        anchor_id: u64,
+        entity_id: u64,
+        kind: EntityKind,
+        confidence: Confidence,
+        provenance: Provenance,
+        rank: DefinitionRank,
+        rank_reason: DefinitionRankReason,
+    ) -> DefinitionCandidate {
+        DefinitionCandidate::new(
+            EntityId(entity_id),
+            AnchorId(anchor_id),
+            name.to_string(),
+            name.to_string(),
+            None,
+            kind,
+            provenance,
+            confidence,
+            rank,
+            rank_reason,
+        )
+    }
+
+    fn first_trace<'a>(
+        receipt: &'a SemanticShadowCompareReceipt,
+    ) -> Result<&'a ProviderFactTrace, Box<dyn std::error::Error>> {
+        match receipt.fact_source_traces.first() {
+            Some(trace) => Ok(trace),
+            None => Err("missing fact-source trace".into()),
+        }
+    }
+
     #[test]
     fn cutover_exact_single_high_confidence_candidate() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
@@ -582,6 +716,16 @@ mod tests {
 
         // Dynamic candidate filtered out, leaving exactly one usable → Exact.
         assert_eq!(outcome.result, DefinitionCutoverResult::Exact(good));
+        assert!(outcome.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::SemanticFact
+                && trace.provenance == Provenance::ExactAst
+                && trace.fallback_state == ProviderFallbackState::Primary
+        }));
+        assert!(outcome.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::DynamicBoundary
+                && trace.provenance == Provenance::DynamicBoundary
+                && trace.fallback_state == ProviderFallbackState::Blocked
+        }));
         Ok(())
     }
 
@@ -605,6 +749,127 @@ mod tests {
         // Receipt should reflect ALL candidates (before filtering), not just usable ones.
         assert_eq!(outcome.receipt.new_result.match_count, 2);
         assert_eq!(outcome.receipt.query, ShadowQueryName::FindDefinition);
+        Ok(())
+    }
+
+    #[test]
+    fn definition_compiler_shadow_traces_import_export_candidate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let candidate = make_candidate_with_trace_fields(
+            "Foo::imported_func",
+            10,
+            20,
+            EntityKind::Subroutine,
+            Confidence::High,
+            Provenance::ImportExportInference,
+            DefinitionRank::ExplicitImport,
+            DefinitionRankReason::ExplicitImport { module: "Foo".to_string() },
+        );
+        let queries = StubSemanticQueries { definitions_result: vec![candidate] };
+        let ctx = QueryContext::new(FileId(1), None, None);
+
+        let result = goto_definition_shadow(&index, &queries, "imported_func", &ctx);
+        let trace = first_trace(&result.receipt)?;
+
+        assert!(result.legacy_result.is_none());
+        assert_eq!(trace.surface, ProviderSurface::Definition);
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::ImportExportInference);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+        Ok(())
+    }
+
+    #[test]
+    fn definition_compiler_shadow_traces_framework_generated_candidate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let candidate = make_candidate_with_trace_fields(
+            "Foo::generated_accessor",
+            11,
+            21,
+            EntityKind::GeneratedMember,
+            Confidence::Medium,
+            Provenance::FrameworkSynthesis,
+            DefinitionRank::WorkspaceCandidate,
+            DefinitionRankReason::WorkspaceSymbol,
+        );
+        let queries = StubSemanticQueries { definitions_result: vec![candidate] };
+        let ctx = QueryContext::new(FileId(1), None, None);
+
+        let result = goto_definition_shadow(&index, &queries, "generated_accessor", &ctx);
+        let trace = first_trace(&result.receipt)?;
+
+        assert_eq!(trace.surface, ProviderSurface::Definition);
+        assert_eq!(trace.source, ProviderFactSourceKind::FrameworkAdapter);
+        assert_eq!(trace.provenance, Provenance::FrameworkSynthesis);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+        Ok(())
+    }
+
+    #[test]
+    fn definition_compiler_shadow_traces_dynamic_boundary_as_blocked()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let candidate = make_candidate_with_trace_fields(
+            "Foo::dynamic_symbol",
+            12,
+            22,
+            EntityKind::Unknown,
+            Confidence::High,
+            Provenance::DynamicBoundary,
+            DefinitionRank::Heuristic,
+            DefinitionRankReason::HeuristicNameMatch,
+        );
+        let queries = StubSemanticQueries { definitions_result: vec![candidate] };
+        let ctx = QueryContext::new(FileId(1), None, None);
+
+        let result = goto_definition_shadow(&index, &queries, "dynamic_symbol", &ctx);
+        let trace = first_trace(&result.receipt)?;
+
+        assert_eq!(trace.surface, ProviderSurface::Definition);
+        assert_eq!(trace.source, ProviderFactSourceKind::DynamicBoundary);
+        assert_eq!(trace.provenance, Provenance::DynamicBoundary);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        assert!(result.legacy_result.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn definition_compiler_shadow_low_confidence_does_not_outrank_exact()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let exact = make_candidate("Foo::bar", 10, 20);
+        let low = make_candidate_with_trace_fields(
+            "Foo::bar",
+            30,
+            40,
+            EntityKind::Subroutine,
+            Confidence::Low,
+            Provenance::NameHeuristic,
+            DefinitionRank::Heuristic,
+            DefinitionRankReason::HeuristicNameMatch,
+        );
+        let queries = StubSemanticQueries { definitions_result: vec![exact.clone(), low] };
+        let ctx = QueryContext::new(FileId(1), None, None);
+
+        let outcome = goto_definition_cutover(&index, &queries, "Foo::bar", &ctx);
+
+        assert_eq!(outcome.result, DefinitionCutoverResult::Exact(exact));
+        assert!(outcome.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::SemanticFact
+                && trace.provenance == Provenance::ExactAst
+                && trace.fallback_state == ProviderFallbackState::Primary
+        }));
+        assert!(outcome.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::Fallback
+                && trace.provenance == Provenance::NameHeuristic
+                && trace.confidence == Confidence::Low
+                && trace.fallback_state == ProviderFallbackState::Fallback
+        }));
         Ok(())
     }
 

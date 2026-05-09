@@ -11,8 +11,11 @@ fallback behavior and rollback proof.
 
 - Fact-source trace receipt wiring is in place through `ProviderFactTrace`
   entries in the semantic shadow compare receipt schema.
-- The current shadow receipt records sixteen fact-source traces across definition,
+- The current shadow receipt records twenty-four fact-source traces across definition,
   references, completion, hover, and diagnostics surfaces.
+- Definition/reference shadow proof now records imported-symbol,
+  framework-generated, dynamic-boundary, and low-confidence fallback candidate
+  traces without changing live navigation behavior.
 - Completion shadow proof now records compiler visible-symbol candidate deltas,
   generated-member labels, and dynamic-boundary blockers without changing live
   completion behavior.
@@ -33,8 +36,8 @@ fallback behavior and rollback proof.
 | Diagnostics | `partial live` | Existing semantic queries suppress selected dynamic false positives, plus high-confidence imported/generated visible-symbol facts; fallback diagnostics remain available | Broader false-positive / false-negative fixture receipts before any additional diagnostic families move live |
 | Completion | `partial live / shadowed` | Existing completion paths remain live; semantic-shadow fixtures trace compiler visible-symbol candidates, generated labels, rank deltas, and dynamic-boundary blockers | Ranking stability and real-workspace candidate quality before any broader live cutover |
 | Hover | `provenance-backed` | Hover cutover/shadow code labels imported, generated, dynamic-boundary, and fallback paths with fact-source traces and source/confidence text; broad live behavior remains gated | Real-workspace hover quality and runtime integration receipts before broader live cutover |
-| Definition / goto | `shadowed` | Definition shadow compare tracks regressions before live migration | Ranked compiler candidates with exact/static/generated/dynamic source labels |
-| References | `shadowed` | Reference shadow compare tracks regressions before live migration | Reference precision/recall fixtures from compiler facts |
+| Definition / goto | `ranked-shadowed` | Definition shadow compare tracks imported, generated, dynamic-boundary, and low-confidence fallback candidate traces before live migration | Runtime integration and real-workspace quality receipts before any live navigation cutover |
+| References | `ranked-shadowed` | Reference shadow compare tracks imported, generated, dynamic-boundary, and low-confidence fallback occurrence traces before live migration | Reference precision/recall fixtures from real-workspace compiler facts |
 | Rename | `fixture-backed queries` | Rename plan semantic fixtures exist; broad live compiler cutover remains deferred | Dynamic-boundary blockers and unsafe-edit receipts |
 | Safe delete | `fixture-backed queries` | Safe-delete plan semantic fixtures exist; broad live compiler cutover remains deferred | Dynamic-boundary blockers and generated-member blockers |
 | Workspace symbols | `legacy workspace index` | Existing workspace index remains provider source | Compiler fact merge and source/freshness trace |

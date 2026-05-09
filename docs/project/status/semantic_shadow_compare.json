@@ -82,6 +82,302 @@
     },
     {
       "schema_version": 2,
+      "query": "find_definition",
+      "input": {
+        "symbol": "imported_func"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "lib/Foo.pm:12:5"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "lib/Foo.pm:12:5"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "definition shadow proof: compiler-ranked imported symbol candidate is traced through ImportSpec/ExportSet; no live navigation behavior change"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Definition",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "find_definition",
+      "input": {
+        "symbol": "generated_accessor"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "generated:Foo::generated_accessor:virtual"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "generated:Foo::generated_accessor:virtual"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "definition shadow proof: framework-generated candidate is labeled as generated/virtual, not treated as an exact source location"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Definition",
+          "source": "FrameworkAdapter",
+          "provenance": "FrameworkSynthesis",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "find_definition",
+      "input": {
+        "symbol": "dynamic_symbol"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "verdict": "same",
+      "notes": [
+        "definition shadow proof: dynamic-boundary candidate blocks false precision instead of inventing a definition"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Definition",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "find_definition",
+      "input": {
+        "symbol": "low_confidence_candidate"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "lib/Foo.pm:10:5"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "lib/Foo.pm:10:5"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "definition shadow proof: low-confidence candidate remains fallback and does not outrank exact syntax"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Definition",
+          "source": "Fallback",
+          "provenance": "NameHeuristic",
+          "confidence": "Low",
+          "freshness": "Fresh",
+          "fallback_state": "Fallback",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "find_references",
+      "input": {
+        "symbol": "imported_func"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "t/foo.t:6:9"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "t/foo.t:6:9"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "references shadow proof: compiler-ranked imported symbol occurrence is traced through ImportSpec/ExportSet; no live navigation behavior change"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "References",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "find_references",
+      "input": {
+        "symbol": "generated_accessor"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "t/foo.t:7:3"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "t/foo.t:7:3"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "references shadow proof: framework-generated member occurrence is labeled with framework provenance"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "References",
+          "source": "FrameworkAdapter",
+          "provenance": "FrameworkSynthesis",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "find_references",
+      "input": {
+        "symbol": "dynamic_symbol"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "verdict": "same",
+      "notes": [
+        "references shadow proof: dynamic-boundary occurrence blocks false precision instead of adding an ordinary reference"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "References",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "find_references",
+      "input": {
+        "symbol": "low_confidence_candidate"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "t/foo.t:8:3"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "t/foo.t:8:3"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "references shadow proof: low-confidence occurrence remains fallback and does not outrank exact references"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "References",
+          "source": "Fallback",
+          "provenance": "NameHeuristic",
+          "confidence": "Low",
+          "freshness": "Fresh",
+          "fallback_state": "Fallback",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
       "query": "count_usages",
       "input": {
         "symbol": "Foo::bar"
@@ -600,14 +896,14 @@
     "ambiguous": 2,
     "improved": 6,
     "regression": 1,
-    "same": 7,
+    "same": 15,
     "unavailable": 0
   },
   "release_readiness_verdict_counts": {
     "ambiguous": 0,
     "improved": 1,
     "regression": 0,
-    "same": 1,
+    "same": 9,
     "unavailable": 0
   },
   "schema_fixture_verdict_counts": {

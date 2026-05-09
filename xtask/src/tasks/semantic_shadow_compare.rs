@@ -82,6 +82,126 @@ fn build_artifact() -> Artifact {
                 ProviderFallbackState::Shadow,
             )],
         ),
+        receipt_from_identities(
+            ShadowQueryName::FindDefinition,
+            "imported_func",
+            Some(vec!["lib/Foo.pm:12:5"]),
+            Some(vec!["lib/Foo.pm:12:5"]),
+            "definition shadow proof: compiler-ranked imported symbol candidate is traced through ImportSpec/ExportSet; no live navigation behavior change",
+            vec![trace(
+                ProviderSurface::Definition,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::ImportExportInference,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::FindDefinition,
+            "generated_accessor",
+            Some(vec!["generated:Foo::generated_accessor:virtual"]),
+            Some(vec!["generated:Foo::generated_accessor:virtual"]),
+            "definition shadow proof: framework-generated candidate is labeled as generated/virtual, not treated as an exact source location",
+            vec![trace(
+                ProviderSurface::Definition,
+                ProviderFactSourceKind::FrameworkAdapter,
+                Provenance::FrameworkSynthesis,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::FindDefinition,
+            "dynamic_symbol",
+            Some(vec![]),
+            Some(vec![]),
+            "definition shadow proof: dynamic-boundary candidate blocks false precision instead of inventing a definition",
+            vec![trace(
+                ProviderSurface::Definition,
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::FindDefinition,
+            "low_confidence_candidate",
+            Some(vec!["lib/Foo.pm:10:5"]),
+            Some(vec!["lib/Foo.pm:10:5"]),
+            "definition shadow proof: low-confidence candidate remains fallback and does not outrank exact syntax",
+            vec![trace(
+                ProviderSurface::Definition,
+                ProviderFactSourceKind::Fallback,
+                Provenance::NameHeuristic,
+                Confidence::Low,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Fallback,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::FindReferences,
+            "imported_func",
+            Some(vec!["t/foo.t:6:9"]),
+            Some(vec!["t/foo.t:6:9"]),
+            "references shadow proof: compiler-ranked imported symbol occurrence is traced through ImportSpec/ExportSet; no live navigation behavior change",
+            vec![trace(
+                ProviderSurface::References,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::ImportExportInference,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::FindReferences,
+            "generated_accessor",
+            Some(vec!["t/foo.t:7:3"]),
+            Some(vec!["t/foo.t:7:3"]),
+            "references shadow proof: framework-generated member occurrence is labeled with framework provenance",
+            vec![trace(
+                ProviderSurface::References,
+                ProviderFactSourceKind::FrameworkAdapter,
+                Provenance::FrameworkSynthesis,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::FindReferences,
+            "dynamic_symbol",
+            Some(vec![]),
+            Some(vec![]),
+            "references shadow proof: dynamic-boundary occurrence blocks false precision instead of adding an ordinary reference",
+            vec![trace(
+                ProviderSurface::References,
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::FindReferences,
+            "low_confidence_candidate",
+            Some(vec!["t/foo.t:8:3"]),
+            Some(vec!["t/foo.t:8:3"]),
+            "references shadow proof: low-confidence occurrence remains fallback and does not outrank exact references",
+            vec![trace(
+                ProviderSurface::References,
+                ProviderFactSourceKind::Fallback,
+                Provenance::NameHeuristic,
+                Confidence::Low,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Fallback,
+            )],
+        ),
         receipt_from_counts(
             ShadowQueryName::CountUsages,
             "Foo::bar",
@@ -507,12 +627,12 @@ mod tests {
     fn artifact_includes_required_verdict_rows() {
         let artifact = build_artifact();
         assert_eq!(artifact.schema_version, 3);
-        assert_eq!(artifact.verdict_counts.get("same"), Some(&7));
+        assert_eq!(artifact.verdict_counts.get("same"), Some(&15));
         assert_eq!(artifact.verdict_counts.get("improved"), Some(&6));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&2));
         assert_eq!(artifact.verdict_counts.get("unavailable"), Some(&0));
-        assert_eq!(artifact.release_readiness_verdict_counts.get("same"), Some(&1));
+        assert_eq!(artifact.release_readiness_verdict_counts.get("same"), Some(&9));
         assert_eq!(artifact.release_readiness_verdict_counts.get("improved"), Some(&1));
         assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
@@ -558,6 +678,14 @@ mod tests {
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | FrameworkSynthesis | High | Fresh | Primary |"));
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | Low | Fresh | Fallback |"));
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
+        assert!(markdown.contains("| release-readiness | FindDefinition | Definition | CompilerFact | ImportExportInference | High | Fresh | Shadow |"));
+        assert!(markdown.contains("| release-readiness | FindDefinition | Definition | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |"));
+        assert!(markdown.contains("| release-readiness | FindDefinition | Definition | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
+        assert!(markdown.contains("| release-readiness | FindDefinition | Definition | Fallback | NameHeuristic | Low | Fresh | Fallback |"));
+        assert!(markdown.contains("| release-readiness | FindReferences | References | CompilerFact | ImportExportInference | High | Fresh | Shadow |"));
+        assert!(markdown.contains("| release-readiness | FindReferences | References | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |"));
+        assert!(markdown.contains("| release-readiness | FindReferences | References | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
+        assert!(markdown.contains("| release-readiness | FindReferences | References | Fallback | NameHeuristic | Low | Fresh | Fallback |"));
     }
 
     #[test]
