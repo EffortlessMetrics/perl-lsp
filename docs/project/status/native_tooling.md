@@ -6,7 +6,7 @@
 
 | Metric | Value |
 | --- | ---: |
-| Fixture count | 34 |
+| Fixture count | 35 |
 | Expected diagnostic fixtures | 8 |
 | Literal-preserve bailout fixtures | 8 |
 

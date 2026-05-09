@@ -771,7 +771,6 @@ fn format_simple_control_block_tokens(
         .map(|offset| body_start + offset)?;
     let body_tokens = &tokens[body_start..body_end];
     let statements = format_simple_statement_block(body_tokens, config)?;
-    let tail = format_simple_control_tail(tokens, body_end, keyword, config)?;
 
     let body_indent = format!("{indent}{}", indent_unit(config));
     let mut formatted = render_simple_block_doc(
@@ -782,17 +781,40 @@ fn format_simple_control_block_tokens(
         config,
     );
 
-    for (condition, statements) in tail.elsif_branches {
-        formatted.push_str(&render_simple_elsif_doc(
-            &condition,
-            &statements,
-            indent,
-            &body_indent,
-            config,
-        ));
-    }
-    if let Some(else_statements) = tail.else_statements {
-        formatted.push_str(&render_simple_else_doc(&else_statements, indent, &body_indent, config));
+    match keyword {
+        "if" | "unless" => {
+            let tail = format_simple_control_tail(tokens, body_end, keyword, config)?;
+            for (condition, statements) in tail.elsif_branches {
+                formatted.push_str(&render_simple_elsif_doc(
+                    &condition,
+                    &statements,
+                    indent,
+                    &body_indent,
+                    config,
+                ));
+            }
+            if let Some(else_statements) = tail.else_statements {
+                formatted.push_str(&render_simple_else_doc(
+                    &else_statements,
+                    indent,
+                    &body_indent,
+                    config,
+                ));
+            }
+        }
+        "while" | "until" => {
+            if let Some(continue_statements) =
+                format_simple_continue_tail(tokens, body_end, config)?
+            {
+                formatted.push_str(&render_simple_continue_doc(
+                    &continue_statements,
+                    indent,
+                    &body_indent,
+                    config,
+                ));
+            }
+        }
+        _ => return None,
     }
     Some(formatted)
 }
@@ -835,21 +857,34 @@ fn format_simple_foreach_block_tokens(
 
     if tokens.get(list_end)?.kind != TokenKind::RightParen
         || tokens.get(list_end + 1)?.kind != TokenKind::LeftBrace
-        || tokens.last()?.kind != TokenKind::RightBrace
     {
         return None;
     }
 
-    let body_tokens = &tokens[list_end + 2..tokens.len() - 1];
+    let body_start = list_end + 2;
+    let body_end = tokens[body_start..]
+        .iter()
+        .position(|token| token.kind == TokenKind::RightBrace)
+        .map(|offset| body_start + offset)?;
+    let body_tokens = &tokens[body_start..body_end];
     let statements = format_simple_statement_block(body_tokens, config)?;
     let body_indent = format!("{indent}{}", indent_unit(config));
-    Some(render_simple_block_doc(
+    let mut formatted = render_simple_block_doc(
         format!("{indent}{keyword} {iterator} ({list}) {{"),
         &statements,
         indent,
         &body_indent,
         config,
-    ))
+    );
+    if let Some(continue_statements) = format_simple_continue_tail(tokens, body_end, config)? {
+        formatted.push_str(&render_simple_continue_doc(
+            &continue_statements,
+            indent,
+            &body_indent,
+            config,
+        ));
+    }
+    Some(formatted)
 }
 
 fn render_simple_block_doc(
@@ -883,6 +918,17 @@ fn render_simple_elsif_doc(
     config: &FormatConfig,
 ) -> String {
     let mut parts = vec![FormatDoc::text(format!(" elsif ({condition}) {{"))];
+    push_simple_block_body_docs(&mut parts, statements, indent, body_indent);
+    FormatDoc::group(parts).render(config)
+}
+
+fn render_simple_continue_doc(
+    statements: &[String],
+    indent: &str,
+    body_indent: &str,
+    config: &FormatConfig,
+) -> String {
+    let mut parts = vec![FormatDoc::text(" continue {")];
     push_simple_block_body_docs(&mut parts, statements, indent, body_indent);
     FormatDoc::group(parts).render(config)
 }
@@ -965,6 +1011,30 @@ fn format_simple_control_tail(
     let statements = format_simple_statement_block(else_body_tokens, config)?;
     tail.else_statements = Some(statements);
     Some(tail)
+}
+
+fn format_simple_continue_tail(
+    tokens: &[perl_parser_core::Token],
+    body_end: usize,
+    config: &FormatConfig,
+) -> Option<Option<Vec<String>>> {
+    use perl_parser_core::TokenKind;
+
+    let next = body_end + 1;
+    if next == tokens.len() {
+        return Some(None);
+    }
+    if tokens.get(next)?.kind != TokenKind::Continue
+        || tokens.get(next + 1)?.kind != TokenKind::LeftBrace
+        || tokens.last()?.kind != TokenKind::RightBrace
+    {
+        return None;
+    }
+
+    let continue_body_start = next + 2;
+    let continue_body_tokens = &tokens[continue_body_start..tokens.len() - 1];
+    let statements = format_simple_statement_block(continue_body_tokens, config)?;
+    Some(Some(statements))
 }
 
 fn format_simple_statement_block(
