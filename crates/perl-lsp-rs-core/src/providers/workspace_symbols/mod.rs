@@ -430,16 +430,63 @@ fn workspace_symbol_shadow_note(
     legacy_symbols: &[WorkspaceSymbol],
     compiler_candidates: &[WorkspaceSymbolShadowCandidate],
 ) -> String {
+    let answer_count = workspace_symbol_answer_identities(compiler_candidates).len();
     let blocked_count = compiler_candidates
         .iter()
         .filter(|candidate| candidate.fallback_state == ProviderFallbackState::Blocked)
         .count();
+    let generated_label_count = compiler_candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.source == ProviderFactSourceKind::FrameworkAdapter
+                || candidate.identity.starts_with("generated:")
+        })
+        .count();
+    let dynamic_boundary_blockers = compiler_candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.fallback_state == ProviderFallbackState::Blocked
+                && (candidate.source == ProviderFactSourceKind::DynamicBoundary
+                    || candidate.provenance == Provenance::DynamicBoundary)
+        })
+        .count();
+    let stale_fact_blockers = compiler_candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.fallback_state == ProviderFallbackState::Blocked
+                && candidate.freshness == ProviderFactFreshness::Stale
+        })
+        .count();
+    let noise_delta = compiler_candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.fallback_state != ProviderFallbackState::Blocked
+                && (candidate.confidence == Confidence::Low
+                    || candidate.freshness != ProviderFactFreshness::Fresh
+                    || candidate.source == ProviderFactSourceKind::DynamicBoundary
+                    || candidate.fallback_state == ProviderFallbackState::Fallback)
+        })
+        .count();
     format!(
-        "workspace-symbol shadow proof: legacy_candidates={}; compiler_fact_candidates={}; blocked_candidates={}; no live workspace-symbol behavior change",
+        "workspace-symbol shadow proof: legacy_candidates={}; compiler_fact_candidates={}; answer_candidates={}; rank_delta={}; noise_delta={}; query_latency=not_measured_shadow_only; generated_labels={}; dynamic_boundary_blockers={}; stale_fact_blockers={}; blocked_candidates={}; no live workspace-symbol behavior change",
         legacy_symbols.len(),
         compiler_candidates.len(),
+        answer_count,
+        signed_count_delta(legacy_symbols.len(), answer_count),
+        noise_delta,
+        generated_label_count,
+        dynamic_boundary_blockers,
+        stale_fact_blockers,
         blocked_count
     )
+}
+
+fn signed_count_delta(old_count: usize, new_count: usize) -> String {
+    if new_count >= old_count {
+        format!("+{}", new_count - old_count)
+    } else {
+        format!("-{}", old_count - new_count)
+    }
 }
 
 // Symbol kind conversion is handled by perl_symbol::SymbolKind::to_lsp_kind()
@@ -616,6 +663,114 @@ sub baz {
         assert_eq!(trace.freshness, ProviderFactFreshness::Stale);
         assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
         Ok(())
+    }
+
+    #[test]
+    fn workspace_symbol_shadow_records_real_workspace_quality_receipt()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let legacy_symbols = indexed_workspace_symbols("legacy")?;
+        assert_eq!(legacy_symbols.len(), 1);
+        let legacy_identity = workspace_symbol_identity(&legacy_symbols[0]);
+        let result = workspace_symbol_source_shadow(
+            legacy_symbols,
+            vec![
+                shadow_candidate(
+                    &legacy_identity,
+                    ProviderFactSourceKind::CompilerFact,
+                    Provenance::ImportExportInference,
+                    Confidence::High,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Shadow,
+                ),
+                shadow_candidate(
+                    "workspace:MyApp::Utils::format_date",
+                    ProviderFactSourceKind::CompilerFact,
+                    Provenance::ImportExportInference,
+                    Confidence::High,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Shadow,
+                ),
+                shadow_candidate(
+                    "generated:MyApp::Model::name:virtual",
+                    ProviderFactSourceKind::FrameworkAdapter,
+                    Provenance::FrameworkSynthesis,
+                    Confidence::Medium,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Shadow,
+                ),
+                shadow_candidate(
+                    "blocker:symbolic_ref_boundary",
+                    ProviderFactSourceKind::DynamicBoundary,
+                    Provenance::DynamicBoundary,
+                    Confidence::High,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Blocked,
+                ),
+                shadow_candidate(
+                    "stale:MyApp::Old::removed_symbol",
+                    ProviderFactSourceKind::CompilerFact,
+                    Provenance::SemanticAnalyzer,
+                    Confidence::Low,
+                    ProviderFactFreshness::Stale,
+                    ProviderFallbackState::Blocked,
+                ),
+            ],
+            "workspace quality",
+        );
+
+        assert_eq!(result.legacy_symbols.len(), 1);
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert_eq!(result.receipt.old_result.match_count, 1);
+        assert_eq!(result.receipt.new_result.match_count, 3);
+
+        let note = result
+            .receipt
+            .notes
+            .first()
+            .ok_or_else(|| "expected workspace-symbol quality note".to_string())?;
+        assert!(note.contains("rank_delta=+2"));
+        assert!(note.contains("noise_delta=0"));
+        assert!(note.contains("query_latency=not_measured_shadow_only"));
+        assert!(note.contains("generated_labels=1"));
+        assert!(note.contains("dynamic_boundary_blockers=1"));
+        assert!(note.contains("stale_fact_blockers=1"));
+        assert!(note.contains("no live workspace-symbol behavior change"));
+
+        assert_eq!(result.receipt.fact_source_traces.len(), 5);
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::FrameworkAdapter
+                && trace.provenance == Provenance::FrameworkSynthesis
+                && trace.fallback_state == ProviderFallbackState::Shadow
+        }));
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::DynamicBoundary
+                && trace.provenance == Provenance::DynamicBoundary
+                && trace.fallback_state == ProviderFallbackState::Blocked
+        }));
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::CompilerFact
+                && trace.freshness == ProviderFactFreshness::Stale
+                && trace.fallback_state == ProviderFallbackState::Blocked
+        }));
+        Ok(())
+    }
+
+    fn indexed_workspace_symbols(
+        query: &str,
+    ) -> Result<Vec<WorkspaceSymbol>, Box<dyn std::error::Error>> {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+        for (uri, source) in [
+            ("file:///lib/App.pm", "package App;\nsub legacy_helper { 1 }\n1;\n"),
+            ("file:///lib/MyApp/Utils.pm", "package MyApp::Utils;\nsub format_date { 1 }\n1;\n"),
+        ] {
+            let mut parser = Parser::new(source);
+            let ast = must(parser.parse());
+            provider.index_document(uri, &ast, source);
+            source_map.insert(uri.to_string(), source.to_string());
+        }
+
+        Ok(provider.search(query, &source_map))
     }
 
     fn legacy_symbol(name: &str) -> WorkspaceSymbol {

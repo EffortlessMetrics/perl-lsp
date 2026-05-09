@@ -488,6 +488,59 @@ fn build_artifact() -> Artifact {
             )],
         ),
         receipt_from_identities(
+            ShadowQueryName::WorkspaceSymbols,
+            "workspace_symbol_real_workspace_quality",
+            Some(vec!["workspace:App::legacy_helper"]),
+            Some(vec![
+                "workspace:App::legacy_helper",
+                "workspace:MyApp::Utils::format_date",
+                "generated:MyApp::Model::name:virtual",
+            ]),
+            "workspace-symbol real-workspace quality receipt: legacy_candidates=1; compiler_fact_candidates=5; rank_delta=+2; noise_delta=0; query_latency=not_measured_shadow_only; generated_labels=1; dynamic_boundary_blockers=1; stale_fact_blockers=1; no live workspace-symbol behavior change",
+            vec![
+                trace(
+                    ProviderSurface::WorkspaceSymbols,
+                    ProviderFactSourceKind::CompilerFact,
+                    Provenance::ImportExportInference,
+                    Confidence::High,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Shadow,
+                ),
+                trace(
+                    ProviderSurface::WorkspaceSymbols,
+                    ProviderFactSourceKind::CompilerFact,
+                    Provenance::ImportExportInference,
+                    Confidence::High,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Shadow,
+                ),
+                trace(
+                    ProviderSurface::WorkspaceSymbols,
+                    ProviderFactSourceKind::FrameworkAdapter,
+                    Provenance::FrameworkSynthesis,
+                    Confidence::Medium,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Shadow,
+                ),
+                trace(
+                    ProviderSurface::WorkspaceSymbols,
+                    ProviderFactSourceKind::DynamicBoundary,
+                    Provenance::DynamicBoundary,
+                    Confidence::High,
+                    ProviderFactFreshness::Fresh,
+                    ProviderFallbackState::Blocked,
+                ),
+                trace(
+                    ProviderSurface::WorkspaceSymbols,
+                    ProviderFactSourceKind::CompilerFact,
+                    Provenance::SemanticAnalyzer,
+                    Confidence::Low,
+                    ProviderFactFreshness::Stale,
+                    ProviderFallbackState::Blocked,
+                ),
+            ],
+        ),
+        receipt_from_identities(
             ShadowQueryName::DocumentSymbols,
             "document_symbol_explicit",
             Some(vec!["document:Foo:package:0:0"]),
@@ -943,7 +996,7 @@ mod tests {
         let artifact = build_artifact();
         assert_eq!(artifact.schema_version, 3);
         assert_eq!(artifact.verdict_counts.get("same"), Some(&32));
-        assert_eq!(artifact.verdict_counts.get("improved"), Some(&10));
+        assert_eq!(artifact.verdict_counts.get("improved"), Some(&11));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&2));
         assert_eq!(artifact.verdict_counts.get("unavailable"), Some(&0));
@@ -952,7 +1005,7 @@ mod tests {
         assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&23));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&9));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&10));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&2));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("unavailable"), Some(&0));
@@ -1002,6 +1055,9 @@ mod tests {
         assert!(markdown.contains("| schema-fixture | WorkspaceSymbols | `workspace_symbol_dynamic_boundary` | same | 0 | 0 |"));
         assert!(markdown.contains(
             "| schema-fixture | WorkspaceSymbols | `workspace_symbol_stale_fact` | same | 0 | 0 |"
+        ));
+        assert!(markdown.contains(
+            "| schema-fixture | WorkspaceSymbols | `workspace_symbol_real_workspace_quality` | improved | 1 | 3 |"
         ));
         assert!(markdown.contains("| schema-fixture | WorkspaceSymbols | WorkspaceSymbols | CompilerFact | ImportExportInference | High | Fresh | Shadow |"));
         assert!(markdown.contains("| schema-fixture | WorkspaceSymbols | WorkspaceSymbols | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |"));

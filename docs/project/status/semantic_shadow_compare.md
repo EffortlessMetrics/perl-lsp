@@ -2,14 +2,14 @@
 
 Measured: `deterministic-fixture-baseline`
 
-Receipts: `45`
+Receipts: `46`
 
 ## Verdict Counts
 
 | Verdict | Count |
 |---|---:|
 | ambiguous | 2 |
-| improved | 10 |
+| improved | 11 |
 | regression | 1 |
 | same | 32 |
 | unavailable | 0 |
@@ -29,7 +29,7 @@ Receipts: `45`
 | Verdict | Count |
 |---|---:|
 | ambiguous | 2 |
-| improved | 9 |
+| improved | 10 |
 | regression | 1 |
 | same | 23 |
 | unavailable | 0 |
@@ -67,6 +67,7 @@ Receipts: `45`
 | schema-fixture | WorkspaceSymbols | `workspace_symbol_generated` | improved | 0 | 1 |
 | schema-fixture | WorkspaceSymbols | `workspace_symbol_dynamic_boundary` | same | 0 | 0 |
 | schema-fixture | WorkspaceSymbols | `workspace_symbol_stale_fact` | same | 0 | 0 |
+| schema-fixture | WorkspaceSymbols | `workspace_symbol_real_workspace_quality` | improved | 1 | 3 |
 | schema-fixture | DocumentSymbols | `document_symbol_explicit` | same | 1 | 1 |
 | schema-fixture | DocumentSymbols | `document_symbol_generated` | improved | 0 | 1 |
 | schema-fixture | DocumentSymbols | `document_symbol_dynamic_boundary` | same | 0 | 0 |
@@ -113,6 +114,11 @@ Receipts: `45`
 | schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | SemanticAnalyzer | High | Fresh | Primary |
 | schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | Low | Fresh | Fallback |
 | schema-fixture | DiagnosticsCheck | Diagnostics | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
+| schema-fixture | WorkspaceSymbols | WorkspaceSymbols | CompilerFact | ImportExportInference | High | Fresh | Shadow |
+| schema-fixture | WorkspaceSymbols | WorkspaceSymbols | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |
+| schema-fixture | WorkspaceSymbols | WorkspaceSymbols | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |
+| schema-fixture | WorkspaceSymbols | WorkspaceSymbols | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |
+| schema-fixture | WorkspaceSymbols | WorkspaceSymbols | CompilerFact | ImportExportInference | High | Fresh | Shadow |
 | schema-fixture | WorkspaceSymbols | WorkspaceSymbols | CompilerFact | ImportExportInference | High | Fresh | Shadow |
 | schema-fixture | WorkspaceSymbols | WorkspaceSymbols | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |
 | schema-fixture | WorkspaceSymbols | WorkspaceSymbols | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |

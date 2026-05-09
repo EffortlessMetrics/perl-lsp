@@ -1074,6 +1074,90 @@
     },
     {
       "schema_version": 2,
+      "query": "workspace_symbols",
+      "input": {
+        "symbol": "workspace_symbol_real_workspace_quality"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "workspace:App::legacy_helper"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 3,
+        "identities": [
+          "generated:MyApp::Model::name:virtual",
+          "workspace:App::legacy_helper",
+          "workspace:MyApp::Utils::format_date"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "workspace-symbol real-workspace quality receipt: legacy_candidates=1; compiler_fact_candidates=5; rank_delta=+2; noise_delta=0; query_latency=not_measured_shadow_only; generated_labels=1; dynamic_boundary_blockers=1; stale_fact_blockers=1; no live workspace-symbol behavior change"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "WorkspaceSymbols",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        },
+        {
+          "surface": "WorkspaceSymbols",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        },
+        {
+          "surface": "WorkspaceSymbols",
+          "source": "FrameworkAdapter",
+          "provenance": "FrameworkSynthesis",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        },
+        {
+          "surface": "WorkspaceSymbols",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        },
+        {
+          "surface": "WorkspaceSymbols",
+          "source": "CompilerFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "Low",
+          "freshness": "Stale",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
       "query": "document_symbols",
       "input": {
         "symbol": "document_symbol_explicit"
@@ -1663,7 +1747,7 @@
   ],
   "verdict_counts": {
     "ambiguous": 2,
-    "improved": 10,
+    "improved": 11,
     "regression": 1,
     "same": 32,
     "unavailable": 0
@@ -1677,7 +1761,7 @@
   },
   "schema_fixture_verdict_counts": {
     "ambiguous": 2,
-    "improved": 9,
+    "improved": 10,
     "regression": 1,
     "same": 23,
     "unavailable": 0
