@@ -11,8 +11,11 @@ fallback behavior and rollback proof.
 
 - Fact-source trace receipt wiring is in place through `ProviderFactTrace`
   entries in the semantic shadow compare receipt schema.
-- The current shadow receipt records ten fact-source traces across definition,
+- The current shadow receipt records thirteen fact-source traces across definition,
   references, completion, hover, and diagnostics surfaces.
+- Completion shadow proof now records compiler visible-symbol candidate deltas,
+  generated-member labels, and dynamic-boundary blockers without changing live
+  completion behavior.
 - Diagnostics now have a narrow live cutover for high-confidence imported and
   generated visible-symbol facts. Ambiguous, low-confidence, and
   dynamic-boundary cases remain fallback or blocked instead of being silently
@@ -25,7 +28,7 @@ fallback behavior and rollback proof.
 | Provider surface | Current state | Current source of truth | Next proof |
 | --- | --- | --- | --- |
 | Diagnostics | `partial live` | Existing semantic queries suppress selected dynamic false positives, plus high-confidence imported/generated visible-symbol facts; fallback diagnostics remain available | Broader false-positive / false-negative fixture receipts before any additional diagnostic families move live |
-| Completion | `partial live / shadowed` | Existing completion paths and semantic-shadow fixtures can use visible symbols and generated members | Provider-impact rows for compiler facts, ranking stability, and fact-source traces |
+| Completion | `partial live / shadowed` | Existing completion paths remain live; semantic-shadow fixtures trace compiler visible-symbol candidates, generated labels, rank deltas, and dynamic-boundary blockers | Ranking stability and real-workspace candidate quality before any broader live cutover |
 | Hover | `shadowed` | Hover shadow code can query visible symbols and provenance | Promote only after provenance labels, fallback behavior, and trace receipts are fixture-backed |
 | Definition / goto | `shadowed` | Definition shadow compare tracks regressions before live migration | Ranked compiler candidates with exact/static/generated/dynamic source labels |
 | References | `shadowed` | Reference shadow compare tracks regressions before live migration | Reference precision/recall fixtures from compiler facts |

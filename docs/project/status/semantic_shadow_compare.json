@@ -156,6 +156,115 @@
     },
     {
       "schema_version": 2,
+      "query": "completion_visibility",
+      "input": {
+        "symbol": "completion_import_candidates"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "legacy_helper"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 2,
+        "identities": [
+          "imported_func",
+          "legacy_helper"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "completion shadow proof: compiler visible-symbol candidate from ImportSpec/ExportSet; legacy_candidates=1; compiler_fact_candidates=2; rank_delta=+1; no_expected_legacy_candidates_removed"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Completion",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "completion_visibility",
+      "input": {
+        "symbol": "completion_generated_candidates"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "generated_accessor"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "completion shadow proof: framework-generated member is labeled as generated, not live-ranked; legacy_candidates=0; compiler_fact_candidates=1; rank_delta=+1; generated_labels=generated_accessor"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Completion",
+          "source": "FrameworkAdapter",
+          "provenance": "FrameworkSynthesis",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "completion_visibility",
+      "input": {
+        "symbol": "completion_dynamic_boundary"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "verdict": "same",
+      "notes": [
+        "completion shadow proof: dynamic-boundary hint is traced and blocked, not ranked as an ordinary completion; dynamic_boundary_blockers=symbolic_ref_candidate"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Completion",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
       "query": "hover",
       "input": {
         "symbol": "Foo::bar"
@@ -377,9 +486,9 @@
   ],
   "verdict_counts": {
     "ambiguous": 2,
-    "improved": 4,
+    "improved": 6,
     "regression": 1,
-    "same": 2,
+    "same": 3,
     "unavailable": 1
   },
   "release_readiness_verdict_counts": {
@@ -391,9 +500,9 @@
   },
   "schema_fixture_verdict_counts": {
     "ambiguous": 2,
-    "improved": 3,
+    "improved": 5,
     "regression": 1,
-    "same": 1,
+    "same": 2,
     "unavailable": 1
   },
   "notes": "0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes."

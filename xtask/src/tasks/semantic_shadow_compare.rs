@@ -113,6 +113,51 @@ fn build_artifact() -> Artifact {
             )],
         ),
         receipt_from_identities(
+            ShadowQueryName::CompletionVisibility,
+            "completion_import_candidates",
+            Some(vec!["legacy_helper"]),
+            Some(vec!["legacy_helper", "imported_func"]),
+            "completion shadow proof: compiler visible-symbol candidate from ImportSpec/ExportSet; legacy_candidates=1; compiler_fact_candidates=2; rank_delta=+1; no_expected_legacy_candidates_removed",
+            vec![trace(
+                ProviderSurface::Completion,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::ImportExportInference,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::CompletionVisibility,
+            "completion_generated_candidates",
+            Some(vec![]),
+            Some(vec!["generated_accessor"]),
+            "completion shadow proof: framework-generated member is labeled as generated, not live-ranked; legacy_candidates=0; compiler_fact_candidates=1; rank_delta=+1; generated_labels=generated_accessor",
+            vec![trace(
+                ProviderSurface::Completion,
+                ProviderFactSourceKind::FrameworkAdapter,
+                Provenance::FrameworkSynthesis,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::CompletionVisibility,
+            "completion_dynamic_boundary",
+            Some(vec![]),
+            Some(vec![]),
+            "completion shadow proof: dynamic-boundary hint is traced and blocked, not ranked as an ordinary completion; dynamic_boundary_blockers=symbolic_ref_candidate",
+            vec![trace(
+                ProviderSurface::Completion,
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
             ShadowQueryName::Hover,
             "Foo::bar",
             None,
@@ -417,8 +462,8 @@ mod tests {
     fn artifact_includes_required_verdict_rows() {
         let artifact = build_artifact();
         assert_eq!(artifact.schema_version, 3);
-        assert_eq!(artifact.verdict_counts.get("same"), Some(&2));
-        assert_eq!(artifact.verdict_counts.get("improved"), Some(&4));
+        assert_eq!(artifact.verdict_counts.get("same"), Some(&3));
+        assert_eq!(artifact.verdict_counts.get("improved"), Some(&6));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&2));
         assert_eq!(artifact.verdict_counts.get("unavailable"), Some(&1));
@@ -426,8 +471,8 @@ mod tests {
         assert_eq!(artifact.release_readiness_verdict_counts.get("improved"), Some(&1));
         assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&1));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&3));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&2));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&5));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&2));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("unavailable"), Some(&1));
@@ -452,8 +497,14 @@ mod tests {
         assert!(markdown.contains("## Schema Fixture Verdict Counts"));
         assert!(markdown.contains("| release-readiness | FindDefinition"));
         assert!(markdown.contains("| schema-fixture | CountUsages"));
+        assert!(markdown.contains("| schema-fixture | CompletionVisibility | `completion_import_candidates` | improved | 1 | 2 |"));
+        assert!(markdown.contains("| schema-fixture | CompletionVisibility | `completion_generated_candidates` | improved | 0 | 1 |"));
+        assert!(markdown.contains("| schema-fixture | CompletionVisibility | `completion_dynamic_boundary` | same | 0 | 0 |"));
         assert!(markdown.contains("## Fact Source Traces"));
         assert!(markdown.contains("| release-readiness | FindDefinition | Definition | CompilerFact | SemanticAnalyzer | High | Fresh | Shadow |"));
+        assert!(markdown.contains("| schema-fixture | CompletionVisibility | Completion | CompilerFact | ImportExportInference | High | Fresh | Shadow |"));
+        assert!(markdown.contains("| schema-fixture | CompletionVisibility | Completion | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |"));
+        assert!(markdown.contains("| schema-fixture | CompletionVisibility | Completion | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | High | Fresh | Primary |"));
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | FrameworkSynthesis | High | Fresh | Primary |"));
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | Low | Fresh | Fallback |"));

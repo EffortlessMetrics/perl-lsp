@@ -32,7 +32,9 @@
 //!   Dynamic/Unavailable → show low or omit.
 
 use perl_semantic_facts::{
-    Confidence, DefinitionCandidate, FileId, ScopeId, VisibleSymbol, VisibleSymbolSource,
+    Confidence, DefinitionCandidate, FileId, Provenance, ProviderFactFreshness,
+    ProviderFactSourceKind, ProviderFactTrace, ProviderFallbackState, ProviderSurface, ScopeId,
+    VisibleSymbol, VisibleSymbolSource,
 };
 use perl_workspace::semantic::queries::SemanticQueries;
 use perl_workspace::semantic_shadow_compare::{
@@ -99,17 +101,21 @@ pub fn completion_visibility_shadow<Q: SemanticQueries>(
     // ── Legacy path ──
     let old_summary = legacy_symbols_to_summary(&legacy_symbols);
 
-    // ── New semantic path ──
+    // ── New compiler-fact path ──
     let new_visible = semantic_queries.visible_symbols_at(file_id, byte_offset, scope_id);
     let new_summary = semantic_visible_to_summary(&new_visible);
+    let notes = completion_shadow_notes(&legacy_symbols, &new_visible);
+    let fact_source_traces =
+        completion_fact_source_traces(&new_visible, ProviderFallbackState::Shadow);
 
     // ── Build receipt ──
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::CompletionVisibility,
         ShadowQueryInput { symbol: input_label.to_string() },
         old_summary,
         new_summary,
-        Vec::new(),
+        notes,
+        fact_source_traces,
     );
 
     tracing::debug!(
@@ -403,6 +409,7 @@ fn semantic_visible_to_summary(symbols: &[VisibleSymbol]) -> ShadowResultSummary
 
     let identities: Vec<String> = symbols
         .iter()
+        .filter(|s| is_completion_candidate_source(&s.source))
         .map(|s| {
             // Use name + source as a stable identity for shadow comparison.
             format!("{}:{:?}", s.name, s.source)
@@ -410,6 +417,126 @@ fn semantic_visible_to_summary(symbols: &[VisibleSymbol]) -> ShadowResultSummary
         .collect();
 
     summarize_identities(Some(identities))
+}
+
+fn completion_shadow_notes(
+    legacy_symbols: &[String],
+    visible_symbols: &[VisibleSymbol],
+) -> Vec<String> {
+    let candidate_count = visible_symbols
+        .iter()
+        .filter(|symbol| is_completion_candidate_source(&symbol.source))
+        .count();
+    let rank_delta = i64::try_from(candidate_count).unwrap_or(i64::MAX)
+        - i64::try_from(legacy_symbols.len()).unwrap_or(i64::MAX);
+    let mut notes = vec![
+        format!("legacy_candidates={}", legacy_symbols.len()),
+        format!("compiler_fact_candidates={candidate_count}"),
+        format!("rank_delta={rank_delta:+}"),
+    ];
+
+    let mut generated_labels: Vec<String> = visible_symbols
+        .iter()
+        .filter(|symbol| symbol.source == VisibleSymbolSource::Generated)
+        .map(|symbol| symbol.name.clone())
+        .collect();
+    generated_labels.sort();
+    generated_labels.dedup();
+    if !generated_labels.is_empty() {
+        notes.push(format!("generated_labels={}", generated_labels.join(",")));
+    }
+
+    let mut dynamic_blockers: Vec<String> = visible_symbols
+        .iter()
+        .filter(|symbol| symbol.source == VisibleSymbolSource::DynamicUnknown)
+        .map(|symbol| symbol.name.clone())
+        .collect();
+    dynamic_blockers.sort();
+    dynamic_blockers.dedup();
+    if !dynamic_blockers.is_empty() {
+        notes.push(format!("dynamic_boundary_blockers={}", dynamic_blockers.join(",")));
+    }
+
+    notes
+}
+
+fn is_completion_candidate_source(source: &VisibleSymbolSource) -> bool {
+    *source != VisibleSymbolSource::DynamicUnknown
+}
+
+fn completion_fact_source_traces(
+    visible_symbols: &[VisibleSymbol],
+    fallback_state: ProviderFallbackState,
+) -> Vec<ProviderFactTrace> {
+    let mut traces = Vec::new();
+    for symbol in visible_symbols {
+        let (source, provenance, state) = completion_trace_shape(symbol, fallback_state);
+        let anchor_id = symbol.context.as_ref().and_then(|context| {
+            context.source_import_anchor_id.or(context.source_export_anchor_id)
+        });
+        traces.push(ProviderFactTrace::new(
+            ProviderSurface::Completion,
+            source,
+            provenance,
+            symbol.confidence,
+            ProviderFactFreshness::Fresh,
+            state,
+            None,
+            anchor_id,
+            Some(1),
+        ));
+    }
+
+    if traces.is_empty() {
+        traces.push(ProviderFactTrace::new(
+            ProviderSurface::Completion,
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::NotApplicable,
+            ProviderFallbackState::Fallback,
+            None,
+            None,
+            Some(1),
+        ));
+    }
+
+    traces
+}
+
+fn completion_trace_shape(
+    symbol: &VisibleSymbol,
+    fallback_state: ProviderFallbackState,
+) -> (ProviderFactSourceKind, Provenance, ProviderFallbackState) {
+    match symbol.source {
+        VisibleSymbolSource::ExplicitImport
+        | VisibleSymbolSource::DefaultExport
+        | VisibleSymbolSource::ExportTag => (
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::ImportExportInference,
+            fallback_state,
+        ),
+        VisibleSymbolSource::Generated => (
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            fallback_state,
+        ),
+        VisibleSymbolSource::DynamicUnknown => (
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            ProviderFallbackState::Blocked,
+        ),
+        VisibleSymbolSource::LocalLexical
+        | VisibleSymbolSource::LocalPackage
+        | VisibleSymbolSource::Constant => {
+            (ProviderFactSourceKind::CompilerFact, Provenance::SemanticAnalyzer, fallback_state)
+        }
+        VisibleSymbolSource::External => (
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            ProviderFallbackState::Fallback,
+        ),
+    }
 }
 
 fn method_probe_names(
@@ -747,6 +874,112 @@ mod tests {
 
         assert_eq!(result.receipt.new_result.match_count, 3);
         assert_eq!(result.receipt.new_result.available, true);
+        Ok(())
+    }
+
+    #[test]
+    fn completion_compiler_shadow_traces_import_export_and_generated_candidates()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let syms = vec![
+            make_visible("imported_func", VisibleSymbolSource::ExplicitImport, Confidence::High),
+            make_visible("default_func", VisibleSymbolSource::DefaultExport, Confidence::High),
+            make_visible("generated_accessor", VisibleSymbolSource::Generated, Confidence::Medium),
+        ];
+        let queries = StubSemanticQueries { visible_result: syms };
+
+        let result = completion_visibility_shadow(
+            vec!["legacy_func".to_string()],
+            &queries,
+            FileId(1),
+            10,
+            None,
+            "completion shadow import/export",
+        );
+
+        assert_eq!(result.legacy_symbols, vec!["legacy_func".to_string()]);
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Improved);
+        assert!(result.receipt.notes.iter().any(|note| note == "legacy_candidates=1"));
+        assert!(result.receipt.notes.iter().any(|note| note == "compiler_fact_candidates=3"));
+        assert!(result.receipt.notes.iter().any(|note| note == "rank_delta=+2"));
+        assert!(
+            result.receipt.notes.iter().any(|note| note == "generated_labels=generated_accessor"),
+            "generated labels should be recorded in the shadow receipt notes"
+        );
+
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.surface == ProviderSurface::Completion
+                && trace.source == ProviderFactSourceKind::CompilerFact
+                && trace.provenance == Provenance::ImportExportInference
+                && trace.confidence == Confidence::High
+                && trace.freshness == ProviderFactFreshness::Fresh
+                && trace.fallback_state == ProviderFallbackState::Shadow
+        }));
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.surface == ProviderSurface::Completion
+                && trace.source == ProviderFactSourceKind::FrameworkAdapter
+                && trace.provenance == Provenance::FrameworkSynthesis
+                && trace.confidence == Confidence::Medium
+                && trace.fallback_state == ProviderFallbackState::Shadow
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn completion_compiler_shadow_labels_dynamic_boundary_blockers()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let syms = vec![make_visible(
+            "symbolic_ref_candidate",
+            VisibleSymbolSource::DynamicUnknown,
+            Confidence::Low,
+        )];
+        let queries = StubSemanticQueries { visible_result: syms };
+
+        let result =
+            completion_visibility_shadow(vec![], &queries, FileId(1), 0, None, "symbolic ref");
+
+        assert_eq!(result.receipt.new_result.match_count, 0);
+        assert!(result.receipt.notes.iter().any(|note| note == "compiler_fact_candidates=0"));
+        assert!(
+            result
+                .receipt
+                .notes
+                .iter()
+                .any(|note| note == "dynamic_boundary_blockers=symbolic_ref_candidate"),
+            "dynamic boundary blockers should be labeled instead of ranked as ordinary completions"
+        );
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.surface == ProviderSurface::Completion
+                && trace.source == ProviderFactSourceKind::DynamicBoundary
+                && trace.provenance == Provenance::DynamicBoundary
+                && trace.confidence == Confidence::Low
+                && trace.fallback_state == ProviderFallbackState::Blocked
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn completion_compiler_shadow_records_fallback_trace_when_no_fact_candidates()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let queries = StubSemanticQueries { visible_result: vec![] };
+
+        let result = completion_visibility_shadow(
+            vec!["legacy_func".to_string()],
+            &queries,
+            FileId(1),
+            0,
+            None,
+            "legacy only",
+        );
+
+        assert_eq!(result.legacy_symbols, vec!["legacy_func".to_string()]);
+        assert!(result.receipt.fact_source_traces.iter().any(|trace| {
+            trace.surface == ProviderSurface::Completion
+                && trace.source == ProviderFactSourceKind::Fallback
+                && trace.provenance == Provenance::SearchFallback
+                && trace.confidence == Confidence::Low
+                && trace.freshness == ProviderFactFreshness::NotApplicable
+                && trace.fallback_state == ProviderFallbackState::Fallback
+        }));
         Ok(())
     }
 
@@ -1136,8 +1369,8 @@ mod tests {
             "test",
         );
 
-        // Receipt should reflect ALL visible symbols (before ranking).
-        assert_eq!(outcome.receipt.new_result.match_count, 2);
+        // DynamicUnknown blockers are traced separately instead of counted as candidates.
+        assert_eq!(outcome.receipt.new_result.match_count, 1);
         assert_eq!(outcome.receipt.query, ShadowQueryName::CompletionVisibility);
         Ok(())
     }
