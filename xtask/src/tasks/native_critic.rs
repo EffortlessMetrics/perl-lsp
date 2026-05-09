@@ -359,7 +359,7 @@ mod tests {
         assert_eq!(value["engine"], "native");
         assert_eq!(value["profile"], "recommended");
         assert_eq!(value["files_checked"], 1);
-        assert_eq!(value["rules_run"], 27);
+        assert_eq!(value["rules_run"], 28);
         assert_eq!(value["findings_count"], 1);
         assert_eq!(value["fixable_findings_count"], 1);
         assert_eq!(value["findings_by_rule"]["native.variables.unused_lexical"], 1);
@@ -394,6 +394,39 @@ mod tests {
         assert_eq!(value["findings_count"], 0);
         assert_eq!(value["suppressed_findings_count"], 1);
         assert_eq!(value["files"][0]["suppressed_findings_count"], 1);
+        Ok(())
+    }
+
+    #[test]
+    fn native_critic_check_keeps_false_positive_fixtures_clean() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let receipt = temp.path().join("native-critic-check.json");
+        let summary = temp.path().join("native-critic-check.md");
+        let fixture_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("xtask/tests/fixtures/native-critic/false-positive");
+
+        check(NativeCriticCheckConfig {
+            roots: vec![fixture_root],
+            severity: 1,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            receipt: receipt.clone(),
+            summary: summary.clone(),
+        })?;
+
+        let value: Value = serde_json::from_str(&fs::read_to_string(receipt)?)?;
+        assert_eq!(value["files_checked"], 3);
+        assert_eq!(value["files_with_parse_errors"], 0);
+        assert_eq!(value["rules_run"], 28);
+        assert_eq!(value["findings_count"], 0);
+        assert_eq!(value["suppressed_findings_count"], 0);
+        assert_eq!(value["fixable_findings_count"], 0);
+        assert_eq!(value["findings_by_rule"].as_object().map(|rules| rules.len()), Some(0));
+
+        let summary = fs::read_to_string(summary)?;
+        assert!(summary.contains("- Findings: `0`"));
+        assert!(summary.contains("| _none_ | 0 |"));
         Ok(())
     }
 }
