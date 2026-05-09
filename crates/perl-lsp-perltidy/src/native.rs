@@ -593,11 +593,11 @@ fn range_includes_line(range: TextRange, line: u32) -> bool {
 fn format_simple_line(line: &str, config: &FormatConfig) -> Option<String> {
     format_simple_control_block_line(line, config)
         .or_else(|| format_simple_subroutine_line(line, config))
-        .or_else(|| format_simple_statement_line(line))
-        .or_else(|| format_simple_lexical_line(line))
+        .or_else(|| format_simple_statement_line(line, config))
+        .or_else(|| format_simple_lexical_line(line, config))
 }
 
-fn format_simple_lexical_line(line: &str) -> Option<String> {
+fn format_simple_lexical_line(line: &str, config: &FormatConfig) -> Option<String> {
     let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
     let (indent, body) = line.split_at(indent_len);
     if body.is_empty() || body.contains('#') {
@@ -614,7 +614,7 @@ fn format_simple_lexical_line(line: &str) -> Option<String> {
         tokens.push(token);
     }
 
-    let formatted = format_simple_lexical_tokens(&tokens)?;
+    let formatted = format_simple_lexical_tokens(&tokens, config)?;
     Some(format!("{indent}{formatted}"))
 }
 
@@ -659,7 +659,7 @@ fn format_simple_control_block_line(line: &str, config: &FormatConfig) -> Option
     format_simple_control_block_tokens(&tokens, indent, config)
 }
 
-fn format_simple_statement_line(line: &str) -> Option<String> {
+fn format_simple_statement_line(line: &str, config: &FormatConfig) -> Option<String> {
     let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
     let (indent, body) = line.split_at(indent_len);
     if body.is_empty() || body.contains('#') {
@@ -676,7 +676,7 @@ fn format_simple_statement_line(line: &str) -> Option<String> {
         tokens.push(token);
     }
 
-    let formatted = format_simple_statement_tokens(&tokens)?;
+    let formatted = format_simple_statement_tokens(&tokens, config)?;
     Some(format!("{indent}{formatted}"))
 }
 
@@ -699,7 +699,7 @@ fn format_simple_subroutine_tokens(
     }
 
     let body_tokens = &tokens[3..tokens.len() - 1];
-    let statements = format_simple_statement_block(body_tokens)?;
+    let statements = format_simple_statement_block(body_tokens, config)?;
     let body_indent = format!("{indent}{}", indent_unit(config));
     Some(render_simple_block_doc(
         format!("{indent}sub {} {{", tokens[1].text),
@@ -731,7 +731,7 @@ fn format_simple_control_block_tokens(
         return None;
     }
 
-    let (condition, next_index) = format_simple_condition_tokens(tokens, 2)?;
+    let (condition, next_index) = format_simple_condition_tokens(tokens, 2, config)?;
     if tokens.get(next_index)?.kind != TokenKind::RightParen
         || tokens.get(next_index + 1)?.kind != TokenKind::LeftBrace
     {
@@ -744,8 +744,8 @@ fn format_simple_control_block_tokens(
         .position(|token| token.kind == TokenKind::RightBrace)
         .map(|offset| body_start + offset)?;
     let body_tokens = &tokens[body_start..body_end];
-    let statements = format_simple_statement_block(body_tokens)?;
-    let else_statements = format_simple_else_branch(tokens, body_end, keyword)?;
+    let statements = format_simple_statement_block(body_tokens, config)?;
+    let else_statements = format_simple_else_branch(tokens, body_end, keyword, config)?;
 
     if else_statements.is_none() && body_end + 1 != tokens.len() {
         return None;
@@ -807,6 +807,7 @@ fn format_simple_else_branch(
     tokens: &[perl_parser_core::Token],
     body_end: usize,
     keyword: &str,
+    config: &FormatConfig,
 ) -> Option<Option<Vec<String>>> {
     use perl_parser_core::TokenKind;
 
@@ -827,11 +828,14 @@ fn format_simple_else_branch(
 
     let else_body_start = next + 2;
     let else_body_tokens = &tokens[else_body_start..tokens.len() - 1];
-    let statements = format_simple_statement_block(else_body_tokens)?;
+    let statements = format_simple_statement_block(else_body_tokens, config)?;
     Some(Some(statements))
 }
 
-fn format_simple_statement_block(tokens: &[perl_parser_core::Token]) -> Option<Vec<String>> {
+fn format_simple_statement_block(
+    tokens: &[perl_parser_core::Token],
+    config: &FormatConfig,
+) -> Option<Vec<String>> {
     use perl_parser_core::TokenKind;
 
     if tokens.is_empty() {
@@ -846,21 +850,27 @@ fn format_simple_statement_block(tokens: &[perl_parser_core::Token]) -> Option<V
         }
 
         let statement_tokens = &tokens[start..=idx];
-        statements.push(format_simple_statement_tokens(statement_tokens)?);
+        statements.push(format_simple_statement_tokens(statement_tokens, config)?);
         start = idx + 1;
     }
 
     (start == tokens.len()).then_some(statements)
 }
 
-fn format_simple_statement_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
-    format_simple_lexical_tokens(tokens)
-        .or_else(|| format_simple_return_tokens(tokens))
-        .or_else(|| format_simple_assignment_tokens(tokens))
-        .or_else(|| format_simple_expression_statement_tokens(tokens))
+fn format_simple_statement_tokens(
+    tokens: &[perl_parser_core::Token],
+    config: &FormatConfig,
+) -> Option<String> {
+    format_simple_lexical_tokens(tokens, config)
+        .or_else(|| format_simple_return_tokens(tokens, config))
+        .or_else(|| format_simple_assignment_tokens(tokens, config))
+        .or_else(|| format_simple_expression_statement_tokens(tokens, config))
 }
 
-fn format_simple_lexical_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
+fn format_simple_lexical_tokens(
+    tokens: &[perl_parser_core::Token],
+    config: &FormatConfig,
+) -> Option<String> {
     use perl_parser_core::TokenKind;
 
     let keyword = match tokens.first()?.kind {
@@ -880,7 +890,8 @@ fn format_simple_lexical_tokens(tokens: &[perl_parser_core::Token]) -> Option<St
     if next_index == semicolon_index {
         Some(format!("{keyword} {variable};"))
     } else if tokens[next_index].kind == TokenKind::Assign {
-        let value = format_simple_expression_tokens(tokens, next_index + 1, semicolon_index)?;
+        let value =
+            format_simple_expression_tokens(tokens, next_index + 1, semicolon_index, config)?;
         Some(format!("{keyword} {variable} = {value};"))
     } else {
         None
@@ -951,7 +962,10 @@ fn format_variable_tokens(
     Some((format!("{}{}", sigil.text, name.text), start + 2))
 }
 
-fn format_simple_return_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
+fn format_simple_return_tokens(
+    tokens: &[perl_parser_core::Token],
+    config: &FormatConfig,
+) -> Option<String> {
     use perl_parser_core::TokenKind;
 
     if tokens.first()?.kind != TokenKind::Return || tokens.last()?.kind != TokenKind::Semicolon {
@@ -963,11 +977,14 @@ fn format_simple_return_tokens(tokens: &[perl_parser_core::Token]) -> Option<Str
         return Some("return;".to_string());
     }
 
-    let value = format_simple_expression_tokens(tokens, 1, semicolon_index)?;
+    let value = format_simple_expression_tokens(tokens, 1, semicolon_index, config)?;
     Some(format!("return {value};"))
 }
 
-fn format_simple_assignment_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
+fn format_simple_assignment_tokens(
+    tokens: &[perl_parser_core::Token],
+    config: &FormatConfig,
+) -> Option<String> {
     use perl_parser_core::TokenKind;
 
     if tokens.last()?.kind != TokenKind::Semicolon {
@@ -980,11 +997,14 @@ fn format_simple_assignment_tokens(tokens: &[perl_parser_core::Token]) -> Option
         return None;
     }
 
-    let value = format_simple_expression_tokens(tokens, next_index + 1, semicolon_index)?;
+    let value = format_simple_expression_tokens(tokens, next_index + 1, semicolon_index, config)?;
     Some(format!("{variable} = {value};"))
 }
 
-fn format_simple_expression_statement_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
+fn format_simple_expression_statement_tokens(
+    tokens: &[perl_parser_core::Token],
+    config: &FormatConfig,
+) -> Option<String> {
     use perl_parser_core::TokenKind;
 
     if tokens.last()?.kind != TokenKind::Semicolon {
@@ -992,13 +1012,14 @@ fn format_simple_expression_statement_tokens(tokens: &[perl_parser_core::Token])
     }
 
     let semicolon_index = tokens.len() - 1;
-    let (call, next_index) = format_simple_call_tokens(tokens, 0)?;
+    let (call, next_index) = format_simple_call_tokens(tokens, 0, config)?;
     (next_index == semicolon_index).then(|| format!("{call};"))
 }
 
 fn format_simple_condition_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
+    config: &FormatConfig,
 ) -> Option<(String, usize)> {
     use perl_parser_core::TokenKind;
 
@@ -1006,7 +1027,8 @@ fn format_simple_condition_tokens(
         .iter()
         .position(|token| token.kind == TokenKind::RightParen)
         .map(|offset| start + offset)?;
-    let condition = format_simple_expression_tokens(tokens, start, end)?;
+    let condition_config = FormatConfig { line_width: u32::MAX, ..config.clone() };
+    let condition = format_simple_expression_tokens(tokens, start, end, &condition_config)?;
     Some((condition, end))
 }
 
@@ -1014,22 +1036,25 @@ fn format_simple_expression_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
     end: usize,
+    config: &FormatConfig,
 ) -> Option<String> {
-    let (left, next_index) = format_simple_atom_tokens(tokens, start)?;
+    let (left, next_index) = format_simple_atom_tokens(tokens, start, config)?;
     if next_index == end {
         return Some(left);
     }
 
     let operator = simple_binary_operator_text(tokens.get(next_index)?)?;
-    let (right, final_index) = format_simple_atom_tokens(tokens, next_index + 1)?;
+    let (right, final_index) = format_simple_atom_tokens(tokens, next_index + 1, config)?;
     (final_index == end).then(|| format!("{left} {operator} {right}"))
 }
 
 fn format_simple_atom_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
+    config: &FormatConfig,
 ) -> Option<(String, usize)> {
-    if let Some((method_call, next_index)) = format_simple_method_call_tokens(tokens, start) {
+    if let Some((method_call, next_index)) = format_simple_method_call_tokens(tokens, start, config)
+    {
         return Some((method_call, next_index));
     }
 
@@ -1037,15 +1062,15 @@ fn format_simple_atom_tokens(
         return Some((variable, next_index));
     }
 
-    if let Some((call, next_index)) = format_simple_call_tokens(tokens, start) {
+    if let Some((call, next_index)) = format_simple_call_tokens(tokens, start, config) {
         return Some((call, next_index));
     }
 
-    if let Some((list, next_index)) = format_simple_list_tokens(tokens, start) {
+    if let Some((list, next_index)) = format_simple_list_tokens(tokens, start, config) {
         return Some((list, next_index));
     }
 
-    if let Some((hash, next_index)) = format_simple_hash_tokens(tokens, start) {
+    if let Some((hash, next_index)) = format_simple_hash_tokens(tokens, start, config) {
         return Some((hash, next_index));
     }
 
@@ -1057,6 +1082,7 @@ fn format_simple_atom_tokens(
 fn format_simple_method_call_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
+    config: &FormatConfig,
 ) -> Option<(String, usize)> {
     use perl_parser_core::TokenKind;
 
@@ -1068,7 +1094,7 @@ fn format_simple_method_call_tokens(
             break;
         }
         let (method_call, next_index) =
-            format_simple_method_call_segment(tokens, index, &expression)?;
+            format_simple_method_call_segment(tokens, index, &expression, config)?;
         expression = method_call;
         index = next_index;
         saw_method = true;
@@ -1081,6 +1107,7 @@ fn format_simple_method_call_segment(
     tokens: &[perl_parser_core::Token],
     arrow_index: usize,
     receiver: &str,
+    config: &FormatConfig,
 ) -> Option<(String, usize)> {
     use perl_parser_core::TokenKind;
 
@@ -1102,7 +1129,7 @@ fn format_simple_method_call_segment(
     }
 
     loop {
-        let (arg, next_index) = format_simple_atom_tokens(tokens, index)?;
+        let (arg, next_index) = format_simple_atom_tokens(tokens, index, config)?;
         args.push(arg);
         index = next_index;
 
@@ -1110,7 +1137,7 @@ fn format_simple_method_call_segment(
             TokenKind::Comma => index += 1,
             TokenKind::RightParen => {
                 return Some((
-                    render_simple_method_call_doc(receiver, method.text.as_ref(), &args),
+                    render_simple_method_call_doc(receiver, method.text.as_ref(), &args, config),
                     index + 1,
                 ));
             }
@@ -1119,27 +1146,19 @@ fn format_simple_method_call_segment(
     }
 }
 
-fn render_simple_method_call_doc(receiver: &str, method: &str, args: &[String]) -> String {
-    let mut parts = vec![
-        FormatDoc::text(receiver),
-        FormatDoc::text("->"),
-        FormatDoc::text(method),
-        FormatDoc::text("("),
-    ];
-    for (index, arg) in args.iter().enumerate() {
-        if index > 0 {
-            parts.push(FormatDoc::text(","));
-            parts.push(FormatDoc::Space);
-        }
-        parts.push(FormatDoc::text(arg));
-    }
-    parts.push(FormatDoc::text(")"));
-    FormatDoc::group(parts).render(&FormatConfig::default())
+fn render_simple_method_call_doc(
+    receiver: &str,
+    method: &str,
+    args: &[String],
+    config: &FormatConfig,
+) -> String {
+    render_delimited_doc(&format!("{receiver}->{method}("), ")", args, config)
 }
 
 fn format_simple_call_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
+    config: &FormatConfig,
 ) -> Option<(String, usize)> {
     use perl_parser_core::TokenKind;
 
@@ -1155,14 +1174,17 @@ fn format_simple_call_tokens(
     }
 
     loop {
-        let (arg, next_index) = format_simple_atom_tokens(tokens, index)?;
+        let (arg, next_index) = format_simple_atom_tokens(tokens, index, config)?;
         args.push(arg);
         index = next_index;
 
         match tokens.get(index)?.kind {
             TokenKind::Comma => index += 1,
             TokenKind::RightParen => {
-                return Some((format!("{}({})", name.text, args.join(", ")), index + 1));
+                return Some((
+                    render_delimited_doc(&format!("{}(", name.text), ")", &args, config),
+                    index + 1,
+                ));
             }
             _ => return None,
         }
@@ -1172,6 +1194,7 @@ fn format_simple_call_tokens(
 fn format_simple_list_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
+    config: &FormatConfig,
 ) -> Option<(String, usize)> {
     use perl_parser_core::TokenKind;
 
@@ -1186,36 +1209,24 @@ fn format_simple_list_tokens(
     }
 
     loop {
-        let (item, next_index) = format_simple_atom_tokens(tokens, index)?;
+        let (item, next_index) = format_simple_atom_tokens(tokens, index, config)?;
         items.push(item);
         index = next_index;
 
         match tokens.get(index)?.kind {
             TokenKind::Comma => index += 1,
             TokenKind::RightParen => {
-                return Some((render_simple_list_doc(&items), index + 1));
+                return Some((render_delimited_doc("(", ")", &items, config), index + 1));
             }
             _ => return None,
         }
     }
 }
 
-fn render_simple_list_doc(items: &[String]) -> String {
-    let mut parts = vec![FormatDoc::text("(")];
-    for (index, item) in items.iter().enumerate() {
-        if index > 0 {
-            parts.push(FormatDoc::text(","));
-            parts.push(FormatDoc::Space);
-        }
-        parts.push(FormatDoc::text(item));
-    }
-    parts.push(FormatDoc::text(")"));
-    FormatDoc::group(parts).render(&FormatConfig::default())
-}
-
 fn format_simple_hash_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
+    config: &FormatConfig,
 ) -> Option<(String, usize)> {
     use perl_parser_core::TokenKind;
 
@@ -1237,14 +1248,14 @@ fn format_simple_hash_tokens(
         }
         index += 1;
 
-        let (value, next_index) = format_simple_atom_tokens(tokens, index)?;
+        let (value, next_index) = format_simple_atom_tokens(tokens, index, config)?;
         pairs.push((key, value));
         index = next_index;
 
         match tokens.get(index)?.kind {
             TokenKind::Comma => index += 1,
             TokenKind::RightBrace => {
-                return Some((render_simple_hash_doc(&pairs), index + 1));
+                return Some((render_simple_hash_doc(&pairs, config), index + 1));
             }
             _ => return None,
         }
@@ -1255,21 +1266,32 @@ fn format_simple_hash_key_token(token: &perl_parser_core::Token) -> Option<Strin
     simple_value_text(token).map(str::to_string)
 }
 
-fn render_simple_hash_doc(pairs: &[(String, String)]) -> String {
-    let mut parts = vec![FormatDoc::text("{")];
-    for (index, (key, value)) in pairs.iter().enumerate() {
-        if index > 0 {
-            parts.push(FormatDoc::text(","));
-            parts.push(FormatDoc::Space);
+fn render_simple_hash_doc(pairs: &[(String, String)], config: &FormatConfig) -> String {
+    let items = pairs.iter().map(|(key, value)| format!("{key} => {value}")).collect::<Vec<_>>();
+    render_delimited_doc("{", "}", &items, config)
+}
+
+fn render_delimited_doc(
+    open: &str,
+    close: &str,
+    items: &[String],
+    config: &FormatConfig,
+) -> String {
+    let mut parts = vec![FormatDoc::text(open)];
+    if !items.is_empty() {
+        let mut item_docs = vec![FormatDoc::if_break(FormatDoc::SoftLine, FormatDoc::text(""))];
+        for (index, item) in items.iter().enumerate() {
+            if index > 0 {
+                item_docs.push(FormatDoc::text(","));
+                item_docs.push(FormatDoc::SoftLine);
+            }
+            item_docs.push(FormatDoc::text(item));
         }
-        parts.push(FormatDoc::text(key));
-        parts.push(FormatDoc::Space);
-        parts.push(FormatDoc::text("=>"));
-        parts.push(FormatDoc::Space);
-        parts.push(FormatDoc::text(value));
+        parts.push(FormatDoc::indent(item_docs));
+        parts.push(FormatDoc::if_break(FormatDoc::SoftLine, FormatDoc::text("")));
     }
-    parts.push(FormatDoc::text("}"));
-    FormatDoc::group(parts).render(&FormatConfig::default())
+    parts.push(FormatDoc::text(close));
+    FormatDoc::group(parts).render(config)
 }
 
 fn simple_binary_operator_text(token: &perl_parser_core::Token) -> Option<&str> {
