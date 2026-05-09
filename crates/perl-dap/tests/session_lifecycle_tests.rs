@@ -188,6 +188,261 @@ fn test_set_variable_rejects_invalid_variable_name() {
     }
 }
 
+// ── setVariable value-field injection guard (Issue #7271) ─────────────────────
+
+#[test]
+fn bdd_set_variable_rejects_system_call_in_value() {
+    // WHEN a setVariable request contains `system(...)` in the value field
+    // THEN the adapter must reject it before sending any command to the debugger
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "setVariable",
+        Some(json!({
+            "variablesReference": 11,
+            "name": "$x",
+            "value": "system('id')"
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "setVariable must reject system() in value");
+            assert_eq!(command, "setVariable");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("unsafe value rejected"),
+                "Error must mention unsafe value rejection: {msg}"
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+fn bdd_set_variable_rejects_exec_injection_in_value() {
+    // WHEN a setVariable value field contains exec() (shell exec injection)
+    // THEN the adapter must reject it
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "setVariable",
+        Some(json!({
+            "variablesReference": 11,
+            "name": "$x",
+            "value": "exec('/bin/sh')"
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "setVariable must reject exec() in value");
+            assert_eq!(command, "setVariable");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("unsafe value rejected"),
+                "Error must mention unsafe value rejection: {msg}"
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+fn bdd_set_variable_rejects_backtick_shell_in_value() {
+    // WHEN a setVariable value field contains backtick shell execution
+    // THEN the adapter must reject it
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "setVariable",
+        Some(json!({
+            "variablesReference": 11,
+            "name": "$x",
+            "value": "`id`"
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "setVariable must reject backtick shell execution in value");
+            assert_eq!(command, "setVariable");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("unsafe value rejected"),
+                "Error must mention unsafe value rejection: {msg}"
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+fn bdd_set_variable_rejects_statement_injection_via_semicolon_with_system() {
+    // WHEN a setVariable value contains `1; system(...)` (statement injection)
+    // THEN the adapter must reject it because system() is dangerous
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "setVariable",
+        Some(json!({
+            "variablesReference": 11,
+            "name": "$x",
+            "value": "1; system('id')"
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "setVariable must reject statement injection via semicolon");
+            assert_eq!(command, "setVariable");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("unsafe value rejected"),
+                "Error must mention unsafe value rejection: {msg}"
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+fn bdd_set_variable_rejects_statement_separator_before_unlisted_call() {
+    // WHEN a setVariable value contains a statement separator before an unlisted call
+    // THEN the adapter must reject it even if the safe-eval builtin denylist does not match it
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "setVariable",
+        Some(json!({
+            "variablesReference": 11,
+            "name": "$x",
+            "value": "1; warn 'still executed'"
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "setVariable must reject unquoted statement separators");
+            assert_eq!(command, "setVariable");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("statement separators are not allowed"),
+                "Error must explain the statement separator rejection: {msg}"
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+fn bdd_set_variable_rejects_unlisted_function_call_value() {
+    // WHEN a setVariable value is a package-qualified function call
+    // THEN the adapter must reject it instead of treating evaluate's broader safe mode as enough
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "setVariable",
+        Some(json!({
+            "variablesReference": 11,
+            "name": "$x",
+            "value": "My::Hook::run()"
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "setVariable must reject function-call values");
+            assert_eq!(command, "setVariable");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("only literal or simple variable-reference values are allowed"),
+                "Error must explain the setVariable value grammar: {msg}"
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+fn bdd_set_variable_rejects_bareword_call_value() {
+    // WHEN a setVariable value is a bareword-style function call without parentheses
+    // THEN the adapter must reject it before sending a debugger command
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "setVariable",
+        Some(json!({
+            "variablesReference": 11,
+            "name": "$x",
+            "value": "warn 'still executed'"
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "setVariable must reject bareword-call values");
+            assert_eq!(command, "setVariable");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("only literal or simple variable-reference values are allowed"),
+                "Error must explain the setVariable value grammar: {msg}"
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+fn bdd_set_variable_allows_safe_literal_values() {
+    // WHEN a setVariable value field contains a safe literal (integer, string, float)
+    // THEN the adapter should proceed past validation (may fail later due to no session)
+    let cases = [
+        ("$x", "42"),
+        ("$x", "\"hello\""),
+        ("$x", "3.14"),
+        ("$x", "'single-quoted string'"),
+        ("$x", "\"quoted; semicolon\""),
+        ("$x", "'quoted; semicolon'"),
+        ("$x", "undef"),
+        ("$x", "$other_value"),
+        ("$x", "$Package::value"),
+        ("$x", "1e10"),
+    ];
+
+    for (name, value) in cases {
+        let (mut adapter, _rx) = create_test_adapter();
+
+        let response = adapter.handle_request(
+            1,
+            "setVariable",
+            Some(json!({
+                "variablesReference": 11,
+                "name": name,
+                "value": value
+            })),
+        );
+
+        match response {
+            DapMessage::Response { message, .. } => {
+                let msg = message.unwrap_or_default();
+                assert!(
+                    !msg.contains("unsafe value rejected"),
+                    "Safe value {value:?} must not be rejected by injection guard: {msg}"
+                );
+            }
+            _ => must(Err::<(), _>("Expected Response message".to_string())),
+        }
+    }
+}
+
 #[test]
 // AC:5.5
 fn test_session_lifecycle_launch_missing_arguments() {
