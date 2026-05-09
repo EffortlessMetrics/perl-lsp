@@ -29,6 +29,16 @@ pub struct NativeFormatCorpusConfig {
     pub summary: PathBuf,
 }
 
+/// Options for `cargo xtask native-format perltidy-compat`.
+pub struct NativeFormatPerltidyCompatConfig {
+    /// Path to the `.perltidyrc`-style profile to classify.
+    pub profile: PathBuf,
+    /// Output JSON receipt path.
+    pub receipt: PathBuf,
+    /// Output markdown summary path.
+    pub summary: PathBuf,
+}
+
 #[derive(Debug, Serialize)]
 struct NativeFormatFixturesReceipt {
     kind: &'static str,
@@ -84,6 +94,30 @@ struct NativeFormatCorpusFileResult {
     literal_bailout: bool,
     unsupported_pattern: bool,
     passed: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct NativeFormatPerltidyCompatReceipt {
+    kind: &'static str,
+    schema_version: u32,
+    generated_at: DateTime<Utc>,
+    commit: String,
+    profile: String,
+    option_count: usize,
+    supported_count: usize,
+    approximated_count: usize,
+    unsupported_safe_count: usize,
+    external_only_count: usize,
+    options: Vec<PerltidyCompatOptionResult>,
+}
+
+#[derive(Debug, Serialize)]
+struct PerltidyCompatOptionResult {
+    option: String,
+    value: Option<String>,
+    classification: &'static str,
+    native_field: Option<&'static str>,
+    note: &'static str,
 }
 
 #[derive(Debug, Serialize)]
@@ -285,6 +319,59 @@ pub fn corpus(config: NativeFormatCorpusConfig) -> Result<()> {
     }
 }
 
+/// Classify a perltidy profile against current native formatter compatibility.
+pub fn perltidy_compat(config: NativeFormatPerltidyCompatConfig) -> Result<()> {
+    let raw = fs::read_to_string(&config.profile)
+        .wrap_err_with(|| format!("failed to read {}", config.profile.display()))?;
+    let options = tokenize_perltidy_profile(&raw);
+    let results = classify_perltidy_options(&options);
+    let receipt = NativeFormatPerltidyCompatReceipt {
+        kind: "native_format_perltidy_compat",
+        schema_version: SCHEMA_VERSION,
+        generated_at: Utc::now(),
+        commit: current_commit(),
+        profile: config.profile.display().to_string(),
+        option_count: results.len(),
+        supported_count: results
+            .iter()
+            .filter(|result| result.classification == "supported")
+            .count(),
+        approximated_count: results
+            .iter()
+            .filter(|result| result.classification == "approximated")
+            .count(),
+        unsupported_safe_count: results
+            .iter()
+            .filter(|result| result.classification == "unsupported_safe")
+            .count(),
+        external_only_count: results
+            .iter()
+            .filter(|result| result.classification == "external_only")
+            .count(),
+        options: results,
+    };
+
+    if let Some(parent) = config.receipt.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("failed to create {}", parent.display()))?;
+    }
+    if let Some(parent) = config.summary.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("failed to create {}", parent.display()))?;
+    }
+    write_json(&config.receipt, &receipt)?;
+    write_perltidy_compat_summary(&config.summary, &receipt)?;
+
+    println!(
+        "native formatter perltidy compatibility: {} supported, {} approximated, {} external-only; receipt: {}",
+        receipt.supported_count,
+        receipt.approximated_count,
+        receipt.external_only_count,
+        config.receipt.display()
+    );
+    Ok(())
+}
+
 fn collect_fixture_paths(fixtures: &Path) -> Result<Vec<PathBuf>> {
     let mut paths = Vec::new();
     for entry in WalkDir::new(fixtures).into_iter().filter_map(Result::ok) {
@@ -302,6 +389,165 @@ fn collect_fixture_paths(fixtures: &Path) -> Result<Vec<PathBuf>> {
     }
     paths.sort();
     Ok(paths)
+}
+
+fn tokenize_perltidy_profile(raw: &str) -> Vec<(String, Option<String>)> {
+    let tokens = raw
+        .lines()
+        .filter_map(|line| line.split('#').next())
+        .flat_map(str::split_whitespace)
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>();
+    let mut options = Vec::new();
+    let mut index = 0;
+    while index < tokens.len() {
+        let token = &tokens[index];
+        if !token.starts_with('-') {
+            index += 1;
+            continue;
+        }
+        if let Some((option, value)) = token.split_once('=') {
+            options.push((option.to_string(), Some(value.to_string())));
+            index += 1;
+            continue;
+        }
+        if option_requires_value(token)
+            && tokens.get(index + 1).is_some_and(|value| !value.starts_with('-'))
+        {
+            options.push((token.to_string(), tokens.get(index + 1).cloned()));
+            index += 2;
+            continue;
+        }
+        options.push((token.to_string(), None));
+        index += 1;
+    }
+    options
+}
+
+fn option_requires_value(option: &str) -> bool {
+    matches!(
+        option,
+        "-l" | "--maximum-line-length"
+            | "-i"
+            | "--indent-columns"
+            | "-ci"
+            | "--block-comment-indentation"
+    )
+}
+
+fn classify_perltidy_options(
+    options: &[(String, Option<String>)],
+) -> Vec<PerltidyCompatOptionResult> {
+    options.iter().map(|(option, value)| classify_perltidy_option(option, value.clone())).collect()
+}
+
+fn classify_perltidy_option(option: &str, value: Option<String>) -> PerltidyCompatOptionResult {
+    match option {
+        "-l" | "--maximum-line-length" => compat_result(
+            option,
+            value,
+            "supported",
+            Some("format.line_width"),
+            "maps directly to the native formatter line width",
+        ),
+        "-i" | "--indent-columns" => compat_result(
+            option,
+            value,
+            "supported",
+            Some("format.indent_width"),
+            "maps directly to native formatter indentation width",
+        ),
+        "-t" | "--tabs" | "-nt" | "--notabs" => compat_result(
+            option,
+            value,
+            "supported",
+            Some("format.use_tabs"),
+            "maps directly to native formatter tab indentation",
+        ),
+        "-ce" | "--cuddled-else" | "-nce" | "--nocuddled-else" => compat_result(
+            option,
+            value,
+            "approximated",
+            None,
+            "native block rendering has fixed else layout today",
+        ),
+        "-sok" | "--space-after-keyword" | "-nsok" | "--nospace-after-keyword" => compat_result(
+            option,
+            value,
+            "approximated",
+            None,
+            "native formatter currently normalizes supported keywords with spaces",
+        ),
+        "-bl" | "--opening-brace-on-new-line" | "-bar" | "--opening-brace-always-on-right" => {
+            compat_result(
+                option,
+                value,
+                "external_only",
+                None,
+                "native formatter does not yet expose brace placement policy",
+            )
+        }
+        "-atc" | "--add-trailing-commas" | "-natc" | "--no-add-trailing-commas" => compat_result(
+            option,
+            value,
+            "external_only",
+            None,
+            "native formatter does not yet expose trailing comma policy",
+        ),
+        "-ci" | "--block-comment-indentation" => compat_result(
+            option,
+            value,
+            "external_only",
+            None,
+            "comment-aware native formatting is not yet configurable",
+        ),
+        "-val" | "--vertical-alignment" | "-nval" | "--novertical-alignment" => compat_result(
+            option,
+            value,
+            "external_only",
+            None,
+            "native formatter intentionally avoids alignment policy today",
+        ),
+        "-pbp" | "--perl-best-practices" | "-gnu" | "--gnu-style" => compat_result(
+            option,
+            value,
+            "approximated",
+            None,
+            "native formatter can map individual style settings but not full preset profiles yet",
+        ),
+        "-q" | "--quiet" | "-st" | "--standard-output" | "-se" | "--standard-error-output" => {
+            compat_result(
+                option,
+                value,
+                "unsupported_safe",
+                None,
+                "perltidy execution/output flag does not affect native formatting style",
+            )
+        }
+        _ => compat_result(
+            option,
+            value,
+            "external_only",
+            None,
+            "unknown style option is not applied by native formatter and may require external compatibility mode",
+        ),
+    }
+}
+
+fn compat_result(
+    option: &str,
+    value: Option<String>,
+    classification: &'static str,
+    native_field: Option<&'static str>,
+    note: &'static str,
+) -> PerltidyCompatOptionResult {
+    PerltidyCompatOptionResult {
+        option: option.to_string(),
+        value,
+        classification,
+        native_field,
+        note,
+    }
 }
 
 fn default_corpus_roots() -> Vec<PathBuf> {
@@ -564,6 +810,33 @@ fn write_corpus_summary(path: &Path, receipt: &NativeFormatCorpusReceipt) -> Res
     fs::write(path, markdown).wrap_err_with(|| format!("failed to write {}", path.display()))
 }
 
+fn write_perltidy_compat_summary(
+    path: &Path,
+    receipt: &NativeFormatPerltidyCompatReceipt,
+) -> Result<()> {
+    let mut markdown = String::new();
+    markdown.push_str("# Native Format Perltidy Compatibility\n\n");
+    markdown.push_str(&format!("- Profile: `{}`\n", receipt.profile));
+    markdown.push_str(&format!("- Options checked: {}\n", receipt.option_count));
+    markdown.push_str(&format!("- Supported: {}\n", receipt.supported_count));
+    markdown.push_str(&format!("- Approximated: {}\n", receipt.approximated_count));
+    markdown.push_str(&format!("- Unsupported safe: {}\n", receipt.unsupported_safe_count));
+    markdown.push_str(&format!("- External-only: {}\n\n", receipt.external_only_count));
+    markdown.push_str("| Option | Value | Classification | Native field | Note |\n");
+    markdown.push_str("| --- | --- | --- | --- | --- |\n");
+    for option in &receipt.options {
+        markdown.push_str(&format!(
+            "| `{}` | {} | {} | {} | {} |\n",
+            option.option,
+            option.value.as_deref().unwrap_or(""),
+            option.classification,
+            option.native_field.unwrap_or(""),
+            option.note
+        ));
+    }
+    fs::write(path, markdown).wrap_err_with(|| format!("failed to write {}", path.display()))
+}
+
 fn current_commit() -> String {
     Command::new("git")
         .args(["rev-parse", "HEAD"])
@@ -670,6 +943,44 @@ mod tests {
         assert!(summary.contains("# Native Format Corpus"));
         assert!(summary.contains("Files checked: 2"));
         assert!(summary.contains("Literal bailouts: 1"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn native_format_perltidy_compat_classifies_common_options() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let profile = temp.path().join(".perltidyrc");
+        let receipts = temp.path().join("receipts");
+        fs::write(
+            &profile,
+            "# common profile\n-l=100\n-i 2\n-nt\n-ce\n-q\n-atc\n--unknown-style\n",
+        )?;
+
+        perltidy_compat(NativeFormatPerltidyCompatConfig {
+            profile,
+            receipt: receipts.join("native-format-perltidy-compat.json"),
+            summary: receipts.join("native-format-perltidy-compat.md"),
+        })?;
+
+        let receipt: Value = serde_json::from_str(&fs::read_to_string(
+            receipts.join("native-format-perltidy-compat.json"),
+        )?)?;
+        assert_eq!(receipt["kind"], "native_format_perltidy_compat");
+        assert_eq!(receipt["option_count"], 7);
+        assert_eq!(receipt["supported_count"], 3);
+        assert_eq!(receipt["approximated_count"], 1);
+        assert_eq!(receipt["external_only_count"], 2);
+        assert_eq!(receipt["unsupported_safe_count"], 1);
+        assert_eq!(receipt["options"][0]["native_field"], "format.line_width");
+        assert_eq!(receipt["options"][1]["value"], "2");
+        assert_eq!(receipt["options"][4]["classification"], "unsupported_safe");
+        assert_eq!(receipt["options"][5]["classification"], "external_only");
+
+        let summary = fs::read_to_string(receipts.join("native-format-perltidy-compat.md"))?;
+        assert!(summary.contains("# Native Format Perltidy Compatibility"));
+        assert!(summary.contains("| `-l` | 100 | supported | format.line_width |"));
+        assert!(summary.contains("| `--unknown-style` |  | external_only |"));
 
         Ok(())
     }
