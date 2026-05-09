@@ -493,6 +493,12 @@ enum Commands {
         command: NativeFormatCommand,
     },
 
+    /// Run native critic checks and emit receipts.
+    NativeCritic {
+        #[command(subcommand)]
+        command: NativeCriticCommand,
+    },
+
     /// Report native formatter and critic replacement status.
     NativeTooling {
         #[command(subcommand)]
@@ -1885,6 +1891,37 @@ enum NativeFormatCommand {
 }
 
 #[derive(Subcommand)]
+enum NativeCriticCommand {
+    /// Run native critic rules over Perl source files and write receipts.
+    Check {
+        /// Files or directories containing Perl sources. Defaults to examples/perl,
+        /// tests/perl-corpus, and crates/perl-corpus/fixtures/parser_accuracy.
+        #[arg(long = "root")]
+        roots: Vec<PathBuf>,
+
+        /// Minimum native critic severity to report.
+        #[arg(long, default_value_t = 3)]
+        severity: u8,
+
+        /// Native rule IDs to include. Empty means all recommended rules.
+        #[arg(long = "include")]
+        include: Vec<String>,
+
+        /// Native rule IDs to exclude.
+        #[arg(long = "exclude")]
+        exclude: Vec<String>,
+
+        /// Output JSON receipt path.
+        #[arg(long, default_value = "target/receipts/native-tooling/native-critic-check.json")]
+        receipt: PathBuf,
+
+        /// Output markdown summary path.
+        #[arg(long, default_value = "target/receipts/native-tooling/native-critic-check.md")]
+        summary: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum NativeToolingCommand {
     /// Write native formatter and critic status receipts.
     Status {
@@ -1911,6 +1948,10 @@ enum NativeToolingCommand {
         /// Native critic perlcritic compatibility receipt to summarize.
         #[arg(long, default_value = "target/receipts/native-tooling/perlcritic-compat.json")]
         critic_perlcritic_compat_receipt: PathBuf,
+
+        /// Native critic check receipt to summarize.
+        #[arg(long, default_value = "target/receipts/native-tooling/native-critic-check.json")]
+        critic_check_receipt: PathBuf,
 
         /// Output path for native-tooling status JSON.
         #[arg(long, default_value = "target/receipts/native-tooling/status.json")]
@@ -2310,6 +2351,18 @@ fn main() -> Result<()> {
                 })
             }
         },
+        Commands::NativeCritic { command } => match command {
+            NativeCriticCommand::Check { roots, severity, include, exclude, receipt, summary } => {
+                native_critic::check(native_critic::NativeCriticCheckConfig {
+                    roots,
+                    severity,
+                    include,
+                    exclude,
+                    receipt,
+                    summary,
+                })
+            }
+        },
         Commands::NativeTooling { command } => match command {
             NativeToolingCommand::Status {
                 format_fixtures,
@@ -2318,6 +2371,7 @@ fn main() -> Result<()> {
                 format_perltidy_compat_receipt,
                 format_config_receipt,
                 critic_perlcritic_compat_receipt,
+                critic_check_receipt,
                 receipt,
                 markdown,
             } => native_tooling::status(native_tooling::NativeToolingStatusConfig {
@@ -2327,6 +2381,7 @@ fn main() -> Result<()> {
                 format_perltidy_compat_receipt,
                 format_config_receipt,
                 critic_perlcritic_compat_receipt,
+                critic_check_receipt,
                 receipt,
                 markdown,
             }),

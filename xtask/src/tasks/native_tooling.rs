@@ -30,6 +30,8 @@ pub struct NativeToolingStatusConfig {
     pub format_config_receipt: PathBuf,
     /// Existing native critic perlcritic compatibility receipt, when available.
     pub critic_perlcritic_compat_receipt: PathBuf,
+    /// Existing native critic check receipt, when available.
+    pub critic_check_receipt: PathBuf,
     /// Output path for the native-tooling JSON receipt.
     pub receipt: PathBuf,
     /// Optional markdown status output path.
@@ -126,6 +128,14 @@ struct CriticStatus {
     rules_surfaced_in_push_diagnostics: usize,
     rules_surfaced_in_workspace_diagnostics: usize,
     rules_with_violation_bridge: usize,
+    critic_check_receipt: String,
+    critic_check_receipt_present: bool,
+    critic_check_files_checked: Option<usize>,
+    critic_check_files_with_parse_errors: Option<usize>,
+    critic_check_rules_run: Option<usize>,
+    critic_check_findings_count: Option<usize>,
+    critic_check_suppressed_findings_count: Option<usize>,
+    critic_check_fixable_findings_count: Option<usize>,
     critic_perlcritic_compat_receipt: String,
     critic_perlcritic_compat_receipt_present: bool,
     perlcritic_compat_item_count: Option<usize>,
@@ -256,7 +266,8 @@ fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeTool
         &config.format_perltidy_compat_receipt,
         &config.format_config_receipt,
     )?;
-    let critic = critic_status(&config.critic_perlcritic_compat_receipt)?;
+    let critic =
+        critic_status(&config.critic_perlcritic_compat_receipt, &config.critic_check_receipt)?;
     Ok(NativeToolingStatusReceipt {
         kind: "native_tooling_status",
         schema_version: SCHEMA_VERSION,
@@ -484,7 +495,10 @@ fn read_expected_diagnostic_codes(path: &Path) -> Result<Vec<String>> {
         .collect())
 }
 
-fn critic_status(critic_perlcritic_compat_receipt: &Path) -> Result<CriticStatus> {
+fn critic_status(
+    critic_perlcritic_compat_receipt: &Path,
+    critic_check_receipt: &Path,
+) -> Result<CriticStatus> {
     let registry = NativeCriticRegistry::recommended();
     let native_rules = registry.rule_ids().into_iter().map(ToOwned::to_owned).collect::<Vec<_>>();
     let fixable = fixable_rule_ids();
@@ -500,6 +514,8 @@ fn critic_status(critic_perlcritic_compat_receipt: &Path) -> Result<CriticStatus
     } else {
         None
     };
+    let check_receipt =
+        if critic_check_receipt.exists() { Some(read_json(critic_check_receipt)?) } else { None };
 
     Ok(CriticStatus {
         native_rule_count: native_rules.len(),
@@ -510,6 +526,23 @@ fn critic_status(critic_perlcritic_compat_receipt: &Path) -> Result<CriticStatus
         rules_surfaced_in_push_diagnostics: native_rules.len(),
         rules_surfaced_in_workspace_diagnostics: native_rules.len(),
         rules_with_violation_bridge: native_rules.len(),
+        critic_check_receipt: critic_check_receipt.display().to_string(),
+        critic_check_receipt_present: check_receipt.is_some(),
+        critic_check_files_checked: optional_usize(&check_receipt, "files_checked"),
+        critic_check_files_with_parse_errors: optional_usize(
+            &check_receipt,
+            "files_with_parse_errors",
+        ),
+        critic_check_rules_run: optional_usize(&check_receipt, "rules_run"),
+        critic_check_findings_count: optional_usize(&check_receipt, "findings_count"),
+        critic_check_suppressed_findings_count: optional_usize(
+            &check_receipt,
+            "suppressed_findings_count",
+        ),
+        critic_check_fixable_findings_count: optional_usize(
+            &check_receipt,
+            "fixable_findings_count",
+        ),
         critic_perlcritic_compat_receipt: critic_perlcritic_compat_receipt.display().to_string(),
         critic_perlcritic_compat_receipt_present: perlcritic_compat_receipt.is_some(),
         perlcritic_compat_item_count: optional_usize(&perlcritic_compat_receipt, "item_count"),
@@ -674,6 +707,24 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
         formatter.format_trailing_comma.as_deref(),
         formatter.format_config_receipt_present,
     );
+    let critic_check_files_checked =
+        optional_metric(critic.critic_check_files_checked, critic.critic_check_receipt_present);
+    let critic_check_parse_errors = optional_metric(
+        critic.critic_check_files_with_parse_errors,
+        critic.critic_check_receipt_present,
+    );
+    let critic_check_rules_run =
+        optional_metric(critic.critic_check_rules_run, critic.critic_check_receipt_present);
+    let critic_check_findings =
+        optional_metric(critic.critic_check_findings_count, critic.critic_check_receipt_present);
+    let critic_check_suppressed = optional_metric(
+        critic.critic_check_suppressed_findings_count,
+        critic.critic_check_receipt_present,
+    );
+    let critic_check_fixable = optional_metric(
+        critic.critic_check_fixable_findings_count,
+        critic.critic_check_receipt_present,
+    );
     let perlcritic_compat_items = optional_metric(
         critic.perlcritic_compat_item_count,
         critic.critic_perlcritic_compat_receipt_present,
@@ -744,6 +795,12 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
 | Push diagnostics coverage | {} |
 | Workspace diagnostics coverage | {} |
 | Violation bridge coverage | {} |
+| Native critic check files | {} |
+| Native critic check parse errors | {} |
+| Native critic check rules run | {} |
+| Native critic check findings | {} |
+| Native critic check suppressed | {} |
+| Native critic check fixable | {} |
 | Perlcritic compatibility items | {} |
 | Perlcritic compatibility native-equivalent | {} |
 | Perlcritic compatibility native-superset | {} |
@@ -789,6 +846,12 @@ Fixable native rules:
         critic.rules_surfaced_in_push_diagnostics,
         critic.rules_surfaced_in_workspace_diagnostics,
         critic.rules_with_violation_bridge,
+        critic_check_files_checked,
+        critic_check_parse_errors,
+        critic_check_rules_run,
+        critic_check_findings,
+        critic_check_suppressed,
+        critic_check_fixable,
         perlcritic_compat_items,
         perlcritic_compat_native_equivalent,
         perlcritic_compat_native_superset,
@@ -1157,6 +1220,19 @@ mod tests {
 }
 "#,
         )?;
+        let critic_check_receipt = receipts.join("native-critic-check.json");
+        fs::write(
+            &critic_check_receipt,
+            r#"{
+  "files_checked": 3,
+  "files_with_parse_errors": 0,
+  "rules_run": 27,
+  "findings_count": 4,
+  "suppressed_findings_count": 1,
+  "fixable_findings_count": 2
+}
+"#,
+        )?;
         let receipt = receipts.join("native-tooling-status.json");
         let markdown = receipts.join("native-tooling-status.md");
         let missing_receipt = receipts.join("missing-native-format-fixtures.json");
@@ -1170,6 +1246,7 @@ mod tests {
             format_perltidy_compat_receipt: format_perltidy_compat_receipt.clone(),
             format_config_receipt: format_config_receipt.clone(),
             critic_perlcritic_compat_receipt: critic_perlcritic_compat_receipt.clone(),
+            critic_check_receipt: critic_check_receipt.clone(),
             receipt: receipt.clone(),
             markdown: Some(markdown.clone()),
         })?;
@@ -1211,6 +1288,13 @@ mod tests {
         assert_eq!(value["formatter"]["format_keyword_spacing"], "compact");
         assert_eq!(value["formatter"]["format_trailing_comma"], "add-when-wrapped");
         assert!(value["critic"]["native_rule_count"].as_u64().unwrap_or_default() > 0);
+        assert_eq!(value["critic"]["critic_check_receipt_present"], true);
+        assert_eq!(value["critic"]["critic_check_files_checked"], 3);
+        assert_eq!(value["critic"]["critic_check_files_with_parse_errors"], 0);
+        assert_eq!(value["critic"]["critic_check_rules_run"], 27);
+        assert_eq!(value["critic"]["critic_check_findings_count"], 4);
+        assert_eq!(value["critic"]["critic_check_suppressed_findings_count"], 1);
+        assert_eq!(value["critic"]["critic_check_fixable_findings_count"], 2);
         assert_eq!(value["critic"]["critic_perlcritic_compat_receipt_present"], true);
         assert_eq!(value["critic"]["perlcritic_compat_item_count"], 12);
         assert_eq!(value["critic"]["perlcritic_compat_native_equivalent_count"], 5);
@@ -1258,6 +1342,12 @@ mod tests {
         assert!(markdown.contains("| Config else placement | separate-line |"));
         assert!(markdown.contains("| Config keyword spacing | compact |"));
         assert!(markdown.contains("| Config trailing comma | add-when-wrapped |"));
+        assert!(markdown.contains("| Native critic check files | 3 |"));
+        assert!(markdown.contains("| Native critic check parse errors | 0 |"));
+        assert!(markdown.contains("| Native critic check rules run | 27 |"));
+        assert!(markdown.contains("| Native critic check findings | 4 |"));
+        assert!(markdown.contains("| Native critic check suppressed | 1 |"));
+        assert!(markdown.contains("| Native critic check fixable | 2 |"));
         assert!(markdown.contains("| Perlcritic compatibility items | 12 |"));
         assert!(markdown.contains("| Perlcritic compatibility native-equivalent | 5 |"));
         assert!(markdown.contains("| Perlcritic compatibility native-superset | 2 |"));
@@ -1273,6 +1363,7 @@ mod tests {
             format_perltidy_compat_receipt,
             format_config_receipt,
             critic_perlcritic_compat_receipt,
+            critic_check_receipt,
             receipt: missing_status_receipt.clone(),
             markdown: Some(missing_markdown.clone()),
         })?;
