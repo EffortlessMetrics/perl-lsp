@@ -238,6 +238,7 @@ impl NativeCriticRegistry {
             Box::new(RequireUseStrictRule),
             Box::new(RequireUseWarningsRule),
             Box::new(AssignmentInConditionRule),
+            Box::new(PrintfFormatArityRule),
             Box::new(BarewordFilehandleRule),
             Box::new(TwoArgOpenRule),
             Box::new(PipeOpenRule),
@@ -465,6 +466,31 @@ impl CriticRule for AssignmentInConditionRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_assignment_in_condition_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports static printf/sprintf format arity mismatches.
+///
+/// This wraps the existing parser-backed PL405 lint through the native critic
+/// contract so opt-in native critic users get stable rule IDs, suppression and
+/// severity filtering, violation bridge coverage, and LSP parity.
+pub struct PrintfFormatArityRule;
+
+impl CriticRule for PrintfFormatArityRule {
+    fn id(&self) -> &'static str {
+        "native.common.printf_format_arity"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Syntax
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_printf_format_arity_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -1003,6 +1029,52 @@ fn assignment_in_condition_finding(
     }
 }
 
+fn printf_format_arity_finding(
+    rule: &PrintfFormatArityRule,
+    source: &str,
+    call_node: &Node,
+    format_node: &Node,
+    call_name: &str,
+    specifier_count: usize,
+    arg_count: usize,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, call_node.location.start, call_node.location.end);
+    let format_range =
+        range_for_byte_span(source, format_node.location.start, format_node.location.end);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!(
+            "`{}` format string has {} specifier{} but {} argument{} supplied",
+            call_name,
+            specifier_count,
+            if specifier_count == 1 { "" } else { "s" },
+            arg_count,
+            if arg_count == 1 { "" } else { "s" },
+        ),
+        explanation: format!(
+            "Add {} argument{} to match {} format specifier{}, or adjust the format string",
+            specifier_count,
+            if specifier_count == 1 { "" } else { "s" },
+            specifier_count,
+            if specifier_count == 1 { "" } else { "s" },
+        ),
+        suppression_key: rule.id().to_string(),
+        related: vec![CriticRelatedInformation {
+            range: format_range,
+            message: format!(
+                "Format string contains {} specifier{}",
+                specifier_count,
+                if specifier_count == 1 { "" } else { "s" }
+            ),
+        }],
+        fix: None,
+    }
+}
+
 fn bareword_filehandle_finding(
     rule: &BarewordFilehandleRule,
     source: &str,
@@ -1291,6 +1363,62 @@ fn collect_assignment_in_condition_findings(
 
     for child in node.children() {
         collect_assignment_in_condition_findings(rule, source, child, out);
+    }
+}
+
+fn collect_printf_format_arity_findings(
+    rule: &PrintfFormatArityRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    match &node.kind {
+        NodeKind::FunctionCall { name, args } if name == "printf" || name == "sprintf" => {
+            push_printf_format_arity_finding(rule, source, node, name, args, out);
+        }
+        NodeKind::IndirectCall { method, args, .. } if method == "printf" => {
+            push_printf_format_arity_finding(rule, source, node, method, args, out);
+        }
+        _ => {}
+    }
+
+    for child in node.children() {
+        collect_printf_format_arity_findings(rule, source, child, out);
+    }
+}
+
+fn push_printf_format_arity_finding(
+    rule: &PrintfFormatArityRule,
+    source: &str,
+    call_node: &Node,
+    call_name: &str,
+    args: &[Node],
+    out: &mut Vec<CriticFinding>,
+) {
+    let Some(format_node) = args.first() else {
+        return;
+    };
+    let NodeKind::String { value, .. } = &format_node.kind else {
+        return;
+    };
+
+    let format_content = unquote_string(value);
+    if format_content.contains('$') {
+        return;
+    }
+
+    let specifier_count = count_format_specifiers(format_content);
+    let arg_count = args.len().saturating_sub(1);
+    if specifier_count != arg_count {
+        out.push(printf_format_arity_finding(
+            rule,
+            source,
+            call_node,
+            format_node,
+            call_name,
+            specifier_count,
+            arg_count,
+        ));
     }
 }
 
@@ -1662,6 +1790,94 @@ fn assignment_comparison_fix(source: &str, start: usize, end: usize) -> Option<C
         safety: FixSafety::Suggested,
         edits: vec![CriticTextEdit { range, new_text: "==".to_string() }],
     })
+}
+
+fn count_format_specifiers(format: &str) -> usize {
+    let bytes = format.as_bytes();
+    let mut count = 0;
+    let mut index = 0;
+
+    while index < bytes.len() {
+        if bytes[index] != b'%' {
+            index += 1;
+            continue;
+        }
+
+        index += 1;
+        if index >= bytes.len() {
+            break;
+        }
+        if bytes[index] == b'%' {
+            index += 1;
+            continue;
+        }
+
+        while index < bytes.len() && matches!(bytes[index], b'-' | b'+' | b' ' | b'0' | b'#') {
+            index += 1;
+        }
+        while index < bytes.len() && bytes[index].is_ascii_digit() {
+            index += 1;
+        }
+        if index < bytes.len() && bytes[index] == b'*' {
+            index += 1;
+        }
+        if index < bytes.len() && bytes[index] == b'.' {
+            index += 1;
+            while index < bytes.len() && bytes[index].is_ascii_digit() {
+                index += 1;
+            }
+            if index < bytes.len() && bytes[index] == b'*' {
+                index += 1;
+            }
+        }
+        if index < bytes.len()
+            && matches!(bytes[index], b'h' | b'l' | b'L' | b'q' | b'v' | b'z' | b't')
+        {
+            index += 1;
+            if index < bytes.len() && matches!(bytes[index], b'h' | b'l') {
+                index += 1;
+            }
+        }
+        if index < bytes.len()
+            && matches!(
+                bytes[index],
+                b's' | b'd'
+                    | b'i'
+                    | b'u'
+                    | b'o'
+                    | b'x'
+                    | b'X'
+                    | b'e'
+                    | b'E'
+                    | b'f'
+                    | b'F'
+                    | b'g'
+                    | b'G'
+                    | b'c'
+                    | b'p'
+                    | b'n'
+                    | b'b'
+            )
+        {
+            count += 1;
+        }
+        index += 1;
+    }
+
+    count
+}
+
+fn unquote_string(raw: &str) -> &str {
+    if raw.len() >= 2 {
+        let bytes = raw.as_bytes();
+        let first = bytes[0];
+        let last = bytes[raw.len() - 1];
+        if (first == b'"' && last == b'"') || (first == b'\'' && last == b'\'') {
+            return &raw[1..raw.len() - 1];
+        }
+    }
+
+    raw
 }
 
 fn duplicate_my_fix(source: &str, variable_start: usize) -> Option<CriticFix> {
@@ -2203,6 +2419,93 @@ mod tests {
         assert_eq!(
             violations[0].explanation,
             "Assignments in conditions are usually accidental. Use '==' for numeric comparison, 'eq' for string comparison, or add parentheses if the assignment is intentional."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
+    fn native_printf_format_arity_rule_reports_static_mismatch() {
+        let source = "use strict;\nuse warnings;\nprintf \"%s %s\", $name;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(PrintfFormatArityRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.common.printf_format_arity");
+        assert_eq!(finding.category, CriticCategory::Syntax);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert_eq!(
+            finding.message,
+            "`printf` format string has 2 specifiers but 1 argument supplied"
+        );
+        assert_eq!(finding.suppression_key, "native.common.printf_format_arity");
+        assert_eq!(
+            &source[finding.range.start.byte..finding.range.end.byte],
+            "printf \"%s %s\", $name"
+        );
+        assert_eq!(finding.related.len(), 1);
+        assert_eq!(finding.related[0].message, "Format string contains 2 specifiers");
+        assert!(finding.fix.is_none());
+    }
+
+    #[test]
+    fn native_printf_format_arity_rule_accepts_matching_and_dynamic_formats() {
+        let source = "use strict;\nuse warnings;\nmy $fmt = \"%s\";\nprintf \"%s\", $name;\nprintf $fmt, $name;\nsprintf \"%s %d\", $name, $count;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(PrintfFormatArityRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "matching and dynamic formats should be accepted");
+    }
+
+    #[test]
+    fn native_printf_format_arity_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nprintf \"%s %s\", $name;\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.common.printf_format_arity".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(PrintfFormatArityRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.common.printf_format_arity -- generated format\nuse strict;\nuse warnings;\nprintf \"%s %s\", $name;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_printf_format_arity_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nsprintf \"%s %s\", $name;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(PrintfFormatArityRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.common.printf_format_arity");
+        assert_eq!(
+            violations[0].description,
+            "`sprintf` format string has 2 specifiers but 1 argument supplied"
+        );
+        assert_eq!(
+            violations[0].explanation,
+            "Add 2 arguments to match 2 format specifiers, or adjust the format string"
         );
         assert_eq!(violations[0].severity, Severity::Stern);
         assert_eq!(violations[0].file, "lib/App.pm");
@@ -2973,6 +3276,7 @@ mod tests {
                 "native.testing.require_use_strict",
                 "native.testing.require_use_warnings",
                 "native.common.assignment_in_condition",
+                "native.common.printf_format_arity",
                 "native.io.bareword_filehandle",
                 "native.io.two_arg_open",
                 "native.io.pipe_open",
