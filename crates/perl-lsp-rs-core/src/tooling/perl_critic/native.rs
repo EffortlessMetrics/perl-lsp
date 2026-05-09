@@ -263,6 +263,7 @@ impl NativeCriticRegistry {
             Box::new(UninitializedVariableRule),
             Box::new(UnquotedBarewordRule),
             Box::new(RequirePodSectionsRule),
+            Box::new(ProhibitLeadingZerosRule),
         ])
     }
 
@@ -1158,6 +1159,40 @@ impl CriticRule for RequirePodSectionsRule {
                 .into_iter()
                 .map(|missing| require_pod_sections_finding(self, ctx.source, &missing)),
         );
+    }
+}
+
+/// Native rule that flags integer literals with a leading zero.
+///
+/// In Perl, an integer literal that starts with `0` followed by additional
+/// digits is interpreted as **base-8 (octal)**, not decimal. For example
+/// `chmod(0755, $file)` sets permission bits to 493 decimal, which is correct
+/// for `chmod`, but `$timeout = 0300` silently evaluates to 192 instead of
+/// 300, causing a hard-to-spot bug. This rule flags such literals and asks the
+/// developer to be explicit about intent.
+///
+/// Excluded forms:
+/// - `0x...` / `0X...` - hexadecimal literals
+/// - `0b...` / `0B...` - binary literals
+/// - `0.N` / `0e+N` / `0e-N` - floating-point literals
+/// - Plain `0` - unambiguous zero
+pub struct ProhibitLeadingZerosRule;
+
+impl CriticRule for ProhibitLeadingZerosRule {
+    fn id(&self) -> &'static str {
+        "native.syntax.prohibit_leading_zeros"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Syntax
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_leading_zeros_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -2718,6 +2753,110 @@ fn position_for_byte_offset(content: &str, offset: usize) -> Position {
 
 fn usize_to_u32(value: usize) -> u32 {
     value.min(u32::MAX as usize) as u32
+}
+
+fn collect_leading_zeros_findings(
+    rule: &ProhibitLeadingZerosRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    if let NodeKind::Number { value } = &node.kind {
+        if is_octal_leading_zero(value) {
+            out.push(leading_zeros_finding(rule, source, node, value));
+        }
+    }
+
+    for child in node.children() {
+        collect_leading_zeros_findings(rule, source, child, out);
+    }
+}
+
+/// Return `true` if `value` is an integer literal with a silent leading-zero
+/// octal interpretation.
+///
+/// Exempted:
+/// - `0x...` / `0X...` - explicit hex
+/// - `0b...` / `0B...` - explicit binary
+/// - `0...` with a decimal point or exponent - decimal float
+/// - Plain `"0"` - unambiguous zero
+fn is_octal_leading_zero(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() < 2 || bytes[0] != b'0' {
+        return false;
+    }
+    let second = bytes[1];
+    // Skip explicit radix prefixes and float forms
+    if matches!(second, b'x' | b'X' | b'b' | b'B' | b'.' | b'e' | b'E') {
+        return false;
+    }
+    // The rest must be a valid octal literal after ignoring numeric
+    // separators. Invalid octal digits are left to parser/compiler diagnostics
+    // instead of getting a misleading explicit-octal suggestion.
+    let mut has_octal_digit = false;
+    for byte in &bytes[1..] {
+        match byte {
+            b'_' => {}
+            b'0'..=b'7' => has_octal_digit = true,
+            _ => return false,
+        }
+    }
+    if !has_octal_digit {
+        return false;
+    }
+
+    let normalized = normalized_octal_digits(value);
+    match (u64::from_str_radix(&normalized, 8).ok(), normalized.parse::<u64>().ok()) {
+        (Some(octal), Some(decimal)) => octal != decimal,
+        _ => true,
+    }
+}
+
+fn leading_zeros_finding(
+    rule: &ProhibitLeadingZerosRule,
+    source: &str,
+    node: &Node,
+    value: &str,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, node.location.start, node.location.end);
+    let decimal_value = octal_literal_to_decimal(value);
+    let decimal_hint = decimal_value.map(|value| format!(" ({value} decimal)")).unwrap_or_default();
+    let evaluated_value = decimal_value
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "an octal value".to_string());
+    let explicit_octal = normalized_octal_digits(value);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!(
+            "Integer literal '{value}' has a leading zero and is interpreted as octal{decimal_hint}"
+        ),
+        explanation: format!(
+            "In Perl, integer literals starting with '0' are base-8 (octal). \
+             '{value}' evaluates to {evaluated_value}, not decimal {value}. \
+             For intentional octal use 0o{explicit_octal} (Perl 5.34+) or spell out \
+             the decimal value directly.",
+        ),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix: None,
+    }
+}
+
+/// Parse a leading-zero octal literal (e.g. `"0755"`) and return its decimal
+/// value. Strips Perl numeric-separator underscores before parsing.
+fn octal_literal_to_decimal(value: &str) -> Option<u64> {
+    let digits = normalized_octal_digits(value);
+    u64::from_str_radix(&digits, 8).ok()
+}
+
+fn normalized_octal_digits(value: &str) -> String {
+    let digits =
+        value.chars().skip(1).filter(|&c| c != '_').skip_while(|&c| c == '0').collect::<String>();
+    if digits.is_empty() { "0".to_string() } else { digits }
 }
 
 /// Build an empty AST node for tests that only exercise rule contract plumbing.
@@ -4493,7 +4632,8 @@ mod tests {
                 "native.variables.undeclared",
                 "native.variables.uninitialized",
                 "native.syntax.unquoted_bareword",
-                "native.documentation.require_pod_sections"
+                "native.documentation.require_pod_sections",
+                "native.syntax.prohibit_leading_zeros"
             ]
         );
         assert_eq!(findings.len(), 2);
@@ -5449,6 +5589,143 @@ my $x = 1;
 
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].policy, "native.testing.require_use_strict");
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
+    fn native_prohibit_leading_zeros_rule_reports_octal_literal() {
+        let source = "use strict;\nuse warnings;\nchmod(0755, $file);\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(ProhibitLeadingZerosRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.syntax.prohibit_leading_zeros");
+        assert_eq!(finding.category, CriticCategory::Syntax);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert!(
+            finding.message.contains("0755"),
+            "message should mention the literal: {}",
+            finding.message
+        );
+        assert!(
+            finding.message.contains("octal"),
+            "message should mention octal: {}",
+            finding.message
+        );
+        assert!(
+            finding.message.contains("493"),
+            "message should include decimal value 493: {}",
+            finding.message
+        );
+        assert!(
+            finding.explanation.contains("evaluates to 493, not decimal 0755"),
+            "explanation should compare evaluated and written values: {}",
+            finding.explanation
+        );
+        assert!(
+            finding.explanation.contains("0o755"),
+            "explanation should suggest explicit octal spelling: {}",
+            finding.explanation
+        );
+        assert_eq!(finding.suppression_key, "native.syntax.prohibit_leading_zeros");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "0755");
+        assert!(finding.fix.is_none(), "leading-zeros is diagnostic-only (no auto-fix)");
+    }
+
+    #[test]
+    fn native_prohibit_leading_zeros_rule_normalizes_underscored_octal_hint() {
+        let source = "use strict;\nuse warnings;\nmy $mode = 0_755;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(ProhibitLeadingZerosRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert!(
+            finding.message.contains("493"),
+            "message should include decimal value 493: {}",
+            finding.message
+        );
+        assert!(
+            finding.explanation.contains("0o755"),
+            "explicit octal suggestion should not preserve separator after the prefix: {}",
+            finding.explanation
+        );
+    }
+
+    #[test]
+    fn native_prohibit_leading_zeros_rule_accepts_safe_numeric_forms() {
+        // Hex, binary, float, plain zero, and invalid-octal-looking forms are
+        // not silent-octal cases for this rule.
+        let source = "use strict;\nuse warnings;\nmy $h = 0xFF;\nmy $b = 0b1010;\nmy $f = 0.5;\nmy $g = 00.5;\nmy $z = 0;\nmy $zero = 00;\nmy $small = 0007;\nmy $bad = 018;\nmy $also_bad = 0_8;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(ProhibitLeadingZerosRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(
+            findings.is_empty(),
+            "hex/binary/float/zero forms should not be flagged, got: {:?}",
+            findings.iter().map(|f| &f.message).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn native_prohibit_leading_zeros_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $mode = 0644;\n";
+        let ast = parse_source(source);
+
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.syntax.prohibit_leading_zeros".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(ProhibitLeadingZerosRule)]);
+
+        assert!(
+            registry.check(&excluded_ctx).is_empty(),
+            "excluded rule should produce no findings"
+        );
+
+        let suppressed_source = "## no critic native.syntax.prohibit_leading_zeros -- intentional octal\nuse strict;\nuse warnings;\nmy $mode = 0644;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let default_config = CriticConfig::default();
+        let suppressed_ctx =
+            CriticContext::new(suppressed_source, &suppressed_ast, &default_config);
+
+        assert!(
+            registry.check(&suppressed_ctx).is_empty(),
+            "suppressed rule should produce no findings"
+        );
+    }
+
+    #[test]
+    fn native_prohibit_leading_zeros_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $timeout = 0300;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(ProhibitLeadingZerosRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.syntax.prohibit_leading_zeros");
+        assert!(
+            violations[0].description.contains("0300"),
+            "description should mention the literal"
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
         assert_eq!(violations[0].file, "lib/App.pm");
     }
 }
