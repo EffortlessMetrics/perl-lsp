@@ -17,7 +17,7 @@ pub use native::{
     CriticSuppressionScope, CriticTextEdit, DeprecatedDefinedRule, DuplicateLexicalDeclarationRule,
     DuplicateParameterRule, FixSafety, NativeCriticRegistry, ParameterShadowsGlobalRule,
     PrintfFormatArityRule, RequireUseStrictRule, RequireUseWarningsRule,
-    ShadowedLexicalVariableRule, UndefComparisonRule, UnusedLexicalVariableRule,
+    ShadowedLexicalVariableRule, StaleDollarAtRule, UndefComparisonRule, UnusedLexicalVariableRule,
     UnusedParameterRule,
 };
 pub use quick_fix::{QuickFix, TextEdit};
