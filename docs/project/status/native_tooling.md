@@ -14,13 +14,13 @@
 
 | Metric | Value |
 | --- | ---: |
-| Native rule count | 22 |
-| Rules with suppressions | 22 |
+| Native rule count | 26 |
+| Rules with suppressions | 26 |
 | Rules with fixes | 14 |
-| Pull diagnostics coverage | 22 |
-| Push diagnostics coverage | 22 |
-| Workspace diagnostics coverage | 22 |
-| Violation bridge coverage | 22 |
+| Pull diagnostics coverage | 26 |
+| Push diagnostics coverage | 26 |
+| Workspace diagnostics coverage | 26 |
+| Violation bridge coverage | 26 |
 
 Native rules:
 - `native.testing.require_use_strict`
@@ -45,6 +45,10 @@ Native rules:
 - `native.variables.parameter_shadows_global`
 - `native.variables.duplicate_lexical`
 - `native.variables.shadowed_lexical`
+- `native.regex.capture_without_match`
+- `native.variables.undeclared`
+- `native.variables.uninitialized`
+- `native.syntax.unquoted_bareword`
 
 Fixable native rules:
 - `native.common.assignment_in_condition`
