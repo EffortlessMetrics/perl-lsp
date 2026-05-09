@@ -1,6 +1,6 @@
 use perl_lsp_perltidy::{
-    FinalNewline, FormatConfig, NativeFormatter, PerlFormatter, TextPosition, TextRange,
-    TrailingComma,
+    BracePlacement, FinalNewline, FormatConfig, NativeFormatter, PerlFormatter, TextPosition,
+    TextRange, TrailingComma,
 };
 
 #[test]
@@ -546,6 +546,42 @@ fn native_formatter_expands_simple_subroutine_blocks() {
 
     assert!(result.changed);
     assert_eq!(result.formatted, "sub answer {\n    my $x = 1;\n    return $x;\n}\n");
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn native_formatter_places_opening_braces_on_next_line_when_configured() {
+    let formatter = NativeFormatter::new();
+    let config =
+        FormatConfig { brace_placement: BracePlacement::NextLine, ..FormatConfig::default() };
+    let source = "sub answer{return 1;}\nif($ok){return 1;}else{return 0;}\nwhile($ok){next;}continue{last;}\n";
+
+    let result = formatter.format_document(source, &config);
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        concat!(
+            "sub answer\n",
+            "{\n",
+            "    return 1;\n",
+            "}\n",
+            "if ($ok)\n",
+            "{\n",
+            "    return 1;\n",
+            "} else\n",
+            "{\n",
+            "    return 0;\n",
+            "}\n",
+            "while ($ok)\n",
+            "{\n",
+            "    next;\n",
+            "} continue\n",
+            "{\n",
+            "    last;\n",
+            "}\n",
+        )
+    );
     assert!(result.diagnostics.is_empty());
 }
 
