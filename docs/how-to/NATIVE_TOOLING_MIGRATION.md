@@ -23,12 +23,16 @@ Start with the generated native-tooling dashboard:
 ```bash
 cargo xtask native-tooling status \
   --markdown docs/project/status/native_tooling.md
+cargo xtask native-tooling readiness \
+  --markdown docs/project/status/native_tooling_readiness.md
 ```
 
 The dashboard summarizes formatter fixtures, literal-preserve bailouts, native
 critic rule coverage, code-action coverage, and compatibility receipt counts.
 See [Native Tooling Status](../project/status/native_tooling.md) for the current
-checked-in snapshot.
+checked-in snapshot. The readiness report turns those receipt counts into
+explicit default-cutover criteria; see
+[Native Tooling Readiness](../project/status/native_tooling_readiness.md).
 
 For formatter proof, run:
 
@@ -146,6 +150,8 @@ After regenerating compatibility receipts, refresh the dashboard:
 ```bash
 cargo xtask native-tooling status \
   --markdown docs/project/status/native_tooling.md
+cargo xtask native-tooling readiness \
+  --markdown docs/project/status/native_tooling_readiness.md
 ```
 
 To verify native paths have not accidentally regressed to shelling out, run:
@@ -166,6 +172,8 @@ cargo xtask native-format corpus
 cargo xtask native-critic check
 cargo xtask native-tooling status \
   --markdown docs/project/status/native_tooling.md
+cargo xtask native-tooling readiness \
+  --markdown docs/project/status/native_tooling_readiness.md
 cargo xtask native-tooling check-defaults
 cargo xtask check-memory-lifecycle-policy
 cargo xtask check-memory-retained-owner-drift --base origin/master
