@@ -893,6 +893,148 @@
     },
     {
       "schema_version": 2,
+      "query": "workspace_symbols",
+      "input": {
+        "symbol": "workspace_symbol_imported"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "workspace:Foo::imported_func"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "workspace:Foo::imported_func"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "workspace-symbol shadow proof: fresh compiler fact source/freshness trace matches legacy identity without changing live provider behavior"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "WorkspaceSymbols",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "workspace_symbols",
+      "input": {
+        "symbol": "workspace_symbol_generated"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "generated:Foo::generated_accessor:virtual"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "workspace-symbol shadow proof: framework-generated candidate is labeled as generated/virtual, not treated as an exact source-backed symbol"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "WorkspaceSymbols",
+          "source": "FrameworkAdapter",
+          "provenance": "FrameworkSynthesis",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "workspace_symbols",
+      "input": {
+        "symbol": "workspace_symbol_dynamic_boundary"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "verdict": "same",
+      "notes": [
+        "workspace-symbol shadow proof: dynamic-boundary facts block false workspace-symbol precision"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "WorkspaceSymbols",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "workspace_symbols",
+      "input": {
+        "symbol": "workspace_symbol_stale_fact"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "verdict": "same",
+      "notes": [
+        "workspace-symbol shadow proof: stale compiler facts cannot authorize workspace-symbol answers"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "WorkspaceSymbols",
+          "source": "CompilerFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "Low",
+          "freshness": "Stale",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
       "query": "rename_plan",
       "input": {
         "symbol": "rename_exact_static"
@@ -1198,9 +1340,9 @@
   ],
   "verdict_counts": {
     "ambiguous": 2,
-    "improved": 6,
+    "improved": 7,
     "regression": 1,
-    "same": 23,
+    "same": 26,
     "unavailable": 0
   },
   "release_readiness_verdict_counts": {
@@ -1212,9 +1354,9 @@
   },
   "schema_fixture_verdict_counts": {
     "ambiguous": 2,
-    "improved": 5,
+    "improved": 6,
     "regression": 1,
-    "same": 14,
+    "same": 17,
     "unavailable": 0
   },
   "notes": "0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes."

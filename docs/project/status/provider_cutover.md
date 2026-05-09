@@ -30,6 +30,9 @@ fallback behavior and rollback proof.
   allow decisions plus dynamic-boundary, stale compiler fact, low-confidence,
   and generated-member blockers. These receipts do not broaden live refactor
   behavior.
+- Workspace symbols now have source/freshness shadow proof for fresh compiler
+  facts, framework-generated candidates, dynamic-boundary blockers, and stale
+  compiler facts. These receipts do not broaden live workspace-symbol behavior.
 - Other provider surfaces remain trace/proof infrastructure only until their
   own cutover proof lands.
 
@@ -44,7 +47,7 @@ fallback behavior and rollback proof.
 | References | `ranked-shadowed` | Reference shadow compare tracks imported, generated, dynamic-boundary, and low-confidence fallback occurrence traces before live migration | Reference precision/recall fixtures from real-workspace compiler facts |
 | Rename | `boundary-shadowed` | Rename plan receipts trace exact static edits, dynamic-boundary blockers, stale compiler facts, and low-confidence ambiguity before any live compiler-backed refactor behavior | Runtime blocker UX and real-workspace unsafe-edit receipts |
 | Safe delete | `boundary-shadowed` | Safe-delete receipts trace exact static allow decisions, dynamic-boundary blockers, framework-generated blockers, and stale compiler facts before any live compiler-backed refactor behavior | Runtime blocker UX and real-workspace unsafe-delete receipts |
-| Workspace symbols | `legacy workspace index` | Existing workspace index remains provider source | Compiler fact merge and source/freshness trace |
+| Workspace symbols | `shadowed` | Existing workspace index remains the live provider source; semantic-shadow fixtures trace fresh compiler, generated, dynamic-boundary, and stale fact candidates | Runtime integration and real-workspace workspace-symbol quality receipts before any live cutover |
 | Semantic tokens | `syntax/legacy` | Parser/token facts remain source | Compiler facts only after token/span invariants are proven |
 
 ## Cutover Rules

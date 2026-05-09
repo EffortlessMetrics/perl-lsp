@@ -349,6 +349,7 @@ fn query_name_key(query: ShadowQueryName) -> String {
         ShadowQueryName::CompletionVisibility => "completion_visibility".to_string(),
         ShadowQueryName::DiagnosticsCheck => "diagnostics_check".to_string(),
         ShadowQueryName::Hover => "hover".to_string(),
+        ShadowQueryName::WorkspaceSymbols => "workspace_symbols".to_string(),
     }
 }
 

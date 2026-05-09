@@ -47,6 +47,8 @@ pub enum ShadowQueryName {
     DiagnosticsCheck,
     /// Hover provider query (SemanticQueries facade).
     Hover,
+    /// Workspace-symbol provider query (SemanticQueries facade).
+    WorkspaceSymbols,
 }
 
 /// Canonical query input payload.
