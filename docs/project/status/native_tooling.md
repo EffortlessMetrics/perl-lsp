@@ -9,6 +9,13 @@
 | Fixture count | 38 |
 | Expected diagnostic fixtures | 8 |
 | Literal-preserve bailout fixtures | 8 |
+| Corpus files checked | 65 |
+| Corpus files changed | 2 |
+| Corpus idempotence | 65/65 |
+| Corpus parse preservation | 65/65 |
+| Corpus literal bailouts | 24 |
+| Corpus unsupported diagnostics | 10 |
+| Corpus passed | true |
 
 ## Critic
 

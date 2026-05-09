@@ -20,6 +20,8 @@ pub struct NativeToolingStatusConfig {
     pub format_fixtures: PathBuf,
     /// Existing native-format fixture receipt, when available.
     pub format_receipt: PathBuf,
+    /// Existing native-format corpus receipt, when available.
+    pub format_corpus_receipt: PathBuf,
     /// Output path for the native-tooling JSON receipt.
     pub receipt: PathBuf,
     /// Optional markdown status output path.
@@ -51,6 +53,16 @@ struct FormatterStatus {
     diagnostics_count: Option<usize>,
     bailout_count: Option<usize>,
     expected_diagnostics_match_count: Option<usize>,
+    format_corpus_receipt: String,
+    format_corpus_receipt_present: bool,
+    corpus_files_checked: Option<usize>,
+    corpus_files_changed: Option<usize>,
+    corpus_idempotence_passed_count: Option<usize>,
+    corpus_parse_preserved_count: Option<usize>,
+    corpus_literal_bailout_count: Option<usize>,
+    corpus_unsupported_patterns_count: Option<usize>,
+    corpus_diagnostics_count: Option<usize>,
+    corpus_passed: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -95,7 +107,11 @@ pub fn status(config: NativeToolingStatusConfig) -> Result<()> {
 }
 
 fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeToolingStatusReceipt> {
-    let formatter = formatter_status(&config.format_fixtures, &config.format_receipt)?;
+    let formatter = formatter_status(
+        &config.format_fixtures,
+        &config.format_receipt,
+        &config.format_corpus_receipt,
+    )?;
     let critic = critic_status()?;
     Ok(NativeToolingStatusReceipt {
         kind: "native_tooling_status",
@@ -107,7 +123,11 @@ fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeTool
     })
 }
 
-fn formatter_status(fixtures: &Path, format_receipt: &Path) -> Result<FormatterStatus> {
+fn formatter_status(
+    fixtures: &Path,
+    format_receipt: &Path,
+    format_corpus_receipt: &Path,
+) -> Result<FormatterStatus> {
     let fixture_paths = WalkDir::new(fixtures)
         .into_iter()
         .filter_map(Result::ok)
@@ -137,6 +157,8 @@ fn formatter_status(fixtures: &Path, format_receipt: &Path) -> Result<FormatterS
     }
 
     let receipt = if format_receipt.exists() { Some(read_json(format_receipt)?) } else { None };
+    let corpus_receipt =
+        if format_corpus_receipt.exists() { Some(read_json(format_corpus_receipt)?) } else { None };
 
     Ok(FormatterStatus {
         fixture_root: fixtures.display().to_string(),
@@ -155,6 +177,22 @@ fn formatter_status(fixtures: &Path, format_receipt: &Path) -> Result<FormatterS
             &receipt,
             "expected_diagnostics_match_count",
         ),
+        format_corpus_receipt: format_corpus_receipt.display().to_string(),
+        format_corpus_receipt_present: corpus_receipt.is_some(),
+        corpus_files_checked: optional_usize(&corpus_receipt, "files_checked"),
+        corpus_files_changed: optional_usize(&corpus_receipt, "files_changed"),
+        corpus_idempotence_passed_count: optional_usize(
+            &corpus_receipt,
+            "idempotence_passed_count",
+        ),
+        corpus_parse_preserved_count: optional_usize(&corpus_receipt, "parse_preserved_count"),
+        corpus_literal_bailout_count: optional_usize(&corpus_receipt, "literal_bailout_count"),
+        corpus_unsupported_patterns_count: optional_usize(
+            &corpus_receipt,
+            "unsupported_patterns_count",
+        ),
+        corpus_diagnostics_count: optional_usize(&corpus_receipt, "diagnostics_count"),
+        corpus_passed: optional_bool(&corpus_receipt, "passed"),
     })
 }
 
@@ -231,6 +269,10 @@ fn optional_usize(receipt: &Option<Value>, key: &str) -> Option<usize> {
         .and_then(|value| usize::try_from(value).ok())
 }
 
+fn optional_bool(receipt: &Option<Value>, key: &str) -> Option<bool> {
+    receipt.as_ref().and_then(|value| value.get(key)).and_then(Value::as_bool)
+}
+
 fn read_json(path: &Path) -> Result<Value> {
     let raw =
         fs::read_to_string(path).wrap_err_with(|| format!("failed to read {}", path.display()))?;
@@ -246,6 +288,36 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
 fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
     let formatter = &receipt.formatter;
     let critic = &receipt.critic;
+    let corpus_files_checked =
+        optional_metric(formatter.corpus_files_checked, formatter.format_corpus_receipt_present);
+    let corpus_files_changed =
+        optional_metric(formatter.corpus_files_changed, formatter.format_corpus_receipt_present);
+    let corpus_idempotence = optional_pair_metric(
+        formatter.corpus_idempotence_passed_count,
+        formatter.corpus_files_checked,
+        formatter.format_corpus_receipt_present,
+    );
+    let corpus_parse_preservation = optional_pair_metric(
+        formatter.corpus_parse_preserved_count,
+        formatter.corpus_files_checked,
+        formatter.format_corpus_receipt_present,
+    );
+    let corpus_literal_bailouts = optional_metric(
+        formatter.corpus_literal_bailout_count,
+        formatter.format_corpus_receipt_present,
+    );
+    let corpus_unsupported_diagnostics = optional_metric(
+        formatter.corpus_unsupported_patterns_count,
+        formatter.format_corpus_receipt_present,
+    );
+    let corpus_passed =
+        formatter.corpus_passed.map(|passed| passed.to_string()).unwrap_or_else(|| {
+            if formatter.format_corpus_receipt_present {
+                "unknown".to_string()
+            } else {
+                "UNVERIFIED".to_string()
+            }
+        });
     format!(
         r#"# Native Tooling Status
 
@@ -258,6 +330,13 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
 | Fixture count | {} |
 | Expected diagnostic fixtures | {} |
 | Literal-preserve bailout fixtures | {} |
+| Corpus files checked | {} |
+| Corpus files changed | {} |
+| Corpus idempotence | {} |
+| Corpus parse preservation | {} |
+| Corpus literal bailouts | {} |
+| Corpus unsupported diagnostics | {} |
+| Corpus passed | {} |
 
 ## Critic
 
@@ -280,6 +359,13 @@ Fixable native rules:
         formatter.fixture_count,
         formatter.expected_diagnostics_fixture_count,
         formatter.literal_preserve_fixture_count,
+        corpus_files_checked,
+        corpus_files_changed,
+        corpus_idempotence,
+        corpus_parse_preservation,
+        corpus_literal_bailouts,
+        corpus_unsupported_diagnostics,
+        corpus_passed,
         critic.native_rule_count,
         critic.rules_with_suppression,
         critic.rules_with_fixes,
@@ -290,6 +376,24 @@ Fixable native rules:
         bullet_list(&critic.native_rules),
         bullet_list(&critic.fixable_rules),
     )
+}
+
+fn optional_metric(value: Option<usize>, receipt_present: bool) -> String {
+    value.map(|value| value.to_string()).unwrap_or_else(|| {
+        if receipt_present { "unknown".to_string() } else { "UNVERIFIED".to_string() }
+    })
+}
+
+fn optional_pair_metric(
+    numerator: Option<usize>,
+    denominator: Option<usize>,
+    receipt_present: bool,
+) -> String {
+    match (numerator, denominator) {
+        (Some(numerator), Some(denominator)) => format!("{numerator}/{denominator}"),
+        _ if receipt_present => "unknown".to_string(),
+        _ => "UNVERIFIED".to_string(),
+    }
 }
 
 fn bullet_list(items: &[String]) -> String {
@@ -339,6 +443,21 @@ mod tests {
 }
 "#,
         )?;
+        let format_corpus_receipt = receipts.join("native-format-corpus.json");
+        fs::write(
+            &format_corpus_receipt,
+            r#"{
+  "files_checked": 2,
+  "files_changed": 1,
+  "idempotence_passed_count": 2,
+  "parse_preserved_count": 2,
+  "literal_bailout_count": 1,
+  "unsupported_patterns_count": 0,
+  "diagnostics_count": 1,
+  "passed": true
+}
+"#,
+        )?;
         let receipt = receipts.join("native-tooling-status.json");
         let markdown = receipts.join("native-tooling-status.md");
         let missing_receipt = receipts.join("missing-native-format-fixtures.json");
@@ -348,6 +467,7 @@ mod tests {
         status(NativeToolingStatusConfig {
             format_fixtures: fixtures.clone(),
             format_receipt: format_receipt.clone(),
+            format_corpus_receipt: format_corpus_receipt.clone(),
             receipt: receipt.clone(),
             markdown: Some(markdown.clone()),
         })?;
@@ -363,6 +483,14 @@ mod tests {
         assert_eq!(value["formatter"]["diagnostics_count"], 1);
         assert_eq!(value["formatter"]["bailout_count"], 1);
         assert_eq!(value["formatter"]["expected_diagnostics_match_count"], 1);
+        assert_eq!(value["formatter"]["format_corpus_receipt_present"], true);
+        assert_eq!(value["formatter"]["corpus_files_checked"], 2);
+        assert_eq!(value["formatter"]["corpus_files_changed"], 1);
+        assert_eq!(value["formatter"]["corpus_idempotence_passed_count"], 2);
+        assert_eq!(value["formatter"]["corpus_parse_preserved_count"], 2);
+        assert_eq!(value["formatter"]["corpus_literal_bailout_count"], 1);
+        assert_eq!(value["formatter"]["corpus_unsupported_patterns_count"], 0);
+        assert_eq!(value["formatter"]["corpus_passed"], true);
         assert!(value["critic"]["native_rule_count"].as_u64().unwrap_or_default() > 0);
         let native_rules = value["critic"]["native_rules"]
             .as_array()
@@ -382,11 +510,19 @@ mod tests {
         assert!(!markdown.contains("unknown"));
         assert!(markdown.contains("| Expected diagnostic fixtures | 1 |"));
         assert!(markdown.contains("| Literal-preserve bailout fixtures | 1 |"));
+        assert!(markdown.contains("| Corpus files checked | 2 |"));
+        assert!(markdown.contains("| Corpus files changed | 1 |"));
+        assert!(markdown.contains("| Corpus idempotence | 2/2 |"));
+        assert!(markdown.contains("| Corpus parse preservation | 2/2 |"));
+        assert!(markdown.contains("| Corpus literal bailouts | 1 |"));
+        assert!(markdown.contains("| Corpus unsupported diagnostics | 0 |"));
+        assert!(markdown.contains("| Corpus passed | true |"));
         assert!(markdown.contains("native.io.unchecked_open_close"));
 
         status(NativeToolingStatusConfig {
             format_fixtures: fixtures,
             format_receipt: missing_receipt,
+            format_corpus_receipt,
             receipt: missing_status_receipt.clone(),
             markdown: Some(missing_markdown.clone()),
         })?;
