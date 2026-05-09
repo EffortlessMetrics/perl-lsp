@@ -1,6 +1,6 @@
 use perl_lsp_perltidy::{
-    BracePlacement, FinalNewline, FormatConfig, NativeFormatter, PerlFormatter, TextPosition,
-    TextRange, TrailingComma,
+    BracePlacement, ElsePlacement, FinalNewline, FormatConfig, NativeFormatter, PerlFormatter,
+    TextPosition, TextRange, TrailingComma,
 };
 
 #[test]
@@ -579,6 +579,39 @@ fn native_formatter_places_opening_braces_on_next_line_when_configured() {
             "} continue\n",
             "{\n",
             "    last;\n",
+            "}\n",
+        )
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn native_formatter_places_else_tails_on_separate_lines_when_configured() {
+    let formatter = NativeFormatter::new();
+    let config =
+        FormatConfig { else_placement: ElsePlacement::SeparateLine, ..FormatConfig::default() };
+    let source = "if($a){return 1;}elsif($b){return 2;}else{return 3;}\nunless($ok){return 0;}else{return 1;}\n";
+
+    let result = formatter.format_document(source, &config);
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        concat!(
+            "if ($a) {\n",
+            "    return 1;\n",
+            "}\n",
+            "elsif ($b) {\n",
+            "    return 2;\n",
+            "}\n",
+            "else {\n",
+            "    return 3;\n",
+            "}\n",
+            "unless ($ok) {\n",
+            "    return 0;\n",
+            "}\n",
+            "else {\n",
+            "    return 1;\n",
             "}\n",
         )
     );

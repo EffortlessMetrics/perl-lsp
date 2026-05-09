@@ -467,9 +467,9 @@ fn classify_perltidy_option(option: &str, value: Option<String>) -> PerltidyComp
         "-ce" | "--cuddled-else" | "-nce" | "--nocuddled-else" => compat_result(
             option,
             value,
-            "approximated",
-            None,
-            "native block rendering has fixed else layout today",
+            "supported",
+            Some("format.else_placement"),
+            "maps to native formatter else placement for supported simple block layouts",
         ),
         "-sok" | "--space-after-keyword" | "-nsok" | "--nospace-after-keyword" => compat_result(
             option,
@@ -968,12 +968,14 @@ mod tests {
         )?)?;
         assert_eq!(receipt["kind"], "native_format_perltidy_compat");
         assert_eq!(receipt["option_count"], 8);
-        assert_eq!(receipt["supported_count"], 5);
-        assert_eq!(receipt["approximated_count"], 1);
+        assert_eq!(receipt["supported_count"], 6);
+        assert_eq!(receipt["approximated_count"], 0);
         assert_eq!(receipt["external_only_count"], 1);
         assert_eq!(receipt["unsupported_safe_count"], 1);
         assert_eq!(receipt["options"][0]["native_field"], "format.line_width");
         assert_eq!(receipt["options"][1]["value"], "2");
+        assert_eq!(receipt["options"][3]["classification"], "supported");
+        assert_eq!(receipt["options"][3]["native_field"], "format.else_placement");
         assert_eq!(receipt["options"][4]["classification"], "unsupported_safe");
         assert_eq!(receipt["options"][5]["classification"], "supported");
         assert_eq!(receipt["options"][5]["native_field"], "format.trailing_comma");

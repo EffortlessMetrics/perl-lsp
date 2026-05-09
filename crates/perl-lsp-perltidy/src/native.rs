@@ -208,6 +208,17 @@ pub enum BracePlacement {
     NextLine,
 }
 
+/// Placement for supported native `else` and `elsif` block tails.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ElsePlacement {
+    /// Keep `else` and `elsif` cuddled to the previous closing brace.
+    #[default]
+    Cuddled,
+    /// Place `else` and `elsif` on a fresh line at the block indentation.
+    SeparateLine,
+}
+
 /// Configuration shared by native formatter implementations.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FormatConfig {
@@ -225,6 +236,8 @@ pub struct FormatConfig {
     pub trailing_comma: TrailingComma,
     /// Opening brace placement for supported block layouts.
     pub brace_placement: BracePlacement,
+    /// Else/elsif placement for supported block tails.
+    pub else_placement: ElsePlacement,
 }
 
 impl Default for FormatConfig {
@@ -237,6 +250,7 @@ impl Default for FormatConfig {
             final_newline: FinalNewline::Preserve,
             trailing_comma: TrailingComma::Preserve,
             brace_placement: BracePlacement::SameLine,
+            else_placement: ElsePlacement::Cuddled,
         }
     }
 }
@@ -1097,7 +1111,12 @@ fn render_simple_else_doc(
     body_indent: &str,
     config: &FormatConfig,
 ) -> String {
-    let mut parts = vec![FormatDoc::text(render_block_header(" else {", indent, config))];
+    let header = if config.else_placement == ElsePlacement::SeparateLine {
+        format!("\n{indent}else {{")
+    } else {
+        " else {".to_string()
+    };
+    let mut parts = vec![FormatDoc::text(render_block_header(&header, indent, config))];
     push_simple_block_body_docs(&mut parts, statements, indent, body_indent);
     FormatDoc::group(parts).render(config)
 }
@@ -1109,7 +1128,11 @@ fn render_simple_elsif_doc(
     body_indent: &str,
     config: &FormatConfig,
 ) -> String {
-    let header = format!(" elsif ({condition}) {{");
+    let header = if config.else_placement == ElsePlacement::SeparateLine {
+        format!("\n{indent}elsif ({condition}) {{")
+    } else {
+        format!(" elsif ({condition}) {{")
+    };
     let mut parts = vec![FormatDoc::text(render_block_header(&header, indent, config))];
     push_simple_block_body_docs(&mut parts, statements, indent, body_indent);
     FormatDoc::group(parts).render(config)
