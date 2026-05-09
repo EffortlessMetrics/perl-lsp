@@ -241,6 +241,7 @@ impl NativeCriticRegistry {
             Box::new(BarewordFilehandleRule),
             Box::new(TwoArgOpenRule),
             Box::new(PipeOpenRule),
+            Box::new(UncheckedOpenCloseRule),
             Box::new(QxReadpipeRule),
             Box::new(BacktickExecRule),
             Box::new(StringEvalRule),
@@ -540,6 +541,32 @@ impl CriticRule for PipeOpenRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_pipe_open_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports statement-level `open` and `close` calls whose
+/// return value is ignored.
+///
+/// The rule intentionally starts narrow: it catches bare `open(...);` and
+/// `close(...);` statements and accepts common checked idioms such as
+/// `open(...) or die ...`.
+pub struct UncheckedOpenCloseRule;
+
+impl CriticRule for UncheckedOpenCloseRule {
+    fn id(&self) -> &'static str {
+        "native.io.unchecked_open_close"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Security
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_unchecked_open_close_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -1067,6 +1094,34 @@ fn pipe_open_finding(rule: &PipeOpenRule, source: &str, open_node: &Node) -> Cri
     }
 }
 
+fn unchecked_open_close_finding(
+    rule: &UncheckedOpenCloseRule,
+    source: &str,
+    call_node: &Node,
+    name: &str,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, call_node.location.start, call_node.location.end);
+    let message = match name {
+        "close" => "close() return value should be checked",
+        _ => "open() return value should be checked",
+    };
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: message.to_string(),
+        explanation: "open and close report I/O failures through their return value. Check the result with an explicit error path such as `or die` so failures are not silently ignored.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: vec![CriticRelatedInformation {
+            range,
+            message: "Unchecked I/O calls can hide missing files, permission failures, and failed flushes.".to_string(),
+        }],
+        fix: None,
+    }
+}
+
 fn backtick_exec_finding(
     rule: &BacktickExecRule,
     source: &str,
@@ -1317,6 +1372,53 @@ fn collect_pipe_open_findings(
 
     for child in node.children() {
         collect_pipe_open_findings(rule, source, child, out);
+    }
+}
+
+fn collect_unchecked_open_close_findings(
+    rule: &UncheckedOpenCloseRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    if let NodeKind::ExpressionStatement { expression } = &node.kind {
+        push_unchecked_open_close_statement_finding(rule, source, expression, out);
+        return;
+    }
+
+    for child in node.children() {
+        collect_unchecked_open_close_findings(rule, source, child, out);
+    }
+}
+
+fn push_unchecked_open_close_statement_finding(
+    rule: &UncheckedOpenCloseRule,
+    source: &str,
+    expression: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    match &expression.kind {
+        NodeKind::FunctionCall { name, args } if is_open_close_call(name) => {
+            if !args.iter().any(node_contains_error_check) {
+                out.push(unchecked_open_close_finding(rule, source, expression, name));
+            }
+        }
+        _ => {}
+    }
+}
+
+fn is_open_close_call(name: &str) -> bool {
+    matches!(name, "open" | "close")
+}
+
+fn is_error_checked_operator(op: &str) -> bool {
+    matches!(op, "or" | "||")
+}
+
+fn node_contains_error_check(node: &Node) -> bool {
+    match &node.kind {
+        NodeKind::Binary { op, .. } if is_error_checked_operator(op) => true,
+        _ => node.children().iter().any(|child| node_contains_error_check(child)),
     }
 }
 
@@ -2365,6 +2467,109 @@ mod tests {
     }
 
     #[test]
+    fn native_unchecked_open_close_rule_reports_bare_statement_calls() {
+        let source = "use strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, '<', $path);\nclose($fh);\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UncheckedOpenCloseRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 2);
+        for finding in &findings {
+            assert_eq!(finding.rule_id, "native.io.unchecked_open_close");
+            assert_eq!(finding.category, CriticCategory::Security);
+            assert_eq!(finding.severity, Severity::Stern);
+            assert_eq!(finding.suppression_key, "native.io.unchecked_open_close");
+            assert!(finding.fix.is_none(), "unchecked I/O fix needs caller-specific error text");
+        }
+        assert_eq!(findings[0].message, "open() return value should be checked");
+        assert_eq!(findings[1].message, "close() return value should be checked");
+        assert_eq!(
+            &source[findings[0].range.start.byte..findings[0].range.end.byte],
+            "open(my $fh, '<', $path)"
+        );
+        assert_eq!(&source[findings[1].range.start.byte..findings[1].range.end.byte], "close($fh)");
+    }
+
+    #[test]
+    fn native_unchecked_open_close_rule_accepts_or_die_checks() {
+        let source = "use strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, '<', $path) or die $!;\nclose($fh) || die $!;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UncheckedOpenCloseRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "open/close guarded by error paths should be accepted");
+    }
+
+    #[test]
+    fn native_unchecked_open_close_rule_composes_with_config_and_suppressions() {
+        let source =
+            "use strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, '<', $path);\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.io.unchecked_open_close".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UncheckedOpenCloseRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let included_config = CriticConfig {
+            include: vec!["native.io.unchecked_open_close".to_string()],
+            ..Default::default()
+        };
+        let included_ctx = CriticContext::new(source, &ast, &included_config);
+        assert_eq!(registry.check(&included_ctx).len(), 1);
+
+        let other_include_config = CriticConfig {
+            include: vec!["native.security.string_eval".to_string()],
+            ..Default::default()
+        };
+        let other_include_ctx = CriticContext::new(source, &ast, &other_include_config);
+        assert!(registry.check(&other_include_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.io.unchecked_open_close -- handled by caller\nuse strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, '<', $path);\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+
+        let severity_config =
+            CriticConfig { severity: Severity::Gentle as u8, ..Default::default() };
+        let severity_ctx = CriticContext::new(source, &ast, &severity_config);
+        assert!(registry.check(&severity_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_unchecked_open_close_rule_flows_through_violation_bridge() {
+        let source =
+            "use strict;\nuse warnings;\nmy $path = 'file.txt';\nopen(my $fh, '<', $path);\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UncheckedOpenCloseRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.io.unchecked_open_close");
+        assert_eq!(violations[0].description, "open() return value should be checked");
+        assert_eq!(
+            violations[0].explanation,
+            "open and close report I/O failures through their return value. Check the result with an explicit error path such as `or die` so failures are not silently ignored."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_qx_readpipe_rule_reports_qx_and_readpipe_forms() {
         let source = "use strict;\nuse warnings;\nmy $date = qx(date);\nmy $listing = qx/ls -la/;\nmy $hash = qx#whoami#;\nmy $pipe_delim = qx|id|;\nmy $tick_delim = qx`uname`;\nmy $pipe = readpipe($date);\nprint $listing . $pipe . $hash . $pipe_delim . $tick_delim;\n";
         let ast = parse_source(source);
@@ -2742,6 +2947,7 @@ mod tests {
                 "native.io.bareword_filehandle",
                 "native.io.two_arg_open",
                 "native.io.pipe_open",
+                "native.io.unchecked_open_close",
                 "native.security.qx_readpipe",
                 "native.security.backtick_exec",
                 "native.security.string_eval",

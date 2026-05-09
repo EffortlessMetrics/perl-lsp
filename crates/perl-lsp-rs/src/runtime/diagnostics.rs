@@ -1889,6 +1889,14 @@ mod tests {
             "native pipe-open finding should preserve rule message; got: {text:?}"
         );
         assert!(
+            text.contains("native.io.unchecked_open_close"),
+            "native critic engine should publish native unchecked open/close finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("open() return value should be checked"),
+            "native unchecked open/close finding should preserve rule message; got: {text:?}"
+        );
+        assert!(
             text.contains("native.security.backtick_exec"),
             "native critic engine should publish native backtick execution finding; got: {text:?}"
         );
@@ -2086,6 +2094,14 @@ mod tests {
                     && diag["message"].as_str() == Some("Pipe-open executes a shell command")
             }),
             "native critic engine should add native pipe-open finding to workspace diagnostics: {report}"
+        );
+        assert!(
+            diagnostics.iter().any(|diag| {
+                diag["code"].as_str() == Some("native.io.unchecked_open_close")
+                    && diag["source"].as_str() == Some("perl-lsp-critic")
+                    && diag["message"].as_str() == Some("open() return value should be checked")
+            }),
+            "native critic engine should add native unchecked open/close finding to workspace diagnostics: {report}"
         );
         assert!(
             diagnostics.iter().any(|diag| {

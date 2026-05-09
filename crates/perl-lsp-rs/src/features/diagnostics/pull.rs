@@ -1453,6 +1453,25 @@ mod tests {
         assert_eq!(data["suppressionKey"], "native.io.pipe_open");
         assert_eq!(data["fixable"], false);
 
+        let unchecked_open_close = items
+            .iter()
+            .find(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.io.unchecked_open_close"),
+                )
+            })
+            .ok_or("expected native unchecked open/close finding")?;
+        assert_eq!(unchecked_open_close.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(unchecked_open_close.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(unchecked_open_close.message, "open() return value should be checked");
+        let data = unchecked_open_close
+            .data
+            .as_ref()
+            .ok_or("native unchecked open/close data should be populated")?;
+        assert_eq!(data["code"], "native.io.unchecked_open_close");
+        assert_eq!(data["suppressionKey"], "native.io.unchecked_open_close");
+        assert_eq!(data["fixable"], false);
+
         let backtick_exec = items
             .iter()
             .find(|diag| {
