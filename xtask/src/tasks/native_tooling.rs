@@ -24,6 +24,8 @@ pub struct NativeToolingStatusConfig {
     pub format_corpus_receipt: PathBuf,
     /// Existing native-format perltidy compatibility receipt, when available.
     pub format_perltidy_compat_receipt: PathBuf,
+    /// Existing native-format config receipt, when available.
+    pub format_config_receipt: PathBuf,
     /// Existing native critic perlcritic compatibility receipt, when available.
     pub critic_perlcritic_compat_receipt: PathBuf,
     /// Output path for the native-tooling JSON receipt.
@@ -84,6 +86,18 @@ struct FormatterStatus {
     perltidy_compat_approximated_count: Option<usize>,
     perltidy_compat_unsupported_safe_count: Option<usize>,
     perltidy_compat_external_only_count: Option<usize>,
+    format_config_receipt: String,
+    format_config_receipt_present: bool,
+    format_config_source: Option<String>,
+    format_engine_selected: Option<String>,
+    format_external_adapter_requested: Option<bool>,
+    format_line_width: Option<usize>,
+    format_indent_width: Option<usize>,
+    format_use_tabs: Option<bool>,
+    format_brace_placement: Option<String>,
+    format_else_placement: Option<String>,
+    format_keyword_spacing: Option<String>,
+    format_trailing_comma: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -208,6 +222,7 @@ fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeTool
         &config.format_receipt,
         &config.format_corpus_receipt,
         &config.format_perltidy_compat_receipt,
+        &config.format_config_receipt,
     )?;
     let critic = critic_status(&config.critic_perlcritic_compat_receipt)?;
     Ok(NativeToolingStatusReceipt {
@@ -225,6 +240,7 @@ fn formatter_status(
     format_receipt: &Path,
     format_corpus_receipt: &Path,
     format_perltidy_compat_receipt: &Path,
+    format_config_receipt: &Path,
 ) -> Result<FormatterStatus> {
     let fixture_paths = WalkDir::new(fixtures)
         .into_iter()
@@ -262,6 +278,8 @@ fn formatter_status(
     } else {
         None
     };
+    let config_receipt =
+        if format_config_receipt.exists() { Some(read_json(format_config_receipt)?) } else { None };
 
     Ok(FormatterStatus {
         fixture_root: fixtures.display().to_string(),
@@ -315,6 +333,21 @@ fn formatter_status(
             &perltidy_compat_receipt,
             "external_only_count",
         ),
+        format_config_receipt: format_config_receipt.display().to_string(),
+        format_config_receipt_present: config_receipt.is_some(),
+        format_config_source: optional_string(&config_receipt, "config_source"),
+        format_engine_selected: optional_string(&config_receipt, "engine_selected"),
+        format_external_adapter_requested: optional_bool(
+            &config_receipt,
+            "external_adapter_requested",
+        ),
+        format_line_width: optional_usize(&config_receipt, "line_width"),
+        format_indent_width: optional_usize(&config_receipt, "indent_width"),
+        format_use_tabs: optional_bool(&config_receipt, "use_tabs"),
+        format_brace_placement: optional_string(&config_receipt, "brace_placement"),
+        format_else_placement: optional_string(&config_receipt, "else_placement"),
+        format_keyword_spacing: optional_string(&config_receipt, "keyword_spacing"),
+        format_trailing_comma: optional_string(&config_receipt, "trailing_comma"),
     })
 }
 
@@ -423,6 +456,10 @@ fn optional_bool(receipt: &Option<Value>, key: &str) -> Option<bool> {
     receipt.as_ref().and_then(|value| value.get(key)).and_then(Value::as_bool)
 }
 
+fn optional_string(receipt: &Option<Value>, key: &str) -> Option<String> {
+    receipt.as_ref().and_then(|value| value.get(key)).and_then(Value::as_str).map(ToOwned::to_owned)
+}
+
 fn read_json(path: &Path) -> Result<Value> {
     let raw =
         fs::read_to_string(path).wrap_err_with(|| format!("failed to read {}", path.display()))?;
@@ -488,6 +525,40 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
         formatter.perltidy_compat_external_only_count,
         formatter.format_perltidy_compat_receipt_present,
     );
+    let format_config_source = optional_text_metric(
+        formatter.format_config_source.as_deref(),
+        formatter.format_config_receipt_present,
+    );
+    let format_engine_selected = optional_text_metric(
+        formatter.format_engine_selected.as_deref(),
+        formatter.format_config_receipt_present,
+    );
+    let format_external_adapter = optional_bool_metric(
+        formatter.format_external_adapter_requested,
+        formatter.format_config_receipt_present,
+    );
+    let format_line_width =
+        optional_metric(formatter.format_line_width, formatter.format_config_receipt_present);
+    let format_indent_width =
+        optional_metric(formatter.format_indent_width, formatter.format_config_receipt_present);
+    let format_use_tabs =
+        optional_bool_metric(formatter.format_use_tabs, formatter.format_config_receipt_present);
+    let format_brace_placement = optional_text_metric(
+        formatter.format_brace_placement.as_deref(),
+        formatter.format_config_receipt_present,
+    );
+    let format_else_placement = optional_text_metric(
+        formatter.format_else_placement.as_deref(),
+        formatter.format_config_receipt_present,
+    );
+    let format_keyword_spacing = optional_text_metric(
+        formatter.format_keyword_spacing.as_deref(),
+        formatter.format_config_receipt_present,
+    );
+    let format_trailing_comma = optional_text_metric(
+        formatter.format_trailing_comma.as_deref(),
+        formatter.format_config_receipt_present,
+    );
     let perlcritic_compat_items = optional_metric(
         critic.perlcritic_compat_item_count,
         critic.critic_perlcritic_compat_receipt_present,
@@ -536,6 +607,16 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
 | Perltidy compatibility approximated | {} |
 | Perltidy compatibility unsupported-safe | {} |
 | Perltidy compatibility external-only | {} |
+| Config source | {} |
+| Selected formatter engine | {} |
+| External formatter adapter requested | {} |
+| Config line width | {} |
+| Config indent width | {} |
+| Config uses tabs | {} |
+| Config brace placement | {} |
+| Config else placement | {} |
+| Config keyword spacing | {} |
+| Config trailing comma | {} |
 
 ## Critic
 
@@ -576,6 +657,16 @@ Fixable native rules:
         perltidy_compat_approximated,
         perltidy_compat_unsupported_safe,
         perltidy_compat_external_only,
+        format_config_source,
+        format_engine_selected,
+        format_external_adapter,
+        format_line_width,
+        format_indent_width,
+        format_use_tabs,
+        format_brace_placement,
+        format_else_placement,
+        format_keyword_spacing,
+        format_trailing_comma,
         critic.native_rule_count,
         critic.rules_with_suppression,
         critic.rules_with_fixes,
@@ -823,6 +914,18 @@ fn optional_metric(value: Option<usize>, receipt_present: bool) -> String {
     })
 }
 
+fn optional_bool_metric(value: Option<bool>, receipt_present: bool) -> String {
+    value.map(|value| value.to_string()).unwrap_or_else(|| {
+        if receipt_present { "unknown".to_string() } else { "UNVERIFIED".to_string() }
+    })
+}
+
+fn optional_text_metric(value: Option<&str>, receipt_present: bool) -> String {
+    value.map(ToOwned::to_owned).unwrap_or_else(|| {
+        if receipt_present { "unknown".to_string() } else { "UNVERIFIED".to_string() }
+    })
+}
+
 fn optional_pair_metric(
     numerator: Option<usize>,
     denominator: Option<usize>,
@@ -909,6 +1012,23 @@ mod tests {
 }
 "#,
         )?;
+        let format_config_receipt = receipts.join("native-format-config.json");
+        fs::write(
+            &format_config_receipt,
+            r#"{
+  "config_source": "project",
+  "engine_selected": "native",
+  "external_adapter_requested": false,
+  "line_width": 88,
+  "indent_width": 2,
+  "use_tabs": false,
+  "brace_placement": "next-line",
+  "else_placement": "separate-line",
+  "keyword_spacing": "compact",
+  "trailing_comma": "add-when-wrapped"
+}
+"#,
+        )?;
         let critic_perlcritic_compat_receipt = receipts.join("perlcritic-compat.json");
         fs::write(
             &critic_perlcritic_compat_receipt,
@@ -933,6 +1053,7 @@ mod tests {
             format_receipt: format_receipt.clone(),
             format_corpus_receipt: format_corpus_receipt.clone(),
             format_perltidy_compat_receipt: format_perltidy_compat_receipt.clone(),
+            format_config_receipt: format_config_receipt.clone(),
             critic_perlcritic_compat_receipt: critic_perlcritic_compat_receipt.clone(),
             receipt: receipt.clone(),
             markdown: Some(markdown.clone()),
@@ -963,6 +1084,17 @@ mod tests {
         assert_eq!(value["formatter"]["perltidy_compat_approximated_count"], 0);
         assert_eq!(value["formatter"]["perltidy_compat_unsupported_safe_count"], 1);
         assert_eq!(value["formatter"]["perltidy_compat_external_only_count"], 1);
+        assert_eq!(value["formatter"]["format_config_receipt_present"], true);
+        assert_eq!(value["formatter"]["format_config_source"], "project");
+        assert_eq!(value["formatter"]["format_engine_selected"], "native");
+        assert_eq!(value["formatter"]["format_external_adapter_requested"], false);
+        assert_eq!(value["formatter"]["format_line_width"], 88);
+        assert_eq!(value["formatter"]["format_indent_width"], 2);
+        assert_eq!(value["formatter"]["format_use_tabs"], false);
+        assert_eq!(value["formatter"]["format_brace_placement"], "next-line");
+        assert_eq!(value["formatter"]["format_else_placement"], "separate-line");
+        assert_eq!(value["formatter"]["format_keyword_spacing"], "compact");
+        assert_eq!(value["formatter"]["format_trailing_comma"], "add-when-wrapped");
         assert!(value["critic"]["native_rule_count"].as_u64().unwrap_or_default() > 0);
         assert_eq!(value["critic"]["critic_perlcritic_compat_receipt_present"], true);
         assert_eq!(value["critic"]["perlcritic_compat_item_count"], 12);
@@ -1001,6 +1133,16 @@ mod tests {
         assert!(markdown.contains("| Perltidy compatibility approximated | 0 |"));
         assert!(markdown.contains("| Perltidy compatibility unsupported-safe | 1 |"));
         assert!(markdown.contains("| Perltidy compatibility external-only | 1 |"));
+        assert!(markdown.contains("| Config source | project |"));
+        assert!(markdown.contains("| Selected formatter engine | native |"));
+        assert!(markdown.contains("| External formatter adapter requested | false |"));
+        assert!(markdown.contains("| Config line width | 88 |"));
+        assert!(markdown.contains("| Config indent width | 2 |"));
+        assert!(markdown.contains("| Config uses tabs | false |"));
+        assert!(markdown.contains("| Config brace placement | next-line |"));
+        assert!(markdown.contains("| Config else placement | separate-line |"));
+        assert!(markdown.contains("| Config keyword spacing | compact |"));
+        assert!(markdown.contains("| Config trailing comma | add-when-wrapped |"));
         assert!(markdown.contains("| Perlcritic compatibility items | 12 |"));
         assert!(markdown.contains("| Perlcritic compatibility native-equivalent | 5 |"));
         assert!(markdown.contains("| Perlcritic compatibility native-superset | 2 |"));
@@ -1014,6 +1156,7 @@ mod tests {
             format_receipt: missing_receipt,
             format_corpus_receipt,
             format_perltidy_compat_receipt,
+            format_config_receipt,
             critic_perlcritic_compat_receipt,
             receipt: missing_status_receipt.clone(),
             markdown: Some(missing_markdown.clone()),

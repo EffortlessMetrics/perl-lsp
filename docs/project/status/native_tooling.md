@@ -21,6 +21,16 @@
 | Perltidy compatibility approximated | 0 |
 | Perltidy compatibility unsupported-safe | 1 |
 | Perltidy compatibility external-only | 1 |
+| Config source | defaults |
+| Selected formatter engine | native |
+| External formatter adapter requested | false |
+| Config line width | 80 |
+| Config indent width | 4 |
+| Config uses tabs | false |
+| Config brace placement | same-line |
+| Config else placement | cuddled |
+| Config keyword spacing | space |
+| Config trailing comma | preserve |
 
 ## Critic
 

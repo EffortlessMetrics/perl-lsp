@@ -1904,6 +1904,10 @@ enum NativeToolingCommand {
         #[arg(long, default_value = "target/receipts/format/native-format-perltidy-compat.json")]
         format_perltidy_compat_receipt: PathBuf,
 
+        /// Native-format config receipt to summarize.
+        #[arg(long, default_value = "target/receipts/format/native-format-config.json")]
+        format_config_receipt: PathBuf,
+
         /// Native critic perlcritic compatibility receipt to summarize.
         #[arg(long, default_value = "target/receipts/native-tooling/perlcritic-compat.json")]
         critic_perlcritic_compat_receipt: PathBuf,
@@ -2305,6 +2309,7 @@ fn main() -> Result<()> {
                 format_receipt,
                 format_corpus_receipt,
                 format_perltidy_compat_receipt,
+                format_config_receipt,
                 critic_perlcritic_compat_receipt,
                 receipt,
                 markdown,
@@ -2313,6 +2318,7 @@ fn main() -> Result<()> {
                 format_receipt,
                 format_corpus_receipt,
                 format_perltidy_compat_receipt,
+                format_config_receipt,
                 critic_perlcritic_compat_receipt,
                 receipt,
                 markdown,
