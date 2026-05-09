@@ -1922,6 +1922,9 @@ enum NativeCriticCommand {
 }
 
 #[derive(Subcommand)]
+// Native tooling status intentionally exposes many receipt path flags; boxing
+// clap fields would trade a diagnostic-only enum size for noisier CLI plumbing.
+#[allow(clippy::large_enum_variant)]
 enum NativeToolingCommand {
     /// Write native formatter and critic status receipts.
     Status {
