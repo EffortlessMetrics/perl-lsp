@@ -15,7 +15,8 @@ use perl_semantic_analyzer::{
     type_inference::{PerlType, TypeInferenceEngine},
 };
 use perl_semantic_facts::{
-    Confidence, DefinitionCandidate, EntityKind, FileId, PackageEdge, Provenance,
+    Confidence, DefinitionCandidate, EntityKind, FileId, PackageEdge, Provenance, VisibleSymbol,
+    VisibleSymbolSource,
 };
 use perl_workspace::semantic::{
     imports::ImportExportIndex,
@@ -212,6 +213,105 @@ pub fn add_workspace_symbol_completions(
             }
         }
     }
+}
+
+/// Add live compiler visible-symbol completions for imported/exported symbols.
+///
+/// This is intentionally narrower than the shadow/cutover proof helpers:
+/// only high-confidence import/export visibility facts are promoted into the
+/// live completion list. Generated members, local symbols, external fallback
+/// symbols, and dynamic-boundary candidates remain gated by their existing
+/// provider-specific proof lanes.
+pub fn add_visible_symbol_completions(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    workspace_index: &Option<Arc<WorkspaceIndex>>,
+    filepath: Option<&str>,
+) {
+    if context.prefix.is_empty() || context.prefix.starts_with(['$', '@', '%', '&']) {
+        return;
+    }
+
+    let Some(index) = workspace_index else {
+        return;
+    };
+    let Some(uri) = filepath else {
+        return;
+    };
+    let Ok(byte_offset) = u32::try_from(context.position) else {
+        return;
+    };
+
+    let Some(visible_symbols) = index.with_semantic_queries_for_uri(uri, |file_id, queries| {
+        queries.visible_symbols_at(file_id, byte_offset, None)
+    }) else {
+        return;
+    };
+
+    for symbol in visible_symbols
+        .into_iter()
+        .filter(is_live_visible_completion_candidate)
+        .filter(|symbol| symbol.name.starts_with(&context.prefix))
+    {
+        let source_module = symbol.context.as_ref().and_then(|context| {
+            context.source_module.as_deref().filter(|module| !module.is_empty())
+        });
+        let label = symbol.name.clone();
+        completions.push(CompletionItem {
+            label: label.clone(),
+            kind: CompletionItemKind::Function,
+            detail: Some(visible_symbol_completion_detail(&symbol, source_module)),
+            documentation: Some(visible_symbol_completion_documentation(&symbol, source_module)),
+            insert_text: Some(label.clone()),
+            sort_text: Some(format!("2z_visible_{label}")),
+            filter_text: Some(label),
+            additional_edits: vec![],
+            text_edit_range: Some((context.prefix_start, context.position)),
+            commit_characters: None,
+            label_details: None,
+        });
+    }
+}
+
+fn is_live_visible_completion_candidate(symbol: &VisibleSymbol) -> bool {
+    symbol.confidence == Confidence::High
+        && matches!(
+            symbol.source,
+            VisibleSymbolSource::ExplicitImport
+                | VisibleSymbolSource::DefaultExport
+                | VisibleSymbolSource::ExportTag
+        )
+}
+
+fn visible_symbol_completion_detail(symbol: &VisibleSymbol, source_module: Option<&str>) -> String {
+    let source = match symbol.source {
+        VisibleSymbolSource::ExplicitImport => "imported",
+        VisibleSymbolSource::DefaultExport => "default export",
+        VisibleSymbolSource::ExportTag => "tag export",
+        _ => "visible symbol",
+    };
+
+    match source_module {
+        Some(module) => format!("{source} from {module} - compiler fact, high confidence"),
+        None => format!("{source} - compiler fact, high confidence"),
+    }
+}
+
+fn visible_symbol_completion_documentation(
+    symbol: &VisibleSymbol,
+    source_module: Option<&str>,
+) -> String {
+    let source = match symbol.source {
+        VisibleSymbolSource::ExplicitImport => "explicit import",
+        VisibleSymbolSource::DefaultExport => "default export",
+        VisibleSymbolSource::ExportTag => "export tag",
+        _ => "visible symbol",
+    };
+    let module = source_module.map(|module| format!("\nModule: `{module}`")).unwrap_or_default();
+
+    format!(
+        "Compiler visible-symbol completion.\n\nSource: {source}\nProvenance: ImportExportInference\nConfidence: High\nFreshness: Fresh{module}"
+    )
 }
 
 /// Ultra-common Perl pragmas and core modules that should surface first in `use` completions.
@@ -1513,6 +1613,55 @@ fn semantic_file_id(uri: &str) -> FileId {
     let mut hasher = DefaultHasher::new();
     uri.hash(&mut hasher);
     FileId(hasher.finish())
+}
+
+#[cfg(test)]
+mod visible_symbol_completion_tests {
+    use super::{VisibleSymbol, VisibleSymbolSource, is_live_visible_completion_candidate};
+    use perl_semantic_facts::{Confidence, EntityId};
+
+    fn visible(source: VisibleSymbolSource, confidence: Confidence) -> VisibleSymbol {
+        VisibleSymbol {
+            name: "candidate".to_string(),
+            entity_id: Some(EntityId(1)),
+            source,
+            confidence,
+            context: None,
+        }
+    }
+
+    #[test]
+    fn live_visible_completion_filter_accepts_only_high_confidence_import_export_sources() {
+        assert!(is_live_visible_completion_candidate(&visible(
+            VisibleSymbolSource::ExplicitImport,
+            Confidence::High,
+        )));
+        assert!(is_live_visible_completion_candidate(&visible(
+            VisibleSymbolSource::DefaultExport,
+            Confidence::High,
+        )));
+        assert!(is_live_visible_completion_candidate(&visible(
+            VisibleSymbolSource::ExportTag,
+            Confidence::High,
+        )));
+
+        assert!(!is_live_visible_completion_candidate(&visible(
+            VisibleSymbolSource::ExplicitImport,
+            Confidence::Medium,
+        )));
+        assert!(!is_live_visible_completion_candidate(&visible(
+            VisibleSymbolSource::Generated,
+            Confidence::High,
+        )));
+        assert!(!is_live_visible_completion_candidate(&visible(
+            VisibleSymbolSource::DynamicUnknown,
+            Confidence::High,
+        )));
+        assert!(!is_live_visible_completion_candidate(&visible(
+            VisibleSymbolSource::LocalLexical,
+            Confidence::High,
+        )));
+    }
 }
 
 /// Collect all method symbols accessible from a package, following parent/role chains.

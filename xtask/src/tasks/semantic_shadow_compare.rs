@@ -249,6 +249,21 @@ fn build_artifact() -> Artifact {
         ),
         receipt_from_identities(
             ShadowQueryName::CompletionVisibility,
+            "completion_live_visible_import_candidates",
+            Some(vec!["legacy_helper"]),
+            Some(vec!["legacy_helper", "imported_func"]),
+            "completion live visible-symbol slice: imported/exported compiler candidates are eligible for live completion; legacy_candidates=1; compiler_fact_candidates=2; rank_delta=+1; noise_delta=0; generated_promotions=0; dynamic_boundary_blockers=0",
+            vec![trace(
+                ProviderSurface::Completion,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::ImportExportInference,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Primary,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::CompletionVisibility,
             "completion_generated_candidates",
             Some(vec![]),
             Some(vec!["generated_accessor"]),
@@ -928,7 +943,7 @@ mod tests {
         let artifact = build_artifact();
         assert_eq!(artifact.schema_version, 3);
         assert_eq!(artifact.verdict_counts.get("same"), Some(&32));
-        assert_eq!(artifact.verdict_counts.get("improved"), Some(&9));
+        assert_eq!(artifact.verdict_counts.get("improved"), Some(&10));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&2));
         assert_eq!(artifact.verdict_counts.get("unavailable"), Some(&0));
@@ -937,7 +952,7 @@ mod tests {
         assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&23));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&8));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&9));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&2));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("unavailable"), Some(&0));
@@ -963,11 +978,13 @@ mod tests {
         assert!(markdown.contains("| release-readiness | FindDefinition"));
         assert!(markdown.contains("| schema-fixture | CountUsages"));
         assert!(markdown.contains("| schema-fixture | CompletionVisibility | `completion_import_candidates` | improved | 1 | 2 |"));
+        assert!(markdown.contains("| schema-fixture | CompletionVisibility | `completion_live_visible_import_candidates` | improved | 1 | 2 |"));
         assert!(markdown.contains("| schema-fixture | CompletionVisibility | `completion_generated_candidates` | improved | 0 | 1 |"));
         assert!(markdown.contains("| schema-fixture | CompletionVisibility | `completion_dynamic_boundary` | same | 0 | 0 |"));
         assert!(markdown.contains("## Fact Source Traces"));
         assert!(markdown.contains("| release-readiness | FindDefinition | Definition | CompilerFact | SemanticAnalyzer | High | Fresh | Shadow |"));
         assert!(markdown.contains("| schema-fixture | CompletionVisibility | Completion | CompilerFact | ImportExportInference | High | Fresh | Shadow |"));
+        assert!(markdown.contains("| schema-fixture | CompletionVisibility | Completion | CompilerFact | ImportExportInference | High | Fresh | Primary |"));
         assert!(markdown.contains("| schema-fixture | CompletionVisibility | Completion | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |"));
         assert!(markdown.contains("| schema-fixture | CompletionVisibility | Completion | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
         assert!(markdown.contains("| schema-fixture | Hover | Hover | CompilerFact | ImportExportInference | High | Fresh | Primary |"));
