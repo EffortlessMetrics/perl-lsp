@@ -998,6 +998,7 @@ fn format_simple_statement_tokens(
 ) -> Option<String> {
     format_simple_lexical_tokens(tokens, config)
         .or_else(|| format_simple_return_tokens(tokens, config))
+        .or_else(|| format_simple_loop_control_tokens(tokens))
         .or_else(|| format_simple_assignment_tokens(tokens, config))
         .or_else(|| format_simple_expression_statement_tokens(tokens, config))
 }
@@ -1210,6 +1211,28 @@ fn format_simple_return_tokens(
         prefix.chars().count(),
     )?;
     Some(format!("return {value};"))
+}
+
+fn format_simple_loop_control_tokens(tokens: &[perl_parser_core::Token]) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    let keyword = match tokens.first()?.kind {
+        TokenKind::Next => "next",
+        TokenKind::Last => "last",
+        TokenKind::Redo => "redo",
+        _ => return None,
+    };
+    if tokens.last()?.kind != TokenKind::Semicolon {
+        return None;
+    }
+
+    match tokens {
+        [_, _] => Some(format!("{keyword};")),
+        [_, label, _] if label.kind == TokenKind::Identifier => {
+            Some(format!("{keyword} {};", label.text))
+        }
+        _ => None,
+    }
 }
 
 fn format_simple_assignment_tokens(

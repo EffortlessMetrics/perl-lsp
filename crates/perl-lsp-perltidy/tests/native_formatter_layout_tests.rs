@@ -582,6 +582,21 @@ fn native_formatter_expands_simple_foreach_blocks() {
 }
 
 #[test]
+fn native_formatter_formats_simple_loop_control_statements() {
+    let formatter = NativeFormatter::new();
+    let source = "foreach my$item(@items){next;last LOOP;redo;}\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        "foreach my $item (@items) {\n    next;\n    last LOOP;\n    redo;\n}\n"
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_expands_simple_for_foreach_alias_blocks() {
     let formatter = NativeFormatter::new();
     let source = "for$item(@items){return$item;}\n";
@@ -705,6 +720,27 @@ fn native_range_formatter_formats_selected_simple_foreach_line() {
     assert_eq!(result.edits.len(), 1);
     assert_eq!(result.edits[0].range, range);
     assert_eq!(result.edits[0].new_text, "foreach my $item (@items) {\n    return $item;\n}");
+}
+
+#[test]
+fn native_range_formatter_formats_selected_simple_loop_control_line() {
+    let formatter = NativeFormatter::new();
+    let source = "my$x=1;\nforeach my$item(@items){next;last LOOP;redo;}\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 45));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        "my$x=1;\nforeach my $item (@items) {\n    next;\n    last LOOP;\n    redo;\n}\n"
+    );
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(
+        result.edits[0].new_text,
+        "foreach my $item (@items) {\n    next;\n    last LOOP;\n    redo;\n}"
+    );
 }
 
 #[test]
