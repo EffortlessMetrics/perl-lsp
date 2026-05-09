@@ -636,6 +636,31 @@ fn native_formatter_expands_simple_for_foreach_alias_blocks() {
 }
 
 #[test]
+fn native_formatter_expands_simple_c_style_for_blocks() {
+    let formatter = NativeFormatter::new();
+    let source = "for(my$i=0;$i<3;$i++){next;}\nfor(;$ok;--$remaining){last;}\nfor(;;){redo;}\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        concat!(
+            "for (my $i = 0; $i < 3; $i++) {\n",
+            "    next;\n",
+            "}\n",
+            "for (; $ok; --$remaining) {\n",
+            "    last;\n",
+            "}\n",
+            "for (;;) {\n",
+            "    redo;\n",
+            "}\n",
+        )
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_expands_simple_if_else_blocks() {
     let formatter = NativeFormatter::new();
     let source = "if($ok){return 1;}else{return 0;}\n";
@@ -783,6 +808,23 @@ fn native_range_formatter_formats_selected_simple_loop_control_line() {
         result.edits[0].new_text,
         "foreach my $item (@items) {\n    next;\n    last LOOP;\n    redo;\n}"
     );
+}
+
+#[test]
+fn native_range_formatter_formats_selected_simple_c_style_for_line() {
+    let formatter = NativeFormatter::new();
+    let source = "my$x=1;\nfor(my$i=0;$i<3;$i++){next;}\n";
+    let range = TextRange {
+        start: TextPosition { line: 1, character: 0 },
+        end: TextPosition { line: 1, character: 28 },
+    };
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "my$x=1;\nfor (my $i = 0; $i < 3; $i++) {\n    next;\n}\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].new_text, "for (my $i = 0; $i < 3; $i++) {\n    next;\n}");
 }
 
 #[test]
