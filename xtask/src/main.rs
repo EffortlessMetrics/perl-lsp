@@ -1983,6 +1983,21 @@ enum NativeToolingCommand {
         #[arg(long, default_value = ".")]
         root: PathBuf,
     },
+
+    /// Render native tooling default-cutover readiness from status receipts.
+    Readiness {
+        /// Native-tooling status receipt to evaluate.
+        #[arg(long, default_value = "target/receipts/native-tooling/status.json")]
+        status_receipt: PathBuf,
+
+        /// Output path for native-tooling readiness JSON.
+        #[arg(long, default_value = "target/receipts/native-tooling/readiness.json")]
+        receipt: PathBuf,
+
+        /// Optional markdown readiness output.
+        #[arg(long)]
+        markdown: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2394,6 +2409,13 @@ fn main() -> Result<()> {
             }
             NativeToolingCommand::CheckDefaults { root } => {
                 native_tooling::check_defaults(native_tooling::NativeToolingDefaultsConfig { root })
+            }
+            NativeToolingCommand::Readiness { status_receipt, receipt, markdown } => {
+                native_tooling::readiness(native_tooling::NativeToolingReadinessConfig {
+                    status_receipt,
+                    receipt,
+                    markdown,
+                })
             }
         },
         Commands::SecurityHardening => hardening::security_hardening(),

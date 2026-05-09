@@ -54,6 +54,16 @@ pub struct NativeToolingDefaultsConfig {
     pub root: PathBuf,
 }
 
+/// Options for `cargo xtask native-tooling readiness`.
+pub struct NativeToolingReadinessConfig {
+    /// Native-tooling status receipt to evaluate.
+    pub status_receipt: PathBuf,
+    /// Output path for the native-tooling readiness JSON receipt.
+    pub receipt: PathBuf,
+    /// Optional markdown readiness output path.
+    pub markdown: Option<PathBuf>,
+}
+
 #[derive(Debug)]
 struct DefaultCheck {
     name: &'static str,
@@ -63,12 +73,37 @@ struct DefaultCheck {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct NativeToolingStatusReceipt {
-    kind: &'static str,
+    kind: String,
     schema_version: u32,
     generated_at: DateTime<Utc>,
     commit: String,
     formatter: FormatterStatus,
     critic: CriticStatus,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct NativeToolingReadinessReceipt {
+    kind: String,
+    schema_version: u32,
+    generated_at: DateTime<Utc>,
+    commit: String,
+    status_receipt: String,
+    verdict: &'static str,
+    ready_count: usize,
+    blocker_count: usize,
+    warning_count: usize,
+    unverified_count: usize,
+    criteria: Vec<ReadinessCriterion>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ReadinessCriterion {
+    area: &'static str,
+    name: &'static str,
+    status: &'static str,
+    required_for_default: bool,
+    evidence: String,
+    next: &'static str,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -258,6 +293,42 @@ pub fn check_defaults(config: NativeToolingDefaultsConfig) -> Result<()> {
     Err(eyre!("native-tooling default guard failed: {} check(s) failed", failures.len()))
 }
 
+/// Render a native tooling default-cutover readiness report from existing receipts.
+pub fn readiness(config: NativeToolingReadinessConfig) -> Result<()> {
+    let status: NativeToolingStatusReceipt = serde_json::from_str(
+        &fs::read_to_string(&config.status_receipt)
+            .wrap_err_with(|| format!("failed to read {}", config.status_receipt.display()))?,
+    )
+    .wrap_err_with(|| format!("failed to parse {}", config.status_receipt.display()))?;
+    let receipt = build_readiness_receipt(&config.status_receipt, &status);
+
+    if let Some(parent) = config.receipt.parent() {
+        fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("failed to create {}", parent.display()))?;
+    }
+    write_json(&config.receipt, &receipt)?;
+
+    if let Some(markdown) = &config.markdown {
+        if let Some(parent) = markdown.parent() {
+            fs::create_dir_all(parent)
+                .wrap_err_with(|| format!("failed to create {}", parent.display()))?;
+        }
+        fs::write(markdown, render_readiness_markdown(&receipt))
+            .wrap_err_with(|| format!("failed to write {}", markdown.display()))?;
+    }
+
+    println!(
+        "native tooling readiness: {} ({} ready, {} blocker, {} warning, {} unverified); receipt: {}",
+        receipt.verdict,
+        receipt.ready_count,
+        receipt.blocker_count,
+        receipt.warning_count,
+        receipt.unverified_count,
+        config.receipt.display()
+    );
+    Ok(())
+}
+
 fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeToolingStatusReceipt> {
     let formatter = formatter_status(
         &config.format_fixtures,
@@ -269,13 +340,267 @@ fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeTool
     let critic =
         critic_status(&config.critic_perlcritic_compat_receipt, &config.critic_check_receipt)?;
     Ok(NativeToolingStatusReceipt {
-        kind: "native_tooling_status",
+        kind: "native_tooling_status".to_string(),
         schema_version: SCHEMA_VERSION,
         generated_at: Utc::now(),
         commit: current_commit(),
         formatter,
         critic,
     })
+}
+
+fn build_readiness_receipt(
+    status_receipt: &Path,
+    status: &NativeToolingStatusReceipt,
+) -> NativeToolingReadinessReceipt {
+    let mut criteria = Vec::new();
+    let formatter = &status.formatter;
+    let critic = &status.critic;
+    let server_defaults = ServerConfig::default();
+
+    criteria.push(readiness_criterion(
+        "formatter",
+        "native formatter default",
+        formatter.format_engine_selected.as_deref() == Some("native")
+            && formatter.format_external_adapter_requested == Some(false),
+        formatter.format_config_receipt_present,
+        true,
+        format!(
+            "engine={}, external_adapter_requested={}",
+            optional_text_metric(
+                formatter.format_engine_selected.as_deref(),
+                formatter.format_config_receipt_present,
+            ),
+            optional_bool_metric(
+                formatter.format_external_adapter_requested,
+                formatter.format_config_receipt_present,
+            )
+        ),
+        "regenerate `cargo xtask native-format config` and keep external adapter opt-in",
+    ));
+    criteria.push(readiness_criterion(
+        "formatter",
+        "fixture suite passes",
+        formatter.fixture_failed_count == Some(0)
+            && formatter.fixture_passed_count == Some(formatter.fixture_count),
+        formatter.format_receipt_present,
+        true,
+        format!(
+            "passed={}/{} failed={}",
+            optional_metric(formatter.fixture_passed_count, formatter.format_receipt_present),
+            formatter.fixture_count,
+            optional_metric(formatter.fixture_failed_count, formatter.format_receipt_present)
+        ),
+        "run `cargo xtask native-format check` and fix any fixture failures",
+    ));
+    criteria.push(readiness_criterion(
+        "formatter",
+        "corpus idempotent and parse-preserving",
+        formatter.corpus_passed == Some(true)
+            && formatter.corpus_idempotence_passed_count == formatter.corpus_files_checked
+            && formatter.corpus_parse_preserved_count == formatter.corpus_files_checked,
+        formatter.format_corpus_receipt_present,
+        true,
+        format!(
+            "files={} idempotence={} parse_preservation={} passed={}",
+            optional_metric(formatter.corpus_files_checked, formatter.format_corpus_receipt_present),
+            optional_pair_metric(
+                formatter.corpus_idempotence_passed_count,
+                formatter.corpus_files_checked,
+                formatter.format_corpus_receipt_present,
+            ),
+            optional_pair_metric(
+                formatter.corpus_parse_preserved_count,
+                formatter.corpus_files_checked,
+                formatter.format_corpus_receipt_present,
+            ),
+            optional_bool_metric(formatter.corpus_passed, formatter.format_corpus_receipt_present)
+        ),
+        "run `cargo xtask native-format corpus` and investigate non-idempotent or non-preserved files",
+    ));
+    criteria.push(readiness_criterion(
+        "formatter",
+        "dangerous surfaces visible",
+        formatter.expected_diagnostics_fixture_count > 0
+            && formatter.literal_preserve_fixture_count > 0
+            && formatter.bailout_count.unwrap_or_default() > 0,
+        formatter.format_receipt_present,
+        true,
+        format!(
+            "expected_diagnostic_fixtures={} literal_preserve_fixtures={} bailout_count={}",
+            formatter.expected_diagnostics_fixture_count,
+            formatter.literal_preserve_fixture_count,
+            optional_metric(formatter.bailout_count, formatter.format_receipt_present)
+        ),
+        "expand literal/comment preservation fixtures before treating format-on-save as broad coverage",
+    ));
+    criteria.push(readiness_criterion(
+        "formatter",
+        "perltidy compatibility has no external-only gaps",
+        formatter.perltidy_compat_external_only_count == Some(0),
+        formatter.format_perltidy_compat_receipt_present,
+        true,
+        format!(
+            "options={} supported={} approximated={} external_only={}",
+            optional_metric(
+                formatter.perltidy_compat_option_count,
+                formatter.format_perltidy_compat_receipt_present,
+            ),
+            optional_metric(
+                formatter.perltidy_compat_supported_count,
+                formatter.format_perltidy_compat_receipt_present,
+            ),
+            optional_metric(
+                formatter.perltidy_compat_approximated_count,
+                formatter.format_perltidy_compat_receipt_present,
+            ),
+            optional_metric(
+                formatter.perltidy_compat_external_only_count,
+                formatter.format_perltidy_compat_receipt_present,
+            )
+        ),
+        "map, approximate, or document remaining external-only perltidy options",
+    ));
+    criteria.push(readiness_criterion(
+        "critic",
+        "native critic default",
+        server_defaults.perlcritic_enabled && server_defaults.critic_engine == CriticEngine::Native,
+        true,
+        true,
+        format!(
+            "default perlcritic_enabled={} critic_engine={:?}",
+            server_defaults.perlcritic_enabled, server_defaults.critic_engine
+        ),
+        "keep native critic opt-in until recommended profile false-positive receipts are boring",
+    ));
+    criteria.push(readiness_criterion(
+        "critic",
+        "native rule surface has LSP and bridge coverage",
+        critic.native_rule_count > 0
+            && critic.rules_surfaced_in_pull_diagnostics == critic.native_rule_count
+            && critic.rules_surfaced_in_push_diagnostics == critic.native_rule_count
+            && critic.rules_surfaced_in_workspace_diagnostics == critic.native_rule_count
+            && critic.rules_with_violation_bridge == critic.native_rule_count,
+        true,
+        true,
+        format!(
+            "rules={} pull={} push={} workspace={} bridge={}",
+            critic.native_rule_count,
+            critic.rules_surfaced_in_pull_diagnostics,
+            critic.rules_surfaced_in_push_diagnostics,
+            critic.rules_surfaced_in_workspace_diagnostics,
+            critic.rules_with_violation_bridge
+        ),
+        "route every recommended rule through pull, push, workspace diagnostics, and violation bridge",
+    ));
+    criteria.push(readiness_criterion(
+        "critic",
+        "native critic check receipt is parse-clean",
+        critic.critic_check_files_checked.unwrap_or_default() > 0
+            && critic.critic_check_files_with_parse_errors == Some(0),
+        critic.critic_check_receipt_present,
+        true,
+        format!(
+            "files={} parse_errors={} findings={} fixable={}",
+            optional_metric(critic.critic_check_files_checked, critic.critic_check_receipt_present),
+            optional_metric(
+                critic.critic_check_files_with_parse_errors,
+                critic.critic_check_receipt_present,
+            ),
+            optional_metric(critic.critic_check_findings_count, critic.critic_check_receipt_present),
+            optional_metric(
+                critic.critic_check_fixable_findings_count,
+                critic.critic_check_receipt_present,
+            )
+        ),
+        "run `cargo xtask native-critic check` and fix parse errors before relying on critic receipts",
+    ));
+    criteria.push(readiness_criterion(
+        "critic",
+        "native critic has fixes and suppression coverage",
+        critic.rules_with_suppression == critic.native_rule_count && critic.rules_with_fixes > 0,
+        true,
+        true,
+        format!(
+            "rules={} suppression={} fixes={}",
+            critic.native_rule_count, critic.rules_with_suppression, critic.rules_with_fixes
+        ),
+        "add suppression/config/fix tests for new rules before enabling them in recommended profile",
+    ));
+    criteria.push(readiness_criterion(
+        "critic",
+        "perlcritic compatibility has no external-only gaps",
+        critic.perlcritic_compat_external_only_count == Some(0),
+        critic.critic_perlcritic_compat_receipt_present,
+        true,
+        format!(
+            "items={} equivalent={} superset={} approximated={} external_only={}",
+            optional_metric(
+                critic.perlcritic_compat_item_count,
+                critic.critic_perlcritic_compat_receipt_present,
+            ),
+            optional_metric(
+                critic.perlcritic_compat_native_equivalent_count,
+                critic.critic_perlcritic_compat_receipt_present,
+            ),
+            optional_metric(
+                critic.perlcritic_compat_native_superset_count,
+                critic.critic_perlcritic_compat_receipt_present,
+            ),
+            optional_metric(
+                critic.perlcritic_compat_approximated_count,
+                critic.critic_perlcritic_compat_receipt_present,
+            ),
+            optional_metric(
+                critic.perlcritic_compat_external_only_count,
+                critic.critic_perlcritic_compat_receipt_present,
+            )
+        ),
+        "map high-value perlcritic policies or keep external mode documented for remaining policies",
+    ));
+
+    let ready_count = criteria.iter().filter(|criterion| criterion.status == "ready").count();
+    let blocker_count = criteria.iter().filter(|criterion| criterion.status == "blocked").count();
+    let warning_count = criteria.iter().filter(|criterion| criterion.status == "warning").count();
+    let unverified_count =
+        criteria.iter().filter(|criterion| criterion.status == "unverified").count();
+    let verdict = if blocker_count == 0 && unverified_count == 0 {
+        if warning_count == 0 { "ready" } else { "provisional" }
+    } else {
+        "not_ready"
+    };
+
+    NativeToolingReadinessReceipt {
+        kind: "native_tooling_readiness".to_string(),
+        schema_version: SCHEMA_VERSION,
+        generated_at: Utc::now(),
+        commit: current_commit(),
+        status_receipt: status_receipt.display().to_string(),
+        verdict,
+        ready_count,
+        blocker_count,
+        warning_count,
+        unverified_count,
+        criteria,
+    }
+}
+
+fn readiness_criterion(
+    area: &'static str,
+    name: &'static str,
+    passed: bool,
+    verified: bool,
+    required_for_default: bool,
+    evidence: String,
+    next: &'static str,
+) -> ReadinessCriterion {
+    let status = match (verified, passed, required_for_default) {
+        (false, _, _) => "unverified",
+        (true, true, _) => "ready",
+        (true, false, true) => "blocked",
+        (true, false, false) => "warning",
+    };
+    ReadinessCriterion { area, name, status, required_for_default, evidence, next }
 }
 
 fn native_tooling_default_checks(root: &Path) -> Result<Vec<DefaultCheck>> {
@@ -863,6 +1188,31 @@ Fixable native rules:
     )
 }
 
+fn render_readiness_markdown(receipt: &NativeToolingReadinessReceipt) -> String {
+    let mut markdown = String::new();
+    markdown.push_str("# Native Tooling Readiness\n\n");
+    markdown.push_str("> Generated by `cargo xtask native-tooling readiness`.\n\n");
+    markdown.push_str(&format!("- Verdict: `{}`\n", receipt.verdict));
+    markdown.push_str(&format!("- Ready: `{}`\n", receipt.ready_count));
+    markdown.push_str(&format!("- Blockers: `{}`\n", receipt.blocker_count));
+    markdown.push_str(&format!("- Warnings: `{}`\n", receipt.warning_count));
+    markdown.push_str(&format!("- Unverified: `{}`\n\n", receipt.unverified_count));
+    markdown.push_str("| Area | Criterion | Status | Required | Evidence | Next |\n");
+    markdown.push_str("| --- | --- | --- | --- | --- | --- |\n");
+    for criterion in &receipt.criteria {
+        markdown.push_str(&format!(
+            "| {} | {} | {} | {} | {} | {} |\n",
+            criterion.area,
+            criterion.name,
+            criterion.status,
+            criterion.required_for_default,
+            criterion.evidence.replace('|', "\\|"),
+            criterion.next.replace('|', "\\|")
+        ));
+    }
+    markdown
+}
+
 fn classify_perlcritic_profile(raw: &str) -> Vec<PerlcriticCompatItem> {
     let native_rules = NativeCriticRegistry::recommended()
         .rule_ids()
@@ -1433,6 +1783,124 @@ color = 1
         assert!(summary.contains("| setting | `profile-strictness` | quiet | unsupported_safe |"));
         assert!(summary.contains("| setting | `color` | 1 | external_only |"));
 
+        Ok(())
+    }
+
+    #[test]
+    fn native_tooling_readiness_marks_default_cutover_blockers() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let status_receipt = temp.path().join("status.json");
+        let readiness_receipt = temp.path().join("readiness.json");
+        let readiness_markdown = temp.path().join("readiness.md");
+        let status = NativeToolingStatusReceipt {
+            kind: "native_tooling_status".to_string(),
+            schema_version: SCHEMA_VERSION,
+            generated_at: Utc::now(),
+            commit: "test".to_string(),
+            formatter: FormatterStatus {
+                fixture_root: "fixtures".to_string(),
+                fixture_count: 2,
+                expected_diagnostics_fixture_count: 1,
+                literal_preserve_fixture_count: 1,
+                format_receipt: "native-format-fixtures.json".to_string(),
+                format_receipt_present: true,
+                fixture_passed_count: Some(2),
+                fixture_failed_count: Some(0),
+                idempotent_count: Some(2),
+                parse_preserved_count: Some(2),
+                diagnostics_count: Some(1),
+                bailout_count: Some(1),
+                expected_diagnostics_match_count: Some(1),
+                format_corpus_receipt: "native-format-corpus.json".to_string(),
+                format_corpus_receipt_present: true,
+                corpus_files_checked: Some(3),
+                corpus_files_changed: Some(1),
+                corpus_idempotence_passed_count: Some(3),
+                corpus_parse_preserved_count: Some(3),
+                corpus_literal_bailout_count: Some(1),
+                corpus_unsupported_patterns_count: Some(0),
+                corpus_diagnostics_count: Some(1),
+                corpus_passed: Some(true),
+                format_perltidy_compat_receipt: "native-format-perltidy-compat.json".to_string(),
+                format_perltidy_compat_receipt_present: true,
+                perltidy_compat_option_count: Some(9),
+                perltidy_compat_supported_count: Some(7),
+                perltidy_compat_approximated_count: Some(0),
+                perltidy_compat_unsupported_safe_count: Some(1),
+                perltidy_compat_external_only_count: Some(1),
+                format_config_receipt: "native-format-config.json".to_string(),
+                format_config_receipt_present: true,
+                format_config_source: Some("defaults".to_string()),
+                format_engine_selected: Some("native".to_string()),
+                format_external_adapter_requested: Some(false),
+                format_line_width: Some(80),
+                format_indent_width: Some(4),
+                format_use_tabs: Some(false),
+                format_brace_placement: Some("same-line".to_string()),
+                format_else_placement: Some("cuddled".to_string()),
+                format_keyword_spacing: Some("space".to_string()),
+                format_trailing_comma: Some("preserve".to_string()),
+            },
+            critic: CriticStatus {
+                native_rule_count: 2,
+                native_rules: vec![
+                    "native.testing.require_use_strict".to_string(),
+                    "native.variables.unused_lexical".to_string(),
+                ],
+                rules_with_suppression: 2,
+                rules_with_fixes: 1,
+                fixable_rules: vec!["native.variables.unused_lexical".to_string()],
+                rules_surfaced_in_pull_diagnostics: 2,
+                rules_surfaced_in_push_diagnostics: 2,
+                rules_surfaced_in_workspace_diagnostics: 2,
+                rules_with_violation_bridge: 2,
+                critic_check_receipt: "native-critic-check.json".to_string(),
+                critic_check_receipt_present: true,
+                critic_check_files_checked: Some(3),
+                critic_check_files_with_parse_errors: Some(0),
+                critic_check_rules_run: Some(2),
+                critic_check_findings_count: Some(1),
+                critic_check_suppressed_findings_count: Some(0),
+                critic_check_fixable_findings_count: Some(1),
+                critic_perlcritic_compat_receipt: "perlcritic-compat.json".to_string(),
+                critic_perlcritic_compat_receipt_present: true,
+                perlcritic_compat_item_count: Some(4),
+                perlcritic_compat_native_equivalent_count: Some(1),
+                perlcritic_compat_native_superset_count: Some(1),
+                perlcritic_compat_approximated_count: Some(0),
+                perlcritic_compat_unsupported_safe_count: Some(0),
+                perlcritic_compat_external_only_count: Some(2),
+            },
+        };
+        write_json(&status_receipt, &status)?;
+
+        readiness(NativeToolingReadinessConfig {
+            status_receipt,
+            receipt: readiness_receipt.clone(),
+            markdown: Some(readiness_markdown.clone()),
+        })?;
+
+        let value: Value = serde_json::from_str(&fs::read_to_string(readiness_receipt)?)?;
+        assert_eq!(value["kind"], "native_tooling_readiness");
+        assert_eq!(value["verdict"], "not_ready");
+        assert!(value["blocker_count"].as_u64().unwrap_or_default() >= 3);
+        assert!(value["ready_count"].as_u64().unwrap_or_default() > 0);
+        let criteria = value["criteria"].as_array().ok_or_else(|| eyre!("criteria array"))?;
+        assert!(criteria.iter().any(|criterion| {
+            criterion["name"] == "perltidy compatibility has no external-only gaps"
+                && criterion["status"] == "blocked"
+        }));
+        assert!(criteria.iter().any(|criterion| {
+            criterion["name"] == "native critic default" && criterion["status"] == "blocked"
+        }));
+
+        let markdown = fs::read_to_string(readiness_markdown)?;
+        assert!(markdown.contains("# Native Tooling Readiness"));
+        assert!(markdown.contains("- Verdict: `not_ready`"));
+        assert!(markdown.contains(
+            "| formatter | perltidy compatibility has no external-only gaps | blocked |"
+        ));
+        assert!(markdown.contains("| critic | native critic default | blocked |"));
         Ok(())
     }
 
