@@ -1368,14 +1368,7 @@ fn classify_perlcritic_setting(name: &str, value: Option<String>) -> PerlcriticC
             None,
             "maps to native critic include/exclude rule filtering for native rule IDs",
         ),
-        "theme" => compat_item(
-            "setting",
-            name,
-            value,
-            "external_only",
-            None,
-            "native critic does not yet implement perlcritic theme expansion",
-        ),
+        "theme" => classify_perlcritic_theme_setting(value),
         "profile-strictness" => compat_item(
             "setting",
             name,
@@ -1383,6 +1376,14 @@ fn classify_perlcritic_setting(name: &str, value: Option<String>) -> PerlcriticC
             "unsupported_safe",
             None,
             "perlcritic loader strictness has no runtime effect on native critic rules",
+        ),
+        "color" => compat_item(
+            "setting",
+            name,
+            value,
+            "unsupported_safe",
+            None,
+            "perlcritic terminal color setting has no effect on structured native diagnostics",
         ),
         _ => compat_item(
             "setting",
@@ -1392,6 +1393,52 @@ fn classify_perlcritic_setting(name: &str, value: Option<String>) -> PerlcriticC
             None,
             "perlcritic setting is not yet applied by native critic",
         ),
+    }
+}
+
+fn classify_perlcritic_theme_setting(value: Option<String>) -> PerlcriticCompatItem {
+    let Some(theme) = value.as_deref() else {
+        return compat_item(
+            "setting",
+            "theme",
+            value,
+            "unsupported_safe",
+            None,
+            "empty perlcritic theme does not change native critic rule selection",
+        );
+    };
+    let theme = theme.trim();
+    let known_themes = [
+        "bugs",
+        "certrec",
+        "certrule",
+        "core",
+        "cosmetic",
+        "maintenance",
+        "pbp",
+        "performance",
+        "security",
+        "tests",
+        "unicode",
+    ];
+    if known_themes.contains(&theme) {
+        compat_item(
+            "setting",
+            "theme",
+            value,
+            "approximated",
+            None,
+            "native critic recommended profile approximates common perlcritic themes with currently implemented native rules",
+        )
+    } else {
+        compat_item(
+            "setting",
+            "theme",
+            value,
+            "external_only",
+            None,
+            "unrecognized perlcritic theme is not expanded by native critic",
+        )
     }
 }
 
@@ -1761,16 +1808,18 @@ color = 1
         assert_eq!(receipt["item_count"], 12);
         assert_eq!(receipt["native_equivalent_count"], 5);
         assert_eq!(receipt["native_superset_count"], 2);
-        assert_eq!(receipt["approximated_count"], 2);
-        assert_eq!(receipt["unsupported_safe_count"], 1);
-        assert_eq!(receipt["external_only_count"], 2);
+        assert_eq!(receipt["approximated_count"], 3);
+        assert_eq!(receipt["unsupported_safe_count"], 2);
+        assert_eq!(receipt["external_only_count"], 0);
         assert_eq!(receipt["items"][0]["classification"], "native_equivalent");
         assert_eq!(receipt["items"][2]["name"], "exclude");
         assert_eq!(receipt["items"][5]["native_rule"], "native.io.two_arg_open");
         assert_eq!(receipt["items"][6]["native_rule"], "native.io.unchecked_open_close");
         assert_eq!(receipt["items"][8]["classification"], "approximated");
         assert_eq!(receipt["items"][9]["classification"], "approximated");
+        assert_eq!(receipt["items"][10]["classification"], "approximated");
         assert_eq!(receipt["items"][11]["name"], "color");
+        assert_eq!(receipt["items"][11]["classification"], "unsupported_safe");
 
         let summary = fs::read_to_string(receipts.join("perlcritic-compat.md"))?;
         assert!(summary.contains("# Native Critic Perlcritic Compatibility"));
@@ -1781,7 +1830,8 @@ color = 1
         assert!(summary.contains("| policy | `InputOutput::RequireCheckedOpen` |  | native_superset | native.io.unchecked_open_close |"));
         assert!(summary.contains("| policy | `Documentation::RequirePodSections` |  | approximated | native.documentation.require_pod_sections |"));
         assert!(summary.contains("| setting | `profile-strictness` | quiet | unsupported_safe |"));
-        assert!(summary.contains("| setting | `color` | 1 | external_only |"));
+        assert!(summary.contains("| setting | `theme` | core | approximated |"));
+        assert!(summary.contains("| setting | `color` | 1 | unsupported_safe |"));
 
         Ok(())
     }
