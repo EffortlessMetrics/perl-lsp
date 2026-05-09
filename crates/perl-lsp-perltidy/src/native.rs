@@ -717,6 +717,10 @@ fn format_simple_control_block_tokens(
 ) -> Option<String> {
     use perl_parser_core::TokenKind;
 
+    if let Some(formatted) = format_simple_foreach_block_tokens(tokens, indent, config) {
+        return Some(formatted);
+    }
+
     if tokens.len() < 6 {
         return None;
     }
@@ -764,6 +768,61 @@ fn format_simple_control_block_tokens(
         formatted.push_str(&render_simple_else_doc(&else_statements, indent, &body_indent, config));
     }
     Some(formatted)
+}
+
+fn format_simple_foreach_block_tokens(
+    tokens: &[perl_parser_core::Token],
+    indent: &str,
+    config: &FormatConfig,
+) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    let keyword = match tokens.first()?.kind {
+        TokenKind::For => "for",
+        TokenKind::Foreach => "foreach",
+        _ => return None,
+    };
+
+    let mut index = 1;
+    let iterator =
+        if matches!(tokens.get(index)?.kind, TokenKind::My | TokenKind::Our | TokenKind::State) {
+            let lexical = tokens[index].text.as_ref();
+            let (variable, next_index) = format_variable_tokens(tokens, index + 1)?;
+            index = next_index;
+            format!("{lexical} {variable}")
+        } else {
+            let (variable, next_index) = format_variable_tokens(tokens, index)?;
+            index = next_index;
+            variable
+        };
+
+    if tokens.get(index)?.kind != TokenKind::LeftParen {
+        return None;
+    }
+    let list_start = index + 1;
+    let list_end = tokens[list_start..]
+        .iter()
+        .position(|token| token.kind == TokenKind::RightParen)
+        .map(|offset| list_start + offset)?;
+    let list = format_simple_expression_tokens(tokens, list_start, list_end, config, 0)?;
+
+    if tokens.get(list_end)?.kind != TokenKind::RightParen
+        || tokens.get(list_end + 1)?.kind != TokenKind::LeftBrace
+        || tokens.last()?.kind != TokenKind::RightBrace
+    {
+        return None;
+    }
+
+    let body_tokens = &tokens[list_end + 2..tokens.len() - 1];
+    let statements = format_simple_statement_block(body_tokens, config)?;
+    let body_indent = format!("{indent}{}", indent_unit(config));
+    Some(render_simple_block_doc(
+        format!("{indent}{keyword} {iterator} ({list}) {{"),
+        &statements,
+        indent,
+        &body_indent,
+        config,
+    ))
 }
 
 fn render_simple_block_doc(
