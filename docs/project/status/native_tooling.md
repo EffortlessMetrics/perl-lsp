@@ -49,6 +49,12 @@
 | Native critic check findings | 187 |
 | Native critic check suppressed | 0 |
 | Native critic check fixable | 173 |
+| Native critic false-positive files | 3 |
+| Native critic false-positive parse errors | 0 |
+| Native critic false-positive rules run | 28 |
+| Native critic false-positive findings | 0 |
+| Native critic false-positive suppressed | 0 |
+| Native critic false-positive fixable | 0 |
 | Perlcritic compatibility items | 12 |
 | Perlcritic compatibility native-equivalent | 5 |
 | Perlcritic compatibility native-superset | 2 |
