@@ -17,8 +17,8 @@
 | Corpus unsupported diagnostics | 10 |
 | Corpus passed | true |
 | Perltidy compatibility options | 8 |
-| Perltidy compatibility supported | 5 |
-| Perltidy compatibility approximated | 1 |
+| Perltidy compatibility supported | 6 |
+| Perltidy compatibility approximated | 0 |
 | Perltidy compatibility unsupported-safe | 1 |
 | Perltidy compatibility external-only | 1 |
 

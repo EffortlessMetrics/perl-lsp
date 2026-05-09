@@ -19,9 +19,9 @@ use std::sync::Arc;
 pub mod native;
 
 pub use native::{
-    BracePlacement, FinalNewline, FormatConfig, FormatDiagnostic, FormatDiagnosticSeverity,
-    FormatDoc, FormatResult, FormatterMode, NativeFormatter, PerlFormatter, TextEdit, TextPosition,
-    TextRange, TrailingComma,
+    BracePlacement, ElsePlacement, FinalNewline, FormatConfig, FormatDiagnostic,
+    FormatDiagnosticSeverity, FormatDoc, FormatResult, FormatterMode, NativeFormatter,
+    PerlFormatter, TextEdit, TextPosition, TextRange, TrailingComma,
 };
 
 /// Configuration for perltidy.
