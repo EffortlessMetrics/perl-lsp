@@ -119,6 +119,12 @@ hard-enforce below the existing 125 LEM ceiling before calibration.
 
 ## PR ladder and acceptance gates
 
+Some gates below are current commands; others are command surfaces introduced
+by earlier steps in this same rollout. A row that creates a new checker should
+prove existing `xtask` health first, then smoke/test the new command after the
+row adds it. Later rows that reference no-panic, file-policy, or policy-report
+checks depend on those earlier command-introduction rows having landed.
+
 | Step | Branch | Objective | Acceptance gate |
 |---:|---|---|---|
 | 1 | `docs/rust-1.95-rollout` | Map the rollout, docs only. | `cargo check -p xtask --locked`; `cargo xtask check-lint-policy`; `git diff --check` |
@@ -127,11 +133,11 @@ hard-enforce below the existing 125 LEM ceiling before calibration.
 | 4 | `policy/rust-1.95-lints` | Activate the Rust compiler lint floor. | workspace check, lint policy, pr-fast receipt |
 | 5 | `policy/clippy-rust-1.95-ratchets` | Measure and activate clean or cheap Rust 1.94/1.95 Clippy ratchets. | lint policy and workspace clippy without global `-D warnings` until debt is receipted |
 | 6 | `policy/no-test-clippy-carveouts` | Remove Clippy test unwrap carveout and add fallible test helper path. | targeted checks for the touched helper crate plus lint policy |
-| 7 | `policy/no-panic-exact-identity` | Harden no-panic matching by exact counted identity. | `cargo test -p xtask no_panic --locked`; `cargo xtask check-no-panic-family` |
+| 7 | `policy/no-panic-exact-identity` | Harden no-panic matching by exact counted identity and introduce the no-panic checker command. | Existing proof: `cargo check -p xtask --locked`, `cargo test -p xtask --locked`, `git diff --check`; new proof after this step adds it: exact no-panic matcher tests plus `cargo xtask check-no-panic-family` smoke |
 | 8 | `policy/no-panic-baseline` | Add generated no-panic baseline and no-new-debt mode. | baseline reset, no-panic family check, xtask no-panic tests, diff check |
 | 9 | `policy/no-panic-diagnostics` | Improve no-panic diagnostics. | xtask no-panic tests, no-panic family check, report existence |
 | 10 | `policy/non-rust-file-ledger` | Add non-Rust file allowlist ledger; no enforcement yet. | TOML parse check and `cargo check -p xtask --locked` |
-| 11 | `policy/check-file-policy` | Add inventory, proposal, and file-policy checker commands. | xtask check, file-policy tests, inventory, propose, advisory check |
+| 11 | `policy/check-file-policy` | Add inventory, proposal, and file-policy checker commands. | Existing proof: `cargo check -p xtask --locked`, `cargo test -p xtask --locked`, `git diff --check`; new proof after this step adds them: file-policy tests plus inventory, proposal, and advisory checker smoke |
 | 12 | `policy/file-companion-ledgers` | Add generated, executable, dependency, workflow, process, and network ledgers. | advisory companion policy checks and `policy-report` |
 | 13 | `ci/policy-gate-wiring` | Wire policy checks into gate receipts. | file-policy gate receipt and receipt validation |
 | 14 | `ci/ripr-and-mutation-routing` | Tune ripr routing and keep mutation off normal PRs. | CI plan dry run where available and diff check |
