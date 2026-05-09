@@ -11,16 +11,20 @@ fallback behavior and rollback proof.
 
 - Fact-source trace receipt wiring is in place through `ProviderFactTrace`
   entries in the semantic shadow compare receipt schema.
-- The current shadow receipt records five fact-source traces across definition,
-  references, completion, and hover surfaces.
-- This is trace/proof infrastructure only. It does not make a provider consume
-  compiler facts in live LSP behavior.
+- The current shadow receipt records ten fact-source traces across definition,
+  references, completion, hover, and diagnostics surfaces.
+- Diagnostics now have a narrow live cutover for high-confidence imported and
+  generated visible-symbol facts. Ambiguous, low-confidence, and
+  dynamic-boundary cases remain fallback or blocked instead of being silently
+  suppressed.
+- Other provider surfaces remain trace/proof infrastructure only until their
+  own cutover proof lands.
 
 ## Cutover Matrix
 
 | Provider surface | Current state | Current source of truth | Next proof |
 | --- | --- | --- | --- |
-| Diagnostics | `partial live` | Existing semantic queries suppress selected dynamic false positives; fallback diagnostics remain available | False-positive / false-negative fixture receipts that include fact-source traces |
+| Diagnostics | `partial live` | Existing semantic queries suppress selected dynamic false positives, plus high-confidence imported/generated visible-symbol facts; fallback diagnostics remain available | Broader false-positive / false-negative fixture receipts before any additional diagnostic families move live |
 | Completion | `partial live / shadowed` | Existing completion paths and semantic-shadow fixtures can use visible symbols and generated members | Provider-impact rows for compiler facts, ranking stability, and fact-source traces |
 | Hover | `shadowed` | Hover shadow code can query visible symbols and provenance | Promote only after provenance labels, fallback behavior, and trace receipts are fixture-backed |
 | Definition / goto | `shadowed` | Definition shadow compare tracks regressions before live migration | Ranked compiler candidates with exact/static/generated/dynamic source labels |
