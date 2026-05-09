@@ -107,6 +107,38 @@ pub(super) fn fix_assignment_in_condition(
     ]
 }
 
+pub(super) fn fix_deprecated_defined(
+    provider: &CodeActionsProvider,
+    diagnostic: &Diagnostic,
+) -> Vec<CodeAction> {
+    let diagnostic_text = &provider.source()[diagnostic.range.0..diagnostic.range.1];
+    let Some(relative_start) = diagnostic_text.find("defined") else {
+        return Vec::new();
+    };
+
+    let defined_start = diagnostic.range.0 + relative_start;
+    let raw_arg = provider.source()[defined_start + "defined".len()..diagnostic.range.1].trim();
+    let arg_text = normalize_deprecated_defined_arg(raw_arg);
+    if arg_text.is_empty() {
+        return Vec::new();
+    }
+
+    vec![diagnostic_action(
+        diagnostic,
+        format!("Replace with '{arg_text}'"),
+        CodeActionKind::QuickFix,
+        TextEdit { range: (defined_start, diagnostic.range.1), new_text: arg_text.to_string() },
+    )]
+}
+
+fn normalize_deprecated_defined_arg(raw_arg: &str) -> &str {
+    raw_arg
+        .strip_prefix('(')
+        .and_then(|inner| inner.strip_suffix(')'))
+        .map(str::trim)
+        .unwrap_or(raw_arg)
+}
+
 pub(super) fn add_use_strict(diagnostic: &Diagnostic) -> Vec<CodeAction> {
     vec![diagnostic_action(
         diagnostic,

@@ -70,6 +70,13 @@ impl CodeActionsProvider {
             {
                 fixes::fix_assignment_in_condition(self, diagnostic)
             }
+            Some(c)
+                if c == DiagnosticCode::DeprecatedDefined.as_str()
+                    || c == "deprecated-defined"
+                    || c == "native.common.deprecated_defined" =>
+            {
+                fixes::fix_deprecated_defined(self, diagnostic)
+            }
             Some("native.testing.require_use_strict") => fixes::add_use_strict(diagnostic),
             Some("native.testing.require_use_warnings") => fixes::add_use_warnings(diagnostic),
             Some(c)
@@ -656,6 +663,44 @@ mod tests {
         assert_eq!(actions[1].title, "Keep assignment (add parentheses)");
         assert_eq!(actions[1].edit.range, (4, 10));
         assert_eq!(actions[1].edit.new_text, "($x = 5)");
+    }
+
+    #[test]
+    fn test_native_critic_deprecated_defined_quick_fix() {
+        let source = "if (defined @items) { print @items; }";
+        let diagnostic = make_diagnostic(
+            (4, 18),
+            DiagnosticSeverity::Warning,
+            "native.common.deprecated_defined",
+            "Use of 'defined @items' is deprecated",
+        );
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Replace with '@items'");
+        assert_eq!(actions[0].edit.range, (4, 18));
+        assert_eq!(actions[0].edit.new_text, "@items");
+    }
+
+    #[test]
+    fn test_native_critic_deprecated_defined_quick_fix_normalizes_parentheses() {
+        let source = "if (defined(%seen)) { print keys %seen; }";
+        let diagnostic = make_diagnostic(
+            (4, 18),
+            DiagnosticSeverity::Warning,
+            "native.common.deprecated_defined",
+            "Use of 'defined %seen' is deprecated",
+        );
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Replace with '%seen'");
+        assert_eq!(actions[0].edit.range, (4, 18));
+        assert_eq!(actions[0].edit.new_text, "%seen");
     }
 
     #[test]

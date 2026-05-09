@@ -239,6 +239,7 @@ impl NativeCriticRegistry {
             Box::new(RequireUseWarningsRule),
             Box::new(AssignmentInConditionRule),
             Box::new(PrintfFormatArityRule),
+            Box::new(DeprecatedDefinedRule),
             Box::new(BarewordFilehandleRule),
             Box::new(TwoArgOpenRule),
             Box::new(PipeOpenRule),
@@ -491,6 +492,32 @@ impl CriticRule for PrintfFormatArityRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_printf_format_arity_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports deprecated `defined @array` / `defined %hash` use.
+///
+/// This wraps the existing PL500 deprecated-syntax lint through the native
+/// critic contract so opt-in native critic users get stable rule IDs,
+/// suppressions, severity filtering, violation bridge coverage, and quick-fix
+/// metadata.
+pub struct DeprecatedDefinedRule;
+
+impl CriticRule for DeprecatedDefinedRule {
+    fn id(&self) -> &'static str {
+        "native.common.deprecated_defined"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Syntax
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_deprecated_defined_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -1075,6 +1102,41 @@ fn printf_format_arity_finding(
     }
 }
 
+fn deprecated_defined_finding(
+    rule: &DeprecatedDefinedRule,
+    source: &str,
+    call_node: &Node,
+    arg_node: &Node,
+    sigil: &str,
+    name: &str,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, call_node.location.start, call_node.location.end);
+    let arg_range = range_for_byte_span(source, arg_node.location.start, arg_node.location.end);
+    let variable_text = format!("{sigil}{name}");
+    let type_name = if sigil == "@" { "array" } else { "hash" };
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!("Use of 'defined {variable_text}' is deprecated"),
+        explanation: format!(
+            "Testing definedness of a whole {type_name} is deprecated because it was rarely useful and often wrong. Use the {type_name} in boolean context instead."
+        ),
+        suppression_key: rule.id().to_string(),
+        related: vec![CriticRelatedInformation {
+            range: arg_range,
+            message: format!("Use 'if ({variable_text})' instead"),
+        }],
+        fix: Some(CriticFix {
+            title: format!("Replace with '{variable_text}'"),
+            safety: FixSafety::Suggested,
+            edits: vec![CriticTextEdit { range, new_text: variable_text }],
+        }),
+    }
+}
+
 fn bareword_filehandle_finding(
     rule: &BarewordFilehandleRule,
     source: &str,
@@ -1384,6 +1446,29 @@ fn collect_printf_format_arity_findings(
 
     for child in node.children() {
         collect_printf_format_arity_findings(rule, source, child, out);
+    }
+}
+
+fn collect_deprecated_defined_findings(
+    rule: &DeprecatedDefinedRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    if let NodeKind::FunctionCall { name, args } = &node.kind
+        && name == "defined"
+    {
+        let effective_args = effective_call_args(args);
+        if let Some(arg) = effective_args.first()
+            && let NodeKind::Variable { sigil, name } = &arg.kind
+            && matches!(sigil.as_str(), "@" | "%")
+        {
+            out.push(deprecated_defined_finding(rule, source, node, arg, sigil, name));
+        }
+    }
+
+    for child in node.children() {
+        collect_deprecated_defined_findings(rule, source, child, out);
     }
 }
 
@@ -2512,6 +2597,104 @@ mod tests {
     }
 
     #[test]
+    fn native_deprecated_defined_rule_reports_array_defined() {
+        let source = "use strict;\nuse warnings;\nmy @items = (1, 2);\nif (defined @items) { print @items; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(DeprecatedDefinedRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.common.deprecated_defined");
+        assert_eq!(finding.category, CriticCategory::Syntax);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert_eq!(finding.message, "Use of 'defined @items' is deprecated");
+        assert_eq!(finding.suppression_key, "native.common.deprecated_defined");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "defined @items");
+        assert_eq!(finding.related.len(), 1);
+
+        let fix = finding.fix.as_ref().expect("deprecated defined should offer direct fix");
+        assert_eq!(fix.title, "Replace with '@items'");
+        assert_eq!(fix.safety, FixSafety::Suggested);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].new_text, "@items");
+    }
+
+    #[test]
+    fn native_deprecated_defined_rule_reports_parenthesized_hash_defined() {
+        let source = "use strict;\nuse warnings;\nmy %seen = (a => 1);\nif (defined(%seen)) { print keys %seen; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(DeprecatedDefinedRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "native.common.deprecated_defined");
+        assert_eq!(findings[0].message, "Use of 'defined %seen' is deprecated");
+    }
+
+    #[test]
+    fn native_deprecated_defined_rule_accepts_scalar_defined() {
+        let source =
+            "use strict;\nuse warnings;\nmy $item = 1;\nif (defined $item) { print $item; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(DeprecatedDefinedRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "scalar defined checks should be accepted");
+    }
+
+    #[test]
+    fn native_deprecated_defined_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy @items = (1, 2);\nif (defined @items) { print @items; }\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.common.deprecated_defined".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(DeprecatedDefinedRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.common.deprecated_defined -- legacy code\nuse strict;\nuse warnings;\nmy @items = (1, 2);\nif (defined @items) { print @items; }\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_deprecated_defined_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy @items = (1, 2);\ndefined @items;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(DeprecatedDefinedRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.common.deprecated_defined");
+        assert_eq!(violations[0].description, "Use of 'defined @items' is deprecated");
+        assert_eq!(
+            violations[0].explanation,
+            "Testing definedness of a whole array is deprecated because it was rarely useful and often wrong. Use the array in boolean context instead."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_bareword_filehandle_rule_reports_open_bareword() {
         let source = "use strict;\nuse warnings;\nopen(FH, '<', 'file.txt');\n";
         let ast = parse_source(source);
@@ -3277,6 +3460,7 @@ mod tests {
                 "native.testing.require_use_warnings",
                 "native.common.assignment_in_condition",
                 "native.common.printf_format_arity",
+                "native.common.deprecated_defined",
                 "native.io.bareword_filehandle",
                 "native.io.two_arg_open",
                 "native.io.pipe_open",
