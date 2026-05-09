@@ -6,6 +6,7 @@
 //! migrate rule-by-rule without changing runtime behavior in one large step.
 
 use super::{CriticConfig, Severity, Violation, insertion_range};
+use crate::providers::diagnostics::unreachable_code::check_unreachable_code;
 use perl_parser_core::Node;
 use perl_parser_core::NodeKind;
 use perl_parser_core::position::{Position, Range};
@@ -242,6 +243,7 @@ impl NativeCriticRegistry {
             Box::new(DeprecatedDefinedRule),
             Box::new(UndefComparisonRule),
             Box::new(StaleDollarAtRule),
+            Box::new(UnreachableCodeRule),
             Box::new(BarewordFilehandleRule),
             Box::new(TwoArgOpenRule),
             Box::new(PipeOpenRule),
@@ -571,6 +573,30 @@ impl CriticRule for StaleDollarAtRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_stale_dollar_at_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports unreachable statements after unconditional exits.
+///
+/// This delegates reachability to the existing PL406 analysis so the native
+/// critic path and built-in diagnostic path share the same control-flow model.
+pub struct UnreachableCodeRule;
+
+impl CriticRule for UnreachableCodeRule {
+    fn id(&self) -> &'static str {
+        "native.common.unreachable_code"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Maintainability
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Harsh
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_unreachable_code_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -1264,6 +1290,32 @@ fn stale_dollar_at_finding(
     }
 }
 
+fn unreachable_code_finding(
+    rule: &UnreachableCodeRule,
+    source: &str,
+    start: usize,
+    end: usize,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, start, end);
+    let removal_range = full_line_range_for_byte_span(source, start, end);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: "Unreachable code: this statement cannot be executed".to_string(),
+        explanation: "This statement follows an unconditional control-flow exit such as return, die, exit, last, next, redo, croak, or confess. Remove it or move it before the exit if it is still needed.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: Vec::new(),
+        fix: Some(CriticFix {
+            title: "Remove unreachable code".to_string(),
+            safety: FixSafety::Safe,
+            edits: vec![CriticTextEdit { range: removal_range, new_text: String::new() }],
+        }),
+    }
+}
+
 fn bareword_filehandle_finding(
     rule: &BarewordFilehandleRule,
     source: &str,
@@ -1642,6 +1694,19 @@ fn collect_stale_dollar_at_findings(
     }
 }
 
+fn collect_unreachable_code_findings(
+    rule: &UnreachableCodeRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    let mut diagnostics = Vec::new();
+    check_unreachable_code(node, &mut diagnostics);
+    out.extend(diagnostics.into_iter().map(|diagnostic| {
+        unreachable_code_finding(rule, source, diagnostic.range.0, diagnostic.range.1)
+    }));
+}
+
 fn collect_stale_dollar_at_in_statements(
     rule: &StaleDollarAtRule,
     source: &str,
@@ -1709,6 +1774,12 @@ fn is_dollar_at_variable(node: &Node) -> bool {
         &node.kind,
         NodeKind::Variable { sigil, name } if sigil == "$" && name == "@"
     )
+}
+
+fn full_line_range_for_byte_span(source: &str, start: usize, end: usize) -> Range {
+    let line_start = source[..start].rfind('\n').map_or(0, |pos| pos + 1);
+    let line_end = source[end..].find('\n').map_or(source.len(), |pos| end + pos + 1);
+    range_for_byte_span(source, line_start, line_end)
 }
 
 fn push_printf_format_arity_finding(
@@ -3133,6 +3204,88 @@ mod tests {
     }
 
     #[test]
+    fn native_unreachable_code_rule_reports_dead_statement_after_return() {
+        let source = "use strict;\nuse warnings;\nsub f {\nreturn 1;\nmy $dead = 2;\n}\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnreachableCodeRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.common.unreachable_code");
+        assert_eq!(finding.category, CriticCategory::Maintainability);
+        assert_eq!(finding.severity, Severity::Harsh);
+        assert_eq!(finding.message, "Unreachable code: this statement cannot be executed");
+        assert_eq!(finding.suppression_key, "native.common.unreachable_code");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "my $dead");
+        let fix = finding.fix.as_ref().expect("unreachable code should offer removal fix");
+        assert_eq!(fix.title, "Remove unreachable code");
+        assert_eq!(fix.safety, FixSafety::Safe);
+        assert_eq!(
+            &source[fix.edits[0].range.start.byte..fix.edits[0].range.end.byte],
+            "my $dead = 2;\n"
+        );
+        assert_eq!(fix.edits[0].new_text, "");
+    }
+
+    #[test]
+    fn native_unreachable_code_rule_accepts_conditional_return_and_eval_die() {
+        let source = "use strict;\nuse warnings;\nsub f {\nreturn if $cond;\nmy $live = 1;\neval { die 'caught'; };\nmy $after_eval = 2;\nreturn $live + $after_eval;\n}\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnreachableCodeRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "conditional return and caught eval die should be accepted");
+    }
+
+    #[test]
+    fn native_unreachable_code_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nsub f {\nreturn 1;\nmy $dead = 2;\n}\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.common.unreachable_code".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnreachableCodeRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.common.unreachable_code -- generated dead branch\nuse strict;\nuse warnings;\nsub f {\nreturn 1;\nmy $dead = 2;\n}\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_unreachable_code_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nsub f {\nreturn 1;\nmy $dead = 2;\n}\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UnreachableCodeRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.common.unreachable_code");
+        assert_eq!(
+            violations[0].description,
+            "Unreachable code: this statement cannot be executed"
+        );
+        assert_eq!(violations[0].severity, Severity::Harsh);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_bareword_filehandle_rule_reports_open_bareword() {
         let source = "use strict;\nuse warnings;\nopen(FH, '<', 'file.txt');\n";
         let ast = parse_source(source);
@@ -3901,6 +4054,7 @@ mod tests {
                 "native.common.deprecated_defined",
                 "native.common.undef_comparison",
                 "native.common.stale_dollar_at",
+                "native.common.unreachable_code",
                 "native.io.bareword_filehandle",
                 "native.io.two_arg_open",
                 "native.io.pipe_open",
