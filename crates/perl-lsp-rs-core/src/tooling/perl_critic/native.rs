@@ -241,6 +241,7 @@ impl NativeCriticRegistry {
             Box::new(BarewordFilehandleRule),
             Box::new(TwoArgOpenRule),
             Box::new(PipeOpenRule),
+            Box::new(BacktickExecRule),
             Box::new(StringEvalRule),
             Box::new(UnusedLexicalVariableRule),
             Box::new(UnusedParameterRule),
@@ -537,6 +538,31 @@ impl CriticRule for PipeOpenRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_pipe_open_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports backtick command execution.
+///
+/// This mirrors the existing security diagnostic through the native critic
+/// contract. The rule intentionally stays diagnostic-only because replacing
+/// shell command execution safely requires user intent.
+pub struct BacktickExecRule;
+
+impl CriticRule for BacktickExecRule {
+    fn id(&self) -> &'static str {
+        "native.security.backtick_exec"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Security
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Harsh
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_backtick_exec_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -989,6 +1015,29 @@ fn pipe_open_finding(rule: &PipeOpenRule, source: &str, open_node: &Node) -> Cri
     }
 }
 
+fn backtick_exec_finding(
+    rule: &BacktickExecRule,
+    source: &str,
+    string_node: &Node,
+) -> CriticFinding {
+    let range = range_for_byte_span(source, string_node.location.start, string_node.location.end);
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: "Command execution detected".to_string(),
+        explanation: "Backticks execute shell commands. Prefer explicit command argument lists or IPC modules when command execution is required.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: vec![CriticRelatedInformation {
+            range,
+            message: "Validate command arguments and avoid shell command execution when input may be user-controlled.".to_string(),
+        }],
+        fix: None,
+    }
+}
+
 fn string_eval_finding(rule: &StringEvalRule, source: &str, eval_node: &Node) -> CriticFinding {
     let range = range_for_byte_span(source, eval_node.location.start, eval_node.location.end);
 
@@ -1200,6 +1249,27 @@ fn is_pipe_two_arg_string(node: &Node) -> bool {
         }
         _ => false,
     }
+}
+
+fn collect_backtick_exec_findings(
+    rule: &BacktickExecRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    if let NodeKind::String { value, interpolated: true } = &node.kind
+        && is_backtick_string(value)
+    {
+        out.push(backtick_exec_finding(rule, source, node));
+    }
+
+    for child in node.children() {
+        collect_backtick_exec_findings(rule, source, child, out);
+    }
+}
+
+fn is_backtick_string(value: &str) -> bool {
+    value.starts_with('`') && value.ends_with('`') && value.len() >= 2
 }
 
 fn collect_string_eval_findings(
@@ -2147,6 +2217,88 @@ mod tests {
     }
 
     #[test]
+    fn native_backtick_exec_rule_reports_backtick_strings() {
+        let source = "use strict;\nuse warnings;\nmy $out = `ls -la`;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(BacktickExecRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        for finding in &findings {
+            assert_eq!(finding.rule_id, "native.security.backtick_exec");
+            assert_eq!(finding.category, CriticCategory::Security);
+            assert_eq!(finding.severity, Severity::Harsh);
+            assert_eq!(finding.message, "Command execution detected");
+            assert_eq!(finding.suppression_key, "native.security.backtick_exec");
+            assert!(finding.fix.is_none(), "backtick command replacement is not safe to automate");
+        }
+        assert_eq!(&source[findings[0].range.start.byte..findings[0].range.end.byte], "`ls -la`");
+    }
+
+    #[test]
+    fn native_backtick_exec_rule_accepts_normal_strings() {
+        let source = "use strict;\nuse warnings;\nmy $text = 'not a command';\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(BacktickExecRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "ordinary strings should be accepted");
+    }
+
+    #[test]
+    fn native_backtick_exec_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $out = `ls -la`;\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.security.backtick_exec".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(BacktickExecRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.security.backtick_exec -- trusted command\nuse strict;\nuse warnings;\nmy $out = `ls -la`;\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+
+        let severity_config =
+            CriticConfig { severity: Severity::Stern as u8, ..Default::default() };
+        let severity_ctx = CriticContext::new(source, &ast, &severity_config);
+        assert!(registry.check(&severity_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_backtick_exec_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $out = `ls -la`;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(BacktickExecRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.security.backtick_exec");
+        assert_eq!(violations[0].description, "Command execution detected");
+        assert_eq!(
+            violations[0].explanation,
+            "Backticks execute shell commands. Prefer explicit command argument lists or IPC modules when command execution is required."
+        );
+        assert_eq!(violations[0].severity, Severity::Harsh);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_string_eval_rule_reports_literal_and_variable_eval() {
         let source =
             "use strict;\nuse warnings;\nmy $code = 'print 1';\neval $code;\neval 'print 2';\n";
@@ -2252,6 +2404,7 @@ mod tests {
                 "native.io.bareword_filehandle",
                 "native.io.two_arg_open",
                 "native.io.pipe_open",
+                "native.security.backtick_exec",
                 "native.security.string_eval",
                 "native.variables.unused_lexical",
                 "native.variables.unused_parameter",
