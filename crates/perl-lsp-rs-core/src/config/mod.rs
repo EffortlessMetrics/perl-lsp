@@ -1022,6 +1022,10 @@ inlay_hints = false
 enabled = true
 engine = "external-perltidy"
 perltidy_maximum_line_length = 100
+perltidy_opening_brace_on_new_line = true
+perltidy_cuddled_else = false
+perltidy_space_after_keyword = false
+perltidy_add_trailing_commas = true
 perltidy_extra_args = ["-noll"]
 
 [critic]
@@ -1040,6 +1044,10 @@ engine = "native"
         assert_eq!(config.formatting.enabled, Some(true));
         assert_eq!(config.formatting.engine.as_deref(), Some("external-perltidy"));
         assert_eq!(config.formatting.perltidy_maximum_line_length, Some(100));
+        assert_eq!(config.formatting.perltidy_opening_brace_on_new_line, Some(true));
+        assert_eq!(config.formatting.perltidy_cuddled_else, Some(false));
+        assert_eq!(config.formatting.perltidy_space_after_keyword, Some(false));
+        assert_eq!(config.formatting.perltidy_add_trailing_commas, Some(true));
         assert_eq!(config.formatting.perltidy_extra_args, vec!["-noll"]);
         assert_eq!(config.critic.engine.as_deref(), Some("native"));
         Ok(())
@@ -1156,6 +1164,25 @@ engine = "native"
         project.apply_to_server_config(&mut config);
 
         assert_eq!(config.formatting_engine, FormatterMode::Off);
+    }
+
+    #[test]
+    fn project_config_applies_native_formatting_policy_fields() {
+        let mut config = ServerConfig::default();
+        let mut project = ProjectConfig::default();
+        project.formatting.engine = Some("native".to_string());
+        project.formatting.perltidy_opening_brace_on_new_line = Some(true);
+        project.formatting.perltidy_cuddled_else = Some(false);
+        project.formatting.perltidy_space_after_keyword = Some(false);
+        project.formatting.perltidy_add_trailing_commas = Some(true);
+
+        project.apply_to_server_config(&mut config);
+
+        assert_eq!(config.formatting_engine, FormatterMode::Native);
+        assert_eq!(config.perltidy_opening_brace_on_new_line, Some(true));
+        assert_eq!(config.perltidy_cuddled_else, Some(false));
+        assert_eq!(config.perltidy_space_after_keyword, Some(false));
+        assert_eq!(config.perltidy_add_trailing_commas, Some(true));
     }
 
     #[test]
