@@ -106,6 +106,22 @@ fn native_formatter_formats_simple_hash_constructors() {
 }
 
 #[test]
+fn native_formatter_formats_simple_module_declarations() {
+    let formatter = NativeFormatter::new();
+    let source =
+        "package Foo::Bar ;\nuse strict ;\nno warnings ;\nrequire Foo::Bar ;\nuse lib 'lib';\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        "package Foo::Bar;\nuse strict;\nno warnings;\nrequire Foo::Bar;\nuse lib 'lib';\n"
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_formats_simple_method_calls() {
     let formatter = NativeFormatter::new();
     let source = "$x=$obj->build();\n$z=$obj->empty();\nreturn $obj->wrap(foo(1),{ok=>1});\n";
@@ -357,6 +373,21 @@ fn native_range_formatter_formats_selected_simple_hash_constructor_line() {
     assert_eq!(result.edits.len(), 1);
     assert_eq!(result.edits[0].range, range);
     assert_eq!(result.edits[0].new_text, "return {answer => 42};");
+}
+
+#[test]
+fn native_range_formatter_formats_selected_simple_module_declaration_line() {
+    let formatter = NativeFormatter::new();
+    let source = "package Foo::Bar ;\nuse strict ;\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 12));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "package Foo::Bar ;\nuse strict;\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(result.edits[0].new_text, "use strict;");
 }
 
 #[test]
