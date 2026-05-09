@@ -24,7 +24,10 @@
 //! - **Req 22.4**: Exact → return typed refs; Ambiguous → include grouped
 //!   candidates; Dynamic/Unavailable → fall back to legacy.
 
-use perl_semantic_facts::{Confidence, EntityId, OccurrenceFact, Provenance};
+use perl_semantic_facts::{
+    Confidence, EntityId, OccurrenceFact, OccurrenceKind, Provenance, ProviderFactFreshness,
+    ProviderFactSourceKind, ProviderFactTrace, ProviderFallbackState, ProviderSurface,
+};
 use perl_workspace::semantic::queries::SemanticQueries;
 use perl_workspace::semantic_shadow_compare::{
     SemanticShadowCompareReceipt, ShadowQueryInput, ShadowQueryName, ShadowResultSummary,
@@ -75,12 +78,13 @@ pub fn find_references_shadow<Q: SemanticQueries>(
     let new_summary = semantic_occurrences_to_summary(&new_occurrences);
 
     // ── Build receipt ──
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::FindReferences,
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
         Vec::new(),
+        references_fact_source_traces(&new_occurrences, ProviderFallbackState::Shadow),
     );
 
     tracing::debug!(
@@ -167,25 +171,28 @@ pub fn find_references_cutover<Q: SemanticQueries>(
     // Filter to usable occurrences: exclude dynamic-boundary provenance and
     // low-confidence results.
     let usable: Vec<OccurrenceFact> = all_occurrences
-        .into_iter()
+        .iter()
         .filter(|o| o.provenance != Provenance::DynamicBoundary && o.confidence != Confidence::Low)
+        .cloned()
         .collect();
 
     // ── Legacy path (for fallback and receipt) ──
     let legacy_locations = workspace_index.find_references(symbol);
     let old_summary = legacy_locations_to_summary(&legacy_locations);
 
+    // ── Classify result ──
+    let result = classify_cutover_result(usable, legacy_locations);
+    let fallback_state = references_cutover_fallback_state(&result);
+
     // ── Build receipt ──
-    let receipt = SemanticShadowCompareReceipt::from_summaries(
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::FindReferences,
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
         Vec::new(),
+        references_fact_source_traces(&all_occurrences, fallback_state),
     );
-
-    // ── Classify result ──
-    let result = classify_cutover_result(usable, legacy_locations);
 
     tracing::debug!(
         symbol = %symbol,
@@ -221,6 +228,99 @@ fn classify_cutover_result(
     } else {
         ReferencesCutoverResult::Exact(usable)
     }
+}
+
+fn references_cutover_fallback_state(result: &ReferencesCutoverResult) -> ProviderFallbackState {
+    match result {
+        ReferencesCutoverResult::Exact(_) | ReferencesCutoverResult::Ambiguous(_) => {
+            ProviderFallbackState::Primary
+        }
+        ReferencesCutoverResult::LegacyFallback(_) => ProviderFallbackState::Fallback,
+    }
+}
+
+fn references_fact_source_traces(
+    occurrences: &[OccurrenceFact],
+    fallback_state: ProviderFallbackState,
+) -> Vec<ProviderFactTrace> {
+    let mut traces: Vec<ProviderFactTrace> = occurrences
+        .iter()
+        .map(|occurrence| {
+            let (source, provenance, state) = references_trace_shape(occurrence, fallback_state);
+            ProviderFactTrace::new(
+                ProviderSurface::References,
+                source,
+                provenance,
+                occurrence.confidence,
+                ProviderFactFreshness::Fresh,
+                state,
+                None,
+                Some(occurrence.anchor_id),
+                Some(1),
+            )
+        })
+        .collect();
+
+    if traces.is_empty() {
+        traces.push(ProviderFactTrace::new(
+            ProviderSurface::References,
+            ProviderFactSourceKind::Fallback,
+            Provenance::SearchFallback,
+            Confidence::Low,
+            ProviderFactFreshness::NotApplicable,
+            ProviderFallbackState::Fallback,
+            None,
+            None,
+            Some(1),
+        ));
+    }
+
+    traces
+}
+
+fn references_trace_shape(
+    occurrence: &OccurrenceFact,
+    fallback_state: ProviderFallbackState,
+) -> (ProviderFactSourceKind, Provenance, ProviderFallbackState) {
+    if is_dynamic_boundary_occurrence(occurrence) {
+        return (
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            ProviderFallbackState::Blocked,
+        );
+    }
+
+    match occurrence.provenance {
+        Provenance::FrameworkSynthesis => (
+            ProviderFactSourceKind::FrameworkAdapter,
+            Provenance::FrameworkSynthesis,
+            fallback_state,
+        ),
+        Provenance::ImportExportInference | Provenance::PragmaInference => {
+            (ProviderFactSourceKind::CompilerFact, occurrence.provenance, fallback_state)
+        }
+        Provenance::NameHeuristic | Provenance::SearchFallback => (
+            ProviderFactSourceKind::Fallback,
+            occurrence.provenance,
+            ProviderFallbackState::Fallback,
+        ),
+        Provenance::ExactAst | Provenance::DesugaredAst | Provenance::SemanticAnalyzer => {
+            (ProviderFactSourceKind::SemanticFact, occurrence.provenance, fallback_state)
+        }
+        Provenance::DynamicBoundary => (
+            ProviderFactSourceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            ProviderFallbackState::Blocked,
+        ),
+    }
+}
+
+fn is_dynamic_boundary_occurrence(occurrence: &OccurrenceFact) -> bool {
+    occurrence.provenance == Provenance::DynamicBoundary
+        || matches!(
+            occurrence.kind,
+            OccurrenceKind::DynamicBoundary | OccurrenceKind::TypeglobReference
+        )
 }
 
 /// Convert legacy `Location` results into a [`ShadowResultSummary`].
@@ -366,6 +466,15 @@ mod tests {
             Provenance::ExactAst,
             Confidence::High,
         )
+    }
+
+    fn first_trace<'a>(
+        receipt: &'a SemanticShadowCompareReceipt,
+    ) -> Result<&'a ProviderFactTrace, Box<dyn std::error::Error>> {
+        match receipt.fact_source_traces.first() {
+            Some(trace) => Ok(trace),
+            None => Err("missing fact-source trace".into()),
+        }
     }
 
     // ── Shadow mode tests ──
@@ -607,6 +716,16 @@ mod tests {
             }
             other => return Err(format!("expected Exact, got {:?}", other).into()),
         }
+        assert!(outcome.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::SemanticFact
+                && trace.provenance == Provenance::ExactAst
+                && trace.fallback_state == ProviderFallbackState::Primary
+        }));
+        assert!(outcome.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::DynamicBoundary
+                && trace.provenance == Provenance::DynamicBoundary
+                && trace.fallback_state == ProviderFallbackState::Blocked
+        }));
         Ok(())
     }
 
@@ -654,6 +773,121 @@ mod tests {
         // Receipt should reflect ALL occurrences (before filtering).
         assert_eq!(outcome.receipt.new_result.match_count, 2);
         assert_eq!(outcome.receipt.query, ShadowQueryName::FindReferences);
+        Ok(())
+    }
+
+    #[test]
+    fn references_compiler_shadow_traces_import_export_occurrence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let occ = make_occurrence(
+            1,
+            10,
+            20,
+            OccurrenceKind::Reference,
+            Provenance::ImportExportInference,
+            Confidence::High,
+        );
+        let queries = StubSemanticQueries { references_result: vec![occ] };
+
+        let result = find_references_shadow(&index, &queries, "imported_func", EntityId(20));
+        let trace = first_trace(&result.receipt)?;
+
+        assert!(result.legacy_result.is_empty());
+        assert_eq!(trace.surface, ProviderSurface::References);
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::ImportExportInference);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Fresh);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+        Ok(())
+    }
+
+    #[test]
+    fn references_compiler_shadow_traces_framework_generated_occurrence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let occ = make_occurrence(
+            2,
+            20,
+            30,
+            OccurrenceKind::GeneratedUse,
+            Provenance::FrameworkSynthesis,
+            Confidence::Medium,
+        );
+        let queries = StubSemanticQueries { references_result: vec![occ] };
+
+        let result = find_references_shadow(&index, &queries, "generated_accessor", EntityId(30));
+        let trace = first_trace(&result.receipt)?;
+
+        assert_eq!(trace.surface, ProviderSurface::References);
+        assert_eq!(trace.source, ProviderFactSourceKind::FrameworkAdapter);
+        assert_eq!(trace.provenance, Provenance::FrameworkSynthesis);
+        assert_eq!(trace.confidence, Confidence::Medium);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Shadow);
+        Ok(())
+    }
+
+    #[test]
+    fn references_compiler_shadow_traces_dynamic_boundary_as_blocked()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let occ = make_occurrence(
+            3,
+            30,
+            40,
+            OccurrenceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            Confidence::High,
+        );
+        let queries = StubSemanticQueries { references_result: vec![occ] };
+
+        let result = find_references_shadow(&index, &queries, "dynamic_symbol", EntityId(40));
+        let trace = first_trace(&result.receipt)?;
+
+        assert_eq!(trace.surface, ProviderSurface::References);
+        assert_eq!(trace.source, ProviderFactSourceKind::DynamicBoundary);
+        assert_eq!(trace.provenance, Provenance::DynamicBoundary);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        assert!(result.legacy_result.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn references_compiler_shadow_low_confidence_does_not_outrank_exact()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let exact = make_ref_occurrence(1, 10, 20);
+        let low = make_occurrence(
+            2,
+            30,
+            20,
+            OccurrenceKind::Reference,
+            Provenance::NameHeuristic,
+            Confidence::Low,
+        );
+        let queries = StubSemanticQueries { references_result: vec![exact.clone(), low] };
+
+        let outcome = find_references_cutover(&index, &queries, "Foo::bar", EntityId(20));
+
+        match &outcome.result {
+            ReferencesCutoverResult::Exact(refs) => {
+                assert_eq!(refs.len(), 1);
+                assert_eq!(refs[0], exact);
+            }
+            other => return Err(format!("expected Exact, got {:?}", other).into()),
+        }
+        assert!(outcome.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::SemanticFact
+                && trace.provenance == Provenance::ExactAst
+                && trace.fallback_state == ProviderFallbackState::Primary
+        }));
+        assert!(outcome.receipt.fact_source_traces.iter().any(|trace| {
+            trace.source == ProviderFactSourceKind::Fallback
+                && trace.provenance == Provenance::NameHeuristic
+                && trace.confidence == Confidence::Low
+                && trace.fallback_state == ProviderFallbackState::Fallback
+        }));
         Ok(())
     }
 
