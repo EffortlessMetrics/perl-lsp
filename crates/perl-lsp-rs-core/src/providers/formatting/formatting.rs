@@ -4,8 +4,8 @@ pub use crate::providers::formatting_types::{
     FormatPosition, FormatRange, FormatTextEdit, FormattedDocument, FormattingOptions,
 };
 use crate::tooling::perltidy::{
-    FinalNewline, FormatConfig, FormatterMode, NativeFormatter, PerlFormatter, TextPosition,
-    TextRange,
+    BracePlacement, ElsePlacement, FinalNewline, FormatConfig, FormatterMode, KeywordSpacing,
+    NativeFormatter, PerlFormatter, TextPosition, TextRange, TrailingComma,
 };
 
 /// Re-export PerlTidyConfig from perl-lsp-perltidy for convenience.
@@ -102,7 +102,7 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
     ) -> Result<FormattedDocument, FormattingError> {
         match self.mode {
             FormatterMode::Native | FormatterMode::Compat => {
-                Ok(native_format_document(content, options))
+                Ok(native_format_document(content, options, self.perltidy_config.as_ref()))
             }
             FormatterMode::ExternalLegacy => self.format_document_with_perltidy(content, options),
             FormatterMode::Off => {
@@ -132,7 +132,7 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
 
         match self.mode {
             FormatterMode::Native | FormatterMode::Compat => {
-                Ok(native_format_range(content, range, options))
+                Ok(native_format_range(content, range, options, self.perltidy_config.as_ref()))
             }
             FormatterMode::ExternalLegacy => {
                 self.format_range_with_perltidy(content, options, &lines, start_line, end_line)
@@ -263,8 +263,12 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
     }
 }
 
-fn native_format_document(content: &str, options: &FormattingOptions) -> FormattedDocument {
-    let config = native_format_config(options, true);
+fn native_format_document(
+    content: &str,
+    options: &FormattingOptions,
+    perltidy_config: Option<&PerlTidyConfig>,
+) -> FormattedDocument {
+    let config = native_format_config(options, perltidy_config, true);
     let result = NativeFormatter::new().format_document(content, &config);
     if result.diagnostics.is_empty() {
         let formatted = apply_lsp_whitespace_options(&result.formatted, options);
@@ -302,6 +306,7 @@ fn native_format_range(
     content: &str,
     range: &FormatRange,
     options: &FormattingOptions,
+    perltidy_config: Option<&PerlTidyConfig>,
 ) -> FormattedDocument {
     let native_range = TextRange::new(
         TextPosition::new(range.start.line, range.start.character),
@@ -310,7 +315,7 @@ fn native_format_range(
     let result = NativeFormatter::new().format_range(
         content,
         native_range,
-        &native_format_config(options, false),
+        &native_format_config(options, perltidy_config, false),
     );
     if result.diagnostics.is_empty() {
         if result.edits.is_empty() {
@@ -326,8 +331,12 @@ fn native_format_range(
     whitespace_range_fallback(content, range, options)
 }
 
-fn native_format_config(options: &FormattingOptions, allow_final_newline: bool) -> FormatConfig {
-    FormatConfig {
+fn native_format_config(
+    options: &FormattingOptions,
+    perltidy_config: Option<&PerlTidyConfig>,
+    allow_final_newline: bool,
+) -> FormatConfig {
+    let mut config = FormatConfig {
         indent_width: options.tab_size,
         use_tabs: !options.insert_spaces,
         final_newline: if allow_final_newline {
@@ -342,7 +351,37 @@ fn native_format_config(options: &FormattingOptions, allow_final_newline: bool) 
             FinalNewline::Preserve
         },
         ..FormatConfig::default()
+    };
+
+    if let Some(perltidy_config) = perltidy_config {
+        if let Some(width) = perltidy_config.maximum_line_length {
+            config.line_width = width;
+        }
+        if let Some(opening_brace_on_new_line) = perltidy_config.opening_brace_on_new_line {
+            config.brace_placement = if opening_brace_on_new_line {
+                BracePlacement::NextLine
+            } else {
+                BracePlacement::SameLine
+            };
+        }
+        if let Some(cuddled_else) = perltidy_config.cuddled_else {
+            config.else_placement =
+                if cuddled_else { ElsePlacement::Cuddled } else { ElsePlacement::SeparateLine };
+        }
+        if let Some(space_after_keyword) = perltidy_config.space_after_keyword {
+            config.keyword_spacing =
+                if space_after_keyword { KeywordSpacing::Space } else { KeywordSpacing::Compact };
+        }
+        if let Some(add_trailing_commas) = perltidy_config.add_trailing_commas {
+            config.trailing_comma = if add_trailing_commas {
+                TrailingComma::AddWhenWrapped
+            } else {
+                TrailingComma::Preserve
+            };
+        }
     }
+
+    config
 }
 
 fn native_edit_to_format_edit(edit: crate::tooling::perltidy::TextEdit) -> FormatTextEdit {
@@ -471,6 +510,93 @@ mod tests {
         let formatted = provider.format_document("my$x=1;\n", &options)?;
         assert_eq!(formatted.edits.len(), 1);
         assert_eq!(formatted.edits[0].new_text, "my $x = 1;\n");
+        Ok(())
+    }
+
+    #[test]
+    fn format_document_native_applies_configured_formatting_policies() -> Result<()> {
+        let config = PerlTidyConfig {
+            maximum_line_length: Some(20),
+            opening_brace_on_new_line: Some(true),
+            cuddled_else: Some(false),
+            space_after_keyword: Some(false),
+            add_trailing_commas: Some(true),
+            ..PerlTidyConfig::default()
+        };
+        let provider = FormattingProvider::new(MissingPerltidyRuntime)
+            .with_perltidy_config(config)
+            .with_formatter_mode(FormatterMode::Native);
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: None,
+            insert_final_newline: None,
+            trim_final_newlines: None,
+        };
+
+        let formatted = provider.format_document(
+            "if($ok){return foo($alpha,$beta,$gamma);}else{return bar();}\n",
+            &options,
+        )?;
+
+        assert_eq!(formatted.edits.len(), 1);
+        assert_eq!(
+            formatted.edits[0].new_text,
+            concat!(
+                "if($ok)\n",
+                "{\n",
+                "    return foo(\n",
+                "    $alpha,\n",
+                "    $beta,\n",
+                "    $gamma,\n",
+                ");\n",
+                "}\n",
+                "else\n",
+                "{\n",
+                "    return bar();\n",
+                "}\n",
+            )
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn format_range_native_applies_configured_formatting_policies() -> Result<()> {
+        let config = PerlTidyConfig {
+            opening_brace_on_new_line: Some(true),
+            cuddled_else: Some(false),
+            space_after_keyword: Some(false),
+            ..PerlTidyConfig::default()
+        };
+        let provider = FormattingProvider::new(MissingPerltidyRuntime)
+            .with_perltidy_config(config)
+            .with_formatter_mode(FormatterMode::Native);
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: None,
+            insert_final_newline: None,
+            trim_final_newlines: None,
+        };
+        let source = "my $prefix = 1;\nif($ok){return 1;}else{return 0;}\nmy $suffix = 1;\n";
+        let range = FormatRange::new(FormatPosition::new(1, 0), FormatPosition::new(1, 34));
+
+        let formatted = provider.format_range(source, &range, &options)?;
+
+        assert_eq!(formatted.edits.len(), 1);
+        assert_eq!(
+            formatted.edits[0].new_text,
+            concat!(
+                "if($ok)\n",
+                "{\n",
+                "    return 1;\n",
+                "}\n",
+                "else\n",
+                "{\n",
+                "    return 0;\n",
+                "}"
+            )
+        );
         Ok(())
     }
 

@@ -13,6 +13,7 @@
 mod support;
 use serde_json::json;
 use support::lsp_harness::LspHarness;
+use support::test_helpers::apply_text_edits;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -316,6 +317,134 @@ fn test_formatting_disabled_via_configuration_returns_no_edits() -> TestResult {
     assert!(
         range_edits.is_empty(),
         "expected no range formatting edits when formatting is disabled"
+    );
+
+    Ok(())
+}
+
+/// Test that configured native formatter policy fields route through LSP document formatting.
+#[test]
+fn test_native_formatting_policies_route_through_document_formatting() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    harness.notify(
+        "workspace/didChangeConfiguration",
+        json!({
+            "settings": {
+                "perl": {
+                    "formatting": {
+                        "engine": "native",
+                        "maximumLineLength": 20,
+                        "openingBraceOnNewLine": true,
+                        "cuddledElse": false,
+                        "spaceAfterKeyword": false,
+                        "addTrailingCommas": true
+                    }
+                }
+            }
+        }),
+    );
+
+    let doc_uri = "file:///test_native_formatting_policies.pl";
+    let source = "if($ok){return foo($alpha,$beta,$gamma);}else{return bar();}\n";
+    harness.open(doc_uri, source)?;
+
+    let response = harness.request(
+        "textDocument/formatting",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "options": {
+                "tabSize": 4,
+                "insertSpaces": true
+            }
+        }),
+    )?;
+    let edits = response.as_array().ok_or("formatting response must be an array")?;
+    let formatted = edits
+        .first()
+        .and_then(|edit| edit.get("newText"))
+        .and_then(|text| text.as_str())
+        .ok_or("formatting edit must include newText")?;
+
+    assert_eq!(
+        formatted,
+        concat!(
+            "if($ok)\n",
+            "{\n",
+            "    return foo(\n",
+            "    $alpha,\n",
+            "    $beta,\n",
+            "    $gamma,\n",
+            ");\n",
+            "}\n",
+            "else\n",
+            "{\n",
+            "    return bar();\n",
+            "}\n",
+        )
+    );
+
+    Ok(())
+}
+
+/// Test that configured native formatter policy fields route through LSP range formatting.
+#[test]
+fn test_native_formatting_policies_route_through_range_formatting() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    harness.notify(
+        "workspace/didChangeConfiguration",
+        json!({
+            "settings": {
+                "perl": {
+                    "formatting": {
+                        "engine": "native",
+                        "openingBraceOnNewLine": true,
+                        "cuddledElse": false,
+                        "spaceAfterKeyword": false
+                    }
+                }
+            }
+        }),
+    );
+
+    let doc_uri = "file:///test_native_range_formatting_policies.pl";
+    let source = "my $prefix = 1;\nif($ok){return 1;}else{return 0;}\nmy $suffix = 1;\n";
+    harness.open(doc_uri, source)?;
+
+    let response = harness.request(
+        "textDocument/rangeFormatting",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "range": {
+                "start": { "line": 1, "character": 0 },
+                "end": { "line": 1, "character": 34 }
+            },
+            "options": {
+                "tabSize": 4,
+                "insertSpaces": true
+            }
+        }),
+    )?;
+    let edits = response.as_array().ok_or("rangeFormatting response must be an array")?;
+    let formatted = apply_text_edits(source, edits);
+
+    assert_eq!(
+        formatted,
+        concat!(
+            "my $prefix = 1;\n",
+            "if($ok)\n",
+            "{\n",
+            "    return 1;\n",
+            "}\n",
+            "else\n",
+            "{\n",
+            "    return 0;\n",
+            "}\n",
+            "my $suffix = 1;\n",
+        )
     );
 
     Ok(())
