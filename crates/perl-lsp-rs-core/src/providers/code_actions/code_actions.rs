@@ -264,7 +264,9 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_misspelled_pragma(&self.source, &qf_diag));
                     }
                     // PL406: Unreachable code
-                    c if c == DiagnosticCode::UnreachableCode.as_str() => {
+                    c if c == DiagnosticCode::UnreachableCode.as_str()
+                        || c == "native.common.unreachable_code" =>
+                    {
                         actions.extend(quick_fixes::fix_unreachable_code(&self.source, &qf_diag));
                     }
                     // PL300: Duplicate subroutine
@@ -402,6 +404,32 @@ mod tests {
         assert!(
             actions.iter().any(|a| a.title == "Keep assignment (add parentheses)"),
             "Expected native critic alias to offer intentional-assignment fix, got: {:?}",
+            actions
+        );
+    }
+
+    #[test]
+    fn test_native_unreachable_code_alias_produces_quick_fix() {
+        let source = "sub f {\nreturn 1;\nmy $dead = 2;\n}\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let start = source.find("my $dead").expect("dead statement start");
+        let end = start + "my $dead = 2;".len();
+        let diagnostics = vec![make_diagnostic(
+            start,
+            end,
+            "native.common.unreachable_code",
+            "Unreachable code: this statement cannot be executed",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(
+            actions.iter().any(|action| action.title == "Remove unreachable code"
+                && action.edit.changes.iter().any(|edit| edit.new_text.is_empty()
+                    && &source[edit.location.start..edit.location.end] == "my $dead = 2;\n")),
+            "Expected native unreachable-code alias to remove dead line, got: {:?}",
             actions
         );
     }

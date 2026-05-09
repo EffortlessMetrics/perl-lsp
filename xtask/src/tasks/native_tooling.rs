@@ -206,6 +206,7 @@ fn fixable_rule_ids() -> BTreeSet<String> {
         "native.common.assignment_in_condition",
         "native.common.deprecated_defined",
         "native.common.undef_comparison",
+        "native.common.unreachable_code",
         "native.io.bareword_filehandle",
         "native.io.two_arg_open",
         "native.testing.require_use_strict",
