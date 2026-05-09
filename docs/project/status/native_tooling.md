@@ -6,7 +6,7 @@
 
 | Metric | Value |
 | --- | ---: |
-| Fixture count | 25 |
+| Fixture count | 30 |
 
 ## Critic
 

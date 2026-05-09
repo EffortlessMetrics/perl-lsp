@@ -1397,14 +1397,40 @@ fn literal_preserve_region(source: &str) -> Option<&'static str> {
         if is_pod_start(trimmed) {
             return Some("POD");
         }
-        if matches!(trimmed, "__DATA__" | "__END__") {
-            return Some("DATA section");
+        if matches!(trimmed.trim_end(), "__DATA__" | "__END__") {
+            return Some("DATA/END section");
         }
         if contains_likely_heredoc_start(line) {
             return Some("heredoc");
         }
+        if is_format_declaration_start(trimmed) {
+            return Some("format body");
+        }
     }
-    None
+    token_literal_preserve_region(source)
+}
+
+fn token_literal_preserve_region(source: &str) -> Option<&'static str> {
+    use perl_parser_core::TokenKind;
+
+    let mut stream = perl_parser_core::TokenStream::new(source);
+    loop {
+        let Ok(token) = stream.next() else {
+            return None;
+        };
+        match token.kind {
+            TokenKind::Eof => return None,
+            TokenKind::Regex => return Some("regex literal"),
+            TokenKind::Substitution => return Some("substitution operator"),
+            TokenKind::Transliteration => return Some("transliteration operator"),
+            TokenKind::QuoteSingle
+            | TokenKind::QuoteDouble
+            | TokenKind::QuoteWords
+            | TokenKind::QuoteCommand => return Some("quote-like operator"),
+            TokenKind::FormatBody => return Some("format body"),
+            _ => {}
+        }
+    }
 }
 
 fn is_pod_start(trimmed_line: &str) -> bool {
@@ -1440,6 +1466,17 @@ fn contains_likely_heredoc_start(line: &str) -> bool {
     let marker = after_indent.strip_prefix('~').unwrap_or(after_indent).trim_start();
     let marker = marker.strip_prefix(['\'', '"', '`']).unwrap_or(marker);
     marker.chars().next().is_some_and(|ch| ch == '_' || ch.is_ascii_alphabetic())
+}
+
+fn is_format_declaration_start(trimmed_line: &str) -> bool {
+    if !trimmed_line.ends_with('=') {
+        return false;
+    }
+
+    let Some(rest) = trimmed_line.strip_prefix("format") else {
+        return false;
+    };
+    rest.is_empty() || rest.starts_with(char::is_whitespace)
 }
 
 impl TextRange {
