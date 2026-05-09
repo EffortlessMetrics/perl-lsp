@@ -22,6 +22,8 @@ pub struct NativeToolingStatusConfig {
     pub format_receipt: PathBuf,
     /// Existing native-format corpus receipt, when available.
     pub format_corpus_receipt: PathBuf,
+    /// Existing native-format perltidy compatibility receipt, when available.
+    pub format_perltidy_compat_receipt: PathBuf,
     /// Output path for the native-tooling JSON receipt.
     pub receipt: PathBuf,
     /// Optional markdown status output path.
@@ -63,6 +65,13 @@ struct FormatterStatus {
     corpus_unsupported_patterns_count: Option<usize>,
     corpus_diagnostics_count: Option<usize>,
     corpus_passed: Option<bool>,
+    format_perltidy_compat_receipt: String,
+    format_perltidy_compat_receipt_present: bool,
+    perltidy_compat_option_count: Option<usize>,
+    perltidy_compat_supported_count: Option<usize>,
+    perltidy_compat_approximated_count: Option<usize>,
+    perltidy_compat_unsupported_safe_count: Option<usize>,
+    perltidy_compat_external_only_count: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -111,6 +120,7 @@ fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeTool
         &config.format_fixtures,
         &config.format_receipt,
         &config.format_corpus_receipt,
+        &config.format_perltidy_compat_receipt,
     )?;
     let critic = critic_status()?;
     Ok(NativeToolingStatusReceipt {
@@ -127,6 +137,7 @@ fn formatter_status(
     fixtures: &Path,
     format_receipt: &Path,
     format_corpus_receipt: &Path,
+    format_perltidy_compat_receipt: &Path,
 ) -> Result<FormatterStatus> {
     let fixture_paths = WalkDir::new(fixtures)
         .into_iter()
@@ -159,6 +170,11 @@ fn formatter_status(
     let receipt = if format_receipt.exists() { Some(read_json(format_receipt)?) } else { None };
     let corpus_receipt =
         if format_corpus_receipt.exists() { Some(read_json(format_corpus_receipt)?) } else { None };
+    let perltidy_compat_receipt = if format_perltidy_compat_receipt.exists() {
+        Some(read_json(format_perltidy_compat_receipt)?)
+    } else {
+        None
+    };
 
     Ok(FormatterStatus {
         fixture_root: fixtures.display().to_string(),
@@ -193,6 +209,25 @@ fn formatter_status(
         ),
         corpus_diagnostics_count: optional_usize(&corpus_receipt, "diagnostics_count"),
         corpus_passed: optional_bool(&corpus_receipt, "passed"),
+        format_perltidy_compat_receipt: format_perltidy_compat_receipt.display().to_string(),
+        format_perltidy_compat_receipt_present: perltidy_compat_receipt.is_some(),
+        perltidy_compat_option_count: optional_usize(&perltidy_compat_receipt, "option_count"),
+        perltidy_compat_supported_count: optional_usize(
+            &perltidy_compat_receipt,
+            "supported_count",
+        ),
+        perltidy_compat_approximated_count: optional_usize(
+            &perltidy_compat_receipt,
+            "approximated_count",
+        ),
+        perltidy_compat_unsupported_safe_count: optional_usize(
+            &perltidy_compat_receipt,
+            "unsupported_safe_count",
+        ),
+        perltidy_compat_external_only_count: optional_usize(
+            &perltidy_compat_receipt,
+            "external_only_count",
+        ),
     })
 }
 
@@ -318,6 +353,26 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
                 "UNVERIFIED".to_string()
             }
         });
+    let perltidy_compat_options = optional_metric(
+        formatter.perltidy_compat_option_count,
+        formatter.format_perltidy_compat_receipt_present,
+    );
+    let perltidy_compat_supported = optional_metric(
+        formatter.perltidy_compat_supported_count,
+        formatter.format_perltidy_compat_receipt_present,
+    );
+    let perltidy_compat_approximated = optional_metric(
+        formatter.perltidy_compat_approximated_count,
+        formatter.format_perltidy_compat_receipt_present,
+    );
+    let perltidy_compat_unsupported_safe = optional_metric(
+        formatter.perltidy_compat_unsupported_safe_count,
+        formatter.format_perltidy_compat_receipt_present,
+    );
+    let perltidy_compat_external_only = optional_metric(
+        formatter.perltidy_compat_external_only_count,
+        formatter.format_perltidy_compat_receipt_present,
+    );
     format!(
         r#"# Native Tooling Status
 
@@ -337,6 +392,11 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
 | Corpus literal bailouts | {} |
 | Corpus unsupported diagnostics | {} |
 | Corpus passed | {} |
+| Perltidy compatibility options | {} |
+| Perltidy compatibility supported | {} |
+| Perltidy compatibility approximated | {} |
+| Perltidy compatibility unsupported-safe | {} |
+| Perltidy compatibility external-only | {} |
 
 ## Critic
 
@@ -366,6 +426,11 @@ Fixable native rules:
         corpus_literal_bailouts,
         corpus_unsupported_diagnostics,
         corpus_passed,
+        perltidy_compat_options,
+        perltidy_compat_supported,
+        perltidy_compat_approximated,
+        perltidy_compat_unsupported_safe,
+        perltidy_compat_external_only,
         critic.native_rule_count,
         critic.rules_with_suppression,
         critic.rules_with_fixes,
@@ -458,6 +523,18 @@ mod tests {
 }
 "#,
         )?;
+        let format_perltidy_compat_receipt = receipts.join("native-format-perltidy-compat.json");
+        fs::write(
+            &format_perltidy_compat_receipt,
+            r#"{
+  "option_count": 7,
+  "supported_count": 3,
+  "approximated_count": 1,
+  "unsupported_safe_count": 1,
+  "external_only_count": 2
+}
+"#,
+        )?;
         let receipt = receipts.join("native-tooling-status.json");
         let markdown = receipts.join("native-tooling-status.md");
         let missing_receipt = receipts.join("missing-native-format-fixtures.json");
@@ -468,6 +545,7 @@ mod tests {
             format_fixtures: fixtures.clone(),
             format_receipt: format_receipt.clone(),
             format_corpus_receipt: format_corpus_receipt.clone(),
+            format_perltidy_compat_receipt: format_perltidy_compat_receipt.clone(),
             receipt: receipt.clone(),
             markdown: Some(markdown.clone()),
         })?;
@@ -491,6 +569,12 @@ mod tests {
         assert_eq!(value["formatter"]["corpus_literal_bailout_count"], 1);
         assert_eq!(value["formatter"]["corpus_unsupported_patterns_count"], 0);
         assert_eq!(value["formatter"]["corpus_passed"], true);
+        assert_eq!(value["formatter"]["format_perltidy_compat_receipt_present"], true);
+        assert_eq!(value["formatter"]["perltidy_compat_option_count"], 7);
+        assert_eq!(value["formatter"]["perltidy_compat_supported_count"], 3);
+        assert_eq!(value["formatter"]["perltidy_compat_approximated_count"], 1);
+        assert_eq!(value["formatter"]["perltidy_compat_unsupported_safe_count"], 1);
+        assert_eq!(value["formatter"]["perltidy_compat_external_only_count"], 2);
         assert!(value["critic"]["native_rule_count"].as_u64().unwrap_or_default() > 0);
         let native_rules = value["critic"]["native_rules"]
             .as_array()
@@ -517,12 +601,18 @@ mod tests {
         assert!(markdown.contains("| Corpus literal bailouts | 1 |"));
         assert!(markdown.contains("| Corpus unsupported diagnostics | 0 |"));
         assert!(markdown.contains("| Corpus passed | true |"));
+        assert!(markdown.contains("| Perltidy compatibility options | 7 |"));
+        assert!(markdown.contains("| Perltidy compatibility supported | 3 |"));
+        assert!(markdown.contains("| Perltidy compatibility approximated | 1 |"));
+        assert!(markdown.contains("| Perltidy compatibility unsupported-safe | 1 |"));
+        assert!(markdown.contains("| Perltidy compatibility external-only | 2 |"));
         assert!(markdown.contains("native.io.unchecked_open_close"));
 
         status(NativeToolingStatusConfig {
             format_fixtures: fixtures,
             format_receipt: missing_receipt,
             format_corpus_receipt,
+            format_perltidy_compat_receipt,
             receipt: missing_status_receipt.clone(),
             markdown: Some(missing_markdown.clone()),
         })?;

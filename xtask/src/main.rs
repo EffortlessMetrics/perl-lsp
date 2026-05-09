@@ -1886,6 +1886,10 @@ enum NativeToolingCommand {
         #[arg(long, default_value = "target/receipts/format/native-format-corpus.json")]
         format_corpus_receipt: PathBuf,
 
+        /// Native-format perltidy compatibility receipt to summarize.
+        #[arg(long, default_value = "target/receipts/format/native-format-perltidy-compat.json")]
+        format_perltidy_compat_receipt: PathBuf,
+
         /// Output path for native-tooling status JSON.
         #[arg(long, default_value = "target/receipts/native-tooling/status.json")]
         receipt: PathBuf,
@@ -2260,12 +2264,14 @@ fn main() -> Result<()> {
                 format_fixtures,
                 format_receipt,
                 format_corpus_receipt,
+                format_perltidy_compat_receipt,
                 receipt,
                 markdown,
             } => native_tooling::status(native_tooling::NativeToolingStatusConfig {
                 format_fixtures,
                 format_receipt,
                 format_corpus_receipt,
+                format_perltidy_compat_receipt,
                 receipt,
                 markdown,
             }),
