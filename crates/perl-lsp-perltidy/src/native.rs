@@ -739,6 +739,10 @@ fn format_simple_control_block_tokens(
 ) -> Option<String> {
     use perl_parser_core::TokenKind;
 
+    if let Some(formatted) = format_simple_c_style_for_block_tokens(tokens, indent, config) {
+        return Some(formatted);
+    }
+
     if let Some(formatted) = format_simple_foreach_block_tokens(tokens, indent, config) {
         return Some(formatted);
     }
@@ -817,6 +821,166 @@ fn format_simple_control_block_tokens(
         _ => return None,
     }
     Some(formatted)
+}
+
+fn format_simple_c_style_for_block_tokens(
+    tokens: &[perl_parser_core::Token],
+    indent: &str,
+    config: &FormatConfig,
+) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    if tokens.first()?.kind != TokenKind::For || tokens.get(1)?.kind != TokenKind::LeftParen {
+        return None;
+    }
+
+    let (first_semicolon, second_semicolon, header_end) = find_for_header_boundaries(tokens, 1)?;
+    if tokens.get(header_end + 1)?.kind != TokenKind::LeftBrace {
+        return None;
+    }
+
+    let init = format_simple_for_init_clause(tokens, 2, first_semicolon, config)?;
+    let condition =
+        format_simple_for_condition_clause(tokens, first_semicolon + 1, second_semicolon, config)?;
+    let update = format_simple_for_update_clause(tokens, second_semicolon + 1, header_end, config)?;
+
+    let body_start = header_end + 2;
+    let body_end = tokens[body_start..]
+        .iter()
+        .position(|token| token.kind == TokenKind::RightBrace)
+        .map(|offset| body_start + offset)?;
+    let statements = format_simple_statement_block(&tokens[body_start..body_end], config)?;
+
+    let body_indent = format!("{indent}{}", indent_unit(config));
+    let mut formatted = render_simple_block_doc(
+        format!("{indent}{}", render_simple_for_header(&init, &condition, &update)),
+        &statements,
+        indent,
+        &body_indent,
+        config,
+    );
+    if let Some(continue_statements) = format_simple_continue_tail(tokens, body_end, config)? {
+        formatted.push_str(&render_simple_continue_doc(
+            &continue_statements,
+            indent,
+            &body_indent,
+            config,
+        ));
+    }
+    Some(formatted)
+}
+
+fn find_for_header_boundaries(
+    tokens: &[perl_parser_core::Token],
+    open_index: usize,
+) -> Option<(usize, usize, usize)> {
+    use perl_parser_core::TokenKind;
+
+    let mut depth = 0usize;
+    let mut first_semicolon = None;
+    let mut second_semicolon = None;
+
+    for (index, token) in tokens.iter().enumerate().skip(open_index) {
+        match token.kind {
+            TokenKind::LeftParen => depth += 1,
+            TokenKind::RightParen => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some((first_semicolon?, second_semicolon?, index));
+                }
+            }
+            TokenKind::Semicolon if depth == 1 => {
+                if first_semicolon.is_none() {
+                    first_semicolon = Some(index);
+                } else if second_semicolon.is_none() {
+                    second_semicolon = Some(index);
+                } else {
+                    return None;
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn render_simple_for_header(init: &str, condition: &str, update: &str) -> String {
+    let mut header = format!("for ({init};");
+    if !condition.is_empty() {
+        header.push(' ');
+        header.push_str(condition);
+    }
+    header.push(';');
+    if !update.is_empty() {
+        header.push(' ');
+        header.push_str(update);
+    }
+    header.push_str(") {");
+    header
+}
+
+fn format_simple_for_init_clause(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+    end: usize,
+    config: &FormatConfig,
+) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    if start == end {
+        return Some(String::new());
+    }
+
+    match tokens.get(start)?.kind {
+        TokenKind::My | TokenKind::Our | TokenKind::State => {
+            format_simple_lexical_clause(tokens, start, end, config)
+        }
+        _ => format_simple_assignment_clause(tokens, start, end, config),
+    }
+}
+
+fn format_simple_for_condition_clause(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+    end: usize,
+    config: &FormatConfig,
+) -> Option<String> {
+    if start == end {
+        return Some(String::new());
+    }
+    format_simple_expression_tokens(tokens, start, end, config, 0)
+}
+
+fn format_simple_for_update_clause(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+    end: usize,
+    config: &FormatConfig,
+) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    if start == end {
+        return Some(String::new());
+    }
+
+    if let Some((variable, next_index)) = format_variable_tokens(tokens, start)
+        && next_index + 1 == end
+    {
+        return match tokens.get(next_index)?.kind {
+            TokenKind::Increment => Some(format!("{variable}++")),
+            TokenKind::Decrement => Some(format!("{variable}--")),
+            _ => None,
+        };
+    }
+
+    if matches!(tokens.get(start)?.kind, TokenKind::Increment | TokenKind::Decrement) {
+        let (variable, next_index) = format_variable_tokens(tokens, start + 1)?;
+        if next_index == end {
+            return Some(format!("{}{variable}", tokens[start].text));
+        }
+    }
+
+    format_simple_assignment_clause(tokens, start, end, config)
 }
 
 fn format_simple_foreach_block_tokens(
@@ -1160,34 +1324,42 @@ fn format_simple_lexical_tokens(
     tokens: &[perl_parser_core::Token],
     config: &FormatConfig,
 ) -> Option<String> {
+    if tokens.last()?.kind != perl_parser_core::TokenKind::Semicolon {
+        return None;
+    }
+
+    let semicolon_index = tokens.len() - 1;
+    Some(format!("{};", format_simple_lexical_clause(tokens, 0, semicolon_index, config)?))
+}
+
+fn format_simple_lexical_clause(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+    end: usize,
+    config: &FormatConfig,
+) -> Option<String> {
     use perl_parser_core::TokenKind;
 
-    let keyword = match tokens.first()?.kind {
+    let keyword = match tokens.get(start)?.kind {
         TokenKind::My => "my",
         TokenKind::Our => "our",
         TokenKind::State => "state",
         _ => return None,
     };
 
-    let semicolon = tokens.last()?;
-    if semicolon.kind != TokenKind::Semicolon {
-        return None;
-    }
-
-    let (variable, next_index) = format_lexical_target_tokens(tokens, 1)?;
-    let semicolon_index = tokens.len() - 1;
-    if next_index == semicolon_index {
-        Some(format!("{keyword} {variable};"))
+    let (variable, next_index) = format_lexical_target_tokens(tokens, start + 1)?;
+    if next_index == end {
+        Some(format!("{keyword} {variable}"))
     } else if tokens[next_index].kind == TokenKind::Assign {
         let prefix = format!("{keyword} {variable} = ");
         let value = format_simple_expression_tokens(
             tokens,
             next_index + 1,
-            semicolon_index,
+            end,
             config,
             prefix.chars().count(),
         )?;
-        Some(format!("{prefix}{value};"))
+        Some(format!("{prefix}{value}"))
     } else {
         None
     }
@@ -1315,8 +1487,19 @@ fn format_simple_assignment_tokens(
         return None;
     }
 
-    let (variable, next_index) = format_variable_tokens(tokens, 0)?;
     let semicolon_index = tokens.len() - 1;
+    Some(format!("{};", format_simple_assignment_clause(tokens, 0, semicolon_index, config)?))
+}
+
+fn format_simple_assignment_clause(
+    tokens: &[perl_parser_core::Token],
+    start: usize,
+    end: usize,
+    config: &FormatConfig,
+) -> Option<String> {
+    use perl_parser_core::TokenKind;
+
+    let (variable, next_index) = format_variable_tokens(tokens, start)?;
     if tokens.get(next_index)?.kind != TokenKind::Assign {
         return None;
     }
@@ -1325,11 +1508,11 @@ fn format_simple_assignment_tokens(
     let value = format_simple_expression_tokens(
         tokens,
         next_index + 1,
-        semicolon_index,
+        end,
         config,
         prefix.chars().count(),
     )?;
-    Some(format!("{variable} = {value};"))
+    Some(format!("{variable} = {value}"))
 }
 
 fn format_simple_expression_statement_tokens(
