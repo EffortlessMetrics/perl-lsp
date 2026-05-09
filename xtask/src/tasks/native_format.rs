@@ -490,9 +490,9 @@ fn classify_perltidy_option(option: &str, value: Option<String>) -> PerltidyComp
         "-atc" | "--add-trailing-commas" | "-natc" | "--no-add-trailing-commas" => compat_result(
             option,
             value,
-            "external_only",
-            None,
-            "native formatter does not yet expose trailing comma policy",
+            "supported",
+            Some("format.trailing_comma"),
+            "maps to native formatter trailing comma policy for wrapped calls, lists, and hashes",
         ),
         "-ci" | "--block-comment-indentation" => compat_result(
             option,
@@ -968,14 +968,15 @@ mod tests {
         )?)?;
         assert_eq!(receipt["kind"], "native_format_perltidy_compat");
         assert_eq!(receipt["option_count"], 7);
-        assert_eq!(receipt["supported_count"], 3);
+        assert_eq!(receipt["supported_count"], 4);
         assert_eq!(receipt["approximated_count"], 1);
-        assert_eq!(receipt["external_only_count"], 2);
+        assert_eq!(receipt["external_only_count"], 1);
         assert_eq!(receipt["unsupported_safe_count"], 1);
         assert_eq!(receipt["options"][0]["native_field"], "format.line_width");
         assert_eq!(receipt["options"][1]["value"], "2");
         assert_eq!(receipt["options"][4]["classification"], "unsupported_safe");
-        assert_eq!(receipt["options"][5]["classification"], "external_only");
+        assert_eq!(receipt["options"][5]["classification"], "supported");
+        assert_eq!(receipt["options"][5]["native_field"], "format.trailing_comma");
 
         let summary = fs::read_to_string(receipts.join("native-format-perltidy-compat.md"))?;
         assert!(summary.contains("# Native Format Perltidy Compatibility"));

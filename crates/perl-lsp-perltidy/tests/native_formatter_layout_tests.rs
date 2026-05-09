@@ -1,5 +1,6 @@
 use perl_lsp_perltidy::{
     FinalNewline, FormatConfig, NativeFormatter, PerlFormatter, TextPosition, TextRange,
+    TrailingComma,
 };
 
 #[test]
@@ -187,6 +188,48 @@ fn native_formatter_wraps_simple_calls_lists_and_hashes_by_line_width() {
             "  $beta,\n",
             "  $gamma\n",
             ");\n",
+        )
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn native_formatter_adds_trailing_commas_only_when_wrapped_and_configured() {
+    let formatter = NativeFormatter::new();
+    let config = FormatConfig {
+        line_width: 18,
+        indent_width: 2,
+        trailing_comma: TrailingComma::AddWhenWrapped,
+        ..FormatConfig::default()
+    };
+    let source = concat!(
+        "my$result=foo($alpha,$beta,$gamma);\n",
+        "my@items=($alpha,$beta,$gamma);\n",
+        "my$hash={alpha=>$alpha,beta=>$beta};\n",
+        "return foo($a,$b);\n",
+    );
+
+    let result = formatter.format_document(source, &config);
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        concat!(
+            "my $result = foo(\n",
+            "  $alpha,\n",
+            "  $beta,\n",
+            "  $gamma,\n",
+            ");\n",
+            "my @items = (\n",
+            "  $alpha,\n",
+            "  $beta,\n",
+            "  $gamma,\n",
+            ");\n",
+            "my $hash = {\n",
+            "  alpha => $alpha,\n",
+            "  beta => $beta,\n",
+            "};\n",
+            "return foo($a, $b);\n",
         )
     );
     assert!(result.diagnostics.is_empty());

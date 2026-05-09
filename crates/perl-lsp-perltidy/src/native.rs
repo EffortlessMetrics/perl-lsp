@@ -186,6 +186,17 @@ pub enum FinalNewline {
     Trim,
 }
 
+/// Trailing comma handling for wrapped delimited expressions.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TrailingComma {
+    /// Preserve the native formatter's current behavior and do not add commas.
+    #[default]
+    Preserve,
+    /// Add a trailing comma when a call, list, or hash is rendered across lines.
+    AddWhenWrapped,
+}
+
 /// Configuration shared by native formatter implementations.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FormatConfig {
@@ -199,6 +210,8 @@ pub struct FormatConfig {
     pub use_tabs: bool,
     /// Final newline handling.
     pub final_newline: FinalNewline,
+    /// Trailing comma handling for wrapped delimited expressions.
+    pub trailing_comma: TrailingComma,
 }
 
 impl Default for FormatConfig {
@@ -209,6 +222,7 @@ impl Default for FormatConfig {
             indent_width: 4,
             use_tabs: false,
             final_newline: FinalNewline::Preserve,
+            trailing_comma: TrailingComma::Preserve,
         }
     }
 }
@@ -1822,6 +1836,9 @@ fn render_delimited_doc(
                 item_docs.push(FormatDoc::SoftLine);
             }
             item_docs.push(FormatDoc::text(item));
+        }
+        if config.trailing_comma == TrailingComma::AddWhenWrapped {
+            item_docs.push(FormatDoc::if_break(FormatDoc::text(","), FormatDoc::text("")));
         }
         parts.push(FormatDoc::indent(item_docs));
         parts.push(FormatDoc::if_break(FormatDoc::SoftLine, FormatDoc::text("")));
