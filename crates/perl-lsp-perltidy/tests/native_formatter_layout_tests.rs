@@ -535,6 +535,18 @@ fn native_formatter_expands_simple_while_blocks() {
 }
 
 #[test]
+fn native_formatter_expands_simple_while_continue_blocks() {
+    let formatter = NativeFormatter::new();
+    let source = "while($ok){next;}continue{last;}\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "while ($ok) {\n    next;\n} continue {\n    last;\n}\n");
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_uses_configured_indent_for_simple_while_blocks() {
     let formatter = NativeFormatter::new();
     let config = FormatConfig { indent_width: 2, ..FormatConfig::default() };
@@ -592,6 +604,21 @@ fn native_formatter_formats_simple_loop_control_statements() {
     assert_eq!(
         result.formatted,
         "foreach my $item (@items) {\n    next;\n    last LOOP;\n    redo;\n}\n"
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn native_formatter_expands_simple_foreach_continue_blocks() {
+    let formatter = NativeFormatter::new();
+    let source = "foreach my$item(@items){next;}continue{redo;}\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        "foreach my $item (@items) {\n    next;\n} continue {\n    redo;\n}\n"
     );
     assert!(result.diagnostics.is_empty());
 }
@@ -690,6 +717,21 @@ fn native_range_formatter_formats_selected_simple_while_line() {
     assert_eq!(result.edits.len(), 1);
     assert_eq!(result.edits[0].range, range);
     assert_eq!(result.edits[0].new_text, "while ($ok) {\n    return $x;\n}");
+}
+
+#[test]
+fn native_range_formatter_formats_selected_simple_while_continue_line() {
+    let formatter = NativeFormatter::new();
+    let source = "my$x=1;\nwhile($ok){next;}continue{last;}\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 32));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "my$x=1;\nwhile ($ok) {\n    next;\n} continue {\n    last;\n}\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(result.edits[0].new_text, "while ($ok) {\n    next;\n} continue {\n    last;\n}");
 }
 
 #[test]
