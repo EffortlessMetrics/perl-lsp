@@ -1839,6 +1839,21 @@ enum NativeFormatCommand {
         #[arg(long, default_value = "target/receipts/format")]
         receipt_dir: PathBuf,
     },
+    /// Run native formatter corpus checks and write JSON/markdown receipts.
+    Corpus {
+        /// Files or directories containing corpus Perl sources. Defaults to examples/perl,
+        /// tests/perl-corpus, and crates/perl-corpus/fixtures/parser_accuracy.
+        #[arg(long = "root")]
+        roots: Vec<PathBuf>,
+
+        /// Output JSON receipt path.
+        #[arg(long, default_value = "target/receipts/format/native-format-corpus.json")]
+        receipt: PathBuf,
+
+        /// Output markdown summary path.
+        #[arg(long, default_value = "target/receipts/format/native-format-corpus-summary.md")]
+        summary: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2205,6 +2220,13 @@ fn main() -> Result<()> {
                 native_format::check(native_format::NativeFormatCheckConfig {
                     fixtures,
                     receipt_dir,
+                })
+            }
+            NativeFormatCommand::Corpus { roots, receipt, summary } => {
+                native_format::corpus(native_format::NativeFormatCorpusConfig {
+                    roots,
+                    receipt,
+                    summary,
                 })
             }
         },
