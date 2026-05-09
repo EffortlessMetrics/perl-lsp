@@ -137,6 +137,12 @@ cargo xtask native-tooling status \
   --markdown docs/project/status/native_tooling.md
 ```
 
+To verify native paths have not accidentally regressed to shelling out, run:
+
+```bash
+cargo xtask native-tooling check-defaults
+```
+
 ## PR Proof
 
 For PRs that touch native formatter, native critic, or compatibility reporting,
@@ -148,6 +154,7 @@ cargo xtask native-format check
 cargo xtask native-format corpus
 cargo xtask native-tooling status \
   --markdown docs/project/status/native_tooling.md
+cargo xtask native-tooling check-defaults
 cargo xtask check-memory-lifecycle-policy
 cargo xtask check-memory-retained-owner-drift --base origin/master
 cargo xtask devex pr-body --base origin/master

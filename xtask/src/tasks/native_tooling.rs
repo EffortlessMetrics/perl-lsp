@@ -2,7 +2,9 @@
 
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{Context, Result, eyre};
+use perl_lsp_rs_core::config::{CriticEngine, FormatterMode, ServerConfig};
 use perl_lsp_rs_core::tooling::perl_critic::NativeCriticRegistry;
+use perl_lsp_rs_core::tooling::perltidy::FormatConfig;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -42,6 +44,19 @@ pub struct PerlcriticCompatConfig {
     pub receipt: PathBuf,
     /// Output markdown summary path.
     pub summary: PathBuf,
+}
+
+/// Options for `cargo xtask native-tooling check-defaults`.
+pub struct NativeToolingDefaultsConfig {
+    /// Repository root used for source-policy checks.
+    pub root: PathBuf,
+}
+
+#[derive(Debug)]
+struct DefaultCheck {
+    name: &'static str,
+    passed: bool,
+    detail: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -216,6 +231,23 @@ pub fn perlcritic_compat(config: PerlcriticCompatConfig) -> Result<()> {
     Ok(())
 }
 
+/// Verify native tooling defaults and native paths do not silently shell out.
+pub fn check_defaults(config: NativeToolingDefaultsConfig) -> Result<()> {
+    let checks = native_tooling_default_checks(&config.root)?;
+    for check in &checks {
+        let status = if check.passed { "pass" } else { "fail" };
+        println!("native-tooling defaults {status}: {} - {}", check.name, check.detail);
+    }
+
+    let failures: Vec<_> = checks.iter().filter(|check| !check.passed).collect();
+    if failures.is_empty() {
+        println!("native-tooling defaults: all checks passed");
+        return Ok(());
+    }
+
+    Err(eyre!("native-tooling default guard failed: {} check(s) failed", failures.len()))
+}
+
 fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeToolingStatusReceipt> {
     let formatter = formatter_status(
         &config.format_fixtures,
@@ -233,6 +265,89 @@ fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeTool
         formatter,
         critic,
     })
+}
+
+fn native_tooling_default_checks(root: &Path) -> Result<Vec<DefaultCheck>> {
+    let server_defaults = ServerConfig::default();
+    let format_defaults = FormatConfig::default();
+    let formatting_provider_source =
+        read_source(root, "crates/perl-lsp-rs-core/src/providers/formatting/formatting.rs")?;
+    let diagnostics_source = read_source(root, "crates/perl-lsp-rs/src/runtime/diagnostics.rs")?;
+    let configuration_docs = read_source(root, "docs/reference/CONFIGURATION.md")?;
+
+    let native_critic_skip_count = diagnostics_source
+        .matches("critic_engine == perl_lsp_rs_core::config::CriticEngine::Native")
+        .count();
+
+    Ok(vec![
+        DefaultCheck {
+            name: "formatter_server_default_native",
+            passed: server_defaults.formatting_engine == FormatterMode::Native,
+            detail: format!(
+                "ServerConfig default formatter engine is {:?}",
+                server_defaults.formatting_engine
+            ),
+        },
+        DefaultCheck {
+            name: "formatter_core_default_native",
+            passed: format_defaults.mode == FormatterMode::Native,
+            detail: format!("FormatConfig default formatter mode is {:?}", format_defaults.mode),
+        },
+        DefaultCheck {
+            name: "critic_default_no_shell_out",
+            passed: !server_defaults.perlcritic_enabled
+                && server_defaults.critic_engine == CriticEngine::Legacy,
+            detail: format!(
+                "ServerConfig default critic enabled={} engine={:?}",
+                server_defaults.perlcritic_enabled, server_defaults.critic_engine
+            ),
+        },
+        DefaultCheck {
+            name: "native_formatter_branch_uses_native_provider",
+            passed: formatting_provider_source
+                .contains("FormatterMode::Native | FormatterMode::Compat")
+                && formatting_provider_source.contains("Ok(native_format_document")
+                && formatting_provider_source.contains("Ok(native_format_range"),
+            detail: "native/compat formatter branches render through native_format_*".to_string(),
+        },
+        DefaultCheck {
+            name: "external_formatter_requires_external_legacy_mode",
+            passed: formatting_provider_source
+                .contains("FormatterMode::ExternalLegacy => self.format_document_with_perltidy")
+                && formatting_provider_source.contains("self.format_range_with_perltidy"),
+            detail: "perltidy formatter calls are isolated behind ExternalLegacy".to_string(),
+        },
+        DefaultCheck {
+            name: "native_critic_skips_external_collectors",
+            passed: native_critic_skip_count >= 2,
+            detail: format!(
+                "found {native_critic_skip_count} native critic skip guards in diagnostics runtime"
+            ),
+        },
+        DefaultCheck {
+            name: "configuration_docs_mark_native_format_default",
+            passed: configuration_docs
+                .contains("| `[formatting]` | `engine` | string | `\"native\"` |")
+                && configuration_docs
+                    .contains("Use `\"external-perltidy\"` for legacy shell-out compatibility"),
+            detail:
+                "configuration docs describe native formatter default and explicit legacy adapter"
+                    .to_string(),
+        },
+        DefaultCheck {
+            name: "configuration_docs_mark_native_critic_opt_in",
+            passed: configuration_docs
+                .contains("| `[critic]` | `engine` | string | `\"legacy\"` |")
+                && configuration_docs.contains("Native critic remains opt-in"),
+            detail: "configuration docs describe current critic default and native opt-in"
+                .to_string(),
+        },
+    ])
+}
+
+fn read_source(root: &Path, relative: &str) -> Result<String> {
+    let path = root.join(relative);
+    fs::read_to_string(&path).wrap_err_with(|| format!("failed to read {}", path.display()))
 }
 
 fn formatter_status(
@@ -1227,6 +1342,98 @@ color = 1
         assert!(summary.contains("| setting | `profile-strictness` | quiet | unsupported_safe |"));
         assert!(summary.contains("| setting | `color` | 1 | external_only |"));
 
+        Ok(())
+    }
+
+    #[test]
+    fn native_tooling_default_checks_require_native_paths_to_avoid_shell_out() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        write_default_guard_sources(temp.path())?;
+
+        let checks = native_tooling_default_checks(temp.path())?;
+
+        assert!(
+            checks.iter().all(|check| check.passed),
+            "expected all checks to pass: {checks:#?}"
+        );
+        assert!(
+            checks
+                .iter()
+                .any(|check| check.name == "external_formatter_requires_external_legacy_mode")
+        );
+        assert!(checks.iter().any(|check| check.name == "native_critic_skips_external_collectors"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn native_tooling_default_checks_fail_when_native_critic_skip_guard_is_missing() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        write_default_guard_sources(temp.path())?;
+        fs::write(
+            temp.path().join("crates/perl-lsp-rs/src/runtime/diagnostics.rs"),
+            "fn collect() { if !enabled { return; } }\n",
+        )?;
+
+        let checks = native_tooling_default_checks(temp.path())?;
+        let critic_guard = checks
+            .iter()
+            .find(|check| check.name == "native_critic_skips_external_collectors")
+            .ok_or_else(|| eyre!("missing native critic guard check"))?;
+
+        assert!(!critic_guard.passed);
+        Ok(())
+    }
+
+    fn write_default_guard_sources(root: &Path) -> Result<()> {
+        let formatting_path =
+            root.join("crates/perl-lsp-rs-core/src/providers/formatting/formatting.rs");
+        let diagnostics_path = root.join("crates/perl-lsp-rs/src/runtime/diagnostics.rs");
+        let docs_path = root.join("docs/reference/CONFIGURATION.md");
+        fs::create_dir_all(formatting_path.parent().ok_or_else(|| eyre!("missing parent"))?)?;
+        fs::create_dir_all(diagnostics_path.parent().ok_or_else(|| eyre!("missing parent"))?)?;
+        fs::create_dir_all(docs_path.parent().ok_or_else(|| eyre!("missing parent"))?)?;
+        fs::write(
+            formatting_path,
+            r#"
+match self.mode {
+    FormatterMode::Native | FormatterMode::Compat => {
+        Ok(native_format_document(content, options, self.perltidy_config.as_ref()))
+    }
+    FormatterMode::ExternalLegacy => self.format_document_with_perltidy(content, options),
+    FormatterMode::Off => Ok(FormattedDocument { text: content.to_string(), edits: vec![] }),
+}
+match self.mode {
+    FormatterMode::Native | FormatterMode::Compat => {
+        Ok(native_format_range(content, range, options, self.perltidy_config.as_ref()))
+    }
+    FormatterMode::ExternalLegacy => {
+                self.format_range_with_perltidy(content, options, &lines, start_line, end_line)
+            }
+    FormatterMode::Off => Ok(FormattedDocument { text: content.to_string(), edits: vec![] }),
+}
+"#,
+        )?;
+        fs::write(
+            diagnostics_path,
+            r#"
+if !enabled || critic_engine == perl_lsp_rs_core::config::CriticEngine::Native {
+    return;
+}
+if !enabled || critic_engine == perl_lsp_rs_core::config::CriticEngine::Native {
+    return;
+}
+"#,
+        )?;
+        fs::write(
+            docs_path,
+            r#"
+| `[critic]` | `engine` | string | `"legacy"` | Critic engine |
+| `[formatting]` | `engine` | string | `"native"` | Formatter engine |
+| `[formatting] engine = "native"` | `"formatting": {"engine": "native"}` | Use `"external-perltidy"` for legacy shell-out compatibility |
+| `[critic] engine = "native"` | `"critic": {"engine": "native"}` | Native critic remains opt-in |
+"#,
+        )?;
         Ok(())
     }
 }
