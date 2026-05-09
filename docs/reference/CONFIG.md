@@ -16,7 +16,9 @@ configuration.
   - [perl.workspace](#perlworkspace)
   - [perl.inlayHints](#perlinlayhints)
   - [perl.testRunner](#perltestrunner)
+  - [perl.formatting](#perlformatting)
   - [perl.perlcritic](#perlperlcritic)
+  - [perl.critic](#perlcritic)
   - [perl.telemetry](#perltelemetry)
   - [perl.limits](#perllimits)
 - [CLI Flags](#cli-flags)
@@ -47,7 +49,9 @@ All LSP workspace settings live under the `perl` namespace:
     "workspace": { "includePaths": ["lib"] },
     "inlayHints": { "enabled": true },
     "testRunner": { "command": "prove" },
+    "formatting": { "engine": "native" },
     "perlcritic": { "enabled": false },
+    "critic": { "engine": "legacy" },
     "telemetry": { "enabled": false },
     "limits": { "completionCap": 100 }
   }
@@ -89,8 +93,14 @@ your-project/
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `perlcritic` | `boolean` | (unset) | Enable perlcritic diagnostics. When unset, the server default (`false`) applies. Requires `perlcritic` installed on the system. |
-| `perlcritic_severity` | `integer` (1–5) | (unset) | Minimum severity to report. Perl::Critic uses `1 = least severe` and `5 = most severe`, so `1` reports everything while `5` reports only the most severe violations. Must be in the range 1–5; values outside this range are a parse error. |
+| `perlcritic` | `boolean` | (unset) | Enable critic diagnostics. When unset, the server default (`false`) applies. With the default `legacy` critic engine this requires `perlcritic` installed on the system; with `[critic].engine = "native"` it runs the Rust-native critic registry. |
+| `perlcritic_severity` | `integer` (1–5) | (unset) | Minimum critic severity to report. Perl::Critic uses `1 = least severe` and `5 = most severe`, so `1` reports everything while `5` reports only the most severe violations. Must be in the range 1–5; values outside this range are a parse error. |
+
+#### `[critic]` — Critic Engine Selection
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `engine` | `"legacy"`, `"perlcritic"`, `"external"`, or `"native"` | `"legacy"` | Selects the critic engine. `legacy`, `perlcritic`, and `external` use the Perl::Critic-compatible legacy path; `native` uses the Rust-native rule registry. Native critic remains opt-in. |
 
 #### `[features]` — LSP Feature Toggles
 
@@ -98,9 +108,24 @@ your-project/
 |-----|------|---------|-------------|
 | `inlay_hints` | `boolean` | (unset) | Enable or disable all inlay hints globally. When unset, the server default (`true`) applies. |
 
-#### `[formatting]` — Future Use (Reserved)
+#### `[formatting]` — Formatting
 
-The `[formatting]` section is reserved for future perltidy configuration and is not yet wired. Keys in this section are silently ignored. You may include it in your file today using the full example below without causing errors.
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | `boolean` | (unset) | Enable or disable LSP formatting. When unset, the server default (`true`) applies. |
+| `engine` | `"native"`, `"compat"`, `"perltidy-compat"`, `"external-legacy"`, `"external-perltidy"`, `"perltidy"`, `"off"`, `"disabled"`, or `"none"` | `"native"` | Selects the formatter engine. `native` runs the Rust-native formatter, `compat` / `perltidy-compat` run native formatting with compatibility defaults, `external-*` / `perltidy` use the external perltidy adapter, and `off` / `disabled` / `none` disable formatting. |
+| `perltidy_profile` | `string` | (unset) | Path to a `.perltidyrc` profile. Used by the external perltidy adapter and by compatibility reporting. |
+| `perltidy_maximum_line_length` | `integer` | (unset) | Maximum line length for formatting compatibility options. |
+| `perltidy_indent_columns` | `integer` | (unset) | Indent width in spaces. |
+| `perltidy_tabs` | `boolean` | (unset) | Use tabs instead of spaces when supported by the selected engine. |
+| `perltidy_opening_brace_on_new_line` | `boolean` | (unset) | Opening-brace style compatibility option. |
+| `perltidy_cuddled_else` | `boolean` | (unset) | Cuddled-else style compatibility option. |
+| `perltidy_space_after_keyword` | `boolean` | (unset) | Space-after-keyword compatibility option. |
+| `perltidy_add_trailing_commas` | `boolean` | (unset) | Trailing-comma compatibility option. |
+| `perltidy_vertical_alignment` | `boolean` | (unset) | Vertical-alignment compatibility option. |
+| `perltidy_block_comment_indentation` | `integer` | (unset) | Block-comment indentation compatibility option. |
+| `perltidy_extra_args` | `string[]` | `[]` | Extra arguments for the external perltidy adapter. Ignored by the native formatter. |
+| `perltidy_timeout_secs` | `integer` | (unset) | Timeout in seconds for the external perltidy adapter. |
 
 ### Full Example
 
@@ -119,19 +144,27 @@ version = "5.38"
 include_paths = ["lib", "local/lib/perl5"]
 
 [diagnostics]
-# Enable perlcritic linting (opt-in; requires perlcritic installed)
+# Enable critic diagnostics. With [critic].engine = "legacy", this requires
+# perlcritic installed. With [critic].engine = "native", it runs native rules.
 perlcritic = false
 
 # Minimum severity to report: 1 (everything) to 5 (most severe only)
 perlcritic_severity = 3
+
+[critic]
+# Critic engine: "legacy" / "perlcritic" / "external" or "native".
+# Native critic remains opt-in.
+engine = "legacy"
 
 [features]
 # Toggle all inlay hints globally
 inlay_hints = true
 
 [formatting]
-# Reserved — not yet active. Keys here are silently ignored.
-perltidy = true
+# Native formatter is the default engine. Use "external-perltidy" only when
+# exact perltidy compatibility is required.
+enabled = true
+engine = "native"
 perltidy_profile = ".perltidyrc"
 ```
 
@@ -165,7 +198,7 @@ Only keys **explicitly set** in `.perl-lsp.toml` override the built-in defaults.
 ## Workspace Settings (LSP)
 
 These settings are read from the LSP client via `initializationOptions` or
-`workspace/didChangeConfiguration`. Source: `crates/perl-lsp-config/src/lib.rs`.
+`workspace/didChangeConfiguration`. Source: `crates/perl-lsp-rs-core/src/config/mod.rs`.
 
 ### perl.workspace
 
@@ -382,9 +415,104 @@ Maximum time to wait for a test run before the server considers it timed out.
 
 ---
 
+### perl.formatting
+
+Controls LSP document and range formatting. Native formatting is built into the
+server; external perltidy is available as an explicit compatibility adapter.
+
+#### `perl.formatting.enabled`
+
+| Property | Value |
+|---|---|
+| Type | `boolean` |
+| Default | `true` |
+
+Master switch for LSP formatting. When `false`, formatting requests return no
+edits regardless of the selected engine.
+
+#### `perl.formatting.engine`
+
+| Property | Value |
+|---|---|
+| Type | `"native"\|"compat"\|"external-perltidy"\|"off"` |
+| Default | `"native"` |
+
+Formatter engine for LSP formatting requests:
+
+- `native` uses the Rust-native formatter.
+- `compat` uses the native formatter with compatibility-oriented defaults.
+- `external-perltidy` shells out through the legacy perltidy adapter.
+- `off` disables formatting.
+
+The TOML parser also accepts compatibility aliases such as `perltidy-compat`,
+`external-legacy`, `perltidy`, `disabled`, and `none`.
+
+#### `perl.formatting.profile`
+
+| Property | Value |
+|---|---|
+| Type | `string` |
+| Default | (none) |
+
+Path to a `.perltidyrc` profile. This is used by the external perltidy adapter
+and by native-tooling compatibility reports.
+
+#### `perl.formatting.maximumLineLength`
+
+| Property | Value |
+|---|---|
+| Type | `number` |
+| Default | `80` |
+
+Maximum line length for formatting compatibility options.
+
+#### `perl.formatting.indentColumns`
+
+| Property | Value |
+|---|---|
+| Type | `number` |
+| Default | `4` |
+
+Indent width in spaces.
+
+#### Additional formatting compatibility options
+
+The server also accepts:
+
+- `perl.formatting.tabs`
+- `perl.formatting.openingBraceOnNewLine`
+- `perl.formatting.cuddledElse`
+- `perl.formatting.spaceAfterKeyword`
+- `perl.formatting.addTrailingCommas`
+- `perl.formatting.verticalAlignment`
+- `perl.formatting.blockCommentIndentation`
+- `perl.formatting.extraArgs`
+- `perl.formatting.timeoutSecs`
+
+Some options are native compatibility hints; others only affect the external
+perltidy adapter. Use the native-tooling compatibility reports to classify a
+specific `.perltidyrc` before switching a project.
+
+```json
+{
+  "perl": {
+    "formatting": {
+      "enabled": true,
+      "engine": "native",
+      "maximumLineLength": 100,
+      "indentColumns": 4
+    }
+  }
+}
+```
+
+---
+
 ### perl.perlcritic
 
-Controls optional Perl::Critic static analysis integration.
+Controls optional critic diagnostics. The default engine is the legacy
+Perl::Critic-compatible path; the Rust-native critic registry is selected with
+`perl.critic.engine = "native"` or `[critic].engine = "native"`.
 
 #### `perl.perlcritic.enabled`
 
@@ -393,10 +521,12 @@ Controls optional Perl::Critic static analysis integration.
 | Type | `boolean` |
 | Default | `false` |
 
-**Opt-in.** When `true`, the server runs `perlcritic` on open documents and
-merges violations into the diagnostic stream. If `perlcritic` is missing,
-profile resolution fails, or the command execution fails, the server emits a
-workspace warning instead of silently skipping.
+**Opt-in.** When `true`, the server publishes critic diagnostics. With the
+default legacy engine, the server runs `perlcritic` and merges violations into
+the diagnostic stream. If `perlcritic` is missing, profile resolution fails, or
+the command execution fails, the server emits a workspace warning instead of
+silently skipping. With the native engine, diagnostics come from the Rust-native
+rule registry and do not require the `perlcritic` executable.
 
 #### `perl.perlcritic.severity`
 
@@ -416,9 +546,26 @@ valid range. Equivalent to `perlcritic --severity N`.
 | Type | `string` |
 | Default | (none — auto-discovery) |
 
-Path to a `.perlcriticrc` profile file. When set, passes `--profile=<path>` to
-perlcritic. When absent, perlcritic's standard auto-discovery looks for
-`.perlcriticrc` in the workspace root.
+Path to a `.perlcriticrc` profile file. With the legacy engine, passes
+`--profile=<path>` to perlcritic. When absent, perlcritic's standard
+auto-discovery looks for `.perlcriticrc` in the workspace root. Native-tooling
+compatibility reports can also classify this file against native rule coverage.
+
+### perl.critic
+
+Selects the critic engine independently of whether critic diagnostics are
+enabled.
+
+#### `perl.critic.engine`
+
+| Property | Value |
+|---|---|
+| Type | `"legacy"\|"perlcritic"\|"external"\|"native"` |
+| Default | `"legacy"` |
+
+Use `native` to route opt-in critic diagnostics through the Rust-native rule
+registry. Use `legacy`, `perlcritic`, or `external` to keep the
+Perl::Critic-compatible path.
 
 ```json
 {
@@ -427,6 +574,9 @@ perlcritic. When absent, perlcritic's standard auto-discovery looks for
       "enabled": true,
       "severity": 3,
       "profile": "${workspaceFolder}/.perlcriticrc"
+    },
+    "critic": {
+      "engine": "native"
     }
   }
 }
@@ -702,7 +852,7 @@ launch `perllsp --stdio`.
 |---|---|---|---|
 | `perl-lsp.enableDiagnostics` | `boolean` | `true` | Real-time syntax diagnostics. |
 | `perl-lsp.enableSemanticTokens` | `boolean` | `true` | Enhanced syntax highlighting. |
-| `perl-lsp.enableFormatting` | `boolean` | `true` | Document formatting with Perl::Tidy. |
+| `perl-lsp.enableFormatting` | `boolean` | `true` | Document formatting. Native formatting is built in; external perltidy is compatibility mode. |
 | `perl-lsp.formatOnSave` | `boolean` | `false` | Auto-format on save. |
 | `perl-lsp.enableRefactoring` | `boolean` | `true` | Advanced refactoring features (rename, extract). |
 | `perl-lsp.enableTestIntegration` | `boolean` | `true` | Test::More and Test2 integration. |
@@ -713,7 +863,7 @@ launch `perllsp --stdio`.
 | Setting | Type | Default | Description |
 |---|---|---|---|
 | `perl-lsp.includePaths` | `string[]` | `["lib", "local/lib/perl5"]` | Additional module search paths (merged with server-side `perl.workspace.includePaths`). |
-| `perl-lsp.perltidyConfig` | `string` | `""` | Path to a `.perltidyrc` configuration file. Empty = use Perl::Tidy defaults. |
+| `perl-lsp.perltidyConfig` | `string` | `""` | Path to a `.perltidyrc` configuration file for external perltidy compatibility and native-tooling compatibility reports. |
 | `perl-lsp.featureProfile` | `string` | `"auto"` | Feature profile passed to the server at startup (see [Feature Profiles](#feature-profiles)). |
 
 ---
