@@ -80,6 +80,6 @@ Failures in the system-Perl baseline grouped by cluster. Counts come from `first
 | **Category partition** | PASS (132 tokens partitioned across canonical groups) | keywords/operators/delimiters/literals/identifiers/special | `crates/perl-token/src/lib.rs` |
 | **Display-name coverage** | 132/132 | user-facing token labels present | `crates/perl-token/src/lib.rs` |
 | **Lexer/parser conformance** | PASS (lexer + parser-core both consume shared `perl-token`) | integration through shared token crate | `crates/perl-lexer/Cargo.toml` + `crates/perl-parser-core/Cargo.toml` |
-| **Token perf (p50/p95)** | UNVERIFIED (token scorecard missing key metrics) | key token operations benchmark health | `docs/project/status/token_performance_scorecard.json` |
+| **Token perf (p50/p95)** | PASS (category predicates: p50 29 ns / p95 40 ns; clone: p50 47 ns / p95 59 ns; display_name: p50 29 ns / p95 40 ns; lexer->parser: p50 226 ns / p95 253 ns; new long: p50 60 ns / p95 85 ns; new short: p50 62 ns / p95 63 ns) | key token operations benchmark health | `docs/project/status/token_performance_scorecard.json` |
 | **Runtime dependencies** | 0 | non-dev deps in `perl-token` | `crates/perl-token/Cargo.toml` |
 <!-- END: TOKEN_HEALTH_TABLE -->
