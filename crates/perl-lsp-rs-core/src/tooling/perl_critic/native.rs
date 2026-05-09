@@ -240,6 +240,7 @@ impl NativeCriticRegistry {
             Box::new(AssignmentInConditionRule),
             Box::new(PrintfFormatArityRule),
             Box::new(DeprecatedDefinedRule),
+            Box::new(UndefComparisonRule),
             Box::new(BarewordFilehandleRule),
             Box::new(TwoArgOpenRule),
             Box::new(PipeOpenRule),
@@ -518,6 +519,31 @@ impl CriticRule for DeprecatedDefinedRule {
 
     fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
         collect_deprecated_defined_findings(self, ctx.source, ctx.ast, out);
+    }
+}
+
+/// Native rule that reports numeric comparison with explicit `undef`.
+///
+/// This wraps the parser-confirmed PL404 surface through the native critic
+/// contract. It intentionally starts with literal `undef` comparisons; broader
+/// maybe-undef semantic inference can be added as a separate rule slice.
+pub struct UndefComparisonRule;
+
+impl CriticRule for UndefComparisonRule {
+    fn id(&self) -> &'static str {
+        "native.common.undef_comparison"
+    }
+
+    fn category(&self) -> CriticCategory {
+        CriticCategory::Syntax
+    }
+
+    fn default_severity(&self) -> Severity {
+        Severity::Stern
+    }
+
+    fn check(&self, ctx: &CriticContext<'_>, out: &mut Vec<CriticFinding>) {
+        collect_undef_comparison_findings(self, ctx.source, ctx.ast, out);
     }
 }
 
@@ -1137,6 +1163,54 @@ fn deprecated_defined_finding(
     }
 }
 
+fn undef_comparison_finding(
+    rule: &UndefComparisonRule,
+    source: &str,
+    comparison_node: &Node,
+    op: &str,
+    compared_node: &Node,
+    undef_node: &Node,
+) -> CriticFinding {
+    let range =
+        range_for_byte_span(source, comparison_node.location.start, comparison_node.location.end);
+    let compared_range =
+        range_for_byte_span(source, compared_node.location.start, compared_node.location.end);
+    let undef_range =
+        range_for_byte_span(source, undef_node.location.start, undef_node.location.end);
+    let compared_text =
+        source[compared_node.location.start..compared_node.location.end].trim().to_string();
+    let replacement = match op {
+        "==" => format!("!defined({compared_text})"),
+        "!=" => format!("defined({compared_text})"),
+        _ => compared_text,
+    };
+
+    CriticFinding {
+        rule_id: rule.id().to_string(),
+        category: rule.category(),
+        severity: rule.default_severity(),
+        range,
+        message: format!("Using '{op}' with undef -- use defined() to check first"),
+        explanation: "Numeric comparison with undef is usually wrong because undef is coerced before comparison. Use defined(...) for definedness checks, or normalize the value before comparing.".to_string(),
+        suppression_key: rule.id().to_string(),
+        related: vec![
+            CriticRelatedInformation {
+                range: undef_range,
+                message: "This undef literal should be checked with defined(...) instead.".to_string(),
+            },
+            CriticRelatedInformation {
+                range: compared_range,
+                message: "Check this expression with defined(...) before comparing values.".to_string(),
+            },
+        ],
+        fix: Some(CriticFix {
+            title: "Use defined() check".to_string(),
+            safety: FixSafety::Suggested,
+            edits: vec![CriticTextEdit { range, new_text: replacement }],
+        }),
+    }
+}
+
 fn bareword_filehandle_finding(
     rule: &BarewordFilehandleRule,
     source: &str,
@@ -1469,6 +1543,31 @@ fn collect_deprecated_defined_findings(
 
     for child in node.children() {
         collect_deprecated_defined_findings(rule, source, child, out);
+    }
+}
+
+fn collect_undef_comparison_findings(
+    rule: &UndefComparisonRule,
+    source: &str,
+    node: &Node,
+    out: &mut Vec<CriticFinding>,
+) {
+    if let NodeKind::Binary { op, left, right } = &node.kind
+        && matches!(op.as_str(), "==" | "!=")
+    {
+        match (&left.kind, &right.kind) {
+            (NodeKind::Undef, _) => {
+                out.push(undef_comparison_finding(rule, source, node, op, right, left));
+            }
+            (_, NodeKind::Undef) => {
+                out.push(undef_comparison_finding(rule, source, node, op, left, right));
+            }
+            _ => {}
+        }
+    }
+
+    for child in node.children() {
+        collect_undef_comparison_findings(rule, source, child, out);
     }
 }
 
@@ -2695,6 +2794,113 @@ mod tests {
     }
 
     #[test]
+    fn native_undef_comparison_rule_reports_numeric_comparison_with_undef() {
+        let source = "use strict;\nuse warnings;\nmy $value = maybe();\nif ($value == undef) { print $value; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UndefComparisonRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.rule_id, "native.common.undef_comparison");
+        assert_eq!(finding.category, CriticCategory::Syntax);
+        assert_eq!(finding.severity, Severity::Stern);
+        assert_eq!(finding.message, "Using '==' with undef -- use defined() to check first");
+        assert_eq!(finding.suppression_key, "native.common.undef_comparison");
+        assert_eq!(&source[finding.range.start.byte..finding.range.end.byte], "$value == undef");
+        assert_eq!(finding.related.len(), 2);
+
+        let fix = finding.fix.as_ref().expect("undef comparison should offer defined() fix");
+        assert_eq!(fix.title, "Use defined() check");
+        assert_eq!(fix.safety, FixSafety::Suggested);
+        assert_eq!(fix.edits.len(), 1);
+        assert_eq!(fix.edits[0].new_text, "!defined($value)");
+    }
+
+    #[test]
+    fn native_undef_comparison_rule_reports_reversed_not_equal_comparison() {
+        let source = "use strict;\nuse warnings;\nmy $value = maybe();\nif (undef != $value) { print $value; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UndefComparisonRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "native.common.undef_comparison");
+        assert_eq!(
+            &source[findings[0].range.start.byte..findings[0].range.end.byte],
+            "undef != $value"
+        );
+        assert_eq!(
+            findings[0].fix.as_ref().expect("defined fix").edits[0].new_text,
+            "defined($value)"
+        );
+    }
+
+    #[test]
+    fn native_undef_comparison_rule_accepts_defined_checks_and_other_comparisons() {
+        let source = "use strict;\nuse warnings;\nmy $value = maybe();\nif (defined $value) { print $value; }\nif ($value == 0) { print $value; }\nif ($value eq undef) { print $value; }\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UndefComparisonRule)]);
+
+        let findings = registry.check(&ctx);
+
+        assert!(findings.is_empty(), "only numeric ==/!= comparisons with undef should report");
+    }
+
+    #[test]
+    fn native_undef_comparison_rule_composes_with_config_and_suppressions() {
+        let source = "use strict;\nuse warnings;\nmy $value = maybe();\nif ($value == undef) { print $value; }\n";
+        let ast = parse_source(source);
+        let excluded_config = CriticConfig {
+            exclude: vec!["native.common.undef_comparison".to_string()],
+            ..Default::default()
+        };
+        let excluded_ctx = CriticContext::new(source, &ast, &excluded_config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UndefComparisonRule)]);
+
+        assert!(registry.check(&excluded_ctx).is_empty());
+
+        let suppressed_source = "## no critic native.common.undef_comparison -- legacy check\nuse strict;\nuse warnings;\nmy $value = maybe();\nif ($value == undef) { print $value; }\n";
+        let suppressed_ast = parse_source(suppressed_source);
+        let config = CriticConfig::default();
+        let suppressed_ctx = CriticContext::new(suppressed_source, &suppressed_ast, &config);
+
+        assert!(registry.check(&suppressed_ctx).is_empty());
+    }
+
+    #[test]
+    fn native_undef_comparison_rule_flows_through_violation_bridge() {
+        let source = "use strict;\nuse warnings;\nmy $value = maybe();\n$value == undef;\n";
+        let ast = parse_source(source);
+        let config = CriticConfig::default();
+        let ctx = CriticContext::new(source, &ast, &config);
+        let registry = NativeCriticRegistry::with_rules(vec![Box::new(UndefComparisonRule)]);
+
+        let violations = registry.check_violations(&ctx, "lib/App.pm");
+
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].policy, "native.common.undef_comparison");
+        assert_eq!(
+            violations[0].description,
+            "Using '==' with undef -- use defined() to check first"
+        );
+        assert_eq!(
+            violations[0].explanation,
+            "Numeric comparison with undef is usually wrong because undef is coerced before comparison. Use defined(...) for definedness checks, or normalize the value before comparing."
+        );
+        assert_eq!(violations[0].severity, Severity::Stern);
+        assert_eq!(violations[0].file, "lib/App.pm");
+    }
+
+    #[test]
     fn native_bareword_filehandle_rule_reports_open_bareword() {
         let source = "use strict;\nuse warnings;\nopen(FH, '<', 'file.txt');\n";
         let ast = parse_source(source);
@@ -3461,6 +3667,7 @@ mod tests {
                 "native.common.assignment_in_condition",
                 "native.common.printf_format_arity",
                 "native.common.deprecated_defined",
+                "native.common.undef_comparison",
                 "native.io.bareword_filehandle",
                 "native.io.two_arg_open",
                 "native.io.pipe_open",

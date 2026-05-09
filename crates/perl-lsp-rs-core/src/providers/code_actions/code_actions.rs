@@ -163,6 +163,12 @@ impl CodeActionsProvider {
                         actions.extend(quick_fixes::fix_deprecated_defined(&self.source, &qf_diag));
                     }
                     // PL404: Numeric comparison with undef
+                    "native.common.undef_comparison" => {
+                        actions.extend(quick_fixes::fix_native_undef_comparison(
+                            &self.source,
+                            &qf_diag,
+                        ));
+                    }
                     c if c == DiagnosticCode::NumericComparisonWithUndef.as_str() => {
                         actions.extend(quick_fixes::fix_numeric_undef(&self.source, &qf_diag));
                     }
@@ -442,6 +448,29 @@ mod tests {
             actions.iter().any(|a| a.title == "Replace with '%seen'"
                 && a.edit.changes.iter().any(|edit| edit.new_text == "%seen")),
             "Expected native deprecated-defined alias to normalize parenthesized defined() removal, got: {:?}",
+            actions
+        );
+    }
+
+    #[test]
+    fn test_native_undef_comparison_alias_produces_defined_quick_fix() {
+        let source = "if ($value == undef) { print $value; }";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![make_diagnostic(
+            4,
+            19,
+            "native.common.undef_comparison",
+            "Using '==' with undef -- use defined() to check first",
+        )];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
+        assert!(
+            actions.iter().any(|a| a.title == "Use defined() check"
+                && a.edit.changes.iter().any(|edit| edit.new_text == "!defined($value)")),
+            "Expected native undef-comparison alias to offer defined() fix, got: {:?}",
             actions
         );
     }

@@ -139,6 +139,54 @@ fn normalize_deprecated_defined_arg(raw_arg: &str) -> &str {
         .unwrap_or(raw_arg)
 }
 
+pub(super) fn fix_native_undef_comparison(
+    provider: &CodeActionsProvider,
+    diagnostic: &Diagnostic,
+) -> Vec<CodeAction> {
+    let Some(replacement) = native_undef_comparison_replacement(
+        &provider.source()[diagnostic.range.0..diagnostic.range.1],
+    ) else {
+        return Vec::new();
+    };
+
+    vec![diagnostic_action(
+        diagnostic,
+        "Use defined() check",
+        CodeActionKind::QuickFix,
+        TextEdit { range: diagnostic.range, new_text: replacement },
+    )]
+}
+
+fn native_undef_comparison_replacement(text: &str) -> Option<String> {
+    if let Some((left, right)) = text.split_once("==") {
+        return native_defined_replacement(left, right, true);
+    }
+    if let Some((left, right)) = text.split_once("!=") {
+        return native_defined_replacement(left, right, false);
+    }
+
+    None
+}
+
+fn native_defined_replacement(left: &str, right: &str, equal: bool) -> Option<String> {
+    let left = left.trim();
+    let right = right.trim();
+    let compared = if left == "undef" {
+        right
+    } else if right == "undef" {
+        left
+    } else {
+        return None;
+    };
+    if compared.is_empty() {
+        return None;
+    }
+
+    let replacement =
+        if equal { format!("!defined({compared})") } else { format!("defined({compared})") };
+    Some(replacement)
+}
+
 pub(super) fn add_use_strict(diagnostic: &Diagnostic) -> Vec<CodeAction> {
     vec![diagnostic_action(
         diagnostic,

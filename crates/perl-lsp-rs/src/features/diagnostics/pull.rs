@@ -1114,6 +1114,7 @@ fn is_fixable_diagnostic(code: &str) -> bool {
             | "native.testing.require_use_strict"
             | "native.testing.require_use_warnings"
             | "native.common.deprecated_defined"
+            | "native.common.undef_comparison"
             | "native.io.bareword_filehandle"
             | "native.io.two_arg_open"
             | "InputOutput::ProhibitBarewordFileHandles"
@@ -1336,6 +1337,7 @@ mod tests {
         assert!(is_fixable_diagnostic("PL503"));
         assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseStrict"));
         assert!(is_fixable_diagnostic("TestingAndDebugging::RequireUseWarnings"));
+        assert!(is_fixable_diagnostic("native.common.undef_comparison"));
         assert!(is_fixable_diagnostic("InputOutput::RequireThreeArgOpen"));
         assert!(is_fixable_diagnostic("Variables::ProhibitUnusedVariables"));
     }
@@ -1351,7 +1353,7 @@ mod tests {
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
             &uri,
-            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy @items = (1, 2);\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nif (defined @items) { print @items; }\nprintf \"%s %s\", $path;\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nsystem($path);\nexec('ls', '-la');\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n",
+            "my $x = 1;\nmy $x = 2;\nmy $unused = 3;\nmy $shadow = 4;\nmy $outer_param = 0;\nmy $cond = 0;\nmy $path = 'file.txt';\nmy @items = (1, 2);\nmy $eval_code = 'print 1';\nmy $cmd_out = `ls`;\nmy $qx_out = qx(date);\nmy $readpipe_out = readpipe($path);\nif ($cond = 1) { print $cond; }\nif (defined @items) { print @items; }\nif ($path == undef) { print $path; }\nprintf \"%s %s\", $path;\nopen(FH, '<', 'file.txt');\nopen(my $log_fh, $path);\nopen(my $pipe_fh, '-|', 'ls');\neval $eval_code;\nsystem($path);\nexec('ls', '-la');\nprint $log_fh;\nprint $pipe_fh;\n{ my $shadow = 5; print $shadow; }\nsub helper($used_param, $unused_param) { return $used_param; }\nsub duplicate_param($dup_param, $dup_param) { return $dup_param; }\nsub shadow_param($outer_param) { return $outer_param; }\nprint $x + $shadow + $outer_param + $cond + $cmd_out + $qx_out + $readpipe_out;\n",
             None,
             &context,
             None,
@@ -1441,6 +1443,28 @@ mod tests {
             .ok_or("native deprecated-defined data should be populated")?;
         assert_eq!(data["code"], "native.common.deprecated_defined");
         assert_eq!(data["suppressionKey"], "native.common.deprecated_defined");
+        assert_eq!(data["fixable"], true);
+
+        let undef_comparison = items
+            .iter()
+            .find(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.common.undef_comparison"),
+                )
+            })
+            .ok_or("expected native undef-comparison finding")?;
+        assert_eq!(undef_comparison.source.as_deref(), Some("perl-lsp-critic"));
+        assert_eq!(undef_comparison.severity, Some(LspDiagnosticSeverity::WARNING));
+        assert_eq!(
+            undef_comparison.message,
+            "Using '==' with undef -- use defined() to check first"
+        );
+        let data = undef_comparison
+            .data
+            .as_ref()
+            .ok_or("native undef-comparison data should be populated")?;
+        assert_eq!(data["code"], "native.common.undef_comparison");
+        assert_eq!(data["suppressionKey"], "native.common.undef_comparison");
         assert_eq!(data["fixable"], true);
 
         let bareword_filehandle = items
