@@ -19,6 +19,16 @@ pub struct NativeFormatCheckConfig {
     pub receipt_dir: PathBuf,
 }
 
+/// Options for `cargo xtask native-format corpus`.
+pub struct NativeFormatCorpusConfig {
+    /// Files or directories containing corpus Perl sources.
+    pub roots: Vec<PathBuf>,
+    /// Output JSON receipt path.
+    pub receipt: PathBuf,
+    /// Output markdown summary path.
+    pub summary: PathBuf,
+}
+
 #[derive(Debug, Serialize)]
 struct NativeFormatFixturesReceipt {
     kind: &'static str,
@@ -38,6 +48,41 @@ struct NativeFormatFixturesReceipt {
     expected_diagnostics_fixture_count: usize,
     expected_diagnostics_match_count: usize,
     fixtures: Vec<NativeFormatFixtureResult>,
+    passed: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct NativeFormatCorpusReceipt {
+    kind: &'static str,
+    schema_version: u32,
+    generated_at: DateTime<Utc>,
+    commit: String,
+    roots: Vec<String>,
+    files_checked: usize,
+    files_changed: usize,
+    source_parse_clean_count: usize,
+    formatted_parse_clean_count: usize,
+    idempotence_passed_count: usize,
+    parse_preserved_count: usize,
+    literal_bailout_count: usize,
+    unsupported_patterns_count: usize,
+    diagnostics_count: usize,
+    passed: bool,
+    files: Vec<NativeFormatCorpusFileResult>,
+}
+
+#[derive(Debug, Serialize)]
+struct NativeFormatCorpusFileResult {
+    path: String,
+    changed: bool,
+    edit_count: usize,
+    diagnostic_codes: Vec<String>,
+    idempotent: bool,
+    source_parse_clean: bool,
+    formatted_parse_clean: bool,
+    parse_preserved: bool,
+    literal_bailout: bool,
+    unsupported_pattern: bool,
     passed: bool,
 }
 
@@ -163,6 +208,83 @@ pub fn check(config: NativeFormatCheckConfig) -> Result<()> {
     }
 }
 
+/// Check corpus files and write native formatter corpus receipts.
+pub fn corpus(config: NativeFormatCorpusConfig) -> Result<()> {
+    let roots = if config.roots.is_empty() { default_corpus_roots() } else { config.roots };
+    let files = collect_corpus_paths(&roots)?;
+    if files.is_empty() {
+        return Err(eyre!(
+            "no native formatter corpus files found under {}",
+            roots.iter().map(|root| root.display().to_string()).collect::<Vec<_>>().join(", ")
+        ));
+    }
+
+    let formatter = NativeFormatter::new();
+    let format_config = FormatConfig::default();
+    let mut results = Vec::new();
+    for file in files {
+        results.push(check_corpus_file(&formatter, &format_config, &file)?);
+    }
+
+    let generated_at = Utc::now();
+    let commit = current_commit();
+    let passed = results.iter().all(|result| result.passed);
+    let receipt = NativeFormatCorpusReceipt {
+        kind: "native_format_corpus",
+        schema_version: SCHEMA_VERSION,
+        generated_at,
+        commit,
+        roots: roots.iter().map(|root| root.display().to_string()).collect(),
+        files_checked: results.len(),
+        files_changed: results.iter().filter(|result| result.changed).count(),
+        source_parse_clean_count: results.iter().filter(|result| result.source_parse_clean).count(),
+        formatted_parse_clean_count: results
+            .iter()
+            .filter(|result| result.formatted_parse_clean)
+            .count(),
+        idempotence_passed_count: results.iter().filter(|result| result.idempotent).count(),
+        parse_preserved_count: results.iter().filter(|result| result.parse_preserved).count(),
+        literal_bailout_count: results.iter().filter(|result| result.literal_bailout).count(),
+        unsupported_patterns_count: results
+            .iter()
+            .filter(|result| result.unsupported_pattern)
+            .count(),
+        diagnostics_count: results.iter().map(|result| result.diagnostic_codes.len()).sum(),
+        passed,
+        files: results,
+    };
+
+    if let Some(parent) = config.receipt.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("failed to create {}", parent.display()))?;
+    }
+    if let Some(parent) = config.summary.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("failed to create {}", parent.display()))?;
+    }
+    write_json(&config.receipt, &receipt)?;
+    write_corpus_summary(&config.summary, &receipt)?;
+
+    println!(
+        "native formatter corpus: {}/{} parse-preserved, {}/{} idempotent; receipt: {}",
+        receipt.parse_preserved_count,
+        receipt.files_checked,
+        receipt.idempotence_passed_count,
+        receipt.files_checked,
+        config.receipt.display()
+    );
+
+    if receipt.passed {
+        Ok(())
+    } else {
+        Err(eyre!(
+            "native formatter corpus found {} file(s) without idempotence or parse preservation; see {}",
+            receipt.files.iter().filter(|result| !result.passed).count(),
+            config.receipt.display()
+        ))
+    }
+}
+
 fn collect_fixture_paths(fixtures: &Path) -> Result<Vec<PathBuf>> {
     let mut paths = Vec::new();
     for entry in WalkDir::new(fixtures).into_iter().filter_map(Result::ok) {
@@ -180,6 +302,87 @@ fn collect_fixture_paths(fixtures: &Path) -> Result<Vec<PathBuf>> {
     }
     paths.sort();
     Ok(paths)
+}
+
+fn default_corpus_roots() -> Vec<PathBuf> {
+    vec![
+        PathBuf::from("examples/perl"),
+        PathBuf::from("tests/perl-corpus"),
+        PathBuf::from("crates/perl-corpus/fixtures/parser_accuracy"),
+    ]
+}
+
+fn collect_corpus_paths(roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    let mut paths = Vec::new();
+    for root in roots {
+        if root.is_file() {
+            if is_perl_source(root) {
+                paths.push(root.to_path_buf());
+            }
+            continue;
+        }
+        if !root.exists() {
+            continue;
+        }
+        for entry in WalkDir::new(root).into_iter().filter_map(Result::ok) {
+            if entry.file_type().is_file() && is_perl_source(entry.path()) {
+                paths.push(entry.path().to_path_buf());
+            }
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
+}
+
+fn is_perl_source(path: &Path) -> bool {
+    let filename = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+    if filename.ends_with(".expected.pl") || filename.ends_with(".expected-diagnostics.txt") {
+        return false;
+    }
+    matches!(path.extension().and_then(|ext| ext.to_str()), Some("pl" | "pm" | "t"))
+}
+
+fn check_corpus_file(
+    formatter: &NativeFormatter,
+    config: &FormatConfig,
+    file: &Path,
+) -> Result<NativeFormatCorpusFileResult> {
+    let source =
+        fs::read_to_string(file).wrap_err_with(|| format!("failed to read {}", file.display()))?;
+    let result = formatter.format_document(&source, config);
+    let second = formatter.format_document(&result.formatted, config);
+    let diagnostic_codes =
+        result.diagnostics.iter().map(|diagnostic| diagnostic.code.clone()).collect::<Vec<_>>();
+    let source_parse_clean = parses_cleanly(&source);
+    let formatted_parse_clean = parses_cleanly(&result.formatted);
+    let idempotent = second.formatted == result.formatted && !second.changed;
+    let parse_preserved = if source_parse_clean {
+        formatted_parse_clean && !has_parse_preservation_diagnostic(&result)
+    } else {
+        result.formatted == source && !has_parse_preservation_diagnostic(&result)
+    };
+    let literal_bailout = !result.changed
+        && result.edits.is_empty()
+        && result.formatted == source
+        && diagnostic_codes.iter().any(|code| code == "native.format.literal_preserve_region");
+    let unsupported_pattern =
+        diagnostic_codes.iter().any(|code| code != "native.format.literal_preserve_region");
+    let passed = idempotent && parse_preserved;
+
+    Ok(NativeFormatCorpusFileResult {
+        path: file.display().to_string(),
+        changed: result.changed,
+        edit_count: result.edits.len(),
+        diagnostic_codes,
+        idempotent,
+        source_parse_clean,
+        formatted_parse_clean,
+        parse_preserved,
+        literal_bailout,
+        unsupported_pattern,
+        passed,
+    })
 }
 
 fn check_fixture(
@@ -327,6 +530,40 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
         .wrap_err_with(|| format!("failed to write {}", path.display()))
 }
 
+fn write_corpus_summary(path: &Path, receipt: &NativeFormatCorpusReceipt) -> Result<()> {
+    let mut markdown = String::new();
+    markdown.push_str("# Native Format Corpus\n\n");
+    markdown.push_str(&format!("- Commit: `{}`\n", receipt.commit));
+    markdown.push_str(&format!("- Files checked: {}\n", receipt.files_checked));
+    markdown.push_str(&format!("- Files changed: {}\n", receipt.files_changed));
+    markdown.push_str(&format!(
+        "- Idempotence: {}/{}\n",
+        receipt.idempotence_passed_count, receipt.files_checked
+    ));
+    markdown.push_str(&format!(
+        "- Parse preservation: {}/{}\n",
+        receipt.parse_preserved_count, receipt.files_checked
+    ));
+    markdown.push_str(&format!("- Literal bailouts: {}\n", receipt.literal_bailout_count));
+    markdown
+        .push_str(&format!("- Unsupported diagnostics: {}\n", receipt.unsupported_patterns_count));
+    markdown.push_str(&format!("- Passed: {}\n\n", receipt.passed));
+    markdown.push_str("| File | Changed | Idempotent | Parse Preserved | Diagnostics |\n");
+    markdown.push_str("| --- | --- | --- | --- | --- |\n");
+    for file in &receipt.files {
+        let diagnostics = if file.diagnostic_codes.is_empty() {
+            String::new()
+        } else {
+            file.diagnostic_codes.join(", ")
+        };
+        markdown.push_str(&format!(
+            "| `{}` | {} | {} | {} | {} |\n",
+            file.path, file.changed, file.idempotent, file.parse_preserved, diagnostics
+        ));
+    }
+    fs::write(path, markdown).wrap_err_with(|| format!("failed to write {}", path.display()))
+}
+
 fn current_commit() -> String {
     Command::new("git")
         .args(["rev-parse", "HEAD"])
@@ -400,6 +637,39 @@ mod tests {
             "native.format.literal_preserve_region"
         );
         assert_eq!(fixture_receipt["fixtures"][0]["bailout"], true);
+
+        Ok(())
+    }
+
+    #[test]
+    fn native_format_corpus_writes_receipt_and_summary() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let corpus_root = temp.path().join("corpus");
+        let receipts = temp.path().join("receipts");
+        fs::create_dir_all(&corpus_root)?;
+        fs::write(corpus_root.join("simple.pl"), "my$x=1;\n")?;
+        fs::write(corpus_root.join("pod.pl"), "=pod\n\n=head1 NAME\n\n=cut\n\nmy $x = 1;\n")?;
+
+        corpus(NativeFormatCorpusConfig {
+            roots: vec![corpus_root],
+            receipt: receipts.join("native-format-corpus.json"),
+            summary: receipts.join("native-format-corpus-summary.md"),
+        })?;
+
+        let receipt: Value =
+            serde_json::from_str(&fs::read_to_string(receipts.join("native-format-corpus.json"))?)?;
+        assert_eq!(receipt["kind"], "native_format_corpus");
+        assert_eq!(receipt["files_checked"], 2);
+        assert_eq!(receipt["files_changed"], 1);
+        assert_eq!(receipt["idempotence_passed_count"], 2);
+        assert_eq!(receipt["parse_preserved_count"], 2);
+        assert_eq!(receipt["literal_bailout_count"], 1);
+        assert_eq!(receipt["passed"], true);
+
+        let summary = fs::read_to_string(receipts.join("native-format-corpus-summary.md"))?;
+        assert!(summary.contains("# Native Format Corpus"));
+        assert!(summary.contains("Files checked: 2"));
+        assert!(summary.contains("Literal bailouts: 1"));
 
         Ok(())
     }
