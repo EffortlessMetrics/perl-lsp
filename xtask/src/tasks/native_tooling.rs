@@ -30,6 +30,16 @@ pub struct NativeToolingStatusConfig {
     pub markdown: Option<PathBuf>,
 }
 
+/// Options for `cargo xtask native-tooling perlcritic-compat`.
+pub struct PerlcriticCompatConfig {
+    /// Path to the `.perlcriticrc`-style profile to classify.
+    pub profile: PathBuf,
+    /// Output JSON receipt path.
+    pub receipt: PathBuf,
+    /// Output markdown summary path.
+    pub summary: PathBuf,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct NativeToolingStatusReceipt {
     kind: &'static str,
@@ -87,6 +97,32 @@ struct CriticStatus {
     rules_with_violation_bridge: usize,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct PerlcriticCompatReceipt {
+    kind: &'static str,
+    schema_version: u32,
+    generated_at: DateTime<Utc>,
+    commit: String,
+    profile: String,
+    item_count: usize,
+    native_equivalent_count: usize,
+    native_superset_count: usize,
+    approximated_count: usize,
+    unsupported_safe_count: usize,
+    external_only_count: usize,
+    items: Vec<PerlcriticCompatItem>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PerlcriticCompatItem {
+    kind: &'static str,
+    name: String,
+    value: Option<String>,
+    classification: &'static str,
+    native_rule: Option<&'static str>,
+    note: &'static str,
+}
+
 /// Write native tooling status receipts.
 pub fn status(config: NativeToolingStatusConfig) -> Result<()> {
     let receipt = build_status_receipt(&config)?;
@@ -112,6 +148,47 @@ pub fn status(config: NativeToolingStatusConfig) -> Result<()> {
         config.receipt.display()
     );
 
+    Ok(())
+}
+
+/// Classify a perlcritic profile against current native critic compatibility.
+pub fn perlcritic_compat(config: PerlcriticCompatConfig) -> Result<()> {
+    let raw = fs::read_to_string(&config.profile)
+        .wrap_err_with(|| format!("failed to read {}", config.profile.display()))?;
+    let items = classify_perlcritic_profile(&raw);
+    let receipt = PerlcriticCompatReceipt {
+        kind: "native_tooling_perlcritic_compat",
+        schema_version: SCHEMA_VERSION,
+        generated_at: Utc::now(),
+        commit: current_commit(),
+        profile: config.profile.display().to_string(),
+        item_count: items.len(),
+        native_equivalent_count: compat_count(&items, "native_equivalent"),
+        native_superset_count: compat_count(&items, "native_superset"),
+        approximated_count: compat_count(&items, "approximated"),
+        unsupported_safe_count: compat_count(&items, "unsupported_safe"),
+        external_only_count: compat_count(&items, "external_only"),
+        items,
+    };
+
+    if let Some(parent) = config.receipt.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("failed to create {}", parent.display()))?;
+    }
+    if let Some(parent) = config.summary.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("failed to create {}", parent.display()))?;
+    }
+    write_json(&config.receipt, &receipt)?;
+    write_perlcritic_compat_summary(&config.summary, &receipt)?;
+
+    println!(
+        "native critic perlcritic compatibility: {} native-equivalent, {} native-superset, {} external-only; receipt: {}",
+        receipt.native_equivalent_count,
+        receipt.native_superset_count,
+        receipt.external_only_count,
+        config.receipt.display()
+    );
     Ok(())
 }
 
@@ -443,6 +520,224 @@ Fixable native rules:
     )
 }
 
+fn classify_perlcritic_profile(raw: &str) -> Vec<PerlcriticCompatItem> {
+    let native_rules = NativeCriticRegistry::recommended()
+        .rule_ids()
+        .into_iter()
+        .map(ToOwned::to_owned)
+        .collect::<BTreeSet<_>>();
+    let mut items = Vec::new();
+
+    for line in raw.lines() {
+        let line = strip_perlcritic_comment(line).trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        if let Some(policy) = parse_perlcritic_policy_section(line) {
+            items.push(classify_perlcritic_policy(&policy, &native_rules));
+            continue;
+        }
+
+        if let Some((name, value)) = line.split_once('=') {
+            items.push(classify_perlcritic_setting(name.trim(), Some(value.trim().to_string())));
+            continue;
+        }
+
+        items.push(compat_item(
+            "setting",
+            line,
+            None,
+            "external_only",
+            None,
+            "unrecognized perlcritic profile line is not applied by native critic",
+        ));
+    }
+
+    items
+}
+
+fn strip_perlcritic_comment(line: &str) -> &str {
+    line.split('#').next().unwrap_or_default()
+}
+
+fn parse_perlcritic_policy_section(line: &str) -> Option<String> {
+    let inner = line.strip_prefix('[')?.strip_suffix(']')?.trim();
+    let policy = inner.strip_prefix('-').unwrap_or(inner).trim();
+    if policy.is_empty() { None } else { Some(policy.to_string()) }
+}
+
+fn classify_perlcritic_policy(
+    policy: &str,
+    native_rules: &BTreeSet<String>,
+) -> PerlcriticCompatItem {
+    match perlcritic_policy_native_mapping(policy) {
+        Some((native_rule, classification, note)) if native_rules.contains(native_rule) => {
+            compat_item("policy", policy, None, classification, Some(native_rule), note)
+        }
+        Some((native_rule, _, _)) => compat_item(
+            "policy",
+            policy,
+            None,
+            "external_only",
+            Some(native_rule),
+            "mapped native rule is not currently present in the recommended registry",
+        ),
+        None => compat_item(
+            "policy",
+            policy,
+            None,
+            "external_only",
+            None,
+            "perlcritic policy does not yet have a native rule mapping",
+        ),
+    }
+}
+
+fn perlcritic_policy_native_mapping(
+    policy: &str,
+) -> Option<(&'static str, &'static str, &'static str)> {
+    match policy {
+        "TestingAndDebugging::RequireUseStrict" => Some((
+            "native.testing.require_use_strict",
+            "native_equivalent",
+            "native critic emits the same strict-pragmas policy with LSP spans",
+        )),
+        "TestingAndDebugging::RequireUseWarnings" => Some((
+            "native.testing.require_use_warnings",
+            "native_equivalent",
+            "native critic emits the same warnings-pragmas policy with LSP spans",
+        )),
+        "InputOutput::ProhibitTwoArgOpen" => Some((
+            "native.io.two_arg_open",
+            "native_equivalent",
+            "native critic detects two-argument open and exposes the existing safe fix",
+        )),
+        "InputOutput::ProhibitBarewordFileHandles" => Some((
+            "native.io.bareword_filehandle",
+            "native_equivalent",
+            "native critic detects bareword filehandles and exposes the existing safe fix",
+        )),
+        "InputOutput::RequireCheckedOpen" => Some((
+            "native.io.unchecked_open_close",
+            "native_superset",
+            "native critic covers unchecked open and close result handling",
+        )),
+        "BuiltinFunctions::ProhibitStringyEval" => Some((
+            "native.security.string_eval",
+            "native_equivalent",
+            "native critic detects parser-confirmed string eval without shelling out",
+        )),
+        "InputOutput::ProhibitBacktickOperators" => Some((
+            "native.security.backtick_exec",
+            "native_superset",
+            "native critic splits backticks and qx/readpipe into precise native rules",
+        )),
+        "BuiltinFunctions::ProhibitSystemCalls" => Some((
+            "native.security.system_exec",
+            "native_equivalent",
+            "native critic reports system and exec command execution without an automatic fix",
+        )),
+        "Variables::ProhibitUnusedVariables" => Some((
+            "native.variables.unused_lexical",
+            "native_superset",
+            "native critic uses semantic scope facts and sigil-aware quick fixes",
+        )),
+        "Variables::ProhibitReusedNames" => Some((
+            "native.variables.duplicate_lexical",
+            "approximated",
+            "native critic has duplicate and shadowing rules but not a single combined perlcritic policy",
+        )),
+        _ => None,
+    }
+}
+
+fn classify_perlcritic_setting(name: &str, value: Option<String>) -> PerlcriticCompatItem {
+    match name {
+        "severity" => compat_item(
+            "setting",
+            name,
+            value,
+            "native_equivalent",
+            None,
+            "maps to native critic minimum severity filtering",
+        ),
+        "include" | "exclude" => compat_item(
+            "setting",
+            name,
+            value,
+            "native_equivalent",
+            None,
+            "maps to native critic include/exclude rule filtering for native rule IDs",
+        ),
+        "theme" => compat_item(
+            "setting",
+            name,
+            value,
+            "external_only",
+            None,
+            "native critic does not yet implement perlcritic theme expansion",
+        ),
+        "profile-strictness" => compat_item(
+            "setting",
+            name,
+            value,
+            "unsupported_safe",
+            None,
+            "perlcritic loader strictness has no runtime effect on native critic rules",
+        ),
+        _ => compat_item(
+            "setting",
+            name,
+            value,
+            "external_only",
+            None,
+            "perlcritic setting is not yet applied by native critic",
+        ),
+    }
+}
+
+fn compat_item(
+    kind: &'static str,
+    name: &str,
+    value: Option<String>,
+    classification: &'static str,
+    native_rule: Option<&'static str>,
+    note: &'static str,
+) -> PerlcriticCompatItem {
+    PerlcriticCompatItem { kind, name: name.to_string(), value, classification, native_rule, note }
+}
+
+fn compat_count(items: &[PerlcriticCompatItem], classification: &str) -> usize {
+    items.iter().filter(|item| item.classification == classification).count()
+}
+
+fn write_perlcritic_compat_summary(path: &Path, receipt: &PerlcriticCompatReceipt) -> Result<()> {
+    let mut markdown = String::new();
+    markdown.push_str("# Native Critic Perlcritic Compatibility\n\n");
+    markdown.push_str(&format!("- Profile: `{}`\n", receipt.profile));
+    markdown.push_str(&format!("- Items checked: {}\n", receipt.item_count));
+    markdown.push_str(&format!("- Native equivalent: {}\n", receipt.native_equivalent_count));
+    markdown.push_str(&format!("- Native superset: {}\n", receipt.native_superset_count));
+    markdown.push_str(&format!("- Approximated: {}\n", receipt.approximated_count));
+    markdown.push_str(&format!("- Unsupported safe: {}\n", receipt.unsupported_safe_count));
+    markdown.push_str(&format!("- External-only: {}\n\n", receipt.external_only_count));
+    markdown.push_str("| Kind | Name | Value | Classification | Native rule | Note |\n");
+    markdown.push_str("| --- | --- | --- | --- | --- | --- |\n");
+    for item in &receipt.items {
+        markdown.push_str(&format!(
+            "| {} | `{}` | {} | {} | {} | {} |\n",
+            item.kind,
+            item.name,
+            item.value.as_deref().unwrap_or(""),
+            item.classification,
+            item.native_rule.unwrap_or(""),
+            item.note
+        ));
+    }
+    fs::write(path, markdown).wrap_err_with(|| format!("failed to write {}", path.display()))
+}
+
 fn optional_metric(value: Option<usize>, receipt_present: bool) -> String {
     value.map(|value| value.to_string()).unwrap_or_else(|| {
         if receipt_present { "unknown".to_string() } else { "UNVERIFIED".to_string() }
@@ -621,6 +916,68 @@ mod tests {
             serde_json::from_str(&fs::read_to_string(missing_status_receipt)?)?;
         assert_eq!(missing_value["formatter"]["format_receipt_present"], false);
         assert_eq!(fs::read_to_string(missing_markdown)?, markdown);
+
+        Ok(())
+    }
+
+    #[test]
+    fn native_tooling_perlcritic_compat_classifies_common_profile() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let profile = temp.path().join(".perlcriticrc");
+        let receipts = temp.path().join("receipts");
+        fs::write(
+            &profile,
+            r#"# common policy profile
+severity = 3
+include = TestingAndDebugging::RequireUseStrict
+exclude = Documentation::RequirePodSections
+profile-strictness = quiet
+[TestingAndDebugging::RequireUseStrict]
+[-InputOutput::ProhibitTwoArgOpen]
+[InputOutput::RequireCheckedOpen]
+[Variables::ProhibitUnusedVariables]
+[Variables::ProhibitReusedNames]
+[Documentation::RequirePodSections]
+theme = core
+color = 1
+"#,
+        )?;
+
+        perlcritic_compat(PerlcriticCompatConfig {
+            profile,
+            receipt: receipts.join("perlcritic-compat.json"),
+            summary: receipts.join("perlcritic-compat.md"),
+        })?;
+
+        let receipt: Value =
+            serde_json::from_str(&fs::read_to_string(receipts.join("perlcritic-compat.json"))?)?;
+        assert_eq!(receipt["kind"], "native_tooling_perlcritic_compat");
+        assert_eq!(receipt["item_count"], 12);
+        assert_eq!(receipt["native_equivalent_count"], 5);
+        assert_eq!(receipt["native_superset_count"], 2);
+        assert_eq!(receipt["approximated_count"], 1);
+        assert_eq!(receipt["unsupported_safe_count"], 1);
+        assert_eq!(receipt["external_only_count"], 3);
+        assert_eq!(receipt["items"][0]["classification"], "native_equivalent");
+        assert_eq!(receipt["items"][2]["name"], "exclude");
+        assert_eq!(receipt["items"][5]["native_rule"], "native.io.two_arg_open");
+        assert_eq!(receipt["items"][6]["native_rule"], "native.io.unchecked_open_close");
+        assert_eq!(receipt["items"][8]["classification"], "approximated");
+        assert_eq!(receipt["items"][9]["classification"], "external_only");
+        assert_eq!(receipt["items"][11]["name"], "color");
+
+        let summary = fs::read_to_string(receipts.join("perlcritic-compat.md"))?;
+        assert!(summary.contains("# Native Critic Perlcritic Compatibility"));
+        assert!(summary.contains(
+            "| setting | `exclude` | Documentation::RequirePodSections | native_equivalent |"
+        ));
+        assert!(summary.contains("| policy | `InputOutput::ProhibitTwoArgOpen` |  | native_equivalent | native.io.two_arg_open |"));
+        assert!(summary.contains("| policy | `InputOutput::RequireCheckedOpen` |  | native_superset | native.io.unchecked_open_close |"));
+        assert!(
+            summary.contains("| policy | `Documentation::RequirePodSections` |  | external_only |")
+        );
+        assert!(summary.contains("| setting | `profile-strictness` | quiet | unsupported_safe |"));
+        assert!(summary.contains("| setting | `color` | 1 | external_only |"));
 
         Ok(())
     }
