@@ -177,6 +177,28 @@ fn native_formatter_wraps_simple_calls_lists_and_hashes_by_line_width() {
 }
 
 #[test]
+fn native_formatter_wraps_delimited_expression_when_statement_prefix_exceeds_width() {
+    let formatter = NativeFormatter::new();
+    let config = FormatConfig { line_width: 30, indent_width: 2, ..FormatConfig::default() };
+    let source = "my$long_variable_name=foo($a,$b);\nreturn foo($a,$b);\n";
+
+    let result = formatter.format_document(source, &config);
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        concat!(
+            "my $long_variable_name = foo(\n",
+            "  $a,\n",
+            "  $b\n",
+            ");\n",
+            "return foo($a, $b);\n",
+        )
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_preserves_indent_and_line_endings_for_simple_declarations() {
     let formatter = NativeFormatter::new();
     let source = "  my $x=1;\r\n\tour @y;\r\n";

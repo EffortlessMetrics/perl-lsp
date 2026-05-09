@@ -890,9 +890,15 @@ fn format_simple_lexical_tokens(
     if next_index == semicolon_index {
         Some(format!("{keyword} {variable};"))
     } else if tokens[next_index].kind == TokenKind::Assign {
-        let value =
-            format_simple_expression_tokens(tokens, next_index + 1, semicolon_index, config)?;
-        Some(format!("{keyword} {variable} = {value};"))
+        let prefix = format!("{keyword} {variable} = ");
+        let value = format_simple_expression_tokens(
+            tokens,
+            next_index + 1,
+            semicolon_index,
+            config,
+            prefix.chars().count(),
+        )?;
+        Some(format!("{prefix}{value};"))
     } else {
         None
     }
@@ -977,7 +983,14 @@ fn format_simple_return_tokens(
         return Some("return;".to_string());
     }
 
-    let value = format_simple_expression_tokens(tokens, 1, semicolon_index, config)?;
+    let prefix = "return ";
+    let value = format_simple_expression_tokens(
+        tokens,
+        1,
+        semicolon_index,
+        config,
+        prefix.chars().count(),
+    )?;
     Some(format!("return {value};"))
 }
 
@@ -997,7 +1010,14 @@ fn format_simple_assignment_tokens(
         return None;
     }
 
-    let value = format_simple_expression_tokens(tokens, next_index + 1, semicolon_index, config)?;
+    let prefix = format!("{variable} = ");
+    let value = format_simple_expression_tokens(
+        tokens,
+        next_index + 1,
+        semicolon_index,
+        config,
+        prefix.chars().count(),
+    )?;
     Some(format!("{variable} = {value};"))
 }
 
@@ -1012,7 +1032,7 @@ fn format_simple_expression_statement_tokens(
     }
 
     let semicolon_index = tokens.len() - 1;
-    let (call, next_index) = format_simple_call_tokens(tokens, 0, config)?;
+    let (call, next_index) = format_simple_call_tokens(tokens, 0, config, 0)?;
     (next_index == semicolon_index).then(|| format!("{call};"))
 }
 
@@ -1028,7 +1048,7 @@ fn format_simple_condition_tokens(
         .position(|token| token.kind == TokenKind::RightParen)
         .map(|offset| start + offset)?;
     let condition_config = FormatConfig { line_width: u32::MAX, ..config.clone() };
-    let condition = format_simple_expression_tokens(tokens, start, end, &condition_config)?;
+    let condition = format_simple_expression_tokens(tokens, start, end, &condition_config, 0)?;
     Some((condition, end))
 }
 
@@ -1037,14 +1057,17 @@ fn format_simple_expression_tokens(
     start: usize,
     end: usize,
     config: &FormatConfig,
+    start_column: usize,
 ) -> Option<String> {
-    let (left, next_index) = format_simple_atom_tokens(tokens, start, config)?;
+    let (left, next_index) = format_simple_atom_tokens(tokens, start, config, start_column)?;
     if next_index == end {
         return Some(left);
     }
 
     let operator = simple_binary_operator_text(tokens.get(next_index)?)?;
-    let (right, final_index) = format_simple_atom_tokens(tokens, next_index + 1, config)?;
+    let right_column = advance_column(start_column, &left) + operator.chars().count() + 2;
+    let (right, final_index) =
+        format_simple_atom_tokens(tokens, next_index + 1, config, right_column)?;
     (final_index == end).then(|| format!("{left} {operator} {right}"))
 }
 
@@ -1052,8 +1075,10 @@ fn format_simple_atom_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
     config: &FormatConfig,
+    start_column: usize,
 ) -> Option<(String, usize)> {
-    if let Some((method_call, next_index)) = format_simple_method_call_tokens(tokens, start, config)
+    if let Some((method_call, next_index)) =
+        format_simple_method_call_tokens(tokens, start, config, start_column)
     {
         return Some((method_call, next_index));
     }
@@ -1062,15 +1087,18 @@ fn format_simple_atom_tokens(
         return Some((variable, next_index));
     }
 
-    if let Some((call, next_index)) = format_simple_call_tokens(tokens, start, config) {
+    if let Some((call, next_index)) = format_simple_call_tokens(tokens, start, config, start_column)
+    {
         return Some((call, next_index));
     }
 
-    if let Some((list, next_index)) = format_simple_list_tokens(tokens, start, config) {
+    if let Some((list, next_index)) = format_simple_list_tokens(tokens, start, config, start_column)
+    {
         return Some((list, next_index));
     }
 
-    if let Some((hash, next_index)) = format_simple_hash_tokens(tokens, start, config) {
+    if let Some((hash, next_index)) = format_simple_hash_tokens(tokens, start, config, start_column)
+    {
         return Some((hash, next_index));
     }
 
@@ -1083,6 +1111,7 @@ fn format_simple_method_call_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
     config: &FormatConfig,
+    start_column: usize,
 ) -> Option<(String, usize)> {
     use perl_parser_core::TokenKind;
 
@@ -1094,7 +1123,7 @@ fn format_simple_method_call_tokens(
             break;
         }
         let (method_call, next_index) =
-            format_simple_method_call_segment(tokens, index, &expression, config)?;
+            format_simple_method_call_segment(tokens, index, &expression, config, start_column)?;
         expression = method_call;
         index = next_index;
         saw_method = true;
@@ -1108,6 +1137,7 @@ fn format_simple_method_call_segment(
     arrow_index: usize,
     receiver: &str,
     config: &FormatConfig,
+    start_column: usize,
 ) -> Option<(String, usize)> {
     use perl_parser_core::TokenKind;
 
@@ -1128,8 +1158,11 @@ fn format_simple_method_call_segment(
         return Some((format!("{receiver}->{}()", method.text), index + 1));
     }
 
+    let open = format!("{receiver}->{}(", method.text);
+    let mut arg_column = start_column + open.chars().count();
     loop {
-        let (arg, next_index) = format_simple_atom_tokens(tokens, index, config)?;
+        let (arg, next_index) = format_simple_atom_tokens(tokens, index, config, arg_column)?;
+        arg_column = advance_column(arg_column, &arg) + 2;
         args.push(arg);
         index = next_index;
 
@@ -1137,7 +1170,7 @@ fn format_simple_method_call_segment(
             TokenKind::Comma => index += 1,
             TokenKind::RightParen => {
                 return Some((
-                    render_simple_method_call_doc(receiver, method.text.as_ref(), &args, config),
+                    render_delimited_doc(&open, ")", &args, config, start_column),
                     index + 1,
                 ));
             }
@@ -1146,19 +1179,11 @@ fn format_simple_method_call_segment(
     }
 }
 
-fn render_simple_method_call_doc(
-    receiver: &str,
-    method: &str,
-    args: &[String],
-    config: &FormatConfig,
-) -> String {
-    render_delimited_doc(&format!("{receiver}->{method}("), ")", args, config)
-}
-
 fn format_simple_call_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
     config: &FormatConfig,
+    start_column: usize,
 ) -> Option<(String, usize)> {
     use perl_parser_core::TokenKind;
 
@@ -1173,8 +1198,11 @@ fn format_simple_call_tokens(
         return Some((format!("{}()", name.text), index + 1));
     }
 
+    let open = format!("{}(", name.text);
+    let mut arg_column = start_column + open.chars().count();
     loop {
-        let (arg, next_index) = format_simple_atom_tokens(tokens, index, config)?;
+        let (arg, next_index) = format_simple_atom_tokens(tokens, index, config, arg_column)?;
+        arg_column = advance_column(arg_column, &arg) + 2;
         args.push(arg);
         index = next_index;
 
@@ -1182,7 +1210,7 @@ fn format_simple_call_tokens(
             TokenKind::Comma => index += 1,
             TokenKind::RightParen => {
                 return Some((
-                    render_delimited_doc(&format!("{}(", name.text), ")", &args, config),
+                    render_delimited_doc(&open, ")", &args, config, start_column),
                     index + 1,
                 ));
             }
@@ -1195,6 +1223,7 @@ fn format_simple_list_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
     config: &FormatConfig,
+    start_column: usize,
 ) -> Option<(String, usize)> {
     use perl_parser_core::TokenKind;
 
@@ -1208,15 +1237,20 @@ fn format_simple_list_tokens(
         return Some(("()".to_string(), index + 1));
     }
 
+    let mut item_column = start_column + 1;
     loop {
-        let (item, next_index) = format_simple_atom_tokens(tokens, index, config)?;
+        let (item, next_index) = format_simple_atom_tokens(tokens, index, config, item_column)?;
+        item_column = advance_column(item_column, &item) + 2;
         items.push(item);
         index = next_index;
 
         match tokens.get(index)?.kind {
             TokenKind::Comma => index += 1,
             TokenKind::RightParen => {
-                return Some((render_delimited_doc("(", ")", &items, config), index + 1));
+                return Some((
+                    render_delimited_doc("(", ")", &items, config, start_column),
+                    index + 1,
+                ));
             }
             _ => return None,
         }
@@ -1227,6 +1261,7 @@ fn format_simple_hash_tokens(
     tokens: &[perl_parser_core::Token],
     start: usize,
     config: &FormatConfig,
+    start_column: usize,
 ) -> Option<(String, usize)> {
     use perl_parser_core::TokenKind;
 
@@ -1248,14 +1283,15 @@ fn format_simple_hash_tokens(
         }
         index += 1;
 
-        let (value, next_index) = format_simple_atom_tokens(tokens, index, config)?;
+        let value_column = start_column + 1 + key.chars().count() + " => ".len();
+        let (value, next_index) = format_simple_atom_tokens(tokens, index, config, value_column)?;
         pairs.push((key, value));
         index = next_index;
 
         match tokens.get(index)?.kind {
             TokenKind::Comma => index += 1,
             TokenKind::RightBrace => {
-                return Some((render_simple_hash_doc(&pairs, config), index + 1));
+                return Some((render_simple_hash_doc(&pairs, config, start_column), index + 1));
             }
             _ => return None,
         }
@@ -1266,9 +1302,13 @@ fn format_simple_hash_key_token(token: &perl_parser_core::Token) -> Option<Strin
     simple_value_text(token).map(str::to_string)
 }
 
-fn render_simple_hash_doc(pairs: &[(String, String)], config: &FormatConfig) -> String {
+fn render_simple_hash_doc(
+    pairs: &[(String, String)],
+    config: &FormatConfig,
+    start_column: usize,
+) -> String {
     let items = pairs.iter().map(|(key, value)| format!("{key} => {value}")).collect::<Vec<_>>();
-    render_delimited_doc("{", "}", &items, config)
+    render_delimited_doc("{", "}", &items, config, start_column)
 }
 
 fn render_delimited_doc(
@@ -1276,7 +1316,9 @@ fn render_delimited_doc(
     close: &str,
     items: &[String],
     config: &FormatConfig,
+    start_column: usize,
 ) -> String {
+    let render_config = config_for_start_column(config, start_column);
     let mut parts = vec![FormatDoc::text(open)];
     if !items.is_empty() {
         let mut item_docs = vec![FormatDoc::if_break(FormatDoc::SoftLine, FormatDoc::text(""))];
@@ -1291,7 +1333,24 @@ fn render_delimited_doc(
         parts.push(FormatDoc::if_break(FormatDoc::SoftLine, FormatDoc::text("")));
     }
     parts.push(FormatDoc::text(close));
-    FormatDoc::group(parts).render(config)
+    FormatDoc::group(parts).render(&render_config)
+}
+
+fn config_for_start_column(config: &FormatConfig, start_column: usize) -> FormatConfig {
+    if config.line_width == u32::MAX {
+        return config.clone();
+    }
+
+    let remaining = (config.line_width as usize).saturating_sub(start_column).max(1);
+    FormatConfig { line_width: remaining.min(u32::MAX as usize) as u32, ..config.clone() }
+}
+
+fn advance_column(start_column: usize, text: &str) -> usize {
+    if let Some((_, tail)) = text.rsplit_once('\n') {
+        tail.chars().count()
+    } else {
+        start_column + text.chars().count()
+    }
 }
 
 fn simple_binary_operator_text(token: &perl_parser_core::Token) -> Option<&str> {
