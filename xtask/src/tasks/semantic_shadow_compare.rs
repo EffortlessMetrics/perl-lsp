@@ -132,14 +132,29 @@ fn build_artifact() -> Artifact {
             "imported_func",
             Some(vec![]),
             Some(vec!["false_positive_removed:imported_func"]),
-            "diagnostics shadow fixture: legacy=warn compiler_fact=suppress via ImportSpec/ExportSet; false_positive_delta=-1; false_negative_delta=0",
+            "diagnostics live cutover fixture: legacy=warn compiler_fact=suppress via ImportSpec/ExportSet; false_positive_delta=-1; false_negative_delta=0",
             vec![trace(
                 ProviderSurface::Diagnostics,
                 ProviderFactSourceKind::CompilerFact,
                 Provenance::ImportExportInference,
                 Confidence::High,
                 ProviderFactFreshness::Fresh,
-                ProviderFallbackState::Shadow,
+                ProviderFallbackState::Primary,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::DiagnosticsCheck,
+            "generated_accessor",
+            Some(vec![]),
+            Some(vec!["false_positive_removed:generated_accessor"]),
+            "diagnostics live cutover fixture: legacy=warn compiler_fact=suppress via framework-generated visibility; false_positive_delta=-1; false_negative_delta=0",
+            vec![trace(
+                ProviderSurface::Diagnostics,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::FrameworkSynthesis,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Primary,
             )],
         ),
         receipt_from_identities(
@@ -147,14 +162,29 @@ fn build_artifact() -> Artifact {
             "genuinely_missing",
             Some(vec!["warn:genuinely_missing"]),
             Some(vec!["warn:genuinely_missing"]),
-            "diagnostics shadow fixture: compiler facts preserve exact undefined-symbol warning; false_positive_delta=0; false_negative_delta=0",
+            "diagnostics live cutover fixture: compiler facts preserve exact undefined-symbol warning; false_positive_delta=0; false_negative_delta=0",
             vec![trace(
                 ProviderSurface::Diagnostics,
                 ProviderFactSourceKind::CompilerFact,
                 Provenance::SemanticAnalyzer,
                 Confidence::High,
                 ProviderFactFreshness::Fresh,
-                ProviderFallbackState::Shadow,
+                ProviderFallbackState::Primary,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::DiagnosticsCheck,
+            "ambiguous_import",
+            Some(vec!["warn:ambiguous_import"]),
+            Some(vec!["weak_warn:ambiguous_import"]),
+            "diagnostics live cutover fixture: ambiguous/low-confidence compiler fact falls back instead of suppressing; false_positive_delta=0; false_negative_delta=0",
+            vec![trace(
+                ProviderSurface::Diagnostics,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::ImportExportInference,
+                Confidence::Low,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Fallback,
             )],
         ),
         receipt_from_identities(
@@ -388,18 +418,18 @@ mod tests {
         let artifact = build_artifact();
         assert_eq!(artifact.schema_version, 3);
         assert_eq!(artifact.verdict_counts.get("same"), Some(&2));
-        assert_eq!(artifact.verdict_counts.get("improved"), Some(&3));
+        assert_eq!(artifact.verdict_counts.get("improved"), Some(&4));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
-        assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&1));
+        assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&2));
         assert_eq!(artifact.verdict_counts.get("unavailable"), Some(&1));
         assert_eq!(artifact.release_readiness_verdict_counts.get("same"), Some(&1));
         assert_eq!(artifact.release_readiness_verdict_counts.get("improved"), Some(&1));
         assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&1));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&2));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&3));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("regression"), Some(&1));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&1));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&2));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("unavailable"), Some(&1));
         assert!(
             artifact.receipts.iter().all(|receipt| !receipt.fact_source_traces.is_empty()),
@@ -424,7 +454,9 @@ mod tests {
         assert!(markdown.contains("| schema-fixture | CountUsages"));
         assert!(markdown.contains("## Fact Source Traces"));
         assert!(markdown.contains("| release-readiness | FindDefinition | Definition | CompilerFact | SemanticAnalyzer | High | Fresh | Shadow |"));
-        assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | High | Fresh | Shadow |"));
+        assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | High | Fresh | Primary |"));
+        assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | FrameworkSynthesis | High | Fresh | Primary |"));
+        assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | CompilerFact | ImportExportInference | Low | Fresh | Fallback |"));
         assert!(markdown.contains("| schema-fixture | DiagnosticsCheck | Diagnostics | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
     }
 

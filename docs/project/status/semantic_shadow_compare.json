@@ -210,7 +210,7 @@
       },
       "verdict": "improved",
       "notes": [
-        "diagnostics shadow fixture: legacy=warn compiler_fact=suppress via ImportSpec/ExportSet; false_positive_delta=-1; false_negative_delta=0"
+        "diagnostics live cutover fixture: legacy=warn compiler_fact=suppress via ImportSpec/ExportSet; false_positive_delta=-1; false_negative_delta=0"
       ],
       "fact_source_traces": [
         {
@@ -219,7 +219,43 @@
           "provenance": "ImportExportInference",
           "confidence": "High",
           "freshness": "Fresh",
-          "fallback_state": "Shadow",
+          "fallback_state": "Primary",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "diagnostics_check",
+      "input": {
+        "symbol": "generated_accessor"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "false_positive_removed:generated_accessor"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "diagnostics live cutover fixture: legacy=warn compiler_fact=suppress via framework-generated visibility; false_positive_delta=-1; false_negative_delta=0"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Diagnostics",
+          "source": "CompilerFact",
+          "provenance": "FrameworkSynthesis",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Primary",
           "source_hash": "deterministic-fixture",
           "anchor_id": 1,
           "model_version": 1
@@ -248,7 +284,7 @@
       },
       "verdict": "same",
       "notes": [
-        "diagnostics shadow fixture: compiler facts preserve exact undefined-symbol warning; false_positive_delta=0; false_negative_delta=0"
+        "diagnostics live cutover fixture: compiler facts preserve exact undefined-symbol warning; false_positive_delta=0; false_negative_delta=0"
       ],
       "fact_source_traces": [
         {
@@ -257,7 +293,45 @@
           "provenance": "SemanticAnalyzer",
           "confidence": "High",
           "freshness": "Fresh",
-          "fallback_state": "Shadow",
+          "fallback_state": "Primary",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "diagnostics_check",
+      "input": {
+        "symbol": "ambiguous_import"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "warn:ambiguous_import"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "weak_warn:ambiguous_import"
+        ]
+      },
+      "verdict": "ambiguous",
+      "notes": [
+        "diagnostics live cutover fixture: ambiguous/low-confidence compiler fact falls back instead of suppressing; false_positive_delta=0; false_negative_delta=0"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "Diagnostics",
+          "source": "CompilerFact",
+          "provenance": "ImportExportInference",
+          "confidence": "Low",
+          "freshness": "Fresh",
+          "fallback_state": "Fallback",
           "source_hash": "deterministic-fixture",
           "anchor_id": 1,
           "model_version": 1
@@ -302,8 +376,8 @@
     }
   ],
   "verdict_counts": {
-    "ambiguous": 1,
-    "improved": 3,
+    "ambiguous": 2,
+    "improved": 4,
     "regression": 1,
     "same": 2,
     "unavailable": 1
@@ -316,8 +390,8 @@
     "unavailable": 0
   },
   "schema_fixture_verdict_counts": {
-    "ambiguous": 1,
-    "improved": 2,
+    "ambiguous": 2,
+    "improved": 3,
     "regression": 1,
     "same": 1,
     "unavailable": 1

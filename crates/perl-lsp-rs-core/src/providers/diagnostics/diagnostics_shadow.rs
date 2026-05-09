@@ -89,7 +89,8 @@ pub fn diagnostics_undefined_symbol_shadow<Q: SemanticQueries>(
     let new_summary = classification_to_summary(&classification, symbol);
 
     // Build receipt
-    let fact_source_traces = diagnostics_fact_source_traces(&classification, &candidates);
+    let fact_source_traces =
+        diagnostics_fact_source_traces(&classification, &candidates, ProviderFallbackState::Shadow);
     let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::DiagnosticsCheck,
         ShadowQueryInput { symbol: symbol.to_string() },
@@ -244,7 +245,11 @@ pub fn diagnostics_undefined_symbol_cutover<Q: SemanticQueries>(
         }
     };
 
-    let fact_source_traces = diagnostics_fact_source_traces(&classification, &candidates);
+    let fact_source_traces = diagnostics_fact_source_traces(
+        &classification,
+        &candidates,
+        cutover_fallback_state(&classification, &candidates),
+    );
     let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
         ShadowQueryName::DiagnosticsCheck,
         ShadowQueryInput { symbol: symbol.to_string() },
@@ -352,13 +357,14 @@ fn classification_to_summary(
 fn diagnostics_fact_source_traces(
     classification: &DiagnosticClassification,
     candidates: &[DefinitionCandidate],
+    fallback_state: ProviderFallbackState,
 ) -> Vec<ProviderFactTrace> {
-    if let Some(candidate) = candidates.first() {
+    if let Some(candidate) = select_trace_candidate(candidates, fallback_state) {
         return vec![diagnostics_trace(
             provider_source_for_provenance(candidate.provenance),
             candidate.provenance,
             candidate.confidence,
-            ProviderFallbackState::Shadow,
+            fallback_state,
             Some(candidate.anchor_id),
         )];
     }
@@ -375,7 +381,50 @@ fn diagnostics_fact_source_traces(
         }
     };
 
-    vec![diagnostics_trace(source, provenance, confidence, ProviderFallbackState::Shadow, None)]
+    vec![diagnostics_trace(source, provenance, confidence, fallback_state, None)]
+}
+
+fn select_trace_candidate(
+    candidates: &[DefinitionCandidate],
+    fallback_state: ProviderFallbackState,
+) -> Option<&DefinitionCandidate> {
+    match fallback_state {
+        ProviderFallbackState::Blocked => candidates
+            .iter()
+            .find(|candidate| candidate.provenance == Provenance::DynamicBoundary)
+            .or_else(|| candidates.first()),
+        ProviderFallbackState::Primary => {
+            candidates.iter().find(|candidate| is_primary_cutover_candidate(candidate))
+        }
+        _ => candidates.first(),
+    }
+}
+
+fn cutover_fallback_state(
+    classification: &DiagnosticClassification,
+    candidates: &[DefinitionCandidate],
+) -> ProviderFallbackState {
+    if candidates.iter().any(|candidate| candidate.provenance == Provenance::DynamicBoundary) {
+        return ProviderFallbackState::Blocked;
+    }
+
+    match classification {
+        DiagnosticClassification::Exact => ProviderFallbackState::Primary,
+        DiagnosticClassification::DynamicOrUnavailable
+            if candidates.len() == 1 && candidates.iter().any(is_primary_cutover_candidate) =>
+        {
+            ProviderFallbackState::Primary
+        }
+        DiagnosticClassification::DynamicOrUnavailable => ProviderFallbackState::Fallback,
+        DiagnosticClassification::Ambiguous => ProviderFallbackState::Fallback,
+    }
+}
+
+fn is_primary_cutover_candidate(candidate: &DefinitionCandidate) -> bool {
+    matches!(
+        candidate.provenance,
+        Provenance::ImportExportInference | Provenance::FrameworkSynthesis
+    ) && candidate.confidence == Confidence::High
 }
 
 fn diagnostics_trace(
@@ -850,6 +899,44 @@ mod tests {
 
         // Semantic path finds the import -> suppress (no false positive).
         assert_eq!(outcome.action, DiagnosticAction::Suppress);
+        assert_eq!(
+            outcome.receipt.fact_source_traces[0].fallback_state,
+            ProviderFallbackState::Primary
+        );
+        assert_eq!(
+            outcome.receipt.fact_source_traces[0].provenance,
+            Provenance::ImportExportInference
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_suppress_generated_symbol_with_primary_trace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let generated = make_candidate(
+            "generated_accessor",
+            10,
+            20,
+            Provenance::FrameworkSynthesis,
+            Confidence::High,
+        );
+        let queries = StubSemanticQueries { definitions_result: vec![generated] };
+
+        let outcome = diagnostics_undefined_symbol_cutover(
+            true,
+            &queries,
+            "generated_accessor",
+            FileId(1),
+            None,
+            5,
+            false,
+        );
+
+        assert_eq!(outcome.action, DiagnosticAction::Suppress);
+        let trace = &outcome.receipt.fact_source_traces[0];
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::FrameworkSynthesis);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
         Ok(())
     }
 
@@ -872,6 +959,10 @@ mod tests {
         assert_eq!(outcome.action, DiagnosticAction::Suppress);
         // Must NOT be Exact classification in dynamic scope.
         assert_eq!(outcome.classification, DiagnosticClassification::DynamicOrUnavailable);
+        assert_eq!(
+            outcome.receipt.fact_source_traces[0].fallback_state,
+            ProviderFallbackState::Blocked
+        );
         Ok(())
     }
 
@@ -915,6 +1006,77 @@ mod tests {
 
         // Medium confidence is usable -> symbol is defined -> suppress.
         assert_eq!(outcome.action, DiagnosticAction::Suppress);
+        assert_eq!(
+            outcome.receipt.fact_source_traces[0].fallback_state,
+            ProviderFallbackState::Fallback
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_low_confidence_trace_uses_fallback_state() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let low = make_candidate(
+            "maybe_imported",
+            1,
+            1,
+            Provenance::ImportExportInference,
+            Confidence::Low,
+        );
+        let queries = StubSemanticQueries { definitions_result: vec![low] };
+
+        let outcome = diagnostics_undefined_symbol_cutover(
+            true,
+            &queries,
+            "maybe_imported",
+            FileId(1),
+            None,
+            10,
+            false,
+        );
+
+        assert_eq!(outcome.action, DiagnosticAction::WeakWarn);
+        assert_eq!(
+            outcome.receipt.fact_source_traces[0].fallback_state,
+            ProviderFallbackState::Fallback
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cutover_ambiguous_compiler_fact_trace_uses_fallback_state()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let first = make_candidate(
+            "ambiguous_import",
+            1,
+            1,
+            Provenance::ImportExportInference,
+            Confidence::High,
+        );
+        let second = make_candidate(
+            "ambiguous_import",
+            2,
+            2,
+            Provenance::FrameworkSynthesis,
+            Confidence::High,
+        );
+        let queries = StubSemanticQueries { definitions_result: vec![first, second] };
+
+        let outcome = diagnostics_undefined_symbol_cutover(
+            true,
+            &queries,
+            "ambiguous_import",
+            FileId(1),
+            None,
+            10,
+            false,
+        );
+
+        assert_eq!(outcome.action, DiagnosticAction::Suppress);
+        assert_eq!(
+            outcome.receipt.fact_source_traces[0].fallback_state,
+            ProviderFallbackState::Fallback
+        );
         Ok(())
     }
 

@@ -5,7 +5,7 @@
 
 use perl_diagnostics::codes::DiagnosticCode;
 use perl_semantic_analyzer::scope_analyzer::{IssueKind, ScopeIssue};
-use perl_semantic_facts::FileId;
+use perl_semantic_facts::{Confidence, FileId, VisibleSymbol, VisibleSymbolSource};
 use perl_workspace::semantic::queries::SemanticQueries;
 
 use super::internal_types::{Diagnostic, DiagnosticTag, RelatedInformation};
@@ -101,6 +101,9 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
 ///   (e.g. `Foo->import(@names)`) — any bareword in the file might be imported.
 /// - The file has a `DynamicBoundary` occurrence whose entity name matches the
 ///   bareword (e.g. `eval "sub NAME { ... }"` — only `NAME` is suppressed).
+/// - The symbol is visible from exactly one high-confidence imported,
+///   exported, or generated compiler fact. Low-confidence, ambiguous, or
+///   dynamic visibility remains diagnosed.
 ///
 /// Non-literal evals, non-Dynamic imports, and genuinely missing subs still fire.
 ///
@@ -188,6 +191,14 @@ pub fn scope_issues_to_diagnostics_with_semantics<Q: SemanticQueries>(
                 );
                 continue;
             }
+
+            if has_proven_compiler_visible_symbol(semantic_queries, file_id, byte_offset, symbol) {
+                tracing::debug!(
+                    bareword = %issue.variable_name,
+                    "suppressed UnquotedBareword diagnostic: compiler fact proves imported/generated symbol"
+                );
+                continue;
+            }
         }
 
         // ── All other issue kinds ── (and unsuppressed UndeclaredVariable /
@@ -241,6 +252,35 @@ pub fn scope_issues_to_diagnostics_with_semantics<Q: SemanticQueries>(
     }
 
     diagnostics
+}
+
+fn has_proven_compiler_visible_symbol<Q: SemanticQueries>(
+    semantic_queries: &Q,
+    file_id: FileId,
+    byte_offset: u32,
+    symbol: &str,
+) -> bool {
+    let visible = semantic_queries.visible_symbols_at(file_id, byte_offset, None);
+    let mut matching = visible.iter().filter(|candidate| candidate.name == symbol);
+    let Some(candidate) = matching.next() else {
+        return false;
+    };
+
+    if matching.next().is_some() {
+        return false;
+    }
+
+    is_proven_compiler_visible_symbol(candidate)
+}
+
+fn is_proven_compiler_visible_symbol(candidate: &VisibleSymbol) -> bool {
+    matches!(
+        candidate.source,
+        VisibleSymbolSource::ExplicitImport
+            | VisibleSymbolSource::DefaultExport
+            | VisibleSymbolSource::ExportTag
+            | VisibleSymbolSource::Generated
+    ) && candidate.confidence == Confidence::High
 }
 
 /// Build related information for a scope issue (extracted for reuse).
@@ -408,7 +448,7 @@ mod tests {
     use perl_semantic_facts::{
         AnchorId, Confidence, DefinitionCandidate, EntityFact, EntityId, FileId, OccurrenceFact,
         OccurrenceId, OccurrenceKind, Provenance, RenamePlan, SafeDeletePlan, ScopeId,
-        VisibleSymbol,
+        VisibleSymbol, VisibleSymbolSource,
     };
     use perl_workspace::semantic::queries::{
         DynamicCallableEvidence, QueryContext, SemanticQueries,
@@ -655,6 +695,85 @@ mod tests {
         }
     }
 
+    struct VisibleSymbolsStubQueries {
+        visible_symbols: Vec<VisibleSymbol>,
+    }
+
+    impl SemanticQueries for VisibleSymbolsStubQueries {
+        fn symbol_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+        ) -> Option<(EntityFact, OccurrenceFact)> {
+            None
+        }
+
+        fn definitions(&self, _symbol: &str, _context: &QueryContext) -> Vec<DefinitionCandidate> {
+            Vec::new()
+        }
+
+        fn references(&self, _entity_id: EntityId) -> Vec<OccurrenceFact> {
+            Vec::new()
+        }
+
+        fn visible_symbols_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _scope_id: Option<ScopeId>,
+        ) -> Vec<VisibleSymbol> {
+            self.visible_symbols.clone()
+        }
+
+        fn method_candidates(
+            &self,
+            _receiver_package: &str,
+            _method_name: &str,
+        ) -> Vec<DefinitionCandidate> {
+            Vec::new()
+        }
+
+        fn rename_plan(&self, entity_id: EntityId, new_name: &str) -> RenamePlan {
+            RenamePlan::new(entity_id, String::new(), new_name.to_string(), vec![], vec![], vec![])
+        }
+
+        fn safe_delete_plan(&self, entity_id: EntityId) -> SafeDeletePlan {
+            SafeDeletePlan::new(entity_id, String::new(), vec![], vec![])
+        }
+
+        fn dynamic_boundary_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _symbol: Option<&str>,
+        ) -> Option<OccurrenceFact> {
+            None
+        }
+
+        fn dynamic_callable_may_be_visible_at(
+            &self,
+            _file_id: FileId,
+            _byte_offset: u32,
+            _symbol: &str,
+        ) -> Option<DynamicCallableEvidence> {
+            None
+        }
+    }
+
+    fn visible_symbol(
+        name: &str,
+        source: VisibleSymbolSource,
+        confidence: Confidence,
+    ) -> VisibleSymbol {
+        VisibleSymbol {
+            name: name.to_string(),
+            entity_id: Some(EntityId(9001)),
+            source,
+            confidence,
+            context: None,
+        }
+    }
+
     // ── Tests ──
 
     #[test]
@@ -835,6 +954,152 @@ mod tests {
             diagnostics.len(),
             1,
             "UnquotedBareword with no dynamic evidence must still fire"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn suppresses_unquoted_bareword_when_high_confidence_import_fact_exists()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let issues = vec![bareword_issue("imported_func", (10, 23))];
+        let queries = VisibleSymbolsStubQueries {
+            visible_symbols: vec![visible_symbol(
+                "imported_func",
+                VisibleSymbolSource::ExplicitImport,
+                Confidence::High,
+            )],
+        };
+
+        let diagnostics = scope_issues_to_diagnostics_with_semantics(issues, FileId(1), &queries);
+
+        assert!(
+            diagnostics.is_empty(),
+            "high-confidence import/export compiler fact should suppress imported bareword"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn suppresses_unquoted_bareword_when_high_confidence_export_visibility_exists()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for source in [VisibleSymbolSource::DefaultExport, VisibleSymbolSource::ExportTag] {
+            let issues = vec![bareword_issue("exported_func", (10, 23))];
+            let queries = VisibleSymbolsStubQueries {
+                visible_symbols: vec![visible_symbol(
+                    "exported_func",
+                    source.clone(),
+                    Confidence::High,
+                )],
+            };
+
+            let diagnostics =
+                scope_issues_to_diagnostics_with_semantics(issues, FileId(1), &queries);
+
+            assert!(
+                diagnostics.is_empty(),
+                "high-confidence {source:?} visibility should suppress exported bareword"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn suppresses_unquoted_bareword_when_high_confidence_framework_fact_exists()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let issues = vec![bareword_issue("generated_member", (10, 26))];
+        let queries = VisibleSymbolsStubQueries {
+            visible_symbols: vec![visible_symbol(
+                "generated_member",
+                VisibleSymbolSource::Generated,
+                Confidence::High,
+            )],
+        };
+
+        let diagnostics = scope_issues_to_diagnostics_with_semantics(issues, FileId(1), &queries);
+
+        assert!(
+            diagnostics.is_empty(),
+            "high-confidence framework compiler fact should suppress generated bareword"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn low_confidence_import_fact_does_not_suppress_unquoted_bareword()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let issues = vec![bareword_issue("maybe_imported_func", (10, 29))];
+        let queries = VisibleSymbolsStubQueries {
+            visible_symbols: vec![visible_symbol(
+                "maybe_imported_func",
+                VisibleSymbolSource::ExplicitImport,
+                Confidence::Low,
+            )],
+        };
+
+        let diagnostics = scope_issues_to_diagnostics_with_semantics(issues, FileId(1), &queries);
+
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "low-confidence import/export fact should not silently suppress diagnostics"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn dynamic_boundary_candidate_blocks_compiler_fact_suppression()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let issues = vec![bareword_issue("dynamic_symbol", (10, 24))];
+        let queries = VisibleSymbolsStubQueries {
+            visible_symbols: vec![
+                visible_symbol(
+                    "dynamic_symbol",
+                    VisibleSymbolSource::DynamicUnknown,
+                    Confidence::Low,
+                ),
+                visible_symbol(
+                    "dynamic_symbol",
+                    VisibleSymbolSource::ExplicitImport,
+                    Confidence::High,
+                ),
+            ],
+        };
+
+        let diagnostics = scope_issues_to_diagnostics_with_semantics(issues, FileId(1), &queries);
+
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "dynamic-boundary candidate should block imported/generated fact suppression"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ambiguous_import_visibility_does_not_expand_live_bareword_cutover()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let issues = vec![bareword_issue("ambiguous_sub", (10, 23))];
+        let queries = VisibleSymbolsStubQueries {
+            visible_symbols: vec![
+                visible_symbol(
+                    "ambiguous_sub",
+                    VisibleSymbolSource::ExplicitImport,
+                    Confidence::High,
+                ),
+                visible_symbol(
+                    "ambiguous_sub",
+                    VisibleSymbolSource::DefaultExport,
+                    Confidence::High,
+                ),
+            ],
+        };
+
+        let diagnostics = scope_issues_to_diagnostics_with_semantics(issues, FileId(1), &queries);
+
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "ambiguous imported/generated visibility should not silently suppress diagnostics"
         );
         Ok(())
     }
