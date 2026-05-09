@@ -33,6 +33,12 @@
 | Push diagnostics coverage | 26 |
 | Workspace diagnostics coverage | 26 |
 | Violation bridge coverage | 26 |
+| Perlcritic compatibility items | 12 |
+| Perlcritic compatibility native-equivalent | 5 |
+| Perlcritic compatibility native-superset | 2 |
+| Perlcritic compatibility approximated | 1 |
+| Perlcritic compatibility unsupported-safe | 1 |
+| Perlcritic compatibility external-only | 3 |
 
 Native rules:
 - `native.testing.require_use_strict`

@@ -24,6 +24,8 @@ pub struct NativeToolingStatusConfig {
     pub format_corpus_receipt: PathBuf,
     /// Existing native-format perltidy compatibility receipt, when available.
     pub format_perltidy_compat_receipt: PathBuf,
+    /// Existing native critic perlcritic compatibility receipt, when available.
+    pub critic_perlcritic_compat_receipt: PathBuf,
     /// Output path for the native-tooling JSON receipt.
     pub receipt: PathBuf,
     /// Optional markdown status output path.
@@ -95,6 +97,14 @@ struct CriticStatus {
     rules_surfaced_in_push_diagnostics: usize,
     rules_surfaced_in_workspace_diagnostics: usize,
     rules_with_violation_bridge: usize,
+    critic_perlcritic_compat_receipt: String,
+    critic_perlcritic_compat_receipt_present: bool,
+    perlcritic_compat_item_count: Option<usize>,
+    perlcritic_compat_native_equivalent_count: Option<usize>,
+    perlcritic_compat_native_superset_count: Option<usize>,
+    perlcritic_compat_approximated_count: Option<usize>,
+    perlcritic_compat_unsupported_safe_count: Option<usize>,
+    perlcritic_compat_external_only_count: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -199,7 +209,7 @@ fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeTool
         &config.format_corpus_receipt,
         &config.format_perltidy_compat_receipt,
     )?;
-    let critic = critic_status()?;
+    let critic = critic_status(&config.critic_perlcritic_compat_receipt)?;
     Ok(NativeToolingStatusReceipt {
         kind: "native_tooling_status",
         schema_version: SCHEMA_VERSION,
@@ -326,7 +336,7 @@ fn read_expected_diagnostic_codes(path: &Path) -> Result<Vec<String>> {
         .collect())
 }
 
-fn critic_status() -> Result<CriticStatus> {
+fn critic_status(critic_perlcritic_compat_receipt: &Path) -> Result<CriticStatus> {
     let registry = NativeCriticRegistry::recommended();
     let native_rules = registry.rule_ids().into_iter().map(ToOwned::to_owned).collect::<Vec<_>>();
     let fixable = fixable_rule_ids();
@@ -337,6 +347,11 @@ fn critic_status() -> Result<CriticStatus> {
     if !missing_fix_rules.is_empty() {
         return Err(eyre!("fixable native critic rule(s) not in registry: {missing_fix_rules:?}"));
     }
+    let perlcritic_compat_receipt = if critic_perlcritic_compat_receipt.exists() {
+        Some(read_json(critic_perlcritic_compat_receipt)?)
+    } else {
+        None
+    };
 
     Ok(CriticStatus {
         native_rule_count: native_rules.len(),
@@ -347,6 +362,29 @@ fn critic_status() -> Result<CriticStatus> {
         rules_surfaced_in_push_diagnostics: native_rules.len(),
         rules_surfaced_in_workspace_diagnostics: native_rules.len(),
         rules_with_violation_bridge: native_rules.len(),
+        critic_perlcritic_compat_receipt: critic_perlcritic_compat_receipt.display().to_string(),
+        critic_perlcritic_compat_receipt_present: perlcritic_compat_receipt.is_some(),
+        perlcritic_compat_item_count: optional_usize(&perlcritic_compat_receipt, "item_count"),
+        perlcritic_compat_native_equivalent_count: optional_usize(
+            &perlcritic_compat_receipt,
+            "native_equivalent_count",
+        ),
+        perlcritic_compat_native_superset_count: optional_usize(
+            &perlcritic_compat_receipt,
+            "native_superset_count",
+        ),
+        perlcritic_compat_approximated_count: optional_usize(
+            &perlcritic_compat_receipt,
+            "approximated_count",
+        ),
+        perlcritic_compat_unsupported_safe_count: optional_usize(
+            &perlcritic_compat_receipt,
+            "unsupported_safe_count",
+        ),
+        perlcritic_compat_external_only_count: optional_usize(
+            &perlcritic_compat_receipt,
+            "external_only_count",
+        ),
         native_rules,
     })
 }
@@ -450,6 +488,30 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
         formatter.perltidy_compat_external_only_count,
         formatter.format_perltidy_compat_receipt_present,
     );
+    let perlcritic_compat_items = optional_metric(
+        critic.perlcritic_compat_item_count,
+        critic.critic_perlcritic_compat_receipt_present,
+    );
+    let perlcritic_compat_native_equivalent = optional_metric(
+        critic.perlcritic_compat_native_equivalent_count,
+        critic.critic_perlcritic_compat_receipt_present,
+    );
+    let perlcritic_compat_native_superset = optional_metric(
+        critic.perlcritic_compat_native_superset_count,
+        critic.critic_perlcritic_compat_receipt_present,
+    );
+    let perlcritic_compat_approximated = optional_metric(
+        critic.perlcritic_compat_approximated_count,
+        critic.critic_perlcritic_compat_receipt_present,
+    );
+    let perlcritic_compat_unsupported_safe = optional_metric(
+        critic.perlcritic_compat_unsupported_safe_count,
+        critic.critic_perlcritic_compat_receipt_present,
+    );
+    let perlcritic_compat_external_only = optional_metric(
+        critic.perlcritic_compat_external_only_count,
+        critic.critic_perlcritic_compat_receipt_present,
+    );
     format!(
         r#"# Native Tooling Status
 
@@ -486,6 +548,12 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
 | Push diagnostics coverage | {} |
 | Workspace diagnostics coverage | {} |
 | Violation bridge coverage | {} |
+| Perlcritic compatibility items | {} |
+| Perlcritic compatibility native-equivalent | {} |
+| Perlcritic compatibility native-superset | {} |
+| Perlcritic compatibility approximated | {} |
+| Perlcritic compatibility unsupported-safe | {} |
+| Perlcritic compatibility external-only | {} |
 
 Native rules:
 {}
@@ -515,6 +583,12 @@ Fixable native rules:
         critic.rules_surfaced_in_push_diagnostics,
         critic.rules_surfaced_in_workspace_diagnostics,
         critic.rules_with_violation_bridge,
+        perlcritic_compat_items,
+        perlcritic_compat_native_equivalent,
+        perlcritic_compat_native_superset,
+        perlcritic_compat_approximated,
+        perlcritic_compat_unsupported_safe,
+        perlcritic_compat_external_only,
         bullet_list(&critic.native_rules),
         bullet_list(&critic.fixable_rules),
     )
@@ -830,6 +904,19 @@ mod tests {
 }
 "#,
         )?;
+        let critic_perlcritic_compat_receipt = receipts.join("perlcritic-compat.json");
+        fs::write(
+            &critic_perlcritic_compat_receipt,
+            r#"{
+  "item_count": 12,
+  "native_equivalent_count": 5,
+  "native_superset_count": 2,
+  "approximated_count": 1,
+  "unsupported_safe_count": 1,
+  "external_only_count": 3
+}
+"#,
+        )?;
         let receipt = receipts.join("native-tooling-status.json");
         let markdown = receipts.join("native-tooling-status.md");
         let missing_receipt = receipts.join("missing-native-format-fixtures.json");
@@ -841,6 +928,7 @@ mod tests {
             format_receipt: format_receipt.clone(),
             format_corpus_receipt: format_corpus_receipt.clone(),
             format_perltidy_compat_receipt: format_perltidy_compat_receipt.clone(),
+            critic_perlcritic_compat_receipt: critic_perlcritic_compat_receipt.clone(),
             receipt: receipt.clone(),
             markdown: Some(markdown.clone()),
         })?;
@@ -871,6 +959,13 @@ mod tests {
         assert_eq!(value["formatter"]["perltidy_compat_unsupported_safe_count"], 1);
         assert_eq!(value["formatter"]["perltidy_compat_external_only_count"], 2);
         assert!(value["critic"]["native_rule_count"].as_u64().unwrap_or_default() > 0);
+        assert_eq!(value["critic"]["critic_perlcritic_compat_receipt_present"], true);
+        assert_eq!(value["critic"]["perlcritic_compat_item_count"], 12);
+        assert_eq!(value["critic"]["perlcritic_compat_native_equivalent_count"], 5);
+        assert_eq!(value["critic"]["perlcritic_compat_native_superset_count"], 2);
+        assert_eq!(value["critic"]["perlcritic_compat_approximated_count"], 1);
+        assert_eq!(value["critic"]["perlcritic_compat_unsupported_safe_count"], 1);
+        assert_eq!(value["critic"]["perlcritic_compat_external_only_count"], 3);
         let native_rules = value["critic"]["native_rules"]
             .as_array()
             .ok_or_else(|| eyre!("native_rules should be an array"))?;
@@ -901,6 +996,12 @@ mod tests {
         assert!(markdown.contains("| Perltidy compatibility approximated | 1 |"));
         assert!(markdown.contains("| Perltidy compatibility unsupported-safe | 1 |"));
         assert!(markdown.contains("| Perltidy compatibility external-only | 2 |"));
+        assert!(markdown.contains("| Perlcritic compatibility items | 12 |"));
+        assert!(markdown.contains("| Perlcritic compatibility native-equivalent | 5 |"));
+        assert!(markdown.contains("| Perlcritic compatibility native-superset | 2 |"));
+        assert!(markdown.contains("| Perlcritic compatibility approximated | 1 |"));
+        assert!(markdown.contains("| Perlcritic compatibility unsupported-safe | 1 |"));
+        assert!(markdown.contains("| Perlcritic compatibility external-only | 3 |"));
         assert!(markdown.contains("native.io.unchecked_open_close"));
 
         status(NativeToolingStatusConfig {
@@ -908,6 +1009,7 @@ mod tests {
             format_receipt: missing_receipt,
             format_corpus_receipt,
             format_perltidy_compat_receipt,
+            critic_perlcritic_compat_receipt,
             receipt: missing_status_receipt.clone(),
             markdown: Some(missing_markdown.clone()),
         })?;

@@ -1890,6 +1890,10 @@ enum NativeToolingCommand {
         #[arg(long, default_value = "target/receipts/format/native-format-perltidy-compat.json")]
         format_perltidy_compat_receipt: PathBuf,
 
+        /// Native critic perlcritic compatibility receipt to summarize.
+        #[arg(long, default_value = "target/receipts/native-tooling/perlcritic-compat.json")]
+        critic_perlcritic_compat_receipt: PathBuf,
+
         /// Output path for native-tooling status JSON.
         #[arg(long, default_value = "target/receipts/native-tooling/status.json")]
         receipt: PathBuf,
@@ -2280,6 +2284,7 @@ fn main() -> Result<()> {
                 format_receipt,
                 format_corpus_receipt,
                 format_perltidy_compat_receipt,
+                critic_perlcritic_compat_receipt,
                 receipt,
                 markdown,
             } => native_tooling::status(native_tooling::NativeToolingStatusConfig {
@@ -2287,6 +2292,7 @@ fn main() -> Result<()> {
                 format_receipt,
                 format_corpus_receipt,
                 format_perltidy_compat_receipt,
+                critic_perlcritic_compat_receipt,
                 receipt,
                 markdown,
             }),
