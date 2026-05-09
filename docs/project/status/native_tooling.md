@@ -16,11 +16,11 @@
 | Corpus literal bailouts | 24 |
 | Corpus unsupported diagnostics | 10 |
 | Corpus passed | true |
-| Perltidy compatibility options | 9 |
+| Perltidy compatibility options | 8 |
 | Perltidy compatibility supported | 7 |
 | Perltidy compatibility approximated | 0 |
 | Perltidy compatibility unsupported-safe | 1 |
-| Perltidy compatibility external-only | 1 |
+| Perltidy compatibility external-only | 0 |
 | Config source | defaults |
 | Selected formatter engine | native |
 | External formatter adapter requested | false |

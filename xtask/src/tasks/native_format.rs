@@ -1113,10 +1113,7 @@ mod tests {
         let temp = tempfile::tempdir()?;
         let profile = temp.path().join(".perltidyrc");
         let receipts = temp.path().join("receipts");
-        fs::write(
-            &profile,
-            "# common profile\n-l=100\n-i 2\n-nt\n-ce\n-nsok\n-q\n-atc\n-bl\n--unknown-style\n",
-        )?;
+        fs::write(&profile, "# common profile\n-l=100\n-i 2\n-nt\n-ce\n-nsok\n-q\n-atc\n-bl\n")?;
 
         perltidy_compat(NativeFormatPerltidyCompatConfig {
             profile,
@@ -1128,10 +1125,10 @@ mod tests {
             receipts.join("native-format-perltidy-compat.json"),
         )?)?;
         assert_eq!(receipt["kind"], "native_format_perltidy_compat");
-        assert_eq!(receipt["option_count"], 9);
+        assert_eq!(receipt["option_count"], 8);
         assert_eq!(receipt["supported_count"], 7);
         assert_eq!(receipt["approximated_count"], 0);
-        assert_eq!(receipt["external_only_count"], 1);
+        assert_eq!(receipt["external_only_count"], 0);
         assert_eq!(receipt["unsupported_safe_count"], 1);
         assert_eq!(receipt["options"][0]["native_field"], "format.line_width");
         assert_eq!(receipt["options"][1]["value"], "2");
@@ -1148,6 +1145,32 @@ mod tests {
         let summary = fs::read_to_string(receipts.join("native-format-perltidy-compat.md"))?;
         assert!(summary.contains("# Native Format Perltidy Compatibility"));
         assert!(summary.contains("| `-l` | 100 | supported | format.line_width |"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn native_format_perltidy_compat_keeps_unknown_options_external_only() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let profile = temp.path().join(".perltidyrc");
+        let receipts = temp.path().join("receipts");
+        fs::write(&profile, "--unknown-style\n")?;
+
+        perltidy_compat(NativeFormatPerltidyCompatConfig {
+            profile,
+            receipt: receipts.join("native-format-perltidy-compat.json"),
+            summary: receipts.join("native-format-perltidy-compat.md"),
+        })?;
+
+        let receipt: Value = serde_json::from_str(&fs::read_to_string(
+            receipts.join("native-format-perltidy-compat.json"),
+        )?)?;
+        assert_eq!(receipt["option_count"], 1);
+        assert_eq!(receipt["external_only_count"], 1);
+        assert_eq!(receipt["options"][0]["option"], "--unknown-style");
+        assert_eq!(receipt["options"][0]["classification"], "external_only");
+
+        let summary = fs::read_to_string(receipts.join("native-format-perltidy-compat.md"))?;
         assert!(summary.contains("| `--unknown-style` |  | external_only |"));
 
         Ok(())
