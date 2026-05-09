@@ -632,6 +632,7 @@ pub enum ProviderSurface {
     Rename,
     SafeDelete,
     WorkspaceSymbols,
+    DocumentSymbols,
     SemanticTokens,
 }
 
@@ -1328,6 +1329,7 @@ mod tests {
             ProviderSurface::Rename,
             ProviderSurface::SafeDelete,
             ProviderSurface::WorkspaceSymbols,
+            ProviderSurface::DocumentSymbols,
             ProviderSurface::SemanticTokens,
         ] {
             let serialized = serde_json::to_string(&surface)?;

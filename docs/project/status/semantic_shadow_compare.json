@@ -1035,6 +1035,148 @@
     },
     {
       "schema_version": 2,
+      "query": "document_symbols",
+      "input": {
+        "symbol": "document_symbol_explicit"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "document:Foo:package:0:0"
+        ]
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "document:Foo:package:0:0"
+        ]
+      },
+      "verdict": "same",
+      "notes": [
+        "document-symbol shadow proof: explicit syntax source/freshness trace matches legacy identity without changing live provider behavior"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "DocumentSymbols",
+          "source": "ParserSyntax",
+          "provenance": "ExactAst",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "document_symbols",
+      "input": {
+        "symbol": "document_symbol_generated"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 1,
+        "identities": [
+          "generated:Foo::generated_accessor:virtual"
+        ]
+      },
+      "verdict": "improved",
+      "notes": [
+        "document-symbol shadow proof: framework-generated candidate is labeled as generated/virtual, not treated as an exact source-backed symbol"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "DocumentSymbols",
+          "source": "FrameworkAdapter",
+          "provenance": "FrameworkSynthesis",
+          "confidence": "Medium",
+          "freshness": "Fresh",
+          "fallback_state": "Shadow",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "document_symbols",
+      "input": {
+        "symbol": "document_symbol_dynamic_boundary"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "verdict": "same",
+      "notes": [
+        "document-symbol shadow proof: dynamic-boundary facts block false document-symbol precision"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "DocumentSymbols",
+          "source": "DynamicBoundary",
+          "provenance": "DynamicBoundary",
+          "confidence": "High",
+          "freshness": "Fresh",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "query": "document_symbols",
+      "input": {
+        "symbol": "document_symbol_stale_fact"
+      },
+      "old_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "new_result": {
+        "available": true,
+        "match_count": 0,
+        "identities": []
+      },
+      "verdict": "same",
+      "notes": [
+        "document-symbol shadow proof: stale compiler facts cannot authorize document-symbol answers"
+      ],
+      "fact_source_traces": [
+        {
+          "surface": "DocumentSymbols",
+          "source": "CompilerFact",
+          "provenance": "SemanticAnalyzer",
+          "confidence": "Low",
+          "freshness": "Stale",
+          "fallback_state": "Blocked",
+          "source_hash": "deterministic-fixture",
+          "anchor_id": 1,
+          "model_version": 1
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
       "query": "rename_plan",
       "input": {
         "symbol": "rename_exact_static"
@@ -1340,9 +1482,9 @@
   ],
   "verdict_counts": {
     "ambiguous": 2,
-    "improved": 7,
+    "improved": 8,
     "regression": 1,
-    "same": 26,
+    "same": 29,
     "unavailable": 0
   },
   "release_readiness_verdict_counts": {
@@ -1354,9 +1496,9 @@
   },
   "schema_fixture_verdict_counts": {
     "ambiguous": 2,
-    "improved": 6,
+    "improved": 7,
     "regression": 1,
-    "same": 17,
+    "same": 20,
     "unavailable": 0
   },
   "notes": "0.13.2 semantic shadow proof: release-readiness counts include provider-gating receipts only; schema fixture receipts exercise non-gating verdict shapes."

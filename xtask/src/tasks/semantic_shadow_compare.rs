@@ -473,6 +473,66 @@ fn build_artifact() -> Artifact {
             )],
         ),
         receipt_from_identities(
+            ShadowQueryName::DocumentSymbols,
+            "document_symbol_explicit",
+            Some(vec!["document:Foo:package:0:0"]),
+            Some(vec!["document:Foo:package:0:0"]),
+            "document-symbol shadow proof: explicit syntax source/freshness trace matches legacy identity without changing live provider behavior",
+            vec![trace(
+                ProviderSurface::DocumentSymbols,
+                ProviderFactSourceKind::ParserSyntax,
+                Provenance::ExactAst,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::DocumentSymbols,
+            "document_symbol_generated",
+            Some(vec![]),
+            Some(vec!["generated:Foo::generated_accessor:virtual"]),
+            "document-symbol shadow proof: framework-generated candidate is labeled as generated/virtual, not treated as an exact source-backed symbol",
+            vec![trace(
+                ProviderSurface::DocumentSymbols,
+                ProviderFactSourceKind::FrameworkAdapter,
+                Provenance::FrameworkSynthesis,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Shadow,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::DocumentSymbols,
+            "document_symbol_dynamic_boundary",
+            Some(vec![]),
+            Some(vec![]),
+            "document-symbol shadow proof: dynamic-boundary facts block false document-symbol precision",
+            vec![trace(
+                ProviderSurface::DocumentSymbols,
+                ProviderFactSourceKind::DynamicBoundary,
+                Provenance::DynamicBoundary,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
+            ShadowQueryName::DocumentSymbols,
+            "document_symbol_stale_fact",
+            Some(vec![]),
+            Some(vec![]),
+            "document-symbol shadow proof: stale compiler facts cannot authorize document-symbol answers",
+            vec![trace(
+                ProviderSurface::DocumentSymbols,
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::Low,
+                ProviderFactFreshness::Stale,
+                ProviderFallbackState::Blocked,
+            )],
+        ),
+        receipt_from_identities(
             ShadowQueryName::RenamePlan,
             "rename_exact_static",
             Some(vec!["edit:definition:anchor:1"]),
@@ -807,8 +867,8 @@ mod tests {
     fn artifact_includes_required_verdict_rows() {
         let artifact = build_artifact();
         assert_eq!(artifact.schema_version, 3);
-        assert_eq!(artifact.verdict_counts.get("same"), Some(&26));
-        assert_eq!(artifact.verdict_counts.get("improved"), Some(&7));
+        assert_eq!(artifact.verdict_counts.get("same"), Some(&29));
+        assert_eq!(artifact.verdict_counts.get("improved"), Some(&8));
         assert_eq!(artifact.verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.verdict_counts.get("ambiguous"), Some(&2));
         assert_eq!(artifact.verdict_counts.get("unavailable"), Some(&0));
@@ -816,8 +876,8 @@ mod tests {
         assert_eq!(artifact.release_readiness_verdict_counts.get("improved"), Some(&1));
         assert_eq!(artifact.release_readiness_verdict_counts.get("regression"), Some(&0));
         assert_eq!(artifact.release_readiness_verdict_counts.get("unavailable"), Some(&0));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&17));
-        assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&6));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("same"), Some(&20));
+        assert_eq!(artifact.schema_fixture_verdict_counts.get("improved"), Some(&7));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("regression"), Some(&1));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("ambiguous"), Some(&2));
         assert_eq!(artifact.schema_fixture_verdict_counts.get("unavailable"), Some(&0));
@@ -870,6 +930,22 @@ mod tests {
         assert!(markdown.contains("| schema-fixture | WorkspaceSymbols | WorkspaceSymbols | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |"));
         assert!(markdown.contains("| schema-fixture | WorkspaceSymbols | WorkspaceSymbols | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
         assert!(markdown.contains("| schema-fixture | WorkspaceSymbols | WorkspaceSymbols | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |"));
+        assert!(markdown.contains(
+            "| schema-fixture | DocumentSymbols | `document_symbol_explicit` | same | 1 | 1 |"
+        ));
+        assert!(markdown.contains(
+            "| schema-fixture | DocumentSymbols | `document_symbol_generated` | improved | 0 | 1 |"
+        ));
+        assert!(markdown.contains(
+            "| schema-fixture | DocumentSymbols | `document_symbol_dynamic_boundary` | same | 0 | 0 |"
+        ));
+        assert!(markdown.contains(
+            "| schema-fixture | DocumentSymbols | `document_symbol_stale_fact` | same | 0 | 0 |"
+        ));
+        assert!(markdown.contains("| schema-fixture | DocumentSymbols | DocumentSymbols | ParserSyntax | ExactAst | High | Fresh | Shadow |"));
+        assert!(markdown.contains("| schema-fixture | DocumentSymbols | DocumentSymbols | FrameworkAdapter | FrameworkSynthesis | Medium | Fresh | Shadow |"));
+        assert!(markdown.contains("| schema-fixture | DocumentSymbols | DocumentSymbols | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
+        assert!(markdown.contains("| schema-fixture | DocumentSymbols | DocumentSymbols | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |"));
         assert!(markdown.contains("| schema-fixture | RenamePlan | Rename | SemanticFact | ExactAst | High | Fresh | Shadow |"));
         assert!(markdown.contains("| schema-fixture | RenamePlan | Rename | DynamicBoundary | DynamicBoundary | High | Fresh | Blocked |"));
         assert!(markdown.contains("| schema-fixture | RenamePlan | Rename | CompilerFact | SemanticAnalyzer | Low | Stale | Blocked |"));
