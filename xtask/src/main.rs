@@ -493,6 +493,12 @@ enum Commands {
         command: NativeFormatCommand,
     },
 
+    /// Report native formatter and critic replacement status.
+    NativeTooling {
+        #[command(subcommand)]
+        command: NativeToolingCommand,
+    },
+
     /// Run production security hardening checks.
     SecurityHardening,
 
@@ -1836,6 +1842,28 @@ enum NativeFormatCommand {
 }
 
 #[derive(Subcommand)]
+enum NativeToolingCommand {
+    /// Write native formatter and critic status receipts.
+    Status {
+        /// Directory containing native formatter fixtures.
+        #[arg(long, default_value = "crates/perl-lsp-perltidy/tests/fixtures/native_formatter")]
+        format_fixtures: PathBuf,
+
+        /// Native-format fixture receipt to summarize.
+        #[arg(long, default_value = "target/receipts/format/native-format-fixtures.json")]
+        format_receipt: PathBuf,
+
+        /// Output path for native-tooling status JSON.
+        #[arg(long, default_value = "target/receipts/native-tooling/status.json")]
+        receipt: PathBuf,
+
+        /// Optional markdown status output.
+        #[arg(long)]
+        markdown: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum DevexCommand {
     /// Plan the cheapest correct local proof commands for the current diff.
     Plan {
@@ -2177,6 +2205,16 @@ fn main() -> Result<()> {
                 native_format::check(native_format::NativeFormatCheckConfig {
                     fixtures,
                     receipt_dir,
+                })
+            }
+        },
+        Commands::NativeTooling { command } => match command {
+            NativeToolingCommand::Status { format_fixtures, format_receipt, receipt, markdown } => {
+                native_tooling::status(native_tooling::NativeToolingStatusConfig {
+                    format_fixtures,
+                    format_receipt,
+                    receipt,
+                    markdown,
                 })
             }
         },
