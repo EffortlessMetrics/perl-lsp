@@ -1397,7 +1397,7 @@ fn literal_preserve_region(source: &str) -> Option<&'static str> {
         if is_pod_start(trimmed) {
             return Some("POD");
         }
-        if matches!(trimmed, "__DATA__" | "__END__") {
+        if matches!(trimmed.trim_end(), "__DATA__" | "__END__") {
             return Some("DATA/END section");
         }
         if contains_likely_heredoc_start(line) {

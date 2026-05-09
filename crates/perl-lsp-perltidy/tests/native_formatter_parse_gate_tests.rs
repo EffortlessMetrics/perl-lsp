@@ -102,7 +102,7 @@ fn native_formatter_refuses_data_section_until_preservation_pass_exists() {
 #[test]
 fn native_formatter_refuses_end_section_until_preservation_pass_exists() {
     let formatter = NativeFormatter::new();
-    let source = "my $x = 1;\n__END__\nraw\n";
+    let source = "my $x = 1;\n__END__   \nraw\n";
     let config = FormatConfig { final_newline: FinalNewline::Trim, ..FormatConfig::default() };
 
     let result = formatter.format_document(source, &config);
