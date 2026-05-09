@@ -11,7 +11,7 @@ impl DiagnosticsTracker {
     /// Return the most recent diagnostics payload seen for `uri`.
     pub fn latest_for_uri(events: &[LspEvent], uri: &str) -> Option<Vec<Value>> {
         events.iter().rev().find_map(|event| match event {
-            LspEvent::Diagnostics { uri: event_uri, diagnostics } if event_uri == uri => {
+            LspEvent::Diagnostics { uri: event_uri, diagnostics, .. } if event_uri == uri => {
                 Some(diagnostics.clone())
             }
             _ => None,
@@ -70,14 +70,17 @@ mod tests {
         let events = vec![
             LspEvent::Diagnostics {
                 uri: "file:///a.pl".to_string(),
+                version: Some(1),
                 diagnostics: vec![json!({"message": "old"})],
             },
             LspEvent::Diagnostics {
                 uri: "file:///b.pl".to_string(),
+                version: Some(1),
                 diagnostics: vec![json!({"message": "other"})],
             },
             LspEvent::Diagnostics {
                 uri: "file:///a.pl".to_string(),
+                version: Some(2),
                 diagnostics: vec![json!({"message": "new"})],
             },
         ];
@@ -90,6 +93,7 @@ mod tests {
     fn latest_for_uri_returns_none_when_no_match() {
         let events = vec![LspEvent::Diagnostics {
             uri: "file:///b.pl".to_string(),
+            version: Some(1),
             diagnostics: vec![json!({"message": "other"})],
         }];
         let latest = DiagnosticsTracker::latest_for_uri(&events, "file:///a.pl");
@@ -100,8 +104,11 @@ mod tests {
     /// already satisfies the predicate — no polling delay.
     #[test]
     fn wait_for_uri_matching_returns_on_immediate_match() {
-        let events =
-            vec![LspEvent::Diagnostics { uri: "file:///a.pl".to_string(), diagnostics: vec![] }];
+        let events = vec![LspEvent::Diagnostics {
+            uri: "file:///a.pl".to_string(),
+            version: Some(1),
+            diagnostics: vec![],
+        }];
         let result = DiagnosticsTracker::wait_for_uri_matching(
             || events.clone(),
             "file:///a.pl",
@@ -120,6 +127,7 @@ mod tests {
             || {
                 vec![LspEvent::Diagnostics {
                     uri: "file:///a.pl".to_string(),
+                    version: Some(1),
                     diagnostics: vec![json!({"message": "err"})],
                 }]
             },
@@ -147,7 +155,11 @@ mod tests {
                 } else {
                     vec![] // cleared on third call
                 };
-                vec![LspEvent::Diagnostics { uri: "file:///a.pl".to_string(), diagnostics: diags }]
+                vec![LspEvent::Diagnostics {
+                    uri: "file:///a.pl".to_string(),
+                    version: Some(1),
+                    diagnostics: diags,
+                }]
             },
             "file:///a.pl",
             Duration::from_secs(5),
@@ -168,6 +180,7 @@ mod tests {
             || {
                 vec![LspEvent::Diagnostics {
                     uri: "file:///b.pl".to_string(), // different URI
+                    version: Some(1),
                     diagnostics: vec![],
                 }]
             },

@@ -34,7 +34,7 @@ pub enum LspEvent {
     /// `window/logMessage` — IDE output panel message.
     LogMessage { message_type: u32, message: String },
     /// `textDocument/publishDiagnostics` — diagnostic update.
-    Diagnostics { uri: String, diagnostics: Vec<Value> },
+    Diagnostics { uri: String, version: Option<i64>, diagnostics: Vec<Value> },
     /// Any other server-initiated notification.
     Other { method: String, params: Value },
 }
@@ -442,8 +442,9 @@ fn decode_event(v: Value) -> LspEvent {
         }
         "textDocument/publishDiagnostics" => {
             let uri = v["params"]["uri"].as_str().unwrap_or("").to_string();
+            let version = v["params"]["version"].as_i64();
             let diagnostics = v["params"]["diagnostics"].as_array().cloned().unwrap_or_default();
-            LspEvent::Diagnostics { uri, diagnostics }
+            LspEvent::Diagnostics { uri, version, diagnostics }
         }
         _ => LspEvent::Other { method, params: v["params"].clone() },
     }
