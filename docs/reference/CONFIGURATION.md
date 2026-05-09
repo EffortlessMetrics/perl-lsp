@@ -13,7 +13,7 @@ For the full technical reference, see [CONFIG.md](CONFIG.md). This guide focuses
   - [Basic CPAN-style project](#basic-cpan-style-project)
   - [Monorepo with multiple distributions](#monorepo-with-multiple-distributions)
   - [Custom Perl path](#custom-perl-path)
-  - [Enable perlcritic linting](#enable-perlcritic-linting)
+  - [Enable critic diagnostics](#enable-critic-diagnostics)
   - [Large codebase (10K+ files)](#large-codebase-10k-files)
   - [Low-resource or remote environment](#low-resource-or-remote-environment)
   - [CI / headless environment](#ci--headless-environment)
@@ -39,9 +39,20 @@ version = "5.38"
 include_paths = ["lib", "local/lib/perl5"]
 
 [diagnostics]
-# Uncomment to enable perlcritic (requires perlcritic installed)
+# Uncomment to enable critic diagnostics.
+# With the default legacy engine this requires perlcritic installed.
+# With [critic].engine = "native" it uses native Rust rules.
 # perlcritic = true
 # perlcritic_severity = 3  # 1 = least severe (reports more), 5 = most severe (reports less)
+
+[critic]
+# legacy/perlcritic/external = Perl::Critic-compatible path; native = Rust rules
+# engine = "legacy"
+
+[formatting]
+# Native formatting is built in. Use external-perltidy only for exact legacy compatibility.
+# enabled = true
+# engine = "native"
 
 [features]
 # Inlay hints show parameter names and types inline while you code
@@ -81,8 +92,12 @@ Priority 3 (highest): didChangeConfiguration — live editor settings
 |---|---|---|---|---|
 | `[perl]` | `version` | string | none | Perl version hint, e.g. `"5.38"`. Reserved; not yet used. |
 | `[perl]` | `include_paths` | string[] | `[]` | Extra module paths. Empty = keep built-in defaults. |
-| `[diagnostics]` | `perlcritic` | bool | false | Enable perlcritic linting (opt-in). |
+| `[diagnostics]` | `perlcritic` | bool | false | Enable critic diagnostics (opt-in). |
 | `[diagnostics]` | `perlcritic_severity` | int 1-5 | 3 | Minimum severity to report. 1 = least severe (reports everything), 5 = most severe (reports only strictest). |
+| `[critic]` | `engine` | string | `"legacy"` | Critic engine: `legacy` / `perlcritic` / `external` for Perl::Critic-compatible diagnostics, or `native` for Rust-native rules. |
+| `[formatting]` | `enabled` | bool | true | Enable LSP formatting. |
+| `[formatting]` | `engine` | string | `"native"` | Formatter engine: `native`, `compat`, `external-perltidy`, or `off`. |
+| `[formatting]` | `perltidy_profile` | string | none | `.perltidyrc` profile used by external perltidy compatibility and native-tooling compatibility reports. |
 | `[features]` | `inlay_hints` | bool | true | Enable/disable all inlay hints globally. |
 
 ### LSP workspace settings (all editors, under `perl.*`)
@@ -101,9 +116,15 @@ Priority 3 (highest): didChangeConfiguration — live editor settings
 | `perl.testRunner.command` | string | `"perl"` | Test executable (`"perl"` or `"prove"`) |
 | `perl.testRunner.args` | string[] | `[]` | Extra args for the test command |
 | `perl.testRunner.timeout` | number (ms) | `60000` | Test execution deadline |
-| `perl.perlcritic.enabled` | bool | `false` | Enable perlcritic diagnostics |
+| `perl.formatting.enabled` | bool | `true` | Enable LSP formatting |
+| `perl.formatting.engine` | string | `"native"` | Formatter engine: `native`, `compat`, `external-perltidy`, or `off` |
+| `perl.formatting.profile` | string | none | Path to `.perltidyrc` profile |
+| `perl.formatting.maximumLineLength` | number | `80` | Maximum line length |
+| `perl.formatting.indentColumns` | number | `4` | Indent width |
+| `perl.perlcritic.enabled` | bool | `false` | Enable critic diagnostics |
 | `perl.perlcritic.severity` | int 1-5 | `3` | Minimum severity to report |
 | `perl.perlcritic.profile` | string | none | Path to `.perlcriticrc` profile |
+| `perl.critic.engine` | string | `"legacy"` | Critic engine: `legacy`, `perlcritic`, `external`, or `native` |
 | `perl.telemetry.enabled` | bool | `false` | Send telemetry events to client |
 | `perl.limits.*` | various | see below | Resource caps and timeouts |
 
@@ -258,11 +279,14 @@ code .
 
 ---
 
-### Enable perlcritic linting
+### Enable critic diagnostics
 
-perlcritic integration is opt-in. It runs `perlcritic` on every open file and shows violations as diagnostics.
+Critic diagnostics are opt-in. The default engine is the legacy
+Perl::Critic-compatible path, which runs `perlcritic` on every open file and
+shows violations as diagnostics. The native engine uses the Rust-native critic
+rule registry instead.
 
-**Requirements**: `perlcritic` must be installed and on `$PATH`:
+**Legacy requirements**: `perlcritic` must be installed and on `$PATH`:
 
 ```bash
 cpanm Perl::Critic
@@ -277,6 +301,17 @@ perlcritic = true
 perlcritic_severity = 3   # 1 = least severe (reports more), 5 = most severe (reports less)
 ```
 
+To use native critic diagnostics instead of shelling out:
+
+```toml
+[diagnostics]
+perlcritic = true
+perlcritic_severity = 3
+
+[critic]
+engine = "native"
+```
+
 **Enable via editor settings** (personal preference):
 
 ```json
@@ -285,6 +320,9 @@ perlcritic_severity = 3   # 1 = least severe (reports more), 5 = most severe (re
     "perlcritic": {
       "enabled": true,
       "severity": 3
+    },
+    "critic": {
+      "engine": "native"
     }
   }
 }
@@ -299,12 +337,18 @@ perlcritic_severity = 3   # 1 = least severe (reports more), 5 = most severe (re
       "enabled": true,
       "severity": 2,
       "profile": "${workspaceFolder}/.perlcriticrc"
+    },
+    "critic": {
+      "engine": "legacy"
     }
   }
 }
 ```
 
-When `profile` is not set, perlcritic auto-discovers `.perlcriticrc` in the workspace root (standard perlcritic behavior).
+When `profile` is not set, the legacy engine lets perlcritic auto-discover
+`.perlcriticrc` in the workspace root. Use
+`cargo xtask native-tooling perlcritic-compat --profile .perlcriticrc` to
+classify a profile against native critic rule coverage before migrating.
 
 **Severity levels**:
 
@@ -405,7 +449,9 @@ perllsp --check-project lib/
 perllsp --check-project . && echo "All files parse clean"
 ```
 
-For a project that also uses perlcritic in CI, use the `perl.perlcritic` settings together with the test runner:
+For a project that also uses critic checks in CI, use the `perl.perlcritic`
+settings together with the test runner. Add `perl.critic.engine = "native"` when
+the project is ready for native critic diagnostics:
 
 ```json
 {
@@ -422,6 +468,9 @@ For a project that also uses perlcritic in CI, use the `perl.perlcritic` setting
     "perlcritic": {
       "enabled": true,
       "severity": 3
+    },
+    "critic": {
+      "engine": "native"
     }
   }
 }
@@ -439,6 +488,10 @@ Every `.perl-lsp.toml` setting has a VSCode `settings.json` counterpart. The tab
 | `[perl] version = "5.38"` | — | No LSP equivalent yet; TOML only |
 | `[diagnostics] perlcritic = true` | `"perlcritic": {"enabled": true}` | |
 | `[diagnostics] perlcritic_severity = 3` | `"perlcritic": {"severity": 3}` | Note: LSP key is `severity`, not `perlcritic_severity` |
+| `[critic] engine = "native"` | `"critic": {"engine": "native"}` | Native critic remains opt-in |
+| `[formatting] enabled = true` | `"formatting": {"enabled": true}` | |
+| `[formatting] engine = "native"` | `"formatting": {"engine": "native"}` | Use `"external-perltidy"` for legacy shell-out compatibility |
+| `[formatting] perltidy_profile = ".perltidyrc"` | `"formatting": {"profile": ".perltidyrc"}` | LSP key is `profile` |
 | `[features] inlay_hints = true` | `"inlayHints": {"enabled": true}` | TOML is global toggle; LSP has finer-grained control |
 
 **Full VSCode `settings.json` with all settings:**
@@ -464,9 +517,19 @@ Every `.perl-lsp.toml` setting has a VSCode `settings.json` counterpart. The tab
       "args": ["-l"],
       "timeout": 60000
     },
+    "formatting": {
+      "enabled": true,
+      "engine": "native",
+      "profile": "${workspaceFolder}/.perltidyrc",
+      "maximumLineLength": 100,
+      "indentColumns": 4
+    },
     "perlcritic": {
       "enabled": false,
       "severity": 3
+    },
+    "critic": {
+      "engine": "legacy"
     },
     "telemetry": {
       "enabled": false
@@ -547,11 +610,12 @@ perllsp --features-json --feature-profile production | python3 -m json.tool
 2. Make sure the path is relative to the workspace root (the directory you opened in your editor).
 3. Use `perl -I lib -e 'use My::Module; print 1'` to verify the path is actually correct.
 
-### perlcritic shows no diagnostics
+### Critic shows no diagnostics
 
-1. Confirm `perlcritic` is installed: `which perlcritic && perlcritic --version`
-2. Confirm `perlcritic = true` is set (it is opt-in and defaults to false).
-3. Check the severity — at severity 1, perlcritic reports the broadest set. Try severity 5 to restrict to only the most severe violations.
+1. Confirm `perlcritic = true` is set (critic diagnostics are opt-in and default to false).
+2. Check the engine. With `[critic].engine = "legacy"` or omitted, confirm `perlcritic` is installed: `which perlcritic && perlcritic --version`.
+3. To avoid the external dependency, set `[critic].engine = "native"` and restart the language server.
+4. Check the severity. Severity 1 reports the broadest set; severity 5 restricts output to only the most severe diagnostics.
 
 ### Inlay hints are missing
 
