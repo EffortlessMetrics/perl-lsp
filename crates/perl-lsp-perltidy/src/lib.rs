@@ -20,8 +20,8 @@ pub mod native;
 
 pub use native::{
     BracePlacement, ElsePlacement, FinalNewline, FormatConfig, FormatDiagnostic,
-    FormatDiagnosticSeverity, FormatDoc, FormatResult, FormatterMode, NativeFormatter,
-    PerlFormatter, TextEdit, TextPosition, TextRange, TrailingComma,
+    FormatDiagnosticSeverity, FormatDoc, FormatResult, FormatterMode, KeywordSpacing,
+    NativeFormatter, PerlFormatter, TextEdit, TextPosition, TextRange, TrailingComma,
 };
 
 /// Configuration for perltidy.

@@ -219,6 +219,17 @@ pub enum ElsePlacement {
     SeparateLine,
 }
 
+/// Spacing between supported control keywords and their condition parentheses.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum KeywordSpacing {
+    /// Insert a space between the keyword and condition parentheses.
+    #[default]
+    Space,
+    /// Omit the space between the keyword and condition parentheses.
+    Compact,
+}
+
 /// Configuration shared by native formatter implementations.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FormatConfig {
@@ -238,6 +249,8 @@ pub struct FormatConfig {
     pub brace_placement: BracePlacement,
     /// Else/elsif placement for supported block tails.
     pub else_placement: ElsePlacement,
+    /// Keyword spacing for supported control-flow condition headers.
+    pub keyword_spacing: KeywordSpacing,
 }
 
 impl Default for FormatConfig {
@@ -251,6 +264,7 @@ impl Default for FormatConfig {
             trailing_comma: TrailingComma::Preserve,
             brace_placement: BracePlacement::SameLine,
             else_placement: ElsePlacement::Cuddled,
+            keyword_spacing: KeywordSpacing::Space,
         }
     }
 }
@@ -820,7 +834,7 @@ fn format_simple_control_block_tokens(
 
     let body_indent = format!("{indent}{}", indent_unit(config));
     let mut formatted = render_simple_block_doc(
-        format!("{indent}{keyword} ({condition}) {{"),
+        render_condition_block_header(indent, keyword, &condition, config),
         &statements,
         indent,
         &body_indent,
@@ -1129,9 +1143,10 @@ fn render_simple_elsif_doc(
     config: &FormatConfig,
 ) -> String {
     let header = if config.else_placement == ElsePlacement::SeparateLine {
-        format!("\n{indent}elsif ({condition}) {{")
+        format!("\n{}", render_condition_block_header(indent, "elsif", condition, config))
     } else {
-        format!(" elsif ({condition}) {{")
+        let gap = keyword_condition_gap(config);
+        format!(" elsif{gap}({condition}) {{")
     };
     let mut parts = vec![FormatDoc::text(render_block_header(&header, indent, config))];
     push_simple_block_body_docs(&mut parts, statements, indent, body_indent);
@@ -1157,6 +1172,23 @@ fn render_block_header(header: &str, indent: &str, config: &FormatConfig) -> Str
     header
         .strip_suffix(" {")
         .map_or_else(|| header.to_string(), |prefix| format!("{prefix}\n{indent}{{"))
+}
+
+fn render_condition_block_header(
+    indent: &str,
+    keyword: &str,
+    condition: &str,
+    config: &FormatConfig,
+) -> String {
+    let gap = keyword_condition_gap(config);
+    format!("{indent}{keyword}{gap}({condition}) {{")
+}
+
+fn keyword_condition_gap(config: &FormatConfig) -> &'static str {
+    match config.keyword_spacing {
+        KeywordSpacing::Space => " ",
+        KeywordSpacing::Compact => "",
+    }
 }
 
 fn push_simple_block_body_docs(
