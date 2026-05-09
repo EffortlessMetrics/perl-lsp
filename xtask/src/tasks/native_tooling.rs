@@ -902,10 +902,10 @@ mod tests {
             &format_perltidy_compat_receipt,
             r#"{
   "option_count": 7,
-  "supported_count": 3,
+  "supported_count": 4,
   "approximated_count": 1,
   "unsupported_safe_count": 1,
-  "external_only_count": 2
+  "external_only_count": 1
 }
 "#,
         )?;
@@ -959,10 +959,10 @@ mod tests {
         assert_eq!(value["formatter"]["corpus_passed"], true);
         assert_eq!(value["formatter"]["format_perltidy_compat_receipt_present"], true);
         assert_eq!(value["formatter"]["perltidy_compat_option_count"], 7);
-        assert_eq!(value["formatter"]["perltidy_compat_supported_count"], 3);
+        assert_eq!(value["formatter"]["perltidy_compat_supported_count"], 4);
         assert_eq!(value["formatter"]["perltidy_compat_approximated_count"], 1);
         assert_eq!(value["formatter"]["perltidy_compat_unsupported_safe_count"], 1);
-        assert_eq!(value["formatter"]["perltidy_compat_external_only_count"], 2);
+        assert_eq!(value["formatter"]["perltidy_compat_external_only_count"], 1);
         assert!(value["critic"]["native_rule_count"].as_u64().unwrap_or_default() > 0);
         assert_eq!(value["critic"]["critic_perlcritic_compat_receipt_present"], true);
         assert_eq!(value["critic"]["perlcritic_compat_item_count"], 12);
@@ -997,10 +997,10 @@ mod tests {
         assert!(markdown.contains("| Corpus unsupported diagnostics | 0 |"));
         assert!(markdown.contains("| Corpus passed | true |"));
         assert!(markdown.contains("| Perltidy compatibility options | 7 |"));
-        assert!(markdown.contains("| Perltidy compatibility supported | 3 |"));
+        assert!(markdown.contains("| Perltidy compatibility supported | 4 |"));
         assert!(markdown.contains("| Perltidy compatibility approximated | 1 |"));
         assert!(markdown.contains("| Perltidy compatibility unsupported-safe | 1 |"));
-        assert!(markdown.contains("| Perltidy compatibility external-only | 2 |"));
+        assert!(markdown.contains("| Perltidy compatibility external-only | 1 |"));
         assert!(markdown.contains("| Perlcritic compatibility items | 12 |"));
         assert!(markdown.contains("| Perlcritic compatibility native-equivalent | 5 |"));
         assert!(markdown.contains("| Perlcritic compatibility native-superset | 2 |"));

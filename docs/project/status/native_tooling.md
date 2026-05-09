@@ -17,10 +17,10 @@
 | Corpus unsupported diagnostics | 10 |
 | Corpus passed | true |
 | Perltidy compatibility options | 7 |
-| Perltidy compatibility supported | 3 |
+| Perltidy compatibility supported | 4 |
 | Perltidy compatibility approximated | 1 |
 | Perltidy compatibility unsupported-safe | 1 |
-| Perltidy compatibility external-only | 2 |
+| Perltidy compatibility external-only | 1 |
 
 ## Critic
 
