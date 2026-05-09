@@ -107,7 +107,7 @@
 use perl_lexer::{PerlLexer, StringPart, TokenType};
 use perl_parser_core::ast::{Node, NodeKind};
 use regex::Regex;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
 use std::sync::LazyLock;
 
@@ -579,6 +579,9 @@ pub fn collect_semantic_tokens(
         .map(|((start, end), is_readonly)| (start, end, is_readonly))
         .collect::<Vec<_>>();
 
+    // 2a-ii) Collect assignment LHS spans to apply the "modification" modifier (bit 7)
+    let assignment_spans = assignment_lhs_spans(ast);
+
     // 2b) AST overlays: package/sub/variable with precise spans where available
     walk_ast_full(ast, &mut |node| {
         // For nodes with name_span, use the precise span for better highlighting
@@ -738,7 +741,12 @@ pub fn collect_semantic_tokens(
                 let mods = match decl_info {
                     Some((_, _, true)) => 1 | 4 | special_mod | sigil_mod, // declaration | readonly (our)
                     Some((_, _, false)) => 1 | special_mod | sigil_mod, // declaration (my/local/state)
-                    None => special_mod | sigil_mod,
+                    None => {
+                        // Apply "modification" modifier (bit 7 = 128) when the variable is
+                        // the direct LHS of an assignment expression ($x = ...).
+                        let mod_bit = if assignment_spans.contains(&(vs, ve)) { 128 } else { 0 };
+                        special_mod | sigil_mod | mod_bit
+                    }
                 };
                 ("variable", mods)
             }
@@ -879,6 +887,17 @@ fn declaration_readonly_flags(ast: &Node) -> FxHashMap<(usize, usize), bool> {
     });
 
     flags
+}
+
+fn assignment_lhs_spans(ast: &Node) -> FxHashSet<(usize, usize)> {
+    let mut spans = FxHashSet::default();
+    walk_ast_full(ast, &mut |node| {
+        if let NodeKind::Assignment { lhs, .. } = &node.kind {
+            spans.insert((lhs.location.start, lhs.location.end));
+        }
+        true
+    });
+    spans
 }
 
 fn ast_uses_const_fast(ast: &Node) -> bool {
