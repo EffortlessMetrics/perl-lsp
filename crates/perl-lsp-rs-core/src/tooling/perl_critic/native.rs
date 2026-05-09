@@ -1321,9 +1321,11 @@ fn is_qx_string(value: &str) -> bool {
     let Some(rest) = value.strip_prefix("qx") else {
         return false;
     };
-    rest.chars().next().is_some_and(|delimiter| {
-        matches!(delimiter, '(' | '[' | '{' | '<' | '/' | '!' | '\'' | '"')
-    })
+    rest.chars().find(|ch| !ch.is_whitespace()).is_some_and(is_quote_like_delimiter)
+}
+
+fn is_quote_like_delimiter(delimiter: char) -> bool {
+    !delimiter.is_ascii_alphanumeric() && !delimiter.is_whitespace()
 }
 
 fn collect_backtick_exec_findings(
@@ -2293,7 +2295,7 @@ mod tests {
 
     #[test]
     fn native_qx_readpipe_rule_reports_qx_and_readpipe_forms() {
-        let source = "use strict;\nuse warnings;\nmy $date = qx(date);\nmy $listing = qx/ls -la/;\nmy $pipe = readpipe($date);\nprint $listing . $pipe;\n";
+        let source = "use strict;\nuse warnings;\nmy $date = qx(date);\nmy $listing = qx/ls -la/;\nmy $hash = qx#whoami#;\nmy $pipe_delim = qx|id|;\nmy $tick_delim = qx`uname`;\nmy $pipe = readpipe($date);\nprint $listing . $pipe . $hash . $pipe_delim . $tick_delim;\n";
         let ast = parse_source(source);
         let config = CriticConfig::default();
         let ctx = CriticContext::new(source, &ast, &config);
@@ -2301,7 +2303,7 @@ mod tests {
 
         let findings = registry.check(&ctx);
 
-        assert_eq!(findings.len(), 3);
+        assert_eq!(findings.len(), 6);
         for finding in &findings {
             assert_eq!(finding.rule_id, "native.security.qx_readpipe");
             assert_eq!(finding.category, CriticCategory::Security);
@@ -2312,8 +2314,11 @@ mod tests {
         }
         assert_eq!(&source[findings[0].range.start.byte..findings[0].range.end.byte], "qx(date)");
         assert_eq!(&source[findings[1].range.start.byte..findings[1].range.end.byte], "qx/ls -la/");
+        assert_eq!(&source[findings[2].range.start.byte..findings[2].range.end.byte], "qx#whoami#");
+        assert_eq!(&source[findings[3].range.start.byte..findings[3].range.end.byte], "qx|id|");
+        assert_eq!(&source[findings[4].range.start.byte..findings[4].range.end.byte], "qx`uname`");
         assert_eq!(
-            &source[findings[2].range.start.byte..findings[2].range.end.byte],
+            &source[findings[5].range.start.byte..findings[5].range.end.byte],
             "readpipe($date)"
         );
     }
