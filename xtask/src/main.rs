@@ -1868,6 +1868,20 @@ enum NativeFormatCommand {
         #[arg(long, default_value = "target/receipts/format/native-format-perltidy-compat.md")]
         summary: PathBuf,
     },
+    /// Report the effective native formatter configuration surface.
+    Config {
+        /// Workspace root used to discover `.perl-lsp.toml`.
+        #[arg(long, default_value = ".")]
+        workspace_root: PathBuf,
+
+        /// Output JSON receipt path.
+        #[arg(long, default_value = "target/receipts/format/native-format-config.json")]
+        receipt: PathBuf,
+
+        /// Output markdown summary path.
+        #[arg(long, default_value = "target/receipts/format/native-format-config.md")]
+        summary: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2273,6 +2287,13 @@ fn main() -> Result<()> {
             NativeFormatCommand::PerltidyCompat { profile, receipt, summary } => {
                 native_format::perltidy_compat(native_format::NativeFormatPerltidyCompatConfig {
                     profile,
+                    receipt,
+                    summary,
+                })
+            }
+            NativeFormatCommand::Config { workspace_root, receipt, summary } => {
+                native_format::config(native_format::NativeFormatConfigReceiptConfig {
+                    workspace_root,
                     receipt,
                     summary,
                 })

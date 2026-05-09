@@ -2,7 +2,11 @@
 
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{Context, Result, eyre};
-use perl_lsp_rs_core::tooling::perltidy::{FormatConfig, NativeFormatter, PerlFormatter};
+use perl_lsp_rs_core::config::{ServerConfig, load_project_config};
+use perl_lsp_rs_core::tooling::perltidy::{
+    BracePlacement, ElsePlacement, FormatConfig, FormatterMode, KeywordSpacing, NativeFormatter,
+    PerlFormatter, TrailingComma,
+};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -33,6 +37,16 @@ pub struct NativeFormatCorpusConfig {
 pub struct NativeFormatPerltidyCompatConfig {
     /// Path to the `.perltidyrc`-style profile to classify.
     pub profile: PathBuf,
+    /// Output JSON receipt path.
+    pub receipt: PathBuf,
+    /// Output markdown summary path.
+    pub summary: PathBuf,
+}
+
+/// Options for `cargo xtask native-format config`.
+pub struct NativeFormatConfigReceiptConfig {
+    /// Workspace root used to discover `.perl-lsp.toml`.
+    pub workspace_root: PathBuf,
     /// Output JSON receipt path.
     pub receipt: PathBuf,
     /// Output markdown summary path.
@@ -109,6 +123,28 @@ struct NativeFormatPerltidyCompatReceipt {
     unsupported_safe_count: usize,
     external_only_count: usize,
     options: Vec<PerltidyCompatOptionResult>,
+}
+
+#[derive(Debug, Serialize)]
+struct NativeFormatConfigReceipt {
+    kind: &'static str,
+    schema_version: u32,
+    generated_at: DateTime<Utc>,
+    commit: String,
+    workspace_root: String,
+    config_source: &'static str,
+    config_profile: Option<String>,
+    formatting_enabled: bool,
+    engine_selected: FormatterMode,
+    external_adapter_requested: bool,
+    line_width: u32,
+    indent_width: u32,
+    use_tabs: bool,
+    brace_placement: BracePlacement,
+    else_placement: ElsePlacement,
+    keyword_spacing: KeywordSpacing,
+    trailing_comma: TrailingComma,
+    final_newline: &'static str,
 }
 
 #[derive(Debug, Serialize)]
@@ -370,6 +406,103 @@ pub fn perltidy_compat(config: NativeFormatPerltidyCompatConfig) -> Result<()> {
         config.receipt.display()
     );
     Ok(())
+}
+
+/// Write a receipt for the effective native formatter configuration surface.
+pub fn config(config: NativeFormatConfigReceiptConfig) -> Result<()> {
+    let mut server_config = ServerConfig::default();
+    let project_config = load_project_config(&config.workspace_root)
+        .map_err(|err| eyre!(err))
+        .wrap_err_with(|| {
+            format!(
+                "failed to load project config from {}",
+                config.workspace_root.join(".perl-lsp.toml").display()
+            )
+        })?;
+    let config_source = if let Some(project_config) = project_config {
+        project_config.apply_to_server_config(&mut server_config);
+        "project"
+    } else {
+        "defaults"
+    };
+
+    let format_config = format_config_from_server_config(&server_config);
+    let receipt = NativeFormatConfigReceipt {
+        kind: "native_format_config",
+        schema_version: SCHEMA_VERSION,
+        generated_at: Utc::now(),
+        commit: current_commit(),
+        workspace_root: config.workspace_root.display().to_string(),
+        config_source,
+        config_profile: server_config.perltidy_profile.clone(),
+        formatting_enabled: server_config.perltidy_enabled,
+        engine_selected: format_config.mode,
+        external_adapter_requested: format_config.mode == FormatterMode::ExternalLegacy,
+        line_width: format_config.line_width,
+        indent_width: format_config.indent_width,
+        use_tabs: format_config.use_tabs,
+        brace_placement: format_config.brace_placement,
+        else_placement: format_config.else_placement,
+        keyword_spacing: format_config.keyword_spacing,
+        trailing_comma: format_config.trailing_comma,
+        final_newline: "preserve",
+    };
+
+    if let Some(parent) = config.receipt.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("failed to create {}", parent.display()))?;
+    }
+    if let Some(parent) = config.summary.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("failed to create {}", parent.display()))?;
+    }
+    write_json(&config.receipt, &receipt)?;
+    write_config_summary(&config.summary, &receipt)?;
+
+    println!(
+        "native formatter config: engine {:?}, source {}; receipt: {}",
+        receipt.engine_selected,
+        receipt.config_source,
+        config.receipt.display()
+    );
+    Ok(())
+}
+
+fn format_config_from_server_config(server_config: &ServerConfig) -> FormatConfig {
+    let mut config = FormatConfig {
+        mode: server_config.formatting_engine,
+        line_width: server_config
+            .perltidy_maximum_line_length
+            .unwrap_or_else(|| FormatConfig::default().line_width),
+        indent_width: server_config
+            .perltidy_indent_columns
+            .unwrap_or_else(|| FormatConfig::default().indent_width),
+        use_tabs: server_config.perltidy_tabs.unwrap_or_else(|| FormatConfig::default().use_tabs),
+        ..FormatConfig::default()
+    };
+    if let Some(opening_brace_on_new_line) = server_config.perltidy_opening_brace_on_new_line {
+        config.brace_placement = if opening_brace_on_new_line {
+            BracePlacement::NextLine
+        } else {
+            BracePlacement::SameLine
+        };
+    }
+    if let Some(cuddled_else) = server_config.perltidy_cuddled_else {
+        config.else_placement =
+            if cuddled_else { ElsePlacement::Cuddled } else { ElsePlacement::SeparateLine };
+    }
+    if let Some(space_after_keyword) = server_config.perltidy_space_after_keyword {
+        config.keyword_spacing =
+            if space_after_keyword { KeywordSpacing::Space } else { KeywordSpacing::Compact };
+    }
+    if let Some(add_trailing_commas) = server_config.perltidy_add_trailing_commas {
+        config.trailing_comma = if add_trailing_commas {
+            TrailingComma::AddWhenWrapped
+        } else {
+            TrailingComma::Preserve
+        };
+    }
+    config
 }
 
 fn collect_fixture_paths(fixtures: &Path) -> Result<Vec<PathBuf>> {
@@ -837,6 +970,34 @@ fn write_perltidy_compat_summary(
     fs::write(path, markdown).wrap_err_with(|| format!("failed to write {}", path.display()))
 }
 
+fn write_config_summary(path: &Path, receipt: &NativeFormatConfigReceipt) -> Result<()> {
+    let mut markdown = String::new();
+    markdown.push_str("# Native Format Config\n\n");
+    markdown.push_str(&format!("- Workspace root: `{}`\n", receipt.workspace_root));
+    markdown.push_str(&format!("- Config source: `{}`\n", receipt.config_source));
+    markdown.push_str(&format!("- Formatting enabled: `{}`\n", receipt.formatting_enabled));
+    markdown.push_str(&format!("- Engine selected: `{:?}`\n", receipt.engine_selected));
+    markdown.push_str(&format!(
+        "- External adapter requested: `{}`\n\n",
+        receipt.external_adapter_requested
+    ));
+    markdown.push_str("| Field | Value |\n");
+    markdown.push_str("| --- | --- |\n");
+    markdown.push_str(&format!(
+        "| config_profile | {} |\n",
+        receipt.config_profile.as_deref().unwrap_or("")
+    ));
+    markdown.push_str(&format!("| line_width | {} |\n", receipt.line_width));
+    markdown.push_str(&format!("| indent_width | {} |\n", receipt.indent_width));
+    markdown.push_str(&format!("| use_tabs | {} |\n", receipt.use_tabs));
+    markdown.push_str(&format!("| brace_placement | {:?} |\n", receipt.brace_placement));
+    markdown.push_str(&format!("| else_placement | {:?} |\n", receipt.else_placement));
+    markdown.push_str(&format!("| keyword_spacing | {:?} |\n", receipt.keyword_spacing));
+    markdown.push_str(&format!("| trailing_comma | {:?} |\n", receipt.trailing_comma));
+    markdown.push_str(&format!("| final_newline | {} |\n", receipt.final_newline));
+    fs::write(path, markdown).wrap_err_with(|| format!("failed to write {}", path.display()))
+}
+
 fn current_commit() -> String {
     Command::new("git")
         .args(["rev-parse", "HEAD"])
@@ -988,6 +1149,112 @@ mod tests {
         assert!(summary.contains("# Native Format Perltidy Compatibility"));
         assert!(summary.contains("| `-l` | 100 | supported | format.line_width |"));
         assert!(summary.contains("| `--unknown-style` |  | external_only |"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn native_format_config_writes_default_receipt_and_summary() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let receipts = temp.path().join("receipts");
+
+        config(NativeFormatConfigReceiptConfig {
+            workspace_root: temp.path().to_path_buf(),
+            receipt: receipts.join("native-format-config.json"),
+            summary: receipts.join("native-format-config.md"),
+        })?;
+
+        let receipt: Value =
+            serde_json::from_str(&fs::read_to_string(receipts.join("native-format-config.json"))?)?;
+        assert_eq!(receipt["kind"], "native_format_config");
+        assert_eq!(receipt["config_source"], "defaults");
+        assert_eq!(receipt["formatting_enabled"], true);
+        assert_eq!(receipt["engine_selected"], "native");
+        assert_eq!(receipt["external_adapter_requested"], false);
+        assert_eq!(receipt["line_width"], 80);
+        assert_eq!(receipt["indent_width"], 4);
+        assert_eq!(receipt["use_tabs"], false);
+        assert_eq!(receipt["brace_placement"], "same-line");
+        assert_eq!(receipt["else_placement"], "cuddled");
+        assert_eq!(receipt["keyword_spacing"], "space");
+        assert_eq!(receipt["trailing_comma"], "preserve");
+        assert_eq!(receipt["final_newline"], "preserve");
+
+        let summary = fs::read_to_string(receipts.join("native-format-config.md"))?;
+        assert!(summary.contains("# Native Format Config"));
+        assert!(summary.contains("Config source: `defaults`"));
+        assert!(summary.contains("| line_width | 80 |"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn native_format_config_applies_project_formatting_policy() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let receipts = temp.path().join("receipts");
+        fs::write(
+            temp.path().join(".perl-lsp.toml"),
+            r#"
+[formatting]
+enabled = true
+engine = "native"
+perltidy_profile = ".perltidyrc"
+perltidy_maximum_line_length = 88
+perltidy_indent_columns = 2
+perltidy_tabs = true
+perltidy_opening_brace_on_new_line = true
+perltidy_cuddled_else = false
+perltidy_space_after_keyword = false
+perltidy_add_trailing_commas = true
+"#,
+        )?;
+
+        config(NativeFormatConfigReceiptConfig {
+            workspace_root: temp.path().to_path_buf(),
+            receipt: receipts.join("native-format-config.json"),
+            summary: receipts.join("native-format-config.md"),
+        })?;
+
+        let receipt: Value =
+            serde_json::from_str(&fs::read_to_string(receipts.join("native-format-config.json"))?)?;
+        assert_eq!(receipt["config_source"], "project");
+        assert_eq!(receipt["config_profile"], ".perltidyrc");
+        assert_eq!(receipt["engine_selected"], "native");
+        assert_eq!(receipt["external_adapter_requested"], false);
+        assert_eq!(receipt["line_width"], 88);
+        assert_eq!(receipt["indent_width"], 2);
+        assert_eq!(receipt["use_tabs"], true);
+        assert_eq!(receipt["brace_placement"], "next-line");
+        assert_eq!(receipt["else_placement"], "separate-line");
+        assert_eq!(receipt["keyword_spacing"], "compact");
+        assert_eq!(receipt["trailing_comma"], "add-when-wrapped");
+
+        Ok(())
+    }
+
+    #[test]
+    fn native_format_config_marks_external_adapter_requests() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let receipts = temp.path().join("receipts");
+        fs::write(
+            temp.path().join(".perl-lsp.toml"),
+            r#"
+[formatting]
+engine = "external-perltidy"
+"#,
+        )?;
+
+        config(NativeFormatConfigReceiptConfig {
+            workspace_root: temp.path().to_path_buf(),
+            receipt: receipts.join("native-format-config.json"),
+            summary: receipts.join("native-format-config.md"),
+        })?;
+
+        let receipt: Value =
+            serde_json::from_str(&fs::read_to_string(receipts.join("native-format-config.json"))?)?;
+        assert_eq!(receipt["config_source"], "project");
+        assert_eq!(receipt["engine_selected"], "external-legacy");
+        assert_eq!(receipt["external_adapter_requested"], true);
 
         Ok(())
     }
