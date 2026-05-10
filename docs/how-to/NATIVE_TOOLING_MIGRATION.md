@@ -50,6 +50,15 @@ cargo xtask native-critic check
 For compatibility reporting, run:
 
 ```bash
+perllsp --perltidy-compat-report .perltidyrc
+perllsp --perlcritic-compat-report .perlcriticrc
+```
+
+Those installed-binary commands print the same native-support classification a
+team needs during migration without requiring a checkout of the `xtask`
+developer tooling. For receipt-backed repository proof, run:
+
+```bash
 cargo xtask native-format perltidy-compat \
   --profile .perltidyrc \
   --receipt target/receipts/format/native-format-perltidy-compat.json \

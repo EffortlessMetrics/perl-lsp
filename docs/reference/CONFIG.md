@@ -454,7 +454,10 @@ The TOML parser also accepts compatibility aliases such as `perltidy-compat`,
 | Default | (none) |
 
 Path to a `.perltidyrc` profile. This is used by the external perltidy adapter
-and by native-tooling compatibility reports.
+and by native-tooling compatibility reports. Run
+`perllsp --perltidy-compat-report .perltidyrc` for an installed-binary
+migration check, or `cargo xtask native-format perltidy-compat --profile
+.perltidyrc` when you need a JSON/Markdown receipt in this repository.
 
 #### `perl.formatting.maximumLineLength`
 
@@ -489,8 +492,9 @@ The server also accepts:
 - `perl.formatting.timeoutSecs`
 
 Some options are native compatibility hints; others only affect the external
-perltidy adapter. Use the native-tooling compatibility reports to classify a
-specific `.perltidyrc` before switching a project.
+perltidy adapter. Use `perllsp --perltidy-compat-report .perltidyrc` or the
+receipt-backed native-tooling compatibility reports to classify a specific
+`.perltidyrc` before switching a project.
 
 ```json
 {
