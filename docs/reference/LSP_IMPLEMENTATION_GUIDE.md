@@ -1685,7 +1685,7 @@ pub static SUPPORTED_COMMANDS: &[&str] = &[
     "perl.runFile",            // Execute single Perl file
     "perl.runTestSub",         // Execute specific test subroutine
     "perl.debugTests",         // Debug test execution
-    "perl.runCritic",          // ⭐ NEW: Perl::Critic analysis
+    "perl.runCritic",          // ⭐ NEW: Native critic analysis
 ];
 ```
 
@@ -1707,12 +1707,7 @@ impl ExecuteCommandProvider {
             return Ok(CriticResult::External(external_result));
         }
 
-        // Legacy fallback for compatibility command behavior.
-        let builtin_analyzer = BuiltInAnalyzer::new();
-        let ast = self.parser.parse_file(file_path)?;
-        let violations = builtin_analyzer.analyze(&ast, &file_content);
-
-        Ok(CriticResult::Builtin(violations))
+        Err("Legacy Perl::Critic compatibility requested but perlcritic is unavailable".into())
     }
 }
 ```
@@ -1723,7 +1718,7 @@ impl ExecuteCommandProvider {
 pub struct CriticCommandResult {
     pub success: bool,                    // Execution status
     pub violations: Vec<Violation>,       // Policy violations found
-    pub analyzer_used: String,            // "external" | "builtin"
+    pub analyzer_used: String,            // "native" | "legacy-perlcritic"
     pub execution_time: Duration,         // Performance metrics
     pub file_path: String,               // Analyzed file path
 }
@@ -1903,20 +1898,21 @@ impl RefactoringOperations {
 
 #### Error Handling and Tool Integration
 
-**Graceful Degradation Strategy**:
+**Native-first error handling**:
 ```rust
 // Robust error handling with user-friendly feedback
 impl ExecuteCommandProvider {
     fn handle_tool_unavailable_error(&self, command: &str, error: &str) -> JsonRpcError {
         match command {
             "perl.runCritic" => {
-                // Provide actionable error message with fallback information
+                // The default native critic path does not require perlcritic.
+                // Missing-tool guidance only applies to explicit legacy mode.
                 JsonRpcError::new(
                     -32603, // Internal error
-                    format!("Perlcritic unavailable, using built-in analyzer: {}", error),
+                    format!("Legacy Perl::Critic compatibility unavailable: {}", error),
                     Some(json!({
-                        "fallback_available": true,
-                        "suggestion": "Install perlcritic for enhanced analysis"
+                        "native_available": true,
+                        "suggestion": "Use the native critic engine or install perlcritic for explicit legacy compatibility"
                     }))
                 )
             },
@@ -1933,7 +1929,7 @@ impl ExecuteCommandProvider {
 # Comprehensive test suite for executeCommand and code actions
 cargo test -p perl-lsp-rs --test lsp_execute_command_tests        # Execute command protocol compliance
 cargo test -p perl-lsp-rs --test lsp_code_actions_tests          # Code action workflows
-cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_perlcritic  # End-to-end validation
+cargo test -p perl-lsp-rs native_critic_engine --profile agent --locked --lib -- --nocapture  # Native critic validation
 
 # Performance validation with adaptive threading
 RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2  # Optimized thread configuration

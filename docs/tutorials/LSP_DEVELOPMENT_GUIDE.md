@@ -731,11 +731,14 @@ impl ExecuteCommandProvider {
             Ok(external_result) => {
                 Ok(serde_json::to_value(CriticResult::External(external_result))?)
             },
-            Err(_) => {
-                // Legacy fallback for compatibility command behavior
-                let builtin_result = self.run_builtin_analyzer(&file_path)?;
-                Ok(serde_json::to_value(CriticResult::Builtin(builtin_result))?)
-            }
+            Err(error) => Err(JsonRpcError::new(
+                -32603,
+                format!("Legacy Perl::Critic compatibility unavailable: {error}"),
+                Some(json!({
+                    "native_available": true,
+                    "suggestion": "Use native critic or install perlcritic for explicit legacy compatibility"
+                }))
+            )),
         }
     }
 
@@ -751,13 +754,13 @@ impl ExecuteCommandProvider {
         self.parse_perlcritic_output(&output.stdout)
     }
 
-    fn run_builtin_analyzer(&self, file_path: &str) -> Result<Vec<Violation>, String> {
-        // Built-in analyzer using AST parsing
+    fn run_native_critic(&self, file_path: &str) -> Result<Vec<Violation>, String> {
+        // Native critic uses parser/semantic facts and stable native rule IDs.
         let content = std::fs::read_to_string(file_path)?;
         let ast = self.parser.parse(&content)?;
 
-        let analyzer = BuiltInCriticAnalyzer::new();
-        analyzer.analyze(&ast, &content)
+        let registry = NativeCriticRegistry::recommended();
+        registry.check(&CriticContext::new(&content, &ast, &self.critic_config))
     }
 }
 ```
@@ -772,10 +775,10 @@ impl ExecuteCommandProvider {
                 -32603, // Internal error
                 format!("Code analysis failed: {}", error),
                 Some(json!({
-                    "fallback_available": true,
-                    "suggestion": "Ensure perlcritic is installed or use built-in analyzer",
+                    "native_available": true,
+                    "suggestion": "Use native critic, or install perlcritic only for explicit legacy compatibility",
                     "command": command,
-                    "recovery_action": "install_perlcritic"
+                    "recovery_action": "select_native_or_install_legacy_perlcritic"
                 }))
             ),
             "perl.runTests" => JsonRpcError::new(
@@ -2181,7 +2184,7 @@ impl DiagnosticAnalyzer {
 
 #### Phase 6: Execute ⭐ **NEW: Issue #145** (*Diataxis: Reference* - Command execution)
 ```rust
-// Enhanced executeCommand with dual analyzer strategy
+// Enhanced executeCommand with native critic and explicit legacy compatibility
 pub struct ExecuteCommandProvider {
     parser: Arc<EnhancedParser>,
     workspace_index: Arc<WorkspaceIndexer>,
@@ -2195,18 +2198,12 @@ impl ExecuteCommandProvider {
             "perl.runCritic" => {
                 let file_path = self.extract_file_path(&arguments)?;
 
-                // Dual analyzer strategy: external perlcritic + built-in fallback
-                if self.command_exists("perlcritic") {
-                    match self.run_external_critic(file_path) {
-                        Ok(result) => return Ok(result),
-                        Err(_) => {
-                            // Seamless fallback to built-in analyzer
-                        }
-                    }
+                if self.critic_engine == CriticEngine::Native {
+                    return self.run_native_critic(file_path);
                 }
 
-                // Built-in analyzer provides 100% availability
-                self.run_builtin_critic(file_path)
+                // Explicit legacy compatibility path.
+                self.run_external_critic(file_path)
             },
             "perl.runTests" => self.execute_test_runner(&arguments),
             "perl.runFile" => self.execute_perl_file(&arguments),
