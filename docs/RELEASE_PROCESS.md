@@ -217,7 +217,8 @@ cargo install perllsp
 
 ### GitHub Releases
 
-Binaries are published for all platforms:
+Binaries are published for all platforms. These target strings are Rust target
+triples; `unknown` is the standard Linux vendor field and is expected.
 
 | Platform | Target | Format |
 |----------|--------|--------|

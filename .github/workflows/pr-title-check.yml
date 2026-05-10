@@ -38,8 +38,9 @@ jobs:
             }
 
             const BOT_MARKER = '<!-- pr-title-check-bot -->';
+            const issueMatches = [...title.matchAll(/\B#(\d+)\b/g)];
 
-            if (!/\B#\d+\b/.test(title)) {
+            if (issueMatches.length === 0) {
               core.setFailed(
                 `PR title must reference an issue (e.g. "feat: add thing (#42)"). Got: "${title}"`
               );
@@ -89,23 +90,31 @@ jobs:
               return;
             }
 
-            // Extract issue number and validate it exists
-            const match = title.match(/\B#(\d+)\b/);
-            if (match) {
-              const issueNumber = parseInt(match[1], 10);
-              try {
-                await github.rest.issues.get({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issueNumber,
-                });
-                core.info(`Referenced issue #${issueNumber} exists.`);
-              } catch (e) {
-                core.warning(
-                  `Referenced issue #${issueNumber} was not found. Please verify the issue number.`
-                );
-                // Don't fail the check for this — it may be a private/internal reference
-              }
+            // Reject zero-valued issue references anywhere in the title.
+            // Real GitHub issues start at #1; zero is the placeholder for an unknown issue.
+            const zeroIssueMatch = issueMatches.find((match) => parseInt(match[1], 10) === 0);
+            if (zeroIssueMatch) {
+              core.setFailed(
+                `PR title contains zero-valued issue reference "${zeroIssueMatch[0]}", which is the Codex placeholder for an unknown issue. ` +
+                `Please replace it with the actual issue number, e.g. "(#1234)". Got: "${title}"`
+              );
+              return;
+            }
+
+            // Validate the first non-placeholder issue reference.
+            const issueNumber = parseInt(issueMatches[0][1], 10);
+            try {
+              await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+              });
+              core.info(`Referenced issue #${issueNumber} exists.`);
+            } catch (e) {
+              core.warning(
+                `Referenced issue #${issueNumber} was not found. Please verify the issue number.`
+              );
+              // Don't fail the check for this — it may be a private/internal reference
             }
 
             core.info('PR title passes validation.');
