@@ -328,6 +328,35 @@ fn native_formatter_formats_simple_trailing_comment_matrix() {
 }
 
 #[test]
+fn native_formatter_preserves_trailing_comments_on_supported_blocks() {
+    let formatter = NativeFormatter::new();
+    let source = concat!(
+        "sub demo{return 1;} # sub tail\n",
+        "if($ok){return 1;} # if tail\n",
+        "while($ok){next;} # while tail\n",
+    );
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        concat!(
+            "sub demo {\n",
+            "    return 1;\n",
+            "} # sub tail\n",
+            "if ($ok) {\n",
+            "    return 1;\n",
+            "} # if tail\n",
+            "while ($ok) {\n",
+            "    next;\n",
+            "} # while tail\n",
+        )
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
 fn native_formatter_does_not_treat_hash_inside_strings_as_trailing_comment() {
     let formatter = NativeFormatter::new();
     let source = "my$msg=\"#not a comment\";\nreturn\"#value\";\n";
