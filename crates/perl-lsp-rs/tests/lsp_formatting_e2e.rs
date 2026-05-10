@@ -136,35 +136,15 @@ return$x;
 }
 
 #[test]
-
-fn formatting_with_custom_config() -> Result<(), Box<dyn std::error::Error>> {
-    // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
-        eprintln!("Skipping test: perltidy not installed");
-        return Ok(());
-    }
-
-    // Create a temporary perltidyrc for testing
-    let config_content = r#"
-# Test configuration
--i=2    # 2-space indentation
--pt=2   # tight parentheses
--bt=2   # tight braces
--sbt=2  # tight square brackets
-"#;
-
-    std::fs::write("/tmp/test.perltidyrc", config_content)?;
-
+fn native_default_formatting_honors_lsp_tab_size() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin)?;
-    let uri = "file:///custom.pl";
+    let uri = "file:///tab-size.pl";
 
-    let source = "sub test { my @array = ( 1, 2, 3 ); return \\@array; }\n";
+    let source = "sub test{my$x=1;return$x;}\n";
 
     client.did_open(uri, "perl", source)?;
 
-    // Note: The LSP server would need to support custom config paths
-    // This test demonstrates the structure but may need server-side support
     let response = client.request(
         "textDocument/formatting",
         json!({
@@ -176,19 +156,12 @@ fn formatting_with_custom_config() -> Result<(), Box<dyn std::error::Error>> {
     let edits =
         response["result"].as_array().ok_or("formatting should return an array of edits")?;
 
-    if !edits.is_empty() {
-        let edit_text =
-            edits.first().ok_or("edits array should have at least one element")?["newText"]
-                .as_str()
-                .ok_or("Edit should have newText")?;
+    assert!(!edits.is_empty(), "native default formatting should return edits");
+    let edit_text = edits.first().ok_or("edits array should have at least one element")?["newText"]
+        .as_str()
+        .ok_or("Edit should have newText")?;
 
-        // Check for some formatting (exact format depends on perltidy version)
-        assert!(edit_text.contains("sub test"), "Should contain formatted subroutine");
-        assert!(edit_text.contains("@array"), "Should contain array variable");
-    }
-
-    // Clean up
-    let _ = std::fs::remove_file("/tmp/test.perltidyrc");
+    assert!(edit_text.contains("sub test {\n  my $x = 1;\n  return $x;\n}"));
 
     client.shutdown()?;
     Ok(())
