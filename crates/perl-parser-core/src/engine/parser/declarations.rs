@@ -138,10 +138,18 @@ impl<'a> Parser<'a> {
                         let token = self.tokens.next()?;
                         attr_name.push_str(&token.text);
 
-                        match token.kind {
-                            TokenKind::LeftParen => paren_depth += 1,
-                            TokenKind::RightParen => paren_depth -= 1,
-                            _ => {}
+                        if base_name == "prototype"
+                            && paren_depth == 1
+                            && token.kind == TokenKind::Identifier
+                            && token.text.as_ref() == "$)"
+                        {
+                            paren_depth -= 1;
+                        } else {
+                            match token.kind {
+                                TokenKind::LeftParen => paren_depth += 1,
+                                TokenKind::RightParen => paren_depth -= 1,
+                                _ => {}
+                            }
                         }
                     }
 
