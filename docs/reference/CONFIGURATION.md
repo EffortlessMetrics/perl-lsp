@@ -351,8 +351,9 @@ profile = "recommended"
 
 When `profile` is not set, the legacy engine lets perlcritic auto-discover
 `.perlcriticrc` in the workspace root. Use
-`cargo xtask native-tooling perlcritic-compat --profile .perlcriticrc` to
-classify a profile against native critic rule coverage before migrating.
+`perllsp --perlcritic-compat-report .perlcriticrc` for an installed-binary
+migration check, or `cargo xtask native-tooling perlcritic-compat --profile
+.perlcriticrc` when you need a JSON/Markdown receipt in this repository.
 
 **Severity levels**:
 

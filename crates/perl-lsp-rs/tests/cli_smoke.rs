@@ -19,7 +19,7 @@ fn version_shows_git_tag() {
 #[test]
 fn help_prints_to_stdout() {
     let mut cmd = cargo_bin_cmd!("perl-lsp");
-    cmd.arg("--help").assert().success().stdout(predicates::str::contains("Usage: perl-lsp"));
+    cmd.arg("--help").assert().success().stdout(predicates::str::contains("Usage:"));
 }
 
 #[test]
@@ -76,6 +76,41 @@ fn completion_zsh_produces_output() {
         .assert()
         .success()
         .stdout(predicates::str::contains("compdef"));
+}
+
+#[test]
+fn perltidy_compat_report_prints_native_mapping() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let profile = dir.path().join(".perltidyrc");
+    std::fs::write(&profile, "-l=100\n-nsok\n-q\n")?;
+
+    let mut cmd = cargo_bin_cmd!("perl-lsp");
+    cmd.args(["--perltidy-compat-report", profile.to_str().ok_or("non-UTF-8 temp path")?])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("# Native Format Perltidy Compatibility"))
+        .stdout(predicates::str::contains("format.line_width"))
+        .stdout(predicates::str::contains("format.keyword_spacing"));
+    Ok(())
+}
+
+#[test]
+fn perlcritic_compat_report_prints_native_mapping() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let profile = dir.path().join(".perlcriticrc");
+    std::fs::write(
+        &profile,
+        "severity = 3\n[TestingAndDebugging::RequireUseStrict]\n[InputOutput::RequireCheckedOpen]\n",
+    )?;
+
+    let mut cmd = cargo_bin_cmd!("perl-lsp");
+    cmd.args(["--perlcritic-compat-report", profile.to_str().ok_or("non-UTF-8 temp path")?])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("# Native Critic Perlcritic Compatibility"))
+        .stdout(predicates::str::contains("native.testing.require_use_strict"))
+        .stdout(predicates::str::contains("native.io.unchecked_open_close"));
+    Ok(())
 }
 
 #[test]

@@ -324,6 +324,28 @@ fn parse_version_flag_produces_version_action() {
     assert_eq!(plan.action, perl_lsp_rs_core::runtime::launcher::LaunchAction::Version);
 }
 
+#[test]
+fn parse_perltidy_compat_report_produces_report_action() {
+    let plan = must(parse_args(["perl-lsp", "--perltidy-compat-report", ".perltidyrc"]));
+    assert_eq!(
+        plan.action,
+        perl_lsp_rs_core::runtime::launcher::LaunchAction::PerltidyCompatReport {
+            profile: ".perltidyrc".to_string()
+        }
+    );
+}
+
+#[test]
+fn parse_perlcritic_compat_report_produces_report_action() {
+    let plan = must(parse_args(["perl-lsp", "--perlcritic-compat-report", ".perlcriticrc"]));
+    assert_eq!(
+        plan.action,
+        perl_lsp_rs_core::runtime::launcher::LaunchAction::PerlcriticCompatReport {
+            profile: ".perlcriticrc".to_string()
+        }
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Module: parse_args — feature profile variants
 // ---------------------------------------------------------------------------
@@ -556,6 +578,13 @@ fn help_text_mentions_health() {
 }
 
 #[test]
+fn help_text_mentions_native_compat_reports() {
+    let text = help_text();
+    assert!(text.contains("--perltidy-compat-report"));
+    assert!(text.contains("--perlcritic-compat-report"));
+}
+
+#[test]
 fn help_text_includes_examples_section() {
     let text = help_text();
     assert!(text.contains("Examples:"));
@@ -626,6 +655,8 @@ fn launch_action_variants_are_distinct() {
         LaunchAction::Completion { shell: "bash".to_string() },
         LaunchAction::Version,
         LaunchAction::FeaturesJson,
+        LaunchAction::PerltidyCompatReport { profile: ".perltidyrc".to_string() },
+        LaunchAction::PerlcriticCompatReport { profile: ".perlcriticrc".to_string() },
         LaunchAction::Help,
     ];
     for (i, a) in actions.iter().enumerate() {
