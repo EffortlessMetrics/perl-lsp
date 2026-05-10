@@ -4,8 +4,8 @@ use chrono::{DateTime, Utc};
 use color_eyre::eyre::{Context, Result, eyre};
 use perl_lsp_rs_core::config::{ServerConfig, load_project_config};
 use perl_lsp_rs_core::tooling::native_compat::{
-    PerltidyCompatOption, PerltidyCompatReport, classify_perltidy_profile,
-    render_perltidy_compat_markdown,
+    PerltidyCompatOption, PerltidyCompatReport, PerltidyNativeConfigSuggestion,
+    classify_perltidy_profile, render_perltidy_compat_markdown,
 };
 use perl_lsp_rs_core::tooling::perltidy::{
     BracePlacement, ElsePlacement, FormatConfig, FormatterMode, KeywordSpacing, NativeFormatter,
@@ -130,6 +130,7 @@ struct NativeFormatPerltidyCompatReceipt {
     approximated_count: usize,
     unsupported_safe_count: usize,
     external_only_count: usize,
+    suggested_config: PerltidyNativeConfigSuggestion,
     options: Vec<PerltidyCompatOption>,
 }
 
@@ -375,6 +376,7 @@ pub fn perltidy_compat(config: NativeFormatPerltidyCompatConfig) -> Result<()> {
         approximated_count: report.approximated_count,
         unsupported_safe_count: report.unsupported_safe_count,
         external_only_count: report.external_only_count,
+        suggested_config: report.suggested_config,
         options: report.options,
     };
 
@@ -810,6 +812,7 @@ fn write_perltidy_compat_summary(
         approximated_count: receipt.approximated_count,
         unsupported_safe_count: receipt.unsupported_safe_count,
         external_only_count: receipt.external_only_count,
+        suggested_config: receipt.suggested_config.clone(),
         options: receipt.options.clone(),
     };
     let markdown = render_perltidy_compat_markdown(&receipt.profile, &report);
@@ -991,9 +994,20 @@ mod tests {
         assert_eq!(receipt["options"][6]["native_field"], "format.trailing_comma");
         assert_eq!(receipt["options"][7]["classification"], "supported");
         assert_eq!(receipt["options"][7]["native_field"], "format.brace_placement");
+        assert_eq!(receipt["suggested_config"]["engine"], "native");
+        assert_eq!(receipt["suggested_config"]["perltidy_maximum_line_length"], 100);
+        assert_eq!(receipt["suggested_config"]["perltidy_indent_columns"], 2);
+        assert_eq!(receipt["suggested_config"]["perltidy_tabs"], false);
+        assert_eq!(receipt["suggested_config"]["perltidy_cuddled_else"], true);
+        assert_eq!(receipt["suggested_config"]["perltidy_space_after_keyword"], false);
+        assert_eq!(receipt["suggested_config"]["perltidy_add_trailing_commas"], true);
+        assert_eq!(receipt["suggested_config"]["perltidy_opening_brace_on_new_line"], true);
 
         let summary = fs::read_to_string(receipts.join("native-format-perltidy-compat.md"))?;
         assert!(summary.contains("# Native Format Perltidy Compatibility"));
+        assert!(summary.contains("## Suggested Native Formatter Config"));
+        assert!(summary.contains("perltidy_maximum_line_length = 100"));
+        assert!(summary.contains("perltidy_space_after_keyword = false"));
         assert!(summary.contains("| `-l` | 100 | supported | format.line_width |"));
 
         Ok(())
