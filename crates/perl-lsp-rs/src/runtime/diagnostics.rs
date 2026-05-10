@@ -1846,6 +1846,7 @@ mod tests {
     fn native_critic_engine_publishes_native_policy_diagnostics() {
         let (server, buf) = make_server_with_capture();
         server.test_configure_critic_engine(perl_lsp_rs_core::config::CriticEngine::Native);
+        server.test_configure_native_critic_profile("strict");
         let uri = "file:///native_critic_push_test.pl";
         server
             .test_handle_did_open(Some(json!({
@@ -2066,6 +2067,7 @@ mod tests {
     #[test]
     fn legacy_critic_engine_keeps_legacy_policy_diagnostics_for_push() {
         let (server, buf) = make_server_with_capture();
+        server.test_configure_critic_engine(perl_lsp_rs_core::config::CriticEngine::Legacy);
         let uri = "file:///legacy_critic_push_test.pl";
         server
             .test_handle_did_open(Some(json!({
@@ -2090,7 +2092,7 @@ mod tests {
         );
         assert!(
             !text.contains("native.testing.require_use_strict"),
-            "legacy critic engine should not publish native policy IDs by default; got: {text:?}"
+            "explicit legacy critic engine should not publish native policy IDs; got: {text:?}"
         );
     }
 
@@ -2099,6 +2101,7 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error>> {
         let (server, _buf) = make_server_with_capture();
         server.test_configure_critic_engine(perl_lsp_rs_core::config::CriticEngine::Native);
+        server.test_configure_native_critic_profile("strict");
         let uri = "file:///native_critic_workspace_test.pl";
         server.test_handle_did_open(Some(json!({
             "textDocument": {

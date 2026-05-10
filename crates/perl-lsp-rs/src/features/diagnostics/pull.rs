@@ -67,11 +67,11 @@ impl PullDiagnosticsContext {
     /// Create a new empty context with default values.
     pub fn new() -> Self {
         Self {
-            perlcritic_enabled: false,
+            perlcritic_enabled: true,
             perlcritic_severity: 3,
             perlcritic_profile: None,
-            critic_engine: CriticEngine::Legacy,
-            native_critic_profile: "strict".to_string(),
+            critic_engine: CriticEngine::Native,
+            native_critic_profile: "recommended".to_string(),
             workspace_root: None,
             include_paths: Vec::new(),
             markup_message_support: false,
@@ -88,7 +88,7 @@ impl PullDiagnosticsContext {
             perlcritic_severity: severity,
             perlcritic_profile: profile,
             critic_engine: CriticEngine::Legacy,
-            native_critic_profile: "strict".to_string(),
+            native_critic_profile: "recommended".to_string(),
             workspace_root: None,
             include_paths: Vec::new(),
             markup_message_support: false,
@@ -103,11 +103,11 @@ impl PullDiagnosticsContext {
         index: std::sync::Arc<perl_workspace::workspace_index::WorkspaceIndex>,
     ) -> Self {
         Self {
-            perlcritic_enabled: false,
+            perlcritic_enabled: true,
             perlcritic_severity: 3,
             perlcritic_profile: None,
-            critic_engine: CriticEngine::Legacy,
-            native_critic_profile: "strict".to_string(),
+            critic_engine: CriticEngine::Native,
+            native_critic_profile: "recommended".to_string(),
             workspace_root: None,
             include_paths: Vec::new(),
             markup_message_support: false,
@@ -1358,6 +1358,7 @@ mod tests {
         let uri: Uri = "file:///test.pl".parse()?;
         let mut context = PullDiagnosticsContext::new();
         context.critic_engine = CriticEngine::Native;
+        context.native_critic_profile = "strict".to_string();
         context.perlcritic_severity = 3;
 
         let items = get_full_items(provider.get_document_diagnostics_with_context(
@@ -1842,19 +1843,19 @@ mod tests {
     }
 
     #[test]
-    fn legacy_critic_engine_remains_default_for_pull_diagnostics()
+    fn native_critic_engine_is_default_for_pull_diagnostics()
     -> Result<(), Box<dyn std::error::Error>> {
         let provider = PullDiagnosticsProvider::new();
         let uri: Uri = "file:///test.pl".parse()?;
         let items =
             get_full_items(provider.get_document_diagnostics(&uri, "my $x = 1;\n", None, None));
 
-        assert!(!items.iter().any(|diag| {
+        assert!(items.iter().any(|diag| {
             diag.code
                 .as_ref()
-                .is_some_and(|code| matches!(code, NumberOrString::String(value) if value.starts_with("native.")))
+                .is_some_and(|code| matches!(code, NumberOrString::String(value) if value == "native.testing.require_use_strict"))
         }));
-        assert!(items.iter().any(|diag| {
+        assert!(!items.iter().any(|diag| {
             diag.code.as_ref().is_some_and(|code| {
                 matches!(code, NumberOrString::String(value) if value == "TestingAndDebugging::RequireUseStrict")
             })

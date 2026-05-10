@@ -92,11 +92,11 @@ source and records the unsupported surface through native-format receipts.
 
 ## Critic Migration
 
-The native critic is opt-in. Legacy `perlcritic` remains the default external
-engine until the native recommended profile is broad enough and boring under
-receipts.
+The native critic recommended profile is the default critic engine. Legacy
+`perlcritic` remains available as an explicit compatibility adapter for teams
+that still need exact Perl::Critic policy behavior.
 
-To try the native critic in project config:
+Default native project config is equivalent to:
 
 ```toml
 [diagnostics]
@@ -120,6 +120,13 @@ Keep external `perlcritic` compatibility when:
 - the project depends on policies classified as `external_only`
 - theme expansion or profile loading behavior is required
 - the team needs exact Perl::Critic policy output during a transition window
+
+To select the external adapter deliberately:
+
+```toml
+[critic]
+engine = "legacy" # or "perlcritic" / "external"
+```
 
 Native critic diagnostics use `source: perl-lsp-critic` and rule IDs such as
 `native.io.two_arg_open` or `native.variables.unused_lexical`. Inline

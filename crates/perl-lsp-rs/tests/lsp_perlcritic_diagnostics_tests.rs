@@ -143,17 +143,17 @@ fn test_a2_severity_one_maps_to_hint() {
 
 // ── Test B ────────────────────────────────────────────────────────────────────
 
-/// No subprocess must be invoked when perlcritic is disabled (the default).
+/// No subprocess must be invoked for default native critic diagnostics.
 #[test]
-fn test_b_no_subprocess_invocation_when_perlcritic_disabled() {
+fn test_b_no_subprocess_invocation_for_default_native_critic() {
     let server = LspServer::new();
 
     // Install a mock runtime that records calls.
     let runtime = Arc::new(MockSubprocessRuntime::new());
     runtime.add_response(MockResponse::success(b"".to_vec()));
     server.test_install_mock_critic_runtime(runtime.clone());
-    // perlcritic_enabled defaults to false; the early-return fires before any
-    // command check or subprocess call.
+    // The default critic engine is native, so the external Perl::Critic
+    // subprocess path must not run.
 
     #[cfg(windows)]
     let uri = "file:///C:/tmp/test_disabled.pl";
@@ -165,7 +165,7 @@ fn test_b_no_subprocess_invocation_when_perlcritic_disabled() {
     assert_eq!(
         runtime.invocations().len(),
         0,
-        "mock runtime must not be called when perlcritic is disabled"
+        "mock runtime must not be called for default native critic diagnostics"
     );
 }
 

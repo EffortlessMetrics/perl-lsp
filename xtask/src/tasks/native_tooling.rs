@@ -478,14 +478,18 @@ fn build_readiness_receipt(
     criteria.push(readiness_criterion(
         "critic",
         "native critic default",
-        server_defaults.perlcritic_enabled && server_defaults.critic_engine == CriticEngine::Native,
+        server_defaults.perlcritic_enabled
+            && server_defaults.critic_engine == CriticEngine::Native
+            && server_defaults.native_critic_profile == "recommended",
         true,
         true,
         format!(
-            "default perlcritic_enabled={} critic_engine={:?}",
-            server_defaults.perlcritic_enabled, server_defaults.critic_engine
+            "default perlcritic_enabled={} critic_engine={:?} profile={}",
+            server_defaults.perlcritic_enabled,
+            server_defaults.critic_engine,
+            server_defaults.native_critic_profile
         ),
-        "keep native critic opt-in until recommended profile false-positive receipts are boring",
+        "keep default critic path on the low-noise native recommended profile",
     ));
     criteria.push(readiness_criterion(
         "critic",
@@ -679,11 +683,14 @@ fn native_tooling_default_checks(root: &Path) -> Result<Vec<DefaultCheck>> {
         },
         DefaultCheck {
             name: "critic_default_no_shell_out",
-            passed: !server_defaults.perlcritic_enabled
-                && server_defaults.critic_engine == CriticEngine::Legacy,
+            passed: server_defaults.perlcritic_enabled
+                && server_defaults.critic_engine == CriticEngine::Native
+                && server_defaults.native_critic_profile == "recommended",
             detail: format!(
-                "ServerConfig default critic enabled={} engine={:?}",
-                server_defaults.perlcritic_enabled, server_defaults.critic_engine
+                "ServerConfig default critic enabled={} engine={:?} profile={}",
+                server_defaults.perlcritic_enabled,
+                server_defaults.critic_engine,
+                server_defaults.native_critic_profile
             ),
         },
         DefaultCheck {
@@ -719,11 +726,13 @@ fn native_tooling_default_checks(root: &Path) -> Result<Vec<DefaultCheck>> {
                     .to_string(),
         },
         DefaultCheck {
-            name: "configuration_docs_mark_native_critic_opt_in",
+            name: "configuration_docs_mark_native_critic_default",
             passed: configuration_docs
-                .contains("| `[critic]` | `engine` | string | `\"legacy\"` |")
-                && configuration_docs.contains("Native critic remains opt-in"),
-            detail: "configuration docs describe current critic default and native opt-in"
+                .contains("| `[critic]` | `engine` | string | `\"native\"` |")
+                && configuration_docs.contains(
+                    "Use `\"legacy\"` or `\"external\"` for Perl::Critic shell-out compatibility",
+                ),
+            detail: "configuration docs describe native critic default and explicit legacy adapter"
                 .to_string(),
         },
     ])
@@ -2093,7 +2102,7 @@ color = 1
         let value: Value = serde_json::from_str(&fs::read_to_string(readiness_receipt)?)?;
         assert_eq!(value["kind"], "native_tooling_readiness");
         assert_eq!(value["verdict"], "not_ready");
-        assert!(value["blocker_count"].as_u64().unwrap_or_default() >= 3);
+        assert_eq!(value["blocker_count"].as_u64().unwrap_or_default(), 2);
         assert!(value["ready_count"].as_u64().unwrap_or_default() > 0);
         let criteria = value["criteria"].as_array().ok_or_else(|| eyre!("criteria array"))?;
         assert!(criteria.iter().any(|criterion| {
@@ -2101,7 +2110,11 @@ color = 1
                 && criterion["status"] == "blocked"
         }));
         assert!(criteria.iter().any(|criterion| {
-            criterion["name"] == "native critic default" && criterion["status"] == "blocked"
+            criterion["name"] == "perlcritic compatibility has no external-only gaps"
+                && criterion["status"] == "blocked"
+        }));
+        assert!(criteria.iter().any(|criterion| {
+            criterion["name"] == "native critic default" && criterion["status"] == "ready"
         }));
         assert!(criteria.iter().any(|criterion| {
             criterion["name"] == "native critic false-positive fixtures are clean"
@@ -2114,7 +2127,12 @@ color = 1
         assert!(markdown.contains(
             "| formatter | perltidy compatibility has no external-only gaps | blocked |"
         ));
-        assert!(markdown.contains("| critic | native critic default | blocked |"));
+        assert!(
+            markdown.contains(
+                "| critic | perlcritic compatibility has no external-only gaps | blocked |"
+            )
+        );
+        assert!(markdown.contains("| critic | native critic default | ready |"));
         assert!(
             markdown
                 .contains("| critic | native critic false-positive fixtures are clean | ready |")
@@ -2205,10 +2223,10 @@ if !enabled || critic_engine == perl_lsp_rs_core::config::CriticEngine::Native {
         fs::write(
             docs_path,
             r#"
-| `[critic]` | `engine` | string | `"legacy"` | Critic engine |
+| `[critic]` | `engine` | string | `"native"` | Critic engine |
 | `[formatting]` | `engine` | string | `"native"` | Formatter engine |
 | `[formatting] engine = "native"` | `"formatting": {"engine": "native"}` | Use `"external-perltidy"` for legacy shell-out compatibility |
-| `[critic] engine = "native"` | `"critic": {"engine": "native"}` | Native critic remains opt-in |
+| `[critic] engine = "native"` | `"critic": {"engine": "native"}` | Use `"legacy"` or `"external"` for Perl::Critic shell-out compatibility |
 "#,
         )?;
         Ok(())

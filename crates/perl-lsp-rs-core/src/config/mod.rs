@@ -57,12 +57,11 @@ pub struct ServerConfig {
     /// Whether telemetry events are enabled.
     pub telemetry_enabled: bool,
 
-    /// Whether external perlcritic diagnostics are enabled (opt-in).
+    /// Whether critic diagnostics are enabled.
     ///
-    /// When enabled, the server will run `perlcritic` on open documents and
-    /// merge violations into the diagnostic stream. Requires `perlcritic` to
-    /// be installed on the system; missing binary/profile/runtime failures are
-    /// surfaced as workspace warnings.
+    /// The default engine is native and does not require `perlcritic`. Projects
+    /// can select the legacy/external engine when exact Perl::Critic behavior is
+    /// required.
     pub perlcritic_enabled: bool,
 
     /// Minimum Perl::Critic severity level to report (1-5, where 5 = most severe).
@@ -89,8 +88,8 @@ pub struct ServerConfig {
 
     /// Native critic profile used when `critic_engine` is [`CriticEngine::Native`].
     ///
-    /// Defaults to `strict` to preserve the existing opt-in native critic behavior.
-    /// Projects can select `recommended` for the lower-noise native rule bundle.
+    /// Defaults to `recommended` for the lower-noise native rule bundle. Projects
+    /// can select `strict` for the full native rule surface.
     pub native_critic_profile: String,
 
     /// Whether LSP formatting is enabled.
@@ -222,12 +221,12 @@ impl Default for ServerConfig {
             test_runner_args: vec![],
             test_runner_timeout: 60000,
             telemetry_enabled: false,
-            perlcritic_enabled: false,
+            perlcritic_enabled: true,
             perlcritic_severity: 3,
             perlcritic_profile: None,
             perlcritic_theme: None,
-            critic_engine: CriticEngine::Legacy,
-            native_critic_profile: "strict".to_string(),
+            critic_engine: CriticEngine::Native,
+            native_critic_profile: "recommended".to_string(),
             perltidy_enabled: true,
             formatting_engine: FormatterMode::Native,
             perltidy_profile: None,
@@ -1168,8 +1167,8 @@ profile = "recommended"
     #[test]
     fn server_config_accepts_native_critic_engine() {
         let mut config = ServerConfig::default();
-        assert_eq!(config.critic_engine, CriticEngine::Legacy);
-        assert_eq!(config.native_critic_profile, "strict");
+        assert_eq!(config.critic_engine, CriticEngine::Native);
+        assert_eq!(config.native_critic_profile, "recommended");
 
         config.update_from_value(&serde_json::json!({
             "critic": {

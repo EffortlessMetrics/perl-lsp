@@ -526,7 +526,7 @@ impl CriticRule for RequireUseWarningsRule {
 /// Native rule that reports assignments used directly as conditions.
 ///
 /// This mirrors the existing common-mistake diagnostic through the native
-/// critic contract so opt-in native critic users get stable rule IDs,
+/// critic contract so native critic users get stable rule IDs,
 /// suppressions, severity filtering, and fix metadata.
 pub struct AssignmentInConditionRule;
 
@@ -551,7 +551,7 @@ impl CriticRule for AssignmentInConditionRule {
 /// Native rule that reports static printf/sprintf format arity mismatches.
 ///
 /// This wraps the existing parser-backed PL405 lint through the native critic
-/// contract so opt-in native critic users get stable rule IDs, suppression and
+/// contract so native critic users get stable rule IDs, suppression and
 /// severity filtering, violation bridge coverage, and LSP parity.
 pub struct PrintfFormatArityRule;
 
@@ -576,7 +576,7 @@ impl CriticRule for PrintfFormatArityRule {
 /// Native rule that reports deprecated `defined @array` / `defined %hash` use.
 ///
 /// This wraps the existing PL500 deprecated-syntax lint through the native
-/// critic contract so opt-in native critic users get stable rule IDs,
+/// critic contract so native critic users get stable rule IDs,
 /// suppressions, severity filtering, violation bridge coverage, and quick-fix
 /// metadata.
 pub struct DeprecatedDefinedRule;
@@ -677,7 +677,7 @@ impl CriticRule for UnreachableCodeRule {
 /// Native rule that reports bareword filehandles passed to `open`.
 ///
 /// This mirrors the existing common-mistake and Perl::Critic policy surfaces
-/// while giving opt-in native critic users a stable rule ID, precise handle
+/// while giving native critic users a stable rule ID, precise handle
 /// span, suppression key, and fix metadata.
 pub struct BarewordFilehandleRule;
 
@@ -703,7 +703,7 @@ impl CriticRule for BarewordFilehandleRule {
 ///
 /// The rule keeps the current native critic migration pattern: stable native
 /// policy ID, suppression/config filtering, violation bridge support, and
-/// quick-fix metadata while legacy/default critic behavior remains unchanged.
+/// quick-fix metadata while explicit legacy critic behavior remains available.
 pub struct TwoArgOpenRule;
 
 impl CriticRule for TwoArgOpenRule {

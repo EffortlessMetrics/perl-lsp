@@ -105,7 +105,9 @@ include_paths = ["lib", ".", "local/lib/perl5", "vendor/lib"]
 inlay_hints = true
 
 [diagnostics]
-perlcritic = false
+# Native critic diagnostics are enabled by default.
+# Set false to disable them.
+# perlcritic = true
 perlcritic_severity = 3
 ```
 
