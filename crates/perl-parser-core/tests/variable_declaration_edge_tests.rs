@@ -34,6 +34,11 @@ fn test_sub_with_multiple_attributes() {
     assert_clean_parse("sub foo :lvalue :method { }");
 }
 
+#[test]
+fn test_sub_prototype_attribute_ending_with_scalar_slot() {
+    assert_clean_parse("sub index :prototype($$;$) { BEGIN { import() } &CORE::index }");
+}
+
 // ---------------------------------------------------------------------------
 // Package-qualified `our` declarations
 // ---------------------------------------------------------------------------
