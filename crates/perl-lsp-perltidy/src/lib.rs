@@ -1,8 +1,11 @@
-//! Perltidy integration for code formatting.
+//! Native-first Perl formatting with optional `perltidy` compatibility.
 //!
 //! This crate isolates Perl formatting concerns behind a small API so the
 //! broader tooling crate can focus on composition rather than formatter
-//! implementation details.
+//! implementation details. The default LSP formatter uses the Rust-native
+//! [`NativeFormatter`]; [`PerlTidyFormatter`] remains an explicit
+//! subprocess-backed compatibility adapter for projects that still require
+//! exact `perltidy` behavior.
 
 #![deny(unsafe_code)]
 #![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]

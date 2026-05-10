@@ -108,25 +108,30 @@ cargo test -p perl-parser --test execute_command_tests -- test_execute_command_r
 }
 ```
 
-### Step 4: Understanding the Dual Analyzer Strategy
+### Step 4: Understanding Native Critic and Legacy Compatibility
 
-The perl.runCritic command implements a sophisticated dual strategy:
+The normal editor diagnostic path uses the native critic engine by default.
+`perl.runCritic` remains a compatibility-oriented execute command for projects
+that still compare against legacy Perl::Critic output.
 
-1. **Primary Path**: External perlcritic (if installed)
-2. **Fallback Path**: Built-in analyzer (always available)
-3. **Seamless Transition**: Automatic fallback with no user intervention
+1. **Default Path**: Native critic recommended profile
+2. **Compatibility Path**: External `perlcritic` when explicitly selected
+3. **Migration Support**: Compatibility receipts map legacy policies to native
+   rules
 
 **Test the Strategy**:
 ```bash
-# Test dual analyzer behavior
+# Test legacy dual analyzer compatibility behavior
 cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
 ```
 
-**Learning Goal**: Understand that you always get analysis results, regardless of external tool availability.
+**Learning Goal**: Understand that native diagnostics do not depend on external
+tool availability, while the legacy command path remains available for
+compatibility testing.
 
-### Step 5: Install External Perlcritic (Optional Enhancement)
+### Step 5: Install External Perlcritic (Optional Compatibility)
 
-For more comprehensive analysis, install external perlcritic:
+Install external perlcritic only when you need exact legacy policy behavior:
 
 ```bash
 # Ubuntu/Debian
@@ -143,11 +148,10 @@ which perlcritic
 perlcritic --version
 ```
 
-**Benefits of External Perlcritic**:
-- 150+ policy checks (vs basic policies in built-in)
-- Configurable severity levels
-- Custom policy configuration support
-- Industry-standard Perl best practices
+**When to use External Perlcritic**:
+- a project requires exact Perl::Critic policy output
+- a `.perlcriticrc` policy is classified as external-only
+- a team is comparing native findings with a legacy baseline during migration
 
 ### Step 6: LSP Protocol Integration
 

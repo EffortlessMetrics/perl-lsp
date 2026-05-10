@@ -95,8 +95,14 @@ The perl-lsp server configuration is hierarchical, with all settings nested unde
         "testRunner": {
           "$ref": "#/definitions/testRunner"
         },
+        "formatting": {
+          "$ref": "#/definitions/formatting"
+        },
         "perlcritic": {
           "$ref": "#/definitions/perlcritic"
+        },
+        "critic": {
+          "$ref": "#/definitions/critic"
         },
         "telemetry": {
           "$ref": "#/definitions/telemetry"
@@ -201,18 +207,77 @@ The perl-lsp server configuration is hierarchical, with all settings nested unde
       },
       "additionalProperties": false
     },
-    "perlcritic": {
+    "formatting": {
       "type": "object",
-      "description": "Perl::Critic static analysis integration",
+      "description": "Native-first formatter configuration. The default engine is native; external perltidy is explicit compatibility mode.",
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Enable perlcritic diagnostics (opt-in; requires perlcritic installed)",
+          "description": "Enable LSP formatting requests",
+          "default": true
+        },
+        "engine": {
+          "type": "string",
+          "description": "Formatter engine: native, compat/perltidy-compat, external-perltidy/external-legacy/perltidy, or off",
+          "enum": ["native", "compat", "perltidy-compat", "external-perltidy", "external-legacy", "perltidy", "off"],
+          "default": "native"
+        },
+        "perltidy_profile": {
+          "type": "string",
+          "description": "Path to a .perltidyrc profile used for compatibility reporting or explicit external mode"
+        },
+        "perltidy_maximum_line_length": {
+          "type": "integer",
+          "description": "Maximum native formatter line width",
+          "minimum": 20,
+          "default": 80
+        },
+        "perltidy_indent_columns": {
+          "type": "integer",
+          "description": "Indent width in spaces",
+          "minimum": 1,
+          "default": 4
+        },
+        "perltidy_tabs": {
+          "type": "boolean",
+          "description": "Use tabs for indentation where supported",
           "default": false
+        },
+        "perltidy_opening_brace_on_new_line": {
+          "type": "boolean",
+          "description": "Place supported opening braces on a new line",
+          "default": false
+        },
+        "perltidy_cuddled_else": {
+          "type": "boolean",
+          "description": "Use cuddled else/elsif layout for supported blocks",
+          "default": true
+        },
+        "perltidy_space_after_keyword": {
+          "type": "boolean",
+          "description": "Insert a space between supported control-flow keywords and their condition",
+          "default": true
+        },
+        "perltidy_add_trailing_commas": {
+          "type": "boolean",
+          "description": "Add trailing commas in supported multi-line lists and hashes",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "perlcritic": {
+      "type": "object",
+      "description": "Critic diagnostics compatibility settings. Native critic is the default engine; legacy Perl::Critic is explicit compatibility mode.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable critic diagnostics",
+          "default": true
         },
         "severity": {
           "type": "integer",
-          "description": "Minimum severity to report: 1 (least severe, reports everything) to 5 (most severe, reports less)",
+          "description": "Minimum critic severity to report: 1 (least severe, reports everything) to 5 (most severe, reports less)",
           "minimum": 1,
           "maximum": 5,
           "default": 3
@@ -220,6 +285,25 @@ The perl-lsp server configuration is hierarchical, with all settings nested unde
         "profile": {
           "type": "string",
           "description": "Path to a .perlcriticrc profile file"
+        }
+      },
+      "additionalProperties": false
+    },
+    "critic": {
+      "type": "object",
+      "description": "Native critic engine selection and profile settings",
+      "properties": {
+        "engine": {
+          "type": "string",
+          "description": "Critic engine: native, legacy, external, or perlcritic",
+          "enum": ["native", "legacy", "external", "perlcritic"],
+          "default": "native"
+        },
+        "profile": {
+          "type": "string",
+          "description": "Native critic profile",
+          "enum": ["recommended", "strict"],
+          "default": "recommended"
         }
       },
       "additionalProperties": false

@@ -1,9 +1,9 @@
 //! Native formatter contract types.
 //!
-//! This module defines the Rust-native formatter API that future formatter
-//! engines should implement. It intentionally lives beside the existing
-//! subprocess-backed `PerlTidyFormatter` adapter so consumers can start moving
-//! toward native formatting without changing the current runtime path.
+//! This module defines the Rust-native formatter API and default formatter
+//! implementation. It intentionally lives beside the subprocess-backed
+//! `PerlTidyFormatter` adapter so consumers can keep an explicit legacy
+//! compatibility path while the LSP runtime uses native formatting by default.
 
 use serde::{Deserialize, Serialize};
 

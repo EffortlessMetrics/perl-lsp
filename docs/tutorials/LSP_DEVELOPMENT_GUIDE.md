@@ -713,20 +713,26 @@ impl ExecuteCommandProvider {
 }
 ```
 
-**Dual Analyzer Strategy Pattern** (*Diataxis: How-to* - Tool integration with fallback):
+**Native Critic and Legacy Compatibility Pattern** (*Diataxis: How-to* - Tool integration with compatibility):
 ```rust
-// perl.runCritic implementation with graceful degradation
+// The normal diagnostics path uses native critic. perl.runCritic keeps
+// compatibility behavior for teams comparing against legacy Perl::Critic.
 impl ExecuteCommandProvider {
     fn execute_perl_critic(&self, arguments: Vec<Value>) -> Result<Value, JsonRpcError> {
         let file_path = self.extract_file_path(&arguments)?;
 
-        // Try external perlcritic first (preferred)
+        // Use native critic unless explicit legacy compatibility is requested.
+        if self.critic_engine == CriticEngine::Native {
+            return self.run_native_critic(&file_path);
+        }
+
+        // Legacy compatibility path.
         match self.run_external_perlcritic(&file_path) {
             Ok(external_result) => {
                 Ok(serde_json::to_value(CriticResult::External(external_result))?)
             },
             Err(_) => {
-                // Fallback to built-in analyzer for 100% availability
+                // Legacy fallback for compatibility command behavior
                 let builtin_result = self.run_builtin_analyzer(&file_path)?;
                 Ok(serde_json::to_value(CriticResult::Builtin(builtin_result))?)
             }

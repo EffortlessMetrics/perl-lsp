@@ -1,11 +1,12 @@
 # Native Formatter and Critic Replacement Contract
 
-**Status**: Draft
+**Status**: Implemented native-first baseline; active hardening and
+compatibility reporting continue.
 **Scope**: native replacement contract for `perltidy` and `perlcritic`
-**Current adapter state**: `perl-lsp-perltidy` shells out to `perltidy` through
-`perl-subprocess-runtime` and keeps a small built-in fallback; `perl.runCritic`
-is an existing execute-command surface; `perl-diagnostics` is the canonical
-diagnostic model.
+**Current adapter state**: the default LSP formatter and critic diagnostics use
+native Rust engines. `PerlTidyFormatter` and legacy `perlcritic` integration
+remain explicit compatibility adapters; `perl.runCritic` remains an
+execute-command surface; `perl-diagnostics` is the canonical diagnostic model.
 
 ---
 
@@ -53,9 +54,6 @@ compat            native behavior tuned toward common perltidy/perlcritic profil
 external-legacy   explicit opt-in shell-out to traditional tools
 off               disabled
 ```
-
-Initial implementation may keep the existing external behavior as the default,
-but every PR in this lane should move toward this final state:
 
 ```text
 default editor path: native
@@ -319,14 +317,15 @@ severity = "info"
 max = 12
 ```
 
-Configuration import commands should be explicit and report gaps:
+Compatibility reports should classify existing legacy profiles against native
+support:
 
 ```bash
-perllsp config import-perltidy .perltidyrc
-perllsp config import-perlcritic .perlcriticrc
+cargo xtask native-format perltidy-compat --profile .perltidyrc
+cargo xtask native-tooling perlcritic-compat --profile .perlcriticrc
 ```
 
-Import output must classify every setting:
+Report output must classify every setting:
 
 ```text
 supported
