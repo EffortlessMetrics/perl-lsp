@@ -657,9 +657,10 @@ fn format_simple_line(line: &str, config: &FormatConfig) -> Option<String> {
 fn format_simple_module_line(line: &str, config: &FormatConfig) -> Option<String> {
     let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
     let (indent, body) = line.split_at(indent_len);
-    if body.is_empty() || body.contains('#') {
+    if body.is_empty() {
         return None;
     }
+    let (body, trailing_comment) = split_trailing_comment(body);
 
     let mut stream = perl_parser_core::TokenStream::new(body);
     let mut tokens = Vec::new();
@@ -672,15 +673,16 @@ fn format_simple_module_line(line: &str, config: &FormatConfig) -> Option<String
     }
 
     let formatted = format_simple_module_tokens(&tokens, config)?;
-    Some(format!("{indent}{formatted}"))
+    Some(format!("{indent}{}", append_trailing_comment(formatted, trailing_comment)))
 }
 
 fn format_simple_lexical_line(line: &str, config: &FormatConfig) -> Option<String> {
     let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
     let (indent, body) = line.split_at(indent_len);
-    if body.is_empty() || body.contains('#') {
+    if body.is_empty() {
         return None;
     }
+    let (body, trailing_comment) = split_trailing_comment(body);
 
     let mut stream = perl_parser_core::TokenStream::new(body);
     let mut tokens = Vec::new();
@@ -693,7 +695,7 @@ fn format_simple_lexical_line(line: &str, config: &FormatConfig) -> Option<Strin
     }
 
     let formatted = format_simple_lexical_tokens(&tokens, config)?;
-    Some(format!("{indent}{formatted}"))
+    Some(format!("{indent}{}", append_trailing_comment(formatted, trailing_comment)))
 }
 
 fn format_simple_subroutine_line(line: &str, config: &FormatConfig) -> Option<String> {
@@ -740,9 +742,10 @@ fn format_simple_control_block_line(line: &str, config: &FormatConfig) -> Option
 fn format_simple_statement_line(line: &str, config: &FormatConfig) -> Option<String> {
     let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
     let (indent, body) = line.split_at(indent_len);
-    if body.is_empty() || body.contains('#') {
+    if body.is_empty() {
         return None;
     }
+    let (body, trailing_comment) = split_trailing_comment(body);
 
     let mut stream = perl_parser_core::TokenStream::new(body);
     let mut tokens = Vec::new();
@@ -755,7 +758,48 @@ fn format_simple_statement_line(line: &str, config: &FormatConfig) -> Option<Str
     }
 
     let formatted = format_simple_statement_tokens(&tokens, config)?;
-    Some(format!("{indent}{formatted}"))
+    Some(format!("{indent}{}", append_trailing_comment(formatted, trailing_comment)))
+}
+
+fn split_trailing_comment(body: &str) -> (&str, Option<&str>) {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for (index, ch) in body.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' && (in_single || in_double) {
+            escaped = true;
+            continue;
+        }
+
+        match ch {
+            '\'' if !in_double => in_single = !in_single,
+            '"' if !in_single => in_double = !in_double,
+            '#' if !in_single && !in_double => {
+                let code = body[..index].trim_end();
+                if code.trim().is_empty() {
+                    return (body, None);
+                }
+                return (code, Some(&body[index..]));
+            }
+            _ => {}
+        }
+    }
+
+    (body, None)
+}
+
+fn append_trailing_comment(mut formatted: String, trailing_comment: Option<&str>) -> String {
+    if let Some(comment) = trailing_comment {
+        formatted.push(' ');
+        formatted.push_str(comment);
+    }
+    formatted
 }
 
 fn format_simple_subroutine_tokens(
