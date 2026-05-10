@@ -11,20 +11,49 @@ fn find_unary_op<'a>(node: &'a Node, op: &str) -> Option<&'a Node> {
     node.children().into_iter().find_map(|child| find_unary_op(child, op))
 }
 
-#[test]
-fn async_named_subroutine_carries_async_attribute() {
-    let ast = parse("use Future::AsyncAwait; async sub fetch { return await lookup(); }");
+fn program_statements(ast: &Node) -> Result<&[Node], String> {
     let NodeKind::Program { statements } = &ast.kind else {
-        panic!("expected program node, got {}", ast.kind.kind_name());
+        return Err(format!("expected program node, got {}", ast.kind.kind_name()));
     };
+    Ok(statements)
+}
+
+fn first_statement<'a>(statements: &'a [Node], context: &str) -> Result<&'a Node, String> {
+    statements.first().ok_or_else(|| format!("expected one statement for {context}"))
+}
+
+fn expression_statement<'a>(stmt: &'a Node, context: &str) -> Result<&'a Node, String> {
+    let NodeKind::ExpressionStatement { expression } = &stmt.kind else {
+        return Err(format!(
+            "expected expression statement for {context}, got {}",
+            stmt.kind.kind_name()
+        ));
+    };
+    Ok(expression)
+}
+
+fn function_call_name<'a>(expression: &'a Node, context: &str) -> Result<&'a str, String> {
+    let NodeKind::FunctionCall { name, .. } = &expression.kind else {
+        return Err(format!(
+            "expected {context} to stay a function call, got {}",
+            expression.kind.kind_name()
+        ));
+    };
+    Ok(name)
+}
+
+#[test]
+fn async_named_subroutine_carries_async_attribute() -> Result<(), String> {
+    let ast = parse("use Future::AsyncAwait; async sub fetch { return await lookup(); }");
+    let statements = program_statements(&ast)?;
 
     let sub = statements
         .iter()
         .find(|statement| matches!(statement.kind, NodeKind::Subroutine { .. }))
-        .expect("expected named subroutine statement");
+        .ok_or_else(|| "expected named subroutine statement".to_string())?;
 
     let NodeKind::Subroutine { name, attributes, body, .. } = &sub.kind else {
-        panic!("expected subroutine node, got {}", sub.kind.kind_name());
+        return Err(format!("expected subroutine node, got {}", sub.kind.kind_name()));
     };
 
     assert_eq!(name.as_deref(), Some("fetch"));
@@ -37,25 +66,28 @@ fn async_named_subroutine_carries_async_attribute() {
         "expected unary `await` inside async subroutine body, got {}",
         body.to_sexp()
     );
+    Ok(())
 }
 
 #[test]
-fn await_parses_as_unary_operator() {
+fn await_parses_as_unary_operator() -> Result<(), String> {
     let ast = parse("my $result = await fetch();");
-    let NodeKind::Program { statements } = &ast.kind else {
-        panic!("expected program node, got {}", ast.kind.kind_name());
-    };
+    let statements = program_statements(&ast)?;
 
-    let decl = statements.first().expect("expected one statement");
+    let decl = first_statement(statements, "await variable declaration")?;
     let NodeKind::VariableDeclaration { initializer: Some(initializer), .. } = &decl.kind else {
-        panic!("expected variable declaration with initializer, got {}", decl.kind.kind_name());
+        return Err(format!(
+            "expected variable declaration with initializer, got {}",
+            decl.kind.kind_name()
+        ));
     };
 
     let NodeKind::Unary { op, .. } = &initializer.kind else {
-        panic!("expected unary initializer, got {}", initializer.kind.kind_name());
+        return Err(format!("expected unary initializer, got {}", initializer.kind.kind_name()));
     };
 
     assert_eq!(op, "await");
+    Ok(())
 }
 
 #[test]
@@ -64,44 +96,25 @@ fn async_bareword_hash_key_stays_parseable() {
 }
 
 #[test]
-fn async_block_stays_parseable_as_a_call() {
+fn async_block_stays_parseable_as_a_call() -> Result<(), String> {
     let ast = parse("async { 1 };");
-    let NodeKind::Program { statements } = &ast.kind else {
-        panic!("expected program node, got {}", ast.kind.kind_name());
-    };
+    let statements = program_statements(&ast)?;
 
-    let stmt = statements.first().expect("expected one statement");
-    let NodeKind::ExpressionStatement { expression } = &stmt.kind else {
-        panic!(
-            "expected expression statement for `async {{ ... }}`, got {}",
-            stmt.kind.kind_name()
-        );
-    };
-
-    let NodeKind::FunctionCall { name, .. } = &expression.kind else {
-        panic!(
-            "expected `async {{ ... }}` to stay a function call, got {}",
-            expression.kind.kind_name()
-        );
-    };
+    let stmt = first_statement(statements, "`async { ... }`")?;
+    let expression = expression_statement(stmt, "`async { ... }`")?;
+    let name = function_call_name(expression, "`async { ... }`")?;
 
     assert_eq!(name, "async");
+    Ok(())
 }
 
 #[test]
-fn package_qualified_await_stays_a_function_call() {
+fn package_qualified_await_stays_a_function_call() -> Result<(), String> {
     let ast = parse("await::helper();");
-    let NodeKind::Program { statements } = &ast.kind else {
-        panic!("expected program node, got {}", ast.kind.kind_name());
-    };
+    let statements = program_statements(&ast)?;
 
-    let stmt = statements.first().expect("expected one statement");
-    let NodeKind::ExpressionStatement { expression } = &stmt.kind else {
-        panic!(
-            "expected expression statement for `await::helper()`, got {}",
-            stmt.kind.kind_name()
-        );
-    };
+    let stmt = first_statement(statements, "`await::helper()`")?;
+    let expression = expression_statement(stmt, "`await::helper()`")?;
 
     assert!(
         find_unary_op(expression, "await").is_none(),
@@ -109,12 +122,8 @@ fn package_qualified_await_stays_a_function_call() {
         expression.to_sexp()
     );
 
-    let NodeKind::FunctionCall { name, .. } = &expression.kind else {
-        panic!(
-            "expected `await::helper()` to stay a function call, got {}",
-            expression.kind.kind_name()
-        );
-    };
+    let name = function_call_name(expression, "`await::helper()`")?;
 
     assert_eq!(name, "await::helper");
+    Ok(())
 }
