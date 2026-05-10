@@ -470,3 +470,8 @@ fn test_subst_double_quoted_replacement_no_delimiter() {
     // The quotes are treated as literal chars in the replacement
     assert_no_errors(r#"$x =~ s/old/"new_replacement"/;"#);
 }
+
+#[test]
+fn test_split_single_quote_string_without_space() {
+    assert_no_errors(r#"@names = split' ', $val;"#);
+}

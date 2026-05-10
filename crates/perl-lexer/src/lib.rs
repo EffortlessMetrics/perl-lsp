@@ -1706,6 +1706,15 @@ impl<'a> PerlLexer<'a> {
     }
 
     #[inline]
+    fn apostrophe_starts_legacy_package_segment(&self, position: usize) -> bool {
+        let next_position = position + '\''.len_utf8();
+        self.input
+            .get(next_position..)
+            .and_then(|suffix| suffix.chars().next())
+            .is_some_and(is_perl_identifier_start)
+    }
+
+    #[inline]
     fn try_identifier_or_keyword(&mut self) -> Option<Token> {
         let start = self.position;
         let ch = self.current_char()?;
@@ -1744,12 +1753,19 @@ impl<'a> PerlLexer<'a> {
             // Fast ASCII path for identifier continuation.
             while self.position < len {
                 let byte = bytes[self.position];
-                if byte == b'\'' && is_quote_op_word_prefix(&bytes[start..self.position]) {
-                    // Keep apostrophe for quote-operator parsing in cases like q'...'.
-                    break;
+                if byte == b'\'' {
+                    if is_quote_op_word_prefix(&bytes[start..self.position])
+                        || !self.apostrophe_starts_legacy_package_segment(self.position)
+                    {
+                        // Keep apostrophe for quote/string parsing in cases like q'...'
+                        // and split' ', while still accepting Foo'Bar package spelling.
+                        break;
+                    }
+                    self.position += 1;
+                    continue;
                 }
 
-                if byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'\'' {
+                if byte.is_ascii_alphanumeric() || byte == b'_' {
                     self.position += 1;
                     continue;
                 }
@@ -1784,7 +1800,15 @@ impl<'a> PerlLexer<'a> {
                 self.advance();
                 while self.position < len {
                     let byte = bytes[self.position];
-                    if byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'\'' {
+                    if byte == b'\'' {
+                        if !self.apostrophe_starts_legacy_package_segment(self.position) {
+                            break;
+                        }
+                        self.position += 1;
+                        continue;
+                    }
+
+                    if byte.is_ascii_alphanumeric() || byte == b'_' {
                         self.position += 1;
                         continue;
                     }
