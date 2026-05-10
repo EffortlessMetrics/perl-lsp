@@ -432,15 +432,34 @@ impl<'a> TokenStream<'a> {
                     // Unclosed quote-like operator from the lexer (e.g. "unclosed qq delimiter '{'").
                     // Map to the corresponding quote token kind so the parser's quote-handler
                     // produces a proper "Unclosed delimiter" diagnostic rather than the generic
-                    // "expected expression, found unknown token" error.  Only q/qq/qw have
-                    // unclosed-detection in their primary-expression arms; other operators
-                    // (qr, qx, m, s, tr, y) fall through to Unknown so they keep the current
-                    // behaviour until dedicated recovery is added.
+                    // "expected expression, found unknown token" error. q/qq/qw have
+                    // unclosed-detection in their primary-expression arms. Substitution
+                    // also has strict parser-side validation, as do transliteration
+                    // operators, so route malformed `s///`, `tr///`, and `y///`
+                    // tokens there instead of losing the lexer diagnostic as Unknown.
+                    // Other operators (qr, qx, m) still fall through to Unknown until
+                    // dedicated recovery is added.
                     let text = token.text.as_ref();
                     if text.starts_with("qq") {
                         TokenKind::QuoteDouble
                     } else if text.starts_with("qw") {
                         TokenKind::QuoteWords
+                    } else if text
+                        .strip_prefix('s')
+                        .and_then(|rest| rest.chars().next())
+                        .is_some_and(|ch| !ch.is_ascii_alphanumeric() && ch != '_')
+                    {
+                        TokenKind::Substitution
+                    } else if text
+                        .strip_prefix("tr")
+                        .and_then(|rest| rest.chars().next())
+                        .is_some_and(|ch| !ch.is_ascii_alphanumeric() && ch != '_')
+                        || text
+                            .strip_prefix('y')
+                            .and_then(|rest| rest.chars().next())
+                            .is_some_and(|ch| !ch.is_ascii_alphanumeric() && ch != '_')
+                    {
+                        TokenKind::Transliteration
                     } else if text
                         .strip_prefix('q')
                         .and_then(|rest| rest.chars().next())
