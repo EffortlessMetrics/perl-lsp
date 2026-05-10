@@ -86,6 +86,9 @@ Check the latest release page before copying a version number.
 Most Linux users should choose the `gnu` archive. Use `musl` mainly for Alpine
 Linux or musl-based containers. You do not need both GNU and musl archives.
 
+These suffixes are Rust target triples. On Linux, `unknown` is the standard
+vendor field and is expected; choose based on the final `gnu` or `musl` segment.
+
 | Your system | Asset suffix |
 | --- | --- |
 | Linux x64 / AMD64, most distributions | `x86_64-unknown-linux-gnu` |
