@@ -293,9 +293,10 @@ fn test_server_capabilities_complete() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
-/// Test that formatting gracefully handles missing perltidy
+/// Test that native default formatting works without external perltidy.
 #[test]
-fn test_formatting_graceful_degradation() -> Result<(), Box<dyn std::error::Error>> {
+fn test_native_default_formatting_returns_edits_without_perltidy()
+-> Result<(), Box<dyn std::error::Error>> {
     let srv = LspServer::new();
 
     // Initialize
@@ -320,7 +321,7 @@ fn test_formatting_graceful_degradation() -> Result<(), Box<dyn std::error::Erro
 
     // Open a simple Perl document
     let uri = "file:///test_format.pl";
-    let text = "sub foo{my$x=1;return$x}";
+    let text = "sub foo{my$x=1;return$x;}\n";
 
     let open_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -337,7 +338,6 @@ fn test_formatting_graceful_degradation() -> Result<(), Box<dyn std::error::Erro
     };
     let _ = srv.handle_request(open_req);
 
-    // Request formatting
     let format_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(2)),
@@ -353,9 +353,19 @@ fn test_formatting_graceful_degradation() -> Result<(), Box<dyn std::error::Erro
 
     let response = srv.handle_request(format_req);
 
-    // Formatting should either succeed or return a helpful error
-    // It should NOT crash or panic
-    assert!(response.is_some(), "Formatting should return a response (success or error)");
+    let response = response.ok_or("Formatting should return a response")?;
+    let result = response.result.ok_or("Formatting response should include a result")?;
+    let edits = result.as_array().ok_or("Formatting result should be an edit array")?;
+    assert!(!edits.is_empty(), "Native default formatting should return edits");
+
+    let edit_text = edits
+        .first()
+        .and_then(|edit| edit.get("newText"))
+        .and_then(|new_text| new_text.as_str())
+        .ok_or("Formatting edit should include newText")?;
+    assert!(edit_text.contains("sub foo {"));
+    assert!(edit_text.contains("my $x = 1;"));
+    assert!(edit_text.contains("return $x"));
 
     Ok(())
 }
