@@ -22,7 +22,7 @@ fn test_lsp_features_unaffected_by_dap() -> Result<()> {
     initialize_lsp(&server);
 
     let uri = "file:///ac1_comprehensive.pl";
-    let text = "package TestPkg;\nsub test_sub { my $var = 1; }\n1;\n";
+    let text = "package TestPkg;\nsub test_sub{my$var=1;return$var;}\n1;\n";
     send_notification(
         &server,
         json!({
@@ -116,7 +116,7 @@ fn test_lsp_features_unaffected_by_dap() -> Result<()> {
         "Workspace symbol response should be present with DAP feature enabled"
     );
 
-    // AC1: formatting (null result is acceptable, response must arrive)
+    // AC1: formatting returns native default edits while DAP is enabled.
     let formatting_id = 104;
     send_request_no_wait(
         &server,
@@ -130,9 +130,30 @@ fn test_lsp_features_unaffected_by_dap() -> Result<()> {
             }
         }),
     );
+    let formatting_response =
+        read_response_matching_i64(&server, formatting_id, Duration::from_secs(5)).ok_or_else(
+            || anyhow::anyhow!("Formatting response should be present with DAP feature enabled"),
+        )?;
+    let edits = formatting_response["result"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("Formatting result should be an edit array"))?;
     assert!(
-        read_response_matching_i64(&server, formatting_id, Duration::from_secs(5)).is_some(),
-        "Formatting response should be present with DAP feature enabled"
+        !edits.is_empty(),
+        "Native default formatting should return edits with DAP feature enabled"
+    );
+    let new_text = edits[0]["newText"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Formatting edit should include newText"))?;
+    assert_eq!(
+        new_text,
+        concat!(
+            "package TestPkg;\n",
+            "sub test_sub {\n",
+            "    my $var = 1;\n",
+            "    return $var;\n",
+            "}\n",
+            "1;\n",
+        )
     );
 
     Ok(())
