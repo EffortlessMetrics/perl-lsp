@@ -156,15 +156,15 @@ fn test_formatting_returns_no_edits_for_literal_preserve_regions() {
     let options = FormattingOptions {
         tab_size: 4,
         insert_spaces: true,
-        trim_trailing_whitespace: None,
-        insert_final_newline: None,
+        trim_trailing_whitespace: Some(true),
+        insert_final_newline: Some(true),
         trim_final_newlines: None,
     };
 
     for code in [
-        "my $matched = $text =~ /needle/i;\n",
-        "print <<'EOF';\nraw { text }\nEOF\n",
-        "=pod\n\n=head1 NAME\n\n=cut\n\nmy $x = 1;\n",
+        "my $matched = $text =~ /needle/i;   \n",
+        "print <<'EOF';   \nraw { text }\nEOF\n",
+        "=pod\n\n=head1 NAME   \n\n=cut\n\nmy $x = 1;   \n",
     ] {
         let edits = must(formatter.format_document(code, &options));
         assert!(edits.is_empty(), "literal-preserve source should not produce edits: {code:?}");
