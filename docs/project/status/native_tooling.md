@@ -6,9 +6,9 @@
 
 | Metric | Value |
 | --- | ---: |
-| Fixture count | 39 |
-| Expected diagnostic fixtures | 8 |
-| Literal-preserve bailout fixtures | 8 |
+| Fixture count | 40 |
+| Expected diagnostic fixtures | 9 |
+| Literal-preserve bailout fixtures | 9 |
 | Corpus files checked | 65 |
 | Corpus files changed | 2 |
 | Corpus idempotence | 65/65 |
