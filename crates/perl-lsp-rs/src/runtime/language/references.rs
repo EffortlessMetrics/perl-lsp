@@ -15,10 +15,32 @@ use crate::util::{is_word_boundary, token_under_cursor};
 use std::sync::OnceLock;
 use std::time::Instant;
 
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
+use perl_lsp_rs_core::providers::navigation::references_shadow::find_references_cutover;
+#[cfg(all(
+    feature = "workspace",
+    not(target_arch = "wasm32"),
+    any(test, feature = "expose_lsp_test_api")
+))]
+use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
+
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 
 static QUALIFIED_NAME_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn lsp_location_count(value: Option<&Value>) -> usize {
+    match value {
+        Some(Value::Array(items)) => items.len(),
+        Some(Value::Object(obj)) if obj.contains_key("uri") || obj.contains_key("targetUri") => 1,
+        _ => 0,
+    }
+}
 
 fn get_qualified_name_regex() -> Option<&'static regex::Regex> {
     QUALIFIED_NAME_RE
@@ -524,6 +546,116 @@ impl LspServer {
         out.dedup();
         out.truncate(cap);
         out
+    }
+
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub(crate) fn references_runtime_quality_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let live_provider_result = self.handle_references(params.clone())?;
+        let live_provider_count = lsp_location_count(live_provider_result.as_ref());
+
+        #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
+        {
+            Ok(Some(json!({
+                "provider": "references",
+                "live_provider_result": live_provider_result,
+                "live_provider_count": live_provider_count,
+                "compiler_receipt": null,
+                "no_live_behavior_change": true,
+                "note": "references runtime proof unavailable without workspace semantic queries"
+            })))
+        }
+
+        #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+        {
+            let Some(params) = params else {
+                return Ok(Some(json!({
+                    "provider": "references",
+                    "live_provider_result": live_provider_result,
+                    "live_provider_count": live_provider_count,
+                    "compiler_receipt": null,
+                    "no_live_behavior_change": true,
+                    "note": "references runtime proof missing request params"
+                })));
+            };
+
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
+            let Some((symbol, byte_offset)) = self.references_runtime_symbol(uri, line, character)
+            else {
+                return Ok(Some(json!({
+                    "provider": "references",
+                    "live_provider_result": live_provider_result,
+                    "live_provider_count": live_provider_count,
+                    "compiler_receipt": null,
+                    "no_live_behavior_change": true,
+                    "note": "references runtime proof found no symbol at request position"
+                })));
+            };
+
+            let compiler_receipt = match route_index_access(self.coordinator()) {
+                IndexAccessMode::Full(coordinator) => {
+                    let index = coordinator.index();
+                    index
+                        .with_semantic_queries_for_uri(uri, |file_id, queries| {
+                            let ctx = QueryContext::new(file_id, None, Some(byte_offset));
+                            let entity_id = queries
+                                .symbol_at(file_id, byte_offset)
+                                .and_then(|(_, occurrence)| occurrence.entity_id)
+                                .or_else(|| {
+                                    queries
+                                        .definitions(&symbol, &ctx)
+                                        .first()
+                                        .map(|candidate| candidate.entity_id)
+                                })?;
+                            let mut receipt = find_references_cutover(
+                                index.as_ref(),
+                                &queries,
+                                &symbol,
+                                entity_id,
+                            )
+                            .receipt;
+                            let compiler_result_count = receipt.new_result.match_count;
+                            receipt.notes.push(format!(
+                                "references runtime proof: live_provider_results={live_provider_count}; compiler_fact_candidates={}; compiler_result_count={}; no live navigation behavior change",
+                                compiler_result_count, compiler_result_count
+                            ));
+                            Some(receipt)
+                        })
+                        .flatten()
+                }
+                IndexAccessMode::Partial(_) | IndexAccessMode::None => None,
+            };
+
+            Ok(Some(json!({
+                "provider": "references",
+                "symbol": symbol,
+                "live_provider_result": live_provider_result,
+                "live_provider_count": live_provider_count,
+                "compiler_receipt": compiler_receipt,
+                "no_live_behavior_change": true
+            })))
+        }
+    }
+
+    #[cfg(all(feature = "workspace", any(test, feature = "expose_lsp_test_api")))]
+    fn references_runtime_symbol(
+        &self,
+        uri: &str,
+        line: u32,
+        character: u32,
+    ) -> Option<(String, u32)> {
+        let documents = self.documents_guard();
+        let doc = self.get_document(&documents, uri)?;
+        let offset = self.pos16_to_offset(doc, line, character);
+        let symbol = token_under_cursor(&doc.text, line as usize, character as usize)?;
+        if symbol.is_empty() {
+            return None;
+        }
+        let byte_offset = u32::try_from(offset).ok()?;
+        Some((symbol, byte_offset))
     }
 
     /// Handle textDocument/documentHighlight request
