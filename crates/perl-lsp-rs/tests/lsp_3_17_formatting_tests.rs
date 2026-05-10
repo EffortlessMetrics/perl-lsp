@@ -114,6 +114,33 @@ fn test_range_formatting_preserves_trailing_comment_3_17() -> TestResult {
 }
 
 #[test]
+fn test_range_formatting_preserves_simple_block_trailing_comment_3_17() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open("file:///block-comment.pl", "if($ok){return 1;} # if tail\nmy$z=3;")?;
+
+    let result = harness.request(
+        "textDocument/rangeFormatting",
+        json!({
+            "textDocument": { "uri": "file:///block-comment.pl" },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 0, "character": 29 }
+            },
+            "options": {
+                "tabSize": 4,
+                "insertSpaces": true
+            }
+        }),
+    )?;
+
+    let edits = result.as_array().ok_or("rangeFormatting should return an edit array")?;
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0]["newText"], "if ($ok) {\n    return 1;\n} # if tail");
+    Ok(())
+}
+
+#[test]
 fn test_on_type_formatting_3_17() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
