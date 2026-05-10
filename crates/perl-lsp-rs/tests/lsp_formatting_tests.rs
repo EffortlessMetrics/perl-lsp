@@ -6,9 +6,6 @@
 //! - Formatting options (tabSize, insertSpaces)
 //! - Capability advertisement in server initialization
 //! - Graceful handling when formatter produces no changes
-//!
-//! Note: Some formatting tests may produce null/empty results if perltidy
-//! is not installed. Tests are written to handle both cases gracefully.
 
 mod support;
 use serde_json::json;
@@ -26,39 +23,43 @@ fn test_formatting_whole_document() -> TestResult {
     let doc_uri = "file:///test_format.pl";
     harness.open(
         doc_uri,
-        r#"sub hello{my$name=shift;print "Hello, $name\n";return 1;}
+        r#"sub hello{my$name=shift;return 1;}
 sub world{return "world";}
 "#,
     )?;
 
-    let response = harness
-        .request(
-            "textDocument/formatting",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "options": {
-                    "tabSize": 4,
-                    "insertSpaces": true
-                }
-            }),
-        )
-        .unwrap_or(json!(null));
+    let response = harness.request(
+        "textDocument/formatting",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "options": {
+                "tabSize": 4,
+                "insertSpaces": true
+            }
+        }),
+    )?;
 
-    // Response should be an array of TextEdit or null
-    if !response.is_null() {
-        assert!(
-            response.is_array(),
-            "formatting should return an array of TextEdit, got: {:?}",
-            response
-        );
-        let edits = response.as_array().ok_or("response is not an array")?;
-        // Each edit should have range and newText
-        for edit in edits {
-            assert!(edit["range"].is_object(), "TextEdit should have a range");
-            assert!(edit["newText"].is_string(), "TextEdit should have newText");
-        }
-    }
-    // null is also acceptable if no formatter is configured
+    let edits = response.as_array().ok_or("formatting response must be an array")?;
+    assert_eq!(edits.len(), 1, "native formatting should produce one document edit");
+    let formatted = apply_text_edits(
+        r#"sub hello{my$name=shift;return 1;}
+sub world{return "world";}
+"#,
+        edits,
+    );
+    assert_eq!(
+        formatted,
+        concat!(
+            "sub hello {\n",
+            "    my $name = shift;\n",
+            "    return 1;\n",
+            "}\n",
+            "sub world {\n",
+            "    return \"world\";\n",
+            "}\n",
+            "\n",
+        )
+    );
 
     Ok(())
 }
@@ -89,36 +90,62 @@ sub another_clean {
 "#,
     )?;
 
-    let response = harness
-        .request(
-            "textDocument/rangeFormatting",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "range": {
-                    "start": { "line": 8, "character": 0 },
-                    "end": { "line": 8, "character": 30 }
-                },
-                "options": {
-                    "tabSize": 4,
-                    "insertSpaces": true
-                }
-            }),
-        )
-        .unwrap_or(json!(null));
+    let response = harness.request(
+        "textDocument/rangeFormatting",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "range": {
+                "start": { "line": 8, "character": 0 },
+                "end": { "line": 8, "character": 30 }
+            },
+            "options": {
+                "tabSize": 4,
+                "insertSpaces": true
+            }
+        }),
+    )?;
 
-    // Response should be an array of TextEdit or null
-    if !response.is_null() {
-        assert!(
-            response.is_array(),
-            "rangeFormatting should return an array of TextEdit, got: {:?}",
-            response
-        );
-        let edits = response.as_array().ok_or("response is not an array")?;
-        for edit in edits {
-            assert!(edit["range"].is_object(), "Each TextEdit should have a range");
-            assert!(edit["newText"].is_string(), "Each TextEdit should have newText");
-        }
-    }
+    let edits = response.as_array().ok_or("rangeFormatting response must be an array")?;
+    assert_eq!(edits.len(), 1, "native range formatting should edit the selected line");
+    let formatted = apply_text_edits(
+        r#"
+# Well-formatted section
+sub clean_func {
+    my $x = 1;
+    return $x;
+}
+
+# Poorly formatted section to be range-formatted
+sub messy{my$y=2;return$y;}
+
+# Another well-formatted section
+sub another_clean {
+    return 42;
+}
+"#,
+        edits,
+    );
+    assert_eq!(
+        formatted,
+        r#"
+# Well-formatted section
+sub clean_func {
+    my $x = 1;
+    return $x;
+}
+
+# Poorly formatted section to be range-formatted
+sub messy {
+    my $y = 2;
+    return $y;
+}
+
+# Another well-formatted section
+sub another_clean {
+    return 42;
+}
+"#
+    );
 
     Ok(())
 }
@@ -132,57 +159,49 @@ fn test_formatting_options_tab_size() -> TestResult {
     let doc_uri = "file:///test_tab_size.pl";
     harness.open(
         doc_uri,
-        r#"sub test{
-my $x=1;
-my $y=2;
-return $x+$y;
-}
+        r#"sub test{my$x=1;return$x;}
 "#,
     )?;
 
-    // Request with tabSize 2
-    let response_2 = harness
-        .request(
-            "textDocument/formatting",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "options": {
-                    "tabSize": 2,
-                    "insertSpaces": true
-                }
-            }),
-        )
-        .unwrap_or(json!(null));
+    let source = r#"sub test{my$x=1;return$x;}
+"#;
 
-    // Request with tabSize 8
-    let response_8 = harness
-        .request(
-            "textDocument/formatting",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "options": {
-                    "tabSize": 8,
-                    "insertSpaces": true
-                }
-            }),
-        )
-        .unwrap_or(json!(null));
+    let response_2 = harness.request(
+        "textDocument/formatting",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "options": {
+                "tabSize": 2,
+                "insertSpaces": true
+            }
+        }),
+    )?;
 
-    // Both responses should be valid (array or null)
-    if !response_2.is_null() {
-        assert!(
-            response_2.is_array(),
-            "formatting with tabSize 2 should return array, got: {:?}",
-            response_2
-        );
-    }
-    if !response_8.is_null() {
-        assert!(
-            response_8.is_array(),
-            "formatting with tabSize 8 should return array, got: {:?}",
-            response_8
-        );
-    }
+    harness.open("file:///test_tab_size_8.pl", source)?;
+
+    let response_8 = harness.request(
+        "textDocument/formatting",
+        json!({
+            "textDocument": { "uri": "file:///test_tab_size_8.pl" },
+            "options": {
+                "tabSize": 8,
+                "insertSpaces": true
+            }
+        }),
+    )?;
+
+    let edits_2 = response_2.as_array().ok_or("tabSize 2 response must be an array")?;
+    let edits_8 = response_8.as_array().ok_or("tabSize 8 response must be an array")?;
+    let formatted_2 = apply_text_edits(source, edits_2);
+    let formatted_8 = apply_text_edits(source, edits_8);
+    assert!(
+        formatted_2.contains("\n  my $x = 1;"),
+        "tabSize 2 should use two-space indentation, got:\n{formatted_2}"
+    );
+    assert!(
+        formatted_8.contains("\n        my $x = 1;"),
+        "tabSize 8 should use eight-space indentation, got:\n{formatted_8}"
+    );
 
     Ok(())
 }
@@ -214,7 +233,7 @@ fn test_formatting_capability_advertised() -> TestResult {
     Ok(())
 }
 
-/// Test formatting on already well-formatted code returns empty edits or null
+/// Test formatting on already well-formatted code returns empty edits.
 #[test]
 fn test_formatting_well_formatted_code() -> TestResult {
     let mut harness = LspHarness::new();
@@ -235,29 +254,19 @@ sub clean_function {
 "#,
     )?;
 
-    let response = harness
-        .request(
-            "textDocument/formatting",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "options": {
-                    "tabSize": 4,
-                    "insertSpaces": true
-                }
-            }),
-        )
-        .unwrap_or(json!(null));
-
-    // Well-formatted code should return empty edits, null, or edits that preserve content
-    if !response.is_null() {
-        if let Some(edits) = response.as_array() {
-            // If edits are returned, they should still be valid TextEdit objects
-            for edit in edits {
-                assert!(edit["range"].is_object(), "TextEdit should have a range");
-                assert!(edit["newText"].is_string(), "TextEdit should have newText");
+    let response = harness.request(
+        "textDocument/formatting",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "options": {
+                "tabSize": 4,
+                "insertSpaces": true
             }
-        }
-    }
+        }),
+    )?;
+
+    let edits = response.as_array().ok_or("formatting response must be an array")?;
+    assert!(edits.is_empty(), "well-formatted native code should not be edited");
 
     Ok(())
 }
@@ -466,27 +475,19 @@ fn test_formatting_comments_only() -> TestResult {
 "#,
     )?;
 
-    let response = harness
-        .request(
-            "textDocument/formatting",
-            json!({
-                "textDocument": { "uri": doc_uri },
-                "options": {
-                    "tabSize": 4,
-                    "insertSpaces": true
-                }
-            }),
-        )
-        .unwrap_or(json!(null));
+    let response = harness.request(
+        "textDocument/formatting",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "options": {
+                "tabSize": 4,
+                "insertSpaces": true
+            }
+        }),
+    )?;
 
-    // Should not crash; null or empty edits are acceptable
-    if !response.is_null() {
-        assert!(
-            response.is_array(),
-            "Should return an array of edits for comment-only file, got: {:?}",
-            response
-        );
-    }
+    let edits = response.as_array().ok_or("formatting response must be an array")?;
+    assert!(edits.is_empty(), "comment-only native formatting should return no edits");
 
     Ok(())
 }
