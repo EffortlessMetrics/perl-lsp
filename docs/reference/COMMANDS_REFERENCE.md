@@ -367,7 +367,7 @@ legacy perlcritic compatibility, and advanced code actions.
 
 #### perl.runCritic Command Usage
 
-**Dual Analyzer Strategy Overview** (*Diataxis: Explanation* - Architecture design):
+**Native Critic and Legacy Compatibility Overview** (*Diataxis: Explanation* - Architecture design):
 
 The normal diagnostic path uses the native critic engine by default. The
 `perl.runCritic` execute command still supports legacy compatibility behavior,
@@ -382,14 +382,14 @@ cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_pe
 # Test executeCommand protocol compliance
 cargo test -p perl-lsp-rs --test lsp_execute_command_tests
 
-# Test legacy dual analyzer compatibility behavior
-cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
+# Test native critic diagnostics through the LSP runtime
+cargo test -p perl-lsp-rs native_critic_engine --profile agent --locked --lib -- --nocapture
 
-# Test built-in analyzer specifically
-cargo test -p perl-parser --test execute_command_tests -- test_execute_command_run_critic_builtin
+# Test execute-command critic behavior in the core provider
+cargo test -p perl-lsp-rs test_execute_command_run_critic_builtin --lib
 
 # Test with missing files (error handling)
-cargo test -p perl-parser --test execute_command_tests -- test_execute_command_run_critic_missing_file
+cargo test -p perl-lsp-rs test_execute_command_run_critic_missing_file --lib
 ```
 
 **Advanced Configuration** (*Diataxis: How-to Guide* - Optimizing critic integration):
@@ -417,7 +417,7 @@ which perlcritic                        # Should return path if installed
 perlcritic --version                    # Check version
 
 # Test external analyzer detection
-cargo test -p perl-parser --test execute_command_tests -- test_command_exists_behavior
+cargo test -p perl-lsp-rs test_command_exists_behavior --profile agent --locked --lib -- --nocapture
 ```
 
 **Native Critic Capabilities** (*Diataxis: Reference* - Policy coverage):
@@ -449,7 +449,7 @@ which perlcritic || echo "perlcritic not found in PATH"
 echo $PATH | grep -o '/usr/local/bin\|/usr/bin\|/opt/perl/bin'
 
 # Alternative: use the native critic path
-cargo test -p perl-parser --test execute_command_tests -- test_execute_command_run_critic_builtin
+cargo test -p perl-lsp-rs test_execute_command_run_critic_builtin --profile agent --locked --lib -- --nocapture
 ```
 
 **Issue: Analysis timeout or slow performance**
@@ -459,16 +459,16 @@ cargo test -p perl-parser --test execute_command_tests -- test_execute_command_r
 wc -l your_file.pl                     # Check line count
 time perlcritic your_file.pl           # Test external tool directly
 
-# Built-in analyzer performance validation
-cargo test -p perl-parser --test execute_command_tests -- test_run_builtin_critic_with_valid_file
+# Native critic performance validation
+cargo test -p perl-lsp-rs test_run_builtin_critic_with_valid_file --profile agent --locked --lib -- --nocapture
 ```
 
 **Issue: Parse errors prevent analysis**
 ```bash
 # Problem: Syntax errors stop analysis
-# Solution: Built-in analyzer handles parse errors gracefully
+# Solution: Native critic keeps executeCommand isolated from parser failures
 perl -c your_file.pl                   # Check syntax separately
-cargo test -p perl-parser --test execute_command_tests # Built-in handles syntax errors
+cargo test -p perl-lsp-rs test_execute_command_run_critic_builtin --profile agent --locked --lib -- --nocapture
 ```
 
 **Integration with LSP Diagnostics** (*Diataxis: How-to Guide* - Diagnostic workflow):
