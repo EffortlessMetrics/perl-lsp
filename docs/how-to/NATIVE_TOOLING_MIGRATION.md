@@ -33,6 +33,9 @@ See [Native Tooling Status](../project/status/native_tooling.md) for the current
 checked-in snapshot. The readiness report turns those receipt counts into
 explicit default-cutover criteria; see
 [Native Tooling Readiness](../project/status/native_tooling_readiness.md).
+Readiness also verifies that the receipts it summarizes were generated for the
+current commit, so stale local artifacts cannot silently support a cutover
+claim.
 
 For formatter proof, run:
 
