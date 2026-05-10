@@ -1382,9 +1382,13 @@ fn quote_like_parse_error_location(error: &ParseError) -> Option<usize> {
 }
 
 fn is_unclosed_quote_like_diagnostic(message: &str) -> bool {
-    message.starts_with("Unclosed ")
+    (message.starts_with("Unclosed ")
         && (message.contains(" delimiter in string operator ")
-            || message.starts_with("Unclosed qw() delimiter"))
+            || message.starts_with("Unclosed qw() delimiter")))
+        || message.starts_with("Missing replacement in substitution")
+        || message.starts_with("Missing closing delimiter in substitution")
+        || message.starts_with("Missing replacement list in transliteration")
+        || message.starts_with("Missing closing delimiter in transliteration")
 }
 
 fn line_tag_for_node(node: &Node) -> Option<LineTag> {
@@ -7680,6 +7684,9 @@ sub dynamic_boundary_case {
             ("q", "package Accuracy::Unclosed;\n\nmy $message = q{still open\n"),
             ("qq", "package Accuracy::Unclosed;\n\nmy $message = qq{still open\n"),
             ("qw", "package Accuracy::Unclosed;\n\nmy @words = qw{still open\n"),
+            ("s", "package Accuracy::Unclosed;\n\nmy $pattern = s/unterminated/foo;\n"),
+            ("tr", "package Accuracy::Unclosed;\n\nmy $table = tr/a/b;\n"),
+            ("y", "package Accuracy::Unclosed;\n\nmy $table = y/a/b;\n"),
         ] {
             let actual_by_line = extract_line_tags(source);
             let line_tags = actual_by_line
@@ -7688,7 +7695,9 @@ sub dynamic_boundary_case {
             let expected = tags(&[LineTag::ParseError]);
 
             assert!(line_tags.contains(&LineTag::ParseError));
-            assert!(line_tags.contains(&LineTag::VariableDecl));
+            if matches!(operator, "q" | "qq" | "qw") {
+                assert!(line_tags.contains(&LineTag::VariableDecl));
+            }
             assert_eq!(comparable_actual_line_tags(&expected, line_tags), expected);
         }
 
