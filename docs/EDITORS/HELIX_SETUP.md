@@ -211,11 +211,9 @@ Inside Helix:
 ## Formatting
 
 Helix uses the language server for `:format` unless you configure an external
-formatter. If formatting fails, confirm `perltidy` is installed:
-
-```bash
-perltidy --version
-```
+formatter. Native LSP formatting does not require `perltidy`; if formatting
+returns no edits, check the language-server log for native formatting
+diagnostics.
 
 To use an external formatter instead of LSP formatting:
 

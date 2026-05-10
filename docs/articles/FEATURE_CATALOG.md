@@ -74,7 +74,7 @@ Diagnostics report problems in your code as you edit.
 
 **Code Actions** (`lsp.code_action`) / **Code Action Resolve** (`lsp.code_action_resolve`) — context-sensitive suggestions for fixing or improving code. Examples: organize imports, add missing `use` statements, modernize old Perl idioms, apply quick fixes for diagnostics. `resolve` fetches the full edit for a code action when selected.
 
-**Formatting** (`lsp.formatting`) — formats the entire document using Perl::Tidy. Produces consistently formatted Perl code.
+**Formatting** (`lsp.formatting`) — formats the entire document using the native Rust formatter, with explicit Perl::Tidy compatibility available for projects that need legacy output.
 
 **Range Formatting** (`lsp.range_formatting`) — formats a selected range rather than the entire file.
 
@@ -124,7 +124,7 @@ These features maintain the server's view of open files in sync with the editor.
 
 **Workspace Edit** (`lsp.workspace_edit`) — applies multi-file edits. Used by rename and other refactoring operations that touch multiple files.
 
-**Execute Command** (`lsp.execute_command`) — runs server-side commands from the editor. Used for invoking Perl::Critic on the current file, running custom Perl tools, and triggering workspace operations that do not fit the standard request/response model.
+**Execute Command** (`lsp.execute_command`) — runs server-side commands from the editor. Used for native critic analysis, legacy Perl::Critic compatibility, custom Perl tools, and workspace operations that do not fit the standard request/response model.
 
 **Configuration** (`lsp.configuration`) / **Did Change Configuration** (`lsp.did_change_configuration`) / **Did Change Watched Files** (`lsp.did_change_watched_files`) — manages server configuration. The server can request specific configuration from the client. The client notifies the server when configuration or watched files change.
 
