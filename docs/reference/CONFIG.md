@@ -581,6 +581,28 @@ Native-critic rule bundle used when `perl.critic.engine = "native"`.
 `recommended` selects the lower-noise security/common-mistake/testing profile.
 `strict` enables the full native rule surface.
 
+#### `perl.critic.include`
+
+| Property | Value |
+|---|---|
+| Type | `string[]` |
+| Default | `[]` |
+
+Native critic rule IDs to include. When non-empty, only listed native rule IDs
+run inside the selected profile. Use native IDs such as
+`native.testing.require_use_strict`, not Perl::Critic policy names.
+
+#### `perl.critic.exclude`
+
+| Property | Value |
+|---|---|
+| Type | `string[]` |
+| Default | `[]` |
+
+Native critic rule IDs to suppress from the selected profile. This is useful
+when migrating a project to the native recommended profile while deferring one
+specific rule.
+
 ```json
 {
   "perl": {
@@ -591,7 +613,8 @@ Native-critic rule bundle used when `perl.critic.engine = "native"`.
     },
     "critic": {
       "engine": "native",
-      "profile": "recommended"
+      "profile": "recommended",
+      "exclude": ["native.documentation.require_pod_sections"]
     }
   }
 }
