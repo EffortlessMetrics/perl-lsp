@@ -105,8 +105,10 @@ Priority 3 (highest): didChangeConfiguration — live editor settings
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `perl.workspace.includePaths` | string[] | `["lib", ".", "local/lib/perl5"]` | Module search paths |
-| `perl.workspace.useSystemInc` | bool | `false` | Include system `@INC` in resolution |
+| `perl.workspace.includePaths` | string[] | `["lib", ".", "local/lib/perl5"]` | Module search paths (project libs) |
+| `perl.workspace.usePerl5lib` | bool | `true` | Read `PERL5LIB` env var. Independent of `useSystemInc`. |
+| `perl.workspace.perl5libPrecedence` | `"prepend"` \| `"append"` | `"prepend"` | Whether `PERL5LIB` is searched before or after `includePaths` |
+| `perl.workspace.useSystemInc` | bool | `false` | Include interpreter startup `@INC` in resolution. Independent of `usePerl5lib`. |
 | `perl.workspace.resolutionTimeout` | number (ms) | `50` | Module resolution deadline |
 | `perl.inlayHints.enabled` | bool | `true` | Master inlay hints switch |
 | `perl.inlayHints.parameterHints` | bool | `true` | Show parameter names at call sites |
