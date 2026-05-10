@@ -610,6 +610,13 @@ impl<'a> Parser<'a> {
             let first_is_scalar = s.tokens.peek().is_ok_and(|t| {
                 t.text.starts_with('$') && t.text.len() > 1
             });
+            let first_is_filehandle_block = s
+                .tokens
+                .peek()
+                .is_ok_and(|t| t.kind == TokenKind::LeftBrace)
+                && s.tokens.peek_second().is_ok_and(|t| {
+                    t.text.starts_with('$') || t.text.starts_with('*')
+                });
             let second_is_not_separator = s.tokens.peek_second().is_ok_and(|t| {
                 !matches!(
                     t.kind,
@@ -617,9 +624,9 @@ impl<'a> Parser<'a> {
                 )
             });
 
-            if first_is_scalar && second_is_not_separator {
-                // Filehandle form: parse $fh as first argument, then remaining args
-                // without requiring a comma separator.
+            if (first_is_scalar && second_is_not_separator) || first_is_filehandle_block {
+                // Filehandle form: parse `$fh` or `{ *FH }` as first argument,
+                // then remaining args without requiring a comma separator.
                 let mut args = Vec::new();
                 let filehandle = s.parse_assignment_or_declaration()?;
                 args.push(filehandle);
