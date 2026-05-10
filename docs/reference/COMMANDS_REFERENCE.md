@@ -536,7 +536,7 @@ cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_de
 - ✅ `perl.runFile` - Execute single Perl file with output capture
 - ✅ `perl.runTestSub` - Execute specific test subroutine with isolation
 - ✅ `perl.debugTests` - Debug test execution with breakpoint support
-- ✅ `perl.runCritic` - Perl::Critic analysis with dual analyzer strategy (external + built-in fallback)
+- ✅ `perl.runCritic` - Native critic analysis with explicit Perl::Critic compatibility
 
 ### Advanced Code Actions Testing (*Diataxis: How-to Guide* - Code action workflows)
 

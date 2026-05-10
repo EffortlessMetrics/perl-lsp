@@ -97,8 +97,8 @@ first to validate the rename and get the default placeholder text.
 
 | Feature | ID | Notes |
 |---|---|---|
-| Document formatting | `lsp.formatting` | Delegates to Perl::Tidy |
-| Range formatting | `lsp.range_formatting` | Single range |
+| Document formatting | `lsp.formatting` | Native formatter by default; Perl::Tidy compatibility is explicit opt-in |
+| Range formatting | `lsp.range_formatting` | Native single-range edits |
 | Multi-range formatting | `lsp.ranges_formatting` | `textDocument/rangesFormatting` (@proposed) |
 | On-type formatting | `lsp.on_type_formatting` | Auto-indent on `{`, `}`, `;` |
 | Format on save | `lsp.will_save_wait_until` | Via willSaveWaitUntil |
