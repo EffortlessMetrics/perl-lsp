@@ -29,7 +29,7 @@ server installation is only required for offline/pinned deployments or when
 ### Optional but Recommended
 
 - **Perl** 5.10 or later (for syntax validation)
-- **perltidy** (for code formatting)
+- **perltidy** only if you select explicit external formatting compatibility
 
 ---
 
@@ -190,15 +190,15 @@ settings.
 | `perl-lsp.includePaths` | array | `["lib", ".", "local/lib/perl5"]` | Additional library paths to search for Perl modules. |
 | `perl-lsp.enableDiagnostics` | boolean | `true` | Enable real-time syntax diagnostics. |
 | `perl-lsp.enableSemanticTokens` | boolean | `true` | Enable semantic syntax highlighting. |
-| `perl-lsp.perltidyConfig` | string | `""` | Path to `.perltidyrc` configuration file. |
-| `perl-lsp.enableFormatting` | boolean | `true` | Enable document formatting using `perltidy`. |
+| `perl-lsp.perltidyConfig` | string | `""` | Path to `.perltidyrc` compatibility file. Native formatting is the default path. |
+| `perl-lsp.enableFormatting` | boolean | `true` | Enable native document formatting. |
 | `perl-lsp.formatOnSave` | boolean | `false` | Format document on save. |
 | `perl-lsp.enableRefactoring` | boolean | `true` | Enable refactoring-related code actions. |
 | `perl-lsp.enableTestIntegration` | boolean | `true` | Enable `Test::More` and `Test2` integration. |
 | `perl-lsp.autoPopulateNewFiles` | boolean | `true` | Auto-populate new `.pm` and `.t` files with boilerplate. |
-| `perl-lsp.perlcritic.enabled` | boolean | `false` | Enable external `perlcritic` diagnostics. |
-| `perl-lsp.perlcritic.severity` | number | `3` | Perl::Critic minimum severity, from `1` to `5`. |
-| `perl-lsp.perlcritic.profile` | string | `""` | Path to `.perlcriticrc` profile file. |
+| `perl-lsp.perlcritic.enabled` | boolean | `true` | Enable native critic diagnostics. |
+| `perl-lsp.perlcritic.severity` | number | `3` | Critic minimum severity, from `1` to `5`. |
+| `perl-lsp.perlcritic.profile` | string | `""` | Path to `.perlcriticrc` compatibility profile file. |
 | `perl-lsp.featureProfile` | string | `"auto"` | Runtime capability profile. Keep `auto` unless you need a specific compatibility profile. |
 | `perl-lsp.disabledFeatures` | array | `[]` | Disable selected server features at client startup. |
 | `perl-lsp.autoUpdate` | boolean | `false` | Automatically download and install a new `perllsp` binary when available. |
@@ -314,7 +314,7 @@ Rename symbols across the workspace:
 
 ### Formatting
 
-Format Perl code using perltidy:
+Format Perl code using the native formatter:
 
 - **Keyboard**: `Shift+Alt+F` (Shift+Option+F on macOS)
 - **Command**: Format Document
@@ -487,27 +487,7 @@ Example:
 
 **Solutions**:
 
-1. **Install perltidy**:
-   ```bash
-   # macOS
-   brew install perltidy
-
-   # Ubuntu/Debian
-   sudo apt-get install perltidy
-
-   # CentOS/RHEL
-   sudo yum install perl-Perl-Tidy
-
-   # Windows (via Strawberry Perl)
-   ppm install Perl-Tidy
-   ```
-
-2. **Check perltidy works**:
-   ```bash
-   perltidy --version
-   ```
-
-3. **Verify formatting enabled**:
+1. **Verify formatting enabled**:
    ```json
    {
      "perl-lsp.enableFormatting": true,
@@ -515,11 +495,21 @@ Example:
    }
    ```
 
-4. **Set perltidy config path** (optional):
+2. **Check server logs**:
+   Open the "Perl Language Server" output channel and look for native formatting
+   diagnostics. Unsupported literal-preserve regions return no edits rather
+   than unsafe rewrites.
+
+3. **Set a compatibility profile path** (optional):
    ```json
    {
      "perl-lsp.perltidyConfig": "/path/to/.perltidyrc"
    }
+   ```
+
+4. **Install perltidy only for explicit external compatibility mode**:
+   ```bash
+   perltidy --version
    ```
 
 ### Extension Conflicts

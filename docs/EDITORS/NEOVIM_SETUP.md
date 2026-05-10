@@ -13,8 +13,8 @@ Optional:
 - `nvim-lspconfig`, if you already use it for other language servers
 - `nvim-cmp`, if you prefer cmp-based completion
 - `telescope.nvim`, for picker-based symbol/reference navigation
-- `perltidy`, for formatting
-- `perlcritic`, only if Perl::Critic diagnostics are enabled
+- `perltidy`, only if explicit external formatting compatibility is enabled
+- `perlcritic`, only if explicit legacy Perl::Critic compatibility is enabled
 
 Verify `perllsp` before changing Neovim configuration:
 

@@ -419,11 +419,9 @@ Reduce result caps:
 
 ### Formatting does not work
 
-Confirm `perltidy` is installed:
-
-```bash
-perltidy --version
-```
+Native formatting does not require `perltidy`. Check `:CocCommand workspace.showOutput`
+or the server log for native formatting diagnostics. Install `perltidy` only
+when using explicit external formatting compatibility mode.
 
 Then run:
 

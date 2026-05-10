@@ -351,11 +351,9 @@ Or pass Emacs-specific startup options through Eglot `:initializationOptions` or
 
 ### Formatting does not work
 
-Install `perltidy` and confirm it is visible to Emacs:
-
-```bash
-perltidy --version
-```
+Native formatting does not require `perltidy`. Check the Eglot or lsp-mode
+server log for native formatting diagnostics. Install `perltidy` only when
+using explicit external formatting compatibility mode.
 
 Then try:
 

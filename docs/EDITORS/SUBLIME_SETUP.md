@@ -14,8 +14,8 @@ package.
 Optional:
 
 - Perl, for running project code, tests, and system `@INC` probing
-- `perltidy`, for formatting
-- `perlcritic`, only if Perl::Critic diagnostics are enabled
+- `perltidy`, only if explicit external formatting compatibility is enabled
+- `perlcritic`, only if explicit legacy Perl::Critic compatibility is enabled
 
 Verify `perllsp` before changing Sublime settings:
 
@@ -369,11 +369,9 @@ Or pass Sublime-specific initialization options:
 
 ### Formatting does not work
 
-Install `perltidy` and confirm it is available:
-
-```bash
-perltidy --version
-```
+Native formatting does not require `perltidy`. If formatting returns no edits,
+check the Sublime LSP output panel for native formatting diagnostics. Install
+`perltidy` only when using explicit external formatting compatibility mode.
 
 Then run:
 
