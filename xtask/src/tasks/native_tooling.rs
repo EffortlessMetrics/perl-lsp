@@ -434,6 +434,29 @@ fn build_readiness_receipt(
     ));
     criteria.push(readiness_criterion(
         "formatter",
+        "corpus unsupported formatter diagnostics are cleared",
+        formatter.corpus_unsupported_patterns_count == Some(0),
+        formatter.format_corpus_receipt_present,
+        false,
+        format!(
+            "unsupported_diagnostics={} literal_bailouts={} diagnostics={}",
+            optional_metric(
+                formatter.corpus_unsupported_patterns_count,
+                formatter.format_corpus_receipt_present,
+            ),
+            optional_metric(
+                formatter.corpus_literal_bailout_count,
+                formatter.format_corpus_receipt_present,
+            ),
+            optional_metric(
+                formatter.corpus_diagnostics_count,
+                formatter.format_corpus_receipt_present
+            )
+        ),
+        "triage unsupported formatter diagnostics before claiming broad format-on-save coverage",
+    ));
+    criteria.push(readiness_criterion(
+        "formatter",
         "dangerous surfaces visible",
         formatter.expected_diagnostics_fixture_count > 0
             && formatter.literal_preserve_fixture_count > 0
@@ -2028,7 +2051,7 @@ color = 1
                 corpus_idempotence_passed_count: Some(3),
                 corpus_parse_preserved_count: Some(3),
                 corpus_literal_bailout_count: Some(1),
-                corpus_unsupported_patterns_count: Some(0),
+                corpus_unsupported_patterns_count: Some(2),
                 corpus_diagnostics_count: Some(1),
                 corpus_passed: Some(true),
                 format_perltidy_compat_receipt: "native-format-perltidy-compat.json".to_string(),
@@ -2103,8 +2126,14 @@ color = 1
         assert_eq!(value["kind"], "native_tooling_readiness");
         assert_eq!(value["verdict"], "not_ready");
         assert_eq!(value["blocker_count"].as_u64().unwrap_or_default(), 2);
+        assert_eq!(value["warning_count"].as_u64().unwrap_or_default(), 1);
         assert!(value["ready_count"].as_u64().unwrap_or_default() > 0);
         let criteria = value["criteria"].as_array().ok_or_else(|| eyre!("criteria array"))?;
+        assert!(criteria.iter().any(|criterion| {
+            criterion["name"] == "corpus unsupported formatter diagnostics are cleared"
+                && criterion["status"] == "warning"
+                && criterion["required_for_default"] == false
+        }));
         assert!(criteria.iter().any(|criterion| {
             criterion["name"] == "perltidy compatibility has no external-only gaps"
                 && criterion["status"] == "blocked"
@@ -2124,6 +2153,10 @@ color = 1
         let markdown = fs::read_to_string(readiness_markdown)?;
         assert!(markdown.contains("# Native Tooling Readiness"));
         assert!(markdown.contains("- Verdict: `not_ready`"));
+        assert!(markdown.contains("- Warnings: `1`"));
+        assert!(markdown.contains(
+            "| formatter | corpus unsupported formatter diagnostics are cleared | warning | false |"
+        ));
         assert!(markdown.contains(
             "| formatter | perltidy compatibility has no external-only gaps | blocked |"
         ));
