@@ -10,7 +10,7 @@ This guide explains how to choose and configure the feature profile for perl-lsp
   - [production](#production-profile)
   - [all](#all-profile)
 - [Selecting a Profile at Runtime](#selecting-a-profile-at-runtime)
-- [Runtime Feature Gating: Perltidy](#runtime-feature-gating-perltidy)
+- [Runtime Feature Gating: Native Formatting](#runtime-feature-gating-native-formatting)
 - [Verifying the Active Profile](#verifying-the-active-profile)
 - [Feature Catalog and Compliance](#feature-catalog-and-compliance)
 - [Per-Feature Reference](#per-feature-reference)
@@ -65,7 +65,7 @@ The default profile for normal runtime operation. This is what the server uses u
 
 **What changes vs. ga-lock:**
 - `lsp.inline_value` is enabled (DAP debugging shows inline variable values)
-- `lsp.formatting` and `lsp.range_formatting` require Perltidy to be installed at runtime; if Perltidy is absent the server disables these capabilities dynamically
+- `lsp.formatting` and `lsp.range_formatting` use the native formatter by default; explicit external Perltidy compatibility mode is opt-in
 
 ---
 
@@ -80,7 +80,7 @@ Every in-tree capability is enabled. This profile is primarily intended for test
 - Generating the complete feature grid JSON for documentation tooling
 - Verifying LSP compliance against the full feature catalog
 
-**Caution:** Because formatting is unconditionally enabled, clients that attempt formatting without a Perltidy installation may receive error responses. Use this profile intentionally.
+**Caution:** Because every in-tree capability is enabled, this profile can expose experimental surfaces intended for test matrices. Native formatting does not require Perltidy, but explicit external compatibility mode still requires the external tool.
 
 ---
 
@@ -245,7 +245,7 @@ The `features.toml` file is the canonical definition. The Rust code in `perl-lsp
 
 ## Per-Feature Reference
 
-The table below summarizes which features each profile enables. "Dynamic" means the feature depends on a runtime availability check (Perltidy).
+The table below summarizes which features each profile enables. "Dynamic" means the feature depends on runtime configuration or an availability check; native formatting is enabled by default and does not require Perltidy.
 
 | Feature ID | ga-lock | production | all |
 |---|---|---|---|
@@ -322,5 +322,5 @@ The `features.toml` file feeds into `perl-lsp-feature-contracts` at build time v
 - [features.toml](../../features.toml) - Complete feature catalog
 - [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) - Workspace and hardware tuning
 - [EDITOR_SETUP.md](EDITOR_SETUP.md) - Editor-specific setup
-- [INSTALLATION.md](INSTALLATION.md) - Installation and Perltidy setup
+- [INSTALLATION.md](INSTALLATION.md) - Installation and setup
 - [CURRENT_STATUS.md](../project/CURRENT_STATUS.md) - Current feature coverage metrics

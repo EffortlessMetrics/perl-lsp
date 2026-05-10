@@ -35,12 +35,12 @@ The following microcrates were extracted to enforce single-responsibility bounda
 | `perl-dap-config` | Launch/attach configuration parsing and validation | DAP |
 | `perl-lsp-code-actions` | LSP code actions provider (extracted from `perl-lsp-providers`) | LSP |
 | `perl-lsp-critic-parser` | Perl::Critic output line parsing (extracted from diagnostics) | LSP |
-| `perl-lsp-perltidy` | Perltidy-based formatting integration (extracted from formatting) | LSP |
+| `perl-lsp-perltidy` | Native-first formatting with explicit Perltidy compatibility (extracted from formatting) | LSP |
 | `perl-lsp-type-hierarchy` | Type hierarchy navigation | LSP |
 | `perl-workspace-index-monitoring` | Monitoring, limits, and lifecycle instrumentation for workspace indexing | Workspace |
 | `perl-ts-statement-tracker` | Statement boundary and heredoc context tracking | Tree-sitter |
 
-The `perl-lsp-code-actions`, `perl-lsp-critic-parser`, and `perl-lsp-perltidy` extractions are part of a broader modularization effort that split monolithic LSP providers into focused microcrates -- each owning a single concern (code actions, Perl::Critic parsing, and perltidy integration respectively).
+The `perl-lsp-code-actions`, `perl-lsp-critic-parser`, and `perl-lsp-perltidy` extractions are part of a broader modularization effort that split monolithic LSP providers into focused microcrates -- each owning a single concern (code actions, Perl::Critic parsing, and native-first formatting with Perltidy compatibility respectively).
 
 ### Internal/Unpublished
 - **`/tree-sitter-perl/`**: Original C implementation (benchmarking only)

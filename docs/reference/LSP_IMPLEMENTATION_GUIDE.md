@@ -1969,9 +1969,9 @@ The Perl LSP server has achieved **100% user-visible coverage (53/53)** and **10
 | `textDocument/documentSymbol` | ✅ Complete | <80ms | Comprehensive symbol tree |
 | `workspace/symbol` | ✅ Complete | <100ms | Workspace-wide indexing |
 | `textDocument/rename` | ✅ Complete | <200ms | Cross-file workspace refactoring |
-| `textDocument/formatting` | ✅ Complete | <2s | Perltidy integration with fallback |
+| `textDocument/formatting` | ✅ Complete | <2s | Native formatter with explicit Perltidy compatibility |
 | `textDocument/codeAction` | ✅ Complete | <50ms | **NEW**: Advanced refactoring operations |
-| `workspace/executeCommand` | ✅ Complete | <2s | **NEW**: perl.runCritic with dual analyzer |
+| `workspace/executeCommand` | ✅ Complete | <2s | **NEW**: perl.runCritic with native critic and legacy compatibility |
 | `textDocument/publishDiagnostics` | ✅ Complete | <100ms | Integrated with executeCommand workflow |
 | `textDocument/semanticTokens` | ✅ Complete | <15ms | Thread-safe with 2.826µs average |
 
@@ -2004,7 +2004,7 @@ The Perl LSP server has achieved **100% user-visible coverage (53/53)** and **10
 | `perl.runFile` | ✅ Complete | Native | <2s | Execution with output capture |
 | `perl.runTestSub` | ✅ Complete | Native | <2s | Subroutine isolation |
 | `perl.debugTests` | ✅ Complete | Native | <1s | Debug adapter preparation |
-| `perl.runCritic` | ✅ Complete | Dual strategy | <2s | External perlcritic + built-in fallback |
+| `perl.runCritic` | ✅ Complete | Native + compatibility | <2s | Native critic with explicit Perl::Critic compatibility |
 
 ### Code Action Categories (*Diataxis: Reference* - Refactoring capabilities)
 | Category | Operations | Status | Performance | Cross-file Support |
@@ -5188,21 +5188,25 @@ them to perltidy command-line arguments:
 - `insertSpaces: true` → `-et=4 -i=4` (expand tabs, indent size)
 - `insertSpaces: false` → `-dt -i=4` (use tabs, tab size)
 
-**Configuration File**: `.perltidyrc` files are automatically detected and applied:
-- Workspace-specific configuration takes precedence
-- Falls back to user home directory configuration
-- Uses built-in defaults when no configuration found
+**Configuration File**: Native formatting uses perl-lsp formatting settings by
+default. `.perltidyrc` files are compatibility inputs for explicit external
+Perltidy mode and for compatibility reporting:
+- Workspace-specific compatibility configuration takes precedence
+- Falls back to user home directory compatibility configuration
+- Uses native defaults when no compatibility configuration is selected
 
 ### Performance Characteristics (*Diataxis: Reference*)
 
 **Formatting Speed**: 
-- Small files (< 1KB): < 100ms including perltidy startup
+- Small files (< 1KB): < 100ms on the native path
 - Medium files (1-10KB): 100-500ms  
 - Large files (> 10KB): Proportional to content size
 
-**Memory Usage**: Minimal overhead beyond perltidy process execution
+**Memory Usage**: Minimal overhead on the native path; external compatibility
+mode adds the subprocess overhead of the selected adapter
 
-**Error Recovery**: Fast fallback with immediate user feedback for missing tools
+**Error Recovery**: Native formatting reports unsupported or preserved syntax
+directly; explicit external compatibility mode reports missing-tool guidance
 
 ## Agent-Driven Feature Development
 

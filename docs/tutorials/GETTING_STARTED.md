@@ -233,7 +233,7 @@ perllsp provides:
 | **Definition** | Jump to where symbols are defined |
 | **References** | Find all uses of a symbol |
 | **Rename** | Safely rename variables across files |
-| **Formatting** | Format code with Perl::Tidy |
+| **Formatting** | Format code with the native formatter |
 | **Folding** | Collapse functions, blocks, POD |
 | **Symbols** | Document outline and workspace search |
 
