@@ -52,6 +52,10 @@ pub struct PullDiagnosticsContext {
     pub critic_engine: CriticEngine,
     /// Native critic profile used when `critic_engine` is native.
     pub native_critic_profile: String,
+    /// Native critic rule IDs to include. Empty means use the selected profile.
+    pub native_critic_include: Vec<String>,
+    /// Native critic rule IDs to exclude from the selected profile.
+    pub native_critic_exclude: Vec<String>,
     /// Workspace root for .perlcriticrc discovery
     pub workspace_root: Option<PathBuf>,
     /// @INC paths for module resolution
@@ -72,6 +76,8 @@ impl PullDiagnosticsContext {
             perlcritic_profile: None,
             critic_engine: CriticEngine::Native,
             native_critic_profile: "recommended".to_string(),
+            native_critic_include: Vec::new(),
+            native_critic_exclude: Vec::new(),
             workspace_root: None,
             include_paths: Vec::new(),
             markup_message_support: false,
@@ -89,6 +95,8 @@ impl PullDiagnosticsContext {
             perlcritic_profile: profile,
             critic_engine: CriticEngine::Legacy,
             native_critic_profile: "recommended".to_string(),
+            native_critic_include: Vec::new(),
+            native_critic_exclude: Vec::new(),
             workspace_root: None,
             include_paths: Vec::new(),
             markup_message_support: false,
@@ -108,6 +116,8 @@ impl PullDiagnosticsContext {
             perlcritic_profile: None,
             critic_engine: CriticEngine::Native,
             native_critic_profile: "recommended".to_string(),
+            native_critic_include: Vec::new(),
+            native_critic_exclude: Vec::new(),
             workspace_root: None,
             include_paths: Vec::new(),
             markup_message_support: false,
@@ -124,6 +134,8 @@ impl std::fmt::Debug for PullDiagnosticsContext {
             .field("perlcritic_profile", &self.perlcritic_profile)
             .field("critic_engine", &self.critic_engine)
             .field("native_critic_profile", &self.native_critic_profile)
+            .field("native_critic_include", &self.native_critic_include)
+            .field("native_critic_exclude", &self.native_critic_exclude)
             .field("workspace_root", &self.workspace_root)
             .field("include_paths", &self.include_paths)
             .field("markup_message_support", &self.markup_message_support)
@@ -492,6 +504,8 @@ impl PullDiagnosticsProvider {
         let critic_config = CriticConfig {
             severity: context.perlcritic_severity.clamp(1, 5) as u8,
             profile: context.perlcritic_profile.clone(),
+            include: context.native_critic_include.clone(),
+            exclude: context.native_critic_exclude.clone(),
             ..CriticConfig::default()
         };
         let critic_context = CriticContext::new(content, ast.as_ref(), &critic_config);
@@ -1837,6 +1851,53 @@ mod tests {
                 )
             }),
             "recommended native critic profile should omit broader variable findings: {items:?}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn native_critic_runtime_context_honors_include_and_exclude_filters()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = PullDiagnosticsProvider::new();
+        let uri: Uri = "file:///test.pl".parse()?;
+        let mut context = PullDiagnosticsContext::new();
+        context.critic_engine = CriticEngine::Native;
+        context.native_critic_profile = "recommended".to_string();
+        context.native_critic_include = vec!["native.testing.require_use_strict".to_string()];
+        context.native_critic_exclude = vec!["native.common.assignment_in_condition".to_string()];
+
+        let items = get_full_items(provider.get_document_diagnostics_with_context(
+            &uri,
+            "my $cond = 0;\nif ($cond = 1) { print $cond; }\n",
+            None,
+            &context,
+            None,
+        ));
+
+        assert!(
+            items.iter().any(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.testing.require_use_strict"),
+                )
+            }),
+            "native include should keep selected strict rule: {items:?}"
+        );
+        assert!(
+            !items.iter().any(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.common.assignment_in_condition"),
+                )
+            }),
+            "native include/exclude filters should suppress assignment rule: {items:?}"
+        );
+        assert!(
+            !items.iter().any(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.testing.require_use_warnings"),
+                )
+            }),
+            "native include should suppress non-included warning rule: {items:?}"
         );
 
         Ok(())

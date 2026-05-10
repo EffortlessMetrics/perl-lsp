@@ -460,7 +460,7 @@ fn classify_perlcritic_setting(name: &str, value: Option<String>) -> PerlcriticC
             value,
             "native_equivalent",
             None,
-            "maps to native critic include/exclude rule filtering for native rule IDs",
+            "native critic supports include/exclude filters; map policy names to native rule IDs before configuring them",
         ),
         "theme" => classify_perlcritic_theme_setting(value),
         "profile-strictness" => perlcritic_item(

@@ -702,11 +702,35 @@ impl LspServer {
                             )
                             .map(|profile| profile.as_str().to_string())
                             .unwrap_or_else(|| cfg.native_critic_profile.clone());
+                        let new_native_include = perl
+                            .get("critic")
+                            .and_then(|v| v.get("include"))
+                            .and_then(|v| v.as_array())
+                            .map(|values| {
+                                values
+                                    .iter()
+                                    .filter_map(|value| value.as_str().map(ToOwned::to_owned))
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_else(|| cfg.native_critic_include.clone());
+                        let new_native_exclude = perl
+                            .get("critic")
+                            .and_then(|v| v.get("exclude"))
+                            .and_then(|v| v.as_array())
+                            .map(|values| {
+                                values
+                                    .iter()
+                                    .filter_map(|value| value.as_str().map(ToOwned::to_owned))
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_else(|| cfg.native_critic_exclude.clone());
                         new_enabled != cfg.perlcritic_enabled
                             || new_severity != cfg.perlcritic_severity
                             || new_profile != cfg.perlcritic_profile
                             || new_theme != cfg.perlcritic_theme
                             || new_native_profile != cfg.native_critic_profile
+                            || new_native_include != cfg.native_critic_include
+                            || new_native_exclude != cfg.native_critic_exclude
                     };
 
                     // Update server config (inlay hints, test runner)

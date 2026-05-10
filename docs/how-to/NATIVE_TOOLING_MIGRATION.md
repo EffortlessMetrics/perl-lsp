@@ -115,6 +115,7 @@ perlcritic_severity = 3
 [critic]
 engine = "native"
 profile = "recommended"
+exclude = ["native.documentation.require_pod_sections"]
 ```
 
 Use native critic diagnostics when:
@@ -123,6 +124,11 @@ Use native critic diagnostics when:
 - suppressions and severity filtering match the project policy
 - editor diagnostics should expose stable rule IDs, precise spans, and code
   actions
+
+Native critic include/exclude filters use native rule IDs, not Perl::Critic
+policy names. During migration, map supported policies from the compatibility
+report to their native IDs before adding them to `[critic].include` or
+`[critic].exclude`.
 
 Keep external `perlcritic` compatibility when:
 
