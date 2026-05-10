@@ -168,14 +168,8 @@ fn native_default_formatting_honors_lsp_tab_size() -> Result<(), Box<dyn std::er
 }
 
 #[test]
-
-fn ranges_formatting() -> Result<(), Box<dyn std::error::Error>> {
-    // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
-        eprintln!("Skipping test: perltidy not installed");
-        return Ok(());
-    }
-
+fn native_default_ranges_formatting_formats_selected_ranges()
+-> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin)?;
     let uri = "file:///ranges.pl";
@@ -193,7 +187,6 @@ sub third{my$c=3;return$c;}
 
     client.did_open(uri, "perl", source)?;
 
-    // Request formatting for multiple ranges (first and third subroutines)
     let response = client.request(
         "textDocument/rangesFormatting",
         json!({
@@ -212,26 +205,23 @@ sub third{my$c=3;return$c;}
         }),
     )?;
 
-    if let Some(result) = response.get("result") {
-        if let Some(edits) = result.as_array() {
-            assert!(!edits.is_empty(), "Should return formatting edits for multiple ranges");
+    let edits =
+        response["result"].as_array().ok_or("rangesFormatting should return an edit array")?;
+    assert_eq!(edits.len(), 2, "native default ranges formatting should edit both ranges");
 
-            // Verify that we got edits (exact number depends on perltidy behavior)
-            let edit_count = edits.len();
-            eprintln!("Received {} edits for ranges formatting", edit_count);
-            assert!(edit_count > 0, "Should have at least one edit");
+    let first_edit_text = edits[0]["newText"].as_str().ok_or("first edit should have newText")?;
+    let second_edit_text = edits[1]["newText"].as_str().ok_or("second edit should have newText")?;
 
-            // Check that at least one edit contains formatted code
-            let has_formatted = edits.iter().any(|edit| {
-                if let Some(new_text) = edit["newText"].as_str() {
-                    new_text.contains("sub first") || new_text.contains("sub third")
-                } else {
-                    false
-                }
-            });
-            assert!(has_formatted, "Should contain formatted code for first or third subroutine");
-        }
-    }
+    assert!(first_edit_text.contains("sub first {\n    my $a = 1;\n    return $a;\n}"));
+    assert!(second_edit_text.contains("sub third {\n    my $c = 3;\n    return $c;\n}"));
+    assert!(
+        !edits.iter().any(|edit| {
+            edit["newText"].as_str().is_some_and(|text| {
+                text.contains("Second subroutine") || text.contains("sub second")
+            })
+        }),
+        "native default ranges formatting should not edit the unselected second subroutine"
+    );
 
     client.shutdown()?;
     Ok(())
