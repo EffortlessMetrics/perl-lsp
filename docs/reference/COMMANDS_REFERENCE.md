@@ -348,9 +348,9 @@ RUST_TEST_THREADS=4 cargo test -p perl-lsp-rs              # High-performance de
 
 **LSP test environment**:
 ```bash
-# Optional external dependencies for enhanced features
-export PERLTIDY_PATH="/usr/local/bin/perltidy"    # Custom perltidy location
-export PERLCRITIC_PATH="/usr/local/bin/perlcritic" # Custom perlcritic location
+# Optional external dependencies for compatibility adapters
+export PERLTIDY_PATH="/usr/local/bin/perltidy"      # explicit external formatter mode
+export PERLCRITIC_PATH="/usr/local/bin/perlcritic"  # explicit legacy critic mode
 
 # Override adaptive test timeouts
 LSP_TEST_TIMEOUT_MS=20000 cargo test -p perl-lsp-rs
@@ -362,18 +362,17 @@ LSP_TEST_ECHO_STDERR=1 cargo test -p perl-lsp-rs -- --nocapture
 
 ### LSP executeCommand Integration (*Diataxis: How-to Guide* - Execute command usage)
 
-The LSP server supports `workspace/executeCommand` with integrated perlcritic analysis and advanced code actions.
+The LSP server supports `workspace/executeCommand` with native critic analysis,
+legacy perlcritic compatibility, and advanced code actions.
 
 #### perl.runCritic Command Usage
 
 **Dual Analyzer Strategy Overview** (*Diataxis: Explanation* - Architecture design):
 
-The `perl.runCritic` command implements a sophisticated dual analyzer strategy ensuring 100% availability:
-
-1. **Primary**: External perlcritic (full policy coverage, configurable)
-2. **Fallback**: Built-in analyzer (always available, comprehensive basic policies)
-3. **Seamless Transition**: Automatic fallback with no user intervention required
-4. **Performance Target**: <2s execution time for typical Perl files
+The normal diagnostic path uses the native critic engine by default. The
+`perl.runCritic` execute command still supports legacy compatibility behavior,
+but external `perlcritic` should be treated as an explicit adapter rather than
+the default editor path.
 
 **Basic Usage** (*Diataxis: Tutorial* - Getting started with code quality analysis):
 ```bash
@@ -383,7 +382,7 @@ cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_pe
 # Test executeCommand protocol compliance
 cargo test -p perl-lsp-rs --test lsp_execute_command_tests
 
-# Test with dual analyzer strategy (external + built-in fallback)
+# Test legacy dual analyzer compatibility behavior
 cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
 
 # Test built-in analyzer specifically
@@ -393,11 +392,22 @@ cargo test -p perl-parser --test execute_command_tests -- test_execute_command_r
 cargo test -p perl-parser --test execute_command_tests -- test_execute_command_run_critic_missing_file
 ```
 
-**Advanced Configuration** (*Diataxis: How-to Guide* - Optimizing perlcritic integration):
+**Advanced Configuration** (*Diataxis: How-to Guide* - Optimizing critic integration):
 
-**External Perlcritic Setup**:
+**Native Critic Setup**:
+```toml
+[diagnostics]
+perlcritic = true
+perlcritic_severity = 3
+
+[critic]
+engine = "native"
+profile = "recommended"
+```
+
+**External Perlcritic Compatibility Setup**:
 ```bash
-# Install perlcritic for enhanced analysis
+# Install perlcritic only when exact legacy policy output is required
 sudo apt-get install perlcritic         # Ubuntu/Debian
 brew install perl-critic                # macOS
 cpan Perl::Critic                      # CPAN installation
@@ -410,12 +420,13 @@ perlcritic --version                    # Check version
 cargo test -p perl-parser --test execute_command_tests -- test_command_exists_behavior
 ```
 
-**Built-in Analyzer Capabilities** (*Diataxis: Reference* - Policy coverage):
+**Native Critic Capabilities** (*Diataxis: Reference* - Policy coverage):
 ```rust
-// Built-in analyzer policies (always available)
+// Native critic policies (always available)
 - RequireUseStrict: "Missing 'use strict' pragma"
 - RequireUseWarnings: "Missing 'use warnings' pragma"
 - Syntax::ParseError: "Comprehensive syntax error detection"
+- Stable native rule IDs, suppressions, and code actions
 - Performance optimized: ~100µs analysis time for typical files
 - Parse-error resilient: Continues analysis even with syntax errors
 ```
@@ -423,21 +434,21 @@ cargo test -p perl-parser --test execute_command_tests -- test_command_exists_be
 **Performance Specifications** (*Diataxis: Reference* - Timing requirements):
 | Analyzer Type | File Size | Analysis Time | Policy Coverage | Availability |
 |---------------|-----------|---------------|-----------------|--------------|
-| External perlcritic | <10KB | <0.5s | 150+ policies | Requires installation |
-| External perlcritic | <100KB | <1.5s | 150+ policies | Configurable severity |
-| Built-in analyzer | <10KB | <0.1s | Core policies | 100% availability |
-| Built-in analyzer | <100KB | <0.3s | Core policies | Parse-error resilient |
+| Native critic | <10KB | <0.1s | Recommended native profile | 100% availability |
+| Native critic | <100KB | <0.3s | Recommended native profile | Parse-error resilient |
+| External perlcritic | <10KB | <0.5s | Legacy policy catalog | Explicit compatibility mode |
+| External perlcritic | <100KB | <1.5s | Legacy policy catalog | Configurable severity |
 
 **Troubleshooting** (*Diataxis: How-to Guide* - Common issues and solutions):
 
-**Issue: External perlcritic not found**
+**Issue: External perlcritic not found in legacy mode**
 ```bash
-# Problem: LSP falls back to built-in analyzer always
-# Solution: Install perlcritic and verify PATH
+# Problem: explicit legacy compatibility mode cannot launch perlcritic
+# Solution: use native critic, or install perlcritic and verify PATH
 which perlcritic || echo "perlcritic not found in PATH"
 echo $PATH | grep -o '/usr/local/bin\|/usr/bin\|/opt/perl/bin'
 
-# Alternative: Use built-in analyzer explicitly (always works)
+# Alternative: use the native critic path
 cargo test -p perl-parser --test execute_command_tests -- test_execute_command_run_critic_builtin
 ```
 

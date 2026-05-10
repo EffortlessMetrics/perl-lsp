@@ -1691,17 +1691,23 @@ pub static SUPPORTED_COMMANDS: &[&str] = &[
 
 #### perl.runCritic Command Integration
 
-**Dual Analyzer Strategy** (*Diataxis: How-to* - Using perlcritic with fallback):
+**Native critic with legacy compatibility** (*Diataxis: How-to* - Using critic diagnostics):
 ```rust
-// Comprehensive perlcritic integration with fallback
+// Native critic is the default diagnostics path. perl.runCritic keeps a
+// compatibility route for projects comparing against legacy Perl::Critic.
 impl ExecuteCommandProvider {
     pub fn execute_perl_critic(&self, file_path: &str) -> Result<CriticResult, String> {
-        // Try external perlcritic first
+        // Use native critic unless explicit legacy compatibility is requested.
+        if self.critic_engine == CriticEngine::Native {
+            return self.run_native_critic(file_path);
+        }
+
+        // Explicit legacy compatibility path.
         if let Ok(external_result) = self.run_external_perlcritic(file_path) {
             return Ok(CriticResult::External(external_result));
         }
 
-        // Fallback to built-in analyzer for 100% availability
+        // Legacy fallback for compatibility command behavior.
         let builtin_analyzer = BuiltInAnalyzer::new();
         let ast = self.parser.parse_file(file_path)?;
         let violations = builtin_analyzer.analyze(&ast, &file_content);
@@ -5059,9 +5065,15 @@ caps.document_range_formatting_provider = Some(OneOf::Left(true));
 
 The server **always** advertises formatting capabilities, independent of external tool detection.
 
-#### External Tool Integration
+#### Native Formatter and Compatibility Adapter
 
-**Primary Formatter**: `perltidy` integration with comprehensive configuration support:
+**Primary formatter**: native Rust formatting through the configured formatter
+engine. The server keeps formatting capabilities advertised even when
+`perltidy` is not installed because the default path does not shell out.
+
+**Compatibility adapter**: explicit `external-perltidy` / `external-legacy`
+mode can still shell out to `perltidy` for projects that require exact legacy
+output:
 
 ```rust
 // Find perltidy in multiple locations
@@ -5075,7 +5087,9 @@ let perltidy_cmd = self.find_perltidy_command();
 // - ~/.perlbrew/perls/current/bin/perltidy
 ```
 
-**Configuration File Support**: Automatic `.perltidyrc` detection with workspace traversal:
+**Configuration File Support**: `.perltidyrc` is now primarily a compatibility
+input. Native compatibility reports classify common options against native
+support, and explicit external mode can still pass a profile to `perltidy`:
 
 ```rust
 // Searches in order:
@@ -5086,7 +5100,10 @@ let perltidy_cmd = self.find_perltidy_command();
 
 #### Error Handling and User Guidance (*Diataxis: How-to*)
 
-When `perltidy` is unavailable, the server provides comprehensive installation guidance:
+When the native formatter cannot safely rewrite a construct, it returns no edits
+and emits a native formatting diagnostic. When explicit external mode is
+selected and `perltidy` is unavailable, the server provides installation
+guidance:
 
 ```
 perltidy not found: No such file or directory
@@ -5121,15 +5138,17 @@ if let Some(res) = result {
 
 #### Development Workflow Impact
 
-**Local Development**: Formatting works seamlessly when `perltidy` is installed
-**CI/CD Environments**: Tests pass without external dependencies  
-**Production Deployments**: Clear error messages guide users to install required tools
+**Local Development**: Native formatting works without external tools
+**CI/CD Environments**: Tests pass without external dependencies
+**Production Deployments**: External-tool errors are limited to explicit
+compatibility mode
 
 ### Future Enhancements (*Diataxis: Explanation*)
 
 The architecture supports planned enhancements:
 
-**Built-in Formatter**: `BuiltInFormatter` struct exists for fallback formatting:
+**Legacy fallback**: `BuiltInFormatter` still exists for direct crate consumers
+that opt into the old adapter path without `perltidy`:
 
 ```rust
 pub struct BuiltInFormatter {
@@ -5144,7 +5163,8 @@ impl BuiltInFormatter {
 }
 ```
 
-**Integration Path**: Future versions can seamlessly add built-in formatting without changing capability advertising or client expectations.
+**Integration Path**: New formatter coverage should extend the native formatter
+and its receipts, not the legacy fallback.
 
 ### Configuration Options (*Diataxis: Reference*)
 
@@ -5160,9 +5180,11 @@ impl BuiltInFormatter {
 }
 ```
 
-#### Perltidy Integration
+#### Native Formatting and Perltidy Compatibility
 
-**Standard Options**: Automatically converted to perltidy command-line arguments:
+**Standard Options**: Common perltidy-style options are mapped onto native
+formatter configuration where supported; explicit external mode still converts
+them to perltidy command-line arguments:
 - `insertSpaces: true` → `-et=4 -i=4` (expand tabs, indent size)
 - `insertSpaces: false` → `-dt -i=4` (use tabs, tab size)
 

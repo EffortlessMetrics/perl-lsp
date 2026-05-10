@@ -1,17 +1,20 @@
 # perl-lsp-perltidy
 
-Standalone SRP microcrate for Perl formatting integration. The existing
-`PerlTidyFormatter` remains a subprocess-backed compatibility adapter; the
-`native` module defines the Rust-native formatter contract for the native-first
-replacement lane.
+Standalone SRP microcrate for Perl formatting integration. The `native` module
+contains the Rust-native formatter used by the default LSP formatting path.
+`PerlTidyFormatter` remains available as an explicit subprocess-backed
+compatibility adapter for projects that still need exact `perltidy` behavior.
 
 ## Features
 
 - `PerlFormatter` trait and native `FormatResult` / edit / diagnostic model
-- `FormatDoc` document IR for deterministic native pretty-printing
+- `NativeFormatter` and `FormatDoc` document IR for deterministic native
+  pretty-printing
 - `PerlTidyConfig` for serializable formatter configuration
-- `PerlTidyFormatter` for subprocess-backed formatting with memoized results
-- `BuiltInFormatter` fallback for environments without `perltidy`
+- `PerlTidyFormatter` for explicit subprocess-backed compatibility formatting
+  with memoized results
+- `BuiltInFormatter` legacy fallback for direct crate consumers that still opt
+  into the old adapter path without `perltidy`
 - Range formatting and simple formatting suggestion generation
 - Argument-injection-safe file formatting via `--` separator
 

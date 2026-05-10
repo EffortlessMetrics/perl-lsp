@@ -164,19 +164,25 @@ args = ["--stdio", "--feature-profile", "production"]
 
 ---
 
-## Runtime Feature Gating: Perltidy
+## Runtime Feature Gating: Native Formatting
 
-Formatting capabilities (`lsp.formatting`, `lsp.range_formatting`, `lsp.on_type_formatting`) depend on an external tool. The server checks at startup whether Perltidy is available on `PATH`.
+Formatting capabilities (`lsp.formatting`, `lsp.range_formatting`,
+`lsp.on_type_formatting`) are backed by the native formatter by default. The
+server no longer removes document/range formatting just because Perltidy is not
+available on `PATH`; Perltidy only matters when explicit external compatibility
+mode is selected.
 
 | Profile | No Perltidy | Perltidy present |
 |---------|-------------|------------------|
 | `ga-lock` | Formatting enabled (static) | Formatting enabled |
-| `production` | Formatting disabled | Formatting enabled |
+| `production` | Formatting enabled | Formatting enabled |
 | `all` | Formatting enabled (static) | Formatting enabled |
 
-In `production` mode without Perltidy the server still starts and all other features remain active; only the formatting capability is removed from the `initialize` response.
+In `production` mode without Perltidy the server still starts and advertises
+native formatting. If explicit external Perltidy compatibility mode is selected,
+formatting errors include guidance for installing the external tool.
 
-To install Perltidy:
+To install Perltidy for explicit compatibility mode:
 
 ```bash
 cpanm Perl::Tidy
