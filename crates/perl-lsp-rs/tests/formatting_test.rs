@@ -18,25 +18,9 @@ fn test_basic_formatting() {
     // Test simple unformatted code supported by the native formatter.
     let code = "my$x=1;\n";
 
-    match formatter.format_document(code, &options) {
-        Ok(edits) => {
-            // Should have at least one edit
-            assert!(!edits.is_empty(), "Expected formatting edits");
-
-            let formatted = &edits[0].new_text;
-
-            // Check that formatting improved spacing
-            assert!(formatted.contains("my $x"));
-        }
-        Err(e) => {
-            // If perltidy is not installed, skip the test
-            if e.to_string().contains("not found") {
-                eprintln!("Skipping test: perltidy not installed");
-                return;
-            }
-            must(Err::<(), _>(format!("Formatting failed: {}", e)));
-        }
-    }
+    let edits = must(formatter.format_document(code, &options));
+    assert_eq!(edits.len(), 1, "native default formatting should return one edit");
+    assert_eq!(edits[0].new_text, "my $x = 1;\n");
 }
 
 #[test]
@@ -56,24 +40,9 @@ fn test_range_formatting() {
     // Format only the middle line
     let range = WireRange { start: WirePosition::new(1, 0), end: WirePosition::new(1, 20) };
 
-    match formatter.format_range(code, &range, &options) {
-        Ok(edits) => {
-            if !edits.is_empty() {
-                let formatted = &edits[0].new_text;
-                // Should format the subroutine
-                assert!(formatted.contains("sub test"));
-                assert!(formatted.contains("return $x"));
-            }
-        }
-        Err(e) => {
-            // If perltidy is not installed, skip the test
-            if e.to_string().contains("not found") {
-                eprintln!("Skipping test: perltidy not installed");
-                return;
-            }
-            must(Err::<(), _>(format!("Range formatting failed: {}", e)));
-        }
-    }
+    let edits = must(formatter.format_range(code, &range, &options));
+    assert_eq!(edits.len(), 1, "native default range formatting should return one edit");
+    assert_eq!(edits[0].new_text, "sub test {\n    return $x;\n}");
 }
 
 #[test]
@@ -209,18 +178,6 @@ fn test_empty_document() {
         trim_final_newlines: None,
     };
 
-    // Empty document should return no edits
-    match formatter.format_document("", &options) {
-        Ok(edits) => {
-            assert!(edits.is_empty() || edits[0].new_text.is_empty());
-        }
-        Err(e) => {
-            // If perltidy is not installed, skip the test
-            if e.to_string().contains("not found") {
-                eprintln!("Skipping test: perltidy not installed");
-                return;
-            }
-            must(Err::<(), _>(format!("Formatting empty document failed: {}", e)));
-        }
-    }
+    let edits = must(formatter.format_document("", &options));
+    assert!(edits.is_empty(), "native default formatting should not edit an empty document");
 }
