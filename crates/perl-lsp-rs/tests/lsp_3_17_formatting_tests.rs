@@ -143,9 +143,9 @@ fn test_range_formatting_preserves_simple_block_trailing_comment_3_17() -> TestR
 #[test]
 fn test_formatting_returns_no_edits_for_literal_preserve_regions_3_17() -> TestResult {
     for (uri, source) in [
-        ("file:///regex-format.pl", "my $matched = $text =~ /needle/i;\n"),
-        ("file:///heredoc-format.pl", "print <<'EOF';\nraw { text }\nEOF\n"),
-        ("file:///pod-format.pl", "=pod\n\n=head1 NAME\n\n=cut\n\nmy $x = 1;\n"),
+        ("file:///regex-format.pl", "my $matched = $text =~ /needle/i;   \n"),
+        ("file:///heredoc-format.pl", "print <<'EOF';   \nraw { text }\nEOF\n"),
+        ("file:///pod-format.pl", "=pod\n\n=head1 NAME   \n\n=cut\n\nmy $x = 1;   \n"),
     ] {
         let mut harness = LspHarness::new();
         harness.initialize(None)?;
@@ -157,7 +157,9 @@ fn test_formatting_returns_no_edits_for_literal_preserve_regions_3_17() -> TestR
                 "textDocument": { "uri": uri },
                 "options": {
                     "tabSize": 4,
-                    "insertSpaces": true
+                    "insertSpaces": true,
+                    "trimTrailingWhitespace": true,
+                    "insertFinalNewline": true
                 }
             }),
         )?;

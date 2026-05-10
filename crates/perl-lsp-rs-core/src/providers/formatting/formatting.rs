@@ -288,18 +288,7 @@ fn native_format_document(
         };
     }
 
-    let formatted = apply_lsp_whitespace_options(content, options);
-    if formatted == content {
-        FormattedDocument { text: content.to_string(), edits: vec![] }
-    } else {
-        FormattedDocument {
-            text: formatted.clone(),
-            edits: vec![FormatTextEdit {
-                range: FormatRange::whole_document(content),
-                new_text: formatted,
-            }],
-        }
-    }
+    FormattedDocument { text: content.to_string(), edits: vec![] }
 }
 
 fn native_format_range(
@@ -328,7 +317,7 @@ fn native_format_range(
         };
     }
 
-    whitespace_range_fallback(content, range, options)
+    FormattedDocument { text: content.to_string(), edits: vec![] }
 }
 
 fn native_format_config(
@@ -654,7 +643,7 @@ mod tests {
     }
 
     #[test]
-    fn format_document_falls_back_to_lsp_whitespace_when_native_declines() -> Result<()> {
+    fn format_document_returns_empty_edits_when_native_reports_literal_preserve() -> Result<()> {
         let provider = FormattingProvider::new(MissingPerltidyRuntime);
         let options = FormattingOptions {
             tab_size: 4,
@@ -665,8 +654,27 @@ mod tests {
         };
 
         let formatted = provider.format_document("=pod\n\n=cut\n\nmy $x = 1;   \n", &options)?;
-        assert_eq!(formatted.edits.len(), 1);
-        assert_eq!(formatted.edits[0].new_text, "=pod\n\n=cut\n\nmy $x = 1;\n");
+        assert!(formatted.edits.is_empty());
+        assert_eq!(formatted.text, "=pod\n\n=cut\n\nmy $x = 1;   \n");
+        Ok(())
+    }
+
+    #[test]
+    fn format_range_returns_empty_edits_when_native_reports_literal_preserve() -> Result<()> {
+        let provider = FormattingProvider::new(MissingPerltidyRuntime);
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(true),
+            insert_final_newline: Some(false),
+            trim_final_newlines: None,
+        };
+        let range = FormatRange::new(FormatPosition::new(0, 0), FormatPosition::new(0, 31));
+
+        let formatted =
+            provider.format_range("my $matched = $text =~ /needle/i;   \n", &range, &options)?;
+
+        assert!(formatted.edits.is_empty());
         Ok(())
     }
 
