@@ -94,13 +94,20 @@ impl PullDiagnosticsOrchestrator {
     /// Build context from LspServer state.
     pub fn build_context(&self, server: &LspServer, uri: &str) -> PullDiagnosticsContext {
         // Get config values
-        let (perlcritic_enabled, perlcritic_severity, perlcritic_profile, critic_engine) = {
+        let (
+            perlcritic_enabled,
+            perlcritic_severity,
+            perlcritic_profile,
+            critic_engine,
+            native_critic_profile,
+        ) = {
             let cfg = server.config.lock();
             (
                 cfg.perlcritic_enabled,
                 cfg.perlcritic_severity,
                 cfg.perlcritic_profile.clone(),
                 cfg.critic_engine,
+                cfg.native_critic_profile.clone(),
             )
         };
 
@@ -135,6 +142,7 @@ impl PullDiagnosticsOrchestrator {
             perlcritic_severity: perlcritic_severity.into(),
             perlcritic_profile: profile,
             critic_engine,
+            native_critic_profile,
             workspace_root,
             include_paths,
             markup_message_support,
@@ -1394,9 +1402,14 @@ impl LspServer {
         doc_text: &str,
         diagnostics: &mut Vec<InternalDiagnostic>,
     ) {
-        let (critic_engine, severity, profile) = {
+        let (critic_engine, severity, profile, native_profile) = {
             let cfg = self.config.lock();
-            (cfg.critic_engine, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+            (
+                cfg.critic_engine,
+                cfg.perlcritic_severity,
+                cfg.perlcritic_profile.clone(),
+                cfg.native_critic_profile.clone(),
+            )
         };
         if critic_engine != perl_lsp_rs_core::config::CriticEngine::Native {
             return;
@@ -1409,7 +1422,9 @@ impl LspServer {
         };
         let critic_context =
             crate::perl_critic::CriticContext::new(doc_text, ast.as_ref(), &critic_config);
-        let registry = crate::perl_critic::NativeCriticRegistry::recommended();
+        let profile = crate::perl_critic::NativeCriticProfile::parse(&native_profile)
+            .unwrap_or(crate::perl_critic::NativeCriticProfile::Strict);
+        let registry = crate::perl_critic::NativeCriticRegistry::for_profile(profile);
 
         diagnostics
             .extend(registry.check(&critic_context).into_iter().map(native_finding_to_diagnostic));
@@ -2008,6 +2023,43 @@ mod tests {
         assert!(
             !text.contains("TestingAndDebugging::RequireUseStrict"),
             "native critic engine should not publish legacy built-in critic policy IDs; got: {text:?}"
+        );
+    }
+
+    #[test]
+    fn native_critic_recommended_profile_publishes_lower_noise_policy_diagnostics() {
+        let (server, buf) = make_server_with_capture();
+        server.test_configure_critic_engine(perl_lsp_rs_core::config::CriticEngine::Native);
+        server.test_configure_native_critic_profile("recommended");
+        let uri = "file:///native_critic_recommended_push_test.pl";
+        server
+            .test_handle_did_open(Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $unused = 1;\nmy $cond = 0;\nif ($cond = 1) { print $cond; }\n"
+                }
+            })))
+            .unwrap();
+
+        server.publish_diagnostics(uri);
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes).unwrap_or_default();
+        assert!(
+            text.contains("native.testing.require_use_strict"),
+            "recommended native critic profile should publish strict finding; got: {text:?}"
+        );
+        assert!(
+            text.contains("native.common.assignment_in_condition"),
+            "recommended native critic profile should publish common-mistake findings; got: {text:?}"
+        );
+        assert!(
+            !text.contains("native.variables.unused_lexical"),
+            "recommended native critic profile should omit broader variable-noise findings; got: {text:?}"
         );
     }
 

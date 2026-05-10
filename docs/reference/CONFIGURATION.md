@@ -95,6 +95,7 @@ Priority 3 (highest): didChangeConfiguration — live editor settings
 | `[diagnostics]` | `perlcritic` | bool | false | Enable critic diagnostics (opt-in). |
 | `[diagnostics]` | `perlcritic_severity` | int 1-5 | 3 | Minimum severity to report. 1 = least severe (reports everything), 5 = most severe (reports only strictest). |
 | `[critic]` | `engine` | string | `"legacy"` | Critic engine: `legacy` / `perlcritic` / `external` for Perl::Critic-compatible diagnostics, or `native` for Rust-native rules. |
+| `[critic]` | `profile` | string | `"strict"` | Native critic rule bundle: `recommended` or `strict`. |
 | `[formatting]` | `enabled` | bool | true | Enable LSP formatting. |
 | `[formatting]` | `engine` | string | `"native"` | Formatter engine: `native`, `compat`, `external-perltidy`, or `off`. |
 | `[formatting]` | `perltidy_profile` | string | none | `.perltidyrc` profile used by external perltidy compatibility and native-tooling compatibility reports. |
@@ -125,6 +126,7 @@ Priority 3 (highest): didChangeConfiguration — live editor settings
 | `perl.perlcritic.severity` | int 1-5 | `3` | Minimum severity to report |
 | `perl.perlcritic.profile` | string | none | Path to `.perlcriticrc` profile |
 | `perl.critic.engine` | string | `"legacy"` | Critic engine: `legacy`, `perlcritic`, `external`, or `native` |
+| `perl.critic.profile` | string | `"strict"` | Native critic profile: `recommended` or `strict` |
 | `perl.telemetry.enabled` | bool | `false` | Send telemetry events to client |
 | `perl.limits.*` | various | see below | Resource caps and timeouts |
 
@@ -310,6 +312,7 @@ perlcritic_severity = 3
 
 [critic]
 engine = "native"
+profile = "recommended"
 ```
 
 **Enable via editor settings** (personal preference):
@@ -322,7 +325,8 @@ engine = "native"
       "severity": 3
     },
     "critic": {
-      "engine": "native"
+      "engine": "native",
+      "profile": "recommended"
     }
   }
 }
@@ -489,6 +493,7 @@ Every `.perl-lsp.toml` setting has a VSCode `settings.json` counterpart. The tab
 | `[diagnostics] perlcritic = true` | `"perlcritic": {"enabled": true}` | |
 | `[diagnostics] perlcritic_severity = 3` | `"perlcritic": {"severity": 3}` | Note: LSP key is `severity`, not `perlcritic_severity` |
 | `[critic] engine = "native"` | `"critic": {"engine": "native"}` | Native critic remains opt-in |
+| `[critic] profile = "recommended"` | `"critic": {"profile": "recommended"}` | Lower-noise native rule bundle |
 | `[formatting] enabled = true` | `"formatting": {"enabled": true}` | |
 | `[formatting] engine = "native"` | `"formatting": {"engine": "native"}` | Use `"external-perltidy"` for legacy shell-out compatibility |
 | `[formatting] perltidy_profile = ".perltidyrc"` | `"formatting": {"profile": ".perltidyrc"}` | LSP key is `profile` |

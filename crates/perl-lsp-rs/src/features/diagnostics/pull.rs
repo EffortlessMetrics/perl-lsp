@@ -21,7 +21,7 @@ use perl_diagnostics::codes::DiagnosticCode;
 use perl_lsp_rs_core::config::CriticEngine;
 use perl_lsp_rs_core::providers::diagnostics::{parse_error_code, parse_error_severity};
 use perl_lsp_rs_core::tooling::perl_critic::{
-    CriticConfig, CriticContext, CriticFinding, NativeCriticRegistry, Severity,
+    CriticConfig, CriticContext, CriticFinding, NativeCriticProfile, NativeCriticRegistry, Severity,
 };
 use perl_module::resolution::use_lib::resolve_use_lib_paths_from_source;
 use perl_parser::Parser;
@@ -50,6 +50,8 @@ pub struct PullDiagnosticsContext {
     pub perlcritic_profile: Option<String>,
     /// Critic engine used for policy diagnostics.
     pub critic_engine: CriticEngine,
+    /// Native critic profile used when `critic_engine` is native.
+    pub native_critic_profile: String,
     /// Workspace root for .perlcriticrc discovery
     pub workspace_root: Option<PathBuf>,
     /// @INC paths for module resolution
@@ -69,6 +71,7 @@ impl PullDiagnosticsContext {
             perlcritic_severity: 3,
             perlcritic_profile: None,
             critic_engine: CriticEngine::Legacy,
+            native_critic_profile: "strict".to_string(),
             workspace_root: None,
             include_paths: Vec::new(),
             markup_message_support: false,
@@ -85,6 +88,7 @@ impl PullDiagnosticsContext {
             perlcritic_severity: severity,
             perlcritic_profile: profile,
             critic_engine: CriticEngine::Legacy,
+            native_critic_profile: "strict".to_string(),
             workspace_root: None,
             include_paths: Vec::new(),
             markup_message_support: false,
@@ -103,6 +107,7 @@ impl PullDiagnosticsContext {
             perlcritic_severity: 3,
             perlcritic_profile: None,
             critic_engine: CriticEngine::Legacy,
+            native_critic_profile: "strict".to_string(),
             workspace_root: None,
             include_paths: Vec::new(),
             markup_message_support: false,
@@ -118,6 +123,7 @@ impl std::fmt::Debug for PullDiagnosticsContext {
             .field("perlcritic_severity", &self.perlcritic_severity)
             .field("perlcritic_profile", &self.perlcritic_profile)
             .field("critic_engine", &self.critic_engine)
+            .field("native_critic_profile", &self.native_critic_profile)
             .field("workspace_root", &self.workspace_root)
             .field("include_paths", &self.include_paths)
             .field("markup_message_support", &self.markup_message_support)
@@ -489,7 +495,9 @@ impl PullDiagnosticsProvider {
             ..CriticConfig::default()
         };
         let critic_context = CriticContext::new(content, ast.as_ref(), &critic_config);
-        let registry = NativeCriticRegistry::recommended();
+        let profile = NativeCriticProfile::parse(&context.native_critic_profile)
+            .unwrap_or(NativeCriticProfile::Strict);
+        let registry = NativeCriticRegistry::for_profile(profile);
 
         for finding in registry.check(&critic_context) {
             diagnostics.push(self.native_finding_to_lsp_diagnostic(uri, content, finding));
@@ -1785,6 +1793,51 @@ mod tests {
         assert_eq!(data["code"], "native.documentation.require_pod_sections");
         assert_eq!(data["suppressionKey"], "native.documentation.require_pod_sections");
         assert_eq!(data["fixable"], false);
+        Ok(())
+    }
+
+    #[test]
+    fn native_critic_recommended_profile_filters_pull_diagnostics()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let provider = PullDiagnosticsProvider::new();
+        let uri: Uri = "file:///test.pl".parse()?;
+        let mut context = PullDiagnosticsContext::new();
+        context.critic_engine = CriticEngine::Native;
+        context.native_critic_profile = "recommended".to_string();
+
+        let items = get_full_items(provider.get_document_diagnostics_with_context(
+            &uri,
+            "my $unused = 1;\nmy $cond = 0;\nif ($cond = 1) { print $cond; }\n",
+            None,
+            &context,
+            None,
+        ));
+
+        assert!(
+            items.iter().any(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.testing.require_use_strict"),
+                )
+            }),
+            "recommended native critic profile should keep strict finding: {items:?}"
+        );
+        assert!(
+            items.iter().any(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.common.assignment_in_condition"),
+                )
+            }),
+            "recommended native critic profile should keep common findings: {items:?}"
+        );
+        assert!(
+            !items.iter().any(|diag| {
+                diag.code.as_ref().is_some_and(
+                    |code| matches!(code, NumberOrString::String(value) if value == "native.variables.unused_lexical"),
+                )
+            }),
+            "recommended native critic profile should omit broader variable findings: {items:?}"
+        );
+
         Ok(())
     }
 
