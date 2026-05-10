@@ -87,6 +87,12 @@ pub struct ServerConfig {
     /// Critic engine used for LSP policy diagnostics.
     pub critic_engine: CriticEngine,
 
+    /// Native critic profile used when `critic_engine` is [`CriticEngine::Native`].
+    ///
+    /// Defaults to `strict` to preserve the existing opt-in native critic behavior.
+    /// Projects can select `recommended` for the lower-noise native rule bundle.
+    pub native_critic_profile: String,
+
     /// Whether LSP formatting is enabled.
     ///
     /// Kept as `perltidy_enabled` for compatibility with older internal call sites
@@ -221,6 +227,7 @@ impl Default for ServerConfig {
             perlcritic_profile: None,
             perlcritic_theme: None,
             critic_engine: CriticEngine::Legacy,
+            native_critic_profile: "strict".to_string(),
             perltidy_enabled: true,
             formatting_engine: FormatterMode::Native,
             perltidy_profile: None,
@@ -305,6 +312,12 @@ impl ServerConfig {
             && let Some(engine) = parse_critic_engine(engine)
         {
             self.critic_engine = engine;
+        }
+        if let Some(critic) = settings.get("critic")
+            && let Some(profile) = critic.get("profile").and_then(|v| v.as_str())
+            && let Some(profile) = parse_native_critic_profile(profile)
+        {
+            self.native_critic_profile = profile.to_string();
         }
 
         if let Some(formatting) = settings.get("formatting") {
@@ -414,6 +427,14 @@ fn parse_critic_engine(value: &str) -> Option<CriticEngine> {
     match value.trim().to_ascii_lowercase().as_str() {
         "legacy" | "external" | "perlcritic" => Some(CriticEngine::Legacy),
         "native" => Some(CriticEngine::Native),
+        _ => None,
+    }
+}
+
+fn parse_native_critic_profile(value: &str) -> Option<&'static str> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "recommended" => Some("recommended"),
+        "strict" => Some("strict"),
         _ => None,
     }
 }
@@ -743,6 +764,8 @@ pub struct ProjectDiagnosticsConfig {
 pub struct ProjectCriticConfig {
     /// Critic engine (`legacy`, `perlcritic`, or `native`).
     pub engine: Option<String>,
+    /// Native critic profile (`recommended` or `strict`).
+    pub profile: Option<String>,
 }
 
 /// `[features]` section of `.perl-lsp.toml`.
@@ -919,6 +942,11 @@ impl ProjectConfig {
         {
             config.critic_engine = engine;
         }
+        if let Some(ref profile) = self.critic.profile
+            && let Some(profile) = parse_native_critic_profile(profile)
+        {
+            config.native_critic_profile = profile.to_string();
+        }
         if let Some(ref profile) = self.formatting.perltidy_profile {
             config.perltidy_profile = Some(profile.clone());
         }
@@ -1030,6 +1058,7 @@ perltidy_extra_args = ["-noll"]
 
 [critic]
 engine = "native"
+profile = "recommended"
 "#,
         )?;
 
@@ -1050,6 +1079,7 @@ engine = "native"
         assert_eq!(config.formatting.perltidy_add_trailing_commas, Some(true));
         assert_eq!(config.formatting.perltidy_extra_args, vec!["-noll"]);
         assert_eq!(config.critic.engine.as_deref(), Some("native"));
+        assert_eq!(config.critic.profile.as_deref(), Some("recommended"));
         Ok(())
     }
 
@@ -1139,20 +1169,32 @@ engine = "native"
     fn server_config_accepts_native_critic_engine() {
         let mut config = ServerConfig::default();
         assert_eq!(config.critic_engine, CriticEngine::Legacy);
+        assert_eq!(config.native_critic_profile, "strict");
 
         config.update_from_value(&serde_json::json!({
             "critic": {
-                "engine": "native"
+                "engine": "native",
+                "profile": "recommended"
             }
         }));
         assert_eq!(config.critic_engine, CriticEngine::Native);
+        assert_eq!(config.native_critic_profile, "recommended");
 
         config.update_from_value(&serde_json::json!({
             "critic": {
-                "engine": "perlcritic"
+                "engine": "perlcritic",
+                "profile": "strict"
             }
         }));
         assert_eq!(config.critic_engine, CriticEngine::Legacy);
+        assert_eq!(config.native_critic_profile, "strict");
+
+        config.update_from_value(&serde_json::json!({
+            "critic": {
+                "profile": "unknown"
+            }
+        }));
+        assert_eq!(config.native_critic_profile, "strict");
     }
 
     #[test]
@@ -1190,10 +1232,12 @@ engine = "native"
         let mut config = ServerConfig::default();
         let mut project = ProjectConfig::default();
         project.critic.engine = Some("native".to_string());
+        project.critic.profile = Some("recommended".to_string());
 
         project.apply_to_server_config(&mut config);
 
         assert_eq!(config.critic_engine, CriticEngine::Native);
+        assert_eq!(config.native_critic_profile, "recommended");
     }
 
     #[test]

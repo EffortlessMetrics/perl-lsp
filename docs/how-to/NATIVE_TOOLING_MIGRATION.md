@@ -105,6 +105,7 @@ perlcritic_severity = 3
 
 [critic]
 engine = "native"
+profile = "recommended"
 ```
 
 Use native critic diagnostics when:

@@ -567,6 +567,18 @@ Use `native` to route opt-in critic diagnostics through the Rust-native rule
 registry. Use `legacy`, `perlcritic`, or `external` to keep the
 Perl::Critic-compatible path.
 
+#### `perl.critic.profile`
+
+| Property | Value |
+|---|---|
+| Type | `"recommended"\|"strict"` |
+| Default | `"strict"` |
+
+Native-critic rule bundle used when `perl.critic.engine = "native"`.
+`strict` preserves the current full opt-in native registry. `recommended`
+selects the lower-noise security/common-mistake/testing profile intended for
+future default-readiness work.
+
 ```json
 {
   "perl": {
@@ -576,7 +588,8 @@ Perl::Critic-compatible path.
       "profile": "${workspaceFolder}/.perlcriticrc"
     },
     "critic": {
-      "engine": "native"
+      "engine": "native",
+      "profile": "recommended"
     }
   }
 }

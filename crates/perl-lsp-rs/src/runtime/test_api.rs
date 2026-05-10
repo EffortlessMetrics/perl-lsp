@@ -292,6 +292,15 @@ impl LspServer {
         self.config.lock().critic_engine = engine;
     }
 
+    /// Configure the native critic profile directly for test purposes.
+    pub fn test_configure_native_critic_profile(&self, profile: &str) {
+        if let Some(profile) =
+            perl_lsp_rs_core::tooling::perl_critic::NativeCriticProfile::parse(profile)
+        {
+            self.config.lock().native_critic_profile = profile.as_str().to_string();
+        }
+    }
+
     /// Test-only entrypoint for LSP `textDocument/inlineCompletion`.
     ///
     /// Exercises inline completion functionality in tests.

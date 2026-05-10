@@ -693,10 +693,20 @@ impl LspServer {
                             .and_then(|v| v.get("theme"))
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string());
+                        let new_native_profile = perl
+                            .get("critic")
+                            .and_then(|v| v.get("profile"))
+                            .and_then(|v| v.as_str())
+                            .and_then(
+                                perl_lsp_rs_core::tooling::perl_critic::NativeCriticProfile::parse,
+                            )
+                            .map(|profile| profile.as_str().to_string())
+                            .unwrap_or_else(|| cfg.native_critic_profile.clone());
                         new_enabled != cfg.perlcritic_enabled
                             || new_severity != cfg.perlcritic_severity
                             || new_profile != cfg.perlcritic_profile
                             || new_theme != cfg.perlcritic_theme
+                            || new_native_profile != cfg.native_critic_profile
                     };
 
                     // Update server config (inlay hints, test runner)
