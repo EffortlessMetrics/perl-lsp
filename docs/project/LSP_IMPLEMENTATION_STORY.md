@@ -161,9 +161,9 @@ As the project matured, more sophisticated features were added:
 
 ### Formatting and Diagnostics
 
-- **Document formatting**: Integration with Perl::Tidy via a subprocess runtime
-  abstraction. The `FormattingProvider` wraps perltidy execution behind a generic
-  `SubprocessRuntime` trait, supporting full-document formatting, range
+- **Document formatting**: Native Rust formatting is the default path, with
+  explicit Perl::Tidy compatibility available for projects that require legacy
+  output. The `FormattingProvider` supports full-document formatting, range
   formatting, and the LSP 3.18 multi-range formatting proposal.
 - **On-type formatting**: Auto-indentation on keystroke, extracted into its own
   `perl-lsp-on-type-formatting` SRP microcrate.
@@ -338,8 +338,8 @@ capabilities are advertised, compiled, and reported:
    `features.toml` and produces a Rust module with all feature metadata.
 
 4. **`perl-lsp-feature-policy`**: Maps high-level profile decisions to runtime
-   `BuildFlags`. Handles runtime tooling checks (e.g., formatting is only
-   advertised if perltidy is installed).
+   `BuildFlags`. Native formatting capabilities are deterministic; external
+   tool detection only affects explicit compatibility adapters.
 
 5. **`perl-lsp-feature-profile`**: Profile name parsing and normalization.
    Handles aliases (`ga`, `ga-lock`, `ga_lock` all resolve to `GaLock`).

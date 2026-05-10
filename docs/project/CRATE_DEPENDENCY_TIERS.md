@@ -163,8 +163,8 @@ This tier contains the parser core engine and LSP transport layer.
 | `perl-parser-core` | `perl-lexer`, `perl-ast`, `perl-quote`, `perl-pragma`, `perl-edit`, `perl-builtins`, `perl-regex`, `perl-heredoc`, `perl-error`, `perl-tokenizer` | Core parser engine for perl-parser |
 | `perl-tdd-support` | `perl-parser-core` | Test-driven development helpers for the Perl LSP ecosystem |
 | `perl-lsp-transport` | `perl-lsp-protocol`, `perl-content-length-framing` | LSP transport layer with Content-Length message framing |
-| `perl-lsp-tooling` | `perl-subprocess-runtime`, `perl-parser-core`, `perl-symbol-index`, `perl-lsp-performance`, `perl-lsp-critic-parser` | Tooling integration (perltidy, perlcritic, subprocess) |
-| `perl-lsp-formatting` | `perl-lsp-tooling`, `perl-lsp-formatting-types` | LSP formatting provider with perltidy integration |
+| `perl-lsp-tooling` | `perl-subprocess-runtime`, `perl-parser-core`, `perl-symbol-index`, `perl-lsp-performance`, `perl-lsp-critic-parser` | Native tooling integration plus explicit perltidy/perlcritic compatibility adapters |
+| `perl-lsp-formatting` | `perl-lsp-tooling`, `perl-lsp-formatting-types` | LSP formatting provider with native-first formatting and Perltidy compatibility |
 | `perl-lsp-diagnostics` | `perl-lsp-diagnostic-types`, `perl-parser-core`, `perl-semantic-analyzer`, `perl-workspace-index`, `perl-pragma` | LSP diagnostics provider |
 | `perl-lsp-semantic-tokens` | `perl-parser-core`, `perl-lexer`, `perl-semantic-analyzer` | LSP semantic tokens provider |
 | `perl-lsp-inlay-hints` | `perl-semantic-analyzer`, `perl-position-tracking`, `perl-parser-core` | LSP inlay hints provider |
