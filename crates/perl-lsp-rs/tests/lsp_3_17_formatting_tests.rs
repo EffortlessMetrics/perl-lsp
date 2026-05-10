@@ -144,7 +144,13 @@ fn test_range_formatting_preserves_simple_block_trailing_comment_3_17() -> TestR
 fn test_formatting_returns_no_edits_for_literal_preserve_regions_3_17() -> TestResult {
     for (uri, source) in [
         ("file:///regex-format.pl", "my $matched = $text =~ /needle/i;   \n"),
+        ("file:///substitution-format.pl", "$text =~ s/foo/bar/g;   \n"),
+        ("file:///transliteration-format.pl", "$text =~ tr/a-z/A-Z/;   \n"),
+        ("file:///quote-like-format.pl", "my @words = qw(alpha beta gamma);   \n"),
         ("file:///heredoc-format.pl", "print <<'EOF';   \nraw { text }\nEOF\n"),
+        ("file:///data-format.pl", "my $x = 1;   \n__DATA__\nraw fixture bytes\n"),
+        ("file:///end-format.pl", "my $x = 1;   \n__END__\nraw fixture bytes\n"),
+        ("file:///format-body-format.pl", "format STDOUT =\n@<<<<\n$name\n.\nwrite;   \n"),
         ("file:///pod-format.pl", "=pod\n\n=head1 NAME   \n\n=cut\n\nmy $x = 1;   \n"),
     ] {
         let mut harness = LspHarness::new();

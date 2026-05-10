@@ -142,6 +142,20 @@ fn native_formatter_refuses_substitution_until_preservation_pass_exists() {
 }
 
 #[test]
+fn native_formatter_refuses_transliteration_until_preservation_pass_exists() {
+    let formatter = NativeFormatter::new();
+    let source = "$text =~ tr/a-z/A-Z/;\n";
+    let config = FormatConfig { final_newline: FinalNewline::Trim, ..FormatConfig::default() };
+
+    let result = formatter.format_document(source, &config);
+
+    assert!(!result.changed);
+    assert_eq!(result.formatted, source);
+    assert_eq!(result.diagnostics[0].code, "native.format.literal_preserve_region");
+    assert!(result.diagnostics[0].message.contains("transliteration operator"));
+}
+
+#[test]
 fn native_formatter_refuses_quote_like_until_preservation_pass_exists() {
     let formatter = NativeFormatter::new();
     let source = "my @words = qw(alpha beta gamma);\n";

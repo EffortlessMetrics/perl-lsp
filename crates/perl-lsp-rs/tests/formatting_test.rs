@@ -163,7 +163,13 @@ fn test_formatting_returns_no_edits_for_literal_preserve_regions() {
 
     for code in [
         "my $matched = $text =~ /needle/i;   \n",
+        "$text =~ s/foo/bar/g;   \n",
+        "$text =~ tr/a-z/A-Z/;   \n",
+        "my @words = qw(alpha beta gamma);   \n",
         "print <<'EOF';   \nraw { text }\nEOF\n",
+        "my $x = 1;   \n__DATA__\nraw fixture bytes\n",
+        "my $x = 1;   \n__END__\nraw fixture bytes\n",
+        "format STDOUT =\n@<<<<\n$name\n.\nwrite;   \n",
         "=pod\n\n=head1 NAME   \n\n=cut\n\nmy $x = 1;   \n",
     ] {
         let edits = must(formatter.format_document(code, &options));
