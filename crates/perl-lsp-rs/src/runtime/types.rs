@@ -26,6 +26,32 @@ pub(super) fn workspace_folder_matches_doc_uri(
     }
 }
 
+/// Pick the most-specific (deepest) workspace folder that contains `doc_uri`.
+///
+/// When workspace folders are nested (e.g. `/repo` and `/repo/app`), a document
+/// inside the inner folder matches both. Returning the deepest folder makes
+/// folder, config, and include-path lookups consistent with
+/// `workspace_root_for_doc` in `runtime/lifecycle/module_resolution.rs`, which
+/// already picks the deepest match. Mixing first-match with deepest-match
+/// causes the runtime root and the per-doc config to disagree on which
+/// folder owns the document.
+///
+/// Rank by component count of the workspace folder's local path. For
+/// non-`file://` URIs (vscode-remote, etc.) the path is unavailable, so fall
+/// back to URI slash count, which preserves nesting order across hosts.
+pub(super) fn best_workspace_folder_for_doc<'a>(
+    folders: &'a [WorkspaceFolderState],
+    doc_uri: &str,
+) -> Option<&'a WorkspaceFolderState> {
+    folders.iter().filter(|folder| workspace_folder_matches_doc_uri(folder, doc_uri)).max_by_key(
+        |folder| {
+            workspace_folder_path(folder)
+                .map(|path| path.components().count())
+                .unwrap_or_else(|| folder.uri.trim_end_matches('/').matches('/').count())
+        },
+    )
+}
+
 /// Tracks metadata for a pending `workspace/configuration` reverse request.
 #[derive(Debug, Clone)]
 pub(crate) struct PendingWorkspaceConfigurationRequest {
