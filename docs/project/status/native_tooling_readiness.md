@@ -11,9 +11,9 @@
 | Area | Criterion | Status | Required | Evidence | Next |
 | --- | --- | --- | --- | --- | --- |
 | formatter | native formatter default | ready | true | engine=native, external_adapter_requested=false | regenerate `cargo xtask native-format config` and keep external adapter opt-in |
-| formatter | fixture suite passes | ready | true | passed=38/38 failed=0 | run `cargo xtask native-format check` and fix any fixture failures |
+| formatter | fixture suite passes | ready | true | passed=40/40 failed=0 | run `cargo xtask native-format check` and fix any fixture failures |
 | formatter | corpus idempotent and parse-preserving | ready | true | files=65 idempotence=65/65 parse_preservation=65/65 passed=true | run `cargo xtask native-format corpus` and investigate non-idempotent or non-preserved files |
-| formatter | dangerous surfaces visible | ready | true | expected_diagnostic_fixtures=8 literal_preserve_fixtures=8 bailout_count=8 | expand literal/comment preservation fixtures before treating format-on-save as broad coverage |
+| formatter | dangerous surfaces visible | ready | true | expected_diagnostic_fixtures=9 literal_preserve_fixtures=9 bailout_count=9 | expand literal/comment preservation fixtures before treating format-on-save as broad coverage |
 | formatter | perltidy compatibility has no external-only gaps | ready | true | options=8 supported=7 approximated=0 external_only=0 | map, approximate, or document remaining external-only perltidy options |
 | critic | native critic default | ready | true | default perlcritic_enabled=true critic_engine=Native profile=recommended | keep default critic path on the low-noise native recommended profile |
 | critic | native rule surface has LSP and bridge coverage | ready | true | rules=28 pull=28 push=28 workspace=28 bridge=28 | route every recommended rule through pull, push, workspace diagnostics, and violation bridge |
