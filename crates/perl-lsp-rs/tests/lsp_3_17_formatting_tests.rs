@@ -15,9 +15,9 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 fn test_formatting_3_17() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
-    harness.open("file:///test.pl", "my$x=1;print$x;")?;
+    harness.open("file:///test.pl", "sub test{my$x=1;return$x;}\n")?;
 
-    let response = harness.request(
+    let result = harness.request(
         "textDocument/formatting",
         json!({
             "textDocument": { "uri": "file:///test.pl" },
@@ -29,22 +29,12 @@ fn test_formatting_3_17() -> TestResult {
                 "trimFinalNewlines": true
             }
         }),
-    );
+    )?;
 
-    // Handle both success and error cases - this is a protocol compliance test
-    match response {
-        Ok(result) => {
-            // Success: should return null or array of edits
-            assert!(result.is_null() || result.is_array());
-        }
-        Err(_) => {
-            // Error is acceptable when perltidy is not available
-            // This maintains LSP protocol compliance
-            eprintln!(
-                "Formatting failed (perltidy may not be installed) - this is acceptable for protocol compliance"
-            );
-        }
-    }
+    let edits = result.as_array().ok_or("formatting should return an edit array")?;
+    assert!(!edits.is_empty(), "native default formatting should return edits");
+    let edit_text = edits[0]["newText"].as_str().ok_or("formatting edit should include newText")?;
+    assert!(edit_text.contains("sub test {\n    my $x = 1;\n    return $x;\n}"));
     Ok(())
 }
 
@@ -54,7 +44,7 @@ fn test_range_formatting_3_17() -> TestResult {
     harness.initialize(None)?;
     harness.open("file:///test.pl", "my$x=1;\nprint$x;")?;
 
-    let response = harness.request(
+    let result = harness.request(
         "textDocument/rangeFormatting",
         json!({
             "textDocument": { "uri": "file:///test.pl" },
@@ -67,22 +57,11 @@ fn test_range_formatting_3_17() -> TestResult {
                 "insertSpaces": true
             }
         }),
-    );
+    )?;
 
-    // Handle both success and error cases - this is a protocol compliance test
-    match response {
-        Ok(result) => {
-            // Success: should return null or array of edits
-            assert!(result.is_null() || result.is_array());
-        }
-        Err(_) => {
-            // Error is acceptable when perltidy is not available
-            // This maintains LSP protocol compliance
-            eprintln!(
-                "Range formatting failed (perltidy may not be installed) - this is acceptable for protocol compliance"
-            );
-        }
-    }
+    let edits = result.as_array().ok_or("rangeFormatting should return an edit array")?;
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0]["newText"], "my $x = 1;");
     Ok(())
 }
 
