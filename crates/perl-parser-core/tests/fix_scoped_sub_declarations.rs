@@ -30,7 +30,7 @@ fn parses_scoped_sub_forward_declarations() {
 }
 
 #[test]
-fn recovers_after_scoped_sub_missing_name() {
+fn recovers_after_scoped_sub_missing_name() -> Result<(), String> {
     let mut parser = Parser::new("my sub { 1 }; my $x = 2;");
     let output = parser.parse_with_recovery();
     let sexp = output.ast.to_sexp();
@@ -51,13 +51,13 @@ fn recovers_after_scoped_sub_missing_name() {
         "scoped sub recovery should preserve an anonymous-sub structure: {sexp}"
     );
 
-    if let NodeKind::Program { statements } = &output.ast.kind {
-        assert!(
-            statements.len() >= 2,
-            "parser should recover and keep following statement, got {} items",
-            statements.len()
-        );
-    } else {
-        panic!("expected Program root, got {:?}", output.ast.kind);
-    }
+    let NodeKind::Program { statements } = &output.ast.kind else {
+        return Err(format!("expected Program root, got {:?}", output.ast.kind));
+    };
+    assert!(
+        statements.len() >= 2,
+        "parser should recover and keep following statement, got {} items",
+        statements.len()
+    );
+    Ok(())
 }
