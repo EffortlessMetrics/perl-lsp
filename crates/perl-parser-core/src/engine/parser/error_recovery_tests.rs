@@ -500,7 +500,7 @@ fn test_recovery_unclosed_qw() {
     assert!(result.is_ok(), "Parser should recover from unclosed qw()");
     let ast = must(result);
     if let NodeKind::Program { statements } = &ast.kind {
-        assert!(statements.len() >= 1, "Should have recovered statements after unclosed qw");
+        assert!(!statements.is_empty(), "Should have recovered statements after unclosed qw");
     }
     assert!(!parser.errors().is_empty(), "Should record unclosed delimiter error");
 }
@@ -513,7 +513,7 @@ fn test_recovery_unclosed_q_brace() {
     assert!(result.is_ok(), "Parser should recover from unclosed q braces");
     let ast = must(result);
     if let NodeKind::Program { statements } = &ast.kind {
-        assert!(statements.len() >= 1, "Should have recovered statements");
+        assert!(!statements.is_empty(), "Should have recovered statements");
     }
     assert!(!parser.errors().is_empty(), "Should record unclosed brace error");
 }
