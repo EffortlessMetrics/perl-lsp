@@ -868,6 +868,12 @@ fn print_parens_filehandle_list() {
 }
 
 #[test]
+fn print_parens_block_filehandle_typeglob_deref() {
+    // From Dpkg::Source::Archive: print({ *$self->{tar_input} } "$file\0")
+    assert_clean_parse(r#"print({ *$self->{tar_input} } "$file\0") or die "write failed";"#);
+}
+
+#[test]
 fn undef_in_return_expr() {
     // return undef — undef at statement boundary, no sigil follows
     assert_clean_parse(r#"sub f { return undef; }"#);
