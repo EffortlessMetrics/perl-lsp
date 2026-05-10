@@ -332,15 +332,18 @@ Note: Configuration is nested under `perl.inlayHints.*` and `perl.workspace.*` s
 3. Verify workspace folder is correctly set
 4. Check `maxFiles` limit isn't exceeded
 
-### perltidy/perlcritic Not Working
+### External perltidy/perlcritic Compatibility Not Working
 
-**Symptoms**: Formatting doesn't work, or no linting diagnostics
+**Symptoms**: Explicit external formatting compatibility doesn't work, or no
+legacy perlcritic diagnostics
 
 **Solutions**:
-1. Verify tools are installed: `which perltidy`, `which perlcritic`
+1. Verify external compatibility tools are installed: `which perltidy`, `which perlcritic`
 2. Check paths in configuration
-3. Formatting works without perltidy (built-in fallback)
-4. perlcritic requires explicit installation
+3. Native formatting works without perltidy; install perltidy only for explicit
+   external compatibility mode
+4. Native critic diagnostics work without perlcritic; install perlcritic only
+   for explicit legacy compatibility mode
 
 ### Multi-Root Workspace Issues
 

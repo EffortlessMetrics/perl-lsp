@@ -100,7 +100,7 @@ and the computed compliance percentage.
 | `perl-lsp-feature-flags` | `crates/perl-lsp-feature-flags/` | Defines `BuildFlags` (per-feature booleans for compile-time selection) and `AdvertisedFeatures` (runtime projection). Provides preset constructors: `production()`, `ga_lock()`, `all()`. Converts flags to feature ID vectors. |
 | `perl-lsp-feature-contracts` | `crates/perl-lsp-feature-contracts/` | Runs a `build.rs` that compiles `features.toml` into `feature_contracts.rs` constants via `perl-feature-catalog`. Defines `FeatureProfileKind` (GaLock, Production, All) and `BddFeatureRow` for reporting. Exposes `all_features()`, `has_feature()`, `compliance_percent()`. |
 | `perl-lsp-feature-profile` | `crates/perl-lsp-feature-profile/` | Parses raw CLI profile tokens (`"ga-lock"`, `"prod"`, `"all"`, `"auto"`) into `FeatureProfileKind`. Handles normalization (trimming, case folding, underscore-to-hyphen). |
-| `perl-lsp-feature-policy` | `crates/perl-lsp-feature-policy/` | Defines `FeatureProfile` and resolves it into `BuildFlags`. Handles runtime environment effects (e.g. enabling formatting when `perltidy` is available). Provides `catalog_advertised_feature_ids()` which intersects profile flags with the catalog. |
+| `perl-lsp-feature-policy` | `crates/perl-lsp-feature-policy/` | Defines `FeatureProfile` and resolves it into `BuildFlags`. Keeps native formatting capabilities deterministic; external `perltidy` availability is only relevant to the explicit compatibility adapter. Provides `catalog_advertised_feature_ids()` which intersects profile flags with the catalog. |
 | `perl-lsp-feature-grid` | `crates/perl-lsp-feature-grid/` | Assembles the BDD feature grid JSON payload. Computes per-profile compliance percentages. Consumed by `xtask`, CI reporting, and the server's feature catalog endpoint. |
 | `perl-lsp-feature-profile-cli` | `crates/perl-lsp-feature-profile-cli/` | Parses `--feature-profile` CLI arguments. Returns structured `UnsupportedFeatureProfileError` with the supported token list for user diagnostics. |
 | `perl-lsp-feature-governance` | `crates/perl-lsp-feature-governance/` | Facade crate that re-exports the public API surface from all governance sub-crates. The LSP server binary and launcher depend on this single crate rather than each sub-crate individually. |
@@ -113,7 +113,7 @@ profiles are defined:
 | Profile | Constructor | Description |
 |---------|------------|-------------|
 | `ga-lock` | `BuildFlags::ga_lock()` | Conservative set. Excludes `inline_values`. Includes formatting. Intended for stable API guarantees. |
-| `production` | `BuildFlags::production()` | Standard runtime set. Excludes formatting (enabled dynamically when `perltidy` is detected). All other GA features enabled. |
+| `production` | `BuildFlags::production()` | Standard runtime set. Includes native full-document and range formatting. All other GA features enabled. |
 | `all` | `BuildFlags::all()` | Every in-tree feature enabled. Used for testing, snapshots, and CI matrices. |
 
 Profile selection happens through:
@@ -126,9 +126,10 @@ Profile selection happens through:
    `ga-lock`, `ga_lock`, `prod`, `production`, `all`, or `auto` (which falls
    back to the compiled default).
 
-3. **Runtime adaptation:** `FeatureProfile::runtime_flags()` checks for external
-   tool availability. For example, formatting is enabled only when `perltidy` is
-   installed, regardless of the base profile.
+3. **Runtime adaptation:** `FeatureProfile::runtime_flags()` preserves the
+   selected profile's native formatting flags. External tool detection still
+   exists for compatibility adapters, but it no longer gates whether formatting
+   capabilities are advertised.
 
 ## Contracts and Compliance
 

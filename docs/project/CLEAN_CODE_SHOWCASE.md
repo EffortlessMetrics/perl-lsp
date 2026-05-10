@@ -131,18 +131,18 @@ impl BuildFlags {
 The policy layer bridges user-facing CLI arguments to concrete flag sets:
 
 ```rust
-pub fn runtime_flags(self, has_perltidy: bool) -> BuildFlags {
-    let mut flags = self.build_flags();
-    if has_perltidy {
-        flags.formatting = true;
-        flags.range_formatting = true;
-    }
-    flags
+pub fn runtime_flags(self, _has_perltidy: bool) -> BuildFlags {
+    // Native formatting is built into the server. Perltidy availability is
+    // still detected for the external compatibility adapter, but it no longer
+    // gates whether formatting capabilities can be advertised.
+    self.build_flags()
 }
 ```
 
-This means formatting is only advertised when `perltidy` is actually installed --
-the capability set adapts to the runtime environment.
+This means native formatting is advertised deterministically from the selected
+feature profile. External `perltidy` availability is still useful for projects
+that opt into the legacy compatibility adapter, but it is not part of default
+capability selection.
 
 The grid layer produces JSON reports showing exactly which features are enabled
 for each profile, with compliance percentages. Tests verify that the feature ID
