@@ -90,6 +90,8 @@ struct NativeFormatCorpusReceipt {
     parse_preserved_count: usize,
     literal_bailout_count: usize,
     unsupported_patterns_count: usize,
+    unsupported_parse_clean_count: usize,
+    parse_error_count: usize,
     diagnostics_count: usize,
     passed: bool,
     files: Vec<NativeFormatCorpusFileResult>,
@@ -107,6 +109,8 @@ struct NativeFormatCorpusFileResult {
     parse_preserved: bool,
     literal_bailout: bool,
     unsupported_pattern: bool,
+    unsupported_parse_clean: bool,
+    parse_error: bool,
     passed: bool,
 }
 
@@ -319,6 +323,11 @@ pub fn corpus(config: NativeFormatCorpusConfig) -> Result<()> {
             .iter()
             .filter(|result| result.unsupported_pattern)
             .count(),
+        unsupported_parse_clean_count: results
+            .iter()
+            .filter(|result| result.unsupported_parse_clean)
+            .count(),
+        parse_error_count: results.iter().filter(|result| result.parse_error).count(),
         diagnostics_count: results.iter().map(|result| result.diagnostic_codes.len()).sum(),
         passed,
         files: results,
@@ -747,6 +756,8 @@ fn check_corpus_file(
         && diagnostic_codes.iter().any(|code| code == "native.format.literal_preserve_region");
     let unsupported_pattern =
         diagnostic_codes.iter().any(|code| code != "native.format.literal_preserve_region");
+    let parse_error = diagnostic_codes.iter().any(|code| code == "native.format.parse_error");
+    let unsupported_parse_clean = unsupported_pattern && source_parse_clean;
     let passed = idempotent && parse_preserved;
 
     Ok(NativeFormatCorpusFileResult {
@@ -760,6 +771,8 @@ fn check_corpus_file(
         parse_preserved,
         literal_bailout,
         unsupported_pattern,
+        unsupported_parse_clean,
+        parse_error,
         passed,
     })
 }
@@ -926,6 +939,11 @@ fn write_corpus_summary(path: &Path, receipt: &NativeFormatCorpusReceipt) -> Res
     markdown.push_str(&format!("- Literal bailouts: {}\n", receipt.literal_bailout_count));
     markdown
         .push_str(&format!("- Unsupported diagnostics: {}\n", receipt.unsupported_patterns_count));
+    markdown.push_str(&format!(
+        "- Unsupported diagnostics on parse-clean files: {}\n",
+        receipt.unsupported_parse_clean_count
+    ));
+    markdown.push_str(&format!("- Parse-error diagnostics: {}\n", receipt.parse_error_count));
     markdown.push_str(&format!("- Passed: {}\n\n", receipt.passed));
     markdown.push_str("| File | Changed | Idempotent | Parse Preserved | Diagnostics |\n");
     markdown.push_str("| --- | --- | --- | --- | --- |\n");
@@ -939,6 +957,22 @@ fn write_corpus_summary(path: &Path, receipt: &NativeFormatCorpusReceipt) -> Res
             "| `{}` | {} | {} | {} | {} |\n",
             file.path, file.changed, file.idempotent, file.parse_preserved, diagnostics
         ));
+    }
+    let unsupported_files =
+        receipt.files.iter().filter(|file| file.unsupported_pattern).collect::<Vec<_>>();
+    if !unsupported_files.is_empty() {
+        markdown.push_str("\n## Unsupported Diagnostics\n\n");
+        markdown.push_str("| File | Source Parse Clean | Parse Error | Diagnostics |\n");
+        markdown.push_str("| --- | --- | --- | --- |\n");
+        for file in unsupported_files {
+            markdown.push_str(&format!(
+                "| `{}` | {} | {} | {} |\n",
+                file.path,
+                file.source_parse_clean,
+                file.parse_error,
+                file.diagnostic_codes.join(", ")
+            ));
+        }
     }
     fs::write(path, markdown).wrap_err_with(|| format!("failed to write {}", path.display()))
 }
@@ -1098,12 +1132,16 @@ mod tests {
         assert_eq!(receipt["idempotence_passed_count"], 2);
         assert_eq!(receipt["parse_preserved_count"], 2);
         assert_eq!(receipt["literal_bailout_count"], 1);
+        assert_eq!(receipt["unsupported_parse_clean_count"], 0);
+        assert_eq!(receipt["parse_error_count"], 0);
         assert_eq!(receipt["passed"], true);
 
         let summary = fs::read_to_string(receipts.join("native-format-corpus-summary.md"))?;
         assert!(summary.contains("# Native Format Corpus"));
         assert!(summary.contains("Files checked: 2"));
         assert!(summary.contains("Literal bailouts: 1"));
+        assert!(summary.contains("Unsupported diagnostics on parse-clean files: 0"));
+        assert!(summary.contains("Parse-error diagnostics: 0"));
 
         Ok(())
     }

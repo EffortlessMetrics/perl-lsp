@@ -13,8 +13,10 @@
 | Corpus files changed | 2 |
 | Corpus idempotence | 65/65 |
 | Corpus parse preservation | 65/65 |
-| Corpus literal bailouts | 24 |
-| Corpus unsupported diagnostics | 10 |
+| Corpus literal bailouts | 25 |
+| Corpus unsupported diagnostics | 9 |
+| Corpus unsupported parse-clean diagnostics | 0 |
+| Corpus parse-error diagnostics | 9 |
 | Corpus passed | true |
 | Perltidy compatibility options | 8 |
 | Perltidy compatibility supported | 7 |

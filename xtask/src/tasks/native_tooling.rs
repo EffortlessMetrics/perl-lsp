@@ -131,6 +131,8 @@ struct FormatterStatus {
     corpus_parse_preserved_count: Option<usize>,
     corpus_literal_bailout_count: Option<usize>,
     corpus_unsupported_patterns_count: Option<usize>,
+    corpus_unsupported_parse_clean_count: Option<usize>,
+    corpus_parse_error_count: Option<usize>,
     corpus_diagnostics_count: Option<usize>,
     corpus_passed: Option<bool>,
     format_perltidy_compat_receipt: String,
@@ -439,9 +441,17 @@ fn build_readiness_receipt(
         formatter.format_corpus_receipt_present,
         false,
         format!(
-            "unsupported_diagnostics={} literal_bailouts={} diagnostics={}",
+            "unsupported_diagnostics={} parse_clean_unsupported={} parse_error_diagnostics={} literal_bailouts={} diagnostics={}",
             optional_metric(
                 formatter.corpus_unsupported_patterns_count,
+                formatter.format_corpus_receipt_present,
+            ),
+            optional_metric(
+                formatter.corpus_unsupported_parse_clean_count,
+                formatter.format_corpus_receipt_present,
+            ),
+            optional_metric(
+                formatter.corpus_parse_error_count,
                 formatter.format_corpus_receipt_present,
             ),
             optional_metric(
@@ -453,7 +463,7 @@ fn build_readiness_receipt(
                 formatter.format_corpus_receipt_present
             )
         ),
-        "triage unsupported formatter diagnostics before claiming broad format-on-save coverage",
+        "triage parse-clean unsupported diagnostics first; parse-error diagnostics are recovery fixtures",
     ));
     criteria.push(readiness_criterion(
         "formatter",
@@ -843,6 +853,11 @@ fn formatter_status(
             &corpus_receipt,
             "unsupported_patterns_count",
         ),
+        corpus_unsupported_parse_clean_count: optional_usize(
+            &corpus_receipt,
+            "unsupported_parse_clean_count",
+        ),
+        corpus_parse_error_count: optional_usize(&corpus_receipt, "parse_error_count"),
         corpus_diagnostics_count: optional_usize(&corpus_receipt, "diagnostics_count"),
         corpus_passed: optional_bool(&corpus_receipt, "passed"),
         format_perltidy_compat_receipt: format_perltidy_compat_receipt.display().to_string(),
@@ -1080,6 +1095,14 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
         formatter.corpus_unsupported_patterns_count,
         formatter.format_corpus_receipt_present,
     );
+    let corpus_unsupported_parse_clean = optional_metric(
+        formatter.corpus_unsupported_parse_clean_count,
+        formatter.format_corpus_receipt_present,
+    );
+    let corpus_parse_errors = optional_metric(
+        formatter.corpus_parse_error_count,
+        formatter.format_corpus_receipt_present,
+    );
     let corpus_passed =
         formatter.corpus_passed.map(|passed| passed.to_string()).unwrap_or_else(|| {
             if formatter.format_corpus_receipt_present {
@@ -1230,6 +1253,8 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
 | Corpus parse preservation | {} |
 | Corpus literal bailouts | {} |
 | Corpus unsupported diagnostics | {} |
+| Corpus unsupported parse-clean diagnostics | {} |
+| Corpus parse-error diagnostics | {} |
 | Corpus passed | {} |
 | Perltidy compatibility options | {} |
 | Perltidy compatibility supported | {} |
@@ -1293,6 +1318,8 @@ Fixable native rules:
         corpus_parse_preservation,
         corpus_literal_bailouts,
         corpus_unsupported_diagnostics,
+        corpus_unsupported_parse_clean,
+        corpus_parse_errors,
         corpus_passed,
         perltidy_compat_options,
         perltidy_compat_supported,
@@ -1722,6 +1749,8 @@ mod tests {
   "parse_preserved_count": 2,
   "literal_bailout_count": 1,
   "unsupported_patterns_count": 0,
+  "unsupported_parse_clean_count": 0,
+  "parse_error_count": 0,
   "diagnostics_count": 1,
   "passed": true
 }
@@ -1833,6 +1862,8 @@ mod tests {
         assert_eq!(value["formatter"]["corpus_parse_preserved_count"], 2);
         assert_eq!(value["formatter"]["corpus_literal_bailout_count"], 1);
         assert_eq!(value["formatter"]["corpus_unsupported_patterns_count"], 0);
+        assert_eq!(value["formatter"]["corpus_unsupported_parse_clean_count"], 0);
+        assert_eq!(value["formatter"]["corpus_parse_error_count"], 0);
         assert_eq!(value["formatter"]["corpus_passed"], true);
         assert_eq!(value["formatter"]["format_perltidy_compat_receipt_present"], true);
         assert_eq!(value["formatter"]["perltidy_compat_option_count"], 9);
@@ -1898,6 +1929,8 @@ mod tests {
         assert!(markdown.contains("| Corpus parse preservation | 2/2 |"));
         assert!(markdown.contains("| Corpus literal bailouts | 1 |"));
         assert!(markdown.contains("| Corpus unsupported diagnostics | 0 |"));
+        assert!(markdown.contains("| Corpus unsupported parse-clean diagnostics | 0 |"));
+        assert!(markdown.contains("| Corpus parse-error diagnostics | 0 |"));
         assert!(markdown.contains("| Corpus passed | true |"));
         assert!(markdown.contains("| Perltidy compatibility options | 9 |"));
         assert!(markdown.contains("| Perltidy compatibility supported | 7 |"));
@@ -2052,6 +2085,8 @@ color = 1
                 corpus_parse_preserved_count: Some(3),
                 corpus_literal_bailout_count: Some(1),
                 corpus_unsupported_patterns_count: Some(2),
+                corpus_unsupported_parse_clean_count: Some(0),
+                corpus_parse_error_count: Some(2),
                 corpus_diagnostics_count: Some(1),
                 corpus_passed: Some(true),
                 format_perltidy_compat_receipt: "native-format-perltidy-compat.json".to_string(),
