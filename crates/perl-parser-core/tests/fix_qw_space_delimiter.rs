@@ -36,6 +36,26 @@ fn qw_space_squote_double_in_call() {
     assert_clean_parse(r#"f(qw 'A B', qw 'C D');"#);
 }
 
+/// my $x = [qw /A B/]; my $y = 1 — slash delimiters after whitespace must not
+/// swallow the closing bracket or following statement. This is the
+/// Regexp::Common::zip corpus shape behind the current unclosed_bracket bucket.
+#[test]
+fn qw_space_slash_inside_array_preserves_following_tokens() {
+    let ast = parse(
+        r#"my $x = ['zip', 'Australia' => qw /-prefix= -country= -lax=/];
+my $y = 1;"#,
+    );
+    let sexp = ast.to_sexp();
+    assert!(
+        sexp.contains("(variable $ y)"),
+        "expected parser to continue after slash-delimited qw list, got: {sexp}"
+    );
+    assert_clean_parse(
+        r#"my $x = ['zip', 'Australia' => qw /-prefix= -country= -lax=/];
+my $y = 1;"#,
+    );
+}
+
 // ── Statement-level (already works — non-regression baseline) ────────────────
 
 /// my @x = qw 'A B' — at statement level. This worked before; must remain

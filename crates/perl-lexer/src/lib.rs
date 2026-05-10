@@ -1965,12 +1965,19 @@ impl<'a> PerlLexer<'a> {
                             //     is a valid file-size filetest and must not be treated as a
                             //     substitution start. All other operators (qw, q, qq, qr, qx, m,
                             //     tr, y) have no corresponding file-test operator.
+                            //   - / is safe for non-substitution quote operators; `qw /a b/` and
+                            //     `m /re/` are common, while `s /foo/bar/` remains ambiguous with
+                            //     the file-size test shape and stays rejected here.
                             //   - Non-paired, non-quote chars ($, @, ,, etc.) remain rejected.
                             let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
                             let is_quote_char = matches!(next, '\'' | '"') && op != "s";
+                            let is_spaced_slash_delim = next == '/' && op != "s";
                             let is_valid_delim = Self::is_quote_delim(next)
                                 && !is_fat_arrow
-                                && (!has_whitespace || is_paired_delim || is_quote_char);
+                                && (!has_whitespace
+                                    || is_paired_delim
+                                    || is_quote_char
+                                    || is_spaced_slash_delim);
 
                             if is_valid_delim {
                                 self.mode = LexerMode::ExpectDelimiter;
