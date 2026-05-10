@@ -12,6 +12,9 @@
 use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
+mod support;
+use support::test_helpers::apply_text_edits;
+
 #[test]
 fn test_complete_workflow_from_messy_to_clean() -> Result<(), Box<dyn std::error::Error>> {
     let srv = LspServer::new();
@@ -52,13 +55,8 @@ fn test_complete_workflow_from_messy_to_clean() -> Result<(), Box<dyn std::error
 
     // Step 3: Open a messy Perl file (no pragmas, unused imports, poor formatting)
     let uri = "file:///workspace/messy.pl";
-    let messy_code = r#"use Data::Dumper;
-use JSON qw(encode_json decode_json from_json);
-use List::Util qw(first max min);
-
-sub calculate{my$x=shift;my$y=shift;return$x+$y}
+    let messy_code = r#"sub calculate{my$x=shift;my$y=shift;return$x+$y;}
 my$result=calculate(5,3);
-print encode_json({result => $result});
 "#;
 
     let open_req = JsonRpcRequest {
@@ -123,7 +121,7 @@ print encode_json({result => $result});
         }
     }
 
-    // Step 6: Request formatting (should work with or without perltidy)
+    // Step 6: Request native-default formatting.
     let format_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(4)),
@@ -137,20 +135,28 @@ print encode_json({result => $result});
         })),
     };
 
-    let format_response = srv.handle_request(format_req);
-
+    let format_response = srv.handle_request(format_req).ok_or("Formatting response missing")?;
     assert!(
-        format_response.is_some(),
-        "Formatting should return a response (either formatted code or an error)"
+        format_response.error.is_none(),
+        "native default formatting should not shell out or return an external-tool error: {:?}",
+        format_response.error
     );
-
-    if let Some(fmt_resp) = format_response {
-        if let Some(result) = fmt_resp.result {
-            println!("Formatting result: {:?}", result);
-        } else if let Some(error) = fmt_resp.error {
-            println!("Formatting error (expected if perltidy not installed): {:?}", error);
-        }
-    }
+    let format_result = format_response.result.ok_or("Formatting result missing")?;
+    let edits = format_result.as_array().ok_or("formatting result must be edit array")?;
+    assert!(!edits.is_empty(), "native default formatting should return edits");
+    let formatted = apply_text_edits(messy_code, edits);
+    assert_eq!(
+        formatted,
+        concat!(
+            "sub calculate {\n",
+            "    my $x = shift;\n",
+            "    my $y = shift;\n",
+            "    return $x + $y;\n",
+            "}\n",
+            "my $result = calculate(5, 3);\n",
+            "\n",
+        )
+    );
 
     // Step 7: Verify server state remains healthy
     let final_diag_req = JsonRpcRequest {
@@ -193,7 +199,7 @@ fn test_batteries_included_features_summary() -> Result<(), Box<dyn std::error::
 
     // Formatting
     if capabilities.get("documentFormattingProvider").is_some() {
-        println!("✓ Document Formatting (Perl::Tidy integration + built-in fallback)");
+        println!("✓ Document Formatting (native by default; Perl::Tidy compatibility is optional)");
     }
     if capabilities.get("documentRangeFormattingProvider").is_some() {
         println!("✓ Range Formatting");
@@ -282,11 +288,11 @@ fn test_batteries_included_features_summary() -> Result<(), Box<dyn std::error::
     }
 
     println!("\n=== Integration Status ===\n");
-    println!("✓ Built-in fallbacks for all external tools");
-    println!("✓ Graceful degradation when tools unavailable");
-    println!("✓ No required external dependencies for basic functionality");
-    println!("✓ Optional Perl::Tidy integration for enhanced formatting");
-    println!("✓ Optional Perl::Critic integration for advanced linting");
+    println!("✓ Native formatter and native critic are the default paths");
+    println!("✓ Explicit compatibility adapters remain available for legacy projects");
+    println!("✓ No required external dependencies for normal editor diagnostics or formatting");
+    println!("✓ Optional Perl::Tidy compatibility for exact legacy formatting");
+    println!("✓ Optional Perl::Critic compatibility for legacy policy migration");
     println!("\n");
 
     Ok(())
