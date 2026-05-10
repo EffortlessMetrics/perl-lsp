@@ -23,8 +23,39 @@ pub struct PerltidyCompatReport {
     pub unsupported_safe_count: usize,
     /// Options that still require external perltidy compatibility mode.
     pub external_only_count: usize,
+    /// Suggested native formatter configuration derived from compatible profile options.
+    pub suggested_config: PerltidyNativeConfigSuggestion,
     /// Per-option classifications in source order.
     pub options: Vec<PerltidyCompatOption>,
+}
+
+/// Native formatter config values that can be migrated from a `.perltidyrc` profile.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PerltidyNativeConfigSuggestion {
+    /// Native formatter engine to use for the migrated config.
+    pub engine: &'static str,
+    /// Maximum line length mapped from `-l`, when present and valid.
+    pub perltidy_maximum_line_length: Option<u32>,
+    /// Indentation width mapped from `-i`, when present and valid.
+    pub perltidy_indent_columns: Option<u32>,
+    /// Tab indentation setting mapped from `-t` / `-nt`.
+    pub perltidy_tabs: Option<bool>,
+    /// Opening brace placement mapped from `-bl` / `-bar`.
+    pub perltidy_opening_brace_on_new_line: Option<bool>,
+    /// Else placement mapped from `-ce` / `-nce`.
+    pub perltidy_cuddled_else: Option<bool>,
+    /// Keyword spacing mapped from `-sok` / `-nsok`.
+    pub perltidy_space_after_keyword: Option<bool>,
+    /// Trailing comma behavior mapped from `-atc` / `-natc`.
+    pub perltidy_add_trailing_commas: Option<bool>,
+    /// Supported options whose values could not be parsed.
+    pub invalid_options: Vec<String>,
+    /// Execution/output options ignored by native formatting.
+    pub ignored_options: Vec<String>,
+    /// Profile or preset options approximated by native settings.
+    pub approximated_options: Vec<String>,
+    /// Options that still need explicit external perltidy compatibility mode.
+    pub external_only_options: Vec<String>,
 }
 
 /// Per-option compatibility classification for a `.perltidyrc` entry.
@@ -107,12 +138,14 @@ pub fn classify_perltidy_profile(raw: &str) -> PerltidyCompatReport {
         .iter()
         .map(|(option, value)| classify_perltidy_option(option, value.clone()))
         .collect::<Vec<_>>();
+    let suggested_config = suggested_perltidy_config(&options);
     PerltidyCompatReport {
         option_count: options.len(),
         supported_count: perltidy_count(&options, "supported"),
         approximated_count: perltidy_count(&options, "approximated"),
         unsupported_safe_count: perltidy_count(&options, "unsupported_safe"),
         external_only_count: perltidy_count(&options, "external_only"),
+        suggested_config,
         options,
     }
 }
@@ -193,6 +226,33 @@ pub fn render_perltidy_compat_markdown(profile: &str, report: &PerltidyCompatRep
     markdown.push_str(&format!("- Approximated: {}\n", report.approximated_count));
     markdown.push_str(&format!("- Unsupported safe: {}\n", report.unsupported_safe_count));
     markdown.push_str(&format!("- External-only: {}\n\n", report.external_only_count));
+    markdown.push_str("## Suggested Native Formatter Config\n\n");
+    markdown.push_str("```toml\n");
+    markdown.push_str("[formatting]\n");
+    markdown.push_str(&format!("engine = \"{}\"\n", report.suggested_config.engine));
+    if let Some(value) = report.suggested_config.perltidy_maximum_line_length {
+        markdown.push_str(&format!("perltidy_maximum_line_length = {value}\n"));
+    }
+    if let Some(value) = report.suggested_config.perltidy_indent_columns {
+        markdown.push_str(&format!("perltidy_indent_columns = {value}\n"));
+    }
+    if let Some(value) = report.suggested_config.perltidy_tabs {
+        markdown.push_str(&format!("perltidy_tabs = {value}\n"));
+    }
+    if let Some(value) = report.suggested_config.perltidy_opening_brace_on_new_line {
+        markdown.push_str(&format!("perltidy_opening_brace_on_new_line = {value}\n"));
+    }
+    if let Some(value) = report.suggested_config.perltidy_cuddled_else {
+        markdown.push_str(&format!("perltidy_cuddled_else = {value}\n"));
+    }
+    if let Some(value) = report.suggested_config.perltidy_space_after_keyword {
+        markdown.push_str(&format!("perltidy_space_after_keyword = {value}\n"));
+    }
+    if let Some(value) = report.suggested_config.perltidy_add_trailing_commas {
+        markdown.push_str(&format!("perltidy_add_trailing_commas = {value}\n"));
+    }
+    markdown.push_str("```\n\n");
+    render_perltidy_option_notes(&mut markdown, &report.suggested_config);
     markdown.push_str("| Option | Value | Classification | Native field | Note |\n");
     markdown.push_str("| --- | --- | --- | --- | --- |\n");
     for option in &report.options {
@@ -206,6 +266,41 @@ pub fn render_perltidy_compat_markdown(profile: &str, report: &PerltidyCompatRep
         ));
     }
     markdown
+}
+
+fn render_perltidy_option_notes(markdown: &mut String, config: &PerltidyNativeConfigSuggestion) {
+    if config.invalid_options.is_empty()
+        && config.ignored_options.is_empty()
+        && config.approximated_options.is_empty()
+        && config.external_only_options.is_empty()
+    {
+        return;
+    }
+
+    markdown.push_str("Migration notes:\n");
+    if !config.invalid_options.is_empty() {
+        markdown
+            .push_str(&format!("- invalid values: `{}`\n", config.invalid_options.join("`, `")));
+    }
+    if !config.ignored_options.is_empty() {
+        markdown.push_str(&format!(
+            "- ignored execution/output options: `{}`\n",
+            config.ignored_options.join("`, `")
+        ));
+    }
+    if !config.approximated_options.is_empty() {
+        markdown.push_str(&format!(
+            "- approximated presets: `{}`\n",
+            config.approximated_options.join("`, `")
+        ));
+    }
+    if !config.external_only_options.is_empty() {
+        markdown.push_str(&format!(
+            "- external-only options: `{}`\n",
+            config.external_only_options.join("`, `")
+        ));
+    }
+    markdown.push('\n');
 }
 
 /// Render a human-readable Markdown summary for a perlcritic compatibility report.
@@ -421,6 +516,95 @@ fn perltidy_option(
     note: &'static str,
 ) -> PerltidyCompatOption {
     PerltidyCompatOption { option: option.to_string(), value, classification, native_field, note }
+}
+
+fn suggested_perltidy_config(options: &[PerltidyCompatOption]) -> PerltidyNativeConfigSuggestion {
+    let mut suggestion = PerltidyNativeConfigSuggestion {
+        engine: "native",
+        perltidy_maximum_line_length: None,
+        perltidy_indent_columns: None,
+        perltidy_tabs: None,
+        perltidy_opening_brace_on_new_line: None,
+        perltidy_cuddled_else: None,
+        perltidy_space_after_keyword: None,
+        perltidy_add_trailing_commas: None,
+        invalid_options: Vec::new(),
+        ignored_options: Vec::new(),
+        approximated_options: Vec::new(),
+        external_only_options: Vec::new(),
+    };
+
+    for option in options {
+        match option.classification {
+            "supported" => apply_supported_perltidy_option(option, &mut suggestion),
+            "unsupported_safe" => {
+                push_unique(&mut suggestion.ignored_options, option.option.clone())
+            }
+            "approximated" => {
+                push_unique(&mut suggestion.approximated_options, option.option.clone());
+            }
+            "external_only" => {
+                push_unique(&mut suggestion.external_only_options, option.option.clone());
+            }
+            _ => {}
+        }
+    }
+
+    suggestion
+}
+
+fn apply_supported_perltidy_option(
+    option: &PerltidyCompatOption,
+    suggestion: &mut PerltidyNativeConfigSuggestion,
+) {
+    match option.option.as_str() {
+        "-l" | "--maximum-line-length" => {
+            apply_perltidy_u32(
+                option,
+                &mut suggestion.perltidy_maximum_line_length,
+                &mut suggestion.invalid_options,
+            );
+        }
+        "-i" | "--indent-columns" => {
+            apply_perltidy_u32(
+                option,
+                &mut suggestion.perltidy_indent_columns,
+                &mut suggestion.invalid_options,
+            );
+        }
+        "-t" | "--tabs" => suggestion.perltidy_tabs = Some(true),
+        "-nt" | "--notabs" => suggestion.perltidy_tabs = Some(false),
+        "-ce" | "--cuddled-else" => suggestion.perltidy_cuddled_else = Some(true),
+        "-nce" | "--nocuddled-else" => suggestion.perltidy_cuddled_else = Some(false),
+        "-sok" | "--space-after-keyword" => {
+            suggestion.perltidy_space_after_keyword = Some(true);
+        }
+        "-nsok" | "--nospace-after-keyword" => {
+            suggestion.perltidy_space_after_keyword = Some(false);
+        }
+        "-bl" | "--opening-brace-on-new-line" => {
+            suggestion.perltidy_opening_brace_on_new_line = Some(true);
+        }
+        "-bar" | "--opening-brace-always-on-right" => {
+            suggestion.perltidy_opening_brace_on_new_line = Some(false);
+        }
+        "-atc" | "--add-trailing-commas" => suggestion.perltidy_add_trailing_commas = Some(true),
+        "-natc" | "--no-add-trailing-commas" => {
+            suggestion.perltidy_add_trailing_commas = Some(false);
+        }
+        _ => {}
+    }
+}
+
+fn apply_perltidy_u32(
+    option: &PerltidyCompatOption,
+    target: &mut Option<u32>,
+    invalid_options: &mut Vec<String>,
+) {
+    match option.value.as_deref().and_then(|value| value.parse::<u32>().ok()) {
+        Some(value) => *target = Some(value),
+        None => push_unique(invalid_options, option.option.clone()),
+    }
 }
 
 fn strip_perlcritic_comment(line: &str) -> &str {
@@ -711,9 +895,21 @@ mod tests {
         assert_eq!(report.options[0].native_field, Some("format.line_width"));
         assert_eq!(report.options[4].native_field, Some("format.keyword_spacing"));
         assert_eq!(report.options[6].native_field, Some("format.trailing_comma"));
+        assert_eq!(report.suggested_config.engine, "native");
+        assert_eq!(report.suggested_config.perltidy_maximum_line_length, Some(100));
+        assert_eq!(report.suggested_config.perltidy_indent_columns, Some(2));
+        assert_eq!(report.suggested_config.perltidy_tabs, Some(false));
+        assert_eq!(report.suggested_config.perltidy_cuddled_else, Some(true));
+        assert_eq!(report.suggested_config.perltidy_space_after_keyword, Some(false));
+        assert_eq!(report.suggested_config.perltidy_add_trailing_commas, Some(true));
+        assert_eq!(report.suggested_config.perltidy_opening_brace_on_new_line, Some(true));
+        assert_eq!(report.suggested_config.ignored_options, vec!["-q"]);
 
         let markdown = render_perltidy_compat_markdown(".perltidyrc", &report);
         assert!(markdown.contains("# Native Format Perltidy Compatibility"));
+        assert!(markdown.contains("## Suggested Native Formatter Config"));
+        assert!(markdown.contains("perltidy_maximum_line_length = 100"));
+        assert!(markdown.contains("perltidy_space_after_keyword = false"));
         assert!(markdown.contains("| `-l` | 100 | supported | format.line_width |"));
     }
 
@@ -725,6 +921,24 @@ mod tests {
         assert_eq!(report.external_only_count, 1);
         assert_eq!(report.options[0].option, "--unknown-style");
         assert_eq!(report.options[0].classification, "external_only");
+        assert_eq!(report.suggested_config.external_only_options, vec!["--unknown-style"]);
+    }
+
+    #[test]
+    fn perltidy_profile_reports_invalid_and_approximated_config_suggestions() {
+        let report = classify_perltidy_profile("-l nope -pbp -ci=3 -st\n");
+
+        assert_eq!(report.suggested_config.perltidy_maximum_line_length, None);
+        assert_eq!(report.suggested_config.invalid_options, vec!["-l"]);
+        assert_eq!(report.suggested_config.approximated_options, vec!["-pbp"]);
+        assert_eq!(report.suggested_config.external_only_options, vec!["-ci"]);
+        assert_eq!(report.suggested_config.ignored_options, vec!["-st"]);
+
+        let markdown = render_perltidy_compat_markdown(".perltidyrc", &report);
+        assert!(markdown.contains("- invalid values: `-l`"));
+        assert!(markdown.contains("- approximated presets: `-pbp`"));
+        assert!(markdown.contains("- external-only options: `-ci`"));
+        assert!(markdown.contains("- ignored execution/output options: `-st`"));
     }
 
     #[test]

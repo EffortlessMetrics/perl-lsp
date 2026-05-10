@@ -457,7 +457,9 @@ Path to a `.perltidyrc` profile. This is used by the external perltidy adapter
 and by native-tooling compatibility reports. Run
 `perllsp --perltidy-compat-report .perltidyrc` for an installed-binary
 migration check, or `cargo xtask native-format perltidy-compat --profile
-.perltidyrc` when you need a JSON/Markdown receipt in this repository.
+.perltidyrc` when you need a JSON/Markdown receipt in this repository. The
+Markdown report includes a suggested native `[formatting]` snippet for
+compatible options and lists external-only options separately.
 
 #### `perl.formatting.maximumLineLength`
 
