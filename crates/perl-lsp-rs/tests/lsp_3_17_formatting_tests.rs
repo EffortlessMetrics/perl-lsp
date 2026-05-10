@@ -114,6 +114,37 @@ fn test_range_formatting_preserves_trailing_comment_3_17() -> TestResult {
 }
 
 #[test]
+fn test_range_formatting_keeps_neighboring_leading_comment_outside_selected_line_3_17() -> TestResult
+{
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness
+        .open("file:///leading-comment.pl", "# applies to next declaration\nmy$x=1;\nmy$y=2;")?;
+
+    let result = harness.request(
+        "textDocument/rangeFormatting",
+        json!({
+            "textDocument": { "uri": "file:///leading-comment.pl" },
+            "range": {
+                "start": { "line": 1, "character": 0 },
+                "end": { "line": 1, "character": 7 }
+            },
+            "options": {
+                "tabSize": 4,
+                "insertSpaces": true
+            }
+        }),
+    )?;
+
+    let edits = result.as_array().ok_or("rangeFormatting should return an edit array")?;
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0]["range"]["start"]["line"], 1);
+    assert_eq!(edits[0]["range"]["end"]["line"], 1);
+    assert_eq!(edits[0]["newText"], "my $x = 1;");
+    Ok(())
+}
+
+#[test]
 fn test_range_formatting_preserves_simple_block_trailing_comment_3_17() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;

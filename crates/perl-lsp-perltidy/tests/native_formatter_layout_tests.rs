@@ -440,6 +440,21 @@ fn native_range_formatter_preserves_trailing_comment_on_selected_simple_statemen
 }
 
 #[test]
+fn native_range_formatter_keeps_neighboring_leading_comment_outside_selected_line() {
+    let formatter = NativeFormatter::new();
+    let source = "# applies to next declaration\nmy$x=1;\nmy$y=2;\n";
+    let range = TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 7));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "# applies to next declaration\nmy $x = 1;\nmy$y=2;\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(result.edits[0].new_text, "my $x = 1;");
+}
+
+#[test]
 fn native_range_formatter_formats_selected_simple_lexical_declaration_list_line() {
     let formatter = NativeFormatter::new();
     let source = "my($x,$y)=($a,$b);\nmy$z=1;\n";
