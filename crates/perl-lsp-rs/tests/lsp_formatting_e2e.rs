@@ -118,14 +118,7 @@ sub second{my$b=2;return$b;}
 }
 
 #[test]
-
-fn formatting_preserves_comments() -> Result<(), Box<dyn std::error::Error>> {
-    // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
-        eprintln!("Skipping test: perltidy not installed");
-        return Ok(());
-    }
-
+fn native_default_formatting_preserves_comments() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin)?;
     let uri = "file:///comments.pl";
@@ -154,26 +147,19 @@ return$x;
     let edits =
         response["result"].as_array().ok_or("formatting should return an array of edits")?;
 
-    if !edits.is_empty() {
-        let edit_text =
-            edits.first().ok_or("edits array should have at least one element")?["newText"]
-                .as_str()
-                .ok_or("Edit should have newText")?;
+    assert!(!edits.is_empty(), "native default formatting should return comment-safe edits");
+    let edit_text = edits.first().ok_or("edits array should have at least one element")?["newText"]
+        .as_str()
+        .ok_or("Edit should have newText")?;
 
-        // Check that comments are preserved
-        assert!(edit_text.contains("# Main script comment"), "Should preserve main comment");
-        assert!(edit_text.contains("# Function comment"), "Should preserve function comment");
-        assert!(edit_text.contains("# Inner comment"), "Should preserve inner comment");
-        assert!(edit_text.contains("# Inline comment"), "Should preserve inline comment");
+    assert!(edit_text.contains("# Main script comment"), "Should preserve main comment");
+    assert!(edit_text.contains("# Function comment"), "Should preserve function comment");
+    assert!(edit_text.contains("# Inner comment"), "Should preserve inner comment");
+    assert!(edit_text.contains("# Inline comment"), "Should preserve inline comment");
 
-        // Check that code is still formatted
-        assert!(edit_text.contains("use strict"), "Should format use statements");
-        assert!(edit_text.contains("use warnings"), "Should separate use statements");
-        assert!(
-            edit_text.contains("sub test") && edit_text.contains("{"),
-            "Should format subroutine"
-        );
-    }
+    assert!(edit_text.contains("use strict"), "Should format use statements");
+    assert!(edit_text.contains("use warnings"), "Should separate use statements");
+    assert!(edit_text.contains("sub test") && edit_text.contains("{"), "Should format subroutine");
 
     client.shutdown()?;
     Ok(())
