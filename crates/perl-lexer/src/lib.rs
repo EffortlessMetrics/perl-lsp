@@ -2874,13 +2874,13 @@ impl<'a> PerlLexer<'a> {
                 && Self::is_quote_delim(repl_delim)
             {
                 self.advance();
-                let (_replacement, closed) = self.read_delimited_body(repl_delim);
+                let (_replacement, closed) = self.read_substitution_replacement_body(repl_delim);
                 replacement_closed = closed;
             } else {
                 replacement_closed = false;
             }
         } else {
-            let (_replacement, closed) = self.read_delimited_body(delimiter);
+            let (_replacement, closed) = self.read_substitution_replacement_body(delimiter);
             replacement_closed = closed;
         }
 
@@ -2906,6 +2906,107 @@ impl<'a> PerlLexer<'a> {
         };
 
         Some(Token { token_type, text: Arc::from(text), start, end: self.position })
+    }
+
+    fn read_substitution_replacement_body(&mut self, delim: char) -> (String, bool) {
+        if quote_handler::paired_close(delim).is_some() {
+            return self.read_delimited_body(delim);
+        }
+
+        self.read_unpaired_substitution_replacement_body(delim)
+    }
+
+    fn read_unpaired_substitution_replacement_body(&mut self, delim: char) -> (String, bool) {
+        let mut body = String::new();
+        let mut escaped = false;
+
+        while let Some(ch) = self.current_char() {
+            if escaped {
+                body.push(ch);
+                self.advance();
+                escaped = false;
+                continue;
+            }
+
+            match ch {
+                '\\' => {
+                    body.push(ch);
+                    self.advance();
+                    escaped = true;
+                }
+                '"' | '\'' if ch != delim => {
+                    if let Some((string_end, true)) =
+                        self.scan_inner_string_for_delimiter(self.position, ch, delim)
+                    {
+                        if let Some(string_text) = self.input.get(self.position..string_end) {
+                            body.push_str(string_text);
+                            self.position = string_end;
+                        } else {
+                            body.push(ch);
+                            self.advance();
+                        }
+                    } else {
+                        body.push(ch);
+                        self.advance();
+                    }
+                }
+                c if c == delim => {
+                    self.advance();
+                    return (body, true);
+                }
+                _ => {
+                    body.push(ch);
+                    self.advance();
+                }
+            }
+        }
+
+        (body, false)
+    }
+
+    fn scan_inner_string_for_delimiter(
+        &self,
+        start: usize,
+        quote: char,
+        delim: char,
+    ) -> Option<(usize, bool)> {
+        let mut pos = start.checked_add(quote.len_utf8())?;
+        let mut escaped = false;
+        let mut contains_delim = false;
+
+        while let Some(ch) = self.input.get(pos..).and_then(|text| text.chars().next()) {
+            if matches!(ch, '\n' | '\r') {
+                return None;
+            }
+
+            if escaped {
+                if ch == delim {
+                    contains_delim = true;
+                }
+                pos += ch.len_utf8();
+                escaped = false;
+                continue;
+            }
+
+            match ch {
+                '\\' => {
+                    pos += ch.len_utf8();
+                    escaped = true;
+                }
+                c if c == quote => {
+                    return Some((pos + ch.len_utf8(), contains_delim));
+                }
+                c if c == delim => {
+                    contains_delim = true;
+                    pos += ch.len_utf8();
+                }
+                _ => {
+                    pos += ch.len_utf8();
+                }
+            }
+        }
+
+        None
     }
 
     fn parse_transliteration(&mut self, start: usize) -> Option<Token> {
