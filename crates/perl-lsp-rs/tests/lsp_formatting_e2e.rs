@@ -6,20 +6,12 @@ mod support;
 use support::lsp_client::LspClient;
 
 #[test]
-
-fn document_formatting_with_perltidy() -> Result<(), Box<dyn std::error::Error>> {
-    // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
-        eprintln!("Skipping test: perltidy not installed");
-        return Ok(());
-    }
-
+fn native_default_document_formatting() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin)?;
     let uri = "file:///fmt.pl";
 
-    // Intentionally poorly formatted code
-    let source = "sub test{my$x=1;return$x;}sub another{print'hello';}\n";
+    let source = "sub test{my$x=1;return$x;}\nsub another{return 2;}\n";
 
     client.did_open(uri, "perl", source)?;
 
@@ -36,13 +28,10 @@ fn document_formatting_with_perltidy() -> Result<(), Box<dyn std::error::Error>>
 
     assert!(!edits.is_empty(), "Should return formatting edits");
 
-    // The server typically returns a single edit that replaces the whole document
     let edit_text = edits.first().ok_or("edits array should have at least one element")?["newText"]
         .as_str()
         .ok_or("Edit should have newText")?;
 
-    // Check that formatting improved the code
-    // perltidy may add varying amounts of whitespace depending on version and config
     assert!(
         edit_text.contains("sub test") && edit_text.contains("{"),
         "Should format subroutine declaration, got: {}",
