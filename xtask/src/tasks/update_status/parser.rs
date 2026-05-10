@@ -3,6 +3,7 @@
 //! Owns corpus tracking, sweep report loading, and parser.md generation.
 
 use std::fs;
+use std::ops::Deref;
 use std::path::Path;
 use std::time::Duration;
 
@@ -36,16 +37,42 @@ fn replace_parser_status_block(text: &str, marker_name: &str, new_content: &str)
 
 pub(super) struct ParserMetrics {
     pub syntax_sections: usize,
-    pub system_receipt: Option<super::super::parser_corpus_sweep::SweepReport>,
-    pub cpan_receipt: Option<super::super::parser_corpus_sweep::SweepReport>,
+    pub system_receipt: Option<ParserSweepReceipt>,
+    pub cpan_receipt: Option<ParserSweepReceipt>,
     pub project_corpus: Option<super::super::corpus_audit::StatusSummary>,
     /// Receipt from `just common-corpus-check` — the strict-clean pinned-module gate.
-    pub common_corpus_receipt: Option<super::super::parser_corpus_sweep::SweepReport>,
+    pub common_corpus_receipt: Option<ParserSweepReceipt>,
     /// Number of pinned modules in `.ci/common-corpus-manifest.txt`.
     pub common_corpus_pinned: usize,
     pub performance_scorecard: Option<ParserPerformanceScorecard>,
     parser_accuracy: Option<ParserAccuracyArtifactSummary>,
     pub token_metrics: TokenHealthMetrics,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct ParserSweepReceipt {
+    report: super::super::parser_corpus_sweep::SweepReport,
+    has_recovery_shape: bool,
+}
+
+impl ParserSweepReceipt {
+    #[cfg(test)]
+    fn with_recovery_shape(report: super::super::parser_corpus_sweep::SweepReport) -> Self {
+        Self { report, has_recovery_shape: true }
+    }
+
+    #[cfg(test)]
+    fn without_recovery_shape(report: super::super::parser_corpus_sweep::SweepReport) -> Self {
+        Self { report, has_recovery_shape: false }
+    }
+}
+
+impl Deref for ParserSweepReceipt {
+    type Target = super::super::parser_corpus_sweep::SweepReport;
+
+    fn deref(&self) -> &Self::Target {
+        &self.report
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -92,11 +119,15 @@ pub(super) fn count_common_corpus_pinned(root: &Path) -> usize {
     raw.lines().filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#')).count()
 }
 
-pub(super) fn read_sweep_report(
-    path: &Path,
-) -> Option<super::super::parser_corpus_sweep::SweepReport> {
+pub(super) fn read_sweep_report(path: &Path) -> Option<ParserSweepReceipt> {
     let raw = fs::read_to_string(path).ok()?;
-    serde_json::from_str(&raw).ok()
+    let value = serde_json::from_str::<serde_json::Value>(&raw).ok()?;
+    let has_recovery_shape = value.get("files_with_structured_recovery_only").is_some()
+        && value.get("files_with_error_nodes").is_some()
+        && value.get("files_with_catastrophic_parse_failure").is_some()
+        && value.get("total_dirty_files").is_some();
+    let report = serde_json::from_value(value).ok()?;
+    Some(ParserSweepReceipt { report, has_recovery_shape })
 }
 
 fn read_parser_performance_scorecard(root: &Path) -> Option<ParserPerformanceScorecard> {
@@ -134,6 +165,23 @@ fn format_salvage_rate(salvage_rate: Option<f64>) -> String {
     match salvage_rate {
         Some(rate) => format!("{:.1}% salvage", rate * 100.0),
         None => "insufficient_data salvage".to_string(),
+    }
+}
+
+fn format_recovery_shape_note(receipt: &ParserSweepReceipt) -> String {
+    if receipt.has_recovery_shape {
+        format!(
+            "`{}` unreadable, `{}` recovery-only, `{}` ERROR-node files, `{}` catastrophic",
+            receipt.files_unreadable,
+            receipt.files_with_structured_recovery_only,
+            receipt.files_with_error_nodes,
+            receipt.files_with_catastrophic_parse_failure,
+        )
+    } else {
+        format!(
+            "`{}` unreadable, `insufficient_data` recovery-only, `insufficient_data` ERROR-node files, `insufficient_data` catastrophic",
+            receipt.files_unreadable,
+        )
     }
 }
 
@@ -192,14 +240,11 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         },
         |report| {
             format!(
-                "| **Ubuntu system Perl** | {} / {} | Compatibility baseline; Perl `{}`, `{}` unreadable, `{}` recovery-only, `{}` ERROR-node files, `{}` catastrophic, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
+                "| **Ubuntu system Perl** | {} / {} | Compatibility baseline; Perl `{}`, {}, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 format_salvage_rate(report.recovery_salvage_rate),
                 report.perl_version,
-                report.files_unreadable,
-                report.files_with_structured_recovery_only,
-                report.files_with_error_nodes,
-                report.files_with_catastrophic_parse_failure,
+                format_recovery_shape_note(report),
                 short_day(&report.timestamp),
             )
         },
@@ -211,13 +256,10 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         },
         |report| {
             format!(
-                "| **CPAN top 1000** | {} / {} | Ecosystem breadth baseline; `{}` unreadable, `{}` recovery-only, `{}` ERROR-node files, `{}` catastrophic, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
+                "| **CPAN top 1000** | {} / {} | Ecosystem breadth baseline; {}, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 format_salvage_rate(report.recovery_salvage_rate),
-                report.files_unreadable,
-                report.files_with_structured_recovery_only,
-                report.files_with_error_nodes,
-                report.files_with_catastrophic_parse_failure,
+                format_recovery_shape_note(report),
                 short_day(&report.timestamp),
             )
         },
@@ -365,7 +407,7 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| insufficient_data (no receipt — run `just corpus-sweep-check` to generate) | insufficient_data |"
                 .to_string()
         },
-        build_failure_worklist,
+        |receipt| build_failure_worklist(receipt),
     );
 
     let parser_coverage_bullets = format!(

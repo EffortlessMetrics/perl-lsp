@@ -695,7 +695,7 @@ fn test_parser_strict_clean_row_with_receipt() -> Result<()> {
         system_receipt: None,
         cpan_receipt: None,
         project_corpus: None,
-        common_corpus_receipt: Some(receipt),
+        common_corpus_receipt: Some(ParserSweepReceipt::with_recovery_shape(receipt)),
         common_corpus_pinned: 10,
         performance_scorecard: None,
         parser_accuracy: None,
@@ -706,6 +706,75 @@ fn test_parser_strict_clean_row_with_receipt() -> Result<()> {
     assert!(result.contains("10/10"), "strict-clean row missing 10/10");
     assert!(result.contains("100%"), "strict-clean row missing 100%");
     assert!(result.contains("10 pinned modules"), "strict-clean row missing pinned modules note");
+    Ok(())
+}
+
+#[test]
+fn test_parser_tracking_old_cpan_receipt_missing_recovery_shape_reports_insufficient_data()
+-> Result<()> {
+    use std::collections::BTreeMap;
+
+    let receipt = super::super::super::parser_corpus_sweep::SweepReport {
+        schema_version: "1.2.0".to_string(),
+        commit: "old".to_string(),
+        timestamp: "2026-04-09T00:00:00Z".to_string(),
+        corpus_profile: "cpan".to_string(),
+        corpus_roots: vec![],
+        resolved_roots_count: 151,
+        perl_version: "5.038002".to_string(),
+        total_files: 9_372,
+        files_unreadable: 6,
+        clean_files: 8_931,
+        files_with_errors: 435,
+        total_dirty_files: 0,
+        files_with_structured_recovery_only: 0,
+        files_with_error_nodes: 0,
+        files_with_catastrophic_parse_failure: 0,
+        total_error_nodes: 3_015,
+        recovered_node_count: 0,
+        first_unrecovered_error_node_buckets: BTreeMap::new(),
+        first_error_buckets: BTreeMap::from([("unexpected_token_in_expr".to_string(), 435)]),
+        files_by_bucket: BTreeMap::new(),
+        file_results: vec![],
+        elapsed_secs: 1.0,
+        phase_timings: None,
+        median_error_density_per_1k_loc: None,
+        recovery_salvage_rate: None,
+        slowest_files: vec![],
+    };
+    let metrics = ParserMetrics {
+        syntax_sections: 611,
+        system_receipt: None,
+        cpan_receipt: Some(ParserSweepReceipt::without_recovery_shape(receipt)),
+        project_corpus: None,
+        common_corpus_receipt: None,
+        common_corpus_pinned: 10,
+        performance_scorecard: None,
+        parser_accuracy: None,
+        token_metrics: token::token_metrics_fixture(),
+    };
+
+    let result = generate_parser_status(&metrics, parser_status_template())?;
+    assert!(
+        result.contains("insufficient_data salvage"),
+        "old CPAN receipt must not fabricate a salvage rate"
+    );
+    assert!(
+        result.contains("`insufficient_data` recovery-only"),
+        "old CPAN receipt must mark missing recovery-only count as insufficient_data"
+    );
+    assert!(
+        result.contains("`insufficient_data` ERROR-node files"),
+        "old CPAN receipt must mark missing ERROR-node file count as insufficient_data"
+    );
+    assert!(
+        result.contains("`insufficient_data` catastrophic"),
+        "old CPAN receipt must mark missing catastrophic count as insufficient_data"
+    );
+    assert!(
+        !result.contains("`0` recovery-only, `0` ERROR-node files, `0` catastrophic"),
+        "old CPAN receipt must not render missing recovery-shape fields as zero"
+    );
     Ok(())
 }
 
