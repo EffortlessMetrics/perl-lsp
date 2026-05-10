@@ -54,6 +54,18 @@ fn test_subst_e_hash_lookup() {
     assert_clean_parse(source);
 }
 
+#[test]
+fn test_subst_e_biber_imatch_array_index_replacement() {
+    let source = r#"$newkey =~ s/(?<!\\)\$(\d)/$imatches[$1-1]/ge;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_subst_r_empty_replacement_inside_hash_subscript_condition() {
+    let source = r#"unless ($nps{$npn =~ s/-i$//r} or $npn eq 'id') { next; }"#;
+    assert_clean_parse(source);
+}
+
 /// Template Toolkit style: replacement is a full conditional expression
 #[test]
 fn test_subst_e_template_toolkit_style() {

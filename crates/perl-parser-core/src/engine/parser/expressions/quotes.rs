@@ -260,15 +260,95 @@ impl<'a> Parser<'a> {
                 ))
             }
             "s" => {
-                // Substitution operator shouldn't reach here - handled by TokenKind::Substitution
-                // This is kept for defensive programming
-                Err(ParseError::syntax(
-                    "Substitution operator should be handled by TokenKind::Substitution",
-                    start,
+                let replacement = self.parse_quote_operator_substitution_replacement(
+                    opening_delim,
+                    closing_delim,
+                )?;
+                let modifiers = self.parse_quote_operator_substitution_modifiers()?;
+                let has_embedded_code = self.analyze_regex_body_for_ast(&content, start)?;
+                end = self.previous_position();
+
+                Ok(Node::new(
+                    NodeKind::Substitution {
+                        expr: Box::new(Node::new(
+                            NodeKind::Identifier { name: String::from("$_") },
+                            SourceLocation { start, end: start },
+                        )),
+                        pattern: content,
+                        replacement,
+                        modifiers,
+                        has_embedded_code,
+                        negated: false,
+                    },
+                    SourceLocation { start, end },
                 ))
             }
             _ => Err(ParseError::syntax(format!("Unknown quote operator: {}", op), start)),
         }
+    }
+
+    fn parse_quote_operator_substitution_replacement(
+        &mut self,
+        pattern_open_delim: char,
+        pattern_close_delim: char,
+    ) -> ParseResult<String> {
+        if pattern_open_delim != pattern_close_delim {
+            return Err(ParseError::syntax(
+                "Paired-delimiter substitution should be handled by TokenKind::Substitution",
+                self.current_position(),
+            ));
+        }
+
+        self.collect_quote_operator_unpaired_body(pattern_close_delim)
+    }
+
+    fn collect_quote_operator_unpaired_body(&mut self, close_delim: char) -> ParseResult<String> {
+        let mut content = String::new();
+
+        while !self.tokens.is_eof() {
+            let token = self.consume_token()?;
+            if token.kind != TokenKind::String && token.text.contains(close_delim) {
+                let pos = token.text.find(close_delim).ok_or_else(|| {
+                    ParseError::syntax("Closing delimiter not found in token", token.start)
+                })?;
+                content.push_str(&token.text[..pos]);
+                break;
+            }
+            content.push_str(&token.text);
+        }
+
+        Ok(content)
+    }
+
+    fn parse_quote_operator_substitution_modifiers(&mut self) -> ParseResult<String> {
+        let mut modifiers = String::new();
+
+        while let Ok(token) = self.tokens.peek() {
+            if token.kind != TokenKind::Identifier || token.text.len() != 1 {
+                break;
+            }
+
+            let ch = token.text.chars().next().ok_or_else(|| {
+                ParseError::syntax("Empty identifier token", token.start)
+            })?;
+            if !ch.is_ascii_alphabetic() {
+                break;
+            }
+            if !matches!(ch, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r') {
+                return Err(ParseError::syntax(
+                    format!(
+                        "Invalid substitution modifier '{}'. Valid modifiers are: g, i, m, s, x, o, e, r",
+                        ch
+                    ),
+                    token.start,
+                ));
+            }
+
+            modifiers.push(ch);
+            self.tokens.next()?;
+        }
+
+        Ok(modifiers)
     }
 
     /// After having consumed the `qw` identifier, parse `qw<delim>...<close>`
