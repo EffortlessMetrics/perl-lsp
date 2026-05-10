@@ -4,6 +4,9 @@
 use perl_lsp::{JsonRpcRequest, JsonRpcResponse, LspServer};
 use serde_json::{Value, json};
 
+mod support;
+use support::test_helpers::apply_text_edits;
+
 /// Helper to set up an initialized LSP server with a document
 fn setup_server_with_document() -> (LspServer, String) {
     let server = LspServer::new();
@@ -175,8 +178,9 @@ fn test_will_save_wait_until_returns_valid_edits() -> Result<(), Box<dyn std::er
     let edits = edits.ok_or("Failed to get edits from response")?;
     assert!(edits.is_array(), "Response should be an array of text edits");
 
-    // The server may return formatting edits if perltidy is available
-    // We verify the structure is valid
+    // Native default formatting always returns a text-edit array. It may be
+    // empty when the opened document is already outside the safe formatter
+    // subset or needs no change.
     let edits_arr = edits.as_array().ok_or("Edits should be an array")?;
     for edit in edits_arr {
         assert!(edit.is_object());
@@ -207,7 +211,7 @@ fn test_will_save_wait_until_with_formatting() -> Result<(), Box<dyn std::error:
                 "version": 2
             },
             "contentChanges": [{
-                "text": "my$foo=42;print$foo;"
+                "text": "sub test{my$foo=42;return$foo;}\n"
             }]
         })),
     };
@@ -234,19 +238,16 @@ fn test_will_save_wait_until_with_formatting() -> Result<(), Box<dyn std::error:
     let edits = edits.ok_or("Failed to get edits from response")?;
     assert!(edits.is_array(), "Response should be an array of text edits");
 
-    // The server may return formatting edits if configured
-    // We're just checking the structure is correct
     let edits_arr = edits.as_array().ok_or("Edits should be an array")?;
-    for edit in edits_arr {
-        assert!(edit.is_object());
-        let obj = edit.as_object().ok_or("Edit should be an object")?;
-        assert!(obj.contains_key("range"), "Edit must have range");
-        assert!(obj.contains_key("newText"), "Edit must have newText");
-
-        let range = &obj["range"];
-        assert!(range["start"].is_object(), "Range start must be object");
-        assert!(range["end"].is_object(), "Range end must be object");
-    }
+    assert!(
+        !edits_arr.is_empty(),
+        "native willSaveWaitUntil formatting should return edits for supported messy code"
+    );
+    let formatted = apply_text_edits("sub test{my$foo=42;return$foo;}\n", edits_arr);
+    assert_eq!(
+        formatted,
+        concat!("sub test {\n", "    my $foo = 42;\n", "    return $foo;\n", "}\n", "\n",)
+    );
 
     Ok(())
 }
