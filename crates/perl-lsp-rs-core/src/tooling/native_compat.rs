@@ -57,8 +57,29 @@ pub struct PerlcriticCompatReport {
     pub unsupported_safe_count: usize,
     /// Items that still require external perlcritic compatibility mode.
     pub external_only_count: usize,
+    /// Suggested native critic configuration derived from compatible profile settings.
+    pub suggested_config: PerlcriticNativeConfigSuggestion,
     /// Per-item classifications in source order.
     pub items: Vec<PerlcriticCompatItem>,
+}
+
+/// Native critic config values that can be migrated from a `.perlcriticrc` profile.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PerlcriticNativeConfigSuggestion {
+    /// Native critic engine to use for the migrated config.
+    pub engine: &'static str,
+    /// Conservative native profile used as the migration target.
+    pub profile: &'static str,
+    /// Project config severity derived from `severity`, when present and valid.
+    pub perlcritic_severity: Option<u8>,
+    /// Native rule IDs derived from compatible `include` policies.
+    pub include: Vec<String>,
+    /// Native rule IDs derived from compatible `exclude` policies.
+    pub exclude: Vec<String>,
+    /// `include` policy names that could not be mapped to active native rules.
+    pub unmapped_include: Vec<String>,
+    /// `exclude` policy names that could not be mapped to active native rules.
+    pub unmapped_exclude: Vec<String>,
 }
 
 /// Per-setting or per-policy compatibility classification for `.perlcriticrc`.
@@ -105,6 +126,15 @@ pub fn classify_perlcritic_profile(raw: &str) -> PerlcriticCompatReport {
         .map(ToOwned::to_owned)
         .collect::<BTreeSet<_>>();
     let mut items = Vec::new();
+    let mut suggested_config = PerlcriticNativeConfigSuggestion {
+        engine: "native",
+        profile: "recommended",
+        perlcritic_severity: None,
+        include: Vec::new(),
+        exclude: Vec::new(),
+        unmapped_include: Vec::new(),
+        unmapped_exclude: Vec::new(),
+    };
 
     for line in raw.lines() {
         let line = strip_perlcritic_comment(line).trim();
@@ -118,7 +148,15 @@ pub fn classify_perlcritic_profile(raw: &str) -> PerlcriticCompatReport {
         }
 
         if let Some((name, value)) = line.split_once('=') {
-            items.push(classify_perlcritic_setting(name.trim(), Some(value.trim().to_string())));
+            let name = name.trim();
+            let value = value.trim().to_string();
+            apply_perlcritic_setting_to_suggestion(
+                name,
+                &value,
+                &native_rules,
+                &mut suggested_config,
+            );
+            items.push(classify_perlcritic_setting(name, Some(value)));
             continue;
         }
 
@@ -139,6 +177,7 @@ pub fn classify_perlcritic_profile(raw: &str) -> PerlcriticCompatReport {
         approximated_count: perlcritic_count(&items, "approximated"),
         unsupported_safe_count: perlcritic_count(&items, "unsupported_safe"),
         external_only_count: perlcritic_count(&items, "external_only"),
+        suggested_config,
         items,
     }
 }
@@ -181,6 +220,42 @@ pub fn render_perlcritic_compat_markdown(profile: &str, report: &PerlcriticCompa
     markdown.push_str(&format!("- Approximated: {}\n", report.approximated_count));
     markdown.push_str(&format!("- Unsupported safe: {}\n", report.unsupported_safe_count));
     markdown.push_str(&format!("- External-only: {}\n\n", report.external_only_count));
+    markdown.push_str("## Suggested Native Critic Config\n\n");
+    markdown.push_str("```toml\n");
+    if let Some(severity) = report.suggested_config.perlcritic_severity {
+        markdown.push_str("[diagnostics]\n");
+        markdown.push_str(&format!("perlcritic_severity = {severity}\n\n"));
+    }
+    markdown.push_str("[critic]\n");
+    markdown.push_str(&format!("engine = \"{}\"\n", report.suggested_config.engine));
+    markdown.push_str(&format!("profile = \"{}\"\n", report.suggested_config.profile));
+    if !report.suggested_config.include.is_empty() {
+        markdown
+            .push_str(&format!("include = [{}]\n", quoted_list(&report.suggested_config.include)));
+    }
+    if !report.suggested_config.exclude.is_empty() {
+        markdown
+            .push_str(&format!("exclude = [{}]\n", quoted_list(&report.suggested_config.exclude)));
+    }
+    markdown.push_str("```\n\n");
+    if !report.suggested_config.unmapped_include.is_empty()
+        || !report.suggested_config.unmapped_exclude.is_empty()
+    {
+        markdown.push_str("Unmapped legacy filters:\n");
+        if !report.suggested_config.unmapped_include.is_empty() {
+            markdown.push_str(&format!(
+                "- include: `{}`\n",
+                report.suggested_config.unmapped_include.join("`, `")
+            ));
+        }
+        if !report.suggested_config.unmapped_exclude.is_empty() {
+            markdown.push_str(&format!(
+                "- exclude: `{}`\n",
+                report.suggested_config.unmapped_exclude.join("`, `")
+            ));
+        }
+        markdown.push('\n');
+    }
     markdown.push_str("| Kind | Name | Value | Classification | Native rule | Note |\n");
     markdown.push_str("| --- | --- | --- | --- | --- | --- |\n");
     for item in &report.items {
@@ -195,6 +270,10 @@ pub fn render_perlcritic_compat_markdown(profile: &str, report: &PerlcriticCompa
         ));
     }
     markdown
+}
+
+fn quoted_list(values: &[String]) -> String {
+    values.iter().map(|value| format!("\"{value}\"")).collect::<Vec<_>>().join(", ")
 }
 
 fn tokenize_perltidy_profile(raw: &str) -> Vec<(String, Option<String>)> {
@@ -490,6 +569,63 @@ fn classify_perlcritic_setting(name: &str, value: Option<String>) -> PerlcriticC
     }
 }
 
+fn apply_perlcritic_setting_to_suggestion(
+    name: &str,
+    value: &str,
+    native_rules: &BTreeSet<String>,
+    suggestion: &mut PerlcriticNativeConfigSuggestion,
+) {
+    match name {
+        "severity" => {
+            suggestion.perlcritic_severity = value.parse::<u8>().ok();
+        }
+        "include" => {
+            let (mapped, unmapped) = map_perlcritic_policy_list(value, native_rules);
+            push_unique_many(&mut suggestion.include, mapped);
+            push_unique_many(&mut suggestion.unmapped_include, unmapped);
+        }
+        "exclude" => {
+            let (mapped, unmapped) = map_perlcritic_policy_list(value, native_rules);
+            push_unique_many(&mut suggestion.exclude, mapped);
+            push_unique_many(&mut suggestion.unmapped_exclude, unmapped);
+        }
+        _ => {}
+    }
+}
+
+fn map_perlcritic_policy_list(
+    value: &str,
+    native_rules: &BTreeSet<String>,
+) -> (Vec<String>, Vec<String>) {
+    let mut mapped = Vec::new();
+    let mut unmapped = Vec::new();
+    for policy in value.split(|ch: char| ch == ',' || ch.is_whitespace()) {
+        let policy = policy.trim();
+        if policy.is_empty() {
+            continue;
+        }
+        match perlcritic_policy_native_mapping(policy) {
+            Some((native_rule, _, _)) if native_rules.contains(native_rule) => {
+                push_unique(&mut mapped, native_rule.to_string());
+            }
+            _ => push_unique(&mut unmapped, policy.to_string()),
+        }
+    }
+    (mapped, unmapped)
+}
+
+fn push_unique_many(target: &mut Vec<String>, values: Vec<String>) {
+    for value in values {
+        push_unique(target, value);
+    }
+}
+
+fn push_unique(target: &mut Vec<String>, value: String) {
+    if !target.iter().any(|existing| existing == &value) {
+        target.push(value);
+    }
+}
+
 fn classify_perlcritic_theme_setting(value: Option<String>) -> PerlcriticCompatItem {
     let Some(theme) = value.as_deref() else {
         return perlcritic_item(
@@ -618,9 +754,44 @@ color = 1
         assert_eq!(report.external_only_count, 0);
         assert_eq!(report.items[5].native_rule, Some("native.io.two_arg_open"));
         assert_eq!(report.items[6].native_rule, Some("native.io.unchecked_open_close"));
+        assert_eq!(report.suggested_config.engine, "native");
+        assert_eq!(report.suggested_config.profile, "recommended");
+        assert_eq!(report.suggested_config.perlcritic_severity, Some(3));
+        assert_eq!(report.suggested_config.include, vec!["native.testing.require_use_strict"]);
+        assert_eq!(
+            report.suggested_config.exclude,
+            vec!["native.documentation.require_pod_sections"]
+        );
 
         let markdown = render_perlcritic_compat_markdown(".perlcriticrc", &report);
         assert!(markdown.contains("# Native Critic Perlcritic Compatibility"));
+        assert!(markdown.contains("include = [\"native.testing.require_use_strict\"]"));
+        assert!(markdown.contains("exclude = [\"native.documentation.require_pod_sections\"]"));
         assert!(markdown.contains("| policy | `InputOutput::RequireCheckedOpen` |  | native_superset | native.io.unchecked_open_close |"));
+    }
+
+    #[test]
+    fn perlcritic_profile_suggests_native_filter_ids_and_reports_unmapped_filters() {
+        let report = classify_perlcritic_profile(
+            r#"
+include = TestingAndDebugging::RequireUseWarnings, Unknown::Policy
+exclude = InputOutput::ProhibitTwoArgOpen Variables::ProhibitUnusedVariables
+"#,
+        );
+
+        assert_eq!(report.suggested_config.include, vec!["native.testing.require_use_warnings"]);
+        assert_eq!(report.suggested_config.unmapped_include, vec!["Unknown::Policy"]);
+        assert_eq!(
+            report.suggested_config.exclude,
+            vec!["native.io.two_arg_open", "native.variables.unused_lexical"]
+        );
+        assert!(report.suggested_config.unmapped_exclude.is_empty());
+
+        let markdown = render_perlcritic_compat_markdown(".perlcriticrc", &report);
+        assert!(markdown.contains("include = [\"native.testing.require_use_warnings\"]"));
+        assert!(markdown.contains(
+            "exclude = [\"native.io.two_arg_open\", \"native.variables.unused_lexical\"]"
+        ));
+        assert!(markdown.contains("- include: `Unknown::Policy`"));
     }
 }

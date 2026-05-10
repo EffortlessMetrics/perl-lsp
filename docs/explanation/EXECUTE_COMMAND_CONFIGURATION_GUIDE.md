@@ -84,6 +84,10 @@ cargo xtask native-tooling perlcritic-compat \
   --summary target/receipts/native-tooling/perlcritic-compat.md
 ```
 
+The Markdown summary includes a suggested native `[critic]` block. It maps
+compatible Perl::Critic `include` and `exclude` policy names to native rule IDs
+and lists any legacy filters that still need manual review.
+
 4. **Suppress intentional findings inline**:
 
 ```perl

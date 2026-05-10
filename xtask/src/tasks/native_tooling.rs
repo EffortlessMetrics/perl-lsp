@@ -4,8 +4,8 @@ use chrono::{DateTime, Utc};
 use color_eyre::eyre::{Context, Result, eyre};
 use perl_lsp_rs_core::config::{CriticEngine, FormatterMode, ServerConfig};
 use perl_lsp_rs_core::tooling::native_compat::{
-    PerlcriticCompatItem, PerlcriticCompatReport, classify_perlcritic_profile,
-    render_perlcritic_compat_markdown,
+    PerlcriticCompatItem, PerlcriticCompatReport, PerlcriticNativeConfigSuggestion,
+    classify_perlcritic_profile, render_perlcritic_compat_markdown,
 };
 use perl_lsp_rs_core::tooling::perl_critic::NativeCriticRegistry;
 use perl_lsp_rs_core::tooling::perltidy::FormatConfig;
@@ -211,6 +211,7 @@ struct PerlcriticCompatReceipt {
     approximated_count: usize,
     unsupported_safe_count: usize,
     external_only_count: usize,
+    suggested_config: PerlcriticNativeConfigSuggestion,
     items: Vec<PerlcriticCompatItem>,
 }
 
@@ -259,6 +260,7 @@ pub fn perlcritic_compat(config: PerlcriticCompatConfig) -> Result<()> {
         approximated_count: report.approximated_count,
         unsupported_safe_count: report.unsupported_safe_count,
         external_only_count: report.external_only_count,
+        suggested_config: report.suggested_config,
         items: report.items,
     };
 
@@ -1394,6 +1396,7 @@ fn write_perlcritic_compat_summary(path: &Path, receipt: &PerlcriticCompatReceip
         approximated_count: receipt.approximated_count,
         unsupported_safe_count: receipt.unsupported_safe_count,
         external_only_count: receipt.external_only_count,
+        suggested_config: receipt.suggested_config.clone(),
         items: receipt.items.clone(),
     };
     let markdown = render_perlcritic_compat_markdown(&receipt.profile, &report);
@@ -1774,9 +1777,21 @@ color = 1
         assert_eq!(receipt["items"][10]["classification"], "approximated");
         assert_eq!(receipt["items"][11]["name"], "color");
         assert_eq!(receipt["items"][11]["classification"], "unsupported_safe");
+        assert_eq!(receipt["suggested_config"]["engine"], "native");
+        assert_eq!(receipt["suggested_config"]["profile"], "recommended");
+        assert_eq!(receipt["suggested_config"]["perlcritic_severity"], 3);
+        assert_eq!(receipt["suggested_config"]["include"][0], "native.testing.require_use_strict");
+        assert_eq!(
+            receipt["suggested_config"]["exclude"][0],
+            "native.documentation.require_pod_sections"
+        );
 
         let summary = fs::read_to_string(receipts.join("perlcritic-compat.md"))?;
         assert!(summary.contains("# Native Critic Perlcritic Compatibility"));
+        assert!(summary.contains("## Suggested Native Critic Config"));
+        assert!(summary.contains("perlcritic_severity = 3"));
+        assert!(summary.contains("include = [\"native.testing.require_use_strict\"]"));
+        assert!(summary.contains("exclude = [\"native.documentation.require_pod_sections\"]"));
         assert!(summary.contains(
             "| setting | `exclude` | Documentation::RequirePodSections | native_equivalent |"
         ));
