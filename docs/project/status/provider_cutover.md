@@ -40,8 +40,11 @@ fallback behavior and rollback proof.
   suppressed.
 - Rename and safe-delete now have boundary-shadowed proof for exact static
   allow decisions plus dynamic-boundary, stale compiler fact, low-confidence,
-  and generated-member blockers. These receipts do not broaden live refactor
-  behavior.
+  and generated-member blockers. Runtime blocker UX receipts compare live
+  rename / symbol safe-delete request paths with compiler plans for exact
+  static cases, while cutover receipts record user-facing blocker reasons for
+  dynamic, generated, and low-confidence cases. These receipts do not broaden
+  live refactor behavior.
 - Workspace symbols now have source/freshness and real-workspace quality shadow
   proof for fresh compiler facts, framework-generated candidates,
   dynamic-boundary blockers, stale compiler facts, and candidate/noise deltas.
@@ -81,8 +84,8 @@ the relevant receipt command.
 | Hover | `partial live / provenance-backed` | Runtime hover uses compiler-fact cutover for traced compiler fact, framework-adapter, and dynamic-boundary paths when fresh workspace facts are available; legacy hover remains fallback; hover cutover/shadow code labels imported, generated, dynamic-boundary, and fallback paths with fact-source traces and source/confidence text | Real-workspace hover quality receipts before broader generated/dynamic expansion |
 | Definition / goto | `ranked-shadowed` | Definition shadow compare tracks imported, generated, dynamic-boundary, low-confidence fallback, stale fact, and real-workspace quality candidate traces before live migration. Runtime quality receipts compare the live `textDocument/definition` result with the compiler cutover receipt without changing live behavior. | Narrow live cutover proof for exact/imported high-confidence candidates before any broader navigation migration |
 | References | `ranked-shadowed` | Reference shadow compare tracks imported, generated, dynamic-boundary, low-confidence fallback, stale fact, and real-workspace quality occurrence traces before live migration. Runtime quality receipts compare the live `textDocument/references` result with the compiler cutover receipt without changing live behavior. | Narrow live cutover proof for exact/imported high-confidence occurrences before any broader navigation migration |
-| Rename | `boundary-shadowed` | Rename plan receipts trace exact static edits, dynamic-boundary blockers, stale compiler facts, and low-confidence ambiguity before any live compiler-backed refactor behavior | Runtime blocker UX and real-workspace unsafe-edit receipts ([#8464](https://github.com/EffortlessMetrics/perl-lsp/issues/8464)) |
-| Safe delete | `boundary-shadowed` | Safe-delete receipts trace exact static allow decisions, dynamic-boundary blockers, framework-generated blockers, and stale compiler facts before any live compiler-backed refactor behavior | Runtime blocker UX and real-workspace unsafe-delete receipts ([#8464](https://github.com/EffortlessMetrics/perl-lsp/issues/8464)) |
+| Rename | `boundary-shadowed` | Rename plan receipts trace exact static edits, dynamic-boundary blockers, stale compiler facts, low-confidence ambiguity, runtime blocker UX notes, and live-vs-compiler exact-static receipt data before any live compiler-backed refactor behavior | Real-workspace unsafe-edit receipts and a narrow lexical/package rename live-cutover proof before any broader refactor migration |
+| Safe delete | `boundary-shadowed` | Safe-delete receipts trace exact static allow decisions, dynamic-boundary blockers, framework-generated blockers, stale compiler facts, runtime blocker UX notes, and live-vs-compiler exact-static receipt data before any live compiler-backed refactor behavior | Real-workspace unsafe-delete receipts and explicit blocker UX in live safe-delete surfaces before any broader refactor migration |
 | Workspace symbols | `shadowed` | Existing workspace index remains the live provider source; semantic-shadow fixtures trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates | Runtime integration and live-provider workspace-symbol quality receipts before any live cutover |
 | Document symbols | `shadowed` | Existing document-symbol provider remains the live source; semantic-shadow fixtures trace explicit syntax, generated, dynamic-boundary, and stale fact candidates | Runtime integration and real-workspace document-symbol quality receipts before any live cutover |
 | Semantic tokens | `shadowed` | Existing parser/token provider remains the live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, dynamic-boundary, and stale fact candidates | Runtime integration and token/span invariant receipts before any live cutover |
