@@ -126,9 +126,10 @@ Use native critic diagnostics when:
   actions
 
 Native critic include/exclude filters use native rule IDs, not Perl::Critic
-policy names. During migration, map supported policies from the compatibility
-report to their native IDs before adding them to `[critic].include` or
-`[critic].exclude`.
+policy names. During migration, the compatibility report includes a suggested
+`[critic]` TOML block with mapped native IDs for compatible `include` and
+`exclude` policy names. Review any unmapped legacy filters before adding the
+snippet to `.perl-lsp.toml`.
 
 Keep external `perlcritic` compatibility when:
 
