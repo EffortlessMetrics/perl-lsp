@@ -301,6 +301,6 @@ secret-check preflight and `PUBLISHING_ROADMAP.md` for the release-day sequence.
 - [ ] **Record the 3 walkthrough GIFs** using `scripts/marketing/render-walkthrough-gif.py`. These improve the in-extension first-run experience, not the marketplace listing itself.
 - [ ] **Delete the stale `perl-lsp-rs-0.12.0.vsix`** from `vscode-extension/`. It does not block publishing but bloats git history.
 - [ ] **Verify icon at 28px** — confirm it reads at sidebar icon size.
-- [ ] **Clarify native tooling requirements** in README.md, with perltidy/perlcritic documented only as optional compatibility adapters.
+- [x] **Clarify native tooling requirements** in README.md, with perltidy/perlcritic documented only as optional compatibility adapters.
 - [ ] **Resolve the `Shift+Alt+F` footnote** in the keyboard shortcuts table.
 - [ ] **Consider root `LICENSE` file** — the repo root has no LICENSE file (only `vscode-extension/LICENSE`). GitHub shows the license badge from the root. Worth adding a root `LICENSE` or symlink.
