@@ -367,7 +367,7 @@ legacy perlcritic compatibility, and advanced code actions.
 
 #### perl.runCritic Command Usage
 
-**Dual Analyzer Strategy Overview** (*Diataxis: Explanation* - Architecture design):
+**Native Critic and Legacy Compatibility Overview** (*Diataxis: Explanation* - Architecture design):
 
 The normal diagnostic path uses the native critic engine by default. The
 `perl.runCritic` execute command still supports legacy compatibility behavior,
@@ -382,14 +382,14 @@ cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_pe
 # Test executeCommand protocol compliance
 cargo test -p perl-lsp-rs --test lsp_execute_command_tests
 
-# Test legacy dual analyzer compatibility behavior
-cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
+# Test native critic diagnostics through the LSP runtime
+cargo test -p perl-lsp-rs native_critic_engine --profile agent --locked --lib -- --nocapture
 
-# Test built-in analyzer specifically
-cargo test -p perl-parser --test execute_command_tests -- test_execute_command_run_critic_builtin
+# Test execute-command critic behavior in the core provider
+cargo test -p perl-lsp-rs test_execute_command_run_critic_builtin --lib
 
 # Test with missing files (error handling)
-cargo test -p perl-parser --test execute_command_tests -- test_execute_command_run_critic_missing_file
+cargo test -p perl-lsp-rs test_execute_command_run_critic_missing_file --lib
 ```
 
 **Advanced Configuration** (*Diataxis: How-to Guide* - Optimizing critic integration):
