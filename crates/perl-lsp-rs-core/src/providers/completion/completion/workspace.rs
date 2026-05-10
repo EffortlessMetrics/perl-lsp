@@ -378,14 +378,66 @@ pub fn path_to_module_name(root: &Path, file_path: &Path) -> Option<String> {
     if parts.is_empty() { None } else { Some(parts.join("::")) }
 }
 
+/// Split a module prefix like `"Foo::Bar::Ba"` into a subdir and a leaf prefix.
+///
+/// Returns `(scan_dir, leaf_prefix, depth_consumed)` where:
+/// - `scan_dir` is `root` joined with the path components before the last `::`,
+/// - `leaf_prefix` is the last `::` segment (the partial name being typed),
+/// - `depth_consumed` is the number of directory levels already descended into.
+///
+/// For a single-segment prefix such as `"Foo"`, `scan_dir == root`,
+/// `leaf_prefix == "Foo"`, and `depth_consumed == 0` — the caller falls back
+/// to a normal root scan.
+///
+/// For `"Foo::Bar::Ba"`:
+/// - `scan_dir  == root.join("Foo/Bar")`
+/// - `leaf_prefix == "Ba"`
+/// - `depth_consumed == 2`  (two directory levels have been consumed)
+///
+/// This lets `scan_directory_for_modules` start the BFS at the narrowest
+/// possible directory instead of scanning from the include root and filtering,
+/// which is a significant speedup on large vendor / local / system `@INC` trees.
+pub fn root_and_leaf_prefix(root: &Path, module_prefix: &str) -> (PathBuf, String, usize) {
+    if module_prefix.is_empty() {
+        return (root.to_path_buf(), String::new(), 0);
+    }
+
+    let mut parts: Vec<&str> = module_prefix.split("::").collect();
+    if parts.len() <= 1 {
+        // Single segment — scan from root, filter by that segment.
+        return (root.to_path_buf(), module_prefix.to_string(), 0);
+    }
+
+    // The last element is the partial leaf being typed; everything before it
+    // is a fully-typed namespace segment that maps to a real directory.
+    let leaf = parts.pop().unwrap_or_default().to_string();
+    let depth_consumed = parts.len(); // number of dir levels consumed
+    let subdir = parts.iter().fold(root.to_path_buf(), |p, part| p.join(part));
+    (subdir, leaf, depth_consumed)
+}
+
 /// Recursively scan a directory for `.pm` files and return module names.
+///
+/// When `prefix` contains `::` separators the scan starts from the narrowest
+/// matching subdirectory (`prefix_dir`) instead of from `root`, which avoids
+/// traversing unrelated subtrees on large include trees.  `path_to_module_name`
+/// is still called with the original `root` so that the full qualified name
+/// (`Foo::Bar::Baz`) is reconstructed correctly and the existing `starts_with`
+/// filter continues to work unchanged.
 pub fn scan_directory_for_modules(root: &Path, prefix: &str) -> Vec<String> {
     let mut modules = Vec::new();
     if !root.is_dir() {
         return modules;
     }
 
-    let mut queue: VecDeque<(PathBuf, usize)> = VecDeque::from([(root.to_path_buf(), 0usize)]);
+    // Prefix-directed optimisation: for namespaced prefixes like "Foo::Bar::Ba"
+    // start BFS at `root/Foo/Bar/` rather than `root/`.  If that subdir does
+    // not exist we fall back to a root scan (the prefix simply has no matches).
+    let (scan_dir, _leaf_prefix, depth_consumed) = root_and_leaf_prefix(root, prefix);
+    let start_dir = if scan_dir.is_dir() { scan_dir } else { root.to_path_buf() };
+    let start_depth = if start_dir == root { 0 } else { depth_consumed };
+
+    let mut queue: VecDeque<(PathBuf, usize)> = VecDeque::from([(start_dir, start_depth)]);
     while let Some((dir, depth)) = queue.pop_front() {
         if modules.len() >= MAX_MODULES_PER_SCAN {
             break;
