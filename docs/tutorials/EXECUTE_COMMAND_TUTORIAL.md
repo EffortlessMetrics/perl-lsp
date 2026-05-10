@@ -9,7 +9,7 @@ The `workspace/executeCommand` LSP method (Issue #145) adds powerful command exe
 ### What You'll Learn
 
 - How to set up and use `perl.runCritic` for code quality analysis
-- Understanding the dual analyzer strategy (external + built-in)
+- Understanding the native critic path and explicit legacy compatibility
 - Integrating executeCommand with your LSP editor workflow
 - Performance optimization and troubleshooting techniques
 - Testing and validating executeCommand functionality
@@ -35,7 +35,7 @@ First, ensure your LSP server advertises executeCommand capabilities:
 cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_capabilities
 
 # Verify perl.runCritic is in supported commands list
-cargo test -p perl-parser --test execute_command_tests -- test_supported_commands_includes_run_critic
+cargo test -p perl-lsp-rs test_supported_commands_includes_run_critic --lib
 ```
 
 **Expected Output**: Tests should pass, confirming executeCommand support.
@@ -63,21 +63,22 @@ greet($name);
 
 **Learning Goal**: This file intentionally lacks `use strict` and `use warnings` pragmas that perl.runCritic will detect.
 
-### Step 3: Test Built-in Analyzer
+### Step 3: Test Native Critic
 
-Run the built-in analyzer (always available):
+Run the native critic tests (always available):
 
 ```bash
-# Test built-in analyzer functionality
-cargo test -p perl-parser --test execute_command_tests -- test_execute_command_run_critic_builtin
+# Test native critic rule behavior
+cargo test -p perl-lsp-rs-core native_critic --profile agent --locked -- --nocapture
 
-# The test creates a similar file and validates policy detection
+# Test native critic diagnostics through the LSP runtime
+cargo test -p perl-lsp-rs native_critic_engine --profile agent --locked --lib -- --nocapture
 ```
 
 **What Happens**:
-- Built-in analyzer detects missing `use strict` and `use warnings`
-- Analysis completes in ~100ms for typical files
-- Returns structured JSON with violations, line numbers, and explanations
+- Native critic detects missing `use strict` and `use warnings`
+- Analysis avoids external `perlcritic` process startup
+- Returns structured findings with rule IDs, ranges, severities, and explanations
 
 **Example Response Structure**:
 ```json
@@ -104,7 +105,7 @@ cargo test -p perl-parser --test execute_command_tests -- test_execute_command_r
     }
   ],
   "violationCount": 2,
-  "analyzerUsed": "builtin"
+  "engine": "native"
 }
 ```
 
@@ -119,10 +120,10 @@ that still compare against legacy Perl::Critic output.
 3. **Migration Support**: Compatibility receipts map legacy policies to native
    rules
 
-**Test the Strategy**:
+**Test the Native Runtime Path**:
 ```bash
-# Test legacy dual analyzer compatibility behavior
-cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
+cargo test -p perl-lsp-rs native_critic_engine --profile agent --locked --lib -- --nocapture
+cargo test -p perl-lsp-rs diagnostics --profile agent --locked --lib -- --nocapture
 ```
 
 **Learning Goal**: Understand that native diagnostics do not depend on external
@@ -249,8 +250,8 @@ use warnings;
 my $name = "Alice";
 print "Hello $name!\n";' > /tmp/clean_sample.pl
 
-# The built-in analyzer should show fewer violations
-cargo test -p perl-parser --test execute_command_tests -- test_execute_command_run_critic_builtin
+# Native critic should show fewer findings
+cargo test -p perl-lsp-rs native_critic_engine --profile agent --locked --lib -- --nocapture
 ```
 
 ## Performance and Reliability
@@ -259,11 +260,11 @@ cargo test -p perl-parser --test execute_command_tests -- test_execute_command_r
 
 Understanding timing expectations:
 
-| File Size | Built-in Analyzer | External Perlcritic | Notes |
-|-----------|-------------------|---------------------|-------|
-| <1KB      | ~50ms            | ~200ms              | Typical small scripts |
-| 1-10KB    | ~100ms           | ~500ms              | Standard modules |
-| 10-100KB  | ~300ms           | ~1.5s               | Large applications |
+| File Size | Native Critic | External Perlcritic Compatibility | Notes |
+|-----------|---------------|------------------------------------|-------|
+| <1KB      | Fast local analysis | Adds process startup | Typical small scripts |
+| 1-10KB    | Parser/runtime bound | Process + output parsing | Standard modules |
+| 10-100KB  | Profile dependent | Process + policy dependent | Large applications |
 
 ### Step 11: Testing Performance
 
@@ -281,10 +282,10 @@ Test error scenarios:
 
 ```bash
 # Test with non-existent file
-cargo test -p perl-parser --test execute_command_tests -- test_execute_command_run_critic_missing_file
+cargo test -p perl-lsp-rs test_execute_command_run_critic_missing_file --lib
 
 # Test parameter validation
-cargo test -p perl-parser --test execute_command_tests -- test_parameter_validation_missing_file_path
+cargo test -p perl-lsp-rs test_parameter_validation_missing_file_path --lib
 ```
 
 **Learning Goal**: The system handles errors gracefully with informative messages.
@@ -331,14 +332,14 @@ cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_de
 Validate your setup meets all acceptance criteria:
 
 ```bash
-# AC1: Complete executeCommand LSP method implementation
-cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_ac1_execute_command_implementation
+# executeCommand LSP method implementation
+cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_execute_command_capabilities
 
-# AC2: perl.runCritic command integration
-cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_ac2_perlcritic_integration
+# perl.runCritic native critic integration
+cargo test -p perl-lsp-rs native_critic_engine --profile agent --locked --lib -- --nocapture
 
-# AC3: Advanced refactoring operations
-cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_ac3_advanced_refactoring_operations
+# Advanced refactoring operations
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_organize_imports
 ```
 
 ## Troubleshooting Common Issues
@@ -360,8 +361,8 @@ perllsp --stdio --log
 **Problem**: perl.runCritic timeout or slow response
 **Solutions**:
 - Check file size: `wc -l your_file.pl`
-- Test external tool directly: `time perlcritic your_file.pl`
-- Use built-in analyzer for faster results
+- Keep the default native engine for editor diagnostics
+- Test external tool directly only when explicit legacy compatibility is selected: `time perlcritic your_file.pl`
 
 ### Issue: No Violations Found
 
@@ -387,7 +388,7 @@ perllsp --stdio --log
 ### Community and Support
 
 - Report issues with executeCommand functionality
-- Contribute policy improvements to built-in analyzer
+- Contribute policy improvements to the native critic rule registry
 - Share integration examples for other editors
 
 ## Summary
@@ -395,7 +396,7 @@ perllsp --stdio --log
 You've successfully learned how to:
 
 ✅ Set up and use perl.runCritic for code quality analysis
-✅ Understand dual analyzer strategy (external + built-in fallback)
+✅ Understand native critic behavior and explicit Perl::Critic compatibility
 ✅ Integrate executeCommand with your LSP development workflow
 ✅ Handle errors and troubleshoot common issues
 ✅ Validate performance and reliability characteristics
