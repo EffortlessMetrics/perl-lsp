@@ -290,18 +290,18 @@ fn native_formatter_keeps_unsupported_lines_unchanged() {
 }
 
 #[test]
-fn native_formatter_preserves_comment_lines_until_comment_aware_layout_exists() {
+fn native_formatter_preserves_trailing_comment_while_formatting_simple_statement() {
     let formatter = NativeFormatter::new();
     let source = "my$x=1; # keep this exact comment\n";
 
     let result = formatter.format_document(source, &FormatConfig::default());
 
-    assert!(!result.changed);
-    assert_eq!(result.formatted, source);
+    assert!(result.changed);
+    assert_eq!(result.formatted, "my $x = 1; # keep this exact comment\n");
 }
 
 #[test]
-fn native_formatter_preserves_comment_matrix_until_comment_aware_layout_exists() {
+fn native_formatter_formats_simple_trailing_comment_matrix() {
     let formatter = NativeFormatter::new();
     let source = concat!(
         "# leading file comment\n",
@@ -313,8 +313,29 @@ fn native_formatter_preserves_comment_matrix_until_comment_aware_layout_exists()
 
     let result = formatter.format_document(source, &FormatConfig::default());
 
-    assert!(!result.changed);
-    assert_eq!(result.formatted, source);
+    assert!(result.changed);
+    assert_eq!(
+        result.formatted,
+        concat!(
+            "# leading file comment\n",
+            "my $x = 1; # trailing assignment comment\n",
+            "if($x){ # trailing block opener comment\n",
+            "    return $x; # trailing return comment\n",
+            "}\n",
+        )
+    );
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn native_formatter_does_not_treat_hash_inside_strings_as_trailing_comment() {
+    let formatter = NativeFormatter::new();
+    let source = "my$msg=\"#not a comment\";\nreturn\"#value\";\n";
+
+    let result = formatter.format_document(source, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "my $msg = \"#not a comment\";\nreturn \"#value\";\n");
     assert!(result.diagnostics.is_empty());
 }
 
@@ -344,6 +365,21 @@ fn native_range_formatter_formats_only_selected_simple_declaration_line() {
         TextRange::new(TextPosition::new(1, 0), TextPosition::new(1, 7))
     );
     assert_eq!(result.edits[0].new_text, "my $y = 2;");
+}
+
+#[test]
+fn native_range_formatter_preserves_trailing_comment_on_selected_simple_statement_line() {
+    let formatter = NativeFormatter::new();
+    let source = "my$x=1; # keep\nmy$y=2;\n";
+    let range = TextRange::new(TextPosition::new(0, 0), TextPosition::new(0, 14));
+
+    let result = formatter.format_range(source, range, &FormatConfig::default());
+
+    assert!(result.changed);
+    assert_eq!(result.formatted, "my $x = 1; # keep\nmy$y=2;\n");
+    assert_eq!(result.edits.len(), 1);
+    assert_eq!(result.edits[0].range, range);
+    assert_eq!(result.edits[0].new_text, "my $x = 1; # keep");
 }
 
 #[test]
