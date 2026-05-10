@@ -764,6 +764,7 @@ fn format_simple_statement_line(line: &str, config: &FormatConfig) -> Option<Str
 fn split_trailing_comment(body: &str) -> (&str, Option<&str>) {
     let mut in_single = false;
     let mut in_double = false;
+    let mut in_backtick = false;
     let mut escaped = false;
 
     for (index, ch) in body.char_indices() {
@@ -772,15 +773,16 @@ fn split_trailing_comment(body: &str) -> (&str, Option<&str>) {
             continue;
         }
 
-        if ch == '\\' && (in_single || in_double) {
+        if ch == '\\' && (in_single || in_double || in_backtick) {
             escaped = true;
             continue;
         }
 
         match ch {
-            '\'' if !in_double => in_single = !in_single,
-            '"' if !in_single => in_double = !in_double,
-            '#' if !in_single && !in_double => {
+            '\'' if !in_double && !in_backtick => in_single = !in_single,
+            '"' if !in_single && !in_backtick => in_double = !in_double,
+            '`' if !in_single && !in_double => in_backtick = !in_backtick,
+            '#' if !in_single && !in_double && !in_backtick => {
                 let code = body[..index].trim_end();
                 if code.trim().is_empty() {
                     return (body, None);
@@ -800,6 +802,25 @@ fn append_trailing_comment(mut formatted: String, trailing_comment: Option<&str>
         formatted.push_str(comment);
     }
     formatted
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_trailing_comment;
+
+    #[test]
+    fn split_trailing_comment_ignores_hash_inside_backticks()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (code, comment) = split_trailing_comment("my$out=`printf '#value'`; # trailing");
+        assert_eq!(code, "my$out=`printf '#value'`;");
+        assert_eq!(comment, Some("# trailing"));
+
+        let (code, comment) = split_trailing_comment("my$out=`printf '#value'`;");
+        assert_eq!(code, "my$out=`printf '#value'`;");
+        assert_eq!(comment, None);
+
+        Ok(())
+    }
 }
 
 fn format_simple_subroutine_tokens(
