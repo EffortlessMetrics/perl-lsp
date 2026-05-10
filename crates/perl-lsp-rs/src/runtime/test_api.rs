@@ -54,6 +54,18 @@ impl LspServer {
         self.handle_definition(params)
     }
 
+    /// Test-only receipt for definition runtime quality proof.
+    ///
+    /// Calls the live `textDocument/definition` handler and compares that result
+    /// with the compiler-fact cutover receipt from the same runtime workspace
+    /// index. This does not change live navigation behavior.
+    pub fn test_definition_runtime_quality_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.definition_runtime_quality_receipt(params)
+    }
+
     /// Test-only entrypoint for LSP `textDocument/references`.
     ///
     /// Exercises find-references functionality in tests. Returns all
@@ -73,6 +85,18 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_references(params)
+    }
+
+    /// Test-only receipt for references runtime quality proof.
+    ///
+    /// Calls the live `textDocument/references` handler and compares that result
+    /// with the compiler-fact cutover receipt from the same runtime workspace
+    /// index. This does not change live navigation behavior.
+    pub fn test_references_runtime_quality_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.references_runtime_quality_receipt(params)
     }
 
     /// Test-only entrypoint for LSP `textDocument/completion`.

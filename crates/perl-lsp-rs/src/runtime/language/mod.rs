@@ -34,6 +34,9 @@ mod streaming;
 mod symbols;
 mod virtual_content;
 
+#[cfg(test)]
+mod navigation_runtime_quality_tests;
+
 #[cfg(feature = "workspace")]
 fn to_workspace_sym_kind(kind: perl_parser::index::SymKind) -> crate::workspace_index::SymKind {
     match kind {
