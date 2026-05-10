@@ -334,6 +334,12 @@ fn native_formatter_preserves_trailing_comments_on_supported_blocks() {
         "sub demo{return 1;} # sub tail\n",
         "if($ok){return 1;} # if tail\n",
         "while($ok){next;} # while tail\n",
+        "unless($ok){return 0;} # unless tail\n",
+        "until($done){return 1;} # until tail\n",
+        "foreach my$item(@items){return$item;} # foreach tail\n",
+        "for(my$i=0;$i<3;$i++){next;} # for tail\n",
+        "if($maybe){return 2;}else{return 3;} # if else tail\n",
+        "while($again){next;}continue{last;} # continue tail\n",
     );
 
     let result = formatter.format_document(source, &FormatConfig::default());
@@ -351,6 +357,28 @@ fn native_formatter_preserves_trailing_comments_on_supported_blocks() {
             "while ($ok) {\n",
             "    next;\n",
             "} # while tail\n",
+            "unless ($ok) {\n",
+            "    return 0;\n",
+            "} # unless tail\n",
+            "until ($done) {\n",
+            "    return 1;\n",
+            "} # until tail\n",
+            "foreach my $item (@items) {\n",
+            "    return $item;\n",
+            "} # foreach tail\n",
+            "for (my $i = 0; $i < 3; $i++) {\n",
+            "    next;\n",
+            "} # for tail\n",
+            "if ($maybe) {\n",
+            "    return 2;\n",
+            "} else {\n",
+            "    return 3;\n",
+            "} # if else tail\n",
+            "while ($again) {\n",
+            "    next;\n",
+            "} continue {\n",
+            "    last;\n",
+            "} # continue tail\n",
         )
     );
     assert!(result.diagnostics.is_empty());
