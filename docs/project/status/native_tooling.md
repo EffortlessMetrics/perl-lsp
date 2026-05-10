@@ -50,7 +50,7 @@
 | Native critic check findings | 112 |
 | Native critic check suppressed | 0 |
 | Native critic check fixable | 110 |
-| Native critic false-positive files | 6 |
+| Native critic false-positive files | 11 |
 | Native critic false-positive parse errors | 0 |
 | Native critic false-positive rules run | 28 |
 | Native critic false-positive findings | 0 |
