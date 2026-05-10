@@ -43,12 +43,13 @@
 | Push diagnostics coverage | 28 |
 | Workspace diagnostics coverage | 28 |
 | Violation bridge coverage | 28 |
+| Native critic check profile | recommended |
 | Native critic check files | 65 |
 | Native critic check parse errors | 0 |
-| Native critic check rules run | 27 |
-| Native critic check findings | 187 |
+| Native critic check rules run | 16 |
+| Native critic check findings | 112 |
 | Native critic check suppressed | 0 |
-| Native critic check fixable | 173 |
+| Native critic check fixable | 110 |
 | Native critic false-positive files | 6 |
 | Native critic false-positive parse errors | 0 |
 | Native critic false-positive rules run | 28 |

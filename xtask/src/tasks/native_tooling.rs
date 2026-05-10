@@ -167,6 +167,7 @@ struct CriticStatus {
     rules_with_violation_bridge: usize,
     critic_check_receipt: String,
     critic_check_receipt_present: bool,
+    critic_check_profile: Option<String>,
     critic_check_files_checked: Option<usize>,
     critic_check_files_with_parse_errors: Option<usize>,
     critic_check_rules_run: Option<usize>,
@@ -514,7 +515,11 @@ fn build_readiness_receipt(
         critic.critic_check_receipt_present,
         true,
         format!(
-            "files={} parse_errors={} findings={} fixable={}",
+            "profile={} files={} parse_errors={} findings={} fixable={}",
+            optional_text_metric(
+                critic.critic_check_profile.as_deref(),
+                critic.critic_check_receipt_present,
+            ),
             optional_metric(critic.critic_check_files_checked, critic.critic_check_receipt_present),
             optional_metric(
                 critic.critic_check_files_with_parse_errors,
@@ -902,6 +907,7 @@ fn critic_status(
         rules_with_violation_bridge: native_rules.len(),
         critic_check_receipt: critic_check_receipt.display().to_string(),
         critic_check_receipt_present: check_receipt.is_some(),
+        critic_check_profile: optional_string(&check_receipt, "profile"),
         critic_check_files_checked: optional_usize(&check_receipt, "files_checked"),
         critic_check_files_with_parse_errors: optional_usize(
             &check_receipt,
@@ -1106,6 +1112,10 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
     );
     let critic_check_files_checked =
         optional_metric(critic.critic_check_files_checked, critic.critic_check_receipt_present);
+    let critic_check_profile = optional_text_metric(
+        critic.critic_check_profile.as_deref(),
+        critic.critic_check_receipt_present,
+    );
     let critic_check_parse_errors = optional_metric(
         critic.critic_check_files_with_parse_errors,
         critic.critic_check_receipt_present,
@@ -1216,6 +1226,7 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
 | Push diagnostics coverage | {} |
 | Workspace diagnostics coverage | {} |
 | Violation bridge coverage | {} |
+| Native critic check profile | {} |
 | Native critic check files | {} |
 | Native critic check parse errors | {} |
 | Native critic check rules run | {} |
@@ -1273,6 +1284,7 @@ Fixable native rules:
         critic.rules_surfaced_in_push_diagnostics,
         critic.rules_surfaced_in_workspace_diagnostics,
         critic.rules_with_violation_bridge,
+        critic_check_profile,
         critic_check_files_checked,
         critic_check_parse_errors,
         critic_check_rules_run,
@@ -1729,6 +1741,7 @@ mod tests {
         fs::write(
             &critic_check_receipt,
             r#"{
+  "profile": "recommended",
   "files_checked": 3,
   "files_with_parse_errors": 0,
   "rules_run": 28,
@@ -1808,6 +1821,7 @@ mod tests {
         assert_eq!(value["formatter"]["format_trailing_comma"], "add-when-wrapped");
         assert!(value["critic"]["native_rule_count"].as_u64().unwrap_or_default() > 0);
         assert_eq!(value["critic"]["critic_check_receipt_present"], true);
+        assert_eq!(value["critic"]["critic_check_profile"], "recommended");
         assert_eq!(value["critic"]["critic_check_files_checked"], 3);
         assert_eq!(value["critic"]["critic_check_files_with_parse_errors"], 0);
         assert_eq!(value["critic"]["critic_check_rules_run"], 28);
@@ -1868,6 +1882,7 @@ mod tests {
         assert!(markdown.contains("| Config else placement | separate-line |"));
         assert!(markdown.contains("| Config keyword spacing | compact |"));
         assert!(markdown.contains("| Config trailing comma | add-when-wrapped |"));
+        assert!(markdown.contains("| Native critic check profile | recommended |"));
         assert!(markdown.contains("| Native critic check files | 3 |"));
         assert!(markdown.contains("| Native critic check parse errors | 0 |"));
         assert!(markdown.contains("| Native critic check rules run | 28 |"));
@@ -2042,6 +2057,7 @@ color = 1
                 rules_with_violation_bridge: 2,
                 critic_check_receipt: "native-critic-check.json".to_string(),
                 critic_check_receipt_present: true,
+                critic_check_profile: Some("recommended".to_string()),
                 critic_check_files_checked: Some(3),
                 critic_check_files_with_parse_errors: Some(0),
                 critic_check_rules_run: Some(2),
