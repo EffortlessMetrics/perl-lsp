@@ -15,6 +15,7 @@ caps:
   - lsp.document_symbol
   - lsp.execute_command
   - lsp.folding_range
+  - lsp.formatting
   - lsp.hover
   - lsp.implementation
   - lsp.inlay_hint
@@ -24,6 +25,7 @@ caps:
   - lsp.notebook_document_sync
   - lsp.on_type_formatting
   - lsp.pull_diagnostics
+  - lsp.range_formatting
   - lsp.references
   - lsp.rename
   - lsp.selection_range
@@ -32,16 +34,31 @@ caps:
   - lsp.type_definition
   - lsp.workspace_symbol
 catalog:
+  - dap.breakpoint_locations
   - dap.breakpoints.basic
+  - dap.breakpoints.function
   - dap.breakpoints.hit_condition
   - dap.breakpoints.logpoints
+  - dap.cancel
   - dap.completions
   - dap.core
   - dap.exceptions.die
   - dap.exceptions.warn
+  - dap.goto
+  - dap.goto_targets
   - dap.inline_values
+  - dap.loaded_sources
   - dap.modules
+  - dap.pause
+  - dap.restart
+  - dap.restart_frame
+  - dap.set_expression
+  - dap.source
+  - dap.step_in_targets
+  - dap.terminate_threads
+  - dap.threads
   - dap.watchpoints
+  - experimental.perlInlineCompletionStream
   - lsp.apply_edit
   - lsp.call_hierarchy
   - lsp.cancel_request
@@ -58,6 +75,11 @@ catalog:
   - lsp.configuration
   - lsp.declaration
   - lsp.definition
+  - lsp.diagnostic.markup_message_support
+  - lsp.diagnostic.missing_strict
+  - lsp.diagnostic.missing_warnings
+  - lsp.diagnostic.phase_scoped_pragmas
+  - lsp.diagnostic.unreachable_code
   - lsp.diagnostic.unused_variable
   - lsp.diagnostic_refresh
   - lsp.did_change_configuration
@@ -99,6 +121,7 @@ catalog:
   - lsp.pull_diagnostics
   - lsp.range_formatting
   - lsp.ranges_formatting
+  - lsp.refactoring
   - lsp.references
   - lsp.rename
   - lsp.selection_range
