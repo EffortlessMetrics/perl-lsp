@@ -51,6 +51,42 @@ fn assert_terminates(input: &str) {
     );
 }
 
+#[test]
+fn split_adjacent_single_quote_pattern_keeps_quote_for_string() -> R {
+    let sig = significant("@names = split' ', $val;");
+
+    let split = sig.iter().find(|token| token.text.as_ref() == "split").ok_or("missing split")?;
+    assert!(
+        matches!(&split.token_type, TokenType::Keyword(keyword) if keyword.as_ref() == "split"),
+        "split should remain a keyword, got {:?}",
+        split.token_type
+    );
+    assert!(
+        sig.iter().any(|token| matches!(token.token_type, TokenType::StringLiteral)
+            && token.text.as_ref() == "' '"),
+        "adjacent single quote should start the split pattern string: {sig:?}"
+    );
+    assert!(
+        !sig.iter().any(|token| token.text.as_ref() == "split'"),
+        "apostrophe should not be consumed into split identifier: {sig:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn legacy_apostrophe_package_separator_stays_identifier() -> R {
+    let first = first_significant("Foo'Bar::baz").ok_or("missing identifier")?;
+    assert!(
+        matches!(&first.token_type, TokenType::Identifier(identifier) if identifier.as_ref() == "Foo'Bar::baz"),
+        "legacy package separator should remain one identifier, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "Foo'Bar::baz");
+
+    Ok(())
+}
+
 // ===========================================================================
 // 1. Heredoc variants
 // ===========================================================================
