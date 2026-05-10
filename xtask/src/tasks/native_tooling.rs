@@ -436,8 +436,8 @@ fn build_readiness_receipt(
     ));
     criteria.push(readiness_criterion(
         "formatter",
-        "corpus unsupported formatter diagnostics are cleared",
-        formatter.corpus_unsupported_patterns_count == Some(0),
+        "corpus parse-clean unsupported formatter diagnostics are cleared",
+        formatter.corpus_unsupported_parse_clean_count == Some(0),
         formatter.format_corpus_receipt_present,
         false,
         format!(
@@ -463,7 +463,7 @@ fn build_readiness_receipt(
                 formatter.format_corpus_receipt_present
             )
         ),
-        "triage parse-clean unsupported diagnostics first; parse-error diagnostics are recovery fixtures",
+        "clear parse-clean unsupported diagnostics before claiming broad format-on-save coverage; parse-error diagnostics remain recovery-fixture signal",
     ));
     criteria.push(readiness_criterion(
         "formatter",
@@ -2161,12 +2161,12 @@ color = 1
         assert_eq!(value["kind"], "native_tooling_readiness");
         assert_eq!(value["verdict"], "not_ready");
         assert_eq!(value["blocker_count"].as_u64().unwrap_or_default(), 2);
-        assert_eq!(value["warning_count"].as_u64().unwrap_or_default(), 1);
+        assert_eq!(value["warning_count"].as_u64().unwrap_or_default(), 0);
         assert!(value["ready_count"].as_u64().unwrap_or_default() > 0);
         let criteria = value["criteria"].as_array().ok_or_else(|| eyre!("criteria array"))?;
         assert!(criteria.iter().any(|criterion| {
-            criterion["name"] == "corpus unsupported formatter diagnostics are cleared"
-                && criterion["status"] == "warning"
+            criterion["name"] == "corpus parse-clean unsupported formatter diagnostics are cleared"
+                && criterion["status"] == "ready"
                 && criterion["required_for_default"] == false
         }));
         assert!(criteria.iter().any(|criterion| {
@@ -2188,9 +2188,9 @@ color = 1
         let markdown = fs::read_to_string(readiness_markdown)?;
         assert!(markdown.contains("# Native Tooling Readiness"));
         assert!(markdown.contains("- Verdict: `not_ready`"));
-        assert!(markdown.contains("- Warnings: `1`"));
+        assert!(markdown.contains("- Warnings: `0`"));
         assert!(markdown.contains(
-            "| formatter | corpus unsupported formatter diagnostics are cleared | warning | false |"
+            "| formatter | corpus parse-clean unsupported formatter diagnostics are cleared | ready | false |"
         ));
         assert!(markdown.contains(
             "| formatter | perltidy compatibility has no external-only gaps | blocked |"
