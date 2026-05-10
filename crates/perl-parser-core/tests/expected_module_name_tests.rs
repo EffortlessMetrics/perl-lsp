@@ -2,6 +2,24 @@ mod cpan_test_helpers;
 use cpan_test_helpers::*;
 use perl_parser_core::NodeKind;
 
+fn assert_use_module_preserved(source: &str, expected: &str) -> Result<(), String> {
+    let ast = parse(source);
+    let NodeKind::Program { statements } = &ast.kind else {
+        return Err(format!("expected Program node, got {:?}", ast.kind));
+    };
+    assert_eq!(statements.len(), 1);
+
+    let Some(statement) = statements.first() else {
+        return Err("expected one top-level statement".to_string());
+    };
+    let NodeKind::Use { module, .. } = &statement.kind else {
+        return Err(format!("expected top-level Use node, got {:?}", statement.kind));
+    };
+
+    assert_eq!(module, expected);
+    Ok(())
+}
+
 // --- VString version directives in `use` ---
 
 #[test]
@@ -104,33 +122,13 @@ use warnings;
 }
 
 #[test]
-fn test_use_vstring_preserves_full_version_segment() {
-    let ast = parse("use v5.38;");
-    if let NodeKind::Program { statements } = &ast.kind {
-        assert_eq!(statements.len(), 1);
-        if let NodeKind::Use { module, .. } = &statements[0].kind {
-            assert_eq!(module, "v5.38");
-        } else {
-            panic!("expected top-level Use node");
-        }
-    } else {
-        panic!("expected Program node");
-    }
+fn test_use_vstring_preserves_full_version_segment() -> Result<(), String> {
+    assert_use_module_preserved("use v5.38;", "v5.38")
 }
 
 #[test]
-fn test_use_vstring_three_part_preserves_patch_segment() {
-    let ast = parse("use v5.12.0;");
-    if let NodeKind::Program { statements } = &ast.kind {
-        assert_eq!(statements.len(), 1);
-        if let NodeKind::Use { module, .. } = &statements[0].kind {
-            assert_eq!(module, "v5.12.0");
-        } else {
-            panic!("expected top-level Use node");
-        }
-    } else {
-        panic!("expected Program node");
-    }
+fn test_use_vstring_three_part_preserves_patch_segment() -> Result<(), String> {
+    assert_use_module_preserved("use v5.12.0;", "v5.12.0")
 }
 
 #[test]
