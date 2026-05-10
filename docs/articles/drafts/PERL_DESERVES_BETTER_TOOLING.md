@@ -61,7 +61,7 @@ The feature list is not a promise — it is tracked in `features.toml` with test
 - **Navigation**: go to definition, find references, call hierarchy, type hierarchy, workspace symbols
 - **Completion**: 150+ built-in Perl functions, workspace symbols across all project files, module names
 - **Diagnostics**: static analysis, undefined subroutine detection, variable scope problems
-- **Editing**: rename across the workspace, code actions, formatting (via Perl::Tidy integration), inlay hints
+- **Editing**: rename across the workspace, code actions, native formatting with optional Perl::Tidy compatibility, inlay hints
 - **Semantic tokens**: syntax highlighting with semantic context (not just regex-based tokenization)
 - **Code lens**: inline contextual information without cluttering the source view
 - **Debugging**: a bundled DAP (Debug Adapter Protocol) server for step debugging

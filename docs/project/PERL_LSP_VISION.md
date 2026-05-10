@@ -315,7 +315,7 @@ What must happen:
 | **Diagnostics** | Syntax + parse errors | GA | 80% | Missing: perlcritic, dead code, use warnings |
 | **Navigation** | Go-to-def, references, rename | GA | 85% | Missing: cross-inheritance, @INC resolution |
 | **Completion** | Symbols, builtins, keywords | GA | 80% | Missing: CPAN module completion |
-| **Formatting** | Perl::Tidy integration | GA | 90% | Missing: config-per-project |
+| **Formatting** | Native formatter with explicit Perl::Tidy compatibility | GA | 90% | Missing: broader corpus coverage |
 | **Semantics** | Workspace symbol index | GA | 70% | Missing: Moose/Moo intelligence |
 | **Debugging** | DAP native adapter | GA | 80% | Missing: expression evaluation, locals |
 | **Perl-specific** | Test runner, perldoc, @INC | Preview | 20% | All missing |

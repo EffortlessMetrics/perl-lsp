@@ -828,7 +828,7 @@ Key metrics to monitor:
 1. **Module resolution** - Slow filesystem, network latency
 2. **Symbol indexing** - Large workspaces, deep nesting
 3. **Completion** - Too many items, complex resolution
-4. **Formatting** - External tool (perltidy) overhead
+4. **Formatting** - Native formatting cost, or external tool overhead when explicit compatibility mode is enabled
 5. **Diagnostics** - Complex syntax analysis
 
 ---

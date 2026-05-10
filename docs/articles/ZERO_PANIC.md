@@ -56,7 +56,7 @@ background. When that process panics, the user's experience degrades silently:
 - **Diagnostics go stale** -- errors from three edits ago persist on screen.
 - **Navigation breaks** -- goto-definition returns nothing, so the user opens
   `grep` instead.
-- **Formatting fails** -- the user assumes perltidy is broken.
+- **Formatting fails** -- the user assumes the language server or formatting configuration is broken.
 
 The editor may restart the server, but restart is not instant. There's a gap
 where the developer has no language intelligence at all. If the panic was
