@@ -24,7 +24,7 @@ This document defines the Service Level Objectives (SLOs) for the Perl LSP serve
 | `textDocument/references` | 100ms | 250ms | 500ms | Multi-phase search |
 | `textDocument/documentSymbol` | 25ms | 50ms | 100ms | Single file parsing |
 | `textDocument/semanticTokens` | 50ms | 100ms | 200ms | Full semantic analysis |
-| `textDocument/formatting` | 500ms | 1000ms | 2000ms | External perltidy |
+| `textDocument/formatting` | 500ms | 1000ms | 2000ms | Native formatter default; external perltidy only in compatibility mode |
 | `textDocument/rename` | 250ms | 500ms | 1000ms | Cross-file workspace |
 | `textDocument/codeAction` | 50ms | 100ms | 200ms | Code action generation |
 | `textDocument/codeLens` | 50ms | 100ms | 200ms | Reference counting |
