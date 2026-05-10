@@ -49,58 +49,39 @@ fn native_default_document_formatting() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
-
-fn range_formatting() -> Result<(), Box<dyn std::error::Error>> {
-    // Skip test if perltidy is not available
-    if std::process::Command::new("perltidy").arg("--version").output().is_err() {
-        eprintln!("Skipping test: perltidy not installed");
-        return Ok(());
-    }
-
+fn native_default_range_formatting() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
     let mut client = LspClient::spawn(bin)?;
     let uri = "file:///range.pl";
 
-    let source = r#"
-# First subroutine - format this
-sub first{my$a=1;return$a;}
-
-# Second subroutine - don't format this
-sub second{my$b=2;return$b;}
-"#;
+    let source = "# First subroutine - leave this comment untouched\nsub first{my$a=1;return$a;}\n\n# Second subroutine - don't format this\nsub second{my$b=2;return$b;}\n";
 
     client.did_open(uri, "perl", source)?;
 
-    // Request formatting only for the first subroutine (lines 1-2)
     let response = client.request(
         "textDocument/rangeFormatting",
         json!({
             "textDocument": {"uri": uri},
             "range": {
                 "start": {"line": 1, "character": 0},
-                "end": {"line": 2, "character": 28}
+                "end": {"line": 1, "character": 27}
             },
             "options": {"tabSize": 4, "insertSpaces": true}
         }),
     )?;
 
-    if let Some(result) = response.get("result") {
-        if let Some(edits) = result.as_array() {
-            if !edits.is_empty() {
-                let edit_text =
-                    edits.first().ok_or("edits array should have at least one element")?["newText"]
-                        .as_str()
-                        .ok_or("Edit should have newText")?;
+    let edits =
+        response["result"].as_array().ok_or("rangeFormatting should return an edit array")?;
+    assert!(!edits.is_empty(), "native default range formatting should return edits");
 
-                // Check that only the first sub was formatted
-                assert!(
-                    edit_text.contains("sub first") && edit_text.contains("{"),
-                    "Should format first subroutine"
-                );
-                assert!(edit_text.contains("my $a = 1"), "Should format first sub's content");
-            }
-        }
-    }
+    let edit = edits.first().ok_or("edits array should have at least one element")?;
+    assert_eq!(edit["range"]["start"]["line"], 1);
+    assert_eq!(edit["range"]["end"]["line"], 1);
+    let edit_text = edit["newText"].as_str().ok_or("Edit should have newText")?;
+
+    assert!(edit_text.contains("sub first") && edit_text.contains("{"));
+    assert!(edit_text.contains("my $a = 1"), "Should format selected subroutine content");
+    assert!(!edit_text.contains("Second subroutine"), "Should not include unselected text");
 
     client.shutdown()?;
     Ok(())
