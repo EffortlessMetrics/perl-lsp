@@ -39,15 +39,15 @@ version = "5.38"
 include_paths = ["lib", "local/lib/perl5"]
 
 [diagnostics]
-# Uncomment to enable critic diagnostics.
-# With the default legacy engine this requires perlcritic installed.
-# With [critic].engine = "native" it uses native Rust rules.
+# Critic diagnostics default to the native recommended profile.
+# Set perlcritic = false to disable them.
 # perlcritic = true
 # perlcritic_severity = 3  # 1 = least severe (reports more), 5 = most severe (reports less)
 
 [critic]
-# legacy/perlcritic/external = Perl::Critic-compatible path; native = Rust rules
-# engine = "legacy"
+# native = Rust rules; legacy/perlcritic/external = Perl::Critic-compatible shell-out
+# engine = "native"
+# profile = "recommended"
 
 [formatting]
 # Native formatting is built in. Use external-perltidy only for exact legacy compatibility.
@@ -92,10 +92,10 @@ Priority 3 (highest): didChangeConfiguration — live editor settings
 |---|---|---|---|---|
 | `[perl]` | `version` | string | none | Perl version hint, e.g. `"5.38"`. Reserved; not yet used. |
 | `[perl]` | `include_paths` | string[] | `[]` | Extra module paths. Empty = keep built-in defaults. |
-| `[diagnostics]` | `perlcritic` | bool | false | Enable critic diagnostics (opt-in). |
+| `[diagnostics]` | `perlcritic` | bool | true | Enable critic diagnostics. Set false to disable. |
 | `[diagnostics]` | `perlcritic_severity` | int 1-5 | 3 | Minimum severity to report. 1 = least severe (reports everything), 5 = most severe (reports only strictest). |
-| `[critic]` | `engine` | string | `"legacy"` | Critic engine: `legacy` / `perlcritic` / `external` for Perl::Critic-compatible diagnostics, or `native` for Rust-native rules. |
-| `[critic]` | `profile` | string | `"strict"` | Native critic rule bundle: `recommended` or `strict`. |
+| `[critic]` | `engine` | string | `"native"` | Critic engine: `native` for Rust-native rules, or `legacy` / `perlcritic` / `external` for Perl::Critic-compatible diagnostics. |
+| `[critic]` | `profile` | string | `"recommended"` | Native critic rule bundle: `recommended` or `strict`. |
 | `[formatting]` | `enabled` | bool | true | Enable LSP formatting. |
 | `[formatting]` | `engine` | string | `"native"` | Formatter engine: `native`, `compat`, `external-perltidy`, or `off`. |
 | `[formatting]` | `perltidy_profile` | string | none | `.perltidyrc` profile used by external perltidy compatibility and native-tooling compatibility reports. |
@@ -122,11 +122,11 @@ Priority 3 (highest): didChangeConfiguration — live editor settings
 | `perl.formatting.profile` | string | none | Path to `.perltidyrc` profile |
 | `perl.formatting.maximumLineLength` | number | `80` | Maximum line length |
 | `perl.formatting.indentColumns` | number | `4` | Indent width |
-| `perl.perlcritic.enabled` | bool | `false` | Enable critic diagnostics |
+| `perl.perlcritic.enabled` | bool | `true` | Enable critic diagnostics. Set false to disable native critic diagnostics |
 | `perl.perlcritic.severity` | int 1-5 | `3` | Minimum severity to report |
 | `perl.perlcritic.profile` | string | none | Path to `.perlcriticrc` profile |
-| `perl.critic.engine` | string | `"legacy"` | Critic engine: `legacy`, `perlcritic`, `external`, or `native` |
-| `perl.critic.profile` | string | `"strict"` | Native critic profile: `recommended` or `strict` |
+| `perl.critic.engine` | string | `"native"` | Critic engine: `native`, `legacy`, `perlcritic`, or `external` |
+| `perl.critic.profile` | string | `"recommended"` | Native critic profile: `recommended` or `strict` |
 | `perl.telemetry.enabled` | bool | `false` | Send telemetry events to client |
 | `perl.limits.*` | various | see below | Resource caps and timeouts |
 
@@ -492,7 +492,7 @@ Every `.perl-lsp.toml` setting has a VSCode `settings.json` counterpart. The tab
 | `[perl] version = "5.38"` | — | No LSP equivalent yet; TOML only |
 | `[diagnostics] perlcritic = true` | `"perlcritic": {"enabled": true}` | |
 | `[diagnostics] perlcritic_severity = 3` | `"perlcritic": {"severity": 3}` | Note: LSP key is `severity`, not `perlcritic_severity` |
-| `[critic] engine = "native"` | `"critic": {"engine": "native"}` | Native critic remains opt-in |
+| `[critic] engine = "native"` | `"critic": {"engine": "native"}` | Use `"legacy"` or `"external"` for Perl::Critic shell-out compatibility |
 | `[critic] profile = "recommended"` | `"critic": {"profile": "recommended"}` | Lower-noise native rule bundle |
 | `[formatting] enabled = true` | `"formatting": {"enabled": true}` | |
 | `[formatting] engine = "native"` | `"formatting": {"engine": "native"}` | Use `"external-perltidy"` for legacy shell-out compatibility |
@@ -617,9 +617,9 @@ perllsp --features-json --feature-profile production | python3 -m json.tool
 
 ### Critic shows no diagnostics
 
-1. Confirm `perlcritic = true` is set (critic diagnostics are opt-in and default to false).
-2. Check the engine. With `[critic].engine = "legacy"` or omitted, confirm `perlcritic` is installed: `which perlcritic && perlcritic --version`.
-3. To avoid the external dependency, set `[critic].engine = "native"` and restart the language server.
+1. Confirm `perlcritic = true` is set or unset. Set `perlcritic = false` only when you want critic diagnostics disabled.
+2. Check the engine. The default native engine does not require Perl::Critic. With `[critic].engine = "legacy"` or `"external"`, confirm `perlcritic` is installed: `which perlcritic && perlcritic --version`.
+3. Check the native profile. `recommended` is lower-noise; `strict` enables the full native rule surface.
 4. Check the severity. Severity 1 reports the broadest set; severity 5 restricts output to only the most severe diagnostics.
 
 ### Inlay hints are missing

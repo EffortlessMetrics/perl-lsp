@@ -92,7 +92,7 @@ perl-dap --stdio  # Standard DAP transport
 | Parser-accuracy metrics touched | `just ci-metrics-ratchet-check parser_accuracy` | Verifies parser-accuracy scorecard floors do not regress. |
 | Generated status docs touched | `just status-update` then `just status-check` | Regenerates and verifies `docs/project/status/` outputs. |
 | Release/version surfaces touched | `just version-check` then `just release-check` | Verifies version sync and the release-prep gate before tagging/publishing. |
-| Native tooling defaults touched | `cargo xtask native-tooling check-defaults` | Verifies native formatter and opt-in native critic paths do not silently shell out. |
+| Native tooling defaults touched | `cargo xtask native-tooling check-defaults` | Verifies native formatter and native critic default paths do not silently shell out. |
 | Native tooling cutover status touched | `cargo xtask native-tooling readiness --markdown docs/project/status/native_tooling_readiness.md` | Renders explicit native formatter/critic default-readiness criteria from existing receipts. |
 | Native critic touched | `cargo xtask native-critic check` | Runs native critic rules and emits check receipts for findings, suppressions, and fixability. |
 | DevEx docs touched | `cargo xtask check-devex-docs` | Verifies toolchain wording and documented command references stay current. |

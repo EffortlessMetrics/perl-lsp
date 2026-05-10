@@ -93,14 +93,14 @@ your-project/
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `perlcritic` | `boolean` | (unset) | Enable critic diagnostics. When unset, the server default (`false`) applies. With the default `legacy` critic engine this requires `perlcritic` installed on the system; with `[critic].engine = "native"` it runs the Rust-native critic registry. |
+| `perlcritic` | `boolean` | (unset) | Enable critic diagnostics. When unset, the server default (`true`) applies. The default native engine does not require `perlcritic`; `legacy`, `perlcritic`, and `external` modes use the Perl::Critic-compatible shell-out path. |
 | `perlcritic_severity` | `integer` (1–5) | (unset) | Minimum critic severity to report. Perl::Critic uses `1 = least severe` and `5 = most severe`, so `1` reports everything while `5` reports only the most severe violations. Must be in the range 1–5; values outside this range are a parse error. |
 
 #### `[critic]` — Critic Engine Selection
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `engine` | `"legacy"`, `"perlcritic"`, `"external"`, or `"native"` | `"legacy"` | Selects the critic engine. `legacy`, `perlcritic`, and `external` use the Perl::Critic-compatible legacy path; `native` uses the Rust-native rule registry. Native critic remains opt-in. |
+| `engine` | `"legacy"`, `"perlcritic"`, `"external"`, or `"native"` | `"native"` | Selects the critic engine. `native` uses the Rust-native rule registry; `legacy`, `perlcritic`, and `external` use the Perl::Critic-compatible shell-out path. |
 
 #### `[features]` — LSP Feature Toggles
 
@@ -144,17 +144,16 @@ version = "5.38"
 include_paths = ["lib", "local/lib/perl5"]
 
 [diagnostics]
-# Enable critic diagnostics. With [critic].engine = "legacy", this requires
-# perlcritic installed. With [critic].engine = "native", it runs native rules.
-perlcritic = false
+# Critic diagnostics default to native Rust rules. Set false to disable them.
+perlcritic = true
 
 # Minimum severity to report: 1 (everything) to 5 (most severe only)
 perlcritic_severity = 3
 
 [critic]
-# Critic engine: "legacy" / "perlcritic" / "external" or "native".
-# Native critic remains opt-in.
-engine = "legacy"
+# Critic engine: "native" or "legacy" / "perlcritic" / "external".
+engine = "native"
+profile = "recommended"
 
 [features]
 # Toggle all inlay hints globally
@@ -510,23 +509,23 @@ specific `.perltidyrc` before switching a project.
 
 ### perl.perlcritic
 
-Controls optional critic diagnostics. The default engine is the legacy
-Perl::Critic-compatible path; the Rust-native critic registry is selected with
-`perl.critic.engine = "native"` or `[critic].engine = "native"`.
+Controls critic diagnostics. The default engine is the Rust-native recommended
+profile. The Perl::Critic-compatible shell-out path is selected explicitly with
+`perl.critic.engine = "legacy"`, `"perlcritic"`, or `"external"`.
 
 #### `perl.perlcritic.enabled`
 
 | Property | Value |
 |---|---|
 | Type | `boolean` |
-| Default | `false` |
+| Default | `true` |
 
-**Opt-in.** When `true`, the server publishes critic diagnostics. With the
-default legacy engine, the server runs `perlcritic` and merges violations into
-the diagnostic stream. If `perlcritic` is missing, profile resolution fails, or
-the command execution fails, the server emits a workspace warning instead of
-silently skipping. With the native engine, diagnostics come from the Rust-native
-rule registry and do not require the `perlcritic` executable.
+When `true`, the server publishes critic diagnostics. With the default native
+engine, diagnostics come from the Rust-native rule registry and do not require
+the `perlcritic` executable. With the legacy/external engine, the server runs
+`perlcritic` and merges violations into the diagnostic stream. If `perlcritic`
+is missing, profile resolution fails, or the command execution fails, the
+server emits a workspace warning instead of silently skipping.
 
 #### `perl.perlcritic.severity`
 
@@ -561,23 +560,22 @@ enabled.
 | Property | Value |
 |---|---|
 | Type | `"legacy"\|"perlcritic"\|"external"\|"native"` |
-| Default | `"legacy"` |
+| Default | `"native"` |
 
-Use `native` to route opt-in critic diagnostics through the Rust-native rule
-registry. Use `legacy`, `perlcritic`, or `external` to keep the
-Perl::Critic-compatible path.
+Use `native` to route critic diagnostics through the Rust-native rule registry.
+Use `legacy`, `perlcritic`, or `external` to keep the Perl::Critic-compatible
+shell-out path.
 
 #### `perl.critic.profile`
 
 | Property | Value |
 |---|---|
 | Type | `"recommended"\|"strict"` |
-| Default | `"strict"` |
+| Default | `"recommended"` |
 
 Native-critic rule bundle used when `perl.critic.engine = "native"`.
-`strict` preserves the current full opt-in native registry. `recommended`
-selects the lower-noise security/common-mistake/testing profile intended for
-future default-readiness work.
+`recommended` selects the lower-noise security/common-mistake/testing profile.
+`strict` enables the full native rule surface.
 
 ```json
 {
