@@ -64,12 +64,12 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ## Corpus Tracking Receipts
 
-- **Compatibility baseline (`just corpus-sweep-check`)**: Ubuntu system Perl in `.ci/parser-corpus-baseline.json` is the "does this still parse what ships on a stock Linux box?" receipt. Current committed floor: `6890/7095` clean (`97.1%`) on Perl `5.038002`, refreshed 2026-04-09 after the parser regression fixes.
-- **Ecosystem-breadth baseline (`just cpan-corpus-check`)**: `.ci/cpan-corpus-baseline.json` tracks the cached CPAN top-1000 install as the broad ecosystem receipt. Current committed floor: `8931/9372` clean (`95.3%`), baseline dated 2026-04-09. The install lane reuses `target/cpan-corpus/.cpanm` so reruns ratchet instead of redownloading from scratch.
-- **Deterministic regression baseline (`just parser-audit`)**: the repo-owned corpus stays at `91/91` clean, `64/68` NodeKinds covered, `12/12` GA features covered across `test_corpus/` plus `crates/perl-corpus/src/gen`.
-- **Strict-clean subsets**: `just common-corpus-check` enforces the pinned common manifest, and `.ci/cpan-corpus-manifest.txt` currently carries `4488` CPAN modules that must stay clean inside `just cpan-corpus-check`.
+- **Compatibility baseline (`just corpus-sweep-check`)**: Ubuntu system Perl in [`.ci/parser-corpus-baseline.json`](../../../.ci/parser-corpus-baseline.json) is the "does this still parse what ships on a stock Linux box?" receipt. Current counts live in [`parser.md`](parser.md), not this narrative release note.
+- **Ecosystem-breadth baseline (`just cpan-corpus-check`)**: [`.ci/cpan-corpus-baseline.json`](../../../.ci/cpan-corpus-baseline.json) tracks the cached CPAN top-1000 install as the broad ecosystem receipt. The install lane reuses `target/cpan-corpus/.cpanm` so reruns ratchet instead of redownloading from scratch. Current counts live in [`parser.md`](parser.md).
+- **Deterministic regression baseline (`just parser-audit`)**: the repo-owned corpus spans [`test_corpus/`](../../../test_corpus/) plus [`crates/perl-corpus/src/gen`](../../../crates/perl-corpus/src/gen). Current clean counts, NodeKind coverage, and GA feature coverage live in [`parser.md`](parser.md).
+- **Strict-clean subsets**: `just common-corpus-check` enforces the pinned common manifest, and [`.ci/cpan-corpus-manifest.txt`](../../../.ci/cpan-corpus-manifest.txt) carries the CPAN known-clean set checked inside `just cpan-corpus-check`. Current strict-clean counts live in [`parser.md`](parser.md).
 - **Automation discipline**: the post-merge CPAN workflow now refreshes both the full baseline receipt and the ratcheted manifest, then reruns the CPAN gate before attempting to commit either artifact.
-- **Cadence discipline**: the three baselines do not need identical refresh dates, but the committed system-Perl and CPAN top-1000 receipts are now both refreshed through 2026-04-09 after the `v0.12.3` parser/corpus fixes.
+- **Cadence discipline**: the three baselines do not need identical refresh dates; use [`parser.md`](parser.md) and the [`.ci/`](../../../.ci/) receipts for current baseline dates.
 
 ## Coverage Baseline Receipts (2026-03-17)
 
@@ -85,4 +85,4 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ---
 
-*Last Updated: 2026-05-01*
+*Last Updated: 2026-05-10*
