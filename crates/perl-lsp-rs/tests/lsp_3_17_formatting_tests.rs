@@ -141,6 +141,34 @@ fn test_range_formatting_preserves_simple_block_trailing_comment_3_17() -> TestR
 }
 
 #[test]
+fn test_formatting_returns_no_edits_for_literal_preserve_regions_3_17() -> TestResult {
+    for (uri, source) in [
+        ("file:///regex-format.pl", "my $matched = $text =~ /needle/i;\n"),
+        ("file:///heredoc-format.pl", "print <<'EOF';\nraw { text }\nEOF\n"),
+        ("file:///pod-format.pl", "=pod\n\n=head1 NAME\n\n=cut\n\nmy $x = 1;\n"),
+    ] {
+        let mut harness = LspHarness::new();
+        harness.initialize(None)?;
+        harness.open(uri, source)?;
+
+        let result = harness.request(
+            "textDocument/formatting",
+            json!({
+                "textDocument": { "uri": uri },
+                "options": {
+                    "tabSize": 4,
+                    "insertSpaces": true
+                }
+            }),
+        )?;
+
+        let edits = result.as_array().ok_or("formatting should return an edit array")?;
+        assert!(edits.is_empty(), "literal-preserve source should not produce edits: {source:?}");
+    }
+    Ok(())
+}
+
+#[test]
 fn test_on_type_formatting_3_17() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
