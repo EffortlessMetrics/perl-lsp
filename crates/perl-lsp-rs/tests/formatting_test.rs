@@ -77,6 +77,43 @@ fn test_range_formatting() {
 }
 
 #[test]
+fn test_formatting_preserves_trailing_comment() {
+    let formatter = CodeFormatter::new();
+    let options = FormattingOptions {
+        tab_size: 4,
+        insert_spaces: true,
+        trim_trailing_whitespace: None,
+        insert_final_newline: None,
+        trim_final_newlines: None,
+    };
+    let code = "my$x=1; # keep\n";
+
+    let edits = must(formatter.format_document(code, &options));
+
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "my $x = 1; # keep\n");
+}
+
+#[test]
+fn test_range_formatting_preserves_trailing_comment() {
+    let formatter = CodeFormatter::new();
+    let options = FormattingOptions {
+        tab_size: 4,
+        insert_spaces: true,
+        trim_trailing_whitespace: None,
+        insert_final_newline: None,
+        trim_final_newlines: None,
+    };
+    let code = "my$x=1; # keep\nmy$y=2;\n";
+    let range = WireRange { start: WirePosition::new(0, 0), end: WirePosition::new(0, 14) };
+
+    let edits = must(formatter.format_range(code, &range, &options));
+
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "my $x = 1; # keep");
+}
+
+#[test]
 fn test_empty_document() {
     let formatter = CodeFormatter::new();
     let options = FormattingOptions {
