@@ -132,6 +132,27 @@ fn test_range_formatting_preserves_trailing_comment() {
 }
 
 #[test]
+fn test_range_formatting_keeps_neighboring_leading_comment_outside_selected_line() {
+    let formatter = CodeFormatter::new();
+    let options = FormattingOptions {
+        tab_size: 4,
+        insert_spaces: true,
+        trim_trailing_whitespace: None,
+        insert_final_newline: None,
+        trim_final_newlines: None,
+    };
+    let code = "# applies to next declaration\nmy$x=1;\nmy$y=2;\n";
+    let range = WireRange { start: WirePosition::new(1, 0), end: WirePosition::new(1, 7) };
+
+    let edits = must(formatter.format_range(code, &range, &options));
+
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "my $x = 1;");
+    assert_eq!(edits[0].range.start.line, 1);
+    assert_eq!(edits[0].range.end.line, 1);
+}
+
+#[test]
 fn test_range_formatting_preserves_simple_block_trailing_comment() {
     let formatter = CodeFormatter::new();
     let options = FormattingOptions {
