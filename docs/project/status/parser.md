@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | <!-- BEGIN: PARSER_TRACKING_TABLE -->
 | **Ubuntu system Perl** | 96.8% clean (`6871/7095`) / 20.5% salvage | Compatibility baseline; Perl `5.038002`, `48` unreadable, `36` recovery-only, `140` ERROR-node files, `0` catastrophic, baseline `2026-04-28` | `.ci/parser-corpus-baseline.json` |
-| **CPAN top 1000** | 95.3% clean (`8931/9372`) / insufficient_data salvage | Ecosystem breadth baseline; `6` unreadable, `0` recovery-only, `0` ERROR-node files, `0` catastrophic, cached downloads in `target/cpan-corpus/.cpanm`, baseline `2026-04-09` | `.ci/cpan-corpus-baseline.json` |
+| **CPAN top 1000** | 95.3% clean (`8931/9372`) / insufficient_data salvage | Ecosystem breadth baseline; `6` unreadable, `insufficient_data` recovery-only, `insufficient_data` ERROR-node files, `insufficient_data` catastrophic, cached downloads in `target/cpan-corpus/.cpanm`, baseline `2026-04-09` | `.ci/cpan-corpus-baseline.json` |
 | **Project corpus** | 100.0% clean (`96/96`) | Deterministic regression baseline; `74` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `66/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
 <!-- END: PARSER_TRACKING_TABLE -->
 
