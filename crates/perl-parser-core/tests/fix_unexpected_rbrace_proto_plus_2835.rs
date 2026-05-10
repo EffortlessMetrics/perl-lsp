@@ -100,19 +100,20 @@ fn test_named_sub_attr_then_plus_proto() {
 }
 
 #[test]
-fn test_proto_then_attr_correct_order() {
+fn test_proto_then_attr_correct_order() -> Result<(), String> {
     let ast = parse("sub foo (+) : lvalue { $_[0] }");
     let NodeKind::Program { statements } = &ast.kind else {
-        panic!("expected program node, got: {:?}", ast.kind);
+        return Err(format!("expected program node, got: {:?}", ast.kind));
     };
     let Some(first) = statements.first() else {
-        panic!("expected a subroutine statement");
+        return Err("expected a subroutine statement".to_string());
     };
     let NodeKind::Subroutine { prototype, attributes, .. } = &first.kind else {
-        panic!("expected subroutine node, got: {:?}", first.kind);
+        return Err(format!("expected subroutine node, got: {:?}", first.kind));
     };
     assert!(prototype.is_some(), "expected prototype for sub foo (+)");
     assert_eq!(attributes, &vec!["lvalue".to_string()]);
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
