@@ -6,7 +6,7 @@
 use crate::runtime::diagnostics::PullDiagnosticsOrchestrator;
 use crate::runtime::types::{
     DocumentScanView, PendingWorkspaceConfigurationRequest, best_workspace_folder_for_doc,
-    source_path_from_uri, workspace_folder_matches_doc_uri, workspace_folder_path,
+    source_path_from_uri, workspace_folder_path,
 };
 use crate::runtime::workspace_folder::WorkspaceFolderState;
 
@@ -1042,6 +1042,7 @@ pub(crate) fn location_from_path(p: &Path) -> serde_json::Value {
 mod tests {
     use super::*;
     use crate::features::formatting::FormatRange;
+    use crate::runtime::types::workspace_folder_matches_doc_uri;
     use perl_lsp_rs_core::config::AiCompletionConfig;
 
     #[test]
