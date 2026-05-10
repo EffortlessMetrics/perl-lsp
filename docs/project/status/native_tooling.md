@@ -6,7 +6,7 @@
 
 | Metric | Value |
 | --- | ---: |
-| Fixture count | 38 |
+| Fixture count | 39 |
 | Expected diagnostic fixtures | 8 |
 | Literal-preserve bailout fixtures | 8 |
 | Corpus files checked | 65 |

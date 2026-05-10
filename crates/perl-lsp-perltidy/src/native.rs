@@ -701,9 +701,10 @@ fn format_simple_lexical_line(line: &str, config: &FormatConfig) -> Option<Strin
 fn format_simple_subroutine_line(line: &str, config: &FormatConfig) -> Option<String> {
     let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
     let (indent, body) = line.split_at(indent_len);
-    if body.is_empty() || body.contains('#') {
+    if body.is_empty() {
         return None;
     }
+    let (body, trailing_comment) = split_trailing_comment(body);
 
     let mut stream = perl_parser_core::TokenStream::new(body);
     let mut tokens = Vec::new();
@@ -716,15 +717,16 @@ fn format_simple_subroutine_line(line: &str, config: &FormatConfig) -> Option<St
     }
 
     let formatted = format_simple_subroutine_tokens(&tokens, indent, config)?;
-    Some(formatted)
+    Some(append_trailing_comment(formatted, trailing_comment))
 }
 
 fn format_simple_control_block_line(line: &str, config: &FormatConfig) -> Option<String> {
     let indent_len = line.len() - line.trim_start_matches([' ', '\t']).len();
     let (indent, body) = line.split_at(indent_len);
-    if body.is_empty() || body.contains('#') {
+    if body.is_empty() {
         return None;
     }
+    let (body, trailing_comment) = split_trailing_comment(body);
 
     let mut stream = perl_parser_core::TokenStream::new(body);
     let mut tokens = Vec::new();
@@ -736,7 +738,8 @@ fn format_simple_control_block_line(line: &str, config: &FormatConfig) -> Option
         tokens.push(token);
     }
 
-    format_simple_control_block_tokens(&tokens, indent, config)
+    let formatted = format_simple_control_block_tokens(&tokens, indent, config)?;
+    Some(append_trailing_comment(formatted, trailing_comment))
 }
 
 fn format_simple_statement_line(line: &str, config: &FormatConfig) -> Option<String> {
