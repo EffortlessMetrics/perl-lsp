@@ -2670,8 +2670,12 @@ print \"unreachable\\n\";\n";
             "PL701 MUST fire: 'no lib' cancelled the path, GoneModule must not be found.\n\
              Published: {text:?}"
         );
-        // PL700 (unused import hint) is orthogonal and may also fire — it does not indicate
-        // the module was found. What matters is that PL701 fires (resolver returned false).
+        assert!(
+            !text.contains("PL700"),
+            "PL700 must not fire after 'no lib' cancels the path; that would mean \
+             the missing module was still treated as resolved.\n\
+             Published: {text:?}"
+        );
         Ok(())
     }
 }
