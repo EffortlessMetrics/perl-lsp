@@ -113,7 +113,7 @@ impl SemanticQueries for NullSemanticQueries {
 #[allow(unused_imports)]
 pub use super::internal_types::{Diagnostic, RelatedInformation};
 #[allow(unused_imports)]
-pub use perl_diagnostics::codes::DiagnosticSeverity;
+pub use perl_diagnostics::codes::{DiagnosticCode, DiagnosticSeverity};
 
 /// Diagnostics provider
 ///
@@ -404,11 +404,30 @@ impl DiagnosticsProvider {
             }
         }
 
+        suppress_unused_imports_for_missing_modules(&mut diagnostics);
+
         // Remove duplicate diagnostics before returning
         deduplicate_diagnostics(&mut diagnostics);
 
         diagnostics
     }
+}
+
+fn suppress_unused_imports_for_missing_modules(diagnostics: &mut Vec<Diagnostic>) {
+    let missing_module_ranges: Vec<_> = diagnostics
+        .iter()
+        .filter(|diag| diag.code.as_deref() == Some(DiagnosticCode::ModuleNotFound.as_str()))
+        .map(|diag| diag.range)
+        .collect();
+
+    if missing_module_ranges.is_empty() {
+        return;
+    }
+
+    diagnostics.retain(|diag| {
+        diag.code.as_deref() != Some(DiagnosticCode::UnusedImport.as_str())
+            || !missing_module_ranges.contains(&diag.range)
+    });
 }
 
 fn format_found_token(found: &str) -> String {
