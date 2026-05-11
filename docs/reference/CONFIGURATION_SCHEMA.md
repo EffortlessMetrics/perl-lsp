@@ -128,8 +128,19 @@ The perl-lsp server configuration is hierarchical, with all settings nested unde
         },
         "useSystemInc": {
           "type": "boolean",
-          "description": "Include system @INC paths in module resolution",
+          "description": "Include interpreter startup @INC (the result of `perl -e 'print join(\"\\n\", @INC)'`) in module resolution. Independent of PERL5LIB, which is controlled by usePerl5lib.",
           "default": false
+        },
+        "usePerl5lib": {
+          "type": "boolean",
+          "description": "Read the PERL5LIB environment variable and merge its paths into module resolution. Independent of useSystemInc; usePerl5lib controls only PERL5LIB.",
+          "default": true
+        },
+        "perl5libPrecedence": {
+          "type": "string",
+          "enum": ["prepend", "append"],
+          "description": "Whether PERL5LIB entries are searched before or after configured includePaths. 'prepend' matches Perl's normal runtime semantics.",
+          "default": "prepend"
         },
         "resolutionTimeout": {
           "type": "number",
@@ -513,11 +524,18 @@ Directories to search for Perl modules, relative to the workspace root.
 |----------|-------|
 | Type | `boolean` |
 | Default | `false` |
-| Source | `crates/perl-lsp-config/src/lib.rs` |
+| Source | `crates/perl-lsp-rs-core/src/config/mod.rs` |
 
-Whether to include system `@INC` paths in module resolution. Disabled by default to avoid blocking on network filesystems.
+Whether to include the selected Perl interpreter's startup `@INC` paths
+(the result of `perl -e 'print join("\n", @INC)'`) in module resolution.
+Disabled by default to avoid slow filesystem probes and surprising matches
+from globally installed modules.
 
-**Security Note:** The current directory (`.`) is filtered from system `@INC` to prevent injection attacks.
+This does **not** control `PERL5LIB`; use `usePerl5lib` for that. The two
+settings are independent: `useSystemInc` controls interpreter startup `@INC`
+only, while `usePerl5lib` controls `PERL5LIB`.
+
+**Security Note:** The current directory (`.`) is filtered from system `@INC` to prevent injection attacks. When `usePerl5lib` is `false`, `PERL5LIB` is also stripped from the probe subprocess environment, so disabling `usePerl5lib` truly disables PERL5LIB even when `useSystemInc=true`.
 
 **Example:**
 
@@ -534,6 +552,72 @@ Whether to include system `@INC` paths in module resolution. Disabled by default
 **Validation Rules:**
 - Must be boolean
 - Cannot be changed while server is running (requires restart)
+
+#### `perl.workspace.usePerl5lib`
+
+| Property | Value |
+|----------|-------|
+| Type | `boolean` |
+| Default | `true` |
+| Source | `crates/perl-lsp-rs-core/src/config/mod.rs` |
+
+Whether `perl-lsp` reads the `PERL5LIB` environment variable and merges its
+paths into module resolution. Default is enabled so the LSP behaves like
+running `perl` directly from the same shell.
+
+This is separate from `useSystemInc`. `PERL5LIB` is an explicit environment
+search path; `useSystemInc` controls probing the selected Perl interpreter's
+startup `@INC`. Set `usePerl5lib` to `false` when you want module resolution
+to ignore ambient shell environment paths and rely only on project /
+workspace configuration.
+
+**Example:**
+
+```json
+{
+  "perl": {
+    "workspace": {
+      "usePerl5lib": false
+    }
+  }
+}
+```
+
+**Validation Rules:**
+- Must be boolean
+- Toggling invalidates the lazy startup-`@INC` cache so the next probe
+  re-runs with the correct `PERL5LIB` environment.
+
+#### `perl.workspace.perl5libPrecedence`
+
+| Property | Value |
+|----------|-------|
+| Type | `"prepend"` or `"append"` |
+| Default | `"prepend"` |
+| Source | `crates/perl-lsp-rs-core/src/config/mod.rs` |
+
+Controls whether `PERL5LIB` entries are searched before or after configured
+`includePaths`. `"prepend"` matches Perl's normal runtime behavior:
+`PERL5LIB` paths appear before later library paths.
+
+Only takes effect when `usePerl5lib` is `true` and `PERL5LIB` is non-empty.
+
+**Example:**
+
+```json
+{
+  "perl": {
+    "workspace": {
+      "perl5libPrecedence": "append"
+    }
+  }
+}
+```
+
+**Validation Rules:**
+- Must be `"prepend"` or `"append"`. Unknown values are ignored (current
+  setting is preserved) rather than rejected, so a typo does not silently
+  reset an explicitly-configured `"append"`.
 
 #### `perl.workspace.resolutionTimeout`
 
@@ -1132,9 +1216,18 @@ export NO_COLOR=1
 
 #### `PERL5LIB`
 
-Standard Perl library path environment variable. Appended to `@INC` by the Perl runtime.
-Not read by `perl-lsp` directly, but affects Perl processes spawned for module resolution
-when `useSystemInc` is enabled.
+Standard Perl library path environment variable. `perl-lsp` reads this for
+module resolution when `perl.workspace.usePerl5lib` is `true` (the default).
+Its ordering relative to configured `includePaths` is controlled by
+`perl.workspace.perl5libPrecedence`.
+
+`PERL5LIB` is **not** the same as interpreter startup `@INC`. Startup `@INC`
+probing — the result of `perl -e 'print join("\n", @INC)'` — is controlled
+separately by `perl.workspace.useSystemInc`. The two sources are independent:
+
+- Project libraries → `perl.workspace.includePaths`
+- Environment libraries → `perl.workspace.usePerl5lib` + `PERL5LIB`
+- Globally installed libraries → `perl.workspace.useSystemInc` + interpreter startup `@INC`
 
 ```bash
 export PERL5LIB="/path/to/lib:/another/path"

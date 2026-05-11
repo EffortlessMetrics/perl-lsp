@@ -26,6 +26,7 @@
 pub mod definition_shadow;
 /// Hover shadow compare path (semantic migration).
 pub mod hover_shadow;
+mod refactor_receipt_helpers;
 mod references;
 /// Find-references shadow compare path (semantic migration).
 pub mod references_shadow;

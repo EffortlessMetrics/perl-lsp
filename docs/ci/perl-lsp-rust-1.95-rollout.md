@@ -108,6 +108,9 @@ expansion.
 normal PRs during this rollout. The target is better routing: skip docs-only and
 test-fixture-only changes unless a label forces analysis, keep artifacts
 consistent, and reserve mutation testing for targeted, nightly, or release lanes.
+While the repo remains pinned to Rust 1.93.1, the workflow pins `ripr` to the
+0.4.x line; the Rust 1.95 toolchain bump is the point where that install can move
+to a newer `ripr` release.
 
 ### CI economics
 

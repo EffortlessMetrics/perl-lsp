@@ -663,6 +663,13 @@ impl WorkspaceConfig {
                 self.resolution_timeout_ms = timeout;
             }
             if let Some(use_p5l) = workspace.get("usePerl5lib").and_then(|v| v.as_bool()) {
+                // Invalidate the lazy startup-@INC cache when usePerl5lib toggles, because
+                // `fetch_perl_inc` strips PERL5LIB from the probe environment when
+                // usePerl5lib is false (and inherits it when true). A cache built under
+                // the old setting may include or exclude PERL5LIB paths incorrectly.
+                if use_p5l != self.use_perl5lib {
+                    self.system_inc_cache = None;
+                }
                 self.use_perl5lib = use_p5l;
             }
             if let Some(prec) = workspace.get("perl5libPrecedence").and_then(|v| v.as_str()) {
@@ -685,21 +692,35 @@ impl WorkspaceConfig {
     /// that takes a long time on first run — an empty vector is cached
     /// so subsequent requests don't re-probe. The user can re-trigger
     /// probing by toggling `useSystemInc`, which invalidates the cache.
+    ///
+    /// The PERL5LIB environment variable is stripped from the probe subprocess
+    /// when `use_perl5lib` is false, so interpreter startup `@INC` does not
+    /// silently reintroduce PERL5LIB paths that the user has disabled. The two
+    /// settings remain independent: PERL5LIB visibility is controlled by
+    /// `use_perl5lib`, and startup `@INC` (everything except PERL5LIB) is
+    /// controlled by `use_system_inc`.
     pub fn get_system_inc(&mut self) -> &[PathBuf] {
         if !self.use_system_inc {
             return &[];
         }
 
         if self.system_inc_cache.is_none() {
-            self.system_inc_cache =
-                Some(Self::fetch_perl_inc(self.perl_path.as_deref(), &self.perl_args));
+            self.system_inc_cache = Some(Self::fetch_perl_inc(
+                self.perl_path.as_deref(),
+                &self.perl_args,
+                self.use_perl5lib,
+            ));
         }
 
         self.system_inc_cache.as_deref().unwrap_or(&[])
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn fetch_perl_inc(perl_path: Option<&str>, perl_args: &[String]) -> Vec<PathBuf> {
+    fn fetch_perl_inc(
+        perl_path: Option<&str>,
+        perl_args: &[String],
+        include_perl5lib: bool,
+    ) -> Vec<PathBuf> {
         let perl_path = match perl_path.filter(|path| !path.is_empty()) {
             Some(path) => PathBuf::from(path),
             None => match resolve_perl_path_with_toolchain() {
@@ -708,6 +729,12 @@ impl WorkspaceConfig {
             },
         };
         let mut command = Command::new(perl_path);
+        if !include_perl5lib {
+            // Prevent PERL5LIB from leaking into interpreter startup @INC when
+            // the user has disabled usePerl5lib. Without this, a PERL5LIB set in
+            // the LSP's environment would still appear in `@INC` via the probe.
+            command.env_remove("PERL5LIB");
+        }
         command.args(perl_args);
         command.args(["-e", "print join(\"\\n\", @INC)"]);
         let output = output_with_timeout(command, SYSTEM_INC_PROBE_TIMEOUT);
@@ -745,7 +772,7 @@ impl WorkspaceConfig {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn fetch_perl_inc(_: Option<&str>, _: &[String]) -> Vec<PathBuf> {
+    fn fetch_perl_inc(_: Option<&str>, _: &[String], _include_perl5lib: bool) -> Vec<PathBuf> {
         Vec::new()
     }
 }
@@ -1572,20 +1599,14 @@ profile = "recommended"
     /// Regression guard for the unbounded `Command::output()` stall: a long-running
     /// probe must be killed within roughly `timeout + poll_interval`. We use perl
     /// itself (via the same toolchain resolver that `fetch_perl_inc` uses) to
-    /// guarantee an interpreter is present; the test skips with a clear message
-    /// when no perl is available.
+    /// guarantee an interpreter is present; the test skips when no perl is
+    /// available.
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
-    fn output_with_timeout_kills_long_running_subprocess() {
+    fn output_with_timeout_kills_long_running_subprocess() -> TestResult {
         let perl_path = match resolve_perl_path_with_toolchain() {
             Ok(path) => path,
-            Err(_) => {
-                eprintln!(
-                    "SKIP output_with_timeout_kills_long_running_subprocess: \
-                     no perl interpreter found by toolchain resolver"
-                );
-                return;
-            }
+            Err(_) => return Ok(()),
         };
 
         let mut command = Command::new(perl_path);
@@ -1596,7 +1617,7 @@ profile = "recommended"
         let elapsed = start.elapsed();
 
         let err = match result {
-            Ok(out) => panic!("expected timeout, got success: {out:?}"),
+            Ok(out) => return Err(format!("expected timeout, got success: {out:?}").into()),
             Err(e) => e,
         };
         assert_eq!(
@@ -1609,6 +1630,7 @@ profile = "recommended"
             elapsed < Duration::from_secs(3),
             "timeout should fire within reasonable overhead, took {elapsed:?}",
         );
+        Ok(())
     }
 
     /// `get_system_inc` must respect `SYSTEM_INC_PROBE_TIMEOUT` so a hung
@@ -1617,16 +1639,10 @@ profile = "recommended"
     /// returned slice is empty, cache holds the empty result.
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
-    fn get_system_inc_does_not_stall_on_slow_interpreter() {
+    fn get_system_inc_does_not_stall_on_slow_interpreter() -> TestResult {
         let perl_path = match resolve_perl_path_with_toolchain() {
             Ok(path) => path,
-            Err(_) => {
-                eprintln!(
-                    "SKIP get_system_inc_does_not_stall_on_slow_interpreter: \
-                     no perl interpreter found"
-                );
-                return;
-            }
+            Err(_) => return Ok(()),
         };
 
         let mut config = WorkspaceConfig::default();
@@ -1655,6 +1671,56 @@ profile = "recommended"
         assert!(
             elapsed2 < Duration::from_millis(50),
             "cached lookup should be fast, took {elapsed2:?}",
+        );
+        Ok(())
+    }
+
+    /// `usePerl5lib` and `useSystemInc` must produce independent startup-`@INC`
+    /// caches. When `usePerl5lib` toggles, the cache must be invalidated so the
+    /// next `get_system_inc` call re-probes Perl with the correct PERL5LIB
+    /// environment (stripped or inherited based on `use_perl5lib`).
+    #[test]
+    fn use_perl5lib_toggle_invalidates_system_inc_cache() {
+        let mut config = WorkspaceConfig::default();
+        config.use_system_inc = true;
+        assert!(config.use_perl5lib, "default usePerl5lib should be true");
+
+        // Pre-populate the cache; flipping usePerl5lib must clear it.
+        config.system_inc_cache = Some(vec![PathBuf::from("/sentinel/cached")]);
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "usePerl5lib": false }
+        }));
+        assert!(!config.use_perl5lib);
+        assert!(
+            config.system_inc_cache.is_none(),
+            "system_inc_cache must invalidate when usePerl5lib changes (true -> false); \
+             got {:?}",
+            config.system_inc_cache
+        );
+
+        // Flip back the other direction.
+        config.system_inc_cache = Some(vec![PathBuf::from("/sentinel/cached2")]);
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "usePerl5lib": true }
+        }));
+        assert!(config.use_perl5lib);
+        assert!(
+            config.system_inc_cache.is_none(),
+            "system_inc_cache must invalidate when usePerl5lib changes (false -> true); \
+             got {:?}",
+            config.system_inc_cache
+        );
+
+        // No-op (same value) must NOT clear the cache.
+        let stable = vec![PathBuf::from("/sentinel/stable")];
+        config.system_inc_cache = Some(stable.clone());
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "usePerl5lib": true }
+        }));
+        assert_eq!(
+            config.system_inc_cache.as_deref(),
+            Some(stable.as_slice()),
+            "cache must survive when usePerl5lib value does not change",
         );
     }
 }
