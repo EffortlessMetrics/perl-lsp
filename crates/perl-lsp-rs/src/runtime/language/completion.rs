@@ -154,8 +154,13 @@ impl LspServer {
         // use_system_inc=true would spawn `perl -e 'print join("\n", @INC)'`.
         if include_system_inc {
             let mut folders = self.workspace_folders.lock();
+            // Pick the most-specific (deepest) matching folder so the cache is
+            // written back to the same authoritative folder that
+            // `config_for_doc` and `folder_for_doc_uri` resolve.
+            let best_uri = super::super::best_workspace_folder_for_doc(&folders, uri)
+                .map(|folder| folder.uri.clone());
             if let Some(folder) =
-                folders.iter_mut().find(|f| super::super::workspace_folder_matches_doc_uri(f, uri))
+                best_uri.and_then(|best_uri| folders.iter_mut().find(|f| f.uri == best_uri))
             {
                 for path in folder.effective_workspace_config.get_system_inc() {
                     if seen_system.insert(path.clone()) {
