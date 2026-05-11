@@ -10,9 +10,9 @@ name: Aggregate CI lane history
 
 on:
   schedule:
-    # 05:00 UTC daily — after the 04:00 flake-detection run, well outside
-    # US/EU CI peak hours. Off-minute and not on the hour to avoid
-    # cron-fleet pile-up.
+    # 05:07 UTC daily — off-minute (not on the hour) to avoid cron-fleet
+    # pile-up at :00. Lands after the 04:00 flake-detection run and well
+    # outside US/EU CI peak hours.
     - cron: '7 5 * * *'
   workflow_dispatch:
 
