@@ -55,6 +55,12 @@ fn double_colon_in_package_variable_unaffected() {
 }
 
 #[test]
+fn main_package_uppercase_variable() {
+    // $::IS_ASCII from Unicode::Normalize is a main-package variable.
+    assert_clean_parse(r#"my $x = $::IS_ASCII;"#);
+}
+
+#[test]
 fn main_stash_hash_sigil() {
     // %:: is the main symbol table as a hash — should parse without error
     assert_clean_parse(r#"my %stash = %::;"#);

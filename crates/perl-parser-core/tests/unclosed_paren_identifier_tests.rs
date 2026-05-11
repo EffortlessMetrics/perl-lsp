@@ -519,6 +519,13 @@ fn unless_null_in_paren() {
     assert_clean_parse(r#"unless (null $root) { print "not null" }"#);
 }
 
+#[test]
+fn main_package_variable_in_paren_expr() {
+    // From Unicode::Normalize: `$::IS_ASCII` must parse as a main-package
+    // variable, not as `$::` followed by a stray bare identifier.
+    assert_clean_parse(r#"my $x = ($::IS_ASCII || $] < 5.008);"#);
+}
+
 // === Sigil-peek heuristic: imported unary functions without parens (#1943) ===
 // These all fail with "expected ')', found identifier" before the fix because
 // `blessed`, `reftype`, etc. are not in the builtin table. The fix adds a
