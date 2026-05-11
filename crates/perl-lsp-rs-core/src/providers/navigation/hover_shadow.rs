@@ -507,6 +507,7 @@ fn provenance_label(prov: Provenance) -> &'static str {
         Provenance::NameHeuristic => "name heuristic",
         Provenance::SearchFallback => "search fallback",
         Provenance::DynamicBoundary => "dynamic boundary",
+        Provenance::LiteralRequireImport => "literal require/import",
     }
 }
 

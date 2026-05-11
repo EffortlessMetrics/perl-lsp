@@ -27,6 +27,8 @@ pub use crate::import::LoadTiming;
 pub use crate::import::ModuleImportHead;
 pub use crate::import::ModuleImportKind;
 pub use crate::import::RequireForm;
+pub use crate::import::RequireImportEntry;
+pub use crate::import::extract_require_import_symbols;
 pub use crate::import::parse_module_import_head;
 pub use crate::import::resolve_known_export_tag;
 

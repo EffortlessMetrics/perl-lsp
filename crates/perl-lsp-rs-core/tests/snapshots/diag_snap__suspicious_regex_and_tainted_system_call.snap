@@ -3,6 +3,6 @@ source: crates/perl-lsp-rs-core/tests/diag_snap.rs
 assertion_line: 136
 expression: snapshot
 ---
-PL002 | Error | (61, 62) | Nested quantifiers detected (possible backtracking risk) | <none>
+PL002 | Error | (66, 67) | Nested quantifiers detected (possible backtracking risk) | <none>
 PL200 | Warning | (0, 0) | This file has no package declaration. Add 'package MyModule;' to declare the package namespace. | Add 'package MyModule;' at the top of the file
 PL603 | Warning | (78, 92) | system() executes a shell command. Ensure input is sanitized. | Use the list form: system($cmd, @args) instead of system("$cmd @args") to avoid shell injection
