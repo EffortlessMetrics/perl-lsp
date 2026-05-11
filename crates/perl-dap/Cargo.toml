@@ -82,7 +82,7 @@ serde = { workspace = true, features = ["derive"] }
 toml = "1.1.2"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31.1", features = ["signal"] }  # For SIGINT handling (AC9)
+nix = { version = "0.31.3", features = ["signal"] }  # For SIGINT handling (AC9)
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["processthreadsapi", "wincon"] }  # For Ctrl+C and GenerateConsoleCtrlEvent (AC9, #3028)
