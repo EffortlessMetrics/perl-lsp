@@ -156,6 +156,130 @@ pub const CORE_MODULES: &[&str] = &[
     "version",
 ];
 
+/// A single `@INC` search path with its origin label.
+///
+/// Used by [`check_missing_modules_with_search_context`] to produce labeled
+/// diagnostic messages (e.g. `- lib (workspace includePaths)`) and to select
+/// context-aware configuration suggestions.
+///
+/// # Source labels
+///
+/// Standard source strings (use these exact values for suggestion selection):
+///
+/// | `source` value | Controlled by |
+/// |---|---|
+/// | `"workspace includePaths"` | `perl.workspace.includePaths` |
+/// | `"PERL5LIB"` | `perl.workspace.usePerl5lib` + `PERL5LIB` env |
+/// | `"use lib"` | Lexical `use lib` in the document |
+/// | `"interpreter startup @INC"` | `perl.workspace.useSystemInc` |
+/// | `"FindBin"` | FindBin-relative paths resolved at index time |
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ModuleSearchPathDisplay {
+    /// The filesystem path that was searched.
+    pub path: String,
+    /// Human-readable label for the origin of this path.
+    pub source: String,
+}
+
+impl ModuleSearchPathDisplay {
+    /// Convenience constructor.
+    pub fn new(path: impl Into<String>, source: impl Into<String>) -> Self {
+        Self { path: path.into(), source: source.into() }
+    }
+}
+
+/// How many labeled paths to show inline before switching to "... and N more".
+const MAX_LABELED_SHOWN: usize = 5;
+
+/// How many total search roots before suggesting a timeout increase.
+const MANY_ROOTS_THRESHOLD: usize = 8;
+
+/// Pick the single most actionable configuration suggestion given the set of
+/// labeled search paths that were consulted.
+///
+/// Priority order:
+/// 1. No paths at all → point to workspace configuration.
+/// 2. Workspace-only search (no env/system paths) → add to includePaths or install.
+/// 3. Many roots searched → suggest resolutionTimeout.
+/// 4. No system @INC paths consulted → suggest useSystemInc.
+/// 5. Generic fallback.
+fn choose_context_suggestion(module: &str, search_context: &[ModuleSearchPathDisplay]) -> String {
+    if search_context.is_empty() {
+        return "Open a workspace folder or configure `perl.workspace.includePaths`.".to_string();
+    }
+
+    let has_perl5lib = search_context.iter().any(|p| p.source == "PERL5LIB");
+    let has_system_inc = search_context.iter().any(|p| p.source == "interpreter startup @INC");
+    let has_workspace = search_context.iter().any(|p| p.source == "workspace includePaths");
+    let has_use_lib = search_context.iter().any(|p| p.source == "use lib");
+    let has_findbin = search_context.iter().any(|p| p.source == "FindBin");
+
+    let workspace_only =
+        has_workspace && !has_perl5lib && !has_system_inc && !has_use_lib && !has_findbin;
+
+    if workspace_only {
+        return format!(
+            "Add the module's directory to `perl.workspace.includePaths` or install the module with: cpanm {module}"
+        );
+    }
+
+    if search_context.len() >= MANY_ROOTS_THRESHOLD {
+        return "Increase `perl.workspace.resolutionTimeout` if this is on a slow filesystem."
+            .to_string();
+    }
+
+    if !has_system_inc {
+        return "Enable `perl.workspace.useSystemInc` to consider interpreter startup `@INC`."
+            .to_string();
+    }
+
+    format!("Install with: cpanm {module} or add to `perl.workspace.includePaths`")
+}
+
+/// Format the PL701 message body for labeled search paths.
+///
+/// Short lists (≤ `MAX_LABELED_SHOWN`): bulleted newline list with source tags.
+/// Long lists (> `MAX_LABELED_SHOWN`): first entry inline, "... and N more" suffix.
+fn format_labeled_path_list(search_context: &[ModuleSearchPathDisplay]) -> String {
+    if search_context.is_empty() {
+        return String::new();
+    }
+
+    let total = search_context.len();
+
+    if total <= MAX_LABELED_SHOWN {
+        let mut out = String::new();
+        for entry in search_context {
+            out.push_str(&format!("\n  - {} ({})", entry.path, entry.source));
+        }
+        out
+    } else {
+        let shown: Vec<String> = search_context[..MAX_LABELED_SHOWN]
+            .iter()
+            .map(|e| format!("{} ({})", e.path, e.source))
+            .collect();
+        let remaining = total - MAX_LABELED_SHOWN;
+        format!(" {}, ... and {} more", shown.join(", "), remaining)
+    }
+}
+
+/// Walk the AST and collect `(module, start, end)` triples for every `use` statement.
+fn collect_use_statements(node: &Node) -> Vec<(String, usize, usize)> {
+    let mut use_statements: Vec<(String, usize, usize)> = Vec::new();
+    walk_node(node, &mut |n| {
+        if let NodeKind::Use { module, .. } = &n.kind {
+            use_statements.push((module.clone(), n.location.start, n.location.end));
+        }
+    });
+    use_statements
+}
+
+/// Return `true` if `module_str` should be skipped by PL701 (empty, version-only, or core).
+fn should_skip_module(module_str: &str) -> bool {
+    module_str.is_empty() || is_version_only_use(module_str) || CORE_MODULES.contains(&module_str)
+}
+
 /// Check for use statements whose modules cannot be resolved.
 ///
 /// Walks the AST to collect all `use Module` statements. For each non-pragma,
@@ -179,6 +303,11 @@ pub const CORE_MODULES: &[&str] = &[
 /// - Version-only `use` statements: `use 5.010;` `use v5.38;`
 /// - All entries in `CORE_MODULES`
 /// - `use if` form (module field is "if"; treated as pragma)
+///
+/// # Migration
+///
+/// Prefer [`check_missing_modules_with_search_context`] for new call sites — it
+/// accepts labeled paths and emits context-aware configuration suggestions.
 pub fn check_missing_modules<F>(
     node: &Node,
     _source: &str,
@@ -188,32 +317,14 @@ pub fn check_missing_modules<F>(
 ) where
     F: Fn(&str) -> bool,
 {
-    let mut use_statements: Vec<(String, usize, usize)> = Vec::new();
-
-    walk_node(node, &mut |n| {
-        if let NodeKind::Use { module, .. } = &n.kind {
-            use_statements.push((module.clone(), n.location.start, n.location.end));
-        }
-    });
+    let use_statements = collect_use_statements(node);
 
     for (raw_module, start, end) in &use_statements {
         // Strip embedded version — "Foo::Bar 1.23" → "Foo::Bar"
         let module_str =
             raw_module.split_once(' ').map(|(name, _)| name).unwrap_or(raw_module.as_str());
 
-        // Skip empty module names — these come from parser error-recovery nodes
-        // (NodeKind::Use { module: String::new(), .. }) and would produce false positives.
-        if module_str.is_empty() {
-            continue;
-        }
-
-        // Skip version-only use: `use 5.010;` or `use v5.38;`
-        if is_version_only_use(module_str) {
-            continue;
-        }
-
-        // Skip core modules (prevents false positives when system @INC is disabled)
-        if CORE_MODULES.contains(&module_str) {
+        if should_skip_module(module_str) {
             continue;
         }
 
@@ -254,6 +365,68 @@ pub fn check_missing_modules<F>(
                 "Install with: cpanm {} or add to .perl-lsp.toml: include_paths",
                 module_str
             )),
+        });
+    }
+}
+
+/// Check for use statements whose modules cannot be resolved — labeled-path variant.
+///
+/// Identical to [`check_missing_modules`] but accepts [`ModuleSearchPathDisplay`]
+/// entries instead of bare `String` paths. The source label on each entry powers:
+///
+/// - **Labeled message format**: `- lib (workspace includePaths)` so users can see
+///   which configuration setting added each path.
+/// - **Context-aware suggestions**: the absence of PERL5LIB or system `@INC` entries
+///   in `search_context` drives specific `usePerl5lib` / `useSystemInc` hints.
+///
+/// # Arguments
+///
+/// * `node` — Root AST node to walk
+/// * `_source` — Source text (reserved for future context extraction)
+/// * `resolver` — Callback: `fn(module_name: &str) -> bool`. Return `true` if the
+///   module was found.
+/// * `search_context` — Labeled `@INC` entries. Pass `&[]` when paths are unknown.
+/// * `diagnostics` — Output vector; new diagnostics are pushed here
+pub fn check_missing_modules_with_search_context<F>(
+    node: &Node,
+    _source: &str,
+    resolver: F,
+    search_context: &[ModuleSearchPathDisplay],
+    diagnostics: &mut Vec<Diagnostic>,
+) where
+    F: Fn(&str) -> bool,
+{
+    let use_statements = collect_use_statements(node);
+
+    for (raw_module, start, end) in &use_statements {
+        let module_str =
+            raw_module.split_once(' ').map(|(name, _)| name).unwrap_or(raw_module.as_str());
+
+        if should_skip_module(module_str) {
+            continue;
+        }
+
+        if resolver(module_str) {
+            continue;
+        }
+
+        let message = if search_context.is_empty() {
+            format!("Module '{module_str}' not found in workspace or configured include paths")
+        } else {
+            let path_list = format_labeled_path_list(search_context);
+            format!("Module '{module_str}' not found. Searched @INC:{path_list}")
+        };
+
+        let suggestion = choose_context_suggestion(module_str, search_context);
+
+        diagnostics.push(Diagnostic {
+            range: (*start, *end),
+            severity: DiagnosticSeverity::Warning,
+            code: Some(DiagnosticCode::ModuleNotFound.as_str().to_string()),
+            message,
+            related_information: vec![],
+            tags: vec![],
+            suggestion: Some(suggestion),
         });
     }
 }
@@ -612,5 +785,337 @@ mod tests {
         // If recovery omitted it entirely we get 0. Either is acceptable — but not a panic.
         let pl701_count = diags.iter().filter(|d| d.code.as_deref() == Some("PL701")).count();
         assert!(pl701_count <= 1, "at most one PL701 for one use statement (got {})", pl701_count);
+    }
+
+    // --- check_missing_modules_with_search_context tests ---
+
+    fn make_ctx(entries: &[(&str, &str)]) -> Vec<ModuleSearchPathDisplay> {
+        entries.iter().map(|(p, s)| ModuleSearchPathDisplay::new(*p, *s)).collect()
+    }
+
+    #[test]
+    fn context_variant_emits_pl701_for_missing_module() {
+        let source = "use My::Missing;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &[],
+            &mut diags,
+        );
+        assert_eq!(diags.len(), 1);
+        assert_eq!(diags[0].code.as_deref(), Some("PL701"));
+        assert!(diags[0].message.contains("My::Missing"));
+    }
+
+    #[test]
+    fn context_variant_found_module_no_diagnostic() {
+        let source = "use Foo::Bar;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        let ctx = make_ctx(&[("lib", "workspace includePaths")]);
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_finds_foo,
+            &ctx,
+            &mut diags,
+        );
+        assert!(diags.is_empty());
+    }
+
+    #[test]
+    fn context_variant_core_modules_not_flagged() {
+        let source = "use strict;\nuse warnings;\nuse Carp;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &[],
+            &mut diags,
+        );
+        assert!(diags.is_empty(), "core modules must not trigger PL701 in context variant");
+    }
+
+    #[test]
+    fn context_variant_labeled_paths_appear_in_message() {
+        let source = "use My::Missing;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        let ctx =
+            make_ctx(&[("lib", "workspace includePaths"), ("/home/user/perl5/lib", "PERL5LIB")]);
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &ctx,
+            &mut diags,
+        );
+        assert_eq!(diags.len(), 1);
+        let msg = &diags[0].message;
+        assert!(msg.contains("lib"), "message should contain path; got: {msg:?}");
+        assert!(
+            msg.contains("workspace includePaths"),
+            "message should contain source label; got: {msg:?}"
+        );
+        assert!(msg.contains("PERL5LIB"), "message should contain PERL5LIB label; got: {msg:?}");
+    }
+
+    #[test]
+    fn context_variant_short_list_uses_bulleted_format() {
+        let source = "use My::Missing;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        let ctx = make_ctx(&[
+            ("lib", "workspace includePaths"),
+            ("/usr/local/lib", "interpreter startup @INC"),
+        ]);
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &ctx,
+            &mut diags,
+        );
+        assert_eq!(diags.len(), 1);
+        let msg = &diags[0].message;
+        // Short list (≤ MAX_LABELED_SHOWN) should use bullet format with newlines
+        assert!(
+            msg.contains('\n') || msg.contains("  -"),
+            "short path list should be bulleted; got: {msg:?}"
+        );
+    }
+
+    #[test]
+    fn context_variant_long_list_uses_truncated_format() {
+        let source = "use My::Missing;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        let ctx: Vec<ModuleSearchPathDisplay> = (1..=10)
+            .map(|i| {
+                ModuleSearchPathDisplay::new(format!("/path/dir{i}"), "workspace includePaths")
+            })
+            .collect();
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &ctx,
+            &mut diags,
+        );
+        assert_eq!(diags.len(), 1);
+        let msg = &diags[0].message;
+        assert!(
+            msg.contains("more"),
+            "long path list should be truncated with '... and N more'; got: {msg:?}"
+        );
+        assert!(
+            !msg.contains("/path/dir10"),
+            "path beyond truncation should not appear in message; got: {msg:?}"
+        );
+    }
+
+    #[test]
+    fn context_variant_empty_paths_suggestion_points_to_configuration() {
+        let source = "use My::Missing;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &[],
+            &mut diags,
+        );
+        assert_eq!(diags.len(), 1);
+        let suggestion = diags[0].suggestion.as_deref().unwrap_or("");
+        assert!(
+            suggestion.contains("includePaths") || suggestion.contains("workspace folder"),
+            "no-paths suggestion should point to workspace configuration; got: {suggestion:?}"
+        );
+    }
+
+    #[test]
+    fn context_variant_workspace_only_suggestion_mentions_include_paths() {
+        let source = "use My::Missing;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        let ctx = make_ctx(&[("lib", "workspace includePaths")]);
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &ctx,
+            &mut diags,
+        );
+        assert_eq!(diags.len(), 1);
+        let suggestion = diags[0].suggestion.as_deref().unwrap_or("");
+        assert!(
+            suggestion.contains("includePaths"),
+            "workspace-only suggestion should mention includePaths; got: {suggestion:?}"
+        );
+    }
+
+    #[test]
+    fn context_variant_no_system_inc_suggestion_mentions_use_system_inc() {
+        let source = "use My::Missing;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        // Include PERL5LIB paths so it's not workspace-only, but no system @INC
+        let ctx =
+            make_ctx(&[("lib", "workspace includePaths"), ("/home/user/perl5/lib", "PERL5LIB")]);
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &ctx,
+            &mut diags,
+        );
+        assert_eq!(diags.len(), 1);
+        let suggestion = diags[0].suggestion.as_deref().unwrap_or("");
+        assert!(
+            suggestion.contains("useSystemInc"),
+            "no-system-inc suggestion should mention useSystemInc; got: {suggestion:?}"
+        );
+    }
+
+    #[test]
+    fn context_variant_many_roots_suggestion_mentions_resolution_timeout() {
+        let source = "use My::Missing;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        // MANY_ROOTS_THRESHOLD = 8; provide 9 roots to trigger timeout suggestion
+        let ctx: Vec<ModuleSearchPathDisplay> = (1..=9)
+            .map(|i| ModuleSearchPathDisplay::new(format!("/path/dir{i}"), "PERL5LIB"))
+            .collect();
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &ctx,
+            &mut diags,
+        );
+        assert_eq!(diags.len(), 1);
+        let suggestion = diags[0].suggestion.as_deref().unwrap_or("");
+        assert!(
+            suggestion.contains("resolutionTimeout"),
+            "many-roots suggestion should mention resolutionTimeout; got: {suggestion:?}"
+        );
+    }
+
+    #[test]
+    fn context_variant_workspace_only_priority_precedes_many_roots() {
+        let source = "use My::Missing;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        let ctx: Vec<ModuleSearchPathDisplay> = (1..=9)
+            .map(|i| {
+                ModuleSearchPathDisplay::new(format!("/workspace/lib{i}"), "workspace includePaths")
+            })
+            .collect();
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &ctx,
+            &mut diags,
+        );
+        assert_eq!(diags.len(), 1);
+        let suggestion = diags[0].suggestion.as_deref().unwrap_or("");
+        assert!(
+            suggestion.contains("includePaths"),
+            "workspace-only context should keep includePaths suggestion before many-roots fallback; got: {suggestion:?}"
+        );
+    }
+
+    #[test]
+    fn context_variant_suggestion_contains_module_name_for_workspace_only() {
+        let source = "use My::Package;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        let ctx = make_ctx(&[("lib", "workspace includePaths")]);
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &ctx,
+            &mut diags,
+        );
+        assert_eq!(diags.len(), 1);
+        let suggestion = diags[0].suggestion.as_deref().unwrap_or("");
+        assert!(
+            suggestion.contains("My::Package"),
+            "workspace-only suggestion should contain module name; got: {suggestion:?}"
+        );
+    }
+
+    #[test]
+    fn context_variant_multiple_missing_modules_all_get_diagnostics() {
+        let source = "use Missing::One;\nuse Missing::Two;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        let ctx = make_ctx(&[("lib", "workspace includePaths")]);
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &ctx,
+            &mut diags,
+        );
+        assert_eq!(diags.len(), 2);
+        assert!(diags.iter().all(|d| d.code.as_deref() == Some("PL701")));
+    }
+
+    #[test]
+    fn module_search_path_display_new_constructor() {
+        let entry = ModuleSearchPathDisplay::new("lib", "workspace includePaths");
+        assert_eq!(entry.path, "lib");
+        assert_eq!(entry.source, "workspace includePaths");
+    }
+
+    #[test]
+    fn context_variant_version_only_use_not_flagged() {
+        for source in &["use 5.010;\n", "use v5.38;\n"] {
+            let ast = must(Parser::new(source).parse());
+            let mut diags = vec![];
+            check_missing_modules_with_search_context(
+                &ast,
+                source,
+                resolver_never_finds,
+                &[],
+                &mut diags,
+            );
+            assert!(
+                diags.is_empty(),
+                "version-only use should not be flagged in context variant: {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn context_variant_use_lib_paths_help_distinguish_workspace_only() {
+        let source = "use My::Missing;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        // Has both workspace AND use lib paths — should NOT be workspace-only
+        let ctx = make_ctx(&[("lib", "workspace includePaths"), ("../other/lib", "use lib")]);
+        check_missing_modules_with_search_context(
+            &ast,
+            source,
+            resolver_never_finds,
+            &ctx,
+            &mut diags,
+        );
+        assert_eq!(diags.len(), 1);
+        let suggestion = diags[0].suggestion.as_deref().unwrap_or("");
+        // With use lib also present, NOT workspace-only, so should NOT suggest includePaths alone
+        assert!(
+            !suggestion.starts_with("Add the module's directory to `perl.workspace.includePaths`"),
+            "workspace+use-lib mix should not use workspace-only suggestion; got: {suggestion:?}"
+        );
     }
 }
