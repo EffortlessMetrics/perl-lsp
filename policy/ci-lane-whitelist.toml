@@ -22,7 +22,7 @@ schema_version = 1
 policy = "ci-lane-whitelist"
 owner = "EffortlessMetrics"
 status = "advisory"
-updated = "2026-05-07"
+updated = "2026-05-11"
 
 # =============================================================================
 # Frontdoor / control lanes
@@ -703,6 +703,27 @@ expensive = false
 duplicate_of = []
 review_after = "2026-06-07"
 expires = "2026-11-07"
+
+[[lane]]
+id = "aggregate_ci_lane_history"
+workflow = ".github/workflows/aggregate-ci-lane-history.yml"
+job = "aggregate"
+tier = "nightly"
+kind = "visibility"
+blocking = false
+default_pr = false
+runner = "ubuntu_24_04"
+base_lem = 2
+owner = "ci"
+intent = "Aggregate recent ci-actuals artifacts into learned lane-history estimates."
+failure_mode = "Planner keeps using static LEM floors or stale learned lane estimates."
+proof_obligation = "Download recent ci-actuals artifacts and run scripts/ci/aggregate_lane_history.py."
+evidence = [".ci/metrics/ci-lane-history.json", "ci-lane-history-* artifact"]
+allowed_triggers = ["schedule", "workflow_dispatch"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-11"
+expires = "2026-11-11"
 
 [[lane]]
 id = "pipeline_labels"
