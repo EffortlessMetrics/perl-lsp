@@ -105,7 +105,7 @@ fn find_latest_benchmark_json(root: &Path) -> Result<PathBuf> {
         })
         .collect();
 
-    candidates.sort_by(|a, b| b.0.cmp(&a.0)); // newest first
+    candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.0)); // newest first
 
     candidates.into_iter().map(|(_, p)| p).next().ok_or_else(|| {
         color_eyre::eyre::eyre!("no *.json files found in {}", results_dir.display())
