@@ -33,6 +33,9 @@ See [Native Tooling Status](../project/status/native_tooling.md) for the current
 checked-in snapshot. The readiness report turns those receipt counts into
 explicit default-cutover criteria; see
 [Native Tooling Readiness](../project/status/native_tooling_readiness.md).
+Readiness also verifies that the receipts it summarizes were generated for the
+current commit, so stale local artifacts cannot silently support a cutover
+claim.
 
 For formatter proof, run:
 
@@ -50,6 +53,15 @@ cargo xtask native-critic check
 For compatibility reporting, run:
 
 ```bash
+perllsp --perltidy-compat-report .perltidyrc
+perllsp --perlcritic-compat-report .perlcriticrc
+```
+
+Those installed-binary commands print the same native-support classification a
+team needs during migration without requiring a checkout of the `xtask`
+developer tooling. For receipt-backed repository proof, run:
+
+```bash
 cargo xtask native-format perltidy-compat \
   --profile .perltidyrc \
   --receipt target/receipts/format/native-format-perltidy-compat.json \
@@ -63,6 +75,9 @@ cargo xtask native-tooling perlcritic-compat \
 
 These commands do not change runtime behavior. They classify existing legacy
 profiles against native support so teams can migrate deliberately.
+Their Markdown summaries include suggested native `.perl-lsp.toml` snippets for
+compatible formatter and critic settings, plus explicit notes for options or
+filters that still need manual review.
 
 ## Formatter Migration
 
@@ -77,6 +92,13 @@ Use native formatting when:
 - `.perltidyrc` options are classified as `supported`, `approximated`, or
   `unsupported_safe`
 - unsupported literal surfaces are preserved or produce explicit diagnostics
+
+The perltidy compatibility report includes a suggested `[formatting]` block. It
+maps supported options such as line width, indentation, tabs, brace placement,
+else placement, keyword spacing, and trailing comma policy to native formatter
+config keys. It also lists ignored execution/output flags, approximated presets,
+invalid values, and external-only options separately so teams know what still
+requires deliberate review.
 
 Keep external `perltidy` compatibility when:
 
@@ -106,6 +128,7 @@ perlcritic_severity = 3
 [critic]
 engine = "native"
 profile = "recommended"
+exclude = ["native.documentation.require_pod_sections"]
 ```
 
 Use native critic diagnostics when:
@@ -114,6 +137,12 @@ Use native critic diagnostics when:
 - suppressions and severity filtering match the project policy
 - editor diagnostics should expose stable rule IDs, precise spans, and code
   actions
+
+Native critic include/exclude filters use native rule IDs, not Perl::Critic
+policy names. During migration, the compatibility report includes a suggested
+`[critic]` TOML block with mapped native IDs for compatible `include` and
+`exclude` policy names. Review any unmapped legacy filters before adding the
+snippet to `.perl-lsp.toml`.
 
 Keep external `perlcritic` compatibility when:
 

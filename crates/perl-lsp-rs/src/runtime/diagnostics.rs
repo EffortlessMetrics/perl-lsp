@@ -100,6 +100,8 @@ impl PullDiagnosticsOrchestrator {
             perlcritic_profile,
             critic_engine,
             native_critic_profile,
+            native_critic_include,
+            native_critic_exclude,
         ) = {
             let cfg = server.config.lock();
             (
@@ -108,6 +110,8 @@ impl PullDiagnosticsOrchestrator {
                 cfg.perlcritic_profile.clone(),
                 cfg.critic_engine,
                 cfg.native_critic_profile.clone(),
+                cfg.native_critic_include.clone(),
+                cfg.native_critic_exclude.clone(),
             )
         };
 
@@ -143,6 +147,8 @@ impl PullDiagnosticsOrchestrator {
             perlcritic_profile: profile,
             critic_engine,
             native_critic_profile,
+            native_critic_include,
+            native_critic_exclude,
             workspace_root,
             include_paths,
             markup_message_support,
@@ -1402,13 +1408,15 @@ impl LspServer {
         doc_text: &str,
         diagnostics: &mut Vec<InternalDiagnostic>,
     ) {
-        let (critic_engine, severity, profile, native_profile) = {
+        let (critic_engine, severity, profile, native_profile, native_include, native_exclude) = {
             let cfg = self.config.lock();
             (
                 cfg.critic_engine,
                 cfg.perlcritic_severity,
                 cfg.perlcritic_profile.clone(),
                 cfg.native_critic_profile.clone(),
+                cfg.native_critic_include.clone(),
+                cfg.native_critic_exclude.clone(),
             )
         };
         if critic_engine != perl_lsp_rs_core::config::CriticEngine::Native {
@@ -1418,6 +1426,8 @@ impl LspServer {
         let critic_config = crate::perl_critic::CriticConfig {
             severity: severity.clamp(1, 5),
             profile,
+            include: native_include,
+            exclude: native_exclude,
             ..crate::perl_critic::CriticConfig::default()
         };
         let critic_context =
@@ -2061,6 +2071,47 @@ mod tests {
         assert!(
             !text.contains("native.variables.unused_lexical"),
             "recommended native critic profile should omit broader variable-noise findings; got: {text:?}"
+        );
+    }
+
+    #[test]
+    fn native_critic_push_diagnostics_honor_include_and_exclude_filters() {
+        let (server, buf) = make_server_with_capture();
+        server.test_configure_critic_engine(perl_lsp_rs_core::config::CriticEngine::Native);
+        server.test_configure_native_critic_profile("recommended");
+        server.test_configure_native_critic_filters(
+            vec!["native.testing.require_use_strict".to_string()],
+            vec!["native.common.assignment_in_condition".to_string()],
+        );
+        let uri = "file:///native_critic_filtered_push_test.pl";
+        server
+            .test_handle_did_open(Some(json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $cond = 0;\nif ($cond = 1) { print $cond; }\n"
+                }
+            })))
+            .unwrap();
+
+        server.publish_diagnostics(uri);
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes).unwrap_or_default();
+        assert!(
+            text.contains("native.testing.require_use_strict"),
+            "native include should keep selected strict rule; got: {text:?}"
+        );
+        assert!(
+            !text.contains("native.common.assignment_in_condition"),
+            "native exclude should suppress assignment rule; got: {text:?}"
+        );
+        assert!(
+            !text.contains("native.testing.require_use_warnings"),
+            "native include should suppress non-included warning rule; got: {text:?}"
         );
     }
 

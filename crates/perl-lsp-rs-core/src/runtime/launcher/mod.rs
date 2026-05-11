@@ -264,6 +264,14 @@ pub struct LspArgs {
     #[arg(long)]
     pub features_json: bool,
 
+    /// Report how a .perltidyrc profile maps to native formatting
+    #[arg(long, value_name = "PROFILE", conflicts_with = "perlcritic_compat_report")]
+    pub perltidy_compat_report: Option<String>,
+
+    /// Report how a .perlcriticrc profile maps to native critic rules
+    #[arg(long, value_name = "PROFILE", conflicts_with = "perltidy_compat_report")]
+    pub perlcritic_compat_report: Option<String>,
+
     /// Set feature profile
     #[arg(long)]
     pub feature_profile: Option<String>,
@@ -333,6 +341,16 @@ pub enum LaunchAction {
     Version,
     /// Print profile-scoped feature catalog JSON.
     FeaturesJson,
+    /// Classify a `.perltidyrc` profile against native formatter support.
+    PerltidyCompatReport {
+        /// Profile path to classify.
+        profile: String,
+    },
+    /// Classify a `.perlcriticrc` profile against native critic support.
+    PerlcriticCompatReport {
+        /// Profile path to classify.
+        profile: String,
+    },
     /// Print CLI help output.
     Help,
 }
@@ -466,6 +484,10 @@ where
                 LaunchAction::Completion { shell }
             } else if parsed_args.features_json {
                 LaunchAction::FeaturesJson
+            } else if let Some(profile) = parsed_args.perltidy_compat_report {
+                LaunchAction::PerltidyCompatReport { profile }
+            } else if let Some(profile) = parsed_args.perlcritic_compat_report {
+                LaunchAction::PerlcriticCompatReport { profile }
             } else {
                 LaunchAction::Run
             };
@@ -611,6 +633,10 @@ pub fn help_text() -> String {
     out.push_str("Tool options:\n");
     out.push_str("  --check <files...>   Validate Perl files and report parse errors\n");
     out.push_str("  --check-project [dir] Scan project directory for parsability report\n");
+    out.push_str("  --perltidy-compat-report <profile>\n");
+    out.push_str("                       Report native formatter compatibility for .perltidyrc\n");
+    out.push_str("  --perlcritic-compat-report <profile>\n");
+    out.push_str("                       Report native critic compatibility for .perlcriticrc\n");
     out.push_str("  --completion <shell> Generate shell completions (bash, zsh, fish)\n");
     out.push_str("  --help               Show this help message\n");
     out.push('\n');
@@ -622,6 +648,8 @@ pub fn help_text() -> String {
     out.push_str("  perllsp --stdio --feature-profile=prod  # production profile\n");
     out.push_str("  perllsp --check lib/MyModule.pm         # syntax check\n");
     out.push_str("  perllsp --check-project lib/             # project scan\n");
+    out.push_str("  perllsp --perltidy-compat-report .perltidyrc\n");
+    out.push_str("  perllsp --perlcritic-compat-report .perlcriticrc\n");
     out.push_str("  perllsp --info                          # server information\n");
     out.push_str("  perllsp --completion bash >> ~/.bashrc   # install completions\n");
     out.push('\n');
@@ -652,7 +680,7 @@ const BASH_COMPLETION: &str = r#"_perl_lsp() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="--stdio --mcp --socket --port --log --health --info --check --check-project --version --features-json --feature-profile --completion --help"
+    opts="--stdio --mcp --socket --port --log --health --info --check --check-project --version --features-json --perltidy-compat-report --perlcritic-compat-report --feature-profile --completion --help"
 
     case "${prev}" in
         --port)
@@ -664,6 +692,10 @@ const BASH_COMPLETION: &str = r#"_perl_lsp() {
             ;;
         --completion)
             COMPREPLY=( $(compgen -W "bash zsh fish powershell" -- "${cur}") )
+            return 0
+            ;;
+        --perltidy-compat-report|--perlcritic-compat-report)
+            COMPREPLY=( $(compgen -f -- "${cur}") )
             return 0
             ;;
         --check)
@@ -695,6 +727,8 @@ _perl-lsp() {
         '--check-project[Scan project directory for parsability report]:dir:_directories' \
         '--version[Show version information]' \
         '--features-json[Output features catalog as JSON]' \
+        '--perltidy-compat-report[Report native formatter compatibility for .perltidyrc]:profile:_files' \
+        '--perlcritic-compat-report[Report native critic compatibility for .perlcriticrc]:profile:_files' \
         '--feature-profile[Set feature profile]:profile:(ga-lock ga prod production all auto)' \
         '--completion[Generate shell completions]:shell:(bash zsh fish powershell)' \
         '--help[Show help message]' \
@@ -715,6 +749,8 @@ complete -c perl-lsp -l check -F -d 'Validate Perl files'
 complete -c perl-lsp -l check-project -d 'Scan project directory for parsability report'
 complete -c perl-lsp -l version -d 'Show version information'
 complete -c perl-lsp -l features-json -d 'Output features catalog as JSON'
+complete -c perl-lsp -l perltidy-compat-report -F -d 'Report native formatter compatibility for .perltidyrc'
+complete -c perl-lsp -l perlcritic-compat-report -F -d 'Report native critic compatibility for .perlcriticrc'
 complete -c perl-lsp -l feature-profile -x -a 'ga-lock ga prod production all auto' -d 'Set feature profile'
 complete -c perl-lsp -l completion -x -a 'bash zsh fish powershell' -d 'Generate shell completions'
 complete -c perl-lsp -l help -d 'Show help message'
@@ -735,6 +771,8 @@ const POWERSHELL_COMPLETION: &str = r#"Register-ArgumentCompleter -Native -Comma
         [CompletionResult]::new('--check-project', '--check-project', 'ParameterName', 'Scan project directory for parsability report')
         [CompletionResult]::new('--version', '--version', 'ParameterName', 'Show version information')
         [CompletionResult]::new('--features-json', '--features-json', 'ParameterName', 'Output features catalog as JSON')
+        [CompletionResult]::new('--perltidy-compat-report', '--perltidy-compat-report', 'ParameterName', 'Report native formatter compatibility for .perltidyrc')
+        [CompletionResult]::new('--perlcritic-compat-report', '--perlcritic-compat-report', 'ParameterName', 'Report native critic compatibility for .perlcriticrc')
         [CompletionResult]::new('--feature-profile', '--feature-profile', 'ParameterName', 'Set feature profile')
         [CompletionResult]::new('--completion', '--completion', 'ParameterName', 'Generate shell completions')
         [CompletionResult]::new('--help', '--help', 'ParameterName', 'Show help message')

@@ -3,6 +3,10 @@
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{Context, Result, eyre};
 use perl_lsp_rs_core::config::{CriticEngine, FormatterMode, ServerConfig};
+use perl_lsp_rs_core::tooling::native_compat::{
+    PerlcriticCompatItem, PerlcriticCompatReport, PerlcriticNativeConfigSuggestion,
+    classify_perlcritic_profile, render_perlcritic_compat_markdown,
+};
 use perl_lsp_rs_core::tooling::perl_critic::NativeCriticRegistry;
 use perl_lsp_rs_core::tooling::perltidy::FormatConfig;
 use serde::{Deserialize, Serialize};
@@ -79,8 +83,22 @@ struct NativeToolingStatusReceipt {
     schema_version: u32,
     generated_at: DateTime<Utc>,
     commit: String,
+    receipt_freshness: ReceiptFreshnessStatus,
     formatter: FormatterStatus,
     critic: CriticStatus,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ReceiptFreshnessStatus {
+    current_commit: String,
+    stale_count: usize,
+    stale_receipts: Vec<StaleReceipt>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct StaleReceipt {
+    receipt: String,
+    receipt_commit: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -131,6 +149,8 @@ struct FormatterStatus {
     corpus_parse_preserved_count: Option<usize>,
     corpus_literal_bailout_count: Option<usize>,
     corpus_unsupported_patterns_count: Option<usize>,
+    corpus_unsupported_parse_clean_count: Option<usize>,
+    corpus_parse_error_count: Option<usize>,
     corpus_diagnostics_count: Option<usize>,
     corpus_passed: Option<bool>,
     format_perltidy_compat_receipt: String,
@@ -192,7 +212,7 @@ struct CriticStatus {
     perlcritic_compat_external_only_count: Option<usize>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 struct PerlcriticCompatReceipt {
     kind: &'static str,
     schema_version: u32,
@@ -205,17 +225,8 @@ struct PerlcriticCompatReceipt {
     approximated_count: usize,
     unsupported_safe_count: usize,
     external_only_count: usize,
+    suggested_config: PerlcriticNativeConfigSuggestion,
     items: Vec<PerlcriticCompatItem>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PerlcriticCompatItem {
-    kind: &'static str,
-    name: String,
-    value: Option<String>,
-    classification: &'static str,
-    native_rule: Option<&'static str>,
-    note: &'static str,
 }
 
 /// Write native tooling status receipts.
@@ -250,20 +261,21 @@ pub fn status(config: NativeToolingStatusConfig) -> Result<()> {
 pub fn perlcritic_compat(config: PerlcriticCompatConfig) -> Result<()> {
     let raw = fs::read_to_string(&config.profile)
         .wrap_err_with(|| format!("failed to read {}", config.profile.display()))?;
-    let items = classify_perlcritic_profile(&raw);
+    let report = classify_perlcritic_profile(&raw);
     let receipt = PerlcriticCompatReceipt {
         kind: "native_tooling_perlcritic_compat",
         schema_version: SCHEMA_VERSION,
         generated_at: Utc::now(),
         commit: current_commit(),
         profile: config.profile.display().to_string(),
-        item_count: items.len(),
-        native_equivalent_count: compat_count(&items, "native_equivalent"),
-        native_superset_count: compat_count(&items, "native_superset"),
-        approximated_count: compat_count(&items, "approximated"),
-        unsupported_safe_count: compat_count(&items, "unsupported_safe"),
-        external_only_count: compat_count(&items, "external_only"),
-        items,
+        item_count: report.item_count,
+        native_equivalent_count: report.native_equivalent_count,
+        native_superset_count: report.native_superset_count,
+        approximated_count: report.approximated_count,
+        unsupported_safe_count: report.unsupported_safe_count,
+        external_only_count: report.external_only_count,
+        suggested_config: report.suggested_config,
+        items: report.items,
     };
 
     if let Some(parent) = config.receipt.parent().filter(|parent| !parent.as_os_str().is_empty()) {
@@ -341,6 +353,8 @@ pub fn readiness(config: NativeToolingReadinessConfig) -> Result<()> {
 }
 
 fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeToolingStatusReceipt> {
+    let commit = current_commit();
+    let receipt_freshness = receipt_freshness(config, &commit)?;
     let formatter = formatter_status(
         &config.format_fixtures,
         &config.format_receipt,
@@ -357,9 +371,49 @@ fn build_status_receipt(config: &NativeToolingStatusConfig) -> Result<NativeTool
         kind: "native_tooling_status".to_string(),
         schema_version: SCHEMA_VERSION,
         generated_at: Utc::now(),
-        commit: current_commit(),
+        commit,
+        receipt_freshness,
         formatter,
         critic,
+    })
+}
+
+fn receipt_freshness(
+    config: &NativeToolingStatusConfig,
+    current_commit: &str,
+) -> Result<ReceiptFreshnessStatus> {
+    let receipt_paths = [
+        &config.format_receipt,
+        &config.format_corpus_receipt,
+        &config.format_perltidy_compat_receipt,
+        &config.format_config_receipt,
+        &config.critic_perlcritic_compat_receipt,
+        &config.critic_check_receipt,
+        &config.critic_false_positive_receipt,
+    ];
+    let mut stale_receipts = Vec::new();
+
+    for path in receipt_paths {
+        if !path.exists() {
+            continue;
+        }
+
+        let value = read_json(path)?;
+        let Some(receipt_commit) = value.get("commit").and_then(Value::as_str) else {
+            continue;
+        };
+        if receipt_commit != current_commit {
+            stale_receipts.push(StaleReceipt {
+                receipt: path.display().to_string(),
+                receipt_commit: receipt_commit.to_string(),
+            });
+        }
+    }
+
+    Ok(ReceiptFreshnessStatus {
+        current_commit: current_commit.to_string(),
+        stale_count: stale_receipts.len(),
+        stale_receipts,
     })
 }
 
@@ -372,6 +426,18 @@ fn build_readiness_receipt(
     let critic = &status.critic;
     let server_defaults = ServerConfig::default();
 
+    criteria.push(readiness_criterion(
+        "tooling",
+        "native tooling receipts are current",
+        status.receipt_freshness.stale_count == 0,
+        true,
+        true,
+        format!(
+            "current_commit={} stale_receipts={}",
+            status.receipt_freshness.current_commit, status.receipt_freshness.stale_count
+        ),
+        "regenerate stale native-tooling receipts before using readiness as cutover evidence",
+    ));
     criteria.push(readiness_criterion(
         "formatter",
         "native formatter default",
@@ -434,14 +500,22 @@ fn build_readiness_receipt(
     ));
     criteria.push(readiness_criterion(
         "formatter",
-        "corpus unsupported formatter diagnostics are cleared",
-        formatter.corpus_unsupported_patterns_count == Some(0),
+        "corpus parse-clean unsupported formatter diagnostics are cleared",
+        formatter.corpus_unsupported_parse_clean_count == Some(0),
         formatter.format_corpus_receipt_present,
         false,
         format!(
-            "unsupported_diagnostics={} literal_bailouts={} diagnostics={}",
+            "unsupported_diagnostics={} parse_clean_unsupported={} parse_error_diagnostics={} literal_bailouts={} diagnostics={}",
             optional_metric(
                 formatter.corpus_unsupported_patterns_count,
+                formatter.format_corpus_receipt_present,
+            ),
+            optional_metric(
+                formatter.corpus_unsupported_parse_clean_count,
+                formatter.format_corpus_receipt_present,
+            ),
+            optional_metric(
+                formatter.corpus_parse_error_count,
                 formatter.format_corpus_receipt_present,
             ),
             optional_metric(
@@ -453,7 +527,7 @@ fn build_readiness_receipt(
                 formatter.format_corpus_receipt_present
             )
         ),
-        "triage unsupported formatter diagnostics before claiming broad format-on-save coverage",
+        "clear parse-clean unsupported diagnostics before claiming broad format-on-save coverage; parse-error diagnostics remain recovery-fixture signal",
     ));
     criteria.push(readiness_criterion(
         "formatter",
@@ -843,6 +917,11 @@ fn formatter_status(
             &corpus_receipt,
             "unsupported_patterns_count",
         ),
+        corpus_unsupported_parse_clean_count: optional_usize(
+            &corpus_receipt,
+            "unsupported_parse_clean_count",
+        ),
+        corpus_parse_error_count: optional_usize(&corpus_receipt, "parse_error_count"),
         corpus_diagnostics_count: optional_usize(&corpus_receipt, "diagnostics_count"),
         corpus_passed: optional_bool(&corpus_receipt, "passed"),
         format_perltidy_compat_receipt: format_perltidy_compat_receipt.display().to_string(),
@@ -1080,6 +1159,14 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
         formatter.corpus_unsupported_patterns_count,
         formatter.format_corpus_receipt_present,
     );
+    let corpus_unsupported_parse_clean = optional_metric(
+        formatter.corpus_unsupported_parse_clean_count,
+        formatter.format_corpus_receipt_present,
+    );
+    let corpus_parse_errors = optional_metric(
+        formatter.corpus_parse_error_count,
+        formatter.format_corpus_receipt_present,
+    );
     let corpus_passed =
         formatter.corpus_passed.map(|passed| passed.to_string()).unwrap_or_else(|| {
             if formatter.format_corpus_receipt_present {
@@ -1217,6 +1304,13 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
 
 > Generated by `cargo xtask native-tooling status`.
 
+## Receipt Freshness
+
+| Metric | Value |
+| --- | ---: |
+| Current commit | {} |
+| Stale receipt count | {} |
+
 ## Formatter
 
 | Metric | Value |
@@ -1230,6 +1324,8 @@ fn render_markdown(receipt: &NativeToolingStatusReceipt) -> String {
 | Corpus parse preservation | {} |
 | Corpus literal bailouts | {} |
 | Corpus unsupported diagnostics | {} |
+| Corpus unsupported parse-clean diagnostics | {} |
+| Corpus parse-error diagnostics | {} |
 | Corpus passed | {} |
 | Perltidy compatibility options | {} |
 | Perltidy compatibility supported | {} |
@@ -1284,6 +1380,8 @@ Native rules:
 Fixable native rules:
 {}
 "#,
+        receipt.receipt_freshness.current_commit,
+        receipt.receipt_freshness.stale_count,
         formatter.fixture_count,
         formatter.expected_diagnostics_fixture_count,
         formatter.literal_preserve_fixture_count,
@@ -1293,6 +1391,8 @@ Fixable native rules:
         corpus_parse_preservation,
         corpus_literal_bailouts,
         corpus_unsupported_diagnostics,
+        corpus_unsupported_parse_clean,
+        corpus_parse_errors,
         corpus_passed,
         perltidy_compat_options,
         perltidy_compat_supported,
@@ -1365,273 +1465,18 @@ fn render_readiness_markdown(receipt: &NativeToolingReadinessReceipt) -> String 
     markdown
 }
 
-fn classify_perlcritic_profile(raw: &str) -> Vec<PerlcriticCompatItem> {
-    let native_rules = NativeCriticRegistry::recommended()
-        .rule_ids()
-        .into_iter()
-        .map(ToOwned::to_owned)
-        .collect::<BTreeSet<_>>();
-    let mut items = Vec::new();
-
-    for line in raw.lines() {
-        let line = strip_perlcritic_comment(line).trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        if let Some(policy) = parse_perlcritic_policy_section(line) {
-            items.push(classify_perlcritic_policy(&policy, &native_rules));
-            continue;
-        }
-
-        if let Some((name, value)) = line.split_once('=') {
-            items.push(classify_perlcritic_setting(name.trim(), Some(value.trim().to_string())));
-            continue;
-        }
-
-        items.push(compat_item(
-            "setting",
-            line,
-            None,
-            "external_only",
-            None,
-            "unrecognized perlcritic profile line is not applied by native critic",
-        ));
-    }
-
-    items
-}
-
-fn strip_perlcritic_comment(line: &str) -> &str {
-    line.split('#').next().unwrap_or_default()
-}
-
-fn parse_perlcritic_policy_section(line: &str) -> Option<String> {
-    let inner = line.strip_prefix('[')?.strip_suffix(']')?.trim();
-    let policy = inner.strip_prefix('-').unwrap_or(inner).trim();
-    if policy.is_empty() { None } else { Some(policy.to_string()) }
-}
-
-fn classify_perlcritic_policy(
-    policy: &str,
-    native_rules: &BTreeSet<String>,
-) -> PerlcriticCompatItem {
-    match perlcritic_policy_native_mapping(policy) {
-        Some((native_rule, classification, note)) if native_rules.contains(native_rule) => {
-            compat_item("policy", policy, None, classification, Some(native_rule), note)
-        }
-        Some((native_rule, _, _)) => compat_item(
-            "policy",
-            policy,
-            None,
-            "external_only",
-            Some(native_rule),
-            "mapped native rule is not currently present in the recommended registry",
-        ),
-        None => compat_item(
-            "policy",
-            policy,
-            None,
-            "external_only",
-            None,
-            "perlcritic policy does not yet have a native rule mapping",
-        ),
-    }
-}
-
-fn perlcritic_policy_native_mapping(
-    policy: &str,
-) -> Option<(&'static str, &'static str, &'static str)> {
-    match policy {
-        "TestingAndDebugging::RequireUseStrict" => Some((
-            "native.testing.require_use_strict",
-            "native_equivalent",
-            "native critic emits the same strict-pragmas policy with LSP spans",
-        )),
-        "TestingAndDebugging::RequireUseWarnings" => Some((
-            "native.testing.require_use_warnings",
-            "native_equivalent",
-            "native critic emits the same warnings-pragmas policy with LSP spans",
-        )),
-        "InputOutput::ProhibitTwoArgOpen" => Some((
-            "native.io.two_arg_open",
-            "native_equivalent",
-            "native critic detects two-argument open and exposes the existing safe fix",
-        )),
-        "InputOutput::ProhibitBarewordFileHandles" => Some((
-            "native.io.bareword_filehandle",
-            "native_equivalent",
-            "native critic detects bareword filehandles and exposes the existing safe fix",
-        )),
-        "InputOutput::RequireCheckedOpen" => Some((
-            "native.io.unchecked_open_close",
-            "native_superset",
-            "native critic covers unchecked open and close result handling",
-        )),
-        "BuiltinFunctions::ProhibitStringyEval" => Some((
-            "native.security.string_eval",
-            "native_equivalent",
-            "native critic detects parser-confirmed string eval without shelling out",
-        )),
-        "InputOutput::ProhibitBacktickOperators" => Some((
-            "native.security.backtick_exec",
-            "native_superset",
-            "native critic splits backticks and qx/readpipe into precise native rules",
-        )),
-        "BuiltinFunctions::ProhibitSystemCalls" => Some((
-            "native.security.system_exec",
-            "native_equivalent",
-            "native critic reports system and exec command execution without an automatic fix",
-        )),
-        "Variables::ProhibitUnusedVariables" => Some((
-            "native.variables.unused_lexical",
-            "native_superset",
-            "native critic uses semantic scope facts and sigil-aware quick fixes",
-        )),
-        "Variables::ProhibitReusedNames" => Some((
-            "native.variables.duplicate_lexical",
-            "approximated",
-            "native critic has duplicate and shadowing rules but not a single combined perlcritic policy",
-        )),
-        "Documentation::RequirePodSections" => Some((
-            "native.documentation.require_pod_sections",
-            "approximated",
-            "native critic checks required NAME/DESCRIPTION sections when a file already contains POD",
-        )),
-        _ => None,
-    }
-}
-
-fn classify_perlcritic_setting(name: &str, value: Option<String>) -> PerlcriticCompatItem {
-    match name {
-        "severity" => compat_item(
-            "setting",
-            name,
-            value,
-            "native_equivalent",
-            None,
-            "maps to native critic minimum severity filtering",
-        ),
-        "include" | "exclude" => compat_item(
-            "setting",
-            name,
-            value,
-            "native_equivalent",
-            None,
-            "maps to native critic include/exclude rule filtering for native rule IDs",
-        ),
-        "theme" => classify_perlcritic_theme_setting(value),
-        "profile-strictness" => compat_item(
-            "setting",
-            name,
-            value,
-            "unsupported_safe",
-            None,
-            "perlcritic loader strictness has no runtime effect on native critic rules",
-        ),
-        "color" => compat_item(
-            "setting",
-            name,
-            value,
-            "unsupported_safe",
-            None,
-            "perlcritic terminal color setting has no effect on structured native diagnostics",
-        ),
-        _ => compat_item(
-            "setting",
-            name,
-            value,
-            "external_only",
-            None,
-            "perlcritic setting is not yet applied by native critic",
-        ),
-    }
-}
-
-fn classify_perlcritic_theme_setting(value: Option<String>) -> PerlcriticCompatItem {
-    let Some(theme) = value.as_deref() else {
-        return compat_item(
-            "setting",
-            "theme",
-            value,
-            "unsupported_safe",
-            None,
-            "empty perlcritic theme does not change native critic rule selection",
-        );
-    };
-    let theme = theme.trim();
-    let known_themes = [
-        "bugs",
-        "certrec",
-        "certrule",
-        "core",
-        "cosmetic",
-        "maintenance",
-        "pbp",
-        "performance",
-        "security",
-        "tests",
-        "unicode",
-    ];
-    if known_themes.contains(&theme) {
-        compat_item(
-            "setting",
-            "theme",
-            value,
-            "approximated",
-            None,
-            "native critic recommended profile approximates common perlcritic themes with currently implemented native rules",
-        )
-    } else {
-        compat_item(
-            "setting",
-            "theme",
-            value,
-            "external_only",
-            None,
-            "unrecognized perlcritic theme is not expanded by native critic",
-        )
-    }
-}
-
-fn compat_item(
-    kind: &'static str,
-    name: &str,
-    value: Option<String>,
-    classification: &'static str,
-    native_rule: Option<&'static str>,
-    note: &'static str,
-) -> PerlcriticCompatItem {
-    PerlcriticCompatItem { kind, name: name.to_string(), value, classification, native_rule, note }
-}
-
-fn compat_count(items: &[PerlcriticCompatItem], classification: &str) -> usize {
-    items.iter().filter(|item| item.classification == classification).count()
-}
-
 fn write_perlcritic_compat_summary(path: &Path, receipt: &PerlcriticCompatReceipt) -> Result<()> {
-    let mut markdown = String::new();
-    markdown.push_str("# Native Critic Perlcritic Compatibility\n\n");
-    markdown.push_str(&format!("- Profile: `{}`\n", receipt.profile));
-    markdown.push_str(&format!("- Items checked: {}\n", receipt.item_count));
-    markdown.push_str(&format!("- Native equivalent: {}\n", receipt.native_equivalent_count));
-    markdown.push_str(&format!("- Native superset: {}\n", receipt.native_superset_count));
-    markdown.push_str(&format!("- Approximated: {}\n", receipt.approximated_count));
-    markdown.push_str(&format!("- Unsupported safe: {}\n", receipt.unsupported_safe_count));
-    markdown.push_str(&format!("- External-only: {}\n\n", receipt.external_only_count));
-    markdown.push_str("| Kind | Name | Value | Classification | Native rule | Note |\n");
-    markdown.push_str("| --- | --- | --- | --- | --- | --- |\n");
-    for item in &receipt.items {
-        markdown.push_str(&format!(
-            "| {} | `{}` | {} | {} | {} | {} |\n",
-            item.kind,
-            item.name,
-            item.value.as_deref().unwrap_or(""),
-            item.classification,
-            item.native_rule.unwrap_or(""),
-            item.note
-        ));
-    }
+    let report = PerlcriticCompatReport {
+        item_count: receipt.item_count,
+        native_equivalent_count: receipt.native_equivalent_count,
+        native_superset_count: receipt.native_superset_count,
+        approximated_count: receipt.approximated_count,
+        unsupported_safe_count: receipt.unsupported_safe_count,
+        external_only_count: receipt.external_only_count,
+        suggested_config: receipt.suggested_config.clone(),
+        items: receipt.items.clone(),
+    };
+    let markdown = render_perlcritic_compat_markdown(&receipt.profile, &report);
     fs::write(path, markdown).wrap_err_with(|| format!("failed to write {}", path.display()))
 }
 
@@ -1690,6 +1535,7 @@ mod tests {
         let temp = tempfile::tempdir()?;
         let fixtures = temp.path().join("fixtures");
         let receipts = temp.path().join("receipts");
+        let commit = current_commit();
         fs::create_dir_all(&fixtures)?;
         fs::create_dir_all(&receipts)?;
         fs::write(fixtures.join("simple.pl"), "my $x = 1;\n")?;
@@ -1701,7 +1547,9 @@ mod tests {
         let format_receipt = receipts.join("native-format-fixtures.json");
         fs::write(
             &format_receipt,
-            r#"{
+            format!(
+                r#"{{
+  "commit": "{commit}",
   "passed_count": 1,
   "failed_count": 0,
   "idempotent_count": 1,
@@ -1709,40 +1557,51 @@ mod tests {
   "diagnostics_count": 1,
   "bailout_count": 1,
   "expected_diagnostics_match_count": 1
-}
-"#,
+}}
+"#
+            ),
         )?;
         let format_corpus_receipt = receipts.join("native-format-corpus.json");
         fs::write(
             &format_corpus_receipt,
-            r#"{
+            format!(
+                r#"{{
+  "commit": "{commit}",
   "files_checked": 2,
   "files_changed": 1,
   "idempotence_passed_count": 2,
   "parse_preserved_count": 2,
   "literal_bailout_count": 1,
   "unsupported_patterns_count": 0,
+  "unsupported_parse_clean_count": 0,
+  "parse_error_count": 0,
   "diagnostics_count": 1,
   "passed": true
-}
-"#,
+}}
+"#
+            ),
         )?;
         let format_perltidy_compat_receipt = receipts.join("native-format-perltidy-compat.json");
         fs::write(
             &format_perltidy_compat_receipt,
-            r#"{
+            format!(
+                r#"{{
+  "commit": "{commit}",
   "option_count": 9,
   "supported_count": 7,
   "approximated_count": 0,
   "unsupported_safe_count": 1,
   "external_only_count": 1
-}
-"#,
+}}
+"#
+            ),
         )?;
         let format_config_receipt = receipts.join("native-format-config.json");
         fs::write(
             &format_config_receipt,
-            r#"{
+            format!(
+                r#"{{
+  "commit": "{commit}",
   "config_source": "project",
   "engine_selected": "native",
   "external_adapter_requested": false,
@@ -1753,26 +1612,32 @@ mod tests {
   "else_placement": "separate-line",
   "keyword_spacing": "compact",
   "trailing_comma": "add-when-wrapped"
-}
-"#,
+}}
+"#
+            ),
         )?;
         let critic_perlcritic_compat_receipt = receipts.join("perlcritic-compat.json");
         fs::write(
             &critic_perlcritic_compat_receipt,
-            r#"{
+            format!(
+                r#"{{
+  "commit": "{commit}",
   "item_count": 12,
   "native_equivalent_count": 5,
   "native_superset_count": 2,
   "approximated_count": 1,
   "unsupported_safe_count": 1,
   "external_only_count": 3
-}
-"#,
+}}
+"#
+            ),
         )?;
         let critic_check_receipt = receipts.join("native-critic-check.json");
         fs::write(
             &critic_check_receipt,
-            r#"{
+            format!(
+                r#"{{
+  "commit": "{commit}",
   "profile": "recommended",
   "files_checked": 3,
   "files_with_parse_errors": 0,
@@ -1780,13 +1645,15 @@ mod tests {
   "findings_count": 4,
   "suppressed_findings_count": 1,
   "fixable_findings_count": 2
-}
-"#,
+}}
+"#
+            ),
         )?;
         let critic_false_positive_receipt = receipts.join("native-critic-false-positive.json");
         fs::write(
             &critic_false_positive_receipt,
             r#"{
+  "commit": "old-test-commit",
   "files_checked": 3,
   "files_with_parse_errors": 0,
   "rules_run": 28,
@@ -1819,6 +1686,12 @@ mod tests {
         assert_eq!(value["kind"], "native_tooling_status");
         assert!(value["generated_at"].as_str().is_some());
         assert!(value["commit"].as_str().is_some());
+        assert_eq!(value["receipt_freshness"]["current_commit"], commit);
+        assert_eq!(value["receipt_freshness"]["stale_count"], 1);
+        assert_eq!(
+            value["receipt_freshness"]["stale_receipts"][0]["receipt_commit"],
+            "old-test-commit"
+        );
         assert_eq!(value["formatter"]["fixture_count"], 1);
         assert_eq!(value["formatter"]["expected_diagnostics_fixture_count"], 1);
         assert_eq!(value["formatter"]["literal_preserve_fixture_count"], 1);
@@ -1833,6 +1706,8 @@ mod tests {
         assert_eq!(value["formatter"]["corpus_parse_preserved_count"], 2);
         assert_eq!(value["formatter"]["corpus_literal_bailout_count"], 1);
         assert_eq!(value["formatter"]["corpus_unsupported_patterns_count"], 0);
+        assert_eq!(value["formatter"]["corpus_unsupported_parse_clean_count"], 0);
+        assert_eq!(value["formatter"]["corpus_parse_error_count"], 0);
         assert_eq!(value["formatter"]["corpus_passed"], true);
         assert_eq!(value["formatter"]["format_perltidy_compat_receipt_present"], true);
         assert_eq!(value["formatter"]["perltidy_compat_option_count"], 9);
@@ -1886,10 +1761,11 @@ mod tests {
         let markdown = fs::read_to_string(markdown)?;
         assert!(markdown.contains("# Native Tooling Status"));
         assert!(!markdown.contains("Generated at:"));
-        assert!(!markdown.contains("Commit:"));
         assert!(!markdown.contains("Fixture receipt present"));
         assert!(!markdown.contains("Fixture passed count"));
         assert!(!markdown.contains("unknown"));
+        assert!(markdown.contains("| Current commit |"));
+        assert!(markdown.contains("| Stale receipt count | 1 |"));
         assert!(markdown.contains("| Expected diagnostic fixtures | 1 |"));
         assert!(markdown.contains("| Literal-preserve bailout fixtures | 1 |"));
         assert!(markdown.contains("| Corpus files checked | 2 |"));
@@ -1898,6 +1774,8 @@ mod tests {
         assert!(markdown.contains("| Corpus parse preservation | 2/2 |"));
         assert!(markdown.contains("| Corpus literal bailouts | 1 |"));
         assert!(markdown.contains("| Corpus unsupported diagnostics | 0 |"));
+        assert!(markdown.contains("| Corpus unsupported parse-clean diagnostics | 0 |"));
+        assert!(markdown.contains("| Corpus parse-error diagnostics | 0 |"));
         assert!(markdown.contains("| Corpus passed | true |"));
         assert!(markdown.contains("| Perltidy compatibility options | 9 |"));
         assert!(markdown.contains("| Perltidy compatibility supported | 7 |"));
@@ -2003,9 +1881,21 @@ color = 1
         assert_eq!(receipt["items"][10]["classification"], "approximated");
         assert_eq!(receipt["items"][11]["name"], "color");
         assert_eq!(receipt["items"][11]["classification"], "unsupported_safe");
+        assert_eq!(receipt["suggested_config"]["engine"], "native");
+        assert_eq!(receipt["suggested_config"]["profile"], "recommended");
+        assert_eq!(receipt["suggested_config"]["perlcritic_severity"], 3);
+        assert_eq!(receipt["suggested_config"]["include"][0], "native.testing.require_use_strict");
+        assert_eq!(
+            receipt["suggested_config"]["exclude"][0],
+            "native.documentation.require_pod_sections"
+        );
 
         let summary = fs::read_to_string(receipts.join("perlcritic-compat.md"))?;
         assert!(summary.contains("# Native Critic Perlcritic Compatibility"));
+        assert!(summary.contains("## Suggested Native Critic Config"));
+        assert!(summary.contains("perlcritic_severity = 3"));
+        assert!(summary.contains("include = [\"native.testing.require_use_strict\"]"));
+        assert!(summary.contains("exclude = [\"native.documentation.require_pod_sections\"]"));
         assert!(summary.contains(
             "| setting | `exclude` | Documentation::RequirePodSections | native_equivalent |"
         ));
@@ -2030,6 +1920,11 @@ color = 1
             schema_version: SCHEMA_VERSION,
             generated_at: Utc::now(),
             commit: "test".to_string(),
+            receipt_freshness: ReceiptFreshnessStatus {
+                current_commit: "test".to_string(),
+                stale_count: 0,
+                stale_receipts: Vec::new(),
+            },
             formatter: FormatterStatus {
                 fixture_root: "fixtures".to_string(),
                 fixture_count: 2,
@@ -2052,6 +1947,8 @@ color = 1
                 corpus_parse_preserved_count: Some(3),
                 corpus_literal_bailout_count: Some(1),
                 corpus_unsupported_patterns_count: Some(2),
+                corpus_unsupported_parse_clean_count: Some(0),
+                corpus_parse_error_count: Some(2),
                 corpus_diagnostics_count: Some(1),
                 corpus_passed: Some(true),
                 format_perltidy_compat_receipt: "native-format-perltidy-compat.json".to_string(),
@@ -2126,12 +2023,12 @@ color = 1
         assert_eq!(value["kind"], "native_tooling_readiness");
         assert_eq!(value["verdict"], "not_ready");
         assert_eq!(value["blocker_count"].as_u64().unwrap_or_default(), 2);
-        assert_eq!(value["warning_count"].as_u64().unwrap_or_default(), 1);
+        assert_eq!(value["warning_count"].as_u64().unwrap_or_default(), 0);
         assert!(value["ready_count"].as_u64().unwrap_or_default() > 0);
         let criteria = value["criteria"].as_array().ok_or_else(|| eyre!("criteria array"))?;
         assert!(criteria.iter().any(|criterion| {
-            criterion["name"] == "corpus unsupported formatter diagnostics are cleared"
-                && criterion["status"] == "warning"
+            criterion["name"] == "corpus parse-clean unsupported formatter diagnostics are cleared"
+                && criterion["status"] == "ready"
                 && criterion["required_for_default"] == false
         }));
         assert!(criteria.iter().any(|criterion| {
@@ -2153,9 +2050,9 @@ color = 1
         let markdown = fs::read_to_string(readiness_markdown)?;
         assert!(markdown.contains("# Native Tooling Readiness"));
         assert!(markdown.contains("- Verdict: `not_ready`"));
-        assert!(markdown.contains("- Warnings: `1`"));
+        assert!(markdown.contains("- Warnings: `0`"));
         assert!(markdown.contains(
-            "| formatter | corpus unsupported formatter diagnostics are cleared | warning | false |"
+            "| formatter | corpus parse-clean unsupported formatter diagnostics are cleared | ready | false |"
         ));
         assert!(markdown.contains(
             "| formatter | perltidy compatibility has no external-only gaps | blocked |"

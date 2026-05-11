@@ -313,6 +313,7 @@ perlcritic_severity = 3
 [critic]
 engine = "native"
 profile = "recommended"
+exclude = ["native.documentation.require_pod_sections"]
 ```
 
 **Enable via editor settings** (personal preference):
@@ -326,11 +327,17 @@ profile = "recommended"
     },
     "critic": {
       "engine": "native",
-      "profile": "recommended"
+      "profile": "recommended",
+      "exclude": ["native.documentation.require_pod_sections"]
     }
   }
 }
 ```
+
+Native critic `include` and `exclude` lists use native rule IDs such as
+`native.testing.require_use_strict`; they do not use Perl::Critic policy names.
+When `include` is non-empty, only listed native IDs run inside the selected
+profile. `exclude` removes native IDs from the selected profile.
 
 **Use a custom `.perlcriticrc` profile**:
 
@@ -351,8 +358,9 @@ profile = "recommended"
 
 When `profile` is not set, the legacy engine lets perlcritic auto-discover
 `.perlcriticrc` in the workspace root. Use
-`cargo xtask native-tooling perlcritic-compat --profile .perlcriticrc` to
-classify a profile against native critic rule coverage before migrating.
+`perllsp --perlcritic-compat-report .perlcriticrc` for an installed-binary
+migration check, or `cargo xtask native-tooling perlcritic-compat --profile
+.perlcriticrc` when you need a JSON/Markdown receipt in this repository.
 
 **Severity levels**:
 

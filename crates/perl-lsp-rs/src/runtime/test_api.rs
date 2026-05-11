@@ -349,6 +349,13 @@ impl LspServer {
         }
     }
 
+    /// Configure native critic include/exclude filters directly for test purposes.
+    pub fn test_configure_native_critic_filters(&self, include: Vec<String>, exclude: Vec<String>) {
+        let mut cfg = self.config.lock();
+        cfg.native_critic_include = include;
+        cfg.native_critic_exclude = exclude;
+    }
+
     /// Test-only entrypoint for LSP `textDocument/inlineCompletion`.
     ///
     /// Exercises inline completion functionality in tests.

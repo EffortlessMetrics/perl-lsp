@@ -15,6 +15,9 @@ pub mod performance {
 /// Perl::Critic integration for code quality analysis.
 pub mod perl_critic;
 
+/// Native formatter and critic compatibility reports for legacy profiles.
+pub mod native_compat;
+
 /// Perltidy integration for code formatting.
 pub mod perltidy {
     pub use perl_lsp_perltidy::*;

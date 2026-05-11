@@ -454,7 +454,12 @@ The TOML parser also accepts compatibility aliases such as `perltidy-compat`,
 | Default | (none) |
 
 Path to a `.perltidyrc` profile. This is used by the external perltidy adapter
-and by native-tooling compatibility reports.
+and by native-tooling compatibility reports. Run
+`perllsp --perltidy-compat-report .perltidyrc` for an installed-binary
+migration check, or `cargo xtask native-format perltidy-compat --profile
+.perltidyrc` when you need a JSON/Markdown receipt in this repository. The
+Markdown report includes a suggested native `[formatting]` snippet for
+compatible options and lists external-only options separately.
 
 #### `perl.formatting.maximumLineLength`
 
@@ -489,8 +494,9 @@ The server also accepts:
 - `perl.formatting.timeoutSecs`
 
 Some options are native compatibility hints; others only affect the external
-perltidy adapter. Use the native-tooling compatibility reports to classify a
-specific `.perltidyrc` before switching a project.
+perltidy adapter. Use `perllsp --perltidy-compat-report .perltidyrc` or the
+receipt-backed native-tooling compatibility reports to classify a specific
+`.perltidyrc` before switching a project.
 
 ```json
 {
@@ -577,6 +583,28 @@ Native-critic rule bundle used when `perl.critic.engine = "native"`.
 `recommended` selects the lower-noise security/common-mistake/testing profile.
 `strict` enables the full native rule surface.
 
+#### `perl.critic.include`
+
+| Property | Value |
+|---|---|
+| Type | `string[]` |
+| Default | `[]` |
+
+Native critic rule IDs to include. When non-empty, only listed native rule IDs
+run inside the selected profile. Use native IDs such as
+`native.testing.require_use_strict`, not Perl::Critic policy names.
+
+#### `perl.critic.exclude`
+
+| Property | Value |
+|---|---|
+| Type | `string[]` |
+| Default | `[]` |
+
+Native critic rule IDs to suppress from the selected profile. This is useful
+when migrating a project to the native recommended profile while deferring one
+specific rule.
+
 ```json
 {
   "perl": {
@@ -587,7 +615,8 @@ Native-critic rule bundle used when `perl.critic.engine = "native"`.
     },
     "critic": {
       "engine": "native",
-      "profile": "recommended"
+      "profile": "recommended",
+      "exclude": ["native.documentation.require_pod_sections"]
     }
   }
 }

@@ -11,6 +11,10 @@ use perl_lsp_rs_core::runtime::launcher::{
     logging_filter, parse_args, port_in_use_message, shell_completion, should_enable_logging,
     should_use_ansi_stdout,
 };
+use perl_lsp_rs_core::tooling::native_compat::{
+    classify_perlcritic_profile, classify_perltidy_profile, render_perlcritic_compat_markdown,
+    render_perltidy_compat_markdown,
+};
 use std::env;
 use std::path::Path;
 use std::process;
@@ -83,6 +87,10 @@ where
             println!("{}", launch_plan.config.features_json());
             0
         }
+        LaunchAction::PerltidyCompatReport { ref profile } => run_perltidy_compat_report(profile),
+        LaunchAction::PerlcriticCompatReport { ref profile } => {
+            run_perlcritic_compat_report(profile)
+        }
         LaunchAction::Help => {
             println!("{}", render_help_text(&command_name));
             0
@@ -106,6 +114,34 @@ fn render_help_text(command_name: &str) -> String {
 fn render_shell_completion(script: &str, command_name: &str) -> String {
     let function_name = command_name.replace('-', "_");
     script.replace("_perl_lsp", &format!("_{function_name}")).replace("perl-lsp", command_name)
+}
+
+fn run_perltidy_compat_report(profile: &str) -> i32 {
+    let raw = match std::fs::read_to_string(profile) {
+        Ok(raw) => raw,
+        Err(error) => {
+            eprintln!("{profile}: error reading perltidy profile: {error}");
+            return 1;
+        }
+    };
+
+    let report = classify_perltidy_profile(&raw);
+    print!("{}", render_perltidy_compat_markdown(profile, &report));
+    0
+}
+
+fn run_perlcritic_compat_report(profile: &str) -> i32 {
+    let raw = match std::fs::read_to_string(profile) {
+        Ok(raw) => raw,
+        Err(error) => {
+            eprintln!("{profile}: error reading perlcritic profile: {error}");
+            return 1;
+        }
+    };
+
+    let report = classify_perlcritic_profile(&raw);
+    print!("{}", render_perlcritic_compat_markdown(profile, &report));
+    0
 }
 
 /// Spawn a blocking reader thread that reads LSP messages from `reader` and

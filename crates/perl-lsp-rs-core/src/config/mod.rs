@@ -92,6 +92,12 @@ pub struct ServerConfig {
     /// can select `strict` for the full native rule surface.
     pub native_critic_profile: String,
 
+    /// Native critic rule IDs to include. Empty means use the selected profile.
+    pub native_critic_include: Vec<String>,
+
+    /// Native critic rule IDs to exclude from the selected profile.
+    pub native_critic_exclude: Vec<String>,
+
     /// Whether LSP formatting is enabled.
     ///
     /// Kept as `perltidy_enabled` for compatibility with older internal call sites
@@ -227,6 +233,8 @@ impl Default for ServerConfig {
             perlcritic_theme: None,
             critic_engine: CriticEngine::Native,
             native_critic_profile: "recommended".to_string(),
+            native_critic_include: Vec::new(),
+            native_critic_exclude: Vec::new(),
             perltidy_enabled: true,
             formatting_engine: FormatterMode::Native,
             perltidy_profile: None,
@@ -317,6 +325,14 @@ impl ServerConfig {
             && let Some(profile) = parse_native_critic_profile(profile)
         {
             self.native_critic_profile = profile.to_string();
+        }
+        if let Some(critic) = settings.get("critic") {
+            if let Some(include) = string_array(critic.get("include")) {
+                self.native_critic_include = include;
+            }
+            if let Some(exclude) = string_array(critic.get("exclude")) {
+                self.native_critic_exclude = exclude;
+            }
         }
 
         if let Some(formatting) = settings.get("formatting") {
@@ -553,6 +569,29 @@ fn dedupe_preserve_order<'a>(paths: impl Iterator<Item = &'a str>) -> Vec<String
     result
 }
 
+fn normalize_string_list(values: &[String]) -> Vec<String> {
+    let mut result = Vec::new();
+    for value in values {
+        let trimmed = value.trim();
+        if trimmed.is_empty() || result.iter().any(|existing| existing == trimmed) {
+            continue;
+        }
+        result.push(trimmed.to_string());
+    }
+    result
+}
+
+fn string_array(value: Option<&serde_json::Value>) -> Option<Vec<String>> {
+    value.and_then(|value| value.as_array()).map(|values| {
+        normalize_string_list(
+            &values
+                .iter()
+                .filter_map(|value| value.as_str().map(ToOwned::to_owned))
+                .collect::<Vec<_>>(),
+        )
+    })
+}
+
 impl WorkspaceConfig {
     /// Parse a `PERL5LIB` environment variable value into a list of paths.
     ///
@@ -765,6 +804,10 @@ pub struct ProjectCriticConfig {
     pub engine: Option<String>,
     /// Native critic profile (`recommended` or `strict`).
     pub profile: Option<String>,
+    /// Native critic rule IDs to include. Empty means use the selected profile.
+    pub include: Option<Vec<String>>,
+    /// Native critic rule IDs to exclude from the selected profile.
+    pub exclude: Option<Vec<String>>,
 }
 
 /// `[features]` section of `.perl-lsp.toml`.
@@ -945,6 +988,12 @@ impl ProjectConfig {
             && let Some(profile) = parse_native_critic_profile(profile)
         {
             config.native_critic_profile = profile.to_string();
+        }
+        if let Some(ref include) = self.critic.include {
+            config.native_critic_include = normalize_string_list(include);
+        }
+        if let Some(ref exclude) = self.critic.exclude {
+            config.native_critic_exclude = normalize_string_list(exclude);
         }
         if let Some(ref profile) = self.formatting.perltidy_profile {
             config.perltidy_profile = Some(profile.clone());
@@ -1197,6 +1246,47 @@ profile = "recommended"
     }
 
     #[test]
+    fn server_config_accepts_native_critic_include_and_exclude_filters() {
+        let mut config = ServerConfig::default();
+
+        config.update_from_value(&serde_json::json!({
+            "critic": {
+                "include": [
+                    "native.testing.require_use_strict",
+                    "",
+                    "native.testing.require_use_warnings"
+                ],
+                "exclude": [
+                    "native.common.assignment_in_condition"
+                ]
+            }
+        }));
+
+        assert_eq!(
+            config.native_critic_include,
+            vec![
+                "native.testing.require_use_strict".to_string(),
+                "native.testing.require_use_warnings".to_string()
+            ]
+        );
+        assert_eq!(
+            config.native_critic_exclude,
+            vec!["native.common.assignment_in_condition".to_string()]
+        );
+
+        config.update_from_value(&serde_json::json!({
+            "critic": {
+                "include": []
+            }
+        }));
+        assert!(config.native_critic_include.is_empty());
+        assert_eq!(
+            config.native_critic_exclude,
+            vec!["native.common.assignment_in_condition".to_string()]
+        );
+    }
+
+    #[test]
     fn project_config_applies_formatter_engine() {
         let mut config = ServerConfig::default();
         let mut project = ProjectConfig::default();
@@ -1232,11 +1322,25 @@ profile = "recommended"
         let mut project = ProjectConfig::default();
         project.critic.engine = Some("native".to_string());
         project.critic.profile = Some("recommended".to_string());
+        project.critic.include = Some(vec![
+            "native.testing.require_use_strict".to_string(),
+            " ".to_string(),
+            "native.testing.require_use_strict".to_string(),
+        ]);
+        project.critic.exclude = Some(vec!["native.common.assignment_in_condition".to_string()]);
 
         project.apply_to_server_config(&mut config);
 
         assert_eq!(config.critic_engine, CriticEngine::Native);
         assert_eq!(config.native_critic_profile, "recommended");
+        assert_eq!(
+            config.native_critic_include,
+            vec!["native.testing.require_use_strict".to_string()]
+        );
+        assert_eq!(
+            config.native_critic_exclude,
+            vec!["native.common.assignment_in_condition".to_string()]
+        );
     }
 
     #[test]

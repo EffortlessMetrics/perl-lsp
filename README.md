@@ -53,6 +53,7 @@ These are behavioral and corpus-backed signals, not feature-inventory counts. Pr
 | Workspace stale-index defects | 0 / 7 tested scenarios |
 | Multi-root workspace tests | 8 / 8 |
 | Memory-control closeout | Known retained-state/session-creep class closed with guardrails ([closeout](docs/large-workspaces/MEMORY_CONTROL_CLOSEOUT.md)) |
+| Native tooling readiness | Native formatter and native critic are default-ready; `perltidy` / `perlcritic` remain explicit compatibility adapters ([status](docs/project/status/native_tooling.md)) |
 
 See [project status](docs/project/status/index.md), [parser status](docs/project/status/parser.md), [workspace status](docs/project/status/workspace.md), and [quality metrics](docs/project/status/quality.md) for generated details.
 
@@ -74,6 +75,10 @@ Current public install artifacts are public alpha. Verify the binary before
 wiring it into shared editor or CI configuration.
 
 The VS Code extension downloads the matching `perllsp` binary automatically. Other editors use the `perllsp --stdio` server command after installing a release binary.
+
+Native formatting and native critic diagnostics do not require `perltidy` or
+`perlcritic`. Install those tools only when a project explicitly opts into
+external compatibility behavior or needs legacy output comparison.
 
 Do not install `perl-lsp` from crates.io; that is a different project.
 
