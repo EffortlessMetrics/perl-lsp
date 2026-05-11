@@ -584,7 +584,12 @@ impl<'a> Parser<'a> {
                 Some(TokenKind::DoubleColon) => {
                     // $:: — the main namespace stash
                     let dc_token = self.tokens.next()?; // consume ::
-                    ("::".to_string(), dc_token.end)
+                    if self.peek_kind() == Some(TokenKind::Identifier) {
+                        let name_token = self.tokens.next()?;
+                        (format!("::{}", name_token.text), name_token.end)
+                    } else {
+                        ("::".to_string(), dc_token.end)
+                    }
                 }
                 Some(TokenKind::Colon) => {
                     // $: — format line-break character variable
