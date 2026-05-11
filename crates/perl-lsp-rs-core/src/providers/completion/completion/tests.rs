@@ -3052,10 +3052,12 @@ fn test_use_completion_workspace_first_and_dedupes_external()
     let include_root = temp.path().join("external");
     let module_file = include_root.join("DBI.pm");
     fs::create_dir_all(module_file.parent().ok_or("missing parent")?)?;
-    fs::write(module_file, "package DBI;\n1;\n")?;
+    fs::write(&module_file, "package DBI;\n1;\n")?;
 
     let index = Arc::new(WorkspaceIndex::new());
-    index.index_file(Url::parse("file:///workspace/lib/DBI.pm")?, "package DBI;\n1;\n".into())?;
+    let module_uri =
+        Url::from_file_path(&module_file).map_err(|()| "failed to build module file URI")?;
+    index.index_file(module_uri, "package DBI;\n1;\n".into())?;
 
     let code = "use DB";
     let mut parser = Parser::new(code);
@@ -3072,6 +3074,41 @@ fn test_use_completion_workspace_first_and_dedupes_external()
     let dbi_items: Vec<_> = completions.iter().filter(|c| c.label == "DBI").collect();
     assert_eq!(dbi_items.len(), 1, "DBI should be deduplicated across workspace/external");
     assert_eq!(dbi_items[0].detail.as_deref(), Some("module"));
+    Ok(())
+}
+
+#[test]
+fn test_use_completion_filters_workspace_module_by_active_include_roots()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = TempDir::new()?;
+    let workspace = temp.path();
+    let suppressed_module = workspace.join("lib").join("GoneModule.pm");
+    let active_root = workspace.join("t").join("lib");
+    fs::create_dir_all(suppressed_module.parent().ok_or("missing suppressed module parent")?)?;
+    fs::create_dir_all(&active_root)?;
+    fs::write(&suppressed_module, "package GoneModule;\n1;\n")?;
+
+    let index = Arc::new(WorkspaceIndex::new());
+    let suppressed_uri =
+        Url::from_file_path(&suppressed_module).map_err(|()| "failed to build module URI")?;
+    index.index_file(suppressed_uri, "package GoneModule;\n1;\n".into())?;
+
+    let code = "use Gon";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source_and_paths(
+        &ast,
+        code,
+        Some(index),
+        vec![active_root],
+        Vec::new(),
+        false,
+    );
+    let completions = provider.get_completions(code, code.len());
+    assert!(
+        !completions.iter().any(|c| c.label == "GoneModule"),
+        "workspace package modules outside active @INC roots must not leak into use-completion"
+    );
     Ok(())
 }
 

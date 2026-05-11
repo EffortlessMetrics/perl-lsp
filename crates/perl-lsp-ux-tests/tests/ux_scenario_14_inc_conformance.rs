@@ -70,6 +70,20 @@ fn has_pl701(diags: &[serde_json::Value]) -> bool {
     })
 }
 
+fn hover_is_not_resolved(hover: &Option<serde_json::Value>) -> bool {
+    let Some(hover) = hover else {
+        return true;
+    };
+
+    let value = hover
+        .get("contents")
+        .and_then(|contents| contents.get("value"))
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+
+    value.contains("Not found in workspace") && !value.contains("[Go to module]")
+}
+
 /// Configure the server to use `includePaths` via workspace/didChangeConfiguration.
 fn send_include_paths(harness: &UxHarness, paths: &[&str]) {
     let paths_json: Vec<serde_json::Value> = paths.iter().map(|p| json!(*p)).collect();
@@ -604,10 +618,10 @@ fn scenario_14_no_lib_cancellation() {
     let def_empty = defs.is_empty();
 
     let hover_result = harness.hover("fixture.pl", 4, 4).expect("hover must not error");
+    let hover_not_resolved = hover_is_not_resolved(&hover_result);
 
     // Completion check (negative): `GoneModule` should NOT appear since `no lib`
-    // cancelled the path. Consumer-divergence is acceptable here — completion
-    // may not fully enforce `no lib` semantics.
+    // cancelled the path.
     harness
         .change_file_full("fixture.pl", NO_LIB_CANCEL_COMPLETION_SOURCE)
         .expect("didChange to completion fixture should succeed");
@@ -619,10 +633,10 @@ fn scenario_14_no_lib_cancellation() {
 
     print_conformance(
         "no_lib_cancellation",
-        pl701_fires,            // "ok" for negative = PL701 fired
-        completion_ok,          // "ok" for negative = module absent from completion
-        def_empty,              // "ok" for negative = definition returned empty
-        hover_result.is_none(), // "ok" for negative = hover returned null
+        pl701_fires,        // "ok" for negative = PL701 fired
+        completion_ok,      // "ok" for negative = module absent from completion
+        def_empty,          // "ok" for negative = definition returned empty
+        hover_not_resolved, // "ok" for negative = hover returned null/not-resolved
     );
 
     // Strict enforcement for PL701: the push-diagnostic resolver must honor
@@ -642,27 +656,25 @@ fn scenario_14_no_lib_cancellation() {
         diags
     );
 
-    // goto-def and completion: workspace-indexed modules bypass @INC resolution.
-    // The workspace indexer scans the filesystem independently of lexical `use lib`
-    // / `no lib` state. As a result, goto-def and completion may still surface
-    // GoneModule via the workspace index even when `no lib` is in effect.
-    //
-    // This is a known architectural limitation tracked as a follow-up to #8516.
-    // We log the state rather than asserting to avoid a false CI gate.
-    if !def_empty {
-        eprintln!(
-            "INFO scenario_14_no_lib_cancellation: goto-def still resolves GoneModule \
-             via workspace index (bypasses @INC). Known follow-up to #8516. \
-             goto-def: {:?}",
-            defs
-        );
-    }
-    if !completion_absent {
-        eprintln!(
-            "INFO scenario_14_no_lib_cancellation: completion still suggests GoneModule \
-             via workspace index (bypasses @INC). Known follow-up to #8516."
-        );
-    }
+    assert!(
+        def_empty,
+        "goto-definition MUST return empty for GoneModule: 'no lib' cancelled the earlier \
+         'use lib', so workspace-index fallback must not bypass active @INC state.\n\
+         goto-def: {:?}",
+        defs
+    );
+    assert!(
+        completion_absent,
+        "completion MUST NOT suggest GoneModule: 'no lib' cancelled the earlier 'use lib', \
+         so workspace-index module completion must be filtered by active @INC roots.\n\
+         labels: {:?}",
+        completion_labels(&completions)
+    );
+    assert!(
+        hover_not_resolved,
+        "hover MUST NOT resolve GoneModule after 'no lib' cancellation; got {:?}",
+        hover_result
+    );
 
     harness.assert_no_crash();
 }

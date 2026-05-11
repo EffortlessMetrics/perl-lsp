@@ -1111,6 +1111,7 @@ impl LspServer {
                                 "core pragma requested via goto-def — no file target"
                             );
                         }
+                        return Ok(Some(json!([])));
                     }
                 }
             }

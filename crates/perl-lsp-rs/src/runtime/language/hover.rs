@@ -1274,9 +1274,12 @@ impl LspServer {
             });
         }
 
-        // Try filesystem resolution as fallback
-        if let Some(path) =
-            self.resolve_module_path_with_uri(module_name, Some(doc_text), Some(doc_uri))
+        // Try filesystem resolution as a legacy fallback only when the caller
+        // has no position. Position-aware callers must not bypass active
+        // `@INC` state such as `no lib` cancellation.
+        if doc_offset.is_none()
+            && let Some(path) =
+                self.resolve_module_path_with_uri(module_name, Some(doc_text), Some(doc_uri))
         {
             let pod_section = self.format_pod_for_hover(&path);
             let display = path.display().to_string();
