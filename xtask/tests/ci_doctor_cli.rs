@@ -14,32 +14,17 @@ fn ci_doctor_exits_zero_in_normal_env() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // The header must always appear
-    assert!(
-        stdout.contains("cargo xtask ci doctor"),
-        "expected header in output:\n{stdout}"
-    );
+    assert!(stdout.contains("cargo xtask ci doctor"), "expected header in output:\n{stdout}");
 
     // Toolchain and component sections must appear
-    assert!(
-        stdout.contains("── Toolchain ──"),
-        "expected toolchain section:\n{stdout}"
-    );
-    assert!(
-        stdout.contains("── Rust components ──"),
-        "expected components section:\n{stdout}"
-    );
+    assert!(stdout.contains("── Toolchain ──"), "expected toolchain section:\n{stdout}");
+    assert!(stdout.contains("── Rust components ──"), "expected components section:\n{stdout}");
 
     // Platform section must appear
-    assert!(
-        stdout.contains("── Platform ──"),
-        "expected platform section:\n{stdout}"
-    );
+    assert!(stdout.contains("── Platform ──"), "expected platform section:\n{stdout}");
 
     // The summary line must appear
-    assert!(
-        stdout.contains("ci doctor:"),
-        "expected summary line:\n{stdout}"
-    );
+    assert!(stdout.contains("ci doctor:"), "expected summary line:\n{stdout}");
 }
 
 /// Verify `cargo xtask ci` (without sub-command) still runs the CI suite.
