@@ -23,13 +23,32 @@ PL701, goto-definition, and hover use exact-module fixtures (`use GreetModule;`)
 | Workspace `includePaths` | + | + | + | + | Config-driven: `includePaths: ["lib"]` |
 | Absolute `includePaths` | + | + | + | + | Config-driven: absolute path entry |
 | Lexical `use lib` | + | + | + | + | In-source pragma extraction |
-| `no lib` cancellation | + | - | + | + | Position-aware negative; completion divergence acceptable today |
+| `no lib` cancellation | + | - | + | + | Position-aware negative; completion divergence — tracked separately |
 | FindBin-relative | + | + | + | + | `$FindBin::Bin/lib` pattern |
 | PERL5LIB env | + | + | + | + | `usePerl5lib=true` gates PERL5LIB |
 | interpreter startup `@INC` | + | + | + | + | `useSystemInc=true` gates interpreter startup paths |
 
 **Key**: Consumer cells are `+` (consistent) or `-` (divergent / unimplemented).
 Conformance means all consumers agree — not necessarily that every mode resolves.
+
+## Rail Status — @INC integration complete (2026-05-11)
+
+The cross-consumer `@INC` rail landed across `#8493 → #8506`:
+
+- `PERL5LIB` is gated by `usePerl5lib`; the startup-`@INC` probe also strips `PERL5LIB` from its subprocess environment when `usePerl5lib=false` so the two flags stay independent. (#8493)
+- Interpreter startup `@INC` is gated by `useSystemInc`; the probe is bounded by `SYSTEM_INC_PROBE_TIMEOUT = 1000 ms` and cached. (#8497)
+- Completion, PL701, goto-definition, and hover share `EffectiveIncContext` for include-root assembly. (#8504, #8505, #8506)
+- PL701 displays labeled search roots via `ModuleSearchPathDisplay`. (#8502)
+- Nested multi-root workspaces resolve folder, config, include paths, and completion-cache write-back against the most-specific (deepest) matching folder. (#8496)
+- Module completion uses prefix-directed scan for namespaced prefixes. (#8498)
+- Startup-`@INC` probe failures and timeouts emit targeted warnings while preserving the cached-empty fail-closed behavior. (#8518)
+- Docs and JSON schema document `usePerl5lib`, `perl5libPrecedence`, and the three sources of search paths. (#8494)
+- Scenario 14 conformance harness has a completion column and prefix-vs-exact fixture semantics. (#8495)
+
+Known follow-ups (each tracked as its own issue, not blocking rail closure):
+
+- `no lib` completion strictness across consumers — completion still suggests modules that lexical `no lib` should hide.
+- Runtime-owned short TTL cache for prefix module scans — split out of #8491 after PR 7a (scan-only) landed in #8498.
 
 ## Resolution Mode Details
 
@@ -114,9 +133,15 @@ callers provide configured, lexical, PERL5LIB-labeled, and system-labeled roots
 explicitly. Runtime consumers still own filesystem-backed resolution and LSP
 provider behavior.
 
-## Follow-up Scope (PR 3+)
+## Follow-up Scope
+
+Tracked follow-ups from the @INC rail completion (each its own issue):
+
+- **Position-aware `no lib` cancellation** across all consumers — see [#8516](https://github.com/EffortlessMetrics/perl-lsp/issues/8516). The completion column for the `no lib` cancellation lane in the matrix above stays `-` until this lands.
+- **Runtime-owned TTL cache for module-completion scans** — see [#8514](https://github.com/EffortlessMetrics/perl-lsp/issues/8514). Builds on the prefix-directed scan in #8498.
+
+Backlog (pre-existing, not part of the @INC rail closure):
 
 - `inc_nested_use_lib` — `use lib` inside `BEGIN` block
 - `inc_qw_use_lib` — `use lib qw(lib t/lib)` multi-path form
 - Cross-scorecard: add `expected.json` diagnostic sidecars to all `inc_*` fixtures
-- `no lib` cancellation completion enforcement (currently `-` in matrix)
