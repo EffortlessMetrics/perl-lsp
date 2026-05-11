@@ -1,5 +1,12 @@
 # Rust 1.95 / 0.14.0 rollout map
 
+> **Status (2026-05-11):** This is the **initial rollout plan**, filed when
+> the workspace was still on Rust 1.93. The MSRV / toolchain / `clippy.toml`
+> bumps have since **landed** (#8509). The historical framing below is
+> preserved as the original plan-of-record. For the **post-landing
+> improvement ladder** — what remains, in agent-actionable form — see
+> [`docs/development/RUST_1_95_ROLLOUT.md`](../development/RUST_1_95_ROLLOUT.md).
+
 This document is the control map for moving `perl-lsp` from the current Rust
 1.93 line to Rust 1.95.0 and preparing the next minor release, 0.14.0. It is
 intentionally documentation-only: no MSRV, toolchain, workflow, lint, baseline,

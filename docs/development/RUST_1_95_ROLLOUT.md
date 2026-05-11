@@ -1,5 +1,13 @@
 # Rust 1.95 / Next-Minor Rollout
 
+> **Companion to** [`docs/ci/perl-lsp-rust-1.95-rollout.md`](../ci/perl-lsp-rust-1.95-rollout.md).
+> That doc is the **initial rollout plan** (historical, planned-from-1.93
+> framing). This doc is the **post-landing improvement spec** — what's
+> remaining now that MSRV / toolchain / `clippy.toml`-msrv have shipped
+> (#8509). Each row in the ladder below is an agent-actionable spec; a
+> haiku scout can file it as a GitHub issue and a sonnet builder can
+> implement it without re-discovering the call sites.
+
 Continuation of the Rust 1.93 → 1.95 quality control plane. This doc tracks
 both the ratchet (what already landed) and the remaining ladder (what's
 next), so subsequent PRs do **one thing**.
