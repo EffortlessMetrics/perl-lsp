@@ -454,9 +454,10 @@ fn provider_source_for_provenance(provenance: Provenance) -> ProviderFactSourceK
         | Provenance::PragmaInference => ProviderFactSourceKind::CompilerFact,
         Provenance::DynamicBoundary => ProviderFactSourceKind::DynamicBoundary,
         Provenance::SearchFallback | Provenance::NameHeuristic => ProviderFactSourceKind::Fallback,
-        Provenance::ExactAst | Provenance::DesugaredAst | Provenance::SemanticAnalyzer => {
-            ProviderFactSourceKind::SemanticFact
-        }
+        Provenance::ExactAst
+        | Provenance::DesugaredAst
+        | Provenance::SemanticAnalyzer
+        | Provenance::LiteralRequireImport => ProviderFactSourceKind::SemanticFact,
     }
 }
 

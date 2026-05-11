@@ -355,7 +355,10 @@ fn definition_trace_shape(
             candidate.provenance,
             ProviderFallbackState::Fallback,
         ),
-        Provenance::ExactAst | Provenance::DesugaredAst | Provenance::SemanticAnalyzer
+        Provenance::ExactAst
+        | Provenance::DesugaredAst
+        | Provenance::SemanticAnalyzer
+        | Provenance::LiteralRequireImport
             if candidate.kind == EntityKind::GeneratedMember =>
         {
             (
@@ -364,7 +367,10 @@ fn definition_trace_shape(
                 fallback_state,
             )
         }
-        Provenance::ExactAst | Provenance::DesugaredAst | Provenance::SemanticAnalyzer => {
+        Provenance::ExactAst
+        | Provenance::DesugaredAst
+        | Provenance::SemanticAnalyzer
+        | Provenance::LiteralRequireImport => {
             (ProviderFactSourceKind::SemanticFact, candidate.provenance, fallback_state)
         }
         Provenance::DynamicBoundary => (
