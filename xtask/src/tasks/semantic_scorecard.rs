@@ -1143,32 +1143,18 @@ fn build_readiness_rows(
         + measurement.reference_edges
         + measurement.package_graph_edges;
     let fixture_rate = if fixture_count == 0 { "0%" } else { "100%" };
-    let method_candidate_rate = if measurement.method_candidate_fixture_total == 0 {
-        "0%".to_string()
-    } else {
-        format!(
-            "{}%",
-            measurement.method_candidate_fixture_passes * 100
-                / measurement.method_candidate_fixture_total
-        )
-    };
-    let rename_plan_rate = if measurement.rename_plan_fixture_total == 0 {
-        "0%".to_string()
-    } else {
-        format!(
-            "{}%",
-            measurement.rename_plan_fixture_passes * 100 / measurement.rename_plan_fixture_total
-        )
-    };
-    let safe_delete_plan_rate = if measurement.safe_delete_plan_fixture_total == 0 {
-        "0%".to_string()
-    } else {
-        format!(
-            "{}%",
-            measurement.safe_delete_plan_fixture_passes * 100
-                / measurement.safe_delete_plan_fixture_total
-        )
-    };
+    let method_candidate_rate = percentage_rate(
+        measurement.method_candidate_fixture_passes,
+        measurement.method_candidate_fixture_total,
+    );
+    let rename_plan_rate = percentage_rate(
+        measurement.rename_plan_fixture_passes,
+        measurement.rename_plan_fixture_total,
+    );
+    let safe_delete_plan_rate = percentage_rate(
+        measurement.safe_delete_plan_fixture_passes,
+        measurement.safe_delete_plan_fixture_total,
+    );
 
     BTreeMap::from([
         (
@@ -1315,6 +1301,12 @@ fn build_readiness_rows(
             },
         ),
     ])
+}
+
+fn percentage_rate(passes: usize, total: usize) -> String {
+    let percent =
+        passes.checked_mul(100).and_then(|numerator| numerator.checked_div(total)).unwrap_or(0);
+    format!("{percent}%")
 }
 
 fn serialize_json(artifact: &Artifact) -> Result<String> {
