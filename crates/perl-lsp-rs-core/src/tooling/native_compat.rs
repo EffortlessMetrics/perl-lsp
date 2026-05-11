@@ -703,6 +703,26 @@ fn perlcritic_policy_native_mapping(
             "approximated",
             "native critic checks required NAME/DESCRIPTION sections when a file already contains POD",
         )),
+        "ValuesAndExpressions::ProhibitLeadingZeros" => Some((
+            "native.syntax.prohibit_leading_zeros",
+            "native_equivalent",
+            "native critic detects leading-zero integer literals that Perl silently interprets as octal",
+        )),
+        "ControlStructures::ProhibitAssignmentInCondition" => Some((
+            "native.common.assignment_in_condition",
+            "native_equivalent",
+            "native critic reports assignment-in-conditional expressions at AST level",
+        )),
+        "InputOutput::RequireCheckedClose" => Some((
+            "native.io.unchecked_open_close",
+            "native_superset",
+            "native critic covers unchecked open and close return values in a single unified rule",
+        )),
+        "ErrorHandling::RequireCheckingReturnValueOfEval" => Some((
+            "native.common.stale_dollar_at",
+            "approximated",
+            "native critic tracks stale $@ from eval blocks that proceed without checking",
+        )),
         _ => None,
     }
 }
@@ -1007,5 +1027,96 @@ exclude = InputOutput::ProhibitTwoArgOpen Variables::ProhibitUnusedVariables
             "exclude = [\"native.io.two_arg_open\", \"native.variables.unused_lexical\"]"
         ));
         assert!(markdown.contains("- include: `Unknown::Policy`"));
+    }
+
+    #[test]
+    fn perlcritic_leading_zeros_maps_to_native_equivalent() {
+        let report = classify_perlcritic_profile("[ValuesAndExpressions::ProhibitLeadingZeros]\n");
+
+        assert_eq!(report.item_count, 1);
+        assert_eq!(report.native_equivalent_count, 1);
+        assert_eq!(report.items[0].classification, "native_equivalent");
+        assert_eq!(report.items[0].native_rule, Some("native.syntax.prohibit_leading_zeros"));
+
+        let markdown = render_perlcritic_compat_markdown(".perlcriticrc", &report);
+        assert!(markdown.contains(
+            "| policy | `ValuesAndExpressions::ProhibitLeadingZeros` |  | native_equivalent | native.syntax.prohibit_leading_zeros |"
+        ));
+    }
+
+    #[test]
+    fn perlcritic_assignment_in_condition_maps_to_native_equivalent() {
+        let report =
+            classify_perlcritic_profile("[ControlStructures::ProhibitAssignmentInCondition]\n");
+
+        assert_eq!(report.item_count, 1);
+        assert_eq!(report.native_equivalent_count, 1);
+        assert_eq!(report.items[0].classification, "native_equivalent");
+        assert_eq!(report.items[0].native_rule, Some("native.common.assignment_in_condition"));
+
+        let markdown = render_perlcritic_compat_markdown(".perlcriticrc", &report);
+        assert!(markdown.contains(
+            "| policy | `ControlStructures::ProhibitAssignmentInCondition` |  | native_equivalent | native.common.assignment_in_condition |"
+        ));
+    }
+
+    #[test]
+    fn perlcritic_require_checked_close_maps_to_native_superset() {
+        let report = classify_perlcritic_profile("[InputOutput::RequireCheckedClose]\n");
+
+        assert_eq!(report.item_count, 1);
+        assert_eq!(report.native_superset_count, 1);
+        assert_eq!(report.items[0].classification, "native_superset");
+        assert_eq!(report.items[0].native_rule, Some("native.io.unchecked_open_close"));
+
+        let markdown = render_perlcritic_compat_markdown(".perlcriticrc", &report);
+        assert!(markdown.contains(
+            "| policy | `InputOutput::RequireCheckedClose` |  | native_superset | native.io.unchecked_open_close |"
+        ));
+    }
+
+    #[test]
+    fn perlcritic_require_checking_eval_return_value_maps_to_approximated() {
+        let report =
+            classify_perlcritic_profile("[ErrorHandling::RequireCheckingReturnValueOfEval]\n");
+
+        assert_eq!(report.item_count, 1);
+        assert_eq!(report.approximated_count, 1);
+        assert_eq!(report.items[0].classification, "approximated");
+        assert_eq!(report.items[0].native_rule, Some("native.common.stale_dollar_at"));
+
+        let markdown = render_perlcritic_compat_markdown(".perlcriticrc", &report);
+        assert!(markdown.contains(
+            "| policy | `ErrorHandling::RequireCheckingReturnValueOfEval` |  | approximated | native.common.stale_dollar_at |"
+        ));
+    }
+
+    #[test]
+    fn perlcritic_new_mappings_appear_in_include_exclude_filter_translation() {
+        let report = classify_perlcritic_profile(
+            r#"
+include = ValuesAndExpressions::ProhibitLeadingZeros ControlStructures::ProhibitAssignmentInCondition
+exclude = InputOutput::RequireCheckedClose ErrorHandling::RequireCheckingReturnValueOfEval
+"#,
+        );
+
+        assert_eq!(
+            report.suggested_config.include,
+            vec!["native.syntax.prohibit_leading_zeros", "native.common.assignment_in_condition"]
+        );
+        assert!(report.suggested_config.unmapped_include.is_empty());
+        assert_eq!(
+            report.suggested_config.exclude,
+            vec!["native.io.unchecked_open_close", "native.common.stale_dollar_at"]
+        );
+        assert!(report.suggested_config.unmapped_exclude.is_empty());
+
+        let markdown = render_perlcritic_compat_markdown(".perlcriticrc", &report);
+        assert!(markdown.contains(
+            "include = [\"native.syntax.prohibit_leading_zeros\", \"native.common.assignment_in_condition\"]"
+        ));
+        assert!(markdown.contains(
+            "exclude = [\"native.io.unchecked_open_close\", \"native.common.stale_dollar_at\"]"
+        ));
     }
 }
