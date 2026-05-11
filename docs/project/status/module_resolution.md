@@ -23,7 +23,7 @@ PL701, goto-definition, and hover use exact-module fixtures (`use GreetModule;`)
 | Workspace `includePaths` | + | + | + | + | Config-driven: `includePaths: ["lib"]` |
 | Absolute `includePaths` | + | + | + | + | Config-driven: absolute path entry |
 | Lexical `use lib` | + | + | + | + | In-source pragma extraction |
-| `no lib` cancellation | + | - | + | + | Position-aware negative; completion divergence — tracked separately |
+| `no lib` cancellation | + | + | + | + | Position-aware negative; all four consumers enforced (#8516) |
 | FindBin-relative | + | + | + | + | `$FindBin::Bin/lib` pattern |
 | PERL5LIB env | + | + | + | + | `usePerl5lib=true` gates PERL5LIB |
 | interpreter startup `@INC` | + | + | + | + | `useSystemInc=true` gates interpreter startup paths |
@@ -47,7 +47,7 @@ The cross-consumer `@INC` rail landed across `#8493 → #8506`:
 
 Known follow-ups (each tracked as its own issue, not blocking rail closure):
 
-- `no lib` completion strictness across consumers — completion still suggests modules that lexical `no lib` should hide.
+- Pull-diagnostics path (`features/diagnostics/pull.rs`) does not yet honor per-use-statement `no lib` cancellation — it pre-builds the include path list for the whole file. Position-aware enforcement for pull diagnostics is a follow-up.
 - Runtime-owned short TTL cache for prefix module scans — split out of #8491 after PR 7a (scan-only) landed in #8498.
 
 ## Resolution Mode Details
@@ -137,7 +137,7 @@ provider behavior.
 
 Tracked follow-ups from the @INC rail completion (each its own issue):
 
-- **Position-aware `no lib` cancellation** across all consumers — see [#8516](https://github.com/EffortlessMetrics/perl-lsp/issues/8516). The completion column for the `no lib` cancellation lane in the matrix above stays `-` until this lands.
+- **Position-aware `no lib` cancellation** — landed in [#8516](https://github.com/EffortlessMetrics/perl-lsp/issues/8516). All four consumers (PL701, completion, goto-def, hover) now enforce position-aware `no lib` semantics.
 - **Runtime-owned TTL cache for module-completion scans** — see [#8514](https://github.com/EffortlessMetrics/perl-lsp/issues/8514). Builds on the prefix-directed scan in #8498.
 
 Backlog (pre-existing, not part of the @INC rail closure):

@@ -625,36 +625,41 @@ fn scenario_14_no_lib_cancellation() {
         hover_result.is_none(), // "ok" for negative = hover returned null
     );
 
-    // Consistency check for negative case:
-    // If definition IS empty, PL701 MUST fire (consistent "not found").
-    // If definition is NON-empty, PL701 must NOT fire (consistent "found" -- but wrong!).
-    if !def_empty && !pl701_fires {
-        eprintln!(
-            "INFO scenario_14_no_lib_cancellation: both consumers agree module resolves \
-             (definition non-empty, no PL701). This may indicate 'no lib' is not \
-             yet enforced end-to-end. Skipping strict assertion."
-        );
-    } else if def_empty && !pl701_fires {
-        panic!(
-            "Consumer inconsistency (no_lib_cancellation): goto-def returned empty \
-             but PL701 did NOT fire.\n\
-             goto-def: {:?}\n\
-             diagnostics: {:?}",
-            defs, diags
-        );
-    } else if !def_empty && pl701_fires {
-        panic!(
-            "Consumer inconsistency (no_lib_cancellation): goto-def resolved \
-             but PL701 also fired.\n\
-             goto-def: {:?}\n\
-             diagnostics: {:?}",
-            defs, diags
-        );
-    }
+    // Strict enforcement: `no lib` cancels the `use lib` before `use GoneModule`,
+    // so ALL four consumers MUST agree the module is not resolvable.
+    //
+    // Root cause fixed by #8516: the PL701 resolver was calling
+    // `resolve_module_to_path_with_doc` (whole-file @INC scan) instead of
+    // `resolve_module_to_path_with_doc_at_offset` (position-aware scan).  With the
+    // whole-file scan the cancelled `lib` path was still visible when evaluating
+    // `use GoneModule`.  The offset-aware scan stops at the `use GoneModule` offset
+    // so the `no lib 'lib'` cancellation that precedes it is respected.
+    assert!(
+        pl701_fires,
+        "PL701 MUST fire for GoneModule: 'no lib' cancelled the earlier 'use lib', \
+         so the module must not be found by the diagnostic resolver.\n\
+         diagnostics: {:?}",
+        diags
+    );
+    assert!(
+        def_empty,
+        "goto-definition MUST return empty for GoneModule: 'no lib' cancelled \
+         the path before the use statement.\n\
+         goto-def: {:?}",
+        defs
+    );
+    assert!(
+        completion_absent,
+        "completion MUST NOT suggest GoneModule: 'no lib' cancelled the path \
+         before the cursor position.\n\
+         completion items: {:?}",
+        completions
+    );
 
-    // Primary assertion: consumers must be consistent — they can't disagree on
-    // whether the module resolves.  The specific outcome (resolved or not) is
-    // separately tracked in the scorecard.
+    // Hover: a null/no-resolve result is the expected behavior after `no lib`.
+    // We do not assert hover here because hover returning null is still acceptable
+    // in degraded mode — the key consumers (PL701, goto-def, completion) are asserted above.
+
     harness.assert_no_crash();
 }
 

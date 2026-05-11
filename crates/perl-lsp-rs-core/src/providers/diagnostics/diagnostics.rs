@@ -144,7 +144,7 @@ impl DiagnosticsProvider {
         ast: &std::sync::Arc<Node>,
         parse_errors: &[ParseError],
         source: &str,
-        module_resolver: Option<&dyn Fn(&str) -> bool>,
+        module_resolver: Option<&dyn Fn(&str, usize) -> bool>,
     ) -> Vec<Diagnostic> {
         self.get_diagnostics_with_path(ast, parse_errors, source, module_resolver, &[], None)
     }
@@ -160,7 +160,7 @@ impl DiagnosticsProvider {
         ast: &std::sync::Arc<Node>,
         parse_errors: &[ParseError],
         source: &str,
-        module_resolver: Option<&dyn Fn(&str) -> bool>,
+        module_resolver: Option<&dyn Fn(&str, usize) -> bool>,
         module_search_paths: &[String],
         source_path: Option<&Path>,
     ) -> Vec<Diagnostic> {
@@ -188,7 +188,7 @@ impl DiagnosticsProvider {
         ast: &std::sync::Arc<Node>,
         parse_errors: &[ParseError],
         source: &str,
-        module_resolver: Option<&dyn Fn(&str) -> bool>,
+        module_resolver: Option<&dyn Fn(&str, usize) -> bool>,
         module_search_context: &[ModuleSearchPathDisplay],
         source_path: Option<&Path>,
     ) -> Vec<Diagnostic> {
@@ -221,7 +221,7 @@ impl DiagnosticsProvider {
         ast: &std::sync::Arc<Node>,
         parse_errors: &[ParseError],
         source: &str,
-        module_resolver: Option<&dyn Fn(&str) -> bool>,
+        module_resolver: Option<&dyn Fn(&str, usize) -> bool>,
         module_search_paths: &[String],
         source_path: Option<&Path>,
         file_id: FileId,
@@ -250,7 +250,7 @@ impl DiagnosticsProvider {
         ast: &std::sync::Arc<Node>,
         parse_errors: &[ParseError],
         source: &str,
-        module_resolver: Option<&dyn Fn(&str) -> bool>,
+        module_resolver: Option<&dyn Fn(&str, usize) -> bool>,
         module_search_context: &[ModuleSearchPathDisplay],
         source_path: Option<&Path>,
         file_id: FileId,
@@ -279,7 +279,7 @@ impl DiagnosticsProvider {
         ast: &std::sync::Arc<Node>,
         parse_errors: &[ParseError],
         source: &str,
-        module_resolver: Option<&dyn Fn(&str) -> bool>,
+        module_resolver: Option<&dyn Fn(&str, usize) -> bool>,
         module_search_paths: &[String],
         module_search_context: Option<&[ModuleSearchPathDisplay]>,
         source_path: Option<&Path>,

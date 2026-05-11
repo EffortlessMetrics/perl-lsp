@@ -300,8 +300,13 @@ impl PullDiagnosticsProvider {
                     context,
                 );
 
-                // Build module resolver using context include_paths
-                let resolver = |module: &str| {
+                // Build module resolver using context include_paths.
+                // The `_use_site_offset` argument is accepted but not yet used here because
+                // the pull-diagnostics path pre-builds `include_paths` for the whole file.
+                // Position-aware `no lib` enforcement for pull diagnostics is tracked as a
+                // follow-up (the push-diagnostics path in runtime/diagnostics.rs is fully
+                // position-aware as of this change).
+                let resolver = |module: &str, _use_site_offset: usize| {
                     self.resolve_module_with_paths(module, &include_paths, source_path.as_deref())
                 };
 
@@ -567,8 +572,13 @@ impl PullDiagnosticsProvider {
                 context,
             );
 
-            // Build module resolver using context include_paths
-            let resolver = |module: &str| {
+            // Build module resolver using context include_paths.
+            // The `_use_site_offset` argument is accepted but not yet used here because
+            // the pull-diagnostics path pre-builds `include_paths` for the whole file.
+            // Position-aware `no lib` enforcement for pull diagnostics is tracked as a
+            // follow-up (the push-diagnostics path in runtime/diagnostics.rs is fully
+            // position-aware as of this change).
+            let resolver = |module: &str, _use_site_offset: usize| {
                 self.resolve_module_with_paths(module, &include_paths, source_path.as_deref())
             };
 

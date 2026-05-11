@@ -290,8 +290,10 @@ fn should_skip_module(module_str: &str) -> bool {
 ///
 /// * `node` — Root AST node to walk
 /// * `source` — Source text (used for context; not searched directly here)
-/// * `resolver` — Callback: `fn(module_name: &str) -> bool`. Return `true` if
-///   the module is found (workspace or configured include paths).
+/// * `resolver` — Callback: `fn(module_name: &str, use_site_offset: usize) -> bool`.
+///   Return `true` if the module is found. The second argument is the byte offset
+///   of the `use` statement in the source — callers that support position-aware
+///   `@INC` (e.g. `no lib` cancellation) should use it as the resolution offset.
 /// * `search_paths` — The `@INC` paths that were searched. Included in the
 ///   diagnostic message so the user knows where perl-lsp looked. Pass `&[]`
 ///   when the paths are not available. If more than 10 entries are provided,
@@ -315,7 +317,7 @@ pub fn check_missing_modules<F>(
     search_paths: &[String],
     diagnostics: &mut Vec<Diagnostic>,
 ) where
-    F: Fn(&str) -> bool,
+    F: Fn(&str, usize) -> bool,
 {
     let use_statements = collect_use_statements(node);
 
@@ -328,8 +330,10 @@ pub fn check_missing_modules<F>(
             continue;
         }
 
-        // Skip if the resolver finds the module
-        if resolver(module_str) {
+        // Skip if the resolver finds the module at this use-site offset.
+        // Callers that honour position-aware `no lib` cancellation pass `*start`
+        // to `resolve_module_to_path_with_doc_at_offset`; others may ignore it.
+        if resolver(module_str, *start) {
             continue;
         }
 
@@ -383,8 +387,11 @@ pub fn check_missing_modules<F>(
 ///
 /// * `node` — Root AST node to walk
 /// * `_source` — Source text (reserved for future context extraction)
-/// * `resolver` — Callback: `fn(module_name: &str) -> bool`. Return `true` if the
-///   module was found.
+/// * `resolver` — Callback: `fn(module_name: &str, use_site_offset: usize) -> bool`.
+///   Return `true` if the module was found. The second argument is the byte offset
+///   of the `use` statement — callers that support position-aware `no lib`
+///   cancellation should use it as the resolution offset so that `no lib`
+///   directives appearing before the `use` statement suppress the path.
 /// * `search_context` — Labeled `@INC` entries. Pass `&[]` when paths are unknown.
 /// * `diagnostics` — Output vector; new diagnostics are pushed here
 pub fn check_missing_modules_with_search_context<F>(
@@ -394,7 +401,7 @@ pub fn check_missing_modules_with_search_context<F>(
     search_context: &[ModuleSearchPathDisplay],
     diagnostics: &mut Vec<Diagnostic>,
 ) where
-    F: Fn(&str) -> bool,
+    F: Fn(&str, usize) -> bool,
 {
     let use_statements = collect_use_statements(node);
 
@@ -406,7 +413,9 @@ pub fn check_missing_modules_with_search_context<F>(
             continue;
         }
 
-        if resolver(module_str) {
+        // Pass the use-site offset so that `no lib` cancellations that precede
+        // this statement are respected by position-aware resolvers.
+        if resolver(module_str, *start) {
             continue;
         }
 
@@ -454,13 +463,13 @@ mod tests {
     use perl_parser::Parser;
     use perl_tdd_support::must;
 
-    fn resolver_never_finds(_: &str) -> bool {
+    fn resolver_never_finds(_: &str, _: usize) -> bool {
         false
     }
-    fn resolver_always_finds(_: &str) -> bool {
+    fn resolver_always_finds(_: &str, _: usize) -> bool {
         true
     }
-    fn resolver_finds_foo(m: &str) -> bool {
+    fn resolver_finds_foo(m: &str, _: usize) -> bool {
         m == "Foo::Bar"
     }
 
@@ -617,7 +626,7 @@ mod tests {
         check_missing_modules(
             &ast,
             source,
-            |_| {
+            |_, _| {
                 call_count.set(call_count.get() + 1);
                 false
             },
@@ -629,6 +638,52 @@ mod tests {
             call_count.get(),
             5,
             "resolver should be called exactly once per non-core module"
+        );
+    }
+
+    /// The resolver must receive the byte offset of each `use` statement so
+    /// that position-aware callers (e.g. `no lib` cancellation) can use it.
+    #[test]
+    fn resolver_receives_use_site_offset() {
+        // Two `use` statements at different offsets.  A resolver that only
+        // accepts the second module's offset simulates a position-aware
+        // `no lib` cancellation that cancels the path for the first module but
+        // not the second.
+        let source = "use First::Mod;\nuse Second::Mod;\n";
+        let ast = must(Parser::new(source).parse());
+
+        // `use First::Mod;` starts at offset 0; `use Second::Mod;` at offset 16.
+        let first_offset = 0usize;
+        let second_offset = 16usize;
+
+        // Use Cell so the Fn closure can accumulate the received offsets.
+        let received_offsets = std::cell::RefCell::new(Vec::<usize>::new());
+        let mut diags = vec![];
+        check_missing_modules(
+            &ast,
+            source,
+            |_module, offset| {
+                received_offsets.borrow_mut().push(offset);
+                false // never finds
+            },
+            &[],
+            &mut diags,
+        );
+
+        let offsets = received_offsets.into_inner();
+        // Both modules are non-core, so the resolver is called twice.
+        assert_eq!(offsets.len(), 2, "resolver must be called once per non-core use");
+        assert!(
+            offsets.contains(&first_offset),
+            "resolver must receive offset of first use statement ({}); got: {:?}",
+            first_offset,
+            offsets
+        );
+        assert!(
+            offsets.contains(&second_offset),
+            "resolver must receive offset of second use statement ({}); got: {:?}",
+            second_offset,
+            offsets
         );
     }
 
