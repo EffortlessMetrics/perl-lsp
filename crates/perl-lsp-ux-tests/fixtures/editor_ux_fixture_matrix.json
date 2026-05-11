@@ -799,6 +799,35 @@
         "first_five_minutes_harness",
         "manual_editor_smoke"
       ]
+    },
+    {
+      "id": "real_workspace_providers",
+      "scenario_file": "ux_scenario_20_real_workspace_providers.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "goto_definition",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "run completion, goto-definition, hover, and diagnostics over a real four-file CPAN-style workspace fixture",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate",
+        "module_resolution_workflow_success_rate"
+      ],
+      "expected_outcomes": [
+        "completion, goto-definition, hover, and diagnostics all respond without crash",
+        "cross-file definition requests resolve or return clean empty results",
+        "real-workspace fixture exercises provider parity across module boundaries"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
     }
   ]
 }
