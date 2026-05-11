@@ -1,5 +1,7 @@
 # Linux-Equivalent Minutes (LEM)
 
+> **Context**: This document is part of perl-lsp's [Industrialized AI](why-industrialized.md) CI architecture. The choices here are responses to operating at 1000+ PRs/day, not premature optimization.
+
 LEM is a normalized cost unit for CI lanes. It lets every lane and every PR be compared
 on the same axis regardless of which runner type or OS the work runs on.
 

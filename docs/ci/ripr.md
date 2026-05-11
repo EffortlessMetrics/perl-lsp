@@ -1,5 +1,7 @@
 # ripr — Static Oracle-Gap Detection
 
+> **Context**: This document is part of perl-lsp's [Industrialized AI](why-industrialized.md) CI architecture. The choices here are responses to operating at 1000+ PRs/day, not premature optimization.
+
 > **Doctrine**: `ripr` is static mutation-exposure analysis. It catches the
 > same class of findings mutation testing catches — weak test/oracle
 > exposure — but earlier and cheaper because it is static and PR-time.
