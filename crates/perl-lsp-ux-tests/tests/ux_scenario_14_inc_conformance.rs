@@ -104,6 +104,29 @@ fn send_use_system_inc(harness: &UxHarness, enabled: bool) {
     std::thread::sleep(Duration::from_millis(200));
 }
 
+/// Configure `usePerl5lib` and `useSystemInc` independently via
+/// workspace/didChangeConfiguration. Used to exercise the four-cell matrix
+/// of (usePerl5lib × useSystemInc) for PERL5LIB completion gating.
+fn send_inc_settings(harness: &UxHarness, use_perl5lib: bool, use_system_inc: bool) {
+    harness
+        .client
+        .notify(
+            "workspace/didChangeConfiguration",
+            json!({
+                "settings": {
+                    "perl": {
+                        "workspace": {
+                            "usePerl5lib": use_perl5lib,
+                            "useSystemInc": use_system_inc
+                        }
+                    }
+                }
+            }),
+        )
+        .expect("didChangeConfiguration should not fail");
+    std::thread::sleep(Duration::from_millis(200));
+}
+
 /// Print a conformance summary row.
 fn print_conformance(mode: &str, pl701_ok: bool, def_ok: bool, hover_ok: bool) {
     eprintln!(
@@ -978,83 +1001,237 @@ fn scenario_14_include_path_missing_module_completion_consistency() {
     harness.assert_no_crash();
 }
 
+// =============================================================================
+// Fixture 8: PERL5LIB completion gating is independent of useSystemInc
+// =============================================================================
+//
+// Replaces the previous `scenario_14_system_inc_completion_opt_in_enabled`,
+// whose expectations incorrectly tied PERL5LIB visibility to `useSystemInc`.
+// Correct semantics (PR #8485 / fix to `perl5lib_paths_for_completion`):
+//
+//   - `usePerl5lib` (default true) gates PERL5LIB.
+//   - `useSystemInc` (default false) gates interpreter startup `@INC` only.
+//
+// The two flags are independent. The fixture module lives only in the PERL5LIB
+// tempdir, so completion visibility tracks `usePerl5lib` exactly.
+
+const PR1_PERL5LIB_MODULE_NAME: &str = "Pr1MatrixModule";
+
+const PR1_PERL5LIB_MODULE: &str = "\
+package Pr1MatrixModule;\n\
+use strict;\n\
+use warnings;\n\
+sub ping { return 'pong' }\n\
+1;\n\
+";
+
+const PR1_PERL5LIB_COMPLETION_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use Pr1\n\
+";
+
+const PR1_PERL5LIB_USE_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use Pr1MatrixModule;\n\
+\n\
+my $r = Pr1MatrixModule::ping();\n\
+print \"$r\\n\";\n\
+";
+
 #[test]
-fn scenario_14_system_inc_completion_opt_in_enabled() {
+fn scenario_14_perl5lib_completion_gating_matrix() {
     if !binary_available() {
-        eprintln!(
-            "SKIP scenario_14_system_inc_completion_opt_in_enabled: perl-lsp binary not found"
-        );
+        eprintln!("SKIP scenario_14_perl5lib_completion_gating_matrix: perl-lsp binary not found");
         return;
     }
 
     let system_dir = tempfile::tempdir().expect("Failed to create system tempdir");
-    let module_path = system_dir.path().join("SystemModule.pm");
-    std::fs::write(&module_path, SYSTEM_MODULE).expect("Failed to write SystemModule.pm");
+    let module_path = system_dir.path().join(format!("{PR1_PERL5LIB_MODULE_NAME}.pm"));
+    std::fs::write(&module_path, PR1_PERL5LIB_MODULE).expect("Failed to write Pr1MatrixModule.pm");
     let perl5lib_value = system_dir.path().to_string_lossy().to_string();
 
     let harness = UxHarness::new(
         ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-            .with_file("fixture.pl", "use strict;\nuse warnings;\nuse Sys\n")
+            .with_file("fixture.pl", PR1_PERL5LIB_COMPLETION_SOURCE)
             .env("PERL5LIB", &perl5lib_value),
     )
     .expect("Failed to create UX harness");
 
     harness
-        .open_file("fixture.pl", "use strict;\nuse warnings;\nuse Sys\n")
+        .open_file("fixture.pl", PR1_PERL5LIB_COMPLETION_SOURCE)
         .expect("didOpen should succeed");
     std::thread::sleep(Duration::from_millis(500));
 
-    send_use_system_inc(&harness, false);
-    let before = harness.completion("fixture.pl", 2, 7).expect("completion before opt-in");
-    let before_has_system_module = completion_has_module(&before, "SystemModule");
+    // (use_perl5lib, use_system_inc, expect_module_in_completion)
+    let cells: &[(bool, bool, bool)] =
+        &[(true, false, true), (true, true, true), (false, true, false), (false, false, false)];
 
-    send_use_system_inc(&harness, true);
-    let after = harness.completion("fixture.pl", 2, 7).expect("completion after opt-in");
-    let after_has_system_module = completion_has_module(&after, "SystemModule");
-
-    assert!(
-        !before_has_system_module,
-        "Expected SystemModule to be absent from completion before useSystemInc opt-in; labels={:?}",
-        completion_labels(&before)
-    );
-    assert!(
-        after_has_system_module,
-        "Expected SystemModule in completion after useSystemInc opt-in; labels={:?}",
-        completion_labels(&after)
-    );
-
-    harness
-        .change_file_full("fixture.pl", "use strict;\nuse warnings;\nuse SystemModule;\n")
-        .expect("didChange to completed module should succeed");
-    std::thread::sleep(Duration::from_millis(500));
-
-    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
-    let def_resolves = !defs.is_empty();
-    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
-
-    assert!(
-        def_resolves,
-        "Expected goto-definition to resolve SystemModule after opt-in; defs={:?}",
-        defs
-    );
-    if hover_result.is_some() {
-        assert!(
-            def_resolves,
-            "Consumer inconsistency (system_inc_completion_opt_in_enabled): hover resolved while goto-definition did not.\n\
-             hover={:?}\n\
-             defs={:?}",
-            hover_result, defs
+    for &(use_perl5lib, use_system_inc, expected) in cells {
+        send_inc_settings(&harness, use_perl5lib, use_system_inc);
+        let completions =
+            harness.completion("fixture.pl", 2, 7).expect("completion must not error");
+        let has = completion_has_module(&completions, PR1_PERL5LIB_MODULE_NAME);
+        assert_eq!(
+            has,
+            expected,
+            "cell (usePerl5lib={use_perl5lib}, useSystemInc={use_system_inc}): \
+             expected PERL5LIB module present={expected}, got {has}; labels={:?}",
+            completion_labels(&completions),
         );
     }
-    assert_eq!(
-        after_has_system_module,
+
+    harness.assert_no_crash();
+    drop(system_dir);
+}
+
+#[test]
+fn scenario_14_perl5lib_completion_without_system_inc() {
+    if !binary_available() {
+        eprintln!(
+            "SKIP scenario_14_perl5lib_completion_without_system_inc: perl-lsp binary not found"
+        );
+        return;
+    }
+
+    // Four-consumer parity at (usePerl5lib=true, useSystemInc=false): the
+    // PERL5LIB module must resolve through PL701 / completion / goto-def / hover.
+    let system_dir = tempfile::tempdir().expect("Failed to create system tempdir");
+    let module_path = system_dir.path().join(format!("{PR1_PERL5LIB_MODULE_NAME}.pm"));
+    std::fs::write(&module_path, PR1_PERL5LIB_MODULE).expect("Failed to write Pr1MatrixModule.pm");
+    let perl5lib_value = system_dir.path().to_string_lossy().to_string();
+
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .with_file("fixture.pl", PR1_PERL5LIB_USE_SOURCE)
+            .env("PERL5LIB", &perl5lib_value),
+    )
+    .expect("Failed to create UX harness");
+
+    send_inc_settings(&harness, true, false);
+
+    harness.open_file("fixture.pl", PR1_PERL5LIB_USE_SOURCE).expect("didOpen should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+
+    let diags = wait_diagnostics(&harness, "fixture.pl");
+    let pl701_absent = !has_pl701(&diags);
+
+    // `use Pr1MatrixModule;` is at line 2, col 4.
+    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
+    let def_resolves = !defs.is_empty();
+
+    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
+    let hover_ok = true;
+
+    // Completion check on a sibling prefix fixture: changing the source to a
+    // prefix inside the same harness keeps the harness configured with the
+    // same usePerl5lib / PERL5LIB settings.
+    harness
+        .change_file_full("fixture.pl", PR1_PERL5LIB_COMPLETION_SOURCE)
+        .expect("didChange to completion fixture should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+    let completions = harness.completion("fixture.pl", 2, 7).expect("completion must not error");
+    let completion_resolves = completion_has_module(&completions, PR1_PERL5LIB_MODULE_NAME);
+
+    print_conformance(
+        "perl5lib_completion_without_system_inc",
+        pl701_absent,
         def_resolves,
-        "Consumer inconsistency (system_inc_completion_opt_in_enabled): completion and goto-definition disagree after opt-in.\n\
-         labels={:?}\n\
-         defs={:?}",
-        completion_labels(&after),
-        defs
+        hover_ok,
+    );
+
+    if def_resolves && !pl701_absent {
+        panic!(
+            "Consumer inconsistency (perl5lib_completion_without_system_inc): \
+             goto-def resolved but PL701 fired.\n\
+             goto-def: {:?}\n\
+             diagnostics: {:?}",
+            defs, diags
+        );
+    }
+
+    assert!(
+        completion_resolves,
+        "Expected completion to include {PR1_PERL5LIB_MODULE_NAME} with \
+         usePerl5lib=true, useSystemInc=false; labels={:?}",
+        completion_labels(&completions),
+    );
+    assert!(
+        def_resolves,
+        "Expected goto-definition to resolve {PR1_PERL5LIB_MODULE_NAME} with \
+         usePerl5lib=true, useSystemInc=false; defs={defs:?}"
+    );
+    assert!(
+        pl701_absent,
+        "Expected no PL701 for {PR1_PERL5LIB_MODULE_NAME} with usePerl5lib=true, \
+         useSystemInc=false; diagnostics={diags:?}"
+    );
+
+    if let Some(hover) = hover_result {
+        assert!(hover.get("contents").is_some(), "Hover result must have 'contents': {hover:?}");
+    }
+
+    harness.assert_no_crash();
+    drop(system_dir);
+}
+
+/// Regression guard for the startup-`@INC` env-inheritance leak: with
+/// `usePerl5lib=false` and `useSystemInc=true`, the interpreter startup
+/// `@INC` probe must NOT inherit `PERL5LIB` from the LSP's environment, so a
+/// PERL5LIB-only module does not silently leak in via the system source.
+#[test]
+fn scenario_14_perl5lib_disabled_ignores_env_even_when_system_inc_enabled() {
+    if !binary_available() {
+        eprintln!(
+            "SKIP scenario_14_perl5lib_disabled_ignores_env_even_when_system_inc_enabled: \
+             perl-lsp binary not found"
+        );
+        return;
+    }
+
+    let system_dir = tempfile::tempdir().expect("Failed to create system tempdir");
+    // Unique module name unlikely to exist anywhere in real interpreter startup @INC,
+    // so absence in completion is a meaningful signal.
+    let module_name = "Pr1EnvLeakProbeModule";
+    let module_path = system_dir.path().join(format!("{module_name}.pm"));
+    std::fs::write(
+        &module_path,
+        "package Pr1EnvLeakProbeModule;\n\
+         use strict;\n\
+         use warnings;\n\
+         sub ping { return 'pong' }\n\
+         1;\n",
+    )
+    .expect("Failed to write Pr1EnvLeakProbeModule.pm");
+    let perl5lib_value = system_dir.path().to_string_lossy().to_string();
+
+    let source = "use strict;\nuse warnings;\nuse Pr1Env\n";
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .with_file("fixture.pl", source)
+            .env("PERL5LIB", &perl5lib_value),
+    )
+    .expect("Failed to create UX harness");
+
+    // usePerl5lib disabled, useSystemInc enabled: PERL5LIB must be stripped
+    // from the startup-@INC probe environment, so the probe does not surface
+    // the tempdir module as an interpreter startup root.
+    send_inc_settings(&harness, false, true);
+
+    harness.open_file("fixture.pl", source).expect("didOpen should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+
+    let completions = harness.completion("fixture.pl", 2, 10).expect("completion must not error");
+    let has = completion_has_module(&completions, module_name);
+    assert!(
+        !has,
+        "Expected {module_name} absent from completion with usePerl5lib=false, \
+         useSystemInc=true (PERL5LIB env must not leak through interpreter startup @INC); \
+         labels={:?}",
+        completion_labels(&completions),
     );
 
     harness.assert_no_crash();
+    drop(system_dir);
 }

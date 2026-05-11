@@ -661,6 +661,13 @@ impl WorkspaceConfig {
                 self.resolution_timeout_ms = timeout;
             }
             if let Some(use_p5l) = workspace.get("usePerl5lib").and_then(|v| v.as_bool()) {
+                // Invalidate the lazy startup-@INC cache when usePerl5lib toggles, because
+                // `fetch_perl_inc` strips PERL5LIB from the probe environment when
+                // usePerl5lib is false (and inherits it when true). A cache built under
+                // the old setting may include or exclude PERL5LIB paths incorrectly.
+                if use_p5l != self.use_perl5lib {
+                    self.system_inc_cache = None;
+                }
                 self.use_perl5lib = use_p5l;
             }
             if let Some(prec) = workspace.get("perl5libPrecedence").and_then(|v| v.as_str()) {
@@ -676,21 +683,35 @@ impl WorkspaceConfig {
     }
 
     /// Get system @INC paths (lazily populated).
+    ///
+    /// The PERL5LIB environment variable is stripped from the probe subprocess
+    /// when `use_perl5lib` is false, so interpreter startup `@INC` does not
+    /// silently reintroduce PERL5LIB paths that the user has disabled. The two
+    /// settings remain independent: PERL5LIB visibility is controlled by
+    /// `use_perl5lib`, and startup `@INC` (everything except PERL5LIB) is
+    /// controlled by `use_system_inc`.
     pub fn get_system_inc(&mut self) -> &[PathBuf] {
         if !self.use_system_inc {
             return &[];
         }
 
         if self.system_inc_cache.is_none() {
-            self.system_inc_cache =
-                Some(Self::fetch_perl_inc(self.perl_path.as_deref(), &self.perl_args));
+            self.system_inc_cache = Some(Self::fetch_perl_inc(
+                self.perl_path.as_deref(),
+                &self.perl_args,
+                self.use_perl5lib,
+            ));
         }
 
         self.system_inc_cache.as_deref().unwrap_or(&[])
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn fetch_perl_inc(perl_path: Option<&str>, perl_args: &[String]) -> Vec<PathBuf> {
+    fn fetch_perl_inc(
+        perl_path: Option<&str>,
+        perl_args: &[String],
+        include_perl5lib: bool,
+    ) -> Vec<PathBuf> {
         let perl_path = match perl_path.filter(|path| !path.is_empty()) {
             Some(path) => PathBuf::from(path),
             None => match resolve_perl_path_with_toolchain() {
@@ -699,6 +720,12 @@ impl WorkspaceConfig {
             },
         };
         let mut command = Command::new(perl_path);
+        if !include_perl5lib {
+            // Prevent PERL5LIB from leaking into interpreter startup @INC when
+            // the user has disabled usePerl5lib. Without this, a PERL5LIB set in
+            // the LSP's environment would still appear in `@INC` via the probe.
+            command.env_remove("PERL5LIB");
+        }
         command.args(perl_args);
         let output = command.args(["-e", "print join(\"\\n\", @INC)"]).output();
 
@@ -735,7 +762,7 @@ impl WorkspaceConfig {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn fetch_perl_inc(_: Option<&str>, _: &[String]) -> Vec<PathBuf> {
+    fn fetch_perl_inc(_: Option<&str>, _: &[String], _include_perl5lib: bool) -> Vec<PathBuf> {
         Vec::new()
     }
 }
@@ -1513,5 +1540,54 @@ profile = "recommended"
         let parsed =
             WorkspaceConfig::parse_perl_inc_output("lib\n.\nlib\n/usr/lib/perl5\n/usr/lib/perl5\n");
         assert_eq!(parsed, vec![PathBuf::from("lib"), PathBuf::from("/usr/lib/perl5")]);
+    }
+
+    /// `usePerl5lib` and `useSystemInc` must produce independent startup-`@INC`
+    /// caches. When `usePerl5lib` toggles, the cache must be invalidated so the
+    /// next `get_system_inc` call re-probes Perl with the correct PERL5LIB
+    /// environment (stripped or inherited based on `use_perl5lib`).
+    #[test]
+    fn use_perl5lib_toggle_invalidates_system_inc_cache() {
+        let mut config = WorkspaceConfig::default();
+        config.use_system_inc = true;
+        assert!(config.use_perl5lib, "default usePerl5lib should be true");
+
+        // Pre-populate the cache; flipping usePerl5lib must clear it.
+        config.system_inc_cache = Some(vec![PathBuf::from("/sentinel/cached")]);
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "usePerl5lib": false }
+        }));
+        assert!(!config.use_perl5lib);
+        assert!(
+            config.system_inc_cache.is_none(),
+            "system_inc_cache must invalidate when usePerl5lib changes (true -> false); \
+             got {:?}",
+            config.system_inc_cache
+        );
+
+        // Flip back the other direction.
+        config.system_inc_cache = Some(vec![PathBuf::from("/sentinel/cached2")]);
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "usePerl5lib": true }
+        }));
+        assert!(config.use_perl5lib);
+        assert!(
+            config.system_inc_cache.is_none(),
+            "system_inc_cache must invalidate when usePerl5lib changes (false -> true); \
+             got {:?}",
+            config.system_inc_cache
+        );
+
+        // No-op (same value) must NOT clear the cache.
+        let stable = vec![PathBuf::from("/sentinel/stable")];
+        config.system_inc_cache = Some(stable.clone());
+        config.update_from_value(&serde_json::json!({
+            "workspace": { "usePerl5lib": true }
+        }));
+        assert_eq!(
+            config.system_inc_cache.as_deref(),
+            Some(stable.as_slice()),
+            "cache must survive when usePerl5lib value does not change",
+        );
     }
 }
