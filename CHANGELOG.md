@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 
 - Documented the Rust 1.95 / 0.14.0 rollout sequence before implementation: compatibility spike first, then MSRV/toolchain, lint, no-panic, file-policy, CI routing, and release-prep lanes.
+- Added the proactive CI integrity guards rail ([`docs/development/RUST_1_95_PROACTIVE_GUARDS.md`](docs/development/RUST_1_95_PROACTIVE_GUARDS.md)) as a sibling rollout. Six guard PRs (PG-1 through PG-6) covering label enforcement, risk-pack referential integrity, lane mapping with matrix expansion, net-new workflow-allowlist ledger, CI Actuals emitter + subscription coverage check, and broad-glob justification tightening. Each row mirrors a sibling-repo proven shape.
 
 ## [0.13.4] - 2026-05-07
 
