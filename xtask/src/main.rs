@@ -1465,6 +1465,24 @@ enum Commands {
         #[arg(long)]
         reason: Option<String>,
     },
+
+    /// Check local CI parity: toolchain, fmt, clippy, git cleanliness, Perl, perl-lsp binary.
+    ///
+    /// Emits a human-readable summary by default.
+    /// Use --json for a machine-readable JSON receipt (schema_version 1).
+    /// Use --strict to exit 1 on any warn or fail.
+    ///
+    /// Example: `cargo xtask ci-doctor --strict`
+    #[command(name = "ci-doctor")]
+    CiDoctor {
+        /// Emit a JSON receipt instead of human-readable output.
+        #[arg(long)]
+        json: bool,
+
+        /// Exit 1 if any check is warn or fail (default: warn-only, exit 0).
+        #[arg(long)]
+        strict: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2929,6 +2947,9 @@ fn main() -> Result<()> {
                 allow_historical,
                 reason,
             })
+        }
+        Commands::CiDoctor { json, strict } => {
+            tasks::ci_doctor::run(tasks::ci_doctor::CiDoctorConfig { json, strict })
         }
     }
 }
