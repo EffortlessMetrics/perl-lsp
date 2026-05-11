@@ -299,7 +299,6 @@
 // NOTE: missing_docs enabled with baseline enforcement (Issue #197)
 // Baseline enforced via ci/missing_docs_baseline.txt
 #![warn(missing_docs)]
-#![warn(clippy::all)]
 #![allow(
     // Core allows for parser/lexer code
     clippy::too_many_lines,

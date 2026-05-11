@@ -8,7 +8,6 @@
 #![deny(unreachable_pub)]
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
-#![warn(clippy::all)]
 #![allow(
     clippy::too_many_lines,
     clippy::module_name_repetitions,

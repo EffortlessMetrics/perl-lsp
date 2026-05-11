@@ -49,7 +49,6 @@
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
 #![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]
-#![warn(clippy::all)]
 #![allow(
     clippy::too_many_lines,
     clippy::module_name_repetitions,

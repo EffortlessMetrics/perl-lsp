@@ -3,7 +3,6 @@
 #![deny(unsafe_code)]
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
-#![warn(clippy::all)]
 
 use serde::{Deserialize, Serialize};
 
