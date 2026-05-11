@@ -107,6 +107,34 @@ environment when `usePerl5lib=false` to prevent cross-flag leakage.
 The two flags are independent: `usePerl5lib` controls PERL5LIB; `useSystemInc`
 controls interpreter startup roots. Setting one does not imply the other.
 
+## Include-Root Classification
+
+When filtering workspace-symbol candidates through `EffectiveIncContext`,
+include roots are NOT equivalent paths — they have semantically distinct
+sources that affect cancellation, reachability, and filter behavior.
+
+| Kind | Source | Subject to `no lib` cancellation? | Notes |
+|---|---|---|---|
+| `WorkspaceDefaultDot` | `.` from the workspace folder | No | **Wildcard-like** — matches almost any workspace file; do NOT treat as an ordinary library root for reachability filters |
+| `WorkspaceConfiguredRelative` | `includePaths: ["lib", "t/lib"]` config | No | Explicit operator intent; persists for the workspace lifetime |
+| `WorkspaceConfiguredAbsolute` | `includePaths: ["/abs/path"]` config | No | Same as Relative but absolute |
+| `LexicalUseLib` | `use lib '...'` in the source under analysis | **Yes** (position-scoped) | Cancelled by a downstream `no lib '...'` at the cancel-point offset |
+| `LexicalNoLibCancellation` | `no lib '...'` cancellation marker | n/a — the cancel itself | Removes a `LexicalUseLib` entry from the position-scoped active set |
+| `Perl5LibEnv` | `PERL5LIB`, gated by `usePerl5lib` | No | Inherited from the LSP process environment; stripped from subprocess oracles per #8551 |
+| `InterpreterStartup` | `perl -e 'print @INC'`, gated by `useSystemInc` | No | Output of the subprocess seam — see [perl-subprocess-seams.md](../../architecture/perl-subprocess-seams.md) (#8555) |
+| `FindBinDerived` | `use FindBin; use lib "$FindBin::Bin/..."` | Yes (position-scoped) | `$FindBin::Bin` derived per analyzed file |
+| `RuntimeDerived` | Other lexical paths derived at runtime | Yes (position-scoped) | Currently rare; reserved for future use |
+
+**Why this matters**: if `.` (the workspace default) is treated like any
+other configured include root, reachability filters incorrectly conclude
+that nearly every workspace file is reachable, which defeats checks like
+"after `no lib 'lib'`, `lib/GoneModule.pm` should NOT resolve." Filters
+must branch on the kind, not the path.
+
+See `crates/perl-lsp-rs/src/runtime/lifecycle/inc_context.rs` for the
+runtime implementation and `crates/perl-lsp-rs/CLAUDE.md` for the per-crate
+rule.
+
 ## Implementation Notes
 
 - Position-aware resolution is implemented in `crates/perl-module/src/resolution/use_lib.rs`.
