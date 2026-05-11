@@ -3,12 +3,10 @@
 //! Handles resolution of Perl module names to file paths.
 
 use super::super::*;
-use perl_module::resolution::use_lib::{
-    resolve_use_lib_paths_from_source, resolve_use_lib_paths_from_source_at_offset,
-};
+use perl_module::resolution::use_lib::resolve_use_lib_paths_from_source;
 use perl_module::resolution::{
-    ModuleUriResolution, build_effective_inc_roots,
-    resolve_module_path as resolve_workspace_module_path, resolve_module_uri_with_effective_inc,
+    ModuleUriResolution, resolve_module_path as resolve_workspace_module_path,
+    resolve_module_uri_with_effective_inc,
 };
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -308,20 +306,11 @@ impl LspServer {
         doc_uri: Option<&str>,
         doc_offset: Option<usize>,
     ) -> Option<String> {
-        let mut config = workspace_config_for_doc(self, doc_uri);
-        let perl5lib_paths = std::env::var("PERL5LIB")
-            .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
-            .unwrap_or_default();
-        let include_paths = config.effective_include_paths(&perl5lib_paths);
-        let timeout_ms = config.resolution_timeout_ms;
-        let use_system_inc = config.use_system_inc;
-        let timeout = Duration::from_millis(timeout_ms);
-
         let workspace_folders = self.workspace_folders.lock().clone();
         let workspace_folder_uris: Vec<String> =
             workspace_folders.iter().map(|f| f.uri.clone()).collect();
-        let root = match resolution_root(self, doc_uri) {
-            Some(r) => r,
+        let context = match self.effective_inc_context_for_doc(doc_uri, doc_text, doc_offset) {
+            Some(context) => context,
             None => {
                 if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
                     let _ = self.show_message(
@@ -334,54 +323,18 @@ impl LspServer {
                 return None;
             }
         };
-
-        // Wire use lib paths scoped to this call
-        let mut lexical_paths = Vec::new();
-        if let Some(text) = doc_text {
-            let file_dir = doc_uri
-                .and_then(super::super::source_path_from_uri)
-                .and_then(|p| p.parent().map(|d| d.to_path_buf()));
-            if file_dir.is_none() && doc_uri.is_some() {
-                tracing::trace!("Module URI resolution failed for doc_uri: {:?}", doc_uri);
-            }
-            lexical_paths = if let Some(offset) = doc_offset {
-                resolve_use_lib_paths_from_source_at_offset(
-                    text,
-                    offset,
-                    &root,
-                    file_dir.as_deref(),
-                )
-            } else {
-                resolve_use_lib_paths_from_source(text, &root, file_dir.as_deref())
-            };
-        }
+        let timeout = Duration::from_millis(context.resolution_timeout_ms);
 
         let open_document_uris: Vec<String> = {
             let documents = self.documents.lock();
             documents.keys().cloned().collect()
         };
 
-        let system_paths = if use_system_inc {
-            // `WorkspaceConfig` now resolves the active interpreter with
-            // perlbrew/plenv-aware fallback before probing startup `@INC`.
-            config.get_system_inc().to_vec()
-        } else {
-            Vec::new()
-        };
-
-        let effective_inc = build_effective_inc_roots(
-            &include_paths,
-            &perl5lib_paths,
-            config.use_perl5lib,
-            &lexical_paths,
-            &system_paths,
-        );
-
         match resolve_module_uri_with_effective_inc(
             module_name,
             &open_document_uris,
             &workspace_folder_uris,
-            &effective_inc,
+            &context.effective_roots,
             timeout,
         ) {
             ModuleUriResolution::Resolved(uri) => Some(uri),
@@ -399,6 +352,7 @@ mod tests {
     use super::*;
     use crate::runtime::workspace_folder::WorkspaceFolderState;
     use perl_module::resolution::IncRootKind;
+    use perl_module::resolution::build_effective_inc_roots;
     use std::fs;
 
     // --- workspace root detection warning tests ---

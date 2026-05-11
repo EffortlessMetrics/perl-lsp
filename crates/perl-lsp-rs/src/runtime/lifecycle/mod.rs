@@ -47,6 +47,7 @@
 //! 4. Exit code 0 if shutdown was received, 1 otherwise
 
 mod capabilities;
+mod inc_context;
 pub mod module_resolution;
 mod tools;
 mod watchers;
