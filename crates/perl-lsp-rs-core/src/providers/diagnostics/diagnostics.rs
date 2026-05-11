@@ -23,6 +23,7 @@ use super::lints::eval_error_flow::check_eval_error_flow;
 use super::lints::ffi_checklib::check_ffi_checklib;
 use super::lints::goto_label::check_goto_labels;
 use super::lints::loop_control_label::check_loop_control_labels;
+use super::lints::missing_module::ModuleSearchPathDisplay;
 use super::lints::package_subroutine::{
     check_duplicate_package, check_duplicate_subroutine, check_missing_package_declaration,
 };
@@ -171,6 +172,33 @@ impl DiagnosticsProvider {
             source,
             module_resolver,
             module_search_paths,
+            None,
+            source_path,
+            FileId(0),
+            &NullSemanticQueries,
+        )
+    }
+
+    /// Generate diagnostics with labeled module-search context for PL701.
+    ///
+    /// This preserves the legacy resolver and source-path behavior while using
+    /// labeled search roots for missing-module messages and suggestions.
+    pub fn get_diagnostics_with_search_context(
+        &self,
+        ast: &std::sync::Arc<Node>,
+        parse_errors: &[ParseError],
+        source: &str,
+        module_resolver: Option<&dyn Fn(&str) -> bool>,
+        module_search_context: &[ModuleSearchPathDisplay],
+        source_path: Option<&Path>,
+    ) -> Vec<Diagnostic> {
+        self.get_diagnostics_with_path_and_semantics_impl(
+            ast,
+            parse_errors,
+            source,
+            module_resolver,
+            &[],
+            Some(module_search_context),
             source_path,
             FileId(0),
             &NullSemanticQueries,
@@ -205,6 +233,36 @@ impl DiagnosticsProvider {
             source,
             module_resolver,
             module_search_paths,
+            None,
+            source_path,
+            file_id,
+            semantic_queries,
+        )
+    }
+
+    /// Generate semantic-aware diagnostics with labeled module-search context.
+    ///
+    /// Callers should use this when they have both workspace semantic queries
+    /// and labeled `@INC` roots from the runtime include-context builder.
+    #[allow(clippy::too_many_arguments)]
+    pub fn get_diagnostics_with_search_context_and_semantics<Q: SemanticQueries>(
+        &self,
+        ast: &std::sync::Arc<Node>,
+        parse_errors: &[ParseError],
+        source: &str,
+        module_resolver: Option<&dyn Fn(&str) -> bool>,
+        module_search_context: &[ModuleSearchPathDisplay],
+        source_path: Option<&Path>,
+        file_id: FileId,
+        semantic_queries: &Q,
+    ) -> Vec<Diagnostic> {
+        self.get_diagnostics_with_path_and_semantics_impl(
+            ast,
+            parse_errors,
+            source,
+            module_resolver,
+            &[],
+            Some(module_search_context),
             source_path,
             file_id,
             semantic_queries,
@@ -223,6 +281,7 @@ impl DiagnosticsProvider {
         source: &str,
         module_resolver: Option<&dyn Fn(&str) -> bool>,
         module_search_paths: &[String],
+        module_search_context: Option<&[ModuleSearchPathDisplay]>,
         source_path: Option<&Path>,
         file_id: FileId,
         semantic_queries: &Q,
@@ -326,13 +385,23 @@ impl DiagnosticsProvider {
 
         // Missing module lint (PL701) — only when a resolver is provided
         if let Some(resolver) = module_resolver {
-            super::lints::missing_module::check_missing_modules(
-                ast,
-                source,
-                resolver,
-                module_search_paths,
-                &mut diagnostics,
-            );
+            if let Some(search_context) = module_search_context {
+                super::lints::missing_module::check_missing_modules_with_search_context(
+                    ast,
+                    source,
+                    resolver,
+                    search_context,
+                    &mut diagnostics,
+                );
+            } else {
+                super::lints::missing_module::check_missing_modules(
+                    ast,
+                    source,
+                    resolver,
+                    module_search_paths,
+                    &mut diagnostics,
+                );
+            }
         }
 
         // Remove duplicate diagnostics before returning
