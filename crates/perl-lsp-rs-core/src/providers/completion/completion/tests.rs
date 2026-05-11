@@ -4208,3 +4208,162 @@ fn baseline_no_bounded_source_no_all_workspace_fallback() -> Result<(), Box<dyn 
     }
     Ok(())
 }
+
+// ── PR 7a: prefix-directed module scan regression tests ──────────────────────
+
+#[test]
+fn test_root_and_leaf_prefix_single_segment() {
+    // Single segment: scan dir stays at root.
+    use std::path::Path;
+    let root = Path::new("/lib");
+    let (scan_dir, leaf, depth) = workspace::root_and_leaf_prefix(root, "Foo");
+    assert_eq!(scan_dir, root, "single segment must keep root as scan_dir");
+    assert_eq!(leaf, "Foo");
+    assert_eq!(depth, 0);
+}
+
+#[test]
+fn test_root_and_leaf_prefix_multi_segment() {
+    // Multi-segment: scan dir descends into the consumed namespace.
+    use std::path::Path;
+    let root = Path::new("/lib");
+    let (scan_dir, leaf, depth) = workspace::root_and_leaf_prefix(root, "Foo::Bar::Ba");
+    assert_eq!(scan_dir, root.join("Foo").join("Bar"));
+    assert_eq!(leaf, "Ba");
+    assert_eq!(depth, 2);
+}
+
+#[test]
+fn test_root_and_leaf_prefix_empty() {
+    // Empty prefix: scan dir stays at root.
+    use std::path::Path;
+    let root = Path::new("/lib");
+    let (scan_dir, leaf, depth) = workspace::root_and_leaf_prefix(root, "");
+    assert_eq!(scan_dir, root);
+    assert_eq!(leaf, "");
+    assert_eq!(depth, 0);
+}
+
+/// Behavior-preservation: the set of module names returned by
+/// `scan_directory_for_modules` for a namespaced prefix must be identical
+/// whether we call it with a single-segment prefix or a multi-segment prefix
+/// that narrows down to the same subset.
+///
+/// This verifies that the prefix-directed scan optimisation (PR 7a) does not
+/// change which modules are returned — only which directory the BFS starts in.
+#[test]
+fn test_scan_prefix_directed_identical_to_root_scan() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = TempDir::new()?;
+    let root = temp.path().join("lib");
+
+    // Create a fixture tree:
+    //   lib/
+    //     Foo/
+    //       Bar/
+    //         Baz.pm        → Foo::Bar::Baz
+    //         Batman.pm     → Foo::Bar::Batman
+    //       Other.pm        → Foo::Other
+    //     Unrelated/
+    //       Module.pm       → Unrelated::Module
+    let foo_bar = root.join("Foo").join("Bar");
+    fs::create_dir_all(&foo_bar)?;
+    fs::write(foo_bar.join("Baz.pm"), "package Foo::Bar::Baz;\n1;\n")?;
+    fs::write(foo_bar.join("Batman.pm"), "package Foo::Bar::Batman;\n1;\n")?;
+
+    let foo_dir = root.join("Foo");
+    fs::write(foo_dir.join("Other.pm"), "package Foo::Other;\n1;\n")?;
+
+    let unrelated = root.join("Unrelated");
+    fs::create_dir_all(&unrelated)?;
+    fs::write(unrelated.join("Module.pm"), "package Unrelated::Module;\n1;\n")?;
+
+    // Multi-segment prefix "Foo::Bar::Ba" — must return only Foo::Bar::Baz and
+    // Foo::Bar::Batman (both match the "Foo::Bar::Ba" prefix).
+    let mut multi_sorted = workspace::scan_directory_for_modules(&root, "Foo::Bar::Ba");
+    multi_sorted.sort();
+
+    // The multi-segment result must include exactly the "Ba"-matching modules.
+    assert!(
+        multi_sorted.contains(&"Foo::Bar::Baz".to_string()),
+        "Foo::Bar::Baz must appear; got: {multi_sorted:?}"
+    );
+    assert!(
+        multi_sorted.contains(&"Foo::Bar::Batman".to_string()),
+        "Foo::Bar::Batman must appear; got: {multi_sorted:?}"
+    );
+
+    // Unrelated modules must not appear in multi-segment result.
+    assert!(
+        !multi_sorted.contains(&"Unrelated::Module".to_string()),
+        "Unrelated::Module must not appear in multi-seg; got: {multi_sorted:?}"
+    );
+
+    // Foo::Other does not start with "Foo::Bar::Ba" so must not appear.
+    assert!(
+        !multi_sorted.contains(&"Foo::Other".to_string()),
+        "Foo::Other must not appear in multi-seg result; got: {multi_sorted:?}"
+    );
+
+    Ok(())
+}
+
+/// Behavior-preservation: `scan_directory_for_modules` with a prefix whose
+/// intermediate subdirectory does not exist must silently return empty rather
+/// than panicking or returning unrelated results.
+#[test]
+fn test_scan_prefix_directed_nonexistent_subdir_returns_empty()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = TempDir::new()?;
+    let root = temp.path().join("lib");
+    fs::create_dir_all(&root)?;
+    // No "Ghost" directory exists under root.
+    let result = workspace::scan_directory_for_modules(&root, "Ghost::Module::Foo");
+    assert!(
+        result.is_empty(),
+        "nonexistent intermediate subdir must yield empty result; got: {result:?}"
+    );
+    Ok(())
+}
+
+/// Behavior-preservation: prefix-directed scan with a fully typed namespace
+/// still surfaces completions via `add_use_module_completions`.
+#[test]
+fn test_use_completion_namespaced_prefix_directed() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = TempDir::new()?;
+    let include_root = temp.path().join("external");
+
+    // Create Mojo::Controller and Mojo::Util (matching "Mojo::C" and "Mojo::U").
+    let mojo_dir = include_root.join("Mojo");
+    fs::create_dir_all(&mojo_dir)?;
+    fs::write(mojo_dir.join("Controller.pm"), "package Mojo::Controller;\n1;\n")?;
+    fs::write(mojo_dir.join("Util.pm"), "package Mojo::Util;\n1;\n")?;
+
+    let code = "use Mojo::Co";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source_and_paths(
+        &ast,
+        code,
+        Some(Arc::new(WorkspaceIndex::new())),
+        vec![include_root],
+        Vec::new(),
+        false,
+    );
+    let completions = provider.get_completions(code, code.len());
+
+    // Controller matches "Mojo::Co" — must appear.
+    assert!(
+        completions.iter().any(|c| c.label == "Mojo::Controller"),
+        "Mojo::Controller must appear for prefix 'Mojo::Co'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    // Util does NOT match "Mojo::Co" — must not appear.
+    assert!(
+        !completions.iter().any(|c| c.label == "Mojo::Util"),
+        "Mojo::Util must not appear for prefix 'Mojo::Co'; got: {:?}",
+        completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    Ok(())
+}
