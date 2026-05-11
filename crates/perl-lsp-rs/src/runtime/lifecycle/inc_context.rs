@@ -68,6 +68,62 @@ impl EffectiveIncContext {
     pub(crate) fn search_display_paths(&self) -> Vec<ModuleSearchPathDisplay> {
         search_display_paths(&self.effective_roots)
     }
+
+    /// Returns `true` if `symbol_uri` is directly reachable through one of the
+    /// effective include roots in this context as a Perl module file.
+    ///
+    /// Used to filter workspace-symbol index hits against position-aware `@INC`
+    /// state so that `no lib` cancellations are honoured for goto-definition and
+    /// module completion (fixes #8537).
+    ///
+    /// # Module file convention
+    ///
+    /// A file at `<root>/Foo/Bar.pm` is reachable via @INC root `<root>` as
+    /// module `Foo::Bar`. We verify that `symbol_uri` is a *direct child path*
+    /// of one of the effective roots — i.e., the root is the *immediate parent
+    /// prefix* that maps to a module name, not just any ancestor.
+    ///
+    /// # Non-file URIs
+    ///
+    /// Non-file-scheme URIs (e.g. `untitled:` or built-in virtual documents) are
+    /// given the benefit of the doubt and are **not** filtered out.
+    ///
+    /// # Relative roots
+    ///
+    /// Roots that are relative (e.g. `FileLocalLexical` entries like `lib`) are
+    /// resolved against `self.root` before the prefix check is applied.
+    #[must_use]
+    pub(crate) fn symbol_uri_reachable(&self, symbol_uri: &str) -> bool {
+        let Some(symbol_path) = super::super::source_path_from_uri(symbol_uri) else {
+            // Non-file URI — don't filter.
+            return true;
+        };
+
+        // Normalise the symbol path to an absolute form for comparison.
+        let symbol_abs =
+            if symbol_path.is_absolute() { symbol_path } else { self.root.join(&symbol_path) };
+
+        // Only count roots that are non-trivial (not equal to the workspace root
+        // itself) for the file-as-module reachability check. The workspace root `.`
+        // covers every file in the workspace, which would defeat the filter.
+        // We rely on explicit include roots (use lib, includePaths, PERL5LIB) to
+        // determine reachability.
+        let root_is_workspace = |root_abs: &std::path::Path| root_abs == self.root.as_path();
+
+        self.effective_roots.iter().any(|root| {
+            let root_abs = if root.path.is_absolute() {
+                root.path.clone()
+            } else {
+                self.root.join(&root.path)
+            };
+            // Skip the workspace root itself — it's a fallback include root that
+            // covers the entire tree, not a specific module directory.
+            if root_is_workspace(&root_abs) {
+                return false;
+            }
+            symbol_abs.starts_with(&root_abs)
+        })
+    }
 }
 
 impl LspServer {
@@ -241,5 +297,114 @@ mod tests {
     fn effective_inc_context_returns_none_without_root() {
         let server = LspServer::new();
         assert!(server.effective_inc_context_for_doc(None, None, None).is_none());
+    }
+
+    #[test]
+    fn symbol_uri_reachable_returns_true_for_symbol_under_inc_root() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let lib_dir = workspace.join("lib");
+        std::fs::create_dir_all(&lib_dir)?;
+
+        // Simulate a workspace symbol at lib/MyModule.pm.
+        let module_path = lib_dir.join("MyModule.pm");
+        std::fs::write(&module_path, "package MyModule;\n1;\n")?;
+        let module_uri = file_uri(&module_path)?;
+
+        // Build a context with lib as an include root.
+        let workspace_uri = file_uri(&workspace)?;
+        let script_path = workspace.join("script.pl");
+        let script_uri = file_uri(&script_path)?;
+        let mut config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+        config.include_paths = vec!["lib".to_string()];
+        config.use_system_inc = false;
+
+        let server = LspServer::new();
+        *server.workspace_folders.lock() = vec![
+            WorkspaceFolderState::new(workspace_uri.clone())
+                .with_path(workspace.clone())
+                .with_effective_workspace_config(config),
+        ];
+        *server.root_path.lock() = Some(workspace.clone());
+
+        let source = "use MyModule;\n";
+        let context = server
+            .effective_inc_context_for_doc(Some(&script_uri), Some(source), Some(source.len()))
+            .ok_or("expected effective @INC context")?;
+
+        assert!(
+            context.symbol_uri_reachable(&module_uri),
+            "symbol under an include root must be reachable; root={:?} symbol={:?}",
+            context.effective_roots,
+            module_uri
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn symbol_uri_reachable_returns_false_after_no_lib_cancellation() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let lib_dir = workspace.join("lib");
+        std::fs::create_dir_all(&lib_dir)?;
+
+        let module_path = lib_dir.join("GoneModule.pm");
+        std::fs::write(&module_path, "package GoneModule;\n1;\n")?;
+        let module_uri = file_uri(&module_path)?;
+
+        let workspace_uri = file_uri(&workspace)?;
+        let script_path = workspace.join("script.pl");
+        let script_uri = file_uri(&script_path)?;
+        let config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+
+        let server = LspServer::new();
+        *server.workspace_folders.lock() = vec![
+            WorkspaceFolderState::new(workspace_uri.clone())
+                .with_path(workspace.clone())
+                .with_effective_workspace_config(config),
+        ];
+        *server.root_path.lock() = Some(workspace.clone());
+
+        // `use lib 'lib'` then `no lib 'lib'` cancels the path at this offset.
+        let source = "use lib 'lib';\nno lib 'lib';\nuse GoneModule;\n";
+        let use_gone_offset = source.rfind("use GoneModule").ok_or("offset not found")?;
+        let context = server
+            .effective_inc_context_for_doc(Some(&script_uri), Some(source), Some(use_gone_offset))
+            .ok_or("expected effective @INC context")?;
+
+        assert!(
+            !context.symbol_uri_reachable(&module_uri),
+            "symbol under a no-lib-cancelled root must NOT be reachable; \
+             roots={:?} symbol={:?}",
+            context.effective_roots,
+            module_uri
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn symbol_uri_reachable_returns_true_for_non_file_uri() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        std::fs::create_dir_all(&workspace)?;
+
+        let workspace_uri = file_uri(&workspace)?;
+        let config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+        let server = LspServer::new();
+        *server.workspace_folders.lock() = vec![
+            WorkspaceFolderState::new(workspace_uri.clone())
+                .with_path(workspace.clone())
+                .with_effective_workspace_config(config),
+        ];
+        *server.root_path.lock() = Some(workspace.clone());
+
+        let source = "use Foo;\n";
+        let context = server
+            .effective_inc_context_for_doc(Some(&workspace_uri), Some(source), Some(source.len()))
+            .ok_or("expected effective @INC context")?;
+
+        // Non-file URI should always be considered reachable (benefit of the doubt).
+        assert!(context.symbol_uri_reachable("untitled:foo"), "non-file URI must not be filtered");
+        Ok(())
     }
 }
