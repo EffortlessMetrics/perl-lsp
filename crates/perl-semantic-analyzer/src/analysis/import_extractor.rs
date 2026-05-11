@@ -192,13 +192,23 @@ impl ImportExtractor {
                 // `require Module; Module->import(...)` → RequireThenImport
                 //
                 // Use the require statement's anchor for the spec.
+                // Choose provenance based on whether the import argument list
+                // is entirely composed of literal strings/qw() words:
+                // - All static (Explicit/Tags/Mixed/Default/None) → LiteralRequireImport
+                //   (guarantees the full symbol set is statically known)
+                // - Dynamic → ExactAst (conservative; symbol set not fully known)
+                let provenance = if matches!(symbols, ImportSymbols::Dynamic) {
+                    Provenance::ExactAst
+                } else {
+                    Provenance::LiteralRequireImport
+                };
                 let anchor_id = Self::anchor_from_node(require_node);
                 let confidence = Self::confidence_for_symbols(&symbols);
                 out.push(ImportSpec {
                     module: module_name,
                     kind: ImportKind::RequireThenImport,
                     symbols,
-                    provenance: Provenance::ExactAst,
+                    provenance,
                     confidence,
                     file_id: Some(file_id),
                     anchor_id: Some(anchor_id),
@@ -1023,7 +1033,8 @@ Foo::Bar->import(qw(alpha beta));
         } else {
             return Err(format!("expected Explicit, got {:?}", spec.symbols));
         }
-        assert_eq!(spec.provenance, Provenance::ExactAst);
+        // Fully literal import list → LiteralRequireImport provenance.
+        assert_eq!(spec.provenance, Provenance::LiteralRequireImport);
         assert_eq!(spec.confidence, Confidence::High);
         Ok(())
     }
@@ -1064,6 +1075,8 @@ Foo::Bar->import('alpha', 'beta');
         } else {
             return Err(format!("expected Explicit, got {:?}", spec.symbols));
         }
+        // Fully literal quoted-string import → LiteralRequireImport provenance.
+        assert_eq!(spec.provenance, Provenance::LiteralRequireImport);
         assert_eq!(spec.confidence, Confidence::High);
         Ok(())
     }

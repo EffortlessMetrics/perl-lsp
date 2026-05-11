@@ -1,7 +1,11 @@
-//! Single-line Perl import head parsing.
+//! Single-line Perl import head parsing and literal require/import extraction.
 //!
 //! Parse a single source line that starts with `use` or `require` and return
 //! the first import token with stable byte offsets.
+//!
+//! Also provides [`extract_require_import_symbols`], a text-level extractor
+//! that recognises the literal `require Module; Module->import(...)` adjacency
+//! pattern in multi-line source without requiring AST construction.
 
 /// When a module is loaded relative to program execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -293,4 +297,215 @@ fn first_token_with_range(input: &str) -> Option<(&str, usize, usize)> {
 
 fn is_token_delimiter(ch: char) -> bool {
     ch.is_whitespace() || matches!(ch, ';' | '(' | ')')
+}
+
+// ── Literal require/import extractor ────────────────────────────────────────
+
+/// A single symbol extracted from a literal `require Module; Module->import(...)` pair.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequireImportEntry {
+    /// The fully qualified module name (e.g. `Foo::Bar`).
+    pub module: String,
+    /// The symbol name imported from the module.
+    pub symbol: String,
+    /// Byte offset of the `require` statement start in the source string.
+    pub require_byte_offset: usize,
+    /// Byte offset of the `Module->import(...)` statement start in the source string.
+    pub import_byte_offset: usize,
+}
+
+/// Extract symbols from literal `require Module; Module->import(...)` patterns
+/// found anywhere in `source`.
+///
+/// # Recognised patterns
+///
+/// - `require Module::Path;` followed (anywhere later) by
+///   `Module::Path->import(qw(a b c));`
+/// - `require Module::Path;` followed by
+///   `Module::Path->import('a', 'b');`
+/// - `require Module::Path;` followed by
+///   `Module::Path->import("a", "b");`
+///
+/// # Non-goals (not matched)
+///
+/// - `require $var;` (dynamic module name — variable)
+/// - `Module->import(@list);` (dynamic argument list — array variable)
+/// - `map { Module->import($_) } @syms;` (computed expressions)
+/// - `$class->import('x');` (variable receiver)
+///
+/// The extractor is **text-level only** — it does not parse a full AST.
+/// It works on whitespace-normalised lines and a small lookahead window.
+#[must_use]
+pub fn extract_require_import_symbols(source: &str) -> Vec<RequireImportEntry> {
+    let mut entries = Vec::new();
+
+    // Build a list of (byte_offset, trimmed_line) pairs.
+    let lines: Vec<(usize, &str)> = {
+        let mut v = Vec::new();
+        let mut offset = 0usize;
+        for line in source.split('\n') {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                v.push((offset, trimmed));
+            }
+            offset += line.len() + 1; // +1 for the '\n' we split on
+        }
+        v
+    };
+
+    for (i, &(req_offset, req_line)) in lines.iter().enumerate() {
+        // Match `require BarewordModule;`
+        let module = match parse_literal_require_line(req_line) {
+            Some(m) => m,
+            None => continue,
+        };
+
+        // Scan the remaining lines within a reasonable window (same scope, adjacent).
+        // We allow up to 5 blank-skipped lines between require and import to handle
+        // common real-world spacing without false positives across unrelated statements.
+        let window_end = (i + 1 + 5).min(lines.len());
+        for &(imp_offset, imp_line) in &lines[i + 1..window_end] {
+            if let Some(symbols) = parse_literal_import_call(imp_line, module) {
+                for symbol in symbols {
+                    entries.push(RequireImportEntry {
+                        module: module.to_string(),
+                        symbol,
+                        require_byte_offset: req_offset,
+                        import_byte_offset: imp_offset,
+                    });
+                }
+                // Consumed this import statement — move to next require.
+                break;
+            }
+            // If the line is a different require or a use, stop looking for a matching import.
+            if is_statement_terminator(imp_line) {
+                break;
+            }
+        }
+    }
+
+    entries
+}
+
+/// Parse a line of the form `require BarewordModule::Name;`.
+///
+/// Returns the module name string slice from `line`, or `None` if the line
+/// does not match this exact pattern.
+///
+/// Rejects:
+/// - `require $var;` (variable)
+/// - `require "file.pm";` (quoted file path)
+/// - `require 'file.pm';` (quoted file path)
+fn parse_literal_require_line(line: &str) -> Option<&str> {
+    let rest = line.strip_prefix("require")?;
+    // Must have whitespace after `require`.
+    if !rest.starts_with(|c: char| c.is_whitespace()) {
+        return None;
+    }
+    let rest = rest.trim_start();
+    // Reject variables and quoted paths.
+    if rest.starts_with('$') || rest.starts_with('"') || rest.starts_with('\'') {
+        return None;
+    }
+    // Extract the bareword module name up to `;` or end of string.
+    let end = rest.find(|c: char| c == ';' || c.is_whitespace()).unwrap_or(rest.len());
+    let module = &rest[..end];
+    if module.is_empty() {
+        return None;
+    }
+    // Must start with an uppercase or lowercase letter (not a sigil, digit, etc.).
+    if !module.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') {
+        return None;
+    }
+    // Must consist only of identifier chars and `::` separators.
+    if !module.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':') {
+        return None;
+    }
+    Some(module)
+}
+
+/// Parse a line of the form `Module::Name->import(literal list);`.
+///
+/// Returns `Some(Vec<String>)` of symbol names when the line matches the
+/// expected module name with only literal arguments (`qw(...)`, `'x'`, `"x"`).
+/// Returns `None` when the line does not match or contains dynamic arguments.
+fn parse_literal_import_call(line: &str, expected_module: &str) -> Option<Vec<String>> {
+    // Line must start with `Module->import(` (possibly with whitespace).
+    let prefix = format!("{}->import(", expected_module);
+    let after_open = line.strip_prefix(prefix.as_str())?;
+
+    // Find the matching close paren.
+    let close_idx = after_open.rfind(')')?;
+    let args_src = &after_open[..close_idx];
+
+    // Reject dynamic arguments: arrays, scalars, map, grep.
+    if args_src.contains('@') || args_src.contains('$') {
+        return None;
+    }
+
+    let symbols = parse_literal_arg_list(args_src)?;
+    Some(symbols)
+}
+
+/// Parse the interior of an `import(...)` argument list that contains only
+/// literal strings and/or a `qw(...)` list.
+///
+/// Returns `None` when any argument looks dynamic or unparseable.
+fn parse_literal_arg_list(args: &str) -> Option<Vec<String>> {
+    let trimmed = args.trim();
+
+    if trimmed.is_empty() {
+        return Some(Vec::new());
+    }
+
+    // qw(...) form.
+    if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
+        let words: Vec<String> =
+            inner.split_whitespace().filter(|w| !w.is_empty()).map(|w| w.to_string()).collect();
+        return Some(words);
+    }
+
+    // Comma-separated literal strings: 'a', "b", 'c'
+    let mut symbols = Vec::new();
+    for part in trimmed.split(',') {
+        let p = part.trim();
+        if p.is_empty() {
+            continue;
+        }
+        // Single-quoted string.
+        if let Some(inner) = p.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')) {
+            if inner.is_empty() {
+                continue;
+            }
+            symbols.push(inner.to_string());
+            continue;
+        }
+        // Double-quoted string.
+        if let Some(inner) = p.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+            if inner.is_empty() {
+                continue;
+            }
+            symbols.push(inner.to_string());
+            continue;
+        }
+        // Anything else is not a literal — bail out.
+        return None;
+    }
+
+    Some(symbols)
+}
+
+/// Return true when `line` indicates a new statement boundary that should stop
+/// the lookahead window for require-then-import matching.
+///
+/// We stop on `use`, another `require`, a `sub`, `package`, or `my` declaration
+/// to avoid false positives across unrelated statement blocks.
+fn is_statement_terminator(line: &str) -> bool {
+    line.starts_with("use ")
+        || line.starts_with("require ")
+        || line.starts_with("sub ")
+        || line.starts_with("package ")
+        || line.starts_with("my ")
+        || line.starts_with("our ")
+        || line.starts_with("local ")
 }

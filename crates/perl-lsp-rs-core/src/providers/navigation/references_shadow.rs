@@ -358,7 +358,10 @@ fn references_trace_shape(
             occurrence.provenance,
             ProviderFallbackState::Fallback,
         ),
-        Provenance::ExactAst | Provenance::DesugaredAst | Provenance::SemanticAnalyzer => {
+        Provenance::ExactAst
+        | Provenance::DesugaredAst
+        | Provenance::SemanticAnalyzer
+        | Provenance::LiteralRequireImport => {
             (ProviderFactSourceKind::SemanticFact, occurrence.provenance, fallback_state)
         }
         Provenance::DynamicBoundary => (

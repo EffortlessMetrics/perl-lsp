@@ -752,7 +752,8 @@ fn stash_confidence_to_compile(confidence: StashConfidence) -> CompileConfidence
 
 fn fact_provenance_to_compile(provenance: Provenance) -> CompileProvenance {
     match provenance {
-        Provenance::ExactAst => CompileProvenance::ExactAst,
+        // Exact AST-derived facts (fully statically known).
+        Provenance::ExactAst | Provenance::LiteralRequireImport => CompileProvenance::ExactAst,
         Provenance::DesugaredAst
         | Provenance::SemanticAnalyzer
         | Provenance::FrameworkSynthesis

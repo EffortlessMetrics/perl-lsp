@@ -93,6 +93,11 @@ pub enum Provenance {
     NameHeuristic,
     SearchFallback,
     DynamicBoundary,
+    /// Exact `require Module; Module->import(literal list)` pattern where all
+    /// import arguments are literal strings or `qw(...)` words — no variables,
+    /// no computed expressions.  More precise than `ExactAst` because it
+    /// guarantees the symbol list is fully statically known.
+    LiteralRequireImport,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
