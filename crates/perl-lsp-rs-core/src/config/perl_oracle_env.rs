@@ -37,6 +37,8 @@ use std::process::Command;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 
+#[cfg(not(target_arch = "wasm32"))]
+use super::SYSTEM_INC_PROBE_TIMEOUT;
 use super::WorkspaceConfig;
 
 /// Controlled subprocess environment for a single Perl oracle seam.
@@ -182,7 +184,7 @@ impl PerlOracleEnv {
         Some(Self {
             perl_binary,
             cwd,
-            timeout: Duration::from_millis(1000),
+            timeout: SYSTEM_INC_PROBE_TIMEOUT,
             allow_perl5lib: config.use_perl5lib,
             allow_perl5opt: false,
             allow_local_lib: false,
@@ -263,6 +265,8 @@ mod tests {
         let env = PerlOracleEnv::for_startup_inc_probe(&config);
         if let Some(e) = env {
             assert!(!e.allow_perl5lib, "allow_perl5lib should be false when use_perl5lib=false");
+            assert!(!e.allow_perl5opt, "allow_perl5opt must always be false for startup probe");
+            assert!(!e.allow_local_lib, "allow_local_lib must always be false for startup probe");
         }
     }
 
