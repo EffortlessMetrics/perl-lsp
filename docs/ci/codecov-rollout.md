@@ -344,3 +344,128 @@ or release readiness.
 - `.ci/coverage-baseline.txt` — source of truth for the local ratchet.
 - `scripts/check-coverage-baseline.sh`, `scripts/update-coverage-baseline.sh` — ratchet tooling.
 - `.github/workflows/ci-nightly.yml::test-coverage` — current coverage lane.
+
+## Burndown status
+
+This section frames the Codecov rollout in the canonical rail-template
+shape so it slots cleanly into the rail index alongside
+`docs/development/PERL_ORACLE_RAIL.md`,
+`docs/development/FILE_POLICY_RAIL.md`, and
+`docs/development/CI_UX_RAIL.md`.
+
+> **Substrate (already built)**: this rollout doc itself (#8539, merged),
+> README badge fix (#8541, merged), the `parser-branch` flag scope and
+> `.ci/coverage-baseline.txt` ratchet baseline. The original umbrella
+> #8508 is closed; the rail tracker is #8635.
+> **Connector gap**: scope Codecov's upload + status to parser-branch
+> coverage (Cov-1), emit a parser coverage receipt artifact (Cov-2), and
+> document the evidence-lane boundary (Cov-3, Cov-5) so Codecov never
+> implicitly claims more than it measures.
+> **0.14.0 upside**: contributors and reviewers can trust the Codecov
+> surface as a narrow, accurate signal — parser branch coverage,
+> informational — without confusing it for release-readiness proof or
+> for parser semantic correctness.
+
+### Status
+
+| Phase | Issue | Builder-ready? | PR | Receipt |
+|---|---|---|---|---|
+| Cov-1 — scope flag | #8578 | filed by ladder agent | — | `codecov.yml` shape matches Cov-1 template above |
+| Cov-2 — parser coverage receipt artifact | #8582 | filed by ladder agent | — | `cargo xtask coverage-ratchet` emits `target/coverage/coverage-receipt.json` |
+| Cov-3 — coverage-lane boundary doc | #8586 | filed by ladder agent | — | `docs/ci/codecov.md` lands with claim boundary |
+| Cov-5 — Test Analytics doc | #8588 | filed by ladder agent | — | doc section in `docs/ci/codecov.md` clearly separates coverage vs Test Analytics |
+| Cov-6 — policy registration | #8594 | filed by ladder agent | — | `cargo xtask check-file-policy --mode advisory` shows `codecov.yml` registered |
+
+Optional, deferred until several stable runs:
+
+| Phase | Issue | Notes |
+|---|---|---|
+| Cov-7 — extract dedicated workflow | not yet filed | only after Cov-1/2 are stable |
+| Cov-8 — calibrate ratchet | not yet filed | only after several stable runs |
+
+### Exit criteria
+
+- [ ] All Cov-* phases land or are explicitly deferred with a successor.
+- [ ] Receipt commands in this doc reproduce the closeout proof.
+- [ ] Status doc updated (`docs/project/status/index.md`).
+- [ ] Claim boundary recorded (this section).
+
+### Claim boundary
+
+**This rail proves**: Codecov is a *scoped, quiet, informational*
+evidence lane that reports parser branch coverage against the local
+ratchet. Cov-1/2 narrow what's uploaded; Cov-3/5 document what it means;
+Cov-6 brings the config file under the same file-policy ledger every
+other non-rust surface uses.
+
+**This rail does NOT prove**:
+
+- parser semantics are correct,
+- tree-sitter behavior is correct,
+- `@INC` / module-resolution is correct,
+- LSP / DAP behavior is complete,
+- CPAN corpus coverage is sufficient,
+- mutation adequacy is strong,
+- no-panic policy is clean,
+- release readiness is proven.
+
+Those are the work of parser corpus, UX tests, `ripr`, mutation,
+real-Perl oracle, no-panic, file policy, and release-readiness lanes
+respectively. Codecov is **one** evidence lane among many; treating it
+as a release-readiness proof or a semantic-correctness proof is exactly
+the failure mode this rail exists to prevent.
+
+### Receipts
+
+```bash
+# Branch-coverage ratchet (local, primary receipt).
+cargo xtask coverage-ratchet
+
+# PR-fast gate receipt (records what was actually verified pre-merge).
+cargo xtask gates --tier pr-fast --base origin/master --receipt
+
+# Confirm Codecov surface is registered under file policy (Cov-6).
+cargo xtask check-file-policy --mode advisory
+
+# Per-phase issue status.
+gh issue view 8578
+gh issue view 8582
+gh issue view 8586
+gh issue view 8588
+gh issue view 8594
+```
+
+### Related
+
+- Umbrella issue: #8635 (rail tracker — the original #8508 is closed and serves only as historical context).
+- Architecture / spec docs: this file (`docs/ci/codecov-rollout.md`); Cov-3 will add `docs/ci/codecov.md`.
+- Status doc: `docs/project/status/index.md`.
+- Adjacent rails:
+  - `docs/development/FILE_POLICY_RAIL.md` — Cov-6 depends on the non-rust allowlist tooling landing first.
+  - `docs/development/CI_UX_RAIL.md` — the PR sticky summary will reference coverage status; the contract between them is that sticky owns "what ran" and Codecov stays informational.
+  - `docs/development/PERL_ORACLE_RAIL.md` — Perl-oracle tests are not in the Codecov-scoped surface; coverage there is intentionally out of scope.
+
+### Do not combine
+
+- Do not combine Codecov work with: Rust 1.95 lint cleanup, no-panic
+  baseline, file-policy strict-mode promotion (Cov-6 lands *after*
+  advisory mode is stable), provider cutover, `@INC` work,
+  Perl-oracle migrations, dependency bumps.
+- Do not make Codecov branch-protection blocking.
+- Do not enable Codecov PR comments.
+- Do not claim Codecov proves parser semantics, LSP / DAP behavior,
+  `@INC` correctness, CPAN corpus adequacy, mutation adequacy,
+  no-panic safety, or release readiness.
+
+### Lane assignment
+
+**codex** owns the Cov-* PRs. The CI-economics lane is codex /
+factory-droid territory by convention; the CI-economics ladder agent
+(`ac0d0d6984fa31b60`, running at file-time) is filing the Cov-* rows.
+Coordinate by searching open issues with the `codecov` or `Cov-`
+filename pattern before filing duplicates:
+
+```bash
+gh api 'repos/EffortlessMetrics/perl-lsp/issues?state=open&per_page=100' \
+  --jq '.[] | select(.title | test("(codecov|Cov-)")) | "#\(.number) \(.title)"'
+```
