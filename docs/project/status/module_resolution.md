@@ -145,3 +145,47 @@ Backlog (pre-existing, not part of the @INC rail closure):
 - `inc_nested_use_lib` — `use lib` inside `BEGIN` block
 - `inc_qw_use_lib` — `use lib qw(lib t/lib)` multi-path form
 - Cross-scorecard: add `expected.json` diagnostic sidecars to all `inc_*` fixtures
+
+## Literal `require` / `import`
+
+Spec lane tracked under [#4280](https://github.com/EffortlessMetrics/perl-lsp/issues/4280)
+(umbrella) and [#8616](https://github.com/EffortlessMetrics/perl-lsp/issues/8616)
+(this spec). All literal-form resolution **must** flow through
+`EffectiveIncContext` (the same filter introduced by [#8544](https://github.com/EffortlessMetrics/perl-lsp/pull/8544)
+for workspace-symbol lookups). No consumer may bypass active `@INC` state to
+resolve a literal `require` or `import` form.
+
+### Consumer × form matrix
+
+| Form | PL701 diagnostic | completion | goto-definition | hover |
+|---|---|---|---|---|
+| `require Foo;` (bareword) | resolve via `EffectiveIncContext` | suggest from prefix scan, filtered by context | jump to module file | show module summary |
+| `require "Foo.pm";` (literal, single-segment) | resolve same as bareword `Foo` | suggest matching `.pm` paths under context roots | jump to module file | show module summary |
+| `require "Foo/Bar.pm";` (literal, multi-segment) | resolve same as bareword `Foo::Bar` | suggest matching nested `.pm` paths | jump to module file | show module summary |
+| `import Foo;` (static bareword) | treat as `use Foo;` for resolution purposes | suggest from prefix scan | jump to module file | show module summary |
+| `Foo->import;` (static method call on bareword) | resolve `Foo`, do not interpret import list | suggest the bareword target | jump to `Foo` | show `Foo` summary |
+
+### Boundary table
+
+| In scope | Out of scope |
+|---|---|
+| `require Foo;` (bareword) | `eval STRING` where STRING contains `use`/`require` |
+| `require "Foo.pm";` (string literal, single segment) | `require $module;` (variable holds the path) |
+| `require "Foo/Bar.pm";` (string literal, multi segment) | `require "${prefix}::Foo";` (string interpolation) |
+| `import Foo;` (static, no list) | Runtime `import` with computed module names |
+| `Foo->import;` (static method call) | Plugin frameworks that synthesize module names at runtime |
+
+Out-of-scope forms remain explicitly unresolved — diagnostics may flag them
+as "dynamic; cannot statically resolve" but must not guess.
+
+### Acceptance test path (when impl lands)
+
+- New fixtures under `crates/perl-lsp-ux-tests/tests/fixtures/literal_require/`.
+- Consumer harness reused from Scenario 14 (`@INC` conformance).
+- Boundary table out-of-scope rows MUST produce a documented "unresolved (dynamic)" outcome — not a panic, not a stale hit, not a false positive.
+
+Receipts:
+
+- [#4280](https://github.com/EffortlessMetrics/perl-lsp/issues/4280) — umbrella ux-journey
+- [#8616](https://github.com/EffortlessMetrics/perl-lsp/issues/8616) — this spec
+- [#8544](https://github.com/EffortlessMetrics/perl-lsp/pull/8544) — `EffectiveIncContext` filter that literal forms must reuse
