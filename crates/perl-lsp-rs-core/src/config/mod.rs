@@ -724,10 +724,11 @@ impl WorkspaceConfig {
             Some(o) => o,
             None => return Vec::new(),
         };
+        let timeout = oracle.timeout;
         let mut command = oracle.into_command();
         command.args(perl_args);
         command.args(["-e", "print join(\"\\n\", @INC)"]);
-        let output = output_with_timeout(command, SYSTEM_INC_PROBE_TIMEOUT);
+        let output = output_with_timeout(command, timeout);
 
         match output {
             Ok(out) if out.status.success() => {
@@ -746,7 +747,7 @@ impl WorkspaceConfig {
             Err(err) if err.kind() == std::io::ErrorKind::TimedOut => {
                 tracing::warn!(
                     target: "perl_lsp::config::system_inc",
-                    timeout_ms = SYSTEM_INC_PROBE_TIMEOUT.as_millis() as u64,
+                    timeout_ms = timeout.as_millis() as u64,
                     "startup @INC probe timed out; caching empty result. \
                      Set perl.workspace.useSystemInc=false to disable probing, \
                      or pin a faster perl interpreter."
