@@ -1,5 +1,7 @@
 # CI Actuals
 
+> **Context**: This document is part of perl-lsp's [Industrialized AI](why-industrialized.md) CI architecture. The choices here are responses to operating at 1000+ PRs/day, not premature optimization.
+
 `ci-actuals.json` records what each gate actually spent in CI. It is the actuals
 counterpart to [`ci-plan.json`](pr-plan.md): the plan forecasts cost; the actuals
 record what was spent. Together they let later PRs derive learned LEM estimates.

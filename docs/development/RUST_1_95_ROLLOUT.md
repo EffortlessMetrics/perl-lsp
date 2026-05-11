@@ -1,5 +1,7 @@
 # Rust 1.95 → 0.14.0 Remaining Roadmap
 
+> **Context**: This document is part of perl-lsp's [Industrialized AI](../ci/why-industrialized.md) CI architecture. The choices here are responses to operating at 1000+ PRs/day, not premature optimization.
+
 > **Canonical post-landing source of truth** for the Rust 1.95 / 0.14.0
 > quality rollout. The MSRV / toolchain / `clippy.toml`-msrv bumps have
 > shipped (#8509); this doc tracks what remains from here to the 0.14.0

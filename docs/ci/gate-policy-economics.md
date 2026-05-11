@@ -1,5 +1,7 @@
 # Gate Policy ↔ Lane Economics Cross-Reference
 
+> **Context**: This document is part of perl-lsp's [Industrialized AI](why-industrialized.md) CI architecture. The choices here are responses to operating at 1000+ PRs/day, not premature optimization.
+
 `.ci/gate-policy.yaml` defines **what executes**; `policy/ci-lanes.toml` defines **what
 it costs and why**. This doc is the cross-reference between the two. The mapping
 itself lives in `scripts/ci/validate_gate_lane_mapping.py` so it can be checked by

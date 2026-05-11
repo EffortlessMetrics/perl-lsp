@@ -1,5 +1,7 @@
 # CI Cost and Verification Policy
 
+> **Context**: This document is part of perl-lsp's [Industrialized AI](why-industrialized.md) CI architecture. The choices here are responses to operating at 1000+ PRs/day, not premature optimization.
+
 This repository targets CI cost per ordinary PR far below common high-volume agentic
 defaults. The goal is **not** lighter verification. The goal is stronger verification per
 CI minute.

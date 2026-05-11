@@ -1,5 +1,7 @@
 # Codecov Rollout
 
+> **Context**: This document is part of perl-lsp's [Industrialized AI](why-industrialized.md) CI architecture. The choices here are responses to operating at 1000+ PRs/day, not premature optimization.
+
 Tightens Codecov's posture in perl-lsp so it accurately reflects what's
 actually uploaded, stays out of branch-protection theater, and remains
 useful alongside the other evidence lanes.
