@@ -373,7 +373,6 @@ dbg_macro = "deny"
 # `priority = 1` overrides `#![warn(clippy::all)]` (priority 0) that several
 # crate `lib.rs` files declare.
 collapsible_match = { level = "allow", priority = 1 }
-while_let_loop = { level = "allow", priority = 1 }
 manual_range_contains = { level = "allow", priority = 1 }
 useless_vec = { level = "allow", priority = 1 }
 vec_init_then_push = { level = "allow", priority = 1 }
