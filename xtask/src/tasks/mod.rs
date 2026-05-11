@@ -21,6 +21,7 @@ pub mod ci_hygiene;
 pub mod ci_measure;
 pub mod ci_metrics;
 pub mod ci_policy;
+pub mod ci_pr_summary;
 pub mod ci_scope;
 pub mod clean;
 pub mod compare;
