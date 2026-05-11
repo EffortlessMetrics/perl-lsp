@@ -98,6 +98,7 @@ Background material that explains why the system is designed the way it is (unde
 Decision records, project status, and planning documents.
 
 - [ADR Index](adr/README.md) — chronological index plus a topic guide for parser, runtime, DAP, security, and swarm decisions
+- [0.14.0 Readiness Queue](releases/0.14.0-readiness.md) — current-release meta-roadmap: drain queue + implementation phase + release lock
 - [Project Roadmap](project/ROADMAP.md)
 - [Compiler-Backed LSP Roadmap](project/COMPILER_BACKED_LSP_ROADMAP.md)
 - [Project Milestones](project/MILESTONES.md)
