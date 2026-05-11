@@ -4,8 +4,8 @@ This page tracks live LSP module-resolution behavior for provider consumers.
 It is distinct from HIR compiler-substrate module-request facts, which are
 tracked in [compiler_facts.md](compiler_facts.md) and [#8242](https://github.com/EffortlessMetrics/perl-lsp/issues/8242).
 
-Consumer-consistency matrix — verified end-to-end through all three LSP consumers
-(PL701 diagnostic, goto-definition, hover) for each `@INC` resolution mode.
+Consumer-consistency matrix — verified end-to-end through all four LSP consumers
+(PL701 diagnostic, completion, goto-definition, hover) for each `@INC` resolution mode.
 
 **Test**: `cargo test -p perl-lsp-ux-tests --test ux_scenario_14_inc_conformance -- --nocapture`
 
@@ -13,15 +13,20 @@ Consumer-consistency matrix — verified end-to-end through all three LSP consum
 
 Each cell indicates whether the consumer agrees on module resolution for the given mode.
 A `+` means the consumer produced the expected answer (resolved or not-resolved consistently).
+A `-` means the consumer diverges or the feature is not yet fully enforced.
 
-| Resolution Mode | PL701 diagnostic | goto-definition | hover | Notes |
-|---|---|---|---|---|
-| Workspace `includePaths` | + | + | + | Config-driven: `includePaths: ["lib"]` |
-| Absolute `includePaths` | + | + | + | Config-driven: absolute path entry |
-| Lexical `use lib` | + | + | + | In-source pragma extraction |
-| `no lib` cancellation | + | + | + | Position-aware negative case |
-| FindBin-relative | + | + | + | `$FindBin::Bin/lib` pattern |
-| System `@INC` (PERL5LIB) | + | + | + | PERL5LIB injection |
+**Fixture semantics**: completion uses prefix fixtures (`use Gre<cursor>`);
+PL701, goto-definition, and hover use exact-module fixtures (`use GreetModule;`).
+
+| Resolution Mode | PL701 diagnostic | completion | goto-definition | hover | Notes |
+|---|---|---|---|---|---|
+| Workspace `includePaths` | + | + | + | + | Config-driven: `includePaths: ["lib"]` |
+| Absolute `includePaths` | + | + | + | + | Config-driven: absolute path entry |
+| Lexical `use lib` | + | + | + | + | In-source pragma extraction |
+| `no lib` cancellation | + | - | + | + | Position-aware negative; completion divergence acceptable today |
+| FindBin-relative | + | + | + | + | `$FindBin::Bin/lib` pattern |
+| PERL5LIB env | + | + | + | + | `usePerl5lib=true` gates PERL5LIB |
+| interpreter startup `@INC` | + | + | + | + | `useSystemInc=true` gates interpreter startup paths |
 
 **Key**: Consumer cells are `+` (consistent) or `-` (divergent / unimplemented).
 Conformance means all consumers agree — not necessarily that every mode resolves.
@@ -67,10 +72,21 @@ Pattern: `use FindBin; use lib "$FindBin::Bin/lib";`. `$FindBin::Bin` resolves
 to the directory containing the script being analyzed. The module must be at
 `<script_dir>/lib/Module.pm`.
 
-### System `@INC` (PERL5LIB)
+### PERL5LIB env (`usePerl5lib`)
 
 Module lives outside the workspace in a directory injected via the `PERL5LIB`
-environment variable. Requires `usePerl5lib: true` in workspace config.
+environment variable. Controlled by `usePerl5lib: true` in workspace config.
+This flag is independent of `useSystemInc`.
+
+### Interpreter startup `@INC` (`useSystemInc`)
+
+Modules reachable via the interpreter's startup `@INC` (the result of
+`perl -e 'print join("\n", @INC)'`). Controlled by `useSystemInc: true` in
+workspace config. The startup-@INC probe strips `PERL5LIB` from the spawned
+environment when `usePerl5lib=false` to prevent cross-flag leakage.
+
+The two flags are independent: `usePerl5lib` controls PERL5LIB; `useSystemInc`
+controls interpreter startup roots. Setting one does not imply the other.
 
 ## Implementation Notes
 
@@ -79,11 +95,12 @@ environment variable. Requires `usePerl5lib: true` in workspace config.
   `build_effective_inc_roots()` in `crates/perl-module/src/resolution/uri.rs`;
   it preserves source labels for configured paths, lexical `use lib`, PERL5LIB,
   and interpreter startup paths.
-- The three LSP consumers all call either `resolve_module_to_path_with_doc()` or
+- The four LSP consumers all call either `resolve_module_to_path_with_doc()` or
   `resolve_module_path_with_uri()` from
   `crates/perl-lsp-rs/src/runtime/lifecycle/module_resolution.rs`.
 - Consumer call sites:
   - PL701 diagnostic: runtime diagnostics and pull-diagnostics paths
+  - completion: module completion path (uses `perl5lib_paths_for_completion()`)
   - goto-definition: runtime navigation path
   - hover: runtime hover path
 
@@ -97,9 +114,9 @@ callers provide configured, lexical, PERL5LIB-labeled, and system-labeled roots
 explicitly. Runtime consumers still own filesystem-backed resolution and LSP
 provider behavior.
 
-## Follow-up Scope (PR 2)
+## Follow-up Scope (PR 3+)
 
-- `inc_perl5lib_env` — PERL5LIB separate from system @INC flag
 - `inc_nested_use_lib` — `use lib` inside `BEGIN` block
 - `inc_qw_use_lib` — `use lib qw(lib t/lib)` multi-path form
 - Cross-scorecard: add `expected.json` diagnostic sidecars to all `inc_*` fixtures
+- `no lib` cancellation completion enforcement (currently `-` in matrix)
