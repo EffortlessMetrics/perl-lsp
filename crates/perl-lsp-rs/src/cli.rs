@@ -313,7 +313,7 @@ fn run_check_project(dir: &str) -> i32 {
 
     if !category_counts.is_empty() {
         let mut cats: Vec<_> = category_counts.into_iter().collect();
-        cats.sort_by(|a, b| b.1.cmp(&a.1));
+        cats.sort_by_key(|c| std::cmp::Reverse(c.1));
         println!("Top issue categories:");
         for (cat, count) in &cats {
             println!("  {cat}: {count}");
