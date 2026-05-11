@@ -146,6 +146,20 @@ an issue, the reason should appear in the issue body.
 - **`feedback_issue_correction_record.md`** + **#8554** — downstream
   remediation rule for when a stale claim slips through anyway.
 
+## Sibling failure mode: stale binary resolution
+
+Source-staleness is one class of frozen-artifact failure. Test-harness binary
+resolution is another: a test invokes a binary from an older build and asserts
+against ancient product code.
+
+See `docs/development/FRESHNESS_RAIL.md` "Stale binary resolution (test-harness)"
+for the canonical example (#8624 / #8659) and detection patterns.
+
+The `cargo xtask freshness-check --binaries` extension (tracked in **#8619**)
+will detect this class of failure once the base `freshness-check` command lands.
+
+---
+
 ## Claim boundary
 
 This document describes the freshness-check surfaces, not their

@@ -53,6 +53,65 @@ Exit status zero means: the working tree is at or ahead of `origin/master` withi
 - Adjacent rails:
   - All other rails depend on freshness for correct issue-spec discipline; this rail is foundational, not parallel
 
+## Stale binary resolution (test-harness)
+
+Source-tree staleness is one failure class — but test harnesses can be stale in
+a different way: the binary they invoke may be from a different SHA than the
+current build.
+
+### Symptom
+
+A test passes or fails unrelated to the current code state because the harness
+resolves a binary from an older build. The test is real; the binary is
+historical.
+
+### Canonical incident — #8624
+
+`scenario_14_no_lib_cancellation` failed on every PR branch and on master.
+Root cause was NOT a regression in `no lib` semantics. It was in the test
+harness:
+
+> `resolve_binary()` in `crates/perl-lsp-ux-tests/src/lib.rs` mishandled
+> `CARGO_TARGET_DIR`, treating it as a workspace root and looking under
+> `CARGO_TARGET_DIR/target/debug/perl-lsp`. That path never existed in agent
+> worktrees, so resolution fell through to a stale v0.13.1 binary in the main
+> checkout. The v0.13.1 binary predated the position-aware `no lib`
+> cancellation fix (#8525), so it correctly-for-itself but incorrectly-for-the-test
+> resolved `GoneModule`, fired PL700 instead of PL701, and failed the strict
+> assertions.
+
+Fix: **#8659** — `resolve_binary()` now looks in `CARGO_TARGET_DIR/debug/` directly.
+
+### Detection
+
+- Pre-test hook: assert `target/debug/perl-lsp` mtime is newer than the
+  workspace SHA's commit time, OR build it explicitly before any harness run.
+- `cargo xtask freshness-check --binaries` (future extension to the existing
+  freshness-check command per **#8619**) — out of scope for this rail doc;
+  tracked there.
+
+### Mitigation
+
+`resolve_binary()` in `crates/perl-lsp-ux-tests/src/lib.rs` must NEVER fall
+through to a binary outside the current build's `target/` tree:
+
+- Respect `CARGO_TARGET_DIR` if set: look in `$CARGO_TARGET_DIR/debug/perl-lsp`.
+- If `CARGO_TARGET_DIR` is unset, use the workspace's `target/debug/` only
+  when it was just built in this session.
+- Refuse fallback to ancestor / parent workspace binaries — they are
+  almost always stale.
+
+### Related
+
+- **#8624** — the regression issue.
+- **#8659** — the fix PR.
+- **#8546** — umbrella freshness tooling.
+- **#8619** — `cargo xtask freshness-check` implementation (covers the
+  `--binaries` extension as a follow-up).
+- **#8485** — sibling stale-source-checkout incident.
+
+---
+
 ## Do not combine
 
 Do **not** roll this rail's PRs into:
