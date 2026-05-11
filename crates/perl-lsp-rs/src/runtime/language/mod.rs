@@ -41,6 +41,9 @@ mod refactor_runtime_blocker_receipts;
 #[cfg(test)]
 mod refactor_runtime_blocker_tests;
 
+#[cfg(test)]
+mod symbols_runtime_quality_tests;
+
 #[cfg(feature = "workspace")]
 fn to_workspace_sym_kind(kind: perl_parser::index::SymKind) -> crate::workspace_index::SymKind {
     match kind {

@@ -204,6 +204,30 @@ impl LspServer {
         self.handle_workspace_symbols_v2(params)
     }
 
+    /// Test-only receipt for document symbol runtime quality proof.
+    ///
+    /// Calls the live `textDocument/documentSymbol` handler and returns a typed
+    /// quality receipt. Document symbols is in `shadowed` state — the receipt
+    /// captures live provider results without changing live behavior.
+    pub fn test_document_symbols_runtime_quality_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.document_symbols_runtime_quality_receipt(params)
+    }
+
+    /// Test-only receipt for workspace symbol runtime quality proof.
+    ///
+    /// Calls the live `workspace/symbol` handler and returns a typed quality
+    /// receipt. Workspace symbols is in `shadowed` state — the receipt captures
+    /// live provider results without changing live behavior.
+    pub fn test_workspace_symbols_runtime_quality_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.workspace_symbols_runtime_quality_receipt(params)
+    }
+
     /// Test-only entrypoint for LSP `textDocument/documentColor`.
     ///
     /// Exercises document color detection functionality in tests.

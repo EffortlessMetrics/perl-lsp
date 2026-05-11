@@ -463,3 +463,42 @@ fn document_symbol_priority(symbol: &crate::symbol::Symbol) -> u8 {
 fn offset_to_line(content: &str, offset: usize) -> usize {
     content[..offset.min(content.len())].chars().filter(|&c| c == '\n').count()
 }
+
+impl LspServer {
+    /// Document symbol runtime quality receipt — shadow-only proof.
+    ///
+    /// Calls the live `textDocument/documentSymbol` handler and wraps the result
+    /// in a typed receipt that can be used for staged cutover proof. Document symbols
+    /// is in `shadowed` state: the live provider is the source of truth; compiler-fact
+    /// candidates are not yet promoted to the runtime path.
+    ///
+    /// Does not change live provider behavior (`no_live_behavior_change: true`).
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub(crate) fn document_symbols_runtime_quality_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let live_provider_result = self.handle_document_symbol(params)?;
+        let live_provider_count = match live_provider_result.as_ref() {
+            Some(Value::Array(items)) => items.len(),
+            _ => 0,
+        };
+
+        Ok(Some(json!({
+            "provider": "document_symbols",
+            "live_provider_result": live_provider_result,
+            "live_provider_count": live_provider_count,
+            "shadow_state": "shadowed",
+            "compiler_receipt": null,
+            "no_live_behavior_change": true,
+            "notes": [
+                format!(
+                    "document-symbol runtime quality receipt: live_provider_count={}; \
+                     compiler-fact candidates pending staged cutover; \
+                     no live document-symbol behavior change",
+                    live_provider_count
+                )
+            ]
+        })))
+    }
+}
