@@ -43,16 +43,18 @@ Codecov does **not** answer:
 
 Each row is one PR. Branch from clean `origin/master`. Do **not** combine.
 
-| #     | Branch                                  | Title                                                          | Notes                                                                                   |
-| ----- | --------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Cov-1 | `ci/codecov-config`                     | `ci(codecov): quiet and scope coverage statuses`               | Replace `codecov.yml`: comments off, informational project/patch, single `parser-branch` flag |
-| Cov-2 | `ci/coverage-receipt`                   | `ci(coverage): add parser branch coverage receipt`             | `ci-nightly.yml::test-coverage` — change flag to `parser-branch`, harden upload condition (token detection + `continue-on-error`), emit `coverage-receipt.json`, write step summary |
-| Cov-3 | `docs/codecov-lane`                     | `docs(ci): document Codecov coverage lane boundary`            | Create `docs/ci/codecov.md` with claim boundary; reference from `docs/how-to/COVERAGE.md` if/when that doc exists |
-| Cov-4 | `docs/readme-codecov-badge`             | `docs(readme): clarify Codecov badge scope`                    | `alt="code coverage"` → `alt="Codecov parser branch coverage"`; MSRV badge `1.93` → `1.95` |
-| Cov-5 | `ci/codecov-test-analytics-docs`        | `ci(codecov): document receipt-backed test analytics`          | Adds a table that separates coverage vs Test Analytics vs branch ratchet (none blocking) |
-| Cov-6 | `policy/codecov-files`                  | `policy(ci): register Codecov coverage surfaces`               | Add entries for `codecov.yml`, `.github/workflows/ci-nightly.yml`, `.ci/coverage-baseline.txt` to `policy/non-rust-allowlist.toml` |
-| Cov-7 | `ci/coverage-workflow` *(optional, late)* | `ci(coverage): extract parser coverage into dedicated workflow` | Move `test-coverage` job out of `ci-nightly.yml` into `.github/workflows/coverage.yml`; remove the old job |
-| Cov-8 | `ci/codecov-ratchet` *(optional, late)* | `ci(codecov): calibrate parser coverage ratchet`               | Only after several stable runs; tune `.ci/coverage-baseline.txt` baseline/drop conservatively |
+| #     | Branch                                  | Title                                                          | Tracking      | Notes                                                                                   |
+| ----- | --------------------------------------- | -------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------- |
+| Cov-1 | `ci/codecov-config`                     | `ci(codecov): quiet and scope coverage statuses`               | #8578         | Replace `codecov.yml`: comments off, informational project/patch, single `parser-branch` flag |
+| Cov-2 | `ci/coverage-receipt`                   | `ci(coverage): add parser branch coverage receipt`             | #8582         | `ci-nightly.yml::test-coverage` — change flag to `parser-branch`, harden upload condition (token detection + `continue-on-error`), emit `coverage-receipt.json`, write step summary |
+| Cov-3 | `docs/codecov-lane`                     | `docs(ci): document Codecov coverage lane boundary`            | #8586         | Create `docs/ci/codecov.md` with claim boundary; reference from `docs/how-to/COVERAGE.md` if/when that doc exists |
+| Cov-4 | `docs/readme-codecov-badge`             | `docs(readme): clarify Codecov badge scope`                    | merged #8541  | `alt="code coverage"` → `alt="Codecov parser branch coverage"`; MSRV badge `1.93` → `1.95` |
+| Cov-5 | `ci/codecov-test-analytics-docs`        | `ci(codecov): document receipt-backed test analytics`          | #8588         | Adds a table that separates coverage vs Test Analytics vs branch ratchet (none blocking) |
+| Cov-6 | `policy/codecov-files`                  | `policy(ci): register Codecov coverage surfaces`               | #8594         | Add entries for `codecov.yml`, `.github/workflows/ci-nightly.yml`, `.ci/coverage-baseline.txt` to `policy/non-rust-allowlist.toml` |
+| Cov-7 | `ci/coverage-workflow` *(optional, late)* | `ci(coverage): extract parser coverage into dedicated workflow` | #8668         | Move `test-coverage` job out of `ci-nightly.yml` into `.github/workflows/coverage.yml`; remove the old job |
+| Cov-8 | `ci/codecov-ratchet` *(optional, late)* | `ci(codecov): calibrate parser coverage ratchet`               | #8669         | Only after several stable runs; tune `.ci/coverage-baseline.txt` baseline/drop conservatively |
+
+> Tracking issues filed 2026-05-11. Cross-link added via #8670.
 
 ## PR Cov-1 — `codecov.yml` shape
 

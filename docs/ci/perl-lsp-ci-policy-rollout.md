@@ -12,6 +12,8 @@ as one of its pr-fast checks.
 
 ## Order
 
+> Tracking: PRs 3–11 are scoped together in #8174. PRs 01–02 already merged (#8158, #8159). Cross-link added via #8670.
+
 | PR | Name | Purpose | Mode introduced |
 |---:|---|---|---|
 | 01 | File-policy doctrine | Document `FILE_POLICY.md`, `NON_RUST_POLICY.md`, `POLICY_ALLOWLISTS.md`, this rollout. | n/a |
