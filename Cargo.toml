@@ -374,7 +374,6 @@ dbg_macro = "deny"
 # crate `lib.rs` files declare.
 collapsible_match = { level = "allow", priority = 1 }
 manual_checked_ops = { level = "allow", priority = 1 }
-unnecessary_sort_by = { level = "allow", priority = 1 }
 useless_conversion = { level = "allow", priority = 1 }
 while_let_loop = { level = "allow", priority = 1 }
 manual_range_contains = { level = "allow", priority = 1 }
