@@ -483,11 +483,10 @@ impl LspServer {
             let resolver = |module: &str| {
                 self.resolve_module_to_path_with_doc(module, Some(&text), Some(uri)).is_some()
             };
-            let search_paths: Vec<String> = self
-                .include_paths_for_doc(uri)
-                .into_iter()
-                .map(|p| p.to_string_lossy().into_owned())
-                .collect();
+            let search_context = self
+                .effective_inc_context_for_doc(Some(uri), Some(&text), None)
+                .map(|context| context.search_display_paths())
+                .unwrap_or_default();
             let source_path = source_path_from_uri(uri);
 
             // Wire semantic queries when workspace data is available for this URI.
@@ -497,12 +496,12 @@ impl LspServer {
             let mut diagnostics = {
                 let semantic_diags = self.workspace_index().and_then(|workspace_index| {
                     workspace_index.with_semantic_queries_for_uri(uri, |file_id, queries| {
-                        provider.get_diagnostics_with_path_and_semantics(
+                        provider.get_diagnostics_with_search_context_and_semantics(
                             ast,
                             &parse_errors,
                             &text,
                             Some(&resolver),
-                            &search_paths,
+                            &search_context,
                             source_path.as_deref(),
                             file_id,
                             &queries,
@@ -510,23 +509,23 @@ impl LspServer {
                     })
                 });
                 semantic_diags.unwrap_or_else(|| {
-                    provider.get_diagnostics_with_path(
+                    provider.get_diagnostics_with_search_context(
                         ast,
                         &parse_errors,
                         &text,
                         Some(&resolver),
-                        &search_paths,
+                        &search_context,
                         source_path.as_deref(),
                     )
                 })
             };
             #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
-            let mut diagnostics = provider.get_diagnostics_with_path(
+            let mut diagnostics = provider.get_diagnostics_with_search_context(
                 ast,
                 &parse_errors,
                 &text,
                 Some(&resolver),
-                &search_paths,
+                &search_context,
                 source_path.as_deref(),
             );
 
@@ -1112,11 +1111,10 @@ impl LspServer {
                     self.resolve_module_to_path_with_doc(module, Some(&doc.text), Some(uri_str))
                         .is_some()
                 };
-                let search_paths: Vec<String> = self
-                    .include_paths_for_doc(uri_str)
-                    .into_iter()
-                    .map(|p| p.to_string_lossy().into_owned())
-                    .collect();
+                let search_context = self
+                    .effective_inc_context_for_doc(Some(uri_str), Some(&doc.text), None)
+                    .map(|context| context.search_display_paths())
+                    .unwrap_or_default();
                 let source_path = source_path_from_uri(uri_str);
 
                 // Wire semantic queries when workspace data is available for this URI.
@@ -1126,12 +1124,12 @@ impl LspServer {
                         workspace_index.with_semantic_queries_for_uri(
                             uri_str,
                             |file_id, queries| {
-                                provider.get_diagnostics_with_path_and_semantics(
+                                provider.get_diagnostics_with_search_context_and_semantics(
                                     ast,
                                     &doc.parse_errors,
                                     &doc.text,
                                     Some(&resolver),
-                                    &search_paths,
+                                    &search_context,
                                     source_path.as_deref(),
                                     file_id,
                                     &queries,
@@ -1140,23 +1138,23 @@ impl LspServer {
                         )
                     });
                     semantic_diags.unwrap_or_else(|| {
-                        provider.get_diagnostics_with_path(
+                        provider.get_diagnostics_with_search_context(
                             ast,
                             &doc.parse_errors,
                             &doc.text,
                             Some(&resolver),
-                            &search_paths,
+                            &search_context,
                             source_path.as_deref(),
                         )
                     })
                 };
                 #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
-                let mut diagnostics = provider.get_diagnostics_with_path(
+                let mut diagnostics = provider.get_diagnostics_with_search_context(
                     ast,
                     &doc.parse_errors,
                     &doc.text,
                     Some(&resolver),
-                    &search_paths,
+                    &search_context,
                     source_path.as_deref(),
                 );
 
@@ -2145,6 +2143,58 @@ mod tests {
             !text.contains("native.testing.require_use_strict"),
             "explicit legacy critic engine should not publish native policy IDs; got: {text:?}"
         );
+    }
+
+    #[test]
+    fn push_pl701_uses_effective_inc_context_labels() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        std::fs::create_dir_all(workspace.join("lib"))?;
+        let script = workspace.join("script.pl");
+        let uri = url::Url::from_file_path(&script)
+            .map_err(|()| "failed to build script URI")?
+            .to_string();
+        let folder_uri = url::Url::from_directory_path(&workspace)
+            .map_err(|()| "failed to build workspace URI")?
+            .to_string();
+
+        let (server, buf) = make_server_with_capture();
+        *server.root_path.lock() = Some(workspace.clone());
+        let mut config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+        config.include_paths = vec!["lib".to_string()];
+        config.use_system_inc = false;
+        config.use_perl5lib = false;
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(folder_uri)
+                .with_path(workspace.clone())
+                .with_effective_workspace_config(config),
+        );
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "use Missing::From::Lib;\n"
+            }
+        })))?;
+
+        server.publish_diagnostics(&uri);
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes)?;
+        assert!(text.contains("PL701"), "missing module should publish PL701; got: {text:?}");
+        assert!(
+            text.contains("Searched @INC"),
+            "PL701 should include searched @INC context; got: {text:?}"
+        );
+        assert!(
+            text.contains("workspace includePaths"),
+            "PL701 should label the include root source; got: {text:?}"
+        );
+        Ok(())
     }
 
     #[test]
