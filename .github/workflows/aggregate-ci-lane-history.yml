@@ -1,0 +1,113 @@
+name: Aggregate CI lane history
+
+# Daily aggregation of per-PR `ci-actuals-*` artifacts into
+# `.ci/metrics/ci-lane-history.json`. Once enough samples exist
+# (≥5 per lane, default `MIN_SAMPLES_FOR_LEARNED`), PR 13's planner
+# starts treating lane estimates as "learned" rather than falling back
+# to the static floor in `policy/ci-lanes.toml`.
+#
+# Tracked in #8166. Wires the previously-deferred aggregator step.
+
+on:
+  schedule:
+    # 05:00 UTC daily — after the 04:00 flake-detection run, well outside
+    # US/EU CI peak hours. Off-minute and not on the hour to avoid
+    # cron-fleet pile-up.
+    - cron: '7 5 * * *'
+  workflow_dispatch:
+
+# Only one aggregation at a time.
+concurrency:
+  group: aggregate-ci-lane-history
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # for the [skip ci] commit-back
+  actions: read     # for listing/downloading recent ci-actuals artifacts
+
+jobs:
+  aggregate:
+    name: Aggregate ci-actuals into ci-lane-history.json
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Python (3.11+ for tomllib)
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Download recent ci-actuals artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/ci/actuals
+
+          # List recent completed ci.yml runs (last ~14 days worth on a
+          # busy repo fits in 100 runs). Download `ci-actuals-*` artifacts
+          # from each into a per-run subdirectory.
+          gh api -X GET "repos/${{ github.repository }}/actions/workflows/ci.yml/runs" \
+            -F per_page=100 \
+            -F status=completed \
+            --jq '.workflow_runs[].id' \
+            > /tmp/run_ids.txt
+
+          run_count=$(wc -l < /tmp/run_ids.txt || echo 0)
+          echo "Found ${run_count} completed ci.yml runs to inspect."
+
+          downloaded=0
+          while read -r run_id; do
+            [ -z "$run_id" ] && continue
+            if gh run download "$run_id" \
+              --pattern 'ci-actuals-*' \
+              --dir "target/ci/actuals/run-${run_id}" \
+              2>/dev/null
+            then
+              downloaded=$((downloaded + 1))
+            fi
+          done < /tmp/run_ids.txt
+
+          echo "Downloaded artifacts from ${downloaded} runs."
+
+      - name: Aggregate lane history
+        run: |
+          python3 scripts/ci/aggregate_lane_history.py \
+            --actuals-dir target/ci/actuals/ \
+            --window-days 14 \
+            --output .ci/metrics/ci-lane-history.json \
+            --static-lanes policy/ci-lanes.toml
+
+      - name: Commit refreshed history if changed
+        # Best-effort push. Branch protection may block the direct-to-master
+        # push (matches the pattern in post-merge-corpus-ratchet.yml). The
+        # warning annotation surfaces silently-blocked pushes without failing
+        # the scheduled run.
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- .ci/metrics/ci-lane-history.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .ci/metrics/ci-lane-history.json
+            git commit -m "chore(ci): refresh ci-lane-history.json [skip ci]"
+            git push || echo "::warning::Direct push to master blocked by branch protection rules -- ci-lane-history not auto-updated. The aggregator output remains in this run's logs; re-run after the protection settles."
+            echo "::notice::Refreshed .ci/metrics/ci-lane-history.json from the last 14d of ci-actuals samples."
+          else
+            echo "::notice::ci-lane-history.json already up to date."
+          fi
+
+      - name: Upload aggregator artifact (always)
+        # Even when commit-back is blocked, the artifact captures the
+        # generator output so operators can inspect the run.
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-lane-history-${{ github.run_id }}
+          path: .ci/metrics/ci-lane-history.json
+          if-no-files-found: warn
+          retention-days: 30
