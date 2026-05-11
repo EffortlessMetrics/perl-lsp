@@ -743,7 +743,34 @@ impl WorkspaceConfig {
             Ok(out) if out.status.success() => {
                 Self::parse_perl_inc_output(&String::from_utf8_lossy(&out.stdout))
             }
-            _ => Vec::new(),
+            Ok(out) => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                tracing::warn!(
+                    target: "perl_lsp::config::system_inc",
+                    status = ?out.status,
+                    stderr = %stderr.trim(),
+                    "startup @INC probe exited non-zero; caching empty result"
+                );
+                Vec::new()
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::TimedOut => {
+                tracing::warn!(
+                    target: "perl_lsp::config::system_inc",
+                    timeout_ms = SYSTEM_INC_PROBE_TIMEOUT.as_millis() as u64,
+                    "startup @INC probe timed out; caching empty result. \
+                     Set perl.workspace.useSystemInc=false to disable probing, \
+                     or pin a faster perl interpreter."
+                );
+                Vec::new()
+            }
+            Err(err) => {
+                tracing::warn!(
+                    target: "perl_lsp::config::system_inc",
+                    error = %err,
+                    "startup @INC probe failed to spawn perl; caching empty result"
+                );
+                Vec::new()
+            }
         }
     }
 
