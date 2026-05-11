@@ -57,6 +57,9 @@ impl LspServer {
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             pull_diagnostics_orchestrator: super::diagnostics::PullDiagnosticsOrchestrator::new(),
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
+            module_scan_cache: Arc::new(
+                perl_lsp_rs_core::providers::completion::module_scan_cache::ModuleCompletionScanCache::new(),
+            ),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
             #[cfg(feature = "workspace")]
@@ -167,6 +170,9 @@ impl LspServer {
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             pull_diagnostics_orchestrator: super::diagnostics::PullDiagnosticsOrchestrator::new(),
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
+            module_scan_cache: Arc::new(
+                perl_lsp_rs_core::providers::completion::module_scan_cache::ModuleCompletionScanCache::new(),
+            ),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
             #[cfg(feature = "workspace")]
@@ -240,6 +246,9 @@ impl LspServer {
             parse_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
             pull_diagnostics_orchestrator: super::diagnostics::PullDiagnosticsOrchestrator::new(),
             semantic_analyzer_cache: Arc::new(Mutex::new(HashMap::new())),
+            module_scan_cache: Arc::new(
+                perl_lsp_rs_core::providers::completion::module_scan_cache::ModuleCompletionScanCache::new(),
+            ),
             #[cfg(feature = "workspace")]
             indexing_in_progress: Arc::new(AtomicBool::new(false)),
             #[cfg(feature = "workspace")]

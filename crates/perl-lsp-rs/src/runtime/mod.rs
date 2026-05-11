@@ -211,6 +211,16 @@ pub struct LspServer {
     /// invalidation when source text changes — no TTL needed.
     pub(crate) semantic_analyzer_cache:
         Arc<Mutex<HashMap<(String, u64), Arc<crate::semantic::SemanticAnalyzer>>>>,
+    /// Short-TTL cache for module prefix directory scans (issue #8514).
+    ///
+    /// Typing a multi-segment `use` prefix (e.g. `use Mojo::Cont|`) triggers a
+    /// filesystem scan on every keystroke. This cache avoids repeated scans of the
+    /// same subdirectory within the 1-second interactive typing burst window.
+    ///
+    /// Cache is runtime-owned (per-server instance) because `CompletionProvider`
+    /// is reconstructed per request and cannot hold persistent state.
+    pub(crate) module_scan_cache:
+        Arc<perl_lsp_rs_core::providers::completion::module_scan_cache::ModuleCompletionScanCache>,
     /// Count of background workspace indexing tasks currently in flight.
     ///
     /// Incremented before spawning a background `index_file` task, decremented

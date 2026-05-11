@@ -502,7 +502,8 @@ impl LspServer {
                         include_paths,
                         system_inc_paths,
                         include_system_inc,
-                    );
+                    )
+                    .with_scan_cache(Arc::clone(&self.module_scan_cache));
 
                     #[cfg(not(feature = "workspace"))]
                     let provider = CompletionProvider::new_with_index_and_source_and_paths(
@@ -512,7 +513,8 @@ impl LspServer {
                         include_paths,
                         system_inc_paths,
                         include_system_inc,
-                    );
+                    )
+                    .with_scan_cache(Arc::clone(&self.module_scan_cache));
 
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.text, offset, Some(uri));
@@ -776,7 +778,8 @@ impl LspServer {
                         include_paths,
                         system_inc_paths,
                         include_system_inc,
-                    );
+                    )
+                    .with_scan_cache(Arc::clone(&self.module_scan_cache));
                     #[cfg(not(feature = "workspace"))]
                     let provider = CompletionProvider::new_with_index_and_source_and_paths(
                         ast,
@@ -785,7 +788,8 @@ impl LspServer {
                         include_paths,
                         system_inc_paths,
                         include_system_inc,
-                    );
+                    )
+                    .with_scan_cache(Arc::clone(&self.module_scan_cache));
 
                     // Use cancellable provider method
                     provider.get_completions_with_path_cancellable(
@@ -1740,5 +1744,305 @@ mod tests {
             "required Foo",
             "required Foo".len()
         ));
+    }
+
+    // =========================================================================
+    // Module scan cache integration tests (issue #8514)
+    // =========================================================================
+
+    /// First call for a given root+prefix triggers a scan (cache miss).
+    /// Second call within TTL returns the cached result (no new scan).
+    #[test]
+    fn test_scan_cache_second_call_within_ttl_does_not_rescan()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use perl_lsp_rs_core::providers::completion::module_scan_cache::{
+            ModuleCompletionScanCache, ScanCacheKey,
+        };
+        use std::path::PathBuf;
+
+        let temp = tempfile::TempDir::new()?;
+        let lib = temp.path().join("lib");
+        let mojo_dir = lib.join("Mojo");
+        std::fs::create_dir_all(&mojo_dir)?;
+        std::fs::write(mojo_dir.join("Controller.pm"), "package Mojo::Controller;\n1;\n")?;
+
+        let cache = ModuleCompletionScanCache::new();
+        let canonical = std::fs::canonicalize(&lib).unwrap_or_else(|_| lib.clone());
+        let key = ScanCacheKey {
+            canonical_root: canonical.clone(),
+            prefix_dir: PathBuf::from("Mojo"),
+            module_prefix: "Mojo::".to_string(),
+        };
+
+        // First: miss — nothing in cache yet
+        assert!(cache.get(&key).is_none(), "cache must be cold initially");
+
+        // Manually populate as the scan would
+        cache.insert(key.clone(), vec!["Mojo::Controller".to_string()]);
+
+        // Second within TTL: hit
+        let hit = cache.get(&key).ok_or("expected cache hit on second call")?;
+        assert!(hit.contains(&"Mojo::Controller".to_string()), "cached result must match scan");
+
+        Ok(())
+    }
+
+    /// Different prefix dir produces a cache miss.
+    #[test]
+    fn test_scan_cache_different_prefix_dir_misses() -> Result<(), Box<dyn std::error::Error>> {
+        use perl_lsp_rs_core::providers::completion::module_scan_cache::{
+            ModuleCompletionScanCache, ScanCacheKey,
+        };
+        use std::path::PathBuf;
+
+        let cache = ModuleCompletionScanCache::new();
+        cache.insert(
+            ScanCacheKey {
+                canonical_root: PathBuf::from("/lib"),
+                prefix_dir: PathBuf::from("Mojo"),
+                module_prefix: "Mojo::C".to_string(),
+            },
+            vec!["Mojo::Controller".to_string()],
+        );
+
+        // Different prefix_dir — must miss
+        let miss = cache.get(&ScanCacheKey {
+            canonical_root: PathBuf::from("/lib"),
+            prefix_dir: PathBuf::from("Catalyst"),
+            module_prefix: "Catalyst::C".to_string(),
+        });
+        assert!(miss.is_none(), "different prefix_dir must be a cache miss");
+
+        Ok(())
+    }
+
+    /// After TTL expires the cache returns None.
+    #[test]
+    fn test_scan_cache_after_ttl_misses() -> Result<(), Box<dyn std::error::Error>> {
+        use perl_lsp_rs_core::providers::completion::module_scan_cache::{
+            ModuleCompletionScanCache, ScanCacheKey,
+        };
+        use std::path::PathBuf;
+        use std::time::Duration;
+
+        let cache = ModuleCompletionScanCache::with_ttl_ms(10);
+        let key = ScanCacheKey {
+            canonical_root: PathBuf::from("/lib"),
+            prefix_dir: PathBuf::from("Mojo"),
+            module_prefix: "Mojo::C".to_string(),
+        };
+        cache.insert(key.clone(), vec!["Mojo::Controller".to_string()]);
+
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(cache.get(&key).is_none(), "expired entry must be a cache miss");
+
+        Ok(())
+    }
+
+    /// Cancellation token is checked before returning a cached hit.
+    #[test]
+    fn test_scan_cache_cancellation_checked_before_returning_hit()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use perl_lsp_rs_core::providers::completion::CompletionProvider;
+        use perl_lsp_rs_core::providers::completion::module_scan_cache::{
+            ModuleCompletionScanCache, ScanCacheKey,
+        };
+        use perl_parser::Parser;
+        use std::path::PathBuf;
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+
+        let temp = tempfile::TempDir::new()?;
+        let lib = temp.path().join("lib");
+        let mojo_dir = lib.join("Mojo");
+        std::fs::create_dir_all(&mojo_dir)?;
+        std::fs::write(mojo_dir.join("Controller.pm"), "package Mojo::Controller;\n1;\n")?;
+
+        // Pre-populate the cache as if a prior call had scanned.
+        let cache = Arc::new(ModuleCompletionScanCache::new());
+        let canonical = std::fs::canonicalize(&lib).unwrap_or_else(|_| lib.clone());
+        let key = ScanCacheKey {
+            canonical_root: canonical.clone(),
+            prefix_dir: PathBuf::from("Mojo"),
+            module_prefix: "Mojo::".to_string(),
+        };
+        cache.insert(key, vec!["Mojo::Controller".to_string()]);
+
+        // Construct a provider with the pre-populated cache and a cancellation flag already set.
+        let source = "use Mojo::";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().map_err(|e| format!("parse error: {e:?}"))?;
+
+        let cancelled = Arc::new(AtomicBool::new(true));
+        let cancel_fn = {
+            let c = Arc::clone(&cancelled);
+            move || c.load(Ordering::Relaxed)
+        };
+
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            source,
+            None,
+            vec![lib.clone()],
+            vec![],
+            false,
+        )
+        .with_scan_cache(Arc::clone(&cache));
+
+        // With cancellation flag set, completions must be empty even though cache has a hit.
+        let completions =
+            provider.get_completions_with_path_cancellable(source, source.len(), None, &cancel_fn);
+
+        // Either the request was cancelled entirely (empty) or the cancellation check
+        // at the cache-hit path caused an early return.  Either way, the contract is
+        // that a cancelled request does not return results.
+        assert!(
+            completions.is_empty(),
+            "cancelled request must not return completions; got {completions:?}"
+        );
+
+        Ok(())
+    }
+
+    /// Prefix-filtered cache entries must not satisfy a different leaf prefix
+    /// under the same namespace directory.
+    #[test]
+    fn test_scan_cache_full_prefix_prevents_cross_prefix_hits()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use perl_lsp_rs_core::providers::completion::CompletionProvider;
+        use perl_lsp_rs_core::providers::completion::module_scan_cache::{
+            ModuleCompletionScanCache, ScanCacheKey,
+        };
+        use perl_parser::Parser;
+        use std::path::PathBuf;
+        use std::sync::Arc;
+
+        let temp = tempfile::TempDir::new()?;
+        let lib = temp.path().join("lib");
+        let mojo_dir = lib.join("Mojo");
+        std::fs::create_dir_all(&mojo_dir)?;
+        std::fs::write(mojo_dir.join("Controller.pm"), "package Mojo::Controller;\n1;\n")?;
+        std::fs::write(mojo_dir.join("Lite.pm"), "package Mojo::Lite;\n1;\n")?;
+
+        // Simulate an earlier `Mojo::C` request. A later `Mojo::L` request
+        // scans the same prefix_dir (`Mojo`) but must not reuse this filtered hit.
+        let cache = Arc::new(ModuleCompletionScanCache::new());
+        let canonical = std::fs::canonicalize(&lib).unwrap_or_else(|_| lib.clone());
+        cache.insert(
+            ScanCacheKey {
+                canonical_root: canonical,
+                prefix_dir: PathBuf::from("Mojo"),
+                module_prefix: "Mojo::C".to_string(),
+            },
+            vec!["Mojo::Controller".to_string()],
+        );
+
+        let source = "use Mojo::L";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().map_err(|e| format!("parse error: {e:?}"))?;
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            source,
+            None,
+            vec![lib.clone()],
+            vec![],
+            false,
+        )
+        .with_scan_cache(Arc::clone(&cache));
+
+        let labels: Vec<String> = provider
+            .get_completions_with_path(source, source.len(), None)
+            .into_iter()
+            .map(|item| item.label)
+            .collect();
+
+        assert!(
+            labels.contains(&"Mojo::Lite".to_string()),
+            "different leaf prefix should miss the stale filtered hit and scan Lite; labels={labels:?}"
+        );
+        assert!(
+            !labels.contains(&"Mojo::Controller".to_string()),
+            "cached Mojo::C result must not leak into Mojo::L completions; labels={labels:?}"
+        );
+
+        Ok(())
+    }
+
+    /// Cached and uncached completions produce the same labels.
+    #[test]
+    fn test_scan_cache_cached_and_uncached_labels_match() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use perl_lsp_rs_core::providers::completion::CompletionProvider;
+        use perl_lsp_rs_core::providers::completion::module_scan_cache::ModuleCompletionScanCache;
+        use perl_parser::Parser;
+        use std::sync::Arc;
+
+        let temp = tempfile::TempDir::new()?;
+        let lib = temp.path().join("lib");
+        let mojo_dir = lib.join("Mojo");
+        std::fs::create_dir_all(&mojo_dir)?;
+        std::fs::write(mojo_dir.join("Controller.pm"), "package Mojo::Controller;\n1;\n")?;
+        std::fs::write(mojo_dir.join("Lite.pm"), "package Mojo::Lite;\n1;\n")?;
+
+        let source = "use Mojo::";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().map_err(|e| format!("parse error: {e:?}"))?;
+
+        // Uncached call.
+        let uncached_provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            source,
+            None,
+            vec![lib.clone()],
+            vec![],
+            false,
+        );
+        let uncached = uncached_provider.get_completions_with_path(source, source.len(), None);
+        let mut uncached_labels: Vec<String> = uncached.iter().map(|c| c.label.clone()).collect();
+        uncached_labels.sort();
+
+        // Cached call — first invocation populates the cache.
+        let cache = Arc::new(ModuleCompletionScanCache::new());
+        let cached_provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            source,
+            None,
+            vec![lib.clone()],
+            vec![],
+            false,
+        )
+        .with_scan_cache(Arc::clone(&cache));
+        let cached_first = cached_provider.get_completions_with_path(source, source.len(), None);
+        let mut cached_first_labels: Vec<String> =
+            cached_first.iter().map(|c| c.label.clone()).collect();
+        cached_first_labels.sort();
+
+        // Second invocation should hit the cache.
+        let cached_provider2 = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            source,
+            None,
+            vec![lib.clone()],
+            vec![],
+            false,
+        )
+        .with_scan_cache(Arc::clone(&cache));
+        let cached_second = cached_provider2.get_completions_with_path(source, source.len(), None);
+        let mut cached_second_labels: Vec<String> =
+            cached_second.iter().map(|c| c.label.clone()).collect();
+        cached_second_labels.sort();
+
+        assert_eq!(
+            uncached_labels, cached_first_labels,
+            "first cached call must produce same labels as uncached"
+        );
+        assert_eq!(
+            cached_first_labels, cached_second_labels,
+            "second cached call (cache hit) must produce same labels as first"
+        );
+
+        Ok(())
     }
 }

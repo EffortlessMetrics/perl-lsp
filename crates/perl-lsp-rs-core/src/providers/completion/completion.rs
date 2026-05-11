@@ -115,6 +115,7 @@ pub use self::methods::get_dbi_method_documentation;
 pub use self::test_more::get_test_more_documentation;
 pub use self::xs_api::{add_xs_api_completions_for_prefix, get_xs_api_documentation, is_xs_source};
 
+use crate::providers::completion::module_scan_cache::ModuleCompletionScanCache;
 use perl_parser_core::ast::Node;
 use perl_semantic_analyzer::class_model::{ClassModel, ClassModelBuilder, Framework};
 use perl_semantic_analyzer::semantic::{BuiltinDoc, get_moose_type_documentation};
@@ -180,6 +181,13 @@ pub struct CompletionProvider {
     include_paths: Vec<PathBuf>,
     system_inc_paths: Vec<PathBuf>,
     include_system_inc: bool,
+    /// Optional runtime-owned scan cache (issue #8514).
+    ///
+    /// When `Some`, repeated `use Module::Prefix|` completions within 1 second
+    /// avoid re-scanning the same include root subdirectory. The cache is owned
+    /// by `LspServer` and survives across requests; this field holds a cheap
+    /// `Arc` clone valid for the lifetime of this provider instance.
+    scan_cache: Option<Arc<ModuleCompletionScanCache>>,
 }
 
 impl CompletionProvider {
@@ -301,7 +309,17 @@ impl CompletionProvider {
             include_paths,
             system_inc_paths,
             include_system_inc,
+            scan_cache: None,
         }
+    }
+
+    /// Attach a runtime-owned scan cache to this provider.
+    ///
+    /// Called by `LspServer` after construction to wire the server-level cache
+    /// into the per-request provider without changing the public constructor API.
+    pub fn with_scan_cache(mut self, cache: Arc<ModuleCompletionScanCache>) -> Self {
+        self.scan_cache = Some(cache);
+        self
     }
 
     fn extract_symbol_table(ast: &Node, source: &str) -> SymbolTable {
@@ -532,13 +550,15 @@ impl CompletionProvider {
             );
         } else if context.in_use_statement && !context.prefix.starts_with('$') {
             // Module name completion after `use` or `require`
-            workspace::add_use_module_completions(
+            workspace::add_use_module_completions_with_cache(
                 &mut completions,
                 &context,
                 &self.workspace_index,
                 &self.include_paths,
                 &self.system_inc_paths,
                 self.include_system_inc,
+                self.scan_cache.as_deref(),
+                is_cancelled,
             );
         } else if self.is_has_type_value_context(source, position) {
             self.add_has_type_completions(&mut completions, &context);
