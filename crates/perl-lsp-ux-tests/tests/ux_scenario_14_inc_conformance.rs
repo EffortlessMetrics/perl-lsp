@@ -585,27 +585,26 @@ fn scenario_14_no_lib_cancellation() {
         diags
     );
 
-    // goto-def and completion: workspace-indexed modules bypass @INC resolution.
-    // The workspace indexer scans the filesystem independently of lexical `use lib`
-    // / `no lib` state. As a result, goto-def and completion may still surface
-    // GoneModule via the workspace index even when `no lib` is in effect.
-    //
-    // This is a known architectural limitation tracked as a follow-up to #8516.
-    // We log the state rather than asserting to avoid a false CI gate.
-    if !def_empty {
-        eprintln!(
-            "INFO scenario_14_no_lib_cancellation: goto-def still resolves GoneModule \
-             via workspace index (bypasses @INC). Known follow-up to #8516. \
-             goto-def: {:?}",
-            defs
-        );
-    }
-    if !completion_absent {
-        eprintln!(
-            "INFO scenario_14_no_lib_cancellation: completion still suggests GoneModule \
-             via workspace index (bypasses @INC). Known follow-up to #8516."
-        );
-    }
+    // goto-def and completion: fixed by #8537.
+    // After the fix, `no lib` cancellation applies to workspace-symbol lookups too.
+    // The file-system resolver is authoritative for `use Module` goto-definition;
+    // the workspace index supplements are filtered through EffectiveIncContext.
+    assert!(
+        def_empty,
+        "goto-def MUST return empty for GoneModule: 'no lib' cancelled the path. \
+         Fixed by #8537 — file-system resolver is authoritative for `use Module` \
+         goto-definition and must not be bypassed by workspace index.\n\
+         goto-def: {:?}",
+        defs
+    );
+    assert!(
+        completion_absent,
+        "completion MUST NOT suggest GoneModule: 'no lib' cancelled the path. \
+         Fixed by #8537 — workspace-index Package completions are filtered through \
+         EffectiveIncContext at the use-site offset.\n\
+         completions (labels): {:?}",
+        completion_labels(&completions)
+    );
 
     harness.assert_no_crash();
 }
@@ -1331,4 +1330,182 @@ fn scenario_14_perl5lib_disabled_ignores_env_even_when_system_inc_enabled() {
 
     harness.assert_no_crash();
     drop(system_dir);
+}
+
+// =============================================================================
+// Fixture 9: no lib cancellation WITH workspace index (negative, workspace-aware)
+// =============================================================================
+//
+// Same fixture as scenario_14_no_lib_cancellation but the harness opens the
+// module file via didOpen, which causes the workspace indexer to index it.
+// After #8537, workspace-index Package symbols are filtered through
+// EffectiveIncContext, so goto-def and completion must still be empty.
+
+#[test]
+fn scenario_14_no_lib_cancellation_workspace_index() {
+    if !binary_available() {
+        eprintln!(
+            "SKIP scenario_14_no_lib_cancellation_workspace_index: perl-lsp binary not found"
+        );
+        return;
+    }
+
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .with_file("fixture.pl", NO_LIB_CANCEL_SOURCE)
+            .with_file("lib/GoneModule.pm", GONE_MODULE),
+    )
+    .expect("Failed to create UX harness");
+
+    // Open the module file first to ensure it gets indexed by the workspace indexer.
+    harness
+        .open_file("lib/GoneModule.pm", GONE_MODULE)
+        .expect("didOpen GoneModule.pm should succeed");
+    std::thread::sleep(Duration::from_millis(300));
+
+    harness.open_file("fixture.pl", NO_LIB_CANCEL_SOURCE).expect("didOpen should succeed");
+    std::thread::sleep(Duration::from_millis(700));
+
+    let diags = wait_diagnostics(&harness, "fixture.pl");
+    let pl701_fires = has_pl701(&diags);
+
+    // goto-definition on `use GoneModule` at line 4, col 4.
+    let defs = harness.definition("fixture.pl", 4, 4).expect("definition must not error");
+    let def_empty = defs.is_empty();
+
+    // Completion check (negative): `GoneModule` must NOT appear even though the
+    // workspace index has it indexed — the @INC filter must suppress it.
+    harness
+        .change_file_full("fixture.pl", NO_LIB_CANCEL_COMPLETION_SOURCE)
+        .expect("didChange to completion fixture should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+    let completions = harness.completion("fixture.pl", 4, 8).expect("completion must not error");
+    let completion_absent = !completion_has_module(&completions, "GoneModule");
+
+    print_conformance(
+        "no_lib_cancellation_workspace_index",
+        pl701_fires,
+        completion_absent,
+        def_empty,
+        true, // hover not checked in this scenario
+    );
+
+    assert!(
+        pl701_fires,
+        "PL701 MUST fire for GoneModule (workspace-index scenario): 'no lib' cancelled the path.\n\
+         diagnostics: {:?}",
+        diags
+    );
+    assert!(
+        def_empty,
+        "goto-def MUST return empty even with workspace index: 'no lib' cancels @INC reachability. \
+         Fixed by #8537.\n\
+         goto-def: {:?}",
+        defs
+    );
+    assert!(
+        completion_absent,
+        "completion MUST NOT suggest GoneModule even with workspace index: @INC filter applies. \
+         Fixed by #8537.\n\
+         completions (labels): {:?}",
+        completion_labels(&completions)
+    );
+
+    harness.assert_no_crash();
+}
+
+// =============================================================================
+// Fixture 10: use lib WITH workspace index (positive control)
+// =============================================================================
+//
+// Same structure as scenario_14_no_lib_cancellation_workspace_index but WITHOUT
+// the `no lib` line. Verifies that the @INC filter does NOT over-filter — a
+// workspace-indexed module that IS reachable through @INC must still surface.
+
+const USE_LIB_WITH_INDEX_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use lib 'lib';\n\
+use GoneModule;\n\
+\n\
+print \"reachable\\n\";\n\
+";
+
+const USE_LIB_WITH_INDEX_COMPLETION_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use lib 'lib';\n\
+use Gone\n\
+";
+
+#[test]
+fn scenario_14_use_lib_with_workspace_index() {
+    if !binary_available() {
+        eprintln!("SKIP scenario_14_use_lib_with_workspace_index: perl-lsp binary not found");
+        return;
+    }
+
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .with_file("fixture.pl", USE_LIB_WITH_INDEX_SOURCE)
+            .with_file("lib/GoneModule.pm", GONE_MODULE),
+    )
+    .expect("Failed to create UX harness");
+
+    // Open the module file first to ensure it gets indexed.
+    harness
+        .open_file("lib/GoneModule.pm", GONE_MODULE)
+        .expect("didOpen GoneModule.pm should succeed");
+    std::thread::sleep(Duration::from_millis(300));
+
+    harness.open_file("fixture.pl", USE_LIB_WITH_INDEX_SOURCE).expect("didOpen should succeed");
+    std::thread::sleep(Duration::from_millis(700));
+
+    let diags = wait_diagnostics(&harness, "fixture.pl");
+    // PL701 must NOT fire — the `use lib 'lib'` is in effect (no `no lib`).
+    let pl701_absent = !has_pl701(&diags);
+
+    // goto-definition on `use GoneModule` at line 3, col 4.
+    let defs = harness.definition("fixture.pl", 3, 4).expect("definition must not error");
+    let def_resolves = !defs.is_empty();
+
+    // Completion check (positive): `GoneModule` MUST appear since `use lib 'lib'`
+    // is active and the module is indexed.
+    harness
+        .change_file_full("fixture.pl", USE_LIB_WITH_INDEX_COMPLETION_SOURCE)
+        .expect("didChange to completion fixture should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+    let completions = harness.completion("fixture.pl", 3, 8).expect("completion must not error");
+    let completion_present = completion_has_module(&completions, "GoneModule");
+
+    print_conformance(
+        "use_lib_with_workspace_index",
+        pl701_absent,
+        completion_present,
+        def_resolves,
+        true,
+    );
+
+    assert!(
+        pl701_absent,
+        "PL701 must NOT fire for GoneModule: 'use lib lib' is in effect and module exists.\n\
+         diagnostics: {:?}",
+        diags
+    );
+    assert!(
+        def_resolves,
+        "goto-def MUST resolve GoneModule: 'use lib lib' is in effect, @INC filter must not \
+         over-filter reachable modules (positive control for #8537).\n\
+         diagnostics: {:?}",
+        diags
+    );
+    assert!(
+        completion_present,
+        "completion MUST suggest GoneModule: 'use lib lib' is in effect, @INC filter must not \
+         suppress reachable modules (positive control for #8537).\n\
+         completions (labels): {:?}",
+        completion_labels(&completions)
+    );
+
+    harness.assert_no_crash();
 }

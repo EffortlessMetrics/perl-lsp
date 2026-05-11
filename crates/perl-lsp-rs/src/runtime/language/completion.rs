@@ -219,6 +219,7 @@ impl LspServer {
         &self,
         completions: &mut Vec<crate::completion::CompletionItem>,
         doc_text: &str,
+        doc_uri: &str,
         offset: usize,
         workspace_mode: &IndexAccessMode,
         cap: usize,
@@ -244,6 +245,22 @@ impl LspServer {
                     .rev()
                     .collect::<String>();
 
+                // Detect `use Module` / `require Module` context so we can gate
+                // Package-kind completions through @INC reachability (fixes #8537).
+                let is_use_module_context = {
+                    let before_prefix =
+                        &text_before[..text_before.len().saturating_sub(prefix.len())];
+                    let trimmed = before_prefix.trim_end();
+                    trimmed.ends_with("use") || trimmed.ends_with("require")
+                };
+
+                // Build @INC context once (only when needed for filtering).
+                let inc_ctx = if is_use_module_context {
+                    self.effective_inc_context_for_doc(Some(doc_uri), Some(doc_text), Some(offset))
+                } else {
+                    None
+                };
+
                 let qualified_variable_symbols =
                     Self::qualified_variable_workspace_symbols(index, &prefix);
                 let replace_prefix_range = (offset.saturating_sub(prefix.len()), offset);
@@ -262,6 +279,28 @@ impl LspServer {
 
                     if seen.contains(&symbol.name) {
                         continue;
+                    }
+
+                    // For module-kind symbols in a `use Module` / `require Module`
+                    // context, filter by position-aware @INC reachability so that
+                    // `no lib` cancellations are honoured (fixes #8537).
+                    let is_module_kind = matches!(
+                        symbol.kind,
+                        crate::workspace_index::SymbolKind::Package
+                            | crate::workspace_index::SymbolKind::Class
+                            | crate::workspace_index::SymbolKind::Role
+                    );
+                    if is_use_module_context && is_module_kind {
+                        if let Some(ref ctx) = inc_ctx {
+                            if !ctx.symbol_uri_reachable(&symbol.uri) {
+                                tracing::trace!(
+                                    symbol = %symbol.name,
+                                    uri = %symbol.uri,
+                                    "completion: skipping workspace symbol not reachable via @INC"
+                                );
+                                continue;
+                            }
+                        }
                     }
 
                     let label = symbol.name.clone();
@@ -480,6 +519,7 @@ impl LspServer {
                     self.add_runtime_workspace_completions(
                         &mut completions,
                         &doc.text,
+                        uri,
                         offset,
                         &workspace_mode,
                         cap,
@@ -730,6 +770,7 @@ impl LspServer {
                 self.add_runtime_workspace_completions(
                     &mut completions,
                     &doc.text,
+                    uri,
                     offset,
                     &workspace_mode,
                     completion_cap(),

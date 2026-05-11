@@ -176,6 +176,12 @@ fn find_label_declaration_span(
 
 #[derive(Debug, Clone)]
 enum EarlyDefinitionTarget {
+    /// Cursor is on a `use Module` / `require Module` statement.
+    /// @INC filtering applies: if file-system resolution fails, the workspace
+    /// index must also be filtered through `EffectiveIncContext`.
+    UseModule(String),
+    /// Cursor is on a bare `Package->method` reference.
+    /// @INC filtering does not apply — workspace-index method lookup is correct.
     Module(String),
     XsBootstrap(String),
 }
@@ -1029,7 +1035,11 @@ impl LspServer {
                     } else if let Some(module_name) =
                         self.extract_module_reference_extended(&text_around, cursor_in_text)
                     {
-                        Some((EarlyDefinitionTarget::Module(module_name), doc.text.clone(), offset))
+                        Some((
+                            EarlyDefinitionTarget::UseModule(module_name),
+                            doc.text.clone(),
+                            offset,
+                        ))
                     } else {
                         // Also check if we're on a package name followed by ->
                         let mut package_name_result = None;
@@ -1073,7 +1083,13 @@ impl LspServer {
                             )])));
                         }
                     }
-                    EarlyDefinitionTarget::Module(module_name) => {
+                    EarlyDefinitionTarget::UseModule(module_name) => {
+                        // Cursor is on a `use Module` / `require Module` statement.
+                        // Resolution is authoritative: if the file-system resolver (which
+                        // honours position-aware @INC including `no lib` cancellations) finds
+                        // a path, return it. If not, return empty rather than falling through
+                        // to the workspace-index lookup — the index is @INC-unaware and would
+                        // surface files that `no lib` has cancelled. Fixes #8537.
                         if let Some(module_path) = self.resolve_module_to_path_with_doc_at_offset(
                             &module_name,
                             Some(&doc_text),
@@ -1110,6 +1126,31 @@ impl LspServer {
                                 module = %module_name,
                                 "core pragma requested via goto-def — no file target"
                             );
+                        }
+                        // Return early: file-system resolution is authoritative for `use Module`.
+                        // Do NOT fall through to workspace-index lookup, which is @INC-unaware.
+                        return Ok(Some(json!([])));
+                    }
+                    EarlyDefinitionTarget::Module(module_name) => {
+                        if let Some(module_path) = self.resolve_module_to_path_with_doc_at_offset(
+                            &module_name,
+                            Some(&doc_text),
+                            Some(uri),
+                            Some(doc_offset),
+                        ) {
+                            return Ok(Some(json!([{
+                                "uri": module_path,
+                                "range": {
+                                    "start": {
+                                        "line": 0,
+                                        "character": 0,
+                                    },
+                                    "end": {
+                                        "line": 0,
+                                        "character": 0,
+                                    },
+                                },
+                            }])));
                         }
                     }
                 }
