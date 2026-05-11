@@ -52,6 +52,15 @@ fallback behavior and rollback proof.
 - Document symbols now have source/freshness shadow proof for explicit syntax
   facts, framework-generated candidates, dynamic-boundary blockers, and stale
   compiler facts. These receipts do not broaden live document-symbol behavior.
+- Document symbols and workspace symbols now have runtime quality receipts that
+  call the live `textDocument/documentSymbol` and `workspace/symbol` handlers
+  and capture live provider counts and results without changing live behavior.
+  Seven BDD receipt tests cover document symbols (provider field,
+  no-live-behavior-change, count integrity, symbol presence, shadow state, notes
+  proof, unknown-URI graceful handling) and eight tests cover workspace symbols
+  (provider field, no-live-behavior-change, count integrity, query echo, shadow
+  state, notes proof, empty-query, no-match query). These receipts complete the
+  runtime integration proof step for both surfaces.
 - Semantic tokens now have source/freshness shadow proof for explicit
   parser/HIR classifications, compiler-backed classifications,
   dynamic-boundary blockers, and stale compiler facts. These receipts do not
@@ -86,8 +95,8 @@ the relevant receipt command.
 | References | `ranked-shadowed` | Reference shadow compare tracks imported, generated, dynamic-boundary, low-confidence fallback, stale fact, and real-workspace quality occurrence traces before live migration. Runtime quality receipts compare the live `textDocument/references` result with the compiler cutover receipt without changing live behavior. | Narrow live cutover proof for exact/imported high-confidence occurrences before any broader navigation migration |
 | Rename | `boundary-shadowed` | Rename plan receipts trace exact static edits, dynamic-boundary blockers, stale compiler facts, low-confidence ambiguity, runtime blocker UX notes, and live-vs-compiler exact-static receipt data before any live compiler-backed refactor behavior | Real-workspace unsafe-edit receipts and a narrow lexical/package rename live-cutover proof before any broader refactor migration |
 | Safe delete | `boundary-shadowed` | Safe-delete receipts trace exact static allow decisions, dynamic-boundary blockers, framework-generated blockers, stale compiler facts, runtime blocker UX notes, and live-vs-compiler exact-static receipt data before any live compiler-backed refactor behavior | Real-workspace unsafe-delete receipts and explicit blocker UX in live safe-delete surfaces before any broader refactor migration |
-| Workspace symbols | `shadowed` | Existing workspace index remains the live provider source; semantic-shadow fixtures trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates | Runtime integration and live-provider workspace-symbol quality receipts before any live cutover |
-| Document symbols | `shadowed` | Existing document-symbol provider remains the live source; semantic-shadow fixtures trace explicit syntax, generated, dynamic-boundary, and stale fact candidates | Runtime integration and real-workspace document-symbol quality receipts before any live cutover |
+| Workspace symbols | `shadowed` | Existing workspace index remains the live provider source; semantic-shadow fixtures trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates; runtime quality receipts capture live provider counts/results without changing live behavior | Real-workspace workspace-symbol quality receipts ([#8378](https://github.com/EffortlessMetrics/perl-lsp/issues/8378)) before any live cutover |
+| Document symbols | `shadowed` | Existing document-symbol provider remains the live source; semantic-shadow fixtures trace explicit syntax, generated, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live provider counts/results without changing live behavior | Real-workspace document-symbol quality receipts before any live cutover |
 | Semantic tokens | `shadowed` | Existing parser/token provider remains the live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, dynamic-boundary, and stale fact candidates | Runtime integration and token/span invariant receipts before any live cutover |
 
 ## Cutover Rules

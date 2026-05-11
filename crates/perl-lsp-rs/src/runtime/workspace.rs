@@ -354,6 +354,51 @@ impl LspServer {
         Ok(Some(json!(all_symbols)))
     }
 
+    /// Workspace symbol runtime quality receipt — shadow-only proof.
+    ///
+    /// Calls the live `workspace/symbol` handler and wraps the result in a typed
+    /// receipt for staged cutover proof. Workspace symbols is in `shadowed` state:
+    /// the live workspace index remains the source of truth; compiler-fact candidates
+    /// are not yet promoted to the runtime path.
+    ///
+    /// Does not change live provider behavior (`no_live_behavior_change: true`).
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub(crate) fn workspace_symbols_runtime_quality_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let query = params
+            .as_ref()
+            .and_then(|p| p.get("query"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+
+        let live_provider_result = self.handle_workspace_symbols_v2(params)?;
+        let live_provider_count = match live_provider_result.as_ref() {
+            Some(Value::Array(items)) => items.len(),
+            _ => 0,
+        };
+
+        Ok(Some(json!({
+            "provider": "workspace_symbols",
+            "query": query,
+            "live_provider_result": live_provider_result,
+            "live_provider_count": live_provider_count,
+            "shadow_state": "shadowed",
+            "compiler_receipt": null,
+            "no_live_behavior_change": true,
+            "notes": [
+                format!(
+                    "workspace-symbol runtime quality receipt: query={:?}; live_provider_count={}; \
+                     compiler-fact candidates pending staged cutover; \
+                     no live workspace-symbol behavior change",
+                    query, live_provider_count
+                )
+            ]
+        })))
+    }
+
     /// Search open documents for symbols (non-workspace stub)
     #[cfg(not(feature = "workspace"))]
     fn search_open_documents_for_symbols(
