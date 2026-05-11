@@ -23,7 +23,10 @@ use perl_lsp_rs_core::providers::diagnostics::{parse_error_code, parse_error_sev
 use perl_lsp_rs_core::tooling::perl_critic::{
     CriticConfig, CriticContext, CriticFinding, NativeCriticProfile, NativeCriticRegistry, Severity,
 };
-use perl_module::resolution::use_lib::resolve_use_lib_paths_from_source;
+use perl_module::resolution::use_lib::{
+    no_lib_cancelled_paths_at_offset, resolve_use_lib_paths_from_source,
+    resolve_use_lib_paths_from_source_at_offset,
+};
 use perl_parser::Parser;
 use perl_parser::error::ParseError;
 use perl_parser::position::offset_to_utf16_line_col;
@@ -293,19 +296,34 @@ impl PullDiagnosticsProvider {
                             tracing::warn!(uri = %uri_str, "pull diagnostics: URI is not a file path");
                         }).ok()
                     });
-                let include_paths = self.effective_include_paths(
-                    &context.include_paths,
+                // Build the baseline include paths (configured + PERL5LIB, without lexical
+                // `use lib`/`no lib`). The resolver re-evaluates lexical paths per use-site
+                // offset so that `no lib` cancellations that precede each `use` statement
+                // are respected.
+                let base_include_paths = context.include_paths.clone();
+
+                // Position-aware resolver: for each `use Module` statement, recompute the
+                // effective include paths at that statement's byte offset so that `no lib`
+                // directives appearing before it cancel the appropriate `use lib` paths.
+                let resolver = |module: &str, use_site_offset: usize| {
+                    let paths = self.effective_include_paths_at_offset(
+                        &base_include_paths,
+                        content,
+                        source_path.as_deref(),
+                        context,
+                        use_site_offset,
+                    );
+                    self.resolve_module_with_paths(module, &paths, source_path.as_deref())
+                };
+
+                // Search context for PL701 display: compute once for the whole file (end
+                // offset) so the diagnostic message shows what paths were searched overall.
+                let search_paths: Vec<String> = self.effective_include_paths(
+                    &base_include_paths,
                     content,
                     source_path.as_deref(),
                     context,
                 );
-
-                // Build module resolver using context include_paths
-                let resolver = |module: &str| {
-                    self.resolve_module_with_paths(module, &include_paths, source_path.as_deref())
-                };
-
-                let search_paths: Vec<String> = include_paths.clone();
 
                 // Wire workspace semantic queries when available (pull-text path).
                 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
@@ -426,6 +444,54 @@ impl PullDiagnosticsProvider {
         let file_dir = source_path.and_then(std::path::Path::parent);
 
         let dynamic_paths = resolve_use_lib_paths_from_source(content, workspace_root, file_dir);
+        for path in dynamic_paths.into_iter().rev() {
+            effective_paths.retain(|existing| existing != &path);
+            effective_paths.insert(0, path);
+        }
+
+        effective_paths
+    }
+
+    /// Compute effective include paths at a specific byte offset.
+    ///
+    /// Identical to [`effective_include_paths`] but uses position-aware
+    /// `use lib` / `no lib` evaluation: only operations that precede
+    /// `use_site_offset` in the source text are considered. This means a
+    /// `no lib 'lib'` directive that appears before the offset correctly
+    /// removes the `lib` path, even though it appears after the initial
+    /// `use lib 'lib'`.
+    fn effective_include_paths_at_offset(
+        &self,
+        include_paths: &[String],
+        content: &str,
+        source_path: Option<&std::path::Path>,
+        context: &PullDiagnosticsContext,
+        use_site_offset: usize,
+    ) -> Vec<String> {
+        let workspace_root = context
+            .workspace_root
+            .as_deref()
+            .or_else(|| source_path.and_then(std::path::Path::parent))
+            .unwrap_or(std::path::Path::new("."));
+        let file_dir = source_path.and_then(std::path::Path::parent);
+
+        // Determine which configured paths were explicitly cancelled by `no lib`
+        // at this offset. A `no lib 'lib'` directive removes `lib` from `@INC`
+        // regardless of whether it arrived via `use lib` or workspace config.
+        let cancelled =
+            no_lib_cancelled_paths_at_offset(content, use_site_offset, workspace_root, file_dir);
+
+        // Start from configured paths, excluding any that `no lib` cancelled.
+        let mut effective_paths: Vec<String> =
+            include_paths.iter().filter(|p| !cancelled.contains(*p)).cloned().collect();
+
+        // Prepend lexical `use lib` paths that are active at this offset.
+        let dynamic_paths = resolve_use_lib_paths_from_source_at_offset(
+            content,
+            use_site_offset,
+            workspace_root,
+            file_dir,
+        );
         for path in dynamic_paths.into_iter().rev() {
             effective_paths.retain(|existing| existing != &path);
             effective_paths.insert(0, path);
@@ -560,19 +626,35 @@ impl PullDiagnosticsProvider {
             let provider = DiagnosticsProvider::new(ast, doc_state.text.clone());
             let source_path =
                 url::Url::parse(&uri.to_string()).ok().and_then(|value| value.to_file_path().ok());
-            let include_paths = self.effective_include_paths(
-                &context.include_paths,
+            // Build the baseline include paths (configured + PERL5LIB, without lexical
+            // `use lib`/`no lib`). The resolver re-evaluates lexical paths per use-site
+            // offset so that `no lib` cancellations that precede each `use` statement
+            // are respected.
+            let base_include_paths = context.include_paths.clone();
+            let doc_text = doc_state.text.clone();
+
+            // Position-aware resolver: for each `use Module` statement, recompute the
+            // effective include paths at that statement's byte offset so that `no lib`
+            // directives appearing before it cancel the appropriate `use lib` paths.
+            let resolver = |module: &str, use_site_offset: usize| {
+                let paths = self.effective_include_paths_at_offset(
+                    &base_include_paths,
+                    &doc_text,
+                    source_path.as_deref(),
+                    context,
+                    use_site_offset,
+                );
+                self.resolve_module_with_paths(module, &paths, source_path.as_deref())
+            };
+
+            // Search context for PL701 display: compute once for the whole file (end
+            // offset) so the diagnostic message shows what paths were searched overall.
+            let search_paths: Vec<String> = self.effective_include_paths(
+                &base_include_paths,
                 &doc_state.text,
                 source_path.as_deref(),
                 context,
             );
-
-            // Build module resolver using context include_paths
-            let resolver = |module: &str| {
-                self.resolve_module_with_paths(module, &include_paths, source_path.as_deref())
-            };
-
-            let search_paths: Vec<String> = include_paths.clone();
             let uri_str = uri.to_string();
 
             // Wire workspace semantic queries when available (pull-state path).

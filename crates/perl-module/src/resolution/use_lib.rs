@@ -247,6 +247,57 @@ pub fn resolve_use_lib_paths_from_source_at_offset(
     resolved
 }
 
+/// Compute the set of paths that are currently excluded from `@INC` at a given
+/// source offset due to `no lib` operations.
+///
+/// Returns the resolved path strings that have been explicitly removed by `no lib`
+/// and not subsequently re-added by a later `use lib` before the given offset.
+/// Callers should use this set to filter out matching entries from configured
+/// include paths, so that `no lib 'lib'` cancels both lexical AND configured
+/// `lib` entries that would otherwise survive the lexical scan.
+///
+/// # Example
+///
+/// For the source `use lib 'lib'; no lib 'lib'; use GoneModule;` at an offset
+/// within `use GoneModule;`, this function returns `["lib"]` because `lib` was
+/// added then removed before the offset.
+#[must_use]
+pub fn no_lib_cancelled_paths_at_offset(
+    source: &str,
+    offset: usize,
+    workspace_root: &Path,
+    file_dir: Option<&Path>,
+) -> Vec<String> {
+    let mut effective = Vec::<String>::new();
+    let mut cancelled = Vec::<String>::new();
+    let source_prefix = source.get(..offset).unwrap_or(source);
+    for op in extract_use_lib_operations(source_prefix) {
+        match op {
+            UseLibAction::Add(paths) => {
+                let added = resolve_use_lib_paths(&paths, workspace_root, file_dir);
+                for path in &added {
+                    // If it was cancelled, re-adding it removes the cancellation.
+                    cancelled.retain(|c| c != path);
+                }
+                for path in added.into_iter().rev() {
+                    effective.retain(|e| e != &path);
+                    effective.insert(0, path);
+                }
+            }
+            UseLibAction::Remove(paths) => {
+                let removed = resolve_use_lib_paths(&paths, workspace_root, file_dir);
+                for path in removed {
+                    effective.retain(|e| e != &path);
+                    if !cancelled.contains(&path) {
+                        cancelled.push(path);
+                    }
+                }
+            }
+        }
+    }
+    cancelled
+}
+
 fn strip_use_lib_prefix(trimmed: &str) -> Option<&str> {
     let rest = trimmed.strip_prefix("use")?;
     if !rest.starts_with(|c: char| c.is_whitespace()) {

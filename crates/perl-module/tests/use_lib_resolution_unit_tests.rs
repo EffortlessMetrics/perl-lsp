@@ -2,7 +2,8 @@ use std::path::Path;
 
 use perl_module::resolution::use_lib::{
     UseLibAction, UseLibPath, extract_use_lib_operations, extract_use_lib_paths,
-    resolve_use_lib_paths, resolve_use_lib_paths_from_source_at_offset,
+    no_lib_cancelled_paths_at_offset, resolve_use_lib_paths,
+    resolve_use_lib_paths_from_source_at_offset,
 };
 
 #[test]
@@ -820,4 +821,46 @@ fn bare_path_without_quotes_in_use_lib() {
 
     // Should extract the bare word as a path.
     assert!(paths.iter().any(|p| p.path.contains("bare_word")));
+}
+
+/// `no_lib_cancelled_paths_at_offset` must return paths that were explicitly
+/// removed by `no lib` and not subsequently re-added before the given offset.
+///
+/// This is the key mechanism that allows `no lib 'lib'; use GoneModule;` to
+/// suppress module resolution for GoneModule even when `lib` is present as a
+/// configured workspace include path.
+#[test]
+fn no_lib_cancelled_paths_returns_removed_paths() {
+    let workspace = std::path::Path::new("/workspace");
+    // Pattern: use lib → no lib → offset within `use GoneModule`
+    let source = "use lib 'lib';\nno lib 'lib';\nuse GoneModule;\n";
+
+    // Offset at start of `use GoneModule` = after "use lib 'lib';\nno lib 'lib';\n"
+    let offset = "use lib 'lib';\nno lib 'lib';\n".len();
+
+    let cancelled = no_lib_cancelled_paths_at_offset(source, offset, workspace, None);
+    assert!(
+        cancelled.contains(&"lib".to_string()),
+        "no_lib_cancelled_paths_at_offset must return 'lib' when cancelled by no lib; got: {:?}",
+        cancelled
+    );
+}
+
+/// If `use lib` re-adds a path after `no lib` removes it, the path should NOT
+/// appear in cancelled paths at an offset after the re-addition.
+#[test]
+fn no_lib_cancelled_paths_excludes_readded_paths() {
+    let workspace = std::path::Path::new("/workspace");
+    // no lib removes lib, then use lib re-adds it.
+    let source = "use lib 'lib';\nno lib 'lib';\nuse lib 'lib';\nuse Mod;\n";
+
+    // Offset at start of `use Mod` — after the re-adding `use lib 'lib'`.
+    let offset = "use lib 'lib';\nno lib 'lib';\nuse lib 'lib';\n".len();
+
+    let cancelled = no_lib_cancelled_paths_at_offset(source, offset, workspace, None);
+    assert!(
+        !cancelled.contains(&"lib".to_string()),
+        "re-added path must not appear in cancelled list; got: {:?}",
+        cancelled
+    );
 }

@@ -568,36 +568,45 @@ fn scenario_14_no_lib_cancellation() {
         hover_result.is_none(), // "ok" for negative = hover returned null
     );
 
-    // Consistency check for negative case:
-    // If definition IS empty, PL701 MUST fire (consistent "not found").
-    // If definition is NON-empty, PL701 must NOT fire (consistent "found" -- but wrong!).
-    if !def_empty && !pl701_fires {
+    // Strict enforcement for PL701: the push-diagnostic resolver must honor
+    // position-aware `no lib` cancellation. Fixed by #8516.
+    //
+    // Root cause: the PL701 resolver called `resolve_module_to_path_with_doc`
+    // (whole-file @INC scan) instead of `resolve_module_to_path_with_doc_at_offset`
+    // (position-aware scan). The fix threads the use-site byte offset through the
+    // resolver callback chain and also filters configured include paths using
+    // `no_lib_cancelled_paths_at_offset` so that workspace-configured `lib` entries
+    // are also suppressed by `no lib 'lib'`.
+    assert!(
+        pl701_fires,
+        "PL701 MUST fire for GoneModule: 'no lib' cancelled the earlier 'use lib', \
+         so the module must not be found by the diagnostic resolver.\n\
+         diagnostics: {:?}",
+        diags
+    );
+
+    // goto-def and completion: workspace-indexed modules bypass @INC resolution.
+    // The workspace indexer scans the filesystem independently of lexical `use lib`
+    // / `no lib` state. As a result, goto-def and completion may still surface
+    // GoneModule via the workspace index even when `no lib` is in effect.
+    //
+    // This is a known architectural limitation tracked as a follow-up to #8516.
+    // We log the state rather than asserting to avoid a false CI gate.
+    if !def_empty {
         eprintln!(
-            "INFO scenario_14_no_lib_cancellation: both consumers agree module resolves \
-             (definition non-empty, no PL701). This may indicate 'no lib' is not \
-             yet enforced end-to-end. Skipping strict assertion."
+            "INFO scenario_14_no_lib_cancellation: goto-def still resolves GoneModule \
+             via workspace index (bypasses @INC). Known follow-up to #8516. \
+             goto-def: {:?}",
+            defs
         );
-    } else if def_empty && !pl701_fires {
-        panic!(
-            "Consumer inconsistency (no_lib_cancellation): goto-def returned empty \
-             but PL701 did NOT fire.\n\
-             goto-def: {:?}\n\
-             diagnostics: {:?}",
-            defs, diags
-        );
-    } else if !def_empty && pl701_fires {
-        panic!(
-            "Consumer inconsistency (no_lib_cancellation): goto-def resolved \
-             but PL701 also fired.\n\
-             goto-def: {:?}\n\
-             diagnostics: {:?}",
-            defs, diags
+    }
+    if !completion_absent {
+        eprintln!(
+            "INFO scenario_14_no_lib_cancellation: completion still suggests GoneModule \
+             via workspace index (bypasses @INC). Known follow-up to #8516."
         );
     }
 
-    // Primary assertion: consumers must be consistent — they can't disagree on
-    // whether the module resolves.  The specific outcome (resolved or not) is
-    // separately tracked in the scorecard.
     harness.assert_no_crash();
 }
 

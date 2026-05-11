@@ -478,10 +478,25 @@ impl LspServer {
 
         let lsp_diagnostics: Vec<Value> = if let Some(ast) = &ast_opt {
             // Get diagnostics (already includes unused variable detection).
-            // resolver is called with the documents lock *released* â€” no reentrant deadlock.
+            // resolver is called with the documents lock *released* — no reentrant deadlock.
+            //
+            // The resolver is position-aware: it receives the byte offset of each `use`
+            // statement so that `no lib` cancellations that precede the statement are
+            // respected.  Passing `Some(use_site_offset)` to
+            // `resolve_module_to_path_with_doc_at_offset` causes
+            // `effective_inc_context_for_doc` to call
+            // `resolve_use_lib_paths_from_source_at_offset` instead of the whole-file
+            // scan, ensuring `no lib 'lib'` strips the path before `use GoneModule` is
+            // checked.
             let provider = DiagnosticsProvider::new(ast, text.clone());
-            let resolver = |module: &str| {
-                self.resolve_module_to_path_with_doc(module, Some(&text), Some(uri)).is_some()
+            let resolver = |module: &str, use_site_offset: usize| {
+                self.resolve_module_to_path_with_doc_at_offset(
+                    module,
+                    Some(&text),
+                    Some(uri),
+                    Some(use_site_offset),
+                )
+                .is_some()
             };
             let search_context = self
                 .effective_inc_context_for_doc(Some(uri), Some(&text), None)
@@ -1107,9 +1122,17 @@ impl LspServer {
 
             if let Some(ast) = &doc.ast {
                 let provider = DiagnosticsProvider::new(ast, doc.text.clone());
-                let resolver = |module: &str| {
-                    self.resolve_module_to_path_with_doc(module, Some(&doc.text), Some(uri_str))
-                        .is_some()
+                // Position-aware resolver: each `use` statement is checked against only
+                // the @INC roots that are lexically active at its offset, so `no lib`
+                // cancellations that precede the statement are respected.
+                let resolver = |module: &str, use_site_offset: usize| {
+                    self.resolve_module_to_path_with_doc_at_offset(
+                        module,
+                        Some(&doc.text),
+                        Some(uri_str),
+                        Some(use_site_offset),
+                    )
+                    .is_some()
                 };
                 let search_context = self
                     .effective_inc_context_for_doc(Some(uri_str), Some(&doc.text), None)
