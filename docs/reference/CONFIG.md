@@ -259,15 +259,62 @@ Extra arguments passed to the Perl interpreter when probing startup `@INC`.
 | Default | `false` |
 | Key | `useSystemInc` |
 
-Include the system `@INC` paths (queried from `perl -e 'print join("\n", @INC)'`)
-in module resolution. Disabled by default to avoid blocking on network
-filesystems. The current directory `.` is always filtered out of the system
-`@INC` for security.
+Include the interpreter startup `@INC` paths (queried from
+`perl -e 'print join("\n", @INC)'`) in module resolution. Disabled by default
+to avoid blocking on network filesystems and surprising matches from
+globally installed modules. The current directory `.` is always filtered
+out of the system `@INC` for security.
 
-Changing this value at runtime clears the internal `@INC` cache.
+This does **not** control `PERL5LIB`; use `usePerl5lib` for that. When
+`usePerl5lib` is `false`, `PERL5LIB` is also stripped from the probe
+subprocess environment so it cannot leak in via startup `@INC`. Changing
+this value at runtime clears the internal `@INC` cache.
 
 ```json
 { "perl": { "workspace": { "useSystemInc": true } } }
+```
+
+#### `perl.workspace.usePerl5lib`
+
+| Property | Value |
+|---|---|
+| Type | `boolean` |
+| Default | `true` |
+| Key | `usePerl5lib` |
+
+Whether `perl-lsp` reads the `PERL5LIB` environment variable and merges
+its paths into module resolution. Default is enabled so the LSP behaves
+like running `perl` directly from the same shell.
+
+This is independent of `useSystemInc`. `PERL5LIB` is an explicit
+environment search path; `useSystemInc` controls probing the selected
+Perl interpreter's startup `@INC`. Set `usePerl5lib` to `false` when you
+want module resolution to ignore ambient shell environment paths.
+
+Toggling this setting invalidates the lazy startup-`@INC` cache so the
+next probe runs with the correct `PERL5LIB` environment.
+
+```json
+{ "perl": { "workspace": { "usePerl5lib": false } } }
+```
+
+#### `perl.workspace.perl5libPrecedence`
+
+| Property | Value |
+|---|---|
+| Type | `"prepend"` or `"append"` |
+| Default | `"prepend"` |
+| Key | `perl5libPrecedence` |
+
+Controls whether `PERL5LIB` entries are searched before or after configured
+`includePaths`. `"prepend"` matches Perl's normal runtime behavior. Only
+takes effect when `usePerl5lib` is `true` and `PERL5LIB` is non-empty.
+
+Unknown values are ignored (the current setting is preserved) rather than
+rejected, so a typo does not silently reset an explicit configuration.
+
+```json
+{ "perl": { "workspace": { "perl5libPrecedence": "append" } } }
 ```
 
 #### `perl.workspace.resolutionTimeout`

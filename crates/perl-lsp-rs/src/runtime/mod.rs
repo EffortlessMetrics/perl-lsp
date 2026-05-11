@@ -5,8 +5,8 @@
 
 use crate::runtime::diagnostics::PullDiagnosticsOrchestrator;
 use crate::runtime::types::{
-    DocumentScanView, PendingWorkspaceConfigurationRequest, source_path_from_uri,
-    workspace_folder_matches_doc_uri, workspace_folder_path,
+    DocumentScanView, PendingWorkspaceConfigurationRequest, best_workspace_folder_for_doc,
+    source_path_from_uri, workspace_folder_path,
 };
 use crate::runtime::workspace_folder::WorkspaceFolderState;
 
@@ -661,30 +661,28 @@ impl LspServer {
 
     /// Find the workspace folder containing a document URI.
     ///
-    /// Returns the first workspace folder whose URI is a prefix of the document URI.
-    /// Returns `None` if no workspace folder contains the document.
+    /// Returns the most-specific (deepest) workspace folder whose URI is a
+    /// prefix of the document URI. Returns `None` if no workspace folder
+    /// contains the document. See `best_workspace_folder_for_doc` for the
+    /// rationale for preferring deepest over first-match.
     #[must_use]
     pub fn folder_for_doc_uri(&self, doc_uri: &str) -> Option<WorkspaceFolderState> {
-        self.workspace_folders
-            .lock()
-            .iter()
-            .find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
-            .cloned()
+        let folders = self.workspace_folders.lock();
+        best_workspace_folder_for_doc(&folders, doc_uri).cloned()
     }
 
     /// Get the effective workspace config for a document's folder.
     ///
-    /// Returns the effective workspace configuration for the folder containing
-    /// the document, or `None` if the document is not in any workspace folder.
+    /// Returns the effective workspace configuration for the most-specific
+    /// (deepest) folder containing the document, or `None` if the document is
+    /// not in any workspace folder.
     #[must_use]
     pub fn config_for_doc(
         &self,
         doc_uri: &str,
     ) -> Option<perl_lsp_rs_core::config::WorkspaceConfig> {
-        self.workspace_folders
-            .lock()
-            .iter()
-            .find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
+        let folders = self.workspace_folders.lock();
+        best_workspace_folder_for_doc(&folders, doc_uri)
             .map(|folder| folder.effective_workspace_config.clone())
     }
 
@@ -714,10 +712,10 @@ impl LspServer {
             }
         };
 
-        // Add current folder's paths first (effective_include_paths merges PERL5LIB)
-        if let Some(current_folder) =
-            folders.iter().find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
-        {
+        // Add the most-specific (deepest) matching folder's paths first
+        // (effective_include_paths merges PERL5LIB).
+        let best = best_workspace_folder_for_doc(&folders, doc_uri);
+        if let Some(current_folder) = best {
             let effective =
                 current_folder.effective_workspace_config.effective_include_paths(&perl5lib_paths);
             for include_path in &effective {
@@ -728,16 +726,18 @@ impl LspServer {
             }
         }
 
-        // Add other folders' include paths
+        // Add other folders' include paths. Skip only the best folder so that
+        // outer folders in a nested workspace contribute as fallback roots.
         for folder in folders.iter() {
-            if !workspace_folder_matches_doc_uri(folder, doc_uri) {
-                let effective =
-                    folder.effective_workspace_config.effective_include_paths(&perl5lib_paths);
-                for include_path in &effective {
-                    let resolved = resolve_one(include_path, folder);
-                    if !paths.contains(&resolved) {
-                        paths.push(resolved);
-                    }
+            if best.is_some_and(|b| b.uri == folder.uri) {
+                continue;
+            }
+            let effective =
+                folder.effective_workspace_config.effective_include_paths(&perl5lib_paths);
+            for include_path in &effective {
+                let resolved = resolve_one(include_path, folder);
+                if !paths.contains(&resolved) {
+                    paths.push(resolved);
                 }
             }
         }
@@ -756,9 +756,7 @@ impl LspServer {
     #[must_use]
     pub fn search_scopes_for_doc(&self, doc_uri: &str) -> Vec<WorkspaceFolderState> {
         let folders = self.workspace_folders.lock();
-        if let Some(current_folder) =
-            folders.iter().find(|folder| workspace_folder_matches_doc_uri(folder, doc_uri))
-        {
+        if let Some(current_folder) = best_workspace_folder_for_doc(&folders, doc_uri) {
             let mut scopes = vec![current_folder.clone()];
             for folder in folders.iter() {
                 if folder.uri != current_folder.uri {
@@ -1044,6 +1042,7 @@ pub(crate) fn location_from_path(p: &Path) -> serde_json::Value {
 mod tests {
     use super::*;
     use crate::features::formatting::FormatRange;
+    use crate::runtime::types::workspace_folder_matches_doc_uri;
     use perl_lsp_rs_core::config::AiCompletionConfig;
 
     #[test]
@@ -1070,6 +1069,98 @@ mod tests {
             &folder,
             "vscode-remote://ssh-remote+dev/workspace-other/lib/Foo.pm"
         ));
+    }
+
+    /// In a nested multi-root workspace (e.g. `/repo` and `/repo/app`), a
+    /// document inside the inner folder matches both. `folder_for_doc_uri`,
+    /// `config_for_doc`, and `include_paths_for_doc` must all agree on the
+    /// most-specific (deepest) folder so that root and per-doc config don't
+    /// disagree. This mirrors the existing deepest-match behavior of
+    /// `workspace_root_for_doc` in `runtime/lifecycle/module_resolution.rs`.
+    #[test]
+    fn nested_workspace_folders_select_most_specific_for_config_and_includes() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let repo = temp.path().join("repo");
+        let app = repo.join("app");
+        std::fs::create_dir_all(&app).expect("create nested dirs");
+
+        let repo_uri = url::Url::from_file_path(&repo).expect("repo URI").to_string();
+        let app_uri = url::Url::from_file_path(&app).expect("app URI").to_string();
+        let doc_path = app.join("script").join("run.pl");
+        std::fs::create_dir_all(doc_path.parent().expect("doc parent")).expect("create doc parent");
+        std::fs::write(&doc_path, "use strict;\n").expect("write doc");
+        let doc_uri = url::Url::from_file_path(&doc_path).expect("doc URI").to_string();
+
+        // Distinct configs so we can verify we got the inner one.
+        let mut outer_state = WorkspaceFolderState::new(repo_uri.clone());
+        outer_state.effective_workspace_config.include_paths = vec!["outer_lib".into()];
+        let mut inner_state = WorkspaceFolderState::new(app_uri.clone());
+        inner_state.effective_workspace_config.include_paths = vec!["inner_lib".into()];
+
+        // Register the outer FIRST. With first-match (the old behavior) this
+        // would mistakenly win for documents inside the inner folder.
+        let server = LspServer::default();
+        {
+            let mut folders = server.workspace_folders.lock();
+            folders.push(outer_state.clone());
+            folders.push(inner_state.clone());
+        }
+
+        // folder_for_doc_uri picks the deepest match.
+        let picked = server.folder_for_doc_uri(&doc_uri).expect("folder must match");
+        assert_eq!(picked.uri, app_uri, "expected inner folder for nested doc");
+
+        // config_for_doc returns the inner folder's config.
+        let cfg = server.config_for_doc(&doc_uri).expect("config must resolve");
+        assert_eq!(
+            cfg.include_paths,
+            vec!["inner_lib".to_string()],
+            "expected inner folder's includePaths for nested doc",
+        );
+
+        // include_paths_for_doc lists inner paths first, then outer as fallback.
+        let resolved = server.include_paths_for_doc(&doc_uri);
+        let inner_first = app.join("inner_lib");
+        let outer_fallback = repo.join("outer_lib");
+        let inner_pos =
+            resolved.iter().position(|p| p == &inner_first).expect("inner_lib must be present");
+        let outer_pos = resolved
+            .iter()
+            .position(|p| p == &outer_fallback)
+            .expect("outer_lib must be present as fallback");
+        assert!(
+            inner_pos < outer_pos,
+            "inner folder's includePaths must precede outer folder's; got {resolved:?}",
+        );
+
+        // search_scopes_for_doc puts the inner folder first.
+        let scopes = server.search_scopes_for_doc(&doc_uri);
+        assert!(!scopes.is_empty(), "expected at least one scope");
+        assert_eq!(scopes[0].uri, app_uri, "first scope must be inner folder");
+    }
+
+    /// Documents outside every workspace folder must produce a `None`
+    /// `folder_for_doc_uri`. The fallback "all folders, registration order"
+    /// behavior is exercised separately by `search_scopes_for_doc`.
+    #[test]
+    fn workspace_folder_outside_all_folders_returns_none() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let inside = temp.path().join("inside");
+        let outside = temp.path().join("outside");
+        std::fs::create_dir_all(&inside).expect("create inside");
+        std::fs::create_dir_all(&outside).expect("create outside");
+
+        let inside_uri = url::Url::from_file_path(&inside).expect("inside URI").to_string();
+        let doc_uri =
+            url::Url::from_file_path(outside.join("doc.pl")).expect("doc URI").to_string();
+
+        let server = LspServer::default();
+        server.workspace_folders.lock().push(WorkspaceFolderState::new(inside_uri));
+        assert!(
+            server.folder_for_doc_uri(&doc_uri).is_none(),
+            "doc outside all folders must not match any folder",
+        );
+        assert!(server.config_for_doc(&doc_uri).is_none());
     }
 
     #[test]

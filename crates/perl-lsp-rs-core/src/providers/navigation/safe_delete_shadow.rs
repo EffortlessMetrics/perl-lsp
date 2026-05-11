@@ -32,6 +32,8 @@ use perl_workspace::semantic_shadow_compare::{
     summarize_identities,
 };
 
+use super::refactor_receipt_helpers::{blocker_reason_list, blocker_ux_list};
+
 /// Result of a shadow-compared safe-delete request.
 ///
 /// Contains the legacy safe-delete result (which callers should use during
@@ -79,7 +81,7 @@ pub fn safe_delete_shadow<Q: SemanticQueries>(
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
-        Vec::new(),
+        safe_delete_plan_receipt_notes(legacy_allowed, &plan, "shadow"),
         safe_delete_plan_fact_source_traces(&plan, ProviderFallbackState::Shadow),
     );
 
@@ -166,7 +168,7 @@ pub fn safe_delete_cutover<Q: SemanticQueries>(
         ShadowQueryInput { symbol: symbol.to_string() },
         old_summary,
         new_summary,
-        Vec::new(),
+        safe_delete_plan_receipt_notes(legacy_allowed, &plan, "cutover"),
         safe_delete_plan_fact_source_traces(&plan, ProviderFallbackState::Primary),
     );
 
@@ -220,6 +222,32 @@ fn safe_delete_plan_to_summary(plan: &SafeDeletePlan) -> ShadowResultSummary {
     }
 
     summarize_identities(Some(identities))
+}
+
+fn safe_delete_plan_receipt_notes(
+    legacy_allowed: bool,
+    plan: &SafeDeletePlan,
+    phase: &str,
+) -> Vec<String> {
+    let blocker_reasons = blocker_reason_list(&plan.blockers);
+    let has_dynamic_boundary =
+        plan.blockers.iter().any(|blocker| blocker.reason == PlanBlockerReason::DynamicBoundary);
+    let has_generated_member =
+        plan.blockers.iter().any(|blocker| blocker.reason == PlanBlockerReason::GeneratedMember);
+    let has_low_confidence = plan.blockers.iter().any(|blocker| {
+        matches!(
+            blocker.reason,
+            PlanBlockerReason::AmbiguousReference | PlanBlockerReason::UnclassifiedOccurrence
+        )
+    });
+    let fallback_state = if plan.blockers.is_empty() { "allowed" } else { "blocked" };
+
+    vec![format!(
+        "safe-delete {phase} receipt: legacy_allowed={legacy_allowed}; compiler_plan_safe={}; blocker_count={}; blocker_reasons={blocker_reasons}; dynamic_boundary={has_dynamic_boundary}; generated_member={has_generated_member}; stale_fact=false; low_confidence={has_low_confidence}; fallback_state={fallback_state}; blocker_ux={}",
+        plan.blockers.is_empty(),
+        plan.blockers.len(),
+        blocker_ux_list(&plan.blockers)
+    )]
 }
 
 fn safe_delete_plan_fact_source_traces(
@@ -488,6 +516,55 @@ mod tests {
         assert_eq!(trace.provenance, Provenance::DynamicBoundary);
         assert_eq!(trace.confidence, Confidence::High);
         assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        Ok(())
+    }
+
+    #[test]
+    fn safe_delete_runtime_blocker_ux_receipt_labels_dynamic_generated_and_low_confidence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = SafeDeletePlan::new(
+            EntityId(1),
+            "accessor".to_string(),
+            vec![
+                PlanBlocker::new(
+                    PlanBlockerReason::DynamicBoundary,
+                    None,
+                    "AUTOLOAD may dispatch to this symbol".to_string(),
+                ),
+                PlanBlocker::new(
+                    PlanBlockerReason::GeneratedMember,
+                    None,
+                    "framework-generated member needs a generator-aware delete plan".to_string(),
+                ),
+                PlanBlocker::new(
+                    PlanBlockerReason::AmbiguousReference,
+                    None,
+                    "low-confidence reference could not be classified".to_string(),
+                ),
+            ],
+            vec![],
+        );
+        let queries = StubSemanticQueries { safe_delete_plan_result: plan };
+
+        let outcome = safe_delete_cutover(true, &queries, EntityId(1), "accessor");
+        let notes = outcome.receipt.notes.join(" ");
+
+        assert!(notes.contains("blocker_count=3"), "missing blocker count in {}", notes);
+        assert!(
+            notes.contains("blocker_reasons=dynamic_boundary,generated_member,ambiguous_reference"),
+            "missing blocker reasons in {}",
+            notes
+        );
+        assert!(notes.contains("dynamic_boundary=true"), "missing dynamic boundary in {}", notes);
+        assert!(notes.contains("generated_member=true"), "missing generated member in {}", notes);
+        assert!(notes.contains("low_confidence=true"), "missing low confidence in {}", notes);
+        assert!(
+            notes.contains("AUTOLOAD may dispatch")
+                && notes.contains("generator-aware delete plan")
+                && notes.contains("low-confidence reference"),
+            "missing user-facing blocker descriptions in {}",
+            notes
+        );
         Ok(())
     }
 

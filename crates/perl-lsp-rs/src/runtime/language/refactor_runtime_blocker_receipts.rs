@@ -1,0 +1,293 @@
+//! Test-only runtime receipts for refactor blocker UX.
+
+use super::super::*;
+use crate::protocol::{req_position, req_uri};
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+use crate::runtime::routing::{IndexAccessMode, route_index_access};
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+use perl_lsp_rs_core::providers::navigation::{
+    rename_shadow::{RenameCutoverResult, rename_cutover},
+    safe_delete_shadow::{SafeDeleteCutoverResult, safe_delete_cutover},
+};
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+use perl_semantic_facts::PlanBlocker;
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
+
+impl LspServer {
+    /// Test-only receipt for rename blocker UX proof.
+    ///
+    /// Calls the live rename handler and compares the result with the
+    /// compiler-fact rename plan from the same runtime workspace index. This is
+    /// receipt-only and does not cut live rename over to compiler facts.
+    pub(crate) fn rename_runtime_blocker_ux_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let live_provider_result = self.handle_rename_workspace(params.clone())?;
+        let live_provider_edit_count = lsp_workspace_edit_count(live_provider_result.as_ref());
+
+        #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
+        {
+            Ok(Some(json!({
+                "provider": "rename",
+                "live_provider_result": live_provider_result,
+                "live_provider_edit_count": live_provider_edit_count,
+                "compiler_receipt": null,
+                "no_live_behavior_change": true,
+                "note": "rename blocker UX proof unavailable without workspace semantic queries"
+            })))
+        }
+
+        #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+        {
+            let Some(params) = params else {
+                return Ok(Some(json!({
+                    "provider": "rename",
+                    "live_provider_result": live_provider_result,
+                    "live_provider_edit_count": live_provider_edit_count,
+                    "compiler_receipt": null,
+                    "no_live_behavior_change": true,
+                    "note": "rename blocker UX proof missing request params"
+                })));
+            };
+
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
+            let Some(new_name) = params.get("newName").and_then(Value::as_str) else {
+                return Ok(Some(json!({
+                    "provider": "rename",
+                    "live_provider_result": live_provider_result,
+                    "live_provider_edit_count": live_provider_edit_count,
+                    "compiler_receipt": null,
+                    "no_live_behavior_change": true,
+                    "note": "rename blocker UX proof missing newName"
+                })));
+            };
+            let Some((symbol, byte_offset)) = self.refactor_runtime_symbol(uri, line, character)
+            else {
+                return Ok(Some(json!({
+                    "provider": "rename",
+                    "live_provider_result": live_provider_result,
+                    "live_provider_edit_count": live_provider_edit_count,
+                    "compiler_receipt": null,
+                    "no_live_behavior_change": true,
+                    "note": "rename blocker UX proof found no symbol at request position"
+                })));
+            };
+
+            let compiler_receipt = match route_index_access(self.coordinator()) {
+                IndexAccessMode::Full(coordinator) => {
+                    let index = coordinator.index();
+                    index
+                        .with_semantic_queries_for_uri(uri, |file_id, queries| {
+                            let entity_id = refactor_entity_id(
+                                &queries,
+                                file_id,
+                                byte_offset,
+                                &symbol,
+                            )?;
+                            let outcome = rename_cutover(
+                                live_provider_edit_count > 0,
+                                &queries,
+                                entity_id,
+                                new_name,
+                            );
+                            let (compiler_plan_edit_count, blockers) = match &outcome.result {
+                                RenameCutoverResult::Allowed { edits } => (edits.len(), Vec::new()),
+                                RenameCutoverResult::Blocked { blockers, edits } => {
+                                    (edits.len(), blockers.clone())
+                                }
+                            };
+                            let mut receipt = outcome.receipt;
+                            receipt.notes.push(format!(
+                                "rename runtime blocker UX: live_provider_edits={}; compiler_plan_edits={compiler_plan_edit_count}; blocker_count={}; blocker_reasons={}; blocker_ux={}; requires_confirmation={}; no live refactor behavior change",
+                                live_provider_edit_count,
+                                blockers.len(),
+                                runtime_blocker_reasons(&blockers),
+                                runtime_blocker_descriptions(&blockers),
+                                !blockers.is_empty()
+                            ));
+                            Some(receipt)
+                        })
+                        .flatten()
+                }
+                IndexAccessMode::Partial(_) | IndexAccessMode::None => None,
+            };
+
+            Ok(Some(json!({
+                "provider": "rename",
+                "symbol": symbol,
+                "live_provider_result": live_provider_result,
+                "live_provider_edit_count": live_provider_edit_count,
+                "compiler_receipt": compiler_receipt,
+                "no_live_behavior_change": true
+            })))
+        }
+    }
+
+    /// Test-only receipt for safe-delete blocker UX proof.
+    ///
+    /// There is no live symbol-level safe-delete request yet, so this records
+    /// the compiler-fact safe-delete plan from the runtime workspace index and
+    /// keeps the live behavior field empty by construction.
+    pub(crate) fn safe_delete_runtime_blocker_ux_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let live_provider_result = Some(json!({"changes": {}}));
+        let live_provider_edit_count = lsp_workspace_edit_count(live_provider_result.as_ref());
+
+        #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
+        {
+            Ok(Some(json!({
+                "provider": "safe_delete",
+                "live_provider_result": live_provider_result,
+                "live_provider_edit_count": live_provider_edit_count,
+                "compiler_receipt": null,
+                "no_live_behavior_change": true,
+                "note": "safe-delete blocker UX proof unavailable without workspace semantic queries"
+            })))
+        }
+
+        #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+        {
+            let Some(params) = params else {
+                return Ok(Some(json!({
+                    "provider": "safe_delete",
+                    "live_provider_result": live_provider_result,
+                    "live_provider_edit_count": live_provider_edit_count,
+                    "compiler_receipt": null,
+                    "no_live_behavior_change": true,
+                    "note": "safe-delete blocker UX proof missing request params"
+                })));
+            };
+
+            let uri = req_uri(&params)?;
+            let (line, character) = req_position(&params)?;
+            let Some((symbol, byte_offset)) = self.refactor_runtime_symbol(uri, line, character)
+            else {
+                return Ok(Some(json!({
+                    "provider": "safe_delete",
+                    "live_provider_result": live_provider_result,
+                    "live_provider_edit_count": live_provider_edit_count,
+                    "compiler_receipt": null,
+                    "no_live_behavior_change": true,
+                    "note": "safe-delete blocker UX proof found no symbol at request position"
+                })));
+            };
+
+            let compiler_receipt = match route_index_access(self.coordinator()) {
+                IndexAccessMode::Full(coordinator) => {
+                    let index = coordinator.index();
+                    index
+                        .with_semantic_queries_for_uri(uri, |file_id, queries| {
+                            let entity_id = refactor_entity_id(
+                                &queries,
+                                file_id,
+                                byte_offset,
+                                &symbol,
+                            )?;
+                            let outcome =
+                                safe_delete_cutover(false, &queries, entity_id, &symbol);
+                            let blockers = match &outcome.result {
+                                SafeDeleteCutoverResult::Allowed => Vec::new(),
+                                SafeDeleteCutoverResult::Blocked { blockers } => blockers.clone(),
+                            };
+                            let mut receipt = outcome.receipt;
+                            receipt.notes.push(format!(
+                                "safe-delete runtime blocker UX: live_provider_edits={}; compiler_plan_safe={}; blocker_count={}; blocker_reasons={}; blocker_ux={}; requires_confirmation={}; no live refactor behavior change",
+                                live_provider_edit_count,
+                                blockers.is_empty(),
+                                blockers.len(),
+                                runtime_blocker_reasons(&blockers),
+                                runtime_blocker_descriptions(&blockers),
+                                !blockers.is_empty()
+                            ));
+                            Some(receipt)
+                        })
+                        .flatten()
+                }
+                IndexAccessMode::Partial(_) | IndexAccessMode::None => None,
+            };
+
+            Ok(Some(json!({
+                "provider": "safe_delete",
+                "symbol": symbol,
+                "live_provider_result": live_provider_result,
+                "live_provider_edit_count": live_provider_edit_count,
+                "compiler_receipt": compiler_receipt,
+                "no_live_behavior_change": true
+            })))
+        }
+    }
+
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    fn refactor_runtime_symbol(
+        &self,
+        uri: &str,
+        line: u32,
+        character: u32,
+    ) -> Option<(String, u32)> {
+        let documents = self.documents_guard();
+        let doc = self.get_document(&documents, uri)?;
+        let offset = self.pos16_to_offset(doc, line, character);
+        let symbol = self.get_token_at_position(&doc.text, offset);
+        if symbol.is_empty() {
+            return None;
+        }
+        Some((symbol, u32::try_from(offset).ok()?))
+    }
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn refactor_entity_id<Q: SemanticQueries>(
+    queries: &Q,
+    file_id: perl_semantic_facts::FileId,
+    byte_offset: u32,
+    symbol: &str,
+) -> Option<perl_semantic_facts::EntityId> {
+    queries
+        .symbol_at(file_id, byte_offset)
+        .and_then(|(_, occurrence)| occurrence.entity_id)
+        .or_else(|| {
+            let context = QueryContext::new(file_id, None, Some(byte_offset));
+            queries.definitions(symbol, &context).first().map(|candidate| candidate.entity_id)
+        })
+}
+
+fn lsp_workspace_edit_count(value: Option<&Value>) -> usize {
+    let Some(value) = value else {
+        return 0;
+    };
+
+    let changes_count = value
+        .get("changes")
+        .and_then(Value::as_object)
+        .map(|changes| {
+            changes.values().filter_map(Value::as_array).map(std::vec::Vec::len).sum::<usize>()
+        })
+        .unwrap_or(0);
+
+    let document_changes_count =
+        value.get("documentChanges").and_then(Value::as_array).map(std::vec::Vec::len).unwrap_or(0);
+
+    changes_count + document_changes_count
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn runtime_blocker_reasons(blockers: &[PlanBlocker]) -> String {
+    if blockers.is_empty() {
+        return "none".to_string();
+    }
+    blockers.iter().map(|blocker| format!("{:?}", blocker.reason)).collect::<Vec<_>>().join(",")
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn runtime_blocker_descriptions(blockers: &[PlanBlocker]) -> String {
+    if blockers.is_empty() {
+        return "none".to_string();
+    }
+    blockers.iter().map(|blocker| blocker.description.as_str()).collect::<Vec<_>>().join(" | ")
+}

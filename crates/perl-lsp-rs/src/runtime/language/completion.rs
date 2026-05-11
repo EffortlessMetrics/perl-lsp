@@ -41,11 +41,15 @@ fn get_snippet_simple_regex() -> Option<&'static Regex> {
     SNIPPET_SIMPLE_RE.get_or_init(|| Regex::new(r"\$\d+")).as_ref().ok()
 }
 
+// PERL5LIB is controlled by `usePerl5lib`, not `useSystemInc`. `useSystemInc`
+// controls interpreter startup `@INC` only. Keep this aligned with
+// `resolve_module_to_path_with_doc_at_offset` so completion, PL701, hover, and
+// goto-definition agree.
 fn perl5lib_paths_for_completion(
     config: &perl_lsp_rs_core::config::WorkspaceConfig,
     perl5lib_value: Option<&str>,
 ) -> Vec<String> {
-    if !config.use_system_inc {
+    if !config.use_perl5lib {
         return Vec::new();
     }
 
@@ -108,15 +112,12 @@ impl LspServer {
             }
         }
 
-        // Read effective include paths from the config clone (workspace paths only here;
-        // PERL5LIB is gated below on use_system_inc).
+        // Read effective include paths from the config clone (workspace paths and PERL5LIB).
         // The clone is lightweight — it does not trigger the system @INC subprocess.
         if let Some(config) = self.config_for_doc(uri) {
-            // PERL5LIB comes from the system environment and is treated as a "system"
-            // source for completion purposes.  Only merge it into the completion roots
-            // after the user opts in via useSystemInc, matching the behaviour of the
-            // system @INC source.  Passing an empty slice omits PERL5LIB without
-            // changing anything else in effective_include_paths.
+            // PERL5LIB is gated on `usePerl5lib` via `perl5lib_paths_for_completion`,
+            // independent of `useSystemInc`. `useSystemInc` controls only interpreter
+            // startup `@INC`, handled separately below.
             let perl5lib_value = std::env::var("PERL5LIB").ok();
             let perl5lib_paths = perl5lib_paths_for_completion(&config, perl5lib_value.as_deref());
             let effective_paths = config.effective_include_paths(&perl5lib_paths);
@@ -153,8 +154,13 @@ impl LspServer {
         // use_system_inc=true would spawn `perl -e 'print join("\n", @INC)'`.
         if include_system_inc {
             let mut folders = self.workspace_folders.lock();
+            // Pick the most-specific (deepest) matching folder so the cache is
+            // written back to the same authoritative folder that
+            // `config_for_doc` and `folder_for_doc_uri` resolve.
+            let best_uri = super::super::best_workspace_folder_for_doc(&folders, uri)
+                .map(|folder| folder.uri.clone());
             if let Some(folder) =
-                folders.iter_mut().find(|f| super::super::workspace_folder_matches_doc_uri(f, uri))
+                best_uri.and_then(|best_uri| folders.iter_mut().find(|f| f.uri == best_uri))
             {
                 for path in folder.effective_workspace_config.get_system_inc() {
                     if seen_system.insert(path.clone()) {
@@ -1593,10 +1599,12 @@ mod tests {
         Ok(())
     }
 
-    /// Verify that PERL5LIB paths are excluded from completion roots when
-    /// `use_system_inc` is disabled, and included when it is enabled.
+    /// PERL5LIB inclusion in completion inputs is gated on `use_perl5lib`, NOT
+    /// `use_system_inc`. `use_system_inc` controls interpreter startup `@INC`
+    /// only. This test walks the four-cell matrix to ensure the two flags are
+    /// truly independent for the PERL5LIB completion source.
     #[test]
-    fn test_perl5lib_excluded_from_completion_roots_when_system_inc_disabled()
+    fn perl5lib_completion_gate_is_use_perl5lib_independent_of_use_system_inc()
     -> Result<(), Box<dyn std::error::Error>> {
         use perl_lsp_rs_core::config::WorkspaceConfig;
         use tempfile::TempDir;
@@ -1606,23 +1614,23 @@ mod tests {
         std::fs::create_dir_all(&perl5lib_dir)?;
         let perl5lib_value = perl5lib_dir.to_string_lossy().to_string();
 
-        let mut config = WorkspaceConfig::default();
-        config.use_system_inc = false;
+        // (use_perl5lib, use_system_inc, expected_perl5lib_present)
+        let cells: &[(bool, bool, bool)] =
+            &[(true, false, true), (true, true, true), (false, true, false), (false, false, false)];
 
-        let paths_no_p5l = perl5lib_paths_for_completion(&config, Some(&perl5lib_value));
-        assert!(
-            !paths_no_p5l.iter().any(|p| p == &perl5lib_value),
-            "PERL5LIB dir must not appear in completion inputs when use_system_inc=false; \
-             got: {paths_no_p5l:?}"
-        );
+        for &(use_perl5lib, use_system_inc, expected) in cells {
+            let mut config = WorkspaceConfig::default();
+            config.use_perl5lib = use_perl5lib;
+            config.use_system_inc = use_system_inc;
 
-        config.use_system_inc = true;
-        let paths_with_p5l = perl5lib_paths_for_completion(&config, Some(&perl5lib_value));
-        assert!(
-            paths_with_p5l.iter().any(|p| p == &perl5lib_value),
-            "PERL5LIB dir must appear in completion inputs after use_system_inc=true; \
-             got: {paths_with_p5l:?}"
-        );
+            let paths = perl5lib_paths_for_completion(&config, Some(&perl5lib_value));
+            let has = paths.iter().any(|p| p == &perl5lib_value);
+            assert_eq!(
+                has, expected,
+                "cell (use_perl5lib={use_perl5lib}, use_system_inc={use_system_inc}): \
+                 expected PERL5LIB present={expected}, got {has}; paths={paths:?}"
+            );
+        }
 
         Ok(())
     }

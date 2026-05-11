@@ -32,6 +32,8 @@ use perl_workspace::semantic_shadow_compare::{
     summarize_identities,
 };
 
+use super::refactor_receipt_helpers::{blocker_reason_list, blocker_ux_list};
+
 /// Result of a shadow-compared rename request.
 ///
 /// Contains the legacy rename result (which callers should use during the
@@ -79,7 +81,7 @@ pub fn rename_shadow<Q: SemanticQueries>(
         ShadowQueryInput { symbol: new_name.to_string() },
         old_summary,
         new_summary,
-        Vec::new(),
+        rename_plan_receipt_notes(legacy_allowed, &plan, "shadow"),
         rename_plan_fact_source_traces(&plan, ProviderFallbackState::Shadow),
     );
 
@@ -171,7 +173,7 @@ pub fn rename_cutover<Q: SemanticQueries>(
         ShadowQueryInput { symbol: new_name.to_string() },
         old_summary,
         new_summary,
-        Vec::new(),
+        rename_plan_receipt_notes(legacy_allowed, &plan, "cutover"),
         rename_plan_fact_source_traces(&plan, ProviderFallbackState::Primary),
     );
 
@@ -225,6 +227,28 @@ fn rename_plan_to_summary(plan: &RenamePlan) -> ShadowResultSummary {
     }
 
     summarize_identities(Some(identities))
+}
+
+fn rename_plan_receipt_notes(legacy_allowed: bool, plan: &RenamePlan, phase: &str) -> Vec<String> {
+    let blocker_reasons = blocker_reason_list(&plan.blockers);
+    let has_dynamic_boundary =
+        plan.blockers.iter().any(|blocker| blocker.reason == PlanBlockerReason::DynamicBoundary);
+    let has_generated_member =
+        plan.blockers.iter().any(|blocker| blocker.reason == PlanBlockerReason::GeneratedMember);
+    let has_low_confidence = plan.blockers.iter().any(|blocker| {
+        matches!(
+            blocker.reason,
+            PlanBlockerReason::AmbiguousReference | PlanBlockerReason::UnclassifiedOccurrence
+        )
+    });
+    let fallback_state = if plan.blockers.is_empty() { "allowed" } else { "blocked" };
+
+    vec![format!(
+        "rename {phase} receipt: legacy_allowed={legacy_allowed}; compiler_plan_edits={}; blocker_count={}; blocker_reasons={blocker_reasons}; dynamic_boundary={has_dynamic_boundary}; generated_member={has_generated_member}; stale_fact=false; low_confidence={has_low_confidence}; fallback_state={fallback_state}; blocker_ux={}",
+        plan.edits.len(),
+        plan.blockers.len(),
+        blocker_ux_list(&plan.blockers)
+    )]
 }
 
 fn rename_plan_fact_source_traces(
@@ -584,6 +608,57 @@ mod tests {
         assert_eq!(blocker_trace.provenance, Provenance::DynamicBoundary);
         assert_eq!(blocker_trace.confidence, Confidence::High);
         assert_eq!(blocker_trace.fallback_state, ProviderFallbackState::Blocked);
+        Ok(())
+    }
+
+    #[test]
+    fn rename_runtime_blocker_ux_receipt_labels_dynamic_generated_and_low_confidence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = RenamePlan::new(
+            EntityId(1),
+            "old_name".to_string(),
+            "new_name".to_string(),
+            vec![make_edit(10, PlannedEditCategory::Definition)],
+            vec![
+                PlanBlocker::new(
+                    PlanBlockerReason::DynamicBoundary,
+                    None,
+                    "symbolic reference may target this symbol".to_string(),
+                ),
+                PlanBlocker::new(
+                    PlanBlockerReason::GeneratedMember,
+                    None,
+                    "generated member needs a framework-aware edit plan".to_string(),
+                ),
+                PlanBlocker::new(
+                    PlanBlockerReason::AmbiguousReference,
+                    None,
+                    "ambiguous reference has multiple candidates".to_string(),
+                ),
+            ],
+            vec![],
+        );
+        let queries = StubSemanticQueries { rename_plan_result: plan };
+
+        let outcome = rename_cutover(true, &queries, EntityId(1), "new_name");
+        let notes = outcome.receipt.notes.join(" ");
+
+        assert!(notes.contains("blocker_count=3"), "missing blocker count in {}", notes);
+        assert!(
+            notes.contains("blocker_reasons=dynamic_boundary,generated_member,ambiguous_reference"),
+            "missing blocker reasons in {}",
+            notes
+        );
+        assert!(notes.contains("dynamic_boundary=true"), "missing dynamic boundary in {}", notes);
+        assert!(notes.contains("generated_member=true"), "missing generated member in {}", notes);
+        assert!(notes.contains("low_confidence=true"), "missing low confidence in {}", notes);
+        assert!(
+            notes.contains("symbolic reference may target this symbol")
+                && notes.contains("framework-aware edit plan")
+                && notes.contains("ambiguous reference has multiple candidates"),
+            "missing user-facing blocker descriptions in {}",
+            notes
+        );
         Ok(())
     }
 
