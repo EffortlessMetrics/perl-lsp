@@ -16,9 +16,19 @@
 //! | `scenario_14_absolute_include_path` | absolute path in `includePaths` | resolves |
 //! | `scenario_14_no_lib_cancellation` | `use lib` then `no lib` | NOT resolved |
 //! | `scenario_14_findbin_relative` | `use FindBin; use lib "$FindBin::Bin/lib"` | resolves |
-//! | `scenario_14_system_inc` | system @INC via PERL5LIB | resolves |
+//! | `scenario_14_perl5lib_env` | PERL5LIB env var via `usePerl5lib=true` | resolves |
 //! | `scenario_14_nested_module_relative_include_path` | `includePaths: ["lib"]` + `Nested::Deep` | resolves |
 //! | `scenario_14_include_path_missing_module_consistency` | `includePaths: ["lib"]` + missing module | NOT resolved |
+//!
+//! ## Fixture semantics
+//!
+//! Completion and exact-symbol consumers use **different** fixture forms:
+//!
+//! - **Completion**: prefix fixtures (`use Gre<cursor>`) — completion works on partial input.
+//! - **PL701 / goto-definition / hover**: exact-module fixtures (`use GreetModule;`) — these
+//!   consumers operate on resolved symbols.
+//!
+//! Do NOT assert goto-definition on incomplete prefix text.
 //!
 //! ## Acceptance criteria
 //!
@@ -83,27 +93,6 @@ fn send_include_paths(harness: &UxHarness, paths: &[&str]) {
     std::thread::sleep(Duration::from_millis(200));
 }
 
-/// Enable system @INC resolution via workspace/didChangeConfiguration.
-fn send_use_system_inc(harness: &UxHarness, enabled: bool) {
-    harness
-        .client
-        .notify(
-            "workspace/didChangeConfiguration",
-            json!({
-                "settings": {
-                    "perl": {
-                        "workspace": {
-                            "useSystemInc": enabled,
-                            "usePerl5lib": true
-                        }
-                    }
-                }
-            }),
-        )
-        .expect("didChangeConfiguration should not fail");
-    std::thread::sleep(Duration::from_millis(200));
-}
-
 /// Configure `usePerl5lib` and `useSystemInc` independently via
 /// workspace/didChangeConfiguration. Used to exercise the four-cell matrix
 /// of (usePerl5lib × useSystemInc) for PERL5LIB completion gating.
@@ -128,11 +117,18 @@ fn send_inc_settings(harness: &UxHarness, use_perl5lib: bool, use_system_inc: bo
 }
 
 /// Print a conformance summary row.
-fn print_conformance(mode: &str, pl701_ok: bool, def_ok: bool, hover_ok: bool) {
+fn print_conformance(
+    mode: &str,
+    pl701_ok: bool,
+    completion_ok: bool,
+    def_ok: bool,
+    hover_ok: bool,
+) {
     eprintln!(
-        "[conformance] mode={} | PL701={} | goto-def={} | hover={}",
+        "[conformance] mode={} | PL701={} | completion={} | goto-def={} | hover={}",
         mode,
         if pl701_ok { "PASS" } else { "FAIL" },
+        if completion_ok { "PASS" } else { "FAIL" },
         if def_ok { "PASS" } else { "FAIL" },
         if hover_ok { "PASS" } else { "FAIL" },
     );
@@ -221,7 +217,17 @@ fn scenario_14_relative_include_path() {
     // Hover resolving = either non-null result, or at minimum no error.
     let hover_ok = true; // hover returning null is acceptable in degraded mode
 
-    print_conformance("relative_include_path", pl701_absent, def_resolves, hover_ok);
+    // Completion check: switch to prefix fixture so completion works on partial input.
+    // Note: this is a separate fixture from the exact-module fixture above — do NOT
+    // assert goto-def on the prefix fixture (see fixture-semantics rule).
+    harness
+        .change_file_full("fixture.pl", RELATIVE_INCLUDE_COMPLETION_SOURCE)
+        .expect("didChange to completion fixture should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+    let completions = harness.completion("fixture.pl", 2, 7).expect("completion must not error");
+    let completion_ok = completion_has_module(&completions, "GreetModule");
+
+    print_conformance("relative_include_path", pl701_absent, completion_ok, def_resolves, hover_ok);
 
     // Consistency check: PL701 and definition must agree.
     // If definition resolves, PL701 must not fire (and vice versa).
@@ -341,6 +347,15 @@ my $result = LexicalModule::compute();\n\
 print \"$result\\n\";\n\
 ";
 
+/// Completion prefix fixture: include the `use lib` pragma for context so the
+/// resolver sees the same path configuration.
+const LEXICAL_USE_LIB_COMPLETION_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use lib 'lib';\n\
+use Lex\n\
+";
+
 const LEXICAL_MODULE: &str = "\
 package LexicalModule;\n\
 \n\
@@ -383,7 +398,15 @@ fn scenario_14_use_lib_lexical() {
     let hover_result = harness.hover("fixture.pl", 3, 4).expect("hover must not error");
     let hover_ok = true; // degraded null is acceptable
 
-    print_conformance("lexical_use_lib", pl701_absent, def_resolves, hover_ok);
+    // Completion check: switch to prefix fixture (includes `use lib` for context).
+    harness
+        .change_file_full("fixture.pl", LEXICAL_USE_LIB_COMPLETION_SOURCE)
+        .expect("didChange to completion fixture should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+    let completions = harness.completion("fixture.pl", 3, 7).expect("completion must not error");
+    let completion_ok = completion_has_module(&completions, "LexicalModule");
+
+    print_conformance("lexical_use_lib", pl701_absent, completion_ok, def_resolves, hover_ok);
 
     // Consistency check.
     if def_resolves && !pl701_absent {
@@ -424,6 +447,13 @@ use strict;\n\
 use warnings;\n\
 use AbsoluteModule;\n\
 print AbsoluteModule::value();\n\
+";
+
+/// Completion prefix fixture for absolute include path scenario.
+const ABSOLUTE_INCLUDE_COMPLETION_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use Abs\n\
 ";
 
 const ABSOLUTE_INCLUDE_MODULE: &str = "\
@@ -470,7 +500,16 @@ fn scenario_14_absolute_include_path() {
     let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
     let hover_ok = true;
 
-    print_conformance("absolute_include_path", pl701_absent, def_resolves, hover_ok);
+    // Completion check: switch to prefix fixture (server already configured with
+    // the absolute includePath from send_include_paths above).
+    harness
+        .change_file_full("fixture.pl", ABSOLUTE_INCLUDE_COMPLETION_SOURCE)
+        .expect("didChange to completion fixture should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+    let completions = harness.completion("fixture.pl", 2, 7).expect("completion must not error");
+    let completion_ok = completion_has_module(&completions, "AbsoluteModule");
+
+    print_conformance("absolute_include_path", pl701_absent, completion_ok, def_resolves, hover_ok);
 
     if def_resolves && !pl701_absent {
         panic!(
@@ -515,6 +554,16 @@ use GoneModule;\n\
 print \"unreachable\\n\";\n\
 ";
 
+/// Completion prefix fixture for no_lib_cancellation: `no lib` cancels the
+/// earlier `use lib`, so `GoneModule` should NOT appear in completion.
+const NO_LIB_CANCEL_COMPLETION_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use lib 'lib';\n\
+no lib 'lib';\n\
+use Gone\n\
+";
+
 const GONE_MODULE: &str = "\
 package GoneModule;\n\
 \n\
@@ -556,9 +605,22 @@ fn scenario_14_no_lib_cancellation() {
 
     let hover_result = harness.hover("fixture.pl", 4, 4).expect("hover must not error");
 
+    // Completion check (negative): `GoneModule` should NOT appear since `no lib`
+    // cancelled the path. Consumer-divergence is acceptable here — completion
+    // may not fully enforce `no lib` semantics.
+    harness
+        .change_file_full("fixture.pl", NO_LIB_CANCEL_COMPLETION_SOURCE)
+        .expect("didChange to completion fixture should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+    let completions = harness.completion("fixture.pl", 4, 8).expect("completion must not error");
+    let completion_absent = !completion_has_module(&completions, "GoneModule");
+    // "ok" for negative = module not in completion
+    let completion_ok = completion_absent;
+
     print_conformance(
         "no_lib_cancellation",
         pl701_fires,            // "ok" for negative = PL701 fired
+        completion_ok,          // "ok" for negative = module absent from completion
         def_empty,              // "ok" for negative = definition returned empty
         hover_result.is_none(), // "ok" for negative = hover returned null
     );
@@ -611,6 +673,17 @@ my $val = FindBinModule::value();\n\
 print \"$val\\n\";\n\
 ";
 
+/// Completion prefix fixture for FindBin-relative scenario.
+/// The `use FindBin` and `use lib` lines must be present so the resolver
+/// sees the same path configuration as the exact-module fixture.
+const FINDBIN_COMPLETION_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use FindBin;\n\
+use lib \"$FindBin::Bin/lib\";\n\
+use Find\n\
+";
+
 const FINDBIN_MODULE: &str = "\
 package FindBinModule;\n\
 \n\
@@ -653,7 +726,16 @@ fn scenario_14_findbin_relative() {
     let hover_result = harness.hover("fixture.pl", 4, 4).expect("hover must not error");
     let hover_ok = true;
 
-    print_conformance("findbin_relative", pl701_absent, def_resolves, hover_ok);
+    // Completion check: switch to prefix fixture (includes FindBin pragmas for context).
+    harness
+        .change_file_full("fixture.pl", FINDBIN_COMPLETION_SOURCE)
+        .expect("didChange to completion fixture should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+    // `use Find` is at line 4, col 8 (0-indexed: line 4, position after "use Find")
+    let completions = harness.completion("fixture.pl", 4, 8).expect("completion must not error");
+    let completion_ok = completion_has_module(&completions, "FindBinModule");
+
+    print_conformance("findbin_relative", pl701_absent, completion_ok, def_resolves, hover_ok);
 
     // Consistency check.
     if def_resolves && !pl701_absent {
@@ -683,8 +765,13 @@ fn scenario_14_findbin_relative() {
 }
 
 // =============================================================================
-// Fixture 5: system @INC via PERL5LIB
+// Fixture 5: PERL5LIB env var (`usePerl5lib=true`)
 // =============================================================================
+//
+// Renamed from `scenario_14_system_inc` — the fixture has always exercised
+// PERL5LIB (not interpreter startup @INC). After PR #8493, PERL5LIB visibility
+// is controlled by `usePerl5lib` alone. We use `send_inc_settings(true, false)`
+// to make the configuration explicit: PERL5LIB enabled, system @INC disabled.
 
 const SYSTEM_INC_SOURCE: &str = "\
 use strict;\n\
@@ -708,14 +795,21 @@ sub run {\n\
 1;\n\
 ";
 
+/// Completion prefix fixture for PERL5LIB scenario.
+const PERL5LIB_ENV_COMPLETION_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use Sys\n\
+";
+
 #[test]
-fn scenario_14_system_inc() {
+fn scenario_14_perl5lib_env() {
     if !binary_available() {
-        eprintln!("SKIP scenario_14_system_inc: perl-lsp binary not found");
+        eprintln!("SKIP scenario_14_perl5lib_env: perl-lsp binary not found");
         return;
     }
 
-    // Create a separate tempdir to act as the system @INC entry.
+    // Create a separate tempdir to act as the PERL5LIB entry.
     // The module lives there, not inside the harness workspace.
     let system_dir = tempfile::tempdir().expect("Failed to create system tempdir");
     let module_path = system_dir.path().join("SystemModule.pm");
@@ -730,8 +824,9 @@ fn scenario_14_system_inc() {
     )
     .expect("Failed to create UX harness");
 
-    // Enable PERL5LIB consumption.
-    send_use_system_inc(&harness, true);
+    // Enable PERL5LIB consumption via usePerl5lib=true; useSystemInc=false
+    // (PERL5LIB visibility no longer depends on useSystemInc after PR #8493).
+    send_inc_settings(&harness, true, false);
 
     harness.open_file("fixture.pl", SYSTEM_INC_SOURCE).expect("didOpen should succeed");
     std::thread::sleep(Duration::from_millis(500));
@@ -746,12 +841,20 @@ fn scenario_14_system_inc() {
     let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
     let hover_ok = true;
 
-    print_conformance("system_inc", pl701_absent, def_resolves, hover_ok);
+    // Completion check: switch to prefix fixture.
+    harness
+        .change_file_full("fixture.pl", PERL5LIB_ENV_COMPLETION_SOURCE)
+        .expect("didChange to completion fixture should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+    let completions = harness.completion("fixture.pl", 2, 7).expect("completion must not error");
+    let completion_ok = completion_has_module(&completions, "SystemModule");
+
+    print_conformance("perl5lib_env", pl701_absent, completion_ok, def_resolves, hover_ok);
 
     // Consistency check.
     if def_resolves && !pl701_absent {
         panic!(
-            "Consumer inconsistency (system_inc): goto-def resolved but PL701 fired.\n\
+            "Consumer inconsistency (perl5lib_env): goto-def resolved but PL701 fired.\n\
              goto-def: {:?}\n\
              diagnostics: {:?}",
             defs, diags
@@ -760,11 +863,11 @@ fn scenario_14_system_inc() {
 
     assert!(
         def_resolves,
-        "scenario_14_system_inc: definition should resolve SystemModule.pm via system @INC (PERL5LIB); defs={defs:?}"
+        "scenario_14_perl5lib_env: definition should resolve SystemModule.pm via PERL5LIB; defs={defs:?}"
     );
     assert!(
         pl701_absent,
-        "scenario_14_system_inc: PL701 should not fire when module resolves via system @INC; diagnostics={diags:?}"
+        "scenario_14_perl5lib_env: PL701 should not fire when module resolves via PERL5LIB; diagnostics={diags:?}"
     );
 
     if let Some(hover) = hover_result {
@@ -787,6 +890,13 @@ use warnings;\n\
 use Nested::Deep;\n\
 \n\
 print Nested::Deep::answer();\n\
+";
+
+/// Completion prefix fixture for nested module scenario.
+const NESTED_INCLUDE_COMPLETION_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use Nested::De\n\
 ";
 
 const NESTED_INCLUDE_MODULE: &str = "\
@@ -830,7 +940,22 @@ fn scenario_14_nested_module_relative_include_path() {
     let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
     let hover_ok = true;
 
-    print_conformance("nested_module_relative_include_path", pl701_absent, def_resolves, hover_ok);
+    // Completion check: switch to prefix fixture.
+    harness
+        .change_file_full("fixture.pl", NESTED_INCLUDE_COMPLETION_SOURCE)
+        .expect("didChange to completion fixture should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+    // `use Nested::De` — completion at line 2, col 14
+    let completions = harness.completion("fixture.pl", 2, 14).expect("completion must not error");
+    let completion_ok = completion_has_module(&completions, "Nested::Deep");
+
+    print_conformance(
+        "nested_module_relative_include_path",
+        pl701_absent,
+        completion_ok,
+        def_resolves,
+        hover_ok,
+    );
 
     if def_resolves && !pl701_absent {
         panic!(
@@ -879,6 +1004,14 @@ use warnings;\n\
 use Gree\n\
 ";
 
+/// Completion prefix fixture for the missing-module negative test.
+/// `MissingFromInclude` does not exist, so it should NOT appear in completion.
+const MISSING_MODULE_COMPLETION_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use MissingFro\n\
+";
+
 #[test]
 fn scenario_14_include_path_missing_module_consistency() {
     if !binary_available() {
@@ -908,9 +1041,20 @@ fn scenario_14_include_path_missing_module_consistency() {
 
     let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
 
+    // Completion check (negative): `MissingFromInclude` should NOT appear since
+    // the module does not exist in the include path.
+    harness
+        .change_file_full("fixture.pl", MISSING_MODULE_COMPLETION_SOURCE)
+        .expect("didChange to completion fixture should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+    let completions = harness.completion("fixture.pl", 2, 13).expect("completion must not error");
+    // "ok" for negative = module absent from completion
+    let completion_ok = !completion_has_module(&completions, "MissingFromInclude");
+
     print_conformance(
         "include_path_missing_module_consistency",
         pl701_fires,
+        completion_ok, // "ok" for negative = module absent from completion
         def_empty,
         hover_result.is_none(),
     );
@@ -1137,6 +1281,7 @@ fn scenario_14_perl5lib_completion_without_system_inc() {
     print_conformance(
         "perl5lib_completion_without_system_inc",
         pl701_absent,
+        completion_resolves,
         def_resolves,
         hover_ok,
     );
