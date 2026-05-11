@@ -176,7 +176,7 @@ impl<'a> Parser<'a> {
         );
 
         // Zip 1:1 in order (collector preserves input order)
-        for (decl, body) in pending.into_iter().zip(out.contents.into_iter()) {
+        for (decl, body) in pending.into_iter().zip(out.contents) {
             let mut attached = self.try_attach_heredoc_at_node(root, decl.decl_span, &body);
             if !attached {
                 // Fallback: when statement recovery mutates span boundaries, the exact

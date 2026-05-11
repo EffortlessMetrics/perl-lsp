@@ -25,7 +25,6 @@
 #![deny(unreachable_pub)]
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
-#![warn(clippy::all)]
 // This crate provides test helpers that intentionally panic on failure.
 // The must/must_some/must_err helpers are designed to panic in tests.
 #![allow(clippy::panic)]

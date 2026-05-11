@@ -3,8 +3,6 @@
 //! This module centralizes URI helpers that are frequently reused by LSP-facing
 //! crates while keeping filesystem URI conversion concerns in `perl-uri`.
 
-#![warn(clippy::all)]
-
 use url::Url;
 
 /// Normalize a URI to a consistent key for lookups.

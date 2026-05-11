@@ -1,6 +1,6 @@
 # Rust toolchain configuration for perl-lsp
-# MSRV: 1.93 (for OpenAI Codex compatibility)
+# MSRV: 1.95 (latest stable; tracks current CI Rust)
 [toolchain]
-channel = "1.93.1"
+channel = "1.95.0"
 components = ["rustfmt", "clippy"]
 profile = "minimal"

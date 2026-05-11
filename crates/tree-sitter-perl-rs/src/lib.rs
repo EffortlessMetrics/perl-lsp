@@ -44,7 +44,6 @@
 #![deny(clippy::print_stdout)]
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
-#![warn(clippy::all)]
 #![allow(
     clippy::module_name_repetitions,
     clippy::must_use_candidate,

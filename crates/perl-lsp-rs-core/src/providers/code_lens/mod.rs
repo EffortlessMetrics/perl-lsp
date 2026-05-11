@@ -23,7 +23,6 @@
 #![deny(unsafe_code)]
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
-#![warn(clippy::all)]
 
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition, WireRange};

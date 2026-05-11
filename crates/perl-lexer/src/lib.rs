@@ -113,7 +113,6 @@
 //! let ast = parser.parse().expect("should parse");
 //! ```
 
-#![warn(clippy::all)]
 #![allow(
     // Core allows for lexer code
     clippy::too_many_lines,
