@@ -99,6 +99,30 @@ impl LspServer {
         self.references_runtime_quality_receipt(params)
     }
 
+    /// Test-only receipt for rename runtime blocker UX proof.
+    ///
+    /// Calls the live rename handler and compares it with the compiler-fact
+    /// rename plan from the same runtime workspace index. This does not change
+    /// live refactor behavior.
+    pub fn test_rename_runtime_blocker_ux_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.rename_runtime_blocker_ux_receipt(params)
+    }
+
+    /// Test-only receipt for safe-delete runtime blocker UX proof.
+    ///
+    /// Records the compiler-fact safe-delete plan from the same runtime
+    /// workspace index without introducing a live symbol-level safe-delete
+    /// provider.
+    pub fn test_safe_delete_runtime_blocker_ux_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.safe_delete_runtime_blocker_ux_receipt(params)
+    }
+
     /// Test-only entrypoint for LSP `textDocument/completion`.
     ///
     /// Exercises completion functionality in tests. Returns completion
