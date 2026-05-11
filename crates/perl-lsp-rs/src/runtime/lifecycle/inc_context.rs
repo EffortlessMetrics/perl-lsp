@@ -26,8 +26,6 @@ pub(crate) struct EffectiveIncContext {
     pub(crate) doc_uri: Option<String>,
     /// Ordered, labeled include roots used for module resolution.
     pub(crate) effective_roots: Vec<IncRoot>,
-    /// Labeled search paths suitable for PL701 display.
-    pub(crate) search_display_paths: Vec<ModuleSearchPathDisplay>,
     /// Whether interpreter startup `@INC` participated.
     pub(crate) use_system_inc: bool,
     /// Whether `PERL5LIB` was eligible to participate.
@@ -56,6 +54,19 @@ fn search_display_paths(roots: &[IncRoot]) -> Vec<ModuleSearchPathDisplay> {
             )
         })
         .collect()
+}
+
+impl EffectiveIncContext {
+    /// Build labeled search paths suitable for PL701 display.
+    ///
+    /// This is intentionally lazy so completion can consume the same
+    /// `EffectiveIncContext` without allocating diagnostic display strings on
+    /// every keystroke.
+    #[must_use]
+    #[allow(dead_code)]
+    pub(crate) fn search_display_paths(&self) -> Vec<ModuleSearchPathDisplay> {
+        search_display_paths(&self.effective_roots)
+    }
 }
 
 impl LspServer {
@@ -130,7 +141,6 @@ impl LspServer {
             root,
             folder_uri,
             doc_uri: doc_uri.map(ToOwned::to_owned),
-            search_display_paths: search_display_paths(&effective_roots),
             effective_roots,
             use_system_inc: config.use_system_inc,
             use_perl5lib: config.use_perl5lib,
@@ -200,8 +210,9 @@ mod tests {
         assert_eq!(context.effective_roots.len(), 2);
         assert_eq!(context.effective_roots[0].kind, IncRootKind::FileLocalLexical);
         assert_eq!(context.effective_roots[1].kind, IncRootKind::WorkspaceRelative);
-        assert_eq!(context.search_display_paths[0].source, "use lib");
-        assert_eq!(context.search_display_paths[1].source, "workspace includePaths");
+        let search_display_paths = context.search_display_paths();
+        assert_eq!(search_display_paths[0].source, "use lib");
+        assert_eq!(search_display_paths[1].source, "workspace includePaths");
         Ok(())
     }
 

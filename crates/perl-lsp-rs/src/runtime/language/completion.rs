@@ -19,7 +19,7 @@ use crate::{
     state::{completion_cap, completion_deadline},
 };
 use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
-use perl_module::resolution::use_lib::resolve_use_lib_paths_from_source_at_offset;
+use perl_module::resolution::{IncRoot, IncRootKind};
 use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
@@ -39,23 +39,6 @@ fn get_snippet_placeholder_regex() -> Option<&'static Regex> {
 
 fn get_snippet_simple_regex() -> Option<&'static Regex> {
     SNIPPET_SIMPLE_RE.get_or_init(|| Regex::new(r"\$\d+")).as_ref().ok()
-}
-
-// PERL5LIB is controlled by `usePerl5lib`, not `useSystemInc`. `useSystemInc`
-// controls interpreter startup `@INC` only. Keep this aligned with
-// `resolve_module_to_path_with_doc_at_offset` so completion, PL701, hover, and
-// goto-definition agree.
-fn perl5lib_paths_for_completion(
-    config: &perl_lsp_rs_core::config::WorkspaceConfig,
-    perl5lib_value: Option<&str>,
-) -> Vec<String> {
-    if !config.use_perl5lib {
-        return Vec::new();
-    }
-
-    perl5lib_value
-        .map(perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib)
-        .unwrap_or_default()
 }
 
 /// Returns commit characters for a completion item based on its kind.
@@ -81,109 +64,76 @@ impl LspServer {
         uri: &str,
         doc_text: &str,
         cursor_offset: usize,
-        file_dir: Option<&Path>,
     ) -> (Vec<PathBuf>, Vec<PathBuf>, bool) {
         let mut include_paths: Vec<PathBuf> = Vec::new();
         let mut seen_include: HashSet<PathBuf> = HashSet::new();
         let mut system_inc_paths: Vec<PathBuf> = Vec::new();
         let mut seen_system: HashSet<PathBuf> = HashSet::new();
-        let mut include_system_inc = false;
+        let Some(context) =
+            self.effective_inc_context_for_doc(Some(uri), Some(doc_text), Some(cursor_offset))
+        else {
+            return (include_paths, system_inc_paths, false);
+        };
 
-        // Resolve the folder root once for relative-path resolution.
-        let folder_root = self
-            .folder_for_doc_uri(uri)
-            .and_then(|folder| super::super::workspace_folder_path(&folder));
-
-        // Prepend lexical `use lib` paths extracted from the document source.
-        // These have the highest precedence (matching goto-definition behaviour).
-        if let Some(root) = folder_root.as_ref() {
-            let use_lib_strings = resolve_use_lib_paths_from_source_at_offset(
-                doc_text,
-                cursor_offset,
-                root,
-                file_dir,
-            );
-            for path_str in use_lib_strings {
-                let p = PathBuf::from(&path_str);
-                let resolved = if p.is_absolute() { p } else { root.join(&p) };
-                if seen_include.insert(resolved.clone()) {
-                    include_paths.push(resolved);
-                }
-            }
-        }
-
-        // Read effective include paths from the config clone (workspace paths and PERL5LIB).
-        // The clone is lightweight — it does not trigger the system @INC subprocess.
-        if let Some(config) = self.config_for_doc(uri) {
-            // PERL5LIB is gated on `usePerl5lib` via `perl5lib_paths_for_completion`,
-            // independent of `useSystemInc`. `useSystemInc` controls only interpreter
-            // startup `@INC`, handled separately below.
-            let perl5lib_value = std::env::var("PERL5LIB").ok();
-            let perl5lib_paths = perl5lib_paths_for_completion(&config, perl5lib_value.as_deref());
-            let effective_paths = config.effective_include_paths(&perl5lib_paths);
-            include_system_inc = config.use_system_inc;
-
-            for path in effective_paths {
-                let resolved = {
-                    let p = PathBuf::from(&path);
-                    if p.is_absolute() {
-                        p
-                    } else if let Some(root) = folder_root.as_ref() {
-                        root.join(p)
-                    } else {
-                        PathBuf::from(path)
+        let include_workspace_roots = context.folder_uri.is_some();
+        for root in &context.effective_roots {
+            match root.kind {
+                IncRootKind::InterpreterStartup => {
+                    let resolved = root.path.clone();
+                    if seen_system.insert(resolved.clone()) {
+                        system_inc_paths.push(resolved);
                     }
-                };
-                if seen_include.insert(resolved.clone()) {
-                    include_paths.push(resolved);
                 }
+                IncRootKind::FileLocalLexical => {
+                    let resolved = Self::completion_path_for_inc_root(root, &context.root);
+                    if seen_include.insert(resolved.clone()) {
+                        include_paths.push(resolved);
+                    }
+                }
+                _ if include_workspace_roots => {
+                    let resolved = Self::completion_path_for_inc_root(root, &context.root);
+                    if seen_include.insert(resolved.clone()) {
+                        include_paths.push(resolved);
+                    }
+                }
+                _ => {}
             }
         }
 
-        if !include_system_inc {
-            include_system_inc = self
-                .workspace_folders
-                .lock()
-                .iter()
-                .any(|folder| folder.effective_workspace_config.use_system_inc);
-        }
+        let mut include_system_inc = context.use_system_inc;
 
-        // For system @INC, call get_system_inc() through the locked folder so the lazy
-        // subprocess result is written back to the authoritative cache and not discarded
-        // when the clone is dropped.  Without this, every completion request with
-        // use_system_inc=true would spawn `perl -e 'print join("\n", @INC)'`.
-        if include_system_inc {
+        // Preserve the historical non-workspace completion fallback: when the
+        // document is outside every workspace folder, opted-in folder startup
+        // @INC roots can still be used for module completion. Workspace-configured
+        // roots stay excluded, while explicit file-local `use lib` roots above
+        // remain eligible.
+        if !include_system_inc && context.folder_uri.is_none() {
             let mut folders = self.workspace_folders.lock();
-            // Pick the most-specific (deepest) matching folder so the cache is
-            // written back to the same authoritative folder that
-            // `config_for_doc` and `folder_for_doc_uri` resolve.
-            let best_uri = super::super::best_workspace_folder_for_doc(&folders, uri)
-                .map(|folder| folder.uri.clone());
-            if let Some(folder) =
-                best_uri.and_then(|best_uri| folders.iter_mut().find(|f| f.uri == best_uri))
-            {
+            for folder in folders.iter_mut() {
+                if !folder.effective_workspace_config.use_system_inc {
+                    continue;
+                }
+                include_system_inc = true;
                 for path in folder.effective_workspace_config.get_system_inc() {
                     if seen_system.insert(path.clone()) {
                         system_inc_paths.push(path.clone());
-                    }
-                }
-            } else {
-                // Fallback for non-workspace URIs: collect startup @INC from all opted-in folders
-                // so completion still has system module roots.
-                for folder in folders.iter_mut() {
-                    if !folder.effective_workspace_config.use_system_inc {
-                        continue;
-                    }
-                    for path in folder.effective_workspace_config.get_system_inc() {
-                        if seen_system.insert(path.clone()) {
-                            system_inc_paths.push(path.clone());
-                        }
                     }
                 }
             }
         }
 
         (include_paths, system_inc_paths, include_system_inc)
+    }
+
+    fn completion_path_for_inc_root(root: &IncRoot, context_root: &Path) -> PathBuf {
+        match root.kind {
+            IncRootKind::FileLocalLexical | IncRootKind::WorkspaceRelative
+                if !root.path.is_absolute() =>
+            {
+                context_root.join(&root.path)
+            }
+            _ => root.path.clone(),
+        }
     }
 
     fn split_sigil(name: &str) -> (Option<char>, &str) {
@@ -454,15 +404,8 @@ impl LspServer {
                 // Get completions, with fallback for missing AST
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
-                    let file_dir = super::super::source_path_from_uri(uri)
-                        .and_then(|p| p.parent().map(|d| d.to_path_buf()));
-                    let (include_paths, system_inc_paths, include_system_inc) = self
-                        .module_completion_roots_for_doc(
-                            uri,
-                            &doc.text,
-                            offset,
-                            file_dir.as_deref(),
-                        );
+                    let (include_paths, system_inc_paths, include_system_inc) =
+                        self.module_completion_roots_for_doc(uri, &doc.text, offset);
                     // Only provide workspace index when Full access is available
                     // This ensures we don't bypass routing policy
                     #[cfg(feature = "workspace")]
@@ -734,15 +677,8 @@ impl LspServer {
 
                 // Get completions with optimized cancellation support
                 let mut completions = if let Some(ast) = &doc.ast {
-                    let file_dir = super::super::source_path_from_uri(uri)
-                        .and_then(|p| p.parent().map(|d| d.to_path_buf()));
-                    let (include_paths, system_inc_paths, include_system_inc) = self
-                        .module_completion_roots_for_doc(
-                            uri,
-                            &doc.text,
-                            offset,
-                            file_dir.as_deref(),
-                        );
+                    let (include_paths, system_inc_paths, include_system_inc) =
+                        self.module_completion_roots_for_doc(uri, &doc.text, offset);
                     // Only provide workspace index when Full access is available
                     // This ensures we don't bypass routing policy
                     #[cfg(feature = "workspace")]
@@ -1263,13 +1199,8 @@ mod tests {
             crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.clone()),
         );
 
-        let file_dir = Some(temp.path().to_path_buf());
-        let (include_paths, _sys, _use_sys) = server.module_completion_roots_for_doc(
-            &doc_uri,
-            &doc_text,
-            doc_text.len(),
-            file_dir.as_deref(),
-        );
+        let (include_paths, _sys, _use_sys) =
+            server.module_completion_roots_for_doc(&doc_uri, &doc_text, doc_text.len());
 
         assert!(
             include_paths.contains(&lib_dir),
@@ -1295,12 +1226,7 @@ mod tests {
         );
 
         let (include_paths, system_inc_paths, include_system_inc) = server
-            .module_completion_roots_for_doc(
-                "file:///tmp/outside_workspace.pl",
-                "use strict;",
-                0,
-                None,
-            );
+            .module_completion_roots_for_doc("file:///tmp/outside_workspace.pl", "use strict;", 0);
 
         assert!(include_system_inc, "use_system_inc should be propagated");
         assert!(include_paths.is_empty(), "no configured include paths expected");
@@ -1309,6 +1235,96 @@ mod tests {
             "fallback system @INC roots should be available for non-workspace URIs"
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_module_completion_roots_keep_file_local_use_lib_for_non_workspace_uri()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use tempfile::TempDir;
+        use url::Url;
+
+        let temp = TempDir::new()?;
+        let workspace = temp.path().join("workspace");
+        let lexical_lib = workspace.join("standalone_lib");
+        let outside_doc = temp.path().join("outside.pl");
+        std::fs::create_dir_all(&lexical_lib)?;
+        std::fs::write(&outside_doc, "use strict;\n")?;
+
+        let workspace_uri =
+            Url::from_file_path(&workspace).map_err(|_| "bad workspace uri")?.to_string();
+        let doc_uri = Url::from_file_path(&outside_doc).map_err(|_| "bad doc uri")?.to_string();
+        let mut config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+        config.include_paths = vec!["configured_lib".to_string()];
+        config.use_system_inc = false;
+
+        let server = LspServer::default();
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri)
+                .with_path(workspace.clone())
+                .with_effective_workspace_config(config),
+        );
+
+        let doc_text = "use lib 'standalone_lib';\nuse Outside::Widget;\n";
+        let (include_paths, system_inc_paths, include_system_inc) =
+            server.module_completion_roots_for_doc(&doc_uri, doc_text, doc_text.len());
+
+        assert!(
+            include_paths.contains(&lexical_lib),
+            "file-local use lib root should survive outside-workspace filtering; got {include_paths:?}"
+        );
+        assert!(
+            !include_paths.iter().any(|path| path.ends_with("configured_lib")),
+            "workspace-configured roots should stay excluded for non-workspace docs; got {include_paths:?}"
+        );
+        assert!(system_inc_paths.is_empty());
+        assert!(!include_system_inc);
+        Ok(())
+    }
+
+    #[test]
+    fn test_module_completion_roots_match_effective_inc_context_for_workspace_doc()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use perl_module::resolution::IncRootKind;
+        use tempfile::TempDir;
+        use url::Url;
+
+        let temp = TempDir::new()?;
+        let workspace = temp.path().join("workspace");
+        let doc_path = workspace.join("bin").join("app.pl");
+        std::fs::create_dir_all(doc_path.parent().ok_or("missing doc parent")?)?;
+
+        let workspace_uri =
+            Url::from_file_path(&workspace).map_err(|_| "bad workspace uri")?.to_string();
+        let doc_uri = Url::from_file_path(&doc_path).map_err(|_| "bad doc uri")?.to_string();
+        let mut config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+        config.include_paths = vec!["lib".to_string()];
+        config.use_system_inc = false;
+
+        let server = LspServer::default();
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri)
+                .with_path(workspace.clone())
+                .with_effective_workspace_config(config),
+        );
+
+        let doc_text = "use lib 't/lib';\nuse Demo::Worker;\n";
+        let context = server
+            .effective_inc_context_for_doc(Some(&doc_uri), Some(doc_text), Some(doc_text.len()))
+            .ok_or("expected effective @INC context")?;
+        let expected_include_paths: Vec<PathBuf> = context
+            .effective_roots
+            .iter()
+            .filter(|root| root.kind != IncRootKind::InterpreterStartup)
+            .map(|root| LspServer::completion_path_for_inc_root(root, &context.root))
+            .collect();
+
+        let (include_paths, system_inc_paths, include_system_inc) =
+            server.module_completion_roots_for_doc(&doc_uri, doc_text, doc_text.len());
+
+        assert_eq!(include_paths, expected_include_paths);
+        assert!(system_inc_paths.is_empty());
+        assert!(!include_system_inc);
         Ok(())
     }
 
@@ -1599,20 +1615,15 @@ mod tests {
         Ok(())
     }
 
-    /// PERL5LIB inclusion in completion inputs is gated on `use_perl5lib`, NOT
-    /// `use_system_inc`. `use_system_inc` controls interpreter startup `@INC`
-    /// only. This test walks the four-cell matrix to ensure the two flags are
-    /// truly independent for the PERL5LIB completion source.
+    /// PERL5LIB inclusion in the shared completion context is gated on
+    /// `use_perl5lib`, NOT `use_system_inc`. `use_system_inc` controls
+    /// interpreter startup `@INC` only. This test walks the four-cell matrix to
+    /// ensure the two flags remain independent for the effective include-path
+    /// source that completion now consumes through `EffectiveIncContext`.
     #[test]
     fn perl5lib_completion_gate_is_use_perl5lib_independent_of_use_system_inc()
     -> Result<(), Box<dyn std::error::Error>> {
         use perl_lsp_rs_core::config::WorkspaceConfig;
-        use tempfile::TempDir;
-
-        let temp = TempDir::new()?;
-        let perl5lib_dir = temp.path().join("perl5lib");
-        std::fs::create_dir_all(&perl5lib_dir)?;
-        let perl5lib_value = perl5lib_dir.to_string_lossy().to_string();
 
         // (use_perl5lib, use_system_inc, expected_perl5lib_present)
         let cells: &[(bool, bool, bool)] =
@@ -1623,8 +1634,8 @@ mod tests {
             config.use_perl5lib = use_perl5lib;
             config.use_system_inc = use_system_inc;
 
-            let paths = perl5lib_paths_for_completion(&config, Some(&perl5lib_value));
-            let has = paths.iter().any(|p| p == &perl5lib_value);
+            let paths = config.effective_include_paths(&["perl5lib".to_string()]);
+            let has = paths.iter().any(|path| path == "perl5lib");
             assert_eq!(
                 has, expected,
                 "cell (use_perl5lib={use_perl5lib}, use_system_inc={use_system_inc}): \
