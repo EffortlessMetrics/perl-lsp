@@ -38,6 +38,8 @@ jobs:
     # Advisory only in this PR. Failures do not block.
     continue-on-error: true
     if: github.event.pull_request.draft != true
+    env:
+      RIPR_VERSION: "0.4.0"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,11 +54,11 @@ jobs:
         with:
           cache-on-failure: true
           cache-all-crates: true
-          shared-key: ripr-${{ hashFiles('Cargo.lock') }}
+          shared-key: ripr-${{ env.RIPR_VERSION }}-${{ hashFiles('Cargo.lock') }}
           save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
       - name: Install ripr
-        run: cargo install ripr --locked
+        run: cargo install ripr --version "$RIPR_VERSION" --locked
 
       - name: Run ripr (doctor)
         run: ripr doctor
