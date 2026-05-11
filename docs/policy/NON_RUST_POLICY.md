@@ -241,3 +241,6 @@ ambiguous and a maintainer wants a tracked place for the question.
 - [FILE_POLICY.md](FILE_POLICY.md) — the overarching doctrine.
 - [POLICY_ALLOWLISTS.md](POLICY_ALLOWLISTS.md) — every ledger.
 - [Rollout plan](../ci/perl-lsp-ci-policy-rollout.md) — the 11-PR sequence.
+- [NON_RUST_LADDER.md](NON_RUST_LADDER.md) — builder-ready remaining ladder
+  with tracking issues for every row (rollout PRs 04-11, inventory
+  classification rows A-I, tightening rows J-K).

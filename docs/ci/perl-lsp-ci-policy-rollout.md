@@ -283,3 +283,8 @@ This rollout does **not**:
   `owner = "@steven"`. Areas outlast people.
 - **Receipt over rule.** The TOML ledger is the durable artifact;
   any command-line output is regenerable.
+
+## Live ladder
+
+See [`docs/policy/NON_RUST_LADDER.md`](../policy/NON_RUST_LADDER.md) for the
+builder-ready remaining ladder with one GitHub tracking issue per row.
