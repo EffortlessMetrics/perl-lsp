@@ -1406,6 +1406,20 @@ enum Commands {
         #[command(subcommand)]
         command: GeneratedFilesCommand,
     },
+
+    /// Non-Rust file policy commands.
+    NonRust {
+        #[command(subcommand)]
+        command: NonRustCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum NonRustCommand {
+    /// Walk `git ls-files`, classify tracked files against the allowlist,
+    /// and emit `target/policy/non-rust-inventory.{md,json}` plus
+    /// `docs/policy/NON_RUST_INVENTORY.md`.
+    Inventory,
 }
 
 #[derive(Subcommand)]
@@ -2831,6 +2845,12 @@ fn main() -> Result<()> {
                 generator_receipt,
                 allow_manual_edits,
             } => generated_files::check(receipt, fixture, generator_receipt, allow_manual_edits),
+        },
+        Commands::NonRust { command } => match command {
+            NonRustCommand::Inventory => {
+                let root = utils::project_root()?;
+                tasks::file_policy::non_rust_inventory(&root)
+            }
         },
     }
 }
