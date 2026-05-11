@@ -43,8 +43,13 @@ enum Commands {
     #[command(name = "list-commands")]
     List,
 
-    /// Run lean CI suite (format, clippy, tests) for constrained environments
-    Ci,
+    /// Run lean CI suite (format, clippy, tests) for constrained environments.
+    /// Use `ci doctor` to check local/CI parity without running the full suite.
+    Ci {
+        /// Optional sub-command; omit to run the full CI suite.
+        #[command(subcommand)]
+        command: Option<CiSubcommand>,
+    },
 
     /// Run format and clippy checks only (no tests)
     CheckOnly,
@@ -2089,6 +2094,12 @@ enum NativeToolingCommand {
 }
 
 #[derive(Subcommand)]
+enum CiSubcommand {
+    /// Run local/CI parity diagnostic: toolchain pin, components, git state, fmt drift, Perl, binary.
+    Doctor,
+}
+
+#[derive(Subcommand)]
 enum DevexCommand {
     /// Plan the cheapest correct local proof commands for the current diff.
     Plan {
@@ -2229,7 +2240,10 @@ fn main() -> Result<()> {
             print_top_level_commands();
             Ok(())
         }
-        Commands::Ci => ci::run(),
+        Commands::Ci { command } => match command {
+            None => ci::run(),
+            Some(CiSubcommand::Doctor) => ci_doctor::run(),
+        },
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckLintPolicy => check_lint_policy::run(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
