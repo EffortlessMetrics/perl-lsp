@@ -42,6 +42,8 @@ mod refactor_runtime_blocker_receipts;
 mod refactor_runtime_blocker_tests;
 
 #[cfg(test)]
+mod semantic_tokens_runtime_quality_tests;
+#[cfg(test)]
 mod symbols_runtime_quality_tests;
 
 #[cfg(feature = "workspace")]

@@ -424,6 +424,38 @@ impl LspServer {
         cfg.ai_completion.fallback = fallback;
     }
 
+    /// Test-only entrypoint for LSP `textDocument/semanticTokens/full`.
+    ///
+    /// Exercises semantic token generation in tests. Returns the full semantic
+    /// token data for the document as a flat encoded array.
+    ///
+    /// # Parameters
+    /// - `params`: JSON-RPC params with `textDocument.uri`.
+    ///
+    /// # Returns
+    /// - `Ok(Some({"data": [...]}))`: Semantic token data (flat u32 array, 5 values per token).
+    ///
+    /// # Errors
+    /// Returns [`JsonRpcError`] if params are invalid or the document is not open.
+    pub fn test_handle_semantic_tokens(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.handle_semantic_tokens(params)
+    }
+
+    /// Test-only receipt for semantic tokens runtime quality proof.
+    ///
+    /// Calls the live `textDocument/semanticTokens/full` handler and captures the
+    /// result in a typed receipt. The receipt records token count, shadow state,
+    /// and a quality proof note. This does not change live semantic token behavior.
+    pub fn test_semantic_tokens_runtime_quality_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        self.semantic_tokens_runtime_quality_receipt(params)
+    }
+
     /// Returns `true` if a document with the given URI is currently in the
     /// document store.
     ///

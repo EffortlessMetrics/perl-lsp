@@ -82,6 +82,45 @@ impl LspServer {
         })))
     }
 
+    /// Semantic tokens runtime quality receipt.
+    ///
+    /// Calls the live `textDocument/semanticTokens/full` handler and captures the result in a
+    /// typed receipt for quality proof. This does not change live semantic token behavior —
+    /// parser/HIR token classifications remain the live provider source.
+    ///
+    /// The receipt records token count, shadow state, and notes confirming no behavior change.
+    /// Compiler-fact candidates are pending staged cutover and are not yet wired.
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    pub(crate) fn semantic_tokens_runtime_quality_receipt(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        let live_provider_result = self.handle_semantic_tokens(params)?;
+
+        // Each LSP semantic token encodes as 5 consecutive u32 values in the flat data array.
+        let live_token_count = live_provider_result
+            .as_ref()
+            .and_then(|v| v.get("data"))
+            .and_then(|d| d.as_array())
+            .map(|arr| arr.len() / 5)
+            .unwrap_or(0);
+
+        Ok(Some(json!({
+            "provider": "semantic_tokens",
+            "live_provider_result": live_provider_result,
+            "live_provider_count": live_token_count,
+            "shadow_state": "shadowed",
+            "compiler_receipt": null,
+            "no_live_behavior_change": true,
+            "notes": format!(
+                "semantic_tokens runtime proof: token_count={live_token_count}; \
+                 parser/HIR classifications remain live provider; \
+                 compiler-fact candidates pending staged cutover; \
+                 no live behavior change"
+            )
+        })))
+    }
+
     /// Handle semantic tokens range request
     pub(crate) fn handle_semantic_tokens_range(
         &self,
