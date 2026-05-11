@@ -1412,6 +1412,38 @@ enum Commands {
         #[command(subcommand)]
         command: NonRustCommand,
     },
+
+    /// Check whether the current checkout is behind origin/master.
+    ///
+    /// Emits a JSON receipt (schema_version 1) with staleness metadata.
+    /// Use --mode block to fail when stale; default is warn (exit 0 always).
+    ///
+    /// Example: `cargo xtask freshness-check --base origin/master --mode block`
+    FreshnessCheck {
+        /// Base git reference to compare HEAD against.
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+
+        /// Operating mode: warn (default, exit 0) or block (exit 1 when stale).
+        #[arg(long, value_enum, default_value = "warn")]
+        mode: FreshnessCheckMode,
+
+        /// Write the JSON receipt to this file path instead of stdout.
+        #[arg(long)]
+        json: Option<PathBuf>,
+
+        /// Skip the `git fetch` step.
+        #[arg(long)]
+        no_fetch: bool,
+
+        /// Accept a stale checkout for historical/archaeology work. Requires --reason.
+        #[arg(long, requires = "reason")]
+        allow_historical: bool,
+
+        /// Reason text for the historical override (required with --allow-historical).
+        #[arg(long)]
+        reason: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1580,6 +1612,13 @@ enum GatePolicyCommand {
 enum GateReceiptsFormat {
     Human,
     Json,
+}
+
+/// CLI-facing mode enum for freshness-check (maps to `tasks::freshness_check::FreshnessMode`).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum FreshnessCheckMode {
+    Warn,
+    Block,
 }
 
 #[derive(Subcommand)]
@@ -2852,6 +2891,21 @@ fn main() -> Result<()> {
                 tasks::file_policy::non_rust_inventory(&root)
             }
         },
+        Commands::FreshnessCheck { base, mode, json, no_fetch, allow_historical, reason } => {
+            use tasks::freshness_check::{FreshnessCheckConfig, FreshnessMode};
+            let mode = match mode {
+                FreshnessCheckMode::Warn => FreshnessMode::Warn,
+                FreshnessCheckMode::Block => FreshnessMode::Block,
+            };
+            tasks::freshness_check::run(FreshnessCheckConfig {
+                base,
+                mode,
+                json_output: json,
+                no_fetch,
+                allow_historical,
+                reason,
+            })
+        }
     }
 }
 
