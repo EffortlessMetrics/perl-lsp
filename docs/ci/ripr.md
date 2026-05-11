@@ -1,5 +1,11 @@
 # ripr — Static Oracle-Gap Detection
 
+> **Doctrine**: `ripr` is static mutation-exposure analysis. It catches the
+> same class of findings mutation testing catches — weak test/oracle
+> exposure — but earlier and cheaper because it is static and PR-time.
+> Mutation testing remains the slower runtime backstop for findings that
+> static analysis cannot predict. `ripr` shifts mutation signal left.
+
 `ripr` adds **mutation-testing-lite oracle-gap detection at static-analysis prices**. It
 sits between coverage and runtime mutation testing on the verification ladder: more
 oracle-aware than coverage, far cheaper than mutation testing.

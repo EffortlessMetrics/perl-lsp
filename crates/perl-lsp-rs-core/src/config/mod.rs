@@ -6,7 +6,7 @@
 //! parsing and defaults from the main server crate so they can evolve
 //! independently and be reused by tooling.
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 use crate::platform::resolve_perl_path_with_toolchain;
 use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
@@ -16,9 +16,12 @@ use std::time::{Duration, Instant};
 use std::{fs::File, io::Read};
 
 mod native_build_hints;
+pub mod perl_oracle_env;
 
 pub use native_build_hints::{NativeBuildHints, detect_native_build_hints};
 pub use perl_lsp_perltidy::FormatterMode;
+#[cfg(not(target_arch = "wasm32"))]
+pub use perl_oracle_env::PerlOracleEnv;
 
 /// Critic diagnostic engine used for LSP policy diagnostics.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -705,36 +708,23 @@ impl WorkspaceConfig {
         }
 
         if self.system_inc_cache.is_none() {
-            self.system_inc_cache = Some(Self::fetch_perl_inc(
-                self.perl_path.as_deref(),
-                &self.perl_args,
-                self.use_perl5lib,
-            ));
+            // Snapshot the fields needed by the oracle constructor before the
+            // mutable borrow below.
+            let perl_args = self.perl_args.clone();
+            let result = Self::fetch_perl_inc(self, &perl_args);
+            self.system_inc_cache = Some(result);
         }
 
         self.system_inc_cache.as_deref().unwrap_or(&[])
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn fetch_perl_inc(
-        perl_path: Option<&str>,
-        perl_args: &[String],
-        include_perl5lib: bool,
-    ) -> Vec<PathBuf> {
-        let perl_path = match perl_path.filter(|path| !path.is_empty()) {
-            Some(path) => PathBuf::from(path),
-            None => match resolve_perl_path_with_toolchain() {
-                Ok(path) => path,
-                Err(_) => return Vec::new(),
-            },
+    fn fetch_perl_inc(config: &WorkspaceConfig, perl_args: &[String]) -> Vec<PathBuf> {
+        let oracle = match PerlOracleEnv::for_startup_inc_probe(config) {
+            Some(o) => o,
+            None => return Vec::new(),
         };
-        let mut command = Command::new(perl_path);
-        if !include_perl5lib {
-            // Prevent PERL5LIB from leaking into interpreter startup @INC when
-            // the user has disabled usePerl5lib. Without this, a PERL5LIB set in
-            // the LSP's environment would still appear in `@INC` via the probe.
-            command.env_remove("PERL5LIB");
-        }
+        let mut command = oracle.into_command();
         command.args(perl_args);
         command.args(["-e", "print join(\"\\n\", @INC)"]);
         let output = output_with_timeout(command, SYSTEM_INC_PROBE_TIMEOUT);
@@ -799,7 +789,7 @@ impl WorkspaceConfig {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn fetch_perl_inc(_: Option<&str>, _: &[String], _include_perl5lib: bool) -> Vec<PathBuf> {
+    fn fetch_perl_inc(_config: &WorkspaceConfig, _perl_args: &[String]) -> Vec<PathBuf> {
         Vec::new()
     }
 }

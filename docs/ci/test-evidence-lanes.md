@@ -31,11 +31,11 @@ warrant different cadences:
 | `ripr` (static oracle-gap) | every Rust-diff PR | Cheap static substitute that surfaces "this changed line is not exercised by any test that could discriminate behavior." Advisory only. |
 | Coverage | push to `master`, label-gated PR (`coverage`), workflow_dispatch | Codecov upload is push-billed; on-demand for PRs. |
 
-The doctrine, repeated from sibling-repo CI economics:
+The doctrine, from [`ripr.md`](ripr.md):
 
-> **`ripr` is the PR-time static oracle-exposure filter; it is not a
-> replacement for mutation testing. Mutation remains runtime evidence
-> for targeted PRs, nightly lanes, and release readiness.**
+> `ripr` shifts mutation signal left — static, per-PR, and cheaper than
+> runtime mutation testing, which remains the backstop for what static analysis
+> cannot predict. See [`docs/ci/ripr.md`](ripr.md) for the canonical framing.
 
 ## Lane shapes
 
