@@ -7,7 +7,8 @@
 use super::super::*;
 use perl_lsp_rs_core::providers::missing_module::ModuleSearchPathDisplay;
 use perl_module::resolution::use_lib::{
-    resolve_use_lib_paths_from_source, resolve_use_lib_paths_from_source_at_offset,
+    no_lib_cancelled_paths_at_offset, resolve_use_lib_paths_from_source,
+    resolve_use_lib_paths_from_source_at_offset,
 };
 use perl_module::resolution::{IncRoot, build_effective_inc_roots};
 use std::path::PathBuf;
@@ -102,7 +103,7 @@ impl LspServer {
         let perl5lib_paths = std::env::var("PERL5LIB")
             .map(|value| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&value))
             .unwrap_or_default();
-        let include_paths = config.effective_include_paths(&perl5lib_paths);
+        let raw_include_paths = config.effective_include_paths(&perl5lib_paths);
         let mut lexical_paths = Vec::new();
 
         if let Some(text) = doc_text {
@@ -123,6 +124,26 @@ impl LspServer {
                 resolve_use_lib_paths_from_source(text, &root, file_dir.as_deref())
             };
         }
+
+        // When a position offset is provided, also compute the set of paths that
+        // `no lib` has explicitly cancelled at that position. These cancellations
+        // apply to configured include paths too — `no lib 'lib'` removes `lib` from
+        // `@INC` regardless of whether it arrived via `use lib` or workspace config.
+        let include_paths: Vec<String> = if let (Some(offset), Some(text)) = (doc_offset, doc_text)
+        {
+            let file_dir = doc_uri
+                .and_then(super::super::source_path_from_uri)
+                .and_then(|path| path.parent().map(|dir| dir.to_path_buf()));
+            let cancelled =
+                no_lib_cancelled_paths_at_offset(text, offset, &root, file_dir.as_deref());
+            if cancelled.is_empty() {
+                raw_include_paths
+            } else {
+                raw_include_paths.into_iter().filter(|p| !cancelled.contains(p)).collect()
+            }
+        } else {
+            raw_include_paths
+        };
 
         let system_paths = if config.use_system_inc {
             self.system_inc_for_context(folder_uri.as_deref())
