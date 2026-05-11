@@ -329,7 +329,11 @@ impl LspServer {
 
         let open_document_uris: Vec<String> = {
             let documents = self.documents.lock();
-            documents.keys().cloned().collect()
+            documents
+                .keys()
+                .filter(|uri| doc_offset.is_none() || context.symbol_uri_reachable(uri))
+                .cloned()
+                .collect()
         };
 
         match resolve_module_uri_with_effective_inc(
@@ -353,6 +357,7 @@ impl LspServer {
 mod tests {
     use super::*;
     use crate::runtime::workspace_folder::WorkspaceFolderState;
+    use crate::state::DocumentState;
     use perl_module::resolution::IncRootKind;
     use perl_module::resolution::build_effective_inc_roots;
     use std::fs;
@@ -851,6 +856,74 @@ use Overlay::Live;
         assert!(
             resolved_after.is_none(),
             "expected module to stop resolving after no lib at end-of-doc"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_position_aware_resolution_filters_open_docs_by_effective_inc() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let custom_dir = workspace.join("custom");
+        let module_file = custom_dir.join("Overlay").join("OpenDoc.pm");
+        fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
+        fs::write(&module_file, "package Overlay::OpenDoc; 1;")?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut folders = server.workspace_folders.lock();
+            folders.push(
+                WorkspaceFolderState::new(format!(
+                    "file://{}",
+                    workspace.to_string_lossy().replace('\\', "/")
+                ))
+                .with_path(workspace.clone())
+                .with_name("workspace".to_string()),
+            );
+        }
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec![];
+        }
+
+        let module_uri =
+            url::Url::from_file_path(&module_file).map_err(|()| "failed module URI")?.to_string();
+        server
+            .documents
+            .lock()
+            .insert(module_uri.clone(), DocumentState::new("package Overlay::OpenDoc; 1;", 1));
+
+        let doc_uri = format!("file://{}/main.pl", workspace.to_string_lossy().replace('\\', "/"));
+        let doc_text = "use lib 'custom';
+no lib 'custom';
+use Overlay::OpenDoc;
+";
+        let before_no_lib = doc_text.find("no lib").ok_or("missing no lib")?;
+
+        let resolved_before = server
+            .resolve_module_to_path_with_doc_at_offset(
+                "Overlay::OpenDoc",
+                Some(doc_text),
+                Some(&doc_uri),
+                Some(before_no_lib),
+            )
+            .ok_or("expected open document under active @INC root to resolve")?;
+        assert_eq!(
+            resolved_before, module_uri,
+            "open document should still resolve while its include root is active"
+        );
+
+        let resolved_after = server.resolve_module_to_path_with_doc_at_offset(
+            "Overlay::OpenDoc",
+            Some(doc_text),
+            Some(&doc_uri),
+            Some(doc_text.len()),
+        );
+        assert!(
+            resolved_after.is_none(),
+            "open document under a cancelled include root must not bypass position-aware @INC"
         );
 
         Ok(())

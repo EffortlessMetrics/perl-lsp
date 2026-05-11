@@ -215,6 +215,43 @@ impl LspServer {
         }
     }
 
+    fn is_module_import_completion_context(doc_text: &str, offset: usize) -> bool {
+        if !doc_text.is_char_boundary(offset) {
+            return false;
+        }
+        let before = &doc_text[..offset];
+        let line_start = before.rfind('\n').map(|position| position + 1).unwrap_or(0);
+        let line = before[line_start..].trim_start();
+
+        if let Some(rest) = line.strip_prefix("use") {
+            if rest.chars().next().is_some_and(|c| !c.is_whitespace()) {
+                return false;
+            }
+            let rest = rest.trim_start();
+            if rest.contains(';') || rest.contains('(') || rest.contains("qw") {
+                return false;
+            }
+            let first_char = rest.chars().next();
+            return first_char.is_none() || first_char.is_some_and(|c| c.is_ascii_uppercase());
+        }
+
+        if let Some(rest) = line.strip_prefix("require") {
+            if rest.chars().next().is_some_and(|c| !c.is_whitespace()) {
+                return false;
+            }
+            let rest = rest.trim_start();
+            if rest.contains(';') {
+                return false;
+            }
+            let Some(first_char) = rest.chars().next() else {
+                return true;
+            };
+            return !matches!(first_char, '0'..='9' | '\'' | '"' | '`' | '.' | '/' | '\\');
+        }
+
+        false
+    }
+
     fn add_runtime_workspace_completions(
         &self,
         completions: &mut Vec<crate::completion::CompletionItem>,
@@ -224,6 +261,10 @@ impl LspServer {
         workspace_mode: &IndexAccessMode,
         cap: usize,
     ) {
+        if Self::is_module_import_completion_context(doc_text, offset) {
+            return;
+        }
+
         match workspace_mode {
             IndexAccessMode::Full(coordinator) => {
                 let index = coordinator.index();
@@ -1685,5 +1726,19 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn module_import_completion_context_accepts_perl_whitespace_only_after_keyword() {
+        assert!(LspServer::is_module_import_completion_context("use\tFoo", "use\tFoo".len()));
+        assert!(LspServer::is_module_import_completion_context(
+            "require\tFoo",
+            "require\tFoo".len()
+        ));
+        assert!(!LspServer::is_module_import_completion_context("useful Foo", "useful Foo".len()));
+        assert!(!LspServer::is_module_import_completion_context(
+            "required Foo",
+            "required Foo".len()
+        ));
     }
 }

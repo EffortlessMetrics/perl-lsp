@@ -70,6 +70,34 @@ fn has_pl701(diags: &[serde_json::Value]) -> bool {
     })
 }
 
+fn hover_is_not_resolved(hover: &Option<serde_json::Value>) -> bool {
+    let Some(hover) = hover else {
+        return true;
+    };
+
+    let Some(contents) = hover.get("contents") else {
+        return false;
+    };
+    let text = match contents {
+        serde_json::Value::String(value) => value.clone(),
+        serde_json::Value::Object(map) => {
+            map.get("value").and_then(|value| value.as_str()).unwrap_or("").to_string()
+        }
+        serde_json::Value::Array(items) => items
+            .iter()
+            .filter_map(|item| {
+                item.as_str().map(str::to_owned).or_else(|| {
+                    item.get("value").and_then(|value| value.as_str()).map(str::to_owned)
+                })
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
+    };
+
+    text.contains("Not found in workspace") && !text.contains("[Go to module]")
+}
+
 /// Configure the server to use `includePaths` via workspace/didChangeConfiguration.
 fn send_include_paths(harness: &UxHarness, paths: &[&str]) {
     let paths_json: Vec<serde_json::Value> = paths.iter().map(|p| json!(*p)).collect();
@@ -547,10 +575,10 @@ fn scenario_14_no_lib_cancellation() {
     let def_empty = defs.is_empty();
 
     let hover_result = harness.hover("fixture.pl", 4, 4).expect("hover must not error");
+    let hover_not_resolved = hover_is_not_resolved(&hover_result);
 
     // Completion check (negative): `GoneModule` should NOT appear since `no lib`
-    // cancelled the path. Consumer-divergence is acceptable here — completion
-    // may not fully enforce `no lib` semantics.
+    // cancelled the path.
     harness
         .change_file_full("fixture.pl", NO_LIB_CANCEL_COMPLETION_SOURCE)
         .expect("didChange to completion fixture should succeed");
@@ -562,10 +590,10 @@ fn scenario_14_no_lib_cancellation() {
 
     print_conformance(
         "no_lib_cancellation",
-        pl701_fires,            // "ok" for negative = PL701 fired
-        completion_ok,          // "ok" for negative = module absent from completion
-        def_empty,              // "ok" for negative = definition returned empty
-        hover_result.is_none(), // "ok" for negative = hover returned null
+        pl701_fires,        // "ok" for negative = PL701 fired
+        completion_ok,      // "ok" for negative = module absent from completion
+        def_empty,          // "ok" for negative = definition returned empty
+        hover_not_resolved, // "ok" for negative = hover returned null/not-resolved
     );
 
     // Strict enforcement for PL701: the push-diagnostic resolver must honor
@@ -604,6 +632,11 @@ fn scenario_14_no_lib_cancellation() {
          EffectiveIncContext at the use-site offset.\n\
          completions (labels): {:?}",
         completion_labels(&completions)
+    );
+    assert!(
+        hover_not_resolved,
+        "hover MUST NOT resolve GoneModule after 'no lib' cancellation; got {:?}",
+        hover_result
     );
 
     harness.assert_no_crash();

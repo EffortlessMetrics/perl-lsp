@@ -3052,10 +3052,12 @@ fn test_use_completion_workspace_first_and_dedupes_external()
     let include_root = temp.path().join("external");
     let module_file = include_root.join("DBI.pm");
     fs::create_dir_all(module_file.parent().ok_or("missing parent")?)?;
-    fs::write(module_file, "package DBI;\n1;\n")?;
+    fs::write(&module_file, "package DBI;\n1;\n")?;
 
     let index = Arc::new(WorkspaceIndex::new());
-    index.index_file(Url::parse("file:///workspace/lib/DBI.pm")?, "package DBI;\n1;\n".into())?;
+    let module_uri =
+        Url::from_file_path(&module_file).map_err(|()| "failed to build module file URI")?;
+    index.index_file(module_uri, "package DBI;\n1;\n".into())?;
 
     let code = "use DB";
     let mut parser = Parser::new(code);
@@ -3072,6 +3074,41 @@ fn test_use_completion_workspace_first_and_dedupes_external()
     let dbi_items: Vec<_> = completions.iter().filter(|c| c.label == "DBI").collect();
     assert_eq!(dbi_items.len(), 1, "DBI should be deduplicated across workspace/external");
     assert_eq!(dbi_items[0].detail.as_deref(), Some("module"));
+    Ok(())
+}
+
+#[test]
+fn test_use_completion_filters_workspace_module_by_active_include_roots()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = TempDir::new()?;
+    let workspace = temp.path();
+    let suppressed_module = workspace.join("lib").join("GoneModule.pm");
+    let active_root = workspace.join("t").join("lib");
+    fs::create_dir_all(suppressed_module.parent().ok_or("missing suppressed module parent")?)?;
+    fs::create_dir_all(&active_root)?;
+    fs::write(&suppressed_module, "package GoneModule;\n1;\n")?;
+
+    let index = Arc::new(WorkspaceIndex::new());
+    let suppressed_uri =
+        Url::from_file_path(&suppressed_module).map_err(|()| "failed to build module URI")?;
+    index.index_file(suppressed_uri, "package GoneModule;\n1;\n".into())?;
+
+    let code = "use Gon";
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+    let provider = CompletionProvider::new_with_index_and_source_and_paths(
+        &ast,
+        code,
+        Some(index),
+        vec![active_root],
+        Vec::new(),
+        false,
+    );
+    let completions = provider.get_completions(code, code.len());
+    assert!(
+        !completions.iter().any(|c| c.label == "GoneModule"),
+        "workspace package modules outside active @INC roots must not leak into use-completion"
+    );
     Ok(())
 }
 
@@ -3801,14 +3838,22 @@ fn test_use_module_completion_unchanged_with_empty_inc_vectors()
     Ok(())
 }
 
-/// Phase 1 contract: non-empty inc_paths are stored but do NOT alter completions
-/// (no filesystem scanning until phase 2). If this test breaks it means someone
-/// started using the paths without adding scan logic — a regression, not a feature.
+/// Include roots constrain workspace-index module candidates, but they do not
+/// trigger filesystem scans. A workspace-indexed package under an active root
+/// remains visible; packages outside active roots are covered by the negative
+/// filter test.
 #[test]
-fn test_non_empty_inc_paths_do_not_change_phase1_completions()
+fn test_non_empty_inc_paths_keep_workspace_module_under_active_root()
 -> Result<(), Box<dyn std::error::Error>> {
+    let temp = TempDir::new()?;
+    let active_root = temp.path().join("lib");
+    let module_path = active_root.join("MyApp.pm");
+    fs::create_dir_all(&active_root)?;
+    fs::write(&module_path, "package MyApp;\n1;\n")?;
+
     let index = Arc::new(WorkspaceIndex::new());
-    let module_uri = Url::parse("file:///workspace/MyApp.pm")?;
+    let module_uri =
+        Url::from_file_path(&module_path).map_err(|()| "failed to build module URI")?;
     index.index_file(module_uri, "package MyApp;\n1;\n".to_string())?;
 
     let code = "use MyA";
@@ -3819,13 +3864,16 @@ fn test_non_empty_inc_paths_do_not_change_phase1_completions()
         CompletionProvider::new_with_index_and_source(&ast, code, Some(Arc::clone(&index)))
             .get_completions_with_path(code, code.len(), None);
 
-    // Non-empty inc paths: completions must still be identical to workspace-only baseline.
+    // Non-empty inc paths: completions keep workspace-indexed modules that live
+    // under an active @INC root.
+    let inactive_root = temp.path().join("inactive-inc-root");
+    let inactive_system_root = temp.path().join("inactive-system-inc-root");
     let with_inc = CompletionProvider::new_with_index_and_source_and_paths(
         &ast,
         code,
         Some(index),
-        vec![PathBuf::from("/usr/local/lib/perl5"), PathBuf::from("t/lib")],
-        vec![PathBuf::from("/usr/lib/perl5/5.38")],
+        vec![active_root, inactive_root],
+        vec![inactive_system_root],
         false,
     )
     .get_completions_with_path(code, code.len(), None);
@@ -3837,7 +3885,7 @@ fn test_non_empty_inc_paths_do_not_change_phase1_completions()
 
     assert_eq!(
         baseline_labels, with_inc_labels,
-        "non-empty include paths must not change completions in phase 1 (no filesystem scanning yet)"
+        "non-empty include paths must keep workspace package completions under active @INC roots"
     );
     Ok(())
 }

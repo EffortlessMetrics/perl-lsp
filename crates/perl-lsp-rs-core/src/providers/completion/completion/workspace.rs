@@ -9,6 +9,7 @@ use super::{
     context::CompletionContext,
     items::{CompletionItem, CompletionItemKind},
 };
+use perl_module::path::module_name_to_path;
 use perl_parser_core::SourceLocation;
 use perl_semantic_analyzer::{
     semantic::SemanticModel,
@@ -31,7 +32,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 /// Add workspace symbol completions for functions and variables
@@ -492,6 +493,37 @@ pub fn scan_directory_for_modules(root: &Path, prefix: &str) -> Vec<String> {
 /// workspace index. This enables discovering available modules as you type.
 ///
 /// For example, typing `use My` will suggest `MyApp`, `MyApp::Config`, etc.
+fn workspace_module_symbol_matches_roots(symbol: &WorkspaceSymbol, active_roots: &[&Path]) -> bool {
+    if active_roots.is_empty() {
+        return true;
+    }
+
+    let Some(symbol_path) = perl_workspace::workspace_index::uri_to_fs_path(&symbol.uri) else {
+        return false;
+    };
+    let module_path = module_name_to_path(&symbol.name);
+    let symbol_key = normalized_path_key(&symbol_path);
+
+    active_roots.iter().any(|root| {
+        let candidate = root.join(&module_path);
+        normalized_path_key(&candidate) == symbol_key
+    })
+}
+
+fn normalized_path_key(path: &Path) -> String {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        if component == Component::CurDir {
+            continue;
+        }
+        normalized.push(component.as_os_str());
+    }
+
+    let path = if normalized.as_os_str().is_empty() { PathBuf::from(".") } else { normalized };
+    let key = path.to_string_lossy().replace('\\', "/").trim_end_matches('/').to_string();
+    if cfg!(windows) { key.to_ascii_lowercase() } else { key }
+}
+
 pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
@@ -501,6 +533,10 @@ pub fn add_use_module_completions(
     include_system_inc: bool,
 ) {
     let mut seen: HashSet<String> = HashSet::new();
+    let mut active_module_roots: Vec<&Path> = include_paths.iter().map(PathBuf::as_path).collect();
+    if include_system_inc {
+        active_module_roots.extend(system_inc_paths.iter().map(PathBuf::as_path));
+    }
 
     if let Some(index) = workspace_index
         && index.has_symbols()
@@ -519,6 +555,10 @@ pub fn add_use_module_completions(
 
             // Match against the module name prefix
             if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
+                continue;
+            }
+
+            if !workspace_module_symbol_matches_roots(&symbol, &active_module_roots) {
                 continue;
             }
 

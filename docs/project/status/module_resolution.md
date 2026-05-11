@@ -23,7 +23,7 @@ PL701, goto-definition, and hover use exact-module fixtures (`use GreetModule;`)
 | Workspace `includePaths` | + | + | + | + | Config-driven: `includePaths: ["lib"]` |
 | Absolute `includePaths` | + | + | + | + | Config-driven: absolute path entry |
 | Lexical `use lib` | + | + | + | + | In-source pragma extraction |
-| `no lib` cancellation | + | - | - | - | PL701 enforced (#8516); goto-def/completion/hover bypass via workspace index — follow-up |
+| `no lib` cancellation | + | + | + | + | Position-aware negative; all four consumers enforce #8516 |
 | FindBin-relative | + | + | + | + | `$FindBin::Bin/lib` pattern |
 | PERL5LIB env | + | + | + | + | `usePerl5lib=true` gates PERL5LIB |
 | interpreter startup `@INC` | + | + | + | + | `useSystemInc=true` gates interpreter startup paths |
@@ -47,7 +47,7 @@ The cross-consumer `@INC` rail landed across `#8493 → #8506`:
 
 Known follow-ups (each tracked as its own issue, not blocking rail closure):
 
-- Pull-diagnostics path (`features/diagnostics/pull.rs`) now also honors per-use-statement `no lib` cancellation — resolved in the follow-up commit to #8516.
+- Pull-diagnostics path (`features/diagnostics/pull.rs`) and workspace-index-backed consumers now honor per-use-statement `no lib` cancellation — resolved in the follow-up commit to #8516.
 - Runtime-owned short TTL cache for prefix module scans — split out of #8491 after PR 7a (scan-only) landed in #8498.
 
 ## Resolution Mode Details
@@ -137,7 +137,7 @@ provider behavior.
 
 Tracked follow-ups from the @INC rail completion (each its own issue):
 
-- **Position-aware `no lib` cancellation for PL701** — landed in [#8516](https://github.com/EffortlessMetrics/perl-lsp/issues/8516). The PL701 diagnostic resolver now correctly fires for modules whose path was cancelled by `no lib`. goto-def, completion, and hover still surface workspace-indexed modules regardless of `no lib` because the workspace indexer bypasses `@INC` — tracked as a follow-up.
+- **Position-aware `no lib` cancellation** — landed in [#8516](https://github.com/EffortlessMetrics/perl-lsp/issues/8516). PL701, pull diagnostics, completion, goto-definition, and hover now reject modules whose path was cancelled by `no lib`; workspace-index-backed consumers are filtered so they cannot bypass active `@INC` state.
 - **Runtime-owned TTL cache for module-completion scans** — see [#8514](https://github.com/EffortlessMetrics/perl-lsp/issues/8514). Builds on the prefix-directed scan in #8498.
 
 Backlog (pre-existing, not part of the @INC rail closure):
