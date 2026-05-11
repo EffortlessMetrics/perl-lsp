@@ -166,7 +166,7 @@ When implementing a new "ask Perl" subprocess:
 - **#8551** — `PerlOracleEnv` struct implementation + per-call-site migration.
 - **#8493** — the `PERL5LIB` env-leak incident that surfaced the cross-cutting rule.
 - **#8525**, **#8537** — downstream @INC strictness work that benefited from explicit env handling.
-- **`feedback_stale_checkout.md`** + **#8546** — adjacent silent-failure-mode story (different domain; same lesson about implicit ambient state).
+- **`docs/devex/freshness-check.md`** + **#8546** — adjacent silent-failure-mode story (different domain; same lesson about implicit ambient state). The `docs/devex/freshness-check.md` spec is the merged-doctrine version of the original orchestrator memory.
 
 ## Claim boundary
 
