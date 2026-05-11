@@ -17,10 +17,9 @@
 >
 > Umbrella for this consolidation: **#8663**.
 
-> Doctrine, repeated from the cross-repo CI economics plan:
-> **`ripr` is the PR-time static oracle-exposure filter; it is not a
-> replacement for mutation testing. Mutation remains runtime evidence
-> for targeted PRs, nightly lanes, and release readiness.**
+> Doctrine: `ripr` shifts mutation signal left — static, per-PR, and cheaper than
+> runtime mutation testing, which remains the backstop for what static analysis
+> cannot predict. See [`docs/ci/ripr.md`](../ci/ripr.md) for the canonical framing.
 
 The doc has four sections:
 
