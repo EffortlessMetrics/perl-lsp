@@ -46,7 +46,7 @@ pub(super) fn send_progress_begin(outbound: &OutboundSender) {
 
 #[cfg(feature = "workspace")]
 pub(super) fn send_progress_report(outbound: &OutboundSender, indexed: usize, total: usize) {
-    let percentage = if total > 0 { (indexed * 100 / total).min(99) as u32 } else { 0 };
+    let percentage = (indexed * 100).checked_div(total).unwrap_or(0).min(99) as u32;
     let message = format!("Indexed {} of {} files", indexed, total);
     if let Err(e) = outbound.send_notification(
         "$/progress",
