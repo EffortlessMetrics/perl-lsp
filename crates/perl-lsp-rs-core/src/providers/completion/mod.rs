@@ -21,6 +21,8 @@
 mod completion;
 /// Completion visibility shadow compare path (semantic migration).
 pub mod completion_shadow;
+/// Short-TTL cache for module prefix directory scans (issue #8514).
+pub mod module_scan_cache;
 
 pub use completion::{
     CompletionContext, CompletionItem, CompletionItemKind, CompletionProvider,

@@ -9,6 +9,7 @@ use super::{
     context::CompletionContext,
     items::{CompletionItem, CompletionItemKind},
 };
+use crate::providers::completion::module_scan_cache::{ModuleCompletionScanCache, ScanCacheKey};
 use perl_module::path::module_name_to_path;
 use perl_parser_core::SourceLocation;
 use perl_semantic_analyzer::{
@@ -524,6 +525,12 @@ fn normalized_path_key(path: &Path) -> String {
     if cfg!(windows) { key.to_ascii_lowercase() } else { key }
 }
 
+/// Add module name completions for `use` and `require` statements.
+///
+/// Thin backward-compatible wrapper around [`add_use_module_completions_with_cache`]
+/// that passes `None` for the cache.  Prefer the `_with_cache` variant when a
+/// runtime-owned [`ModuleCompletionScanCache`] is available.
+#[allow(dead_code)] // Public backward-compatibility API; callers in perl-lsp-rs use _with_cache
 pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
@@ -531,6 +538,43 @@ pub fn add_use_module_completions(
     include_paths: &[PathBuf],
     system_inc_paths: &[PathBuf],
     include_system_inc: bool,
+) {
+    add_use_module_completions_with_cache(
+        completions,
+        context,
+        workspace_index,
+        include_paths,
+        system_inc_paths,
+        include_system_inc,
+        None,
+        &|| false,
+    );
+}
+
+/// Add module name completions for `use` and `require` statements, optionally
+/// using a runtime-owned TTL cache to avoid repeated filesystem scans on each
+/// keystroke (issue #8514).
+///
+/// ## Cache contract
+///
+/// - When `scan_cache` is `Some`, each
+///   `(canonical_root, prefix_dir, full_module_prefix)` tuple is looked up before
+///   scanning. On a miss the scan proceeds normally and the result is stored in
+///   the cache. On a hit the cached `Vec<String>` is used directly.
+/// - `is_cancelled` is checked **before returning any cached hit** so that a
+///   cancelled LSP request does not deliver results to the editor.
+/// - The workspace-index path is not cached — it is already in-memory.
+/// - Cache population uses the canonical form of the root path when available
+///   (`std::fs::canonicalize`); falls back to the raw path on error.
+pub fn add_use_module_completions_with_cache(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    workspace_index: &Option<Arc<WorkspaceIndex>>,
+    include_paths: &[PathBuf],
+    system_inc_paths: &[PathBuf],
+    include_system_inc: bool,
+    scan_cache: Option<&ModuleCompletionScanCache>,
+    is_cancelled: &dyn Fn() -> bool,
 ) {
     let mut seen: HashSet<String> = HashSet::new();
     let mut active_module_roots: Vec<&Path> = include_paths.iter().map(PathBuf::as_path).collect();
@@ -586,9 +630,61 @@ pub fn add_use_module_completions(
         }
     }
 
-    let mut add_external_modules = |roots: &[PathBuf], detail: &str| {
+    // Helper: resolve the canonical form of `root` for use as a cache key.
+    // Falls back to the raw path when canonicalization fails (e.g. non-existent dir).
+    let canonical_root = |root: &Path| -> PathBuf {
+        std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf())
+    };
+
+    // Helper: build the ScanCacheKey for (root, prefix).
+    //
+    // The prefix_dir is the subdirectory that the scan starts from
+    // (e.g. `Mojo/` for prefix `Mojo::Controller`). Using a relative
+    // path under the canonical root keeps the key stable across callers
+    // that might pass in slightly different root representations. The full
+    // prefix is part of the key because cached values are prefix-filtered.
+    let cache_key = |root: &Path| -> ScanCacheKey {
+        let (scan_dir, _, _) = root_and_leaf_prefix(root, &context.prefix);
+        let prefix_dir = scan_dir.strip_prefix(root).unwrap_or(&scan_dir).to_path_buf();
+        ScanCacheKey {
+            canonical_root: canonical_root(root),
+            prefix_dir,
+            module_prefix: context.prefix.clone(),
+        }
+    };
+
+    let mut add_external_modules = |roots: &[PathBuf], detail: &str| -> bool {
         for root in roots.iter().take(MAX_MODULE_SCAN_ROOTS) {
-            for name in scan_directory_for_modules(root, &context.prefix) {
+            if is_cancelled() {
+                return false;
+            }
+
+            let modules = match scan_cache {
+                Some(cache) => {
+                    let key = cache_key(root);
+                    if let Some(cached) = cache.get(&key) {
+                        // Cancellation check before returning cached result.
+                        if is_cancelled() {
+                            return false;
+                        }
+                        cached
+                    } else {
+                        let scanned = scan_directory_for_modules(root, &context.prefix);
+                        if is_cancelled() {
+                            return false;
+                        }
+                        cache.insert(key, scanned.clone());
+                        scanned
+                    }
+                }
+                None => scan_directory_for_modules(root, &context.prefix),
+            };
+
+            if is_cancelled() {
+                return false;
+            }
+
+            for name in modules {
                 if !seen.insert(name.clone()) {
                     continue;
                 }
@@ -608,11 +704,14 @@ pub fn add_use_module_completions(
                 });
             }
         }
+        true
     };
 
-    add_external_modules(include_paths, "external module");
+    if !add_external_modules(include_paths, "external module") {
+        return;
+    }
     if include_system_inc {
-        add_external_modules(system_inc_paths, "system module");
+        let _ = add_external_modules(system_inc_paths, "system module");
     }
 }
 
