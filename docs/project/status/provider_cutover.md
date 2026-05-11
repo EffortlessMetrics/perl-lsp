@@ -42,9 +42,9 @@ fallback behavior and rollback proof.
   allow decisions plus dynamic-boundary, stale compiler fact, low-confidence,
   and generated-member blockers. Runtime blocker UX receipts compare live
   rename / symbol safe-delete request paths with compiler plans for exact
-  static cases, while cutover receipts record user-facing blocker reasons for
-  dynamic, generated, and low-confidence cases. These receipts do not broaden
-  live refactor behavior.
+  static, dynamic-boundary, and generated-member cases, while cutover receipts
+  record user-facing blocker reasons for dynamic, generated, and
+  low-confidence cases. These receipts do not broaden live refactor behavior.
 - Workspace symbols now have source/freshness and real-workspace quality shadow
   proof for fresh compiler facts, framework-generated candidates,
   dynamic-boundary blockers, stale compiler facts, and candidate/noise deltas.

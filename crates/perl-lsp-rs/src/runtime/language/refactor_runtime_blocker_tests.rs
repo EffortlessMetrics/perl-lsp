@@ -28,6 +28,37 @@ sub caller {
 1;
 "#;
 
+const DYNAMIC_URI: &str = "file:///workspace/lib/Refactor/Dynamic.pm";
+
+const DYNAMIC_MODULE: &str = r#"package Refactor::Dynamic;
+use strict;
+use warnings;
+
+eval "sub dyn_target { return 1; }";
+
+sub caller {
+    dyn_target();
+}
+
+1;
+"#;
+
+const GENERATED_URI: &str = "file:///workspace/lib/Refactor/Generated.pm";
+
+const GENERATED_MODULE: &str = r#"package Refactor::Generated;
+use strict;
+use warnings;
+use Moo;
+
+has name => (is => 'ro');
+
+sub caller {
+    shift->name;
+}
+
+1;
+"#;
+
 fn create_server() -> LspServer {
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
@@ -90,6 +121,17 @@ fn trace_count(receipt: &Value) -> Result<usize, Box<dyn std::error::Error>> {
         .and_then(Value::as_array)
         .ok_or("missing fact_source_traces")?;
     Ok(traces.len())
+}
+
+fn assert_note_contains(
+    receipt: &Value,
+    expected_parts: &[&str],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let notes = receipt_notes(receipt)?.join(" ");
+    for expected in expected_parts {
+        assert!(notes.contains(expected), "receipt notes must contain `{}`: {}", expected, notes);
+    }
+    Ok(())
 }
 
 #[test]
@@ -157,6 +199,142 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_records_exact_static_plan()
         "safe-delete receipt notes must record exact static runtime proof without live cutover: {}",
         notes
     );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_rename_receipt_blocks_dynamic_boundary()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, DYNAMIC_URI, DYNAMIC_MODULE)?;
+    let (line, character) = position_of(DYNAMIC_MODULE, "dyn_target();")?;
+    let params = json!({
+        "textDocument": {"uri": DYNAMIC_URI},
+        "position": {"line": line, "character": character},
+        "newName": "renamed_dynamic"
+    });
+
+    let runtime_receipt = server
+        .test_rename_runtime_blocker_ux_receipt(Some(params))?
+        .ok_or("missing rename runtime receipt")?;
+    let compiler = compiler_receipt(&runtime_receipt)?;
+
+    assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert!(trace_count(compiler)? > 0, "rename receipt must carry fact-source traces");
+    assert_note_contains(
+        compiler,
+        &[
+            "rename runtime blocker UX",
+            "blocker_count=",
+            "blocker_reasons=DynamicBoundary",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dynamic_boundary()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, DYNAMIC_URI, DYNAMIC_MODULE)?;
+    let (line, character) = position_of(DYNAMIC_MODULE, "dyn_target();")?;
+    let params = json!({
+        "textDocument": {"uri": DYNAMIC_URI},
+        "position": {"line": line, "character": character}
+    });
+
+    let runtime_receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(params))?
+        .ok_or("missing safe-delete runtime receipt")?;
+    let compiler = compiler_receipt(&runtime_receipt)?;
+
+    assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert!(trace_count(compiler)? > 0, "safe-delete receipt must carry fact-source traces");
+    assert_note_contains(
+        compiler,
+        &[
+            "safe-delete runtime blocker UX",
+            "compiler_plan_safe=false",
+            "blocker_count=",
+            "blocker_reasons=DynamicBoundary",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_rename_receipt_blocks_generated_member()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, GENERATED_URI, GENERATED_MODULE)?;
+    let (line, character) = position_of(GENERATED_MODULE, "name =>")?;
+    let params = json!({
+        "textDocument": {"uri": GENERATED_URI},
+        "position": {"line": line, "character": character},
+        "newName": "title"
+    });
+
+    let runtime_receipt = server
+        .test_rename_runtime_blocker_ux_receipt(Some(params))?
+        .ok_or("missing rename runtime receipt")?;
+    let compiler = compiler_receipt(&runtime_receipt)?;
+
+    assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert!(trace_count(compiler)? > 0, "rename receipt must carry fact-source traces");
+    assert_note_contains(
+        compiler,
+        &[
+            "rename runtime blocker UX",
+            "blocker_count=1",
+            "blocker_reasons=GeneratedMember",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_generated_member()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, GENERATED_URI, GENERATED_MODULE)?;
+    let (line, character) = position_of(GENERATED_MODULE, "name =>")?;
+    let params = json!({
+        "textDocument": {"uri": GENERATED_URI},
+        "position": {"line": line, "character": character}
+    });
+
+    let runtime_receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(params))?
+        .ok_or("missing safe-delete runtime receipt")?;
+    let compiler = compiler_receipt(&runtime_receipt)?;
+
+    assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert!(trace_count(compiler)? > 0, "safe-delete receipt must carry fact-source traces");
+    assert_note_contains(
+        compiler,
+        &[
+            "safe-delete runtime blocker UX",
+            "compiler_plan_safe=false",
+            "blocker_count=1",
+            "blocker_reasons=GeneratedMember",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
 
     Ok(())
 }
