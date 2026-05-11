@@ -150,6 +150,14 @@ names; see `xtask --help` for the current command surface.
 
 - Cross-repo doctrine: this rollout follows the same pattern as the
   Rust 1.95 quality wave in adjacent repos (BitNet-rs, etc.).
+- [`STRONG_CLIPPY_LINTS_ROLLOUT.md`](STRONG_CLIPPY_LINTS_ROLLOUT.md) —
+  the strong-clippy-lints activation rail (sibling rollout).
+- [`RUST_1_95_PROACTIVE_GUARDS.md`](RUST_1_95_PROACTIVE_GUARDS.md) —
+  the proactive CI integrity guards rail (sibling rollout). Six guard
+  PRs (PG-1 through PG-6) covering label enforcement, risk-pack
+  referential integrity, lane mapping, workflow allowlist coverage, CI
+  Actuals emitter + subscription coverage, and broad-glob justification
+  tightening.
 - `docs/ci/codecov-rollout.md` — the parallel CI/Codecov cleanup ladder.
 - `docs/project/status/module_resolution.md` — the `@INC` rail summary
   that this rollout sits on top of.
