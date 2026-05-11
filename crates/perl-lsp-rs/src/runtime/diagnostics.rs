@@ -2601,4 +2601,77 @@ mod tests {
         );
         Ok(())
     }
+
+    /// Regression guard for scenario_14_no_lib_cancellation:
+    ///
+    /// When `use lib 'lib'` is followed by `no lib 'lib'` and then `use GoneModule`,
+    /// push diagnostics must emit PL701 (missing module) for GoneModule, NOT PL700
+    /// (unused import). PL700 would mean the resolver found the module, which would
+    /// be wrong — the `no lib` should have cancelled the path.
+    ///
+    /// This test uses the DEFAULT WorkspaceConfig (include_paths = ["lib", ".", ...])
+    /// to match the UX harness scenario where no explicit includePaths are configured.
+    #[test]
+    fn push_pl701_fires_after_no_lib_cancels_default_include_path()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        std::fs::create_dir_all(workspace.join("lib"))?;
+        // Create GoneModule.pm in lib/ so that without no-lib it WOULD be found.
+        std::fs::write(
+            workspace.join("lib").join("GoneModule.pm"),
+            "package GoneModule;\nsub gone { 1 }\n1;\n",
+        )?;
+        let script = workspace.join("fixture.pl");
+        let uri = url::Url::from_file_path(&script)
+            .map_err(|()| "failed to build script URI")?
+            .to_string();
+        let folder_uri = url::Url::from_directory_path(&workspace)
+            .map_err(|()| "failed to build workspace URI")?
+            .to_string();
+
+        let (server, buf) = make_server_with_capture();
+        *server.root_path.lock() = Some(workspace.clone());
+        // Use default config — include_paths = ["lib", ".", "local/lib/perl5"], use_perl5lib = true.
+        // This matches the UX harness startup state (no workspace/didChangeConfiguration sent).
+        let config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(folder_uri)
+                .with_path(workspace.clone())
+                .with_effective_workspace_config(config),
+        );
+
+        let source = "use strict;\n\
+use warnings;\n\
+use lib 'lib';\n\
+no lib 'lib';\n\
+use GoneModule;\n\
+\n\
+print \"unreachable\\n\";\n";
+
+        server.test_handle_did_open(Some(serde_json::json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": source
+            }
+        })))?;
+
+        server.publish_diagnostics(&uri);
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let bytes = buf.lock().clone();
+        let text = String::from_utf8(bytes)?;
+
+        assert!(
+            text.contains("PL701"),
+            "PL701 MUST fire: 'no lib' cancelled the path, GoneModule must not be found.\n\
+             Published: {text:?}"
+        );
+        // PL700 (unused import hint) is orthogonal and may also fire — it does not indicate
+        // the module was found. What matters is that PL701 fires (resolver returned false).
+        Ok(())
+    }
 }

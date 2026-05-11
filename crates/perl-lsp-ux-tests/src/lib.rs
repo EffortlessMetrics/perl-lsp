@@ -981,10 +981,17 @@ pub fn resolve_binary() -> Result<String> {
 
     // 3. CARGO_TARGET_DIR — if set, look directly in its debug/release subdirs.
     //    This covers custom target directories (e.g. agent worktrees using
-    //    CARGO_TARGET_DIR=/tmp/agent-...).
+    //    CARGO_TARGET_DIR=/tmp/agent-...). Note: CARGO_TARGET_DIR is the target
+    //    directory itself (not a workspace root), so we look in
+    //    CARGO_TARGET_DIR/debug/ and CARGO_TARGET_DIR/release/ directly.
     if let Ok(target_dir) = std::env::var("CARGO_TARGET_DIR") {
-        if let Some(binary) = find_binary_in_target(std::path::Path::new(&target_dir)) {
-            return Ok(binary);
+        let target_path = std::path::Path::new(&target_dir);
+        let bin_name = if cfg!(windows) { "perl-lsp.exe" } else { "perl-lsp" };
+        for profile in ["debug", "release"] {
+            let candidate = target_path.join(profile).join(bin_name);
+            if candidate.exists() {
+                return Ok(candidate.to_string_lossy().into_owned());
+            }
         }
     }
 
