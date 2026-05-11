@@ -31,6 +31,38 @@ PL701, goto-definition, and hover use exact-module fixtures (`use GreetModule;`)
 **Key**: Consumer cells are `+` (consistent) or `-` (divergent / unimplemented).
 Conformance means all consumers agree — not necessarily that every mode resolves.
 
+## Closeouts — final no-lib workspace-index strictness (2026-05-11)
+
+The eight `@INC` rail closeouts now sit on master. Workspace-symbol candidates are
+filtered through `EffectiveIncContext` at the lookup boundary, so no-`use lib`
+consumers can no longer leak through the workspace-index path:
+
+| # | Closeout | Receipt PR |
+|---|---|---|
+| 1 | `PERL5LIB` gated by `usePerl5lib`; startup-`@INC` probe strips `PERL5LIB` when `usePerl5lib=false` | [#8493](https://github.com/EffortlessMetrics/perl-lsp/pull/8493) |
+| 2 | Nested multi-root workspaces resolve against the deepest matching folder | [#8496](https://github.com/EffortlessMetrics/perl-lsp/pull/8496) |
+| 3 | Interpreter startup `@INC` gated by `useSystemInc`; bounded probe + cache | [#8497](https://github.com/EffortlessMetrics/perl-lsp/pull/8497) |
+| 4 | Module completion uses prefix-directed scan for namespaced prefixes | [#8498](https://github.com/EffortlessMetrics/perl-lsp/pull/8498) |
+| 5 | `EffectiveIncContext` shared across completion, PL701, goto-definition, hover | [#8504](https://github.com/EffortlessMetrics/perl-lsp/pull/8504), [#8505](https://github.com/EffortlessMetrics/perl-lsp/pull/8505), [#8506](https://github.com/EffortlessMetrics/perl-lsp/pull/8506) |
+| 6 | Startup-`@INC` probe failures emit targeted warnings; fail-closed cache preserved | [#8518](https://github.com/EffortlessMetrics/perl-lsp/pull/8518) |
+| 7 | Position-aware `no lib` cancellation enforced across PL701, pull diagnostics, completion, goto-definition, hover; workspace-index-backed consumers filtered | [#8540](https://github.com/EffortlessMetrics/perl-lsp/pull/8540) (impl of #8516) |
+| 8 | Workspace-symbol lookups filtered through `EffectiveIncContext` at the lookup boundary — final no-lib strictness gap closed | [#8544](https://github.com/EffortlessMetrics/perl-lsp/pull/8544) (impl of #8537) |
+
+The Consumer Consistency Matrix above is the strict-mode receipt: every
+consumer cell is `+` after these closeouts landed. The include-root
+classification table added in [#8553](https://github.com/EffortlessMetrics/perl-lsp/pull/8553)
+records why `.` remains a wildcard-like root distinct from configured and
+lexical roots.
+
+### `.`-wildcard caveat
+
+Per [#8552](https://github.com/EffortlessMetrics/perl-lsp/pull/8552), `.`-wildcard
+entries in include roots remain a known edge with documented semantics, not a
+regression: the prefix-vs-exact fixture rule distinguishes prefix completion
+(`use Gre<cursor>`) from exact-module fixtures (`use GreetModule;`), and
+wildcard roots resolve under the exact-module path. This is intentional and is
+covered by Scenario 14 — it is **not** an open `@INC` rail item.
+
 ## Rail Status — @INC integration complete (2026-05-11)
 
 The cross-consumer `@INC` rail landed across `#8493 → #8506`:
