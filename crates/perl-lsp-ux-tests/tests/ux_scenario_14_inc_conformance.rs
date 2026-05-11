@@ -266,72 +266,15 @@ fn scenario_14_relative_include_path() {
     harness.assert_no_crash();
 }
 
-// FIXME(#7570): goto-definition does not agree with completion when
-// `includePaths` is configured — completion finds the module but defs is empty.
-// Tracked in #7570; ignored to unblock master CI Gate. The bug shape and
-// repro live in the issue.
-#[test]
-#[ignore = "FIXME(#7570): goto-def returns empty under includePaths completion"]
-fn scenario_14_include_path_completion_external_module() {
-    if !binary_available() {
-        eprintln!(
-            "SKIP scenario_14_include_path_completion_external_module: perl-lsp binary not found"
-        );
-        return;
-    }
-
-    let harness = UxHarness::new(
-        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
-            .with_file("fixture.pl", RELATIVE_INCLUDE_COMPLETION_SOURCE)
-            .with_file("lib/GreetModule.pm", RELATIVE_INCLUDE_MODULE),
-    )
-    .expect("Failed to create UX harness");
-
-    send_include_paths(&harness, &["lib"]);
-    harness
-        .open_file("fixture.pl", RELATIVE_INCLUDE_COMPLETION_SOURCE)
-        .expect("didOpen should succeed");
-    std::thread::sleep(Duration::from_millis(500));
-
-    let completions = harness.completion("fixture.pl", 2, 7).expect("completion must not error");
-    let completion_has_greet = completion_has_module(&completions, "GreetModule");
-
-    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
-    let def_resolves = !defs.is_empty();
-
-    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
-
-    assert!(
-        completion_has_greet,
-        "Expected completion to include GreetModule via includePaths=['lib']; labels={:?}",
-        completion_labels(&completions)
-    );
-    assert!(
-        def_resolves,
-        "Expected goto-definition to resolve GreetModule from completion scenario; defs={:?}",
-        defs
-    );
-    if hover_result.is_some() {
-        assert!(
-            def_resolves,
-            "Consumer inconsistency (completion_external_module): hover resolved while goto-definition did not.\n\
-             hover={:?}\n\
-             defs={:?}",
-            hover_result, defs
-        );
-    }
-    assert_eq!(
-        completion_has_greet,
-        def_resolves,
-        "Consumer inconsistency (completion_external_module): completion and goto-definition disagree.\n\
-         labels={:?}\n\
-         defs={:?}",
-        completion_labels(&completions),
-        defs
-    );
-
-    harness.assert_no_crash();
-}
+// Removed `scenario_14_include_path_completion_external_module` (was the
+// FIXME(#7570) ignored test). The test asserted goto-definition would
+// resolve on an incomplete prefix `use Gre` — that is not a valid parity
+// assertion: completion works on prefixes; PL701, goto-definition, and
+// hover work on resolved/exact symbols. The post-rail conformance harness
+// (PR #8495) covers the intended parity correctly via separate prefix-
+// completion and exact-module fixtures in `scenario_14_relative_include_path`
+// and `scenario_14_perl5lib_completion_gating_matrix`. #7570 closed
+// 2026-05-07.
 
 // =============================================================================
 // Fixture 2: lexical use lib in source

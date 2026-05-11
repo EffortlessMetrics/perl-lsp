@@ -272,10 +272,12 @@ impl LspServer {
     ///    - Custom paths from workspace configuration
     ///    - Relative paths are resolved against each workspace folder
     ///
-    /// 4. **System @INC** (opt-in only)
+    /// 4. **Interpreter startup `@INC`** (opt-in only)
     ///    - Disabled by default (network filesystem concern)
     ///    - Enable via `workspace.useSystemInc: true` in settings
     ///    - Filtered to exclude `.` (current directory) for security
+    ///    - Distinct from `PERL5LIB`, which is governed by
+    ///      `workspace.usePerl5lib` and merged with `includePaths` (see #8493).
     ///
     /// ## Performance Characteristics
     /// - Timeout: Configurable (default 50ms) to prevent blocking
