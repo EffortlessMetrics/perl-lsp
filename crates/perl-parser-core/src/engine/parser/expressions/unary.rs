@@ -18,6 +18,36 @@ fn is_typeglob_punct_terminator(kind: Option<TokenKind>) -> bool {
     )
 }
 
+fn typeglob_punctuation_name(
+    kind: TokenKind,
+    text: &str,
+    next_kind: Option<TokenKind>,
+) -> Option<String> {
+    if !is_typeglob_punct_terminator(next_kind) {
+        return None;
+    }
+
+    let name = match kind {
+        TokenKind::Backslash => "\\",
+        TokenKind::Semicolon => ";",
+        TokenKind::Percent | TokenKind::HashSigil => "%",
+        TokenKind::BitwiseNot => "~",
+        TokenKind::BitwiseXor => "^",
+        TokenKind::Not => "!",
+        TokenKind::SubSigil | TokenKind::BitwiseAnd => "&",
+        TokenKind::ScalarSigil => "$",
+        TokenKind::ArraySigil => "@",
+        TokenKind::LeftBracket => "[",
+        TokenKind::RightBracket => "]",
+        TokenKind::Unknown if text.starts_with('"') => "\"",
+        TokenKind::Unknown if text.starts_with('`') => "`",
+        TokenKind::Unknown if text.starts_with('\'') => "'",
+        _ => return None,
+    };
+
+    Some(name.to_string())
+}
+
 impl<'a> Parser<'a> {
     fn is_contextual_await_start(&mut self) -> bool {
         if self.peek_kind() != Some(TokenKind::Identifier)
@@ -240,6 +270,21 @@ impl<'a> Parser<'a> {
                     // If TokenKind is Star and it is followed by an identifier or {
                     if op_token.kind == TokenKind::Star {
                         if let Some(next_kind) = self.peek_kind() {
+                            let next_text = self.tokens.peek()?.text.to_string();
+                            let terminator_kind =
+                                self.tokens.peek_second().ok().map(|t| t.kind);
+                            if let Some(name) = typeglob_punctuation_name(
+                                next_kind,
+                                &next_text,
+                                terminator_kind,
+                            ) {
+                                let t = self.tokens.next()?;
+                                return Ok(Node::new(
+                                    NodeKind::Typeglob { name },
+                                    SourceLocation { start, end: t.end },
+                                ));
+                            }
+
                             match next_kind {
                                 kind if Self::can_be_sub_name(kind) => {
                                     let id_token = self.tokens.next()?;

@@ -2,10 +2,26 @@
 mod tests {
     use crate::engine::parser::Parser;
     use perl_ast::ast::{Node, NodeKind, SourceLocation};
+    use perl_tdd_support::must;
 
     fn parse_code(input: &str) -> Option<perl_ast::ast::Node> {
         let mut parser = Parser::new(input);
         parser.parse().ok()
+    }
+
+    fn collect_typeglob_names(node: &Node, names: &mut Vec<String>) {
+        if let NodeKind::Typeglob { name } = &node.kind {
+            names.push(name.clone());
+        }
+
+        for child in node.children() {
+            collect_typeglob_names(child, names);
+        }
+    }
+
+    fn contains_error_node(node: &Node) -> bool {
+        matches!(node.kind, NodeKind::Error { .. })
+            || node.children().into_iter().any(contains_error_node)
     }
 
     #[test]
@@ -98,6 +114,41 @@ mod tests {
             if let NodeKind::Variable { sigil, name: _ } = &stmt.kind {
                 assert_eq!(sigil, "$");
             }
+        }
+    }
+
+    #[test]
+    fn test_english_special_punctuation_typeglobs() {
+        let cases = [
+            ("*LIST_SEPARATOR = *\";", "\""),
+            ("*PREMATCH = *`;", "`"),
+            ("*POSTMATCH = *';", "'"),
+            ("*SUBSCRIPT_SEPARATOR = *;;", ";"),
+            ("*FORMAT_PAGE_NUMBER = *%;", "%"),
+            ("*FORMAT_NAME = *~;", "~"),
+            ("*FORMAT_TOP_NAME = *^;", "^"),
+            ("*MATCH = *&;", "&"),
+            ("*OS_ERROR = *!;", "!"),
+            ("*OLD_PERL_VERSION = *];", "]"),
+            ("*EVAL_ERROR = *@ ;", "@"),
+            ("*PROCESS_ID = *$ ;", "$"),
+            ("*OUTPUT_RECORD_SEPARATOR = *\\;", "\\"),
+        ];
+
+        for (source, expected_rhs) in cases {
+            let mut parser = Parser::new(source);
+            let ast = must(parser.parse());
+            let mut typeglobs = Vec::new();
+            collect_typeglob_names(&ast, &mut typeglobs);
+
+            assert!(
+                !contains_error_node(&ast),
+                "special punctuation typeglob should not produce Error nodes in {source:?}"
+            );
+            assert!(
+                typeglobs.iter().any(|name| name == expected_rhs),
+                "missing RHS typeglob {expected_rhs:?} in {source:?}: {typeglobs:?}"
+            );
         }
     }
 }
