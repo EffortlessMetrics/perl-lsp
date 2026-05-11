@@ -1556,9 +1556,9 @@ fn cmd_generate_badges(repo_root: &Path, check_mode: bool) -> Result<i32> {
                         && let Some(found) = caps.get(1)
                     {
                         eprintln!(
-                            "  stale badge found: {} uses {} in {}",
+                            "  stale badge found: {} but expected {} in {}",
                             found.as_str(),
-                            found.as_str(),
+                            vscode_installs,
                             readme_path.display()
                         );
                     }
@@ -2279,7 +2279,8 @@ fn cmd_check_ignored(repo_root: &Path) -> Result<i32> {
     println!("  - Remaining to target: {remaining} tests");
 
     if current <= target {
-        let reduction_percent = if baseline > 0 { (reduction * 100) / baseline } else { 0 };
+        let reduction_percent =
+            reduction.checked_mul(100).and_then(|scaled| scaled.checked_div(baseline)).unwrap_or(0);
         println!("  ✅ TARGET ACHIEVED: {current} ≤ {target}");
         println!("  📈 Reduction: {reduction_percent}% (target: 49%+)");
     } else if current <= baseline {
