@@ -93,11 +93,7 @@ pub fn selection_chain(
 
     let mut current_ptr = leaf as *const Node;
     let mut first = true;
-    loop {
-        let Some(node) = node_lookup.get(&current_ptr).copied() else {
-            break;
-        };
-
+    while let Some(node) = node_lookup.get(&current_ptr).copied() {
         // For the *first* (deepest) node, inject any synthetic sub-ranges
         // that contain the offset.  This handles the case where the cursor
         // sits on a subroutine name or signature: those areas are not
@@ -131,11 +127,10 @@ pub fn selection_chain(
             }
         }
 
-        // Move to parent
-        if let Some(&parent_ptr) = parent_map.get(&current_ptr) {
-            current_ptr = parent_ptr;
-        } else {
-            break;
+        // Move to parent; if there is no parent, exit the loop.
+        match parent_map.get(&current_ptr) {
+            Some(&parent_ptr) => current_ptr = parent_ptr,
+            None => break,
         }
     }
 
