@@ -623,7 +623,7 @@ fn split_args(args_str: &str) -> Vec<String> {
 fn substitute_params(body: &str, sub_map: &HashMap<String, String>) -> String {
     let mut result = body.to_string();
     let mut pairs: Vec<(&String, &String)> = sub_map.iter().collect();
-    pairs.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    pairs.sort_by_key(|p| std::cmp::Reverse(p.0.len()));
 
     for (param, arg) in pairs {
         let var = format!("${}", param);

@@ -1529,7 +1529,7 @@ impl RefactoringEngine {
         }
 
         // Sort by start position descending for safe removal from source
-        elements_to_move.sort_by(|a, b| b.location.start.cmp(&a.location.start));
+        elements_to_move.sort_by_key(|e| std::cmp::Reverse(e.location.start));
 
         let mut modified_source = source_content.clone();
 
@@ -1550,7 +1550,7 @@ impl RefactoringEngine {
         }
 
         // Sort by start position ascending for correct append order
-        elements_to_move.sort_by(|a, b| a.location.start.cmp(&b.location.start));
+        elements_to_move.sort_by_key(|e| e.location.start);
 
         // Construct moved content
         let mut moved_content = String::new();
@@ -1882,7 +1882,7 @@ impl RefactoringEngine {
             // Clone and sort edits by start position in descending order to apply them safely
             // (applying from end to start preserves earlier byte positions)
             let mut edits = file_edit.edits.clone();
-            edits.sort_by(|a, b| b.start.cmp(&a.start));
+            edits.sort_by_key(|e| std::cmp::Reverse(e.start));
 
             // Clone content for comparison after modifications
             let mut new_content = content.clone();

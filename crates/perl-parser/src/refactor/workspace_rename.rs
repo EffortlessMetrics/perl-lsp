@@ -569,7 +569,7 @@ impl WorkspaceRename {
         let file_edits: Vec<FileEdit> = edits_by_file
             .into_iter()
             .map(|(file_path, mut edits)| {
-                edits.sort_by(|a, b| b.start.cmp(&a.start));
+                edits.sort_by_key(|e| std::cmp::Reverse(e.start));
                 FileEdit { file_path, edits }
             })
             .collect();
