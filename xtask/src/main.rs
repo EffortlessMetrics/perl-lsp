@@ -442,6 +442,27 @@ enum Commands {
         format: String,
     },
 
+    /// Emit a markdown PR gate summary (dry-run: stdout only, no GitHub posting).
+    ///
+    /// Computes what CI would run for the current branch diff against `--base`,
+    /// and formats it as markdown: changed crates, widened crates, gates run,
+    /// gates skipped, timing estimate, and receipt links.
+    ///
+    /// **Claim boundary**: dry-run only. GitHub sticky-comment posting is
+    /// a follow-up to issue #4825.
+    ///
+    /// Example: `cargo xtask ci pr-summary --base origin/master --dry-run`
+    CiPrSummary {
+        /// Base git reference to diff against (e.g. `origin/master`).
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+
+        /// Emit markdown to stdout only; do not post to GitHub.
+        /// Required in this version — GitHub posting is a future follow-up.
+        #[arg(long, default_value_t = true)]
+        dry_run: bool,
+    },
+
     /// Lint required workflow triggers against policy.
     WorkflowTriggerLint {
         /// Policy TOML path listing conventional required checks.
@@ -2380,6 +2401,9 @@ fn main() -> Result<()> {
         }
         Commands::CiScope { base, format } => {
             ci_scope::run(ci_scope::CiScopeConfig { base, format })
+        }
+        Commands::CiPrSummary { base, dry_run } => {
+            ci_pr_summary::run(ci_pr_summary::CiPrSummaryConfig { base, dry_run })
         }
 
         Commands::WorkflowTriggerLint { policy, receipt, fixture, format } => {
