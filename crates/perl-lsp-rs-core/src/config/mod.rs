@@ -1530,6 +1530,74 @@ profile = "recommended"
         assert_eq!(paths, vec!["local/lib", "vendor/lib", "lib"]);
     }
 
+    /// Precedence audit: when the SAME path appears in both `PERL5LIB` and
+    /// `include_paths`, `Prepend` resolves it from PERL5LIB's slot (early in
+    /// the search list) and `Append` resolves it from `include_paths`' slot.
+    ///
+    /// This pins the policy decision flagged in the 2026-05-11 @INC
+    /// checkpoint: `perl5libPrecedence=prepend` is **Perl-faithful**
+    /// (PERL5LIB shadows workspace `includePaths` for overlapping modules).
+    /// `Append` makes workspace `includePaths` win over PERL5LIB. The
+    /// resolver iterates in the returned order and picks the first hit, so
+    /// the asserted index is the resolution outcome.
+    #[test]
+    fn perl5lib_precedence_pins_shadow_order_for_overlapping_paths() {
+        let shared = "shared/lib".to_string();
+        let perl5lib = vec![shared.clone()];
+        let workspace = vec![shared.clone()];
+
+        let prepend_config = WorkspaceConfig {
+            include_paths: workspace.clone(),
+            perl5lib_precedence: Perl5LibPrecedence::Prepend,
+            ..WorkspaceConfig::default()
+        };
+        let prepend = prepend_config.effective_include_paths(&perl5lib);
+        assert_eq!(prepend.len(), 1, "dedup must collapse to one entry");
+        // With prepend, the overlapping path is contributed by PERL5LIB
+        // first and the workspace copy is deduped. The kept entry is
+        // conceptually the PERL5LIB one — which matches Perl's runtime
+        // behaviour where `-I` / PERL5LIB precedes the default `@INC`.
+
+        let append_config = WorkspaceConfig {
+            include_paths: workspace,
+            perl5lib_precedence: Perl5LibPrecedence::Append,
+            ..WorkspaceConfig::default()
+        };
+        let append = append_config.effective_include_paths(&perl5lib);
+        assert_eq!(append.len(), 1, "dedup must collapse to one entry");
+        // Symmetric: with append, the workspace `includePaths` entry comes
+        // first; the PERL5LIB duplicate is deduped after it.
+
+        // Multi-path overlap: shared appears in both lists, plus distinct
+        // entries on each side. Prepend interleaves PERL5LIB-first.
+        let prepend_multi_config = WorkspaceConfig {
+            include_paths: vec!["workspace_only".into(), shared.clone()],
+            perl5lib_precedence: Perl5LibPrecedence::Prepend,
+            ..WorkspaceConfig::default()
+        };
+        let prepend_multi =
+            prepend_multi_config.effective_include_paths(&["env_only".into(), shared.clone()]);
+        // PERL5LIB entries first → env_only then shared (from env). The
+        // workspace's `shared` is deduped. workspace_only follows.
+        #[cfg(windows)]
+        assert_eq!(prepend_multi, vec!["env_only", "shared\\lib", "workspace_only"]);
+        #[cfg(not(windows))]
+        assert_eq!(prepend_multi, vec!["env_only", "shared/lib", "workspace_only"]);
+
+        // And append flips it: workspace entries first, then env-only.
+        let append_multi_config = WorkspaceConfig {
+            include_paths: vec!["workspace_only".into(), shared.clone()],
+            perl5lib_precedence: Perl5LibPrecedence::Append,
+            ..WorkspaceConfig::default()
+        };
+        let append_multi =
+            append_multi_config.effective_include_paths(&["env_only".into(), shared.clone()]);
+        #[cfg(windows)]
+        assert_eq!(append_multi, vec!["workspace_only", "shared\\lib", "env_only"]);
+        #[cfg(not(windows))]
+        assert_eq!(append_multi, vec!["workspace_only", "shared/lib", "env_only"]);
+    }
+
     #[test]
     fn effective_include_paths_dedupes_with_append_precedence() {
         let config = WorkspaceConfig {
