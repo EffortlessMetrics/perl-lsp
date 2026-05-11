@@ -13,28 +13,30 @@ replace the conveyor — it adds the missing economics layer.
 
 ## Order and status
 
-| PR | Name | Purpose | Status |
-|---:|---|---|---|
-| 01 | CI economics docs | Encode verification economics doctrine and contributor framing. | landed |
-| 02 | Policy TOML ledgers | Map every CI item to intent, cost, trigger, owner. | landed |
-| 03 | CI inventory | Inventory current workflows; flag duplicates and gaps. | landed |
-| 04 | PR Plan advisory | Emit per-PR LEM estimate and selected lanes. | landed |
-| 05 | Cache save-only-master | Stop PR cache write churn. | landed |
-| 06 | `ripr` advisory | Add static oracle-gap signal. | landed |
-| 07 | PR Plan: `ripr` + LEM wiring | Make planner aware of `ripr` and risk packs. | landed |
-| 08 | `ci-actuals` | Convert receipts into cost telemetry. | landed (upload wiring deferred) |
-| 09 | LEM in gate policy | Cross-reference `.ci/gate-policy.yaml` with lane economics. | landed |
-| 10 | Risk-pack routing metadata | Parser/LSP/workspace/DAP/security/memory risk packs. | landed |
-| 11 | Workflow policy lint | Lint workflows against `policy/ci-lane-whitelist.toml`. | landed |
-| 12 | `xtask ci plan` | Move PR Plan from Python to Rust. | deferred |
-| 13 | Soft LEM warnings | Warn above 35 / 75 LEM, hard guard above 125. | landed |
-| 14 | External AI review tuning | Make Droid review advisory and LEM-visible. | landed |
-| 15 | UX ownership clarification | Resolve `ci.yml` UX vs `ux-regression-gate.yml` overlap. | landed |
-| 16 | Learned estimate scaffolding | Use observed actuals for LEM estimates. | landed |
-| 17 | Conditional lane cleanup | Tune Windows / memory / UX / external review after actuals. | data-gated |
-| 18 | `ripr` soft-gate promotion | Require acknowledgement for high-confidence new gaps. | data-gated |
+| PR | Name | Purpose | Status | Tracking |
+|---:|---|---|---|---|
+| 01 | CI economics docs | Encode verification economics doctrine and contributor framing. | landed | #8134 |
+| 02 | Policy TOML ledgers | Map every CI item to intent, cost, trigger, owner. | landed | #8135 |
+| 03 | CI inventory | Inventory current workflows; flag duplicates and gaps. | landed | #8136 |
+| 04 | PR Plan advisory | Emit per-PR LEM estimate and selected lanes. | landed | #8137 |
+| 05 | Cache save-only-master | Stop PR cache write churn. | landed | #8138 |
+| 06 | `ripr` advisory | Add static oracle-gap signal. | landed | #8139 |
+| 07 | PR Plan: `ripr` + LEM wiring | Make planner aware of `ripr` and risk packs. | landed | #8142 |
+| 08 | `ci-actuals` | Convert receipts into cost telemetry. | landed (upload wiring deferred) | #8143 (wiring → #8166) |
+| 09 | LEM in gate policy | Cross-reference `.ci/gate-policy.yaml` with lane economics. | landed | #8144 |
+| 10 | Risk-pack routing metadata | Parser/LSP/workspace/DAP/security/memory risk packs. | landed | #8153 |
+| 11 | Workflow policy lint | Lint workflows against `policy/ci-lane-whitelist.toml`. | landed | #8154 |
+| 12 | `xtask ci plan` | Move PR Plan from Python to Rust. | deferred | #8166 |
+| 13 | Soft LEM warnings | Warn above 35 / 75 LEM, hard guard above 125. | landed | #8145 |
+| 14 | External AI review tuning | Make Droid review advisory and LEM-visible. | landed | #8146 |
+| 15 | UX ownership clarification | Resolve `ci.yml` UX vs `ux-regression-gate.yml` overlap. | landed | #8147 |
+| 16 | Learned estimate scaffolding | Use observed actuals for LEM estimates. | landed | #8155 |
+| 17 | Conditional lane cleanup | Tune Windows / memory / UX / external review after actuals. | data-gated | #8166 |
+| 18 | `ripr` soft-gate promotion | Require acknowledgement for high-confidence new gaps. | data-gated | #8166 |
 
 End-of-rollout retrospective: [`rollout-summary.md`](rollout-summary.md).
+
+> Tracking-column "landed" PR numbers are the audit-trail PRs from the retrospective; deferred rows (12, 17, 18 + actuals wiring) are tracked together in #8166. Cross-link added via #8670.
 
 ---
 

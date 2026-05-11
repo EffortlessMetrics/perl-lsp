@@ -139,6 +139,28 @@ Once data is available, gate promotion lands as a one-line change in `ripr.toml`
 
 ---
 
+## Follow-up tracking
+
+GitHub issues for every remaining row in the CI economics + Codecov + file-policy ladders (filed 2026-05-11 via #8670):
+
+| Ladder | Row | Issue |
+|---|---|---|
+| CI economics | PR 12, 17, 18 + actuals wiring (deferred cluster) | #8166 |
+| Codecov | Cov-1 (`codecov.yml` shape) | #8578 |
+| Codecov | Cov-2 (test-coverage receipt) | #8582 |
+| Codecov | Cov-3 (`docs/ci/codecov.md`) | #8586 |
+| Codecov | Cov-4 (README) | merged #8541 |
+| Codecov | Cov-5 (Test Analytics table) | #8588 |
+| Codecov | Cov-6 (policy registration) | #8594 |
+| Codecov | Cov-7 (dedicated workflow, optional/late) | #8668 |
+| Codecov | Cov-8 (ratchet calibration, data-gated) | #8669 |
+| File-policy | PRs 3–11 (xtask, companion ledgers, gate wiring) | #8174 |
+| Cross-link | this doc-update PR | #8670 |
+
+Coworker agents reading the ladders should open the corresponding tracking issue before starting work on a row.
+
+---
+
 ## Operational reminders
 
 - **PR Plan failure does not block merges.** The workflow is intentionally not a
