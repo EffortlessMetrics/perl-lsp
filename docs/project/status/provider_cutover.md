@@ -65,6 +65,12 @@ fallback behavior and rollback proof.
   parser/HIR classifications, compiler-backed classifications,
   dynamic-boundary blockers, and stale compiler facts. These receipts do not
   broaden live semantic-token behavior.
+- Semantic tokens now have runtime integration quality receipts
+  (`semantic_tokens_runtime_quality_receipt`) that exercise the live
+  `textDocument/semanticTokens/full` handler and capture token count, shadow
+  state, and a quality-proof note. Nine BDD tests confirm receipt correctness,
+  no-live-behavior-change invariant, and token-count parity with the live
+  handler. Compiler-fact candidates remain pending staged cutover.
 - Other provider surfaces remain trace/proof infrastructure only until their
   own cutover proof lands.
 
@@ -97,7 +103,7 @@ the relevant receipt command.
 | Safe delete | `boundary-shadowed` | Safe-delete receipts trace exact static allow decisions, dynamic-boundary blockers, framework-generated blockers, stale compiler facts, runtime blocker UX notes, and live-vs-compiler exact-static receipt data before any live compiler-backed refactor behavior | Real-workspace unsafe-delete receipts and explicit blocker UX in live safe-delete surfaces before any broader refactor migration |
 | Workspace symbols | `shadowed` | Existing workspace index remains the live provider source; semantic-shadow fixtures trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates; runtime quality receipts capture live provider counts/results without changing live behavior | Real-workspace workspace-symbol quality receipts ([#8378](https://github.com/EffortlessMetrics/perl-lsp/issues/8378)) before any live cutover |
 | Document symbols | `shadowed` | Existing document-symbol provider remains the live source; semantic-shadow fixtures trace explicit syntax, generated, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live provider counts/results without changing live behavior | Real-workspace document-symbol quality receipts before any live cutover |
-| Semantic tokens | `shadowed` | Existing parser/token provider remains the live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, dynamic-boundary, and stale fact candidates | Runtime integration and token/span invariant receipts before any live cutover |
+| Semantic tokens | `shadowed` | Existing parser/token provider remains the live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live token count and shadow state without changing live behavior | Token/span invariant receipts and real-workspace token quality before any live cutover |
 
 ## Cutover Rules
 
