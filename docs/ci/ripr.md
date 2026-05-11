@@ -94,15 +94,17 @@ ripr is **never** used as proof; it is used as a **prompt**.
 
 ## Toolchain
 
-`rust-toolchain.toml` pins `1.93.1`, which satisfies `ripr`'s `>= 1.93` MSRV. The workflow
-uses the toolchain pinned in the repo and installs `ripr` via `cargo install ripr --locked`.
+`rust-toolchain.toml` pins `1.93.1`. While the repository is on that toolchain,
+the workflow installs `ripr` `0.4.0`, the latest compatible advisory version for
+the Rust 1.93 line. The Rust 1.95 rollout can unpin or bump this after the repo
+toolchain moves.
 
 ---
 
 ## Running locally
 
 ```bash
-cargo install ripr --locked
+cargo install ripr --version 0.4.0 --locked
 ripr doctor
 ripr check --base origin/master
 ripr check --base origin/master --json > target/ripr/ripr.json
