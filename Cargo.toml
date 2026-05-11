@@ -376,7 +376,6 @@ collapsible_match = { level = "allow", priority = 1 }
 manual_range_contains = { level = "allow", priority = 1 }
 useless_vec = { level = "allow", priority = 1 }
 vec_init_then_push = { level = "allow", priority = 1 }
-assertions_on_constants = { level = "allow", priority = 1 }
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)', 'cfg(feature, values("slow_tests"))'] }
