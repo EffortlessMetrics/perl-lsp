@@ -96,7 +96,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
       - name: Install cargo-audit
-        uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1  # v2.75.22
+        uses: taiki-e/install-action@fa0dd4cd0a40696e6f9766370614a5ce482e6aa8  # v2.77.5
         with:
           tool: cargo-audit
 
@@ -150,7 +150,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
 
       - name: Install cargo-deny
-        uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1  # v2.75.22
+        uses: taiki-e/install-action@fa0dd4cd0a40696e6f9766370614a5ce482e6aa8  # v2.77.5
         with:
           tool: cargo-deny
 
