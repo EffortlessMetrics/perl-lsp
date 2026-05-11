@@ -74,6 +74,12 @@ enum Commands {
         command: QueueCommand,
     },
 
+    /// PR-related local tooling (title check, etc.)
+    Pr {
+        #[command(subcommand)]
+        command: PrSubcommand,
+    },
+
     /// Build project with various configurations
     Build {
         /// Build in release mode
@@ -2100,6 +2106,31 @@ enum CiSubcommand {
 }
 
 #[derive(Subcommand)]
+enum PrSubcommand {
+    /// Validate a PR title matches the required format and references an open issue.
+    ///
+    /// Mirrors the `validate-title` GitHub Actions check for local pre-push use.
+    /// Pass a title string directly or omit to read from `git log -1 --pretty=%s`.
+    #[command(name = "title-check")]
+    TitleCheck {
+        /// PR title to validate. If omitted, reads the HEAD commit subject.
+        title: Option<String>,
+
+        /// Emit a JSON receipt instead of human-readable output.
+        #[arg(long)]
+        json: bool,
+
+        /// Exit 1 on warnings (e.g. closed issue) in addition to hard failures.
+        #[arg(long)]
+        strict: bool,
+
+        /// Skip the GitHub issue-existence API call.
+        #[arg(long)]
+        no_gh: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum DevexCommand {
     /// Plan the cheapest correct local proof commands for the current diff.
     Plan {
@@ -2252,6 +2283,16 @@ fn main() -> Result<()> {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
             QueueCommand::Health { receipt, fixture } => {
                 queue_health::run(queue_health::QueueHealthArgs { receipt, fixture })
+            }
+        },
+        Commands::Pr { command } => match command {
+            PrSubcommand::TitleCheck { title, json, strict, no_gh } => {
+                tasks::pr::title_check::run(tasks::pr::title_check::TitleCheckConfig {
+                    title,
+                    json,
+                    strict,
+                    no_gh,
+                })
             }
         },
         Commands::Build { release, features, c_scanner, rust_scanner } => {
