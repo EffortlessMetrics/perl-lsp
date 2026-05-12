@@ -14,7 +14,7 @@ fn fuzz_segment(state: &mut u64, max_len: usize) -> String {
     for _ in 0..len {
         let byte = (next_u64(state) & 0x7F) as u8;
         let ch = match byte {
-            0..=31 => b'a' + (byte % 26) as u8,
+            0..=31 => b'a' + byte % 26,
             b':' | b'/' | b'\\' => b'x',
             _ => byte,
         } as char;

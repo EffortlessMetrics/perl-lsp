@@ -3,6 +3,10 @@
 //! This benchmark suite verifies performance improvements from issue #3527:
 //! - Segment-based token cache implementation
 //! - Two-sided checkpoint window implementation
+// Bench-only code: allow patterns that are spurious in micro-benchmark context.
+#![allow(dead_code)] // BenchmarkResult fields and helpers are bench scaffolding
+#![allow(clippy::expect_used)] // benches use expect() to fail-fast on setup errors
+#![allow(clippy::manual_range_contains)] // range-check assertion is explicit for bench readability
 //! - Enhanced metrics tracking
 //!
 //! Performance expectations (based on similar implementations):
