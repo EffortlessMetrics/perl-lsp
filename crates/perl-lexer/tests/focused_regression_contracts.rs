@@ -123,6 +123,26 @@ fn unicode_heredoc_regression_input_does_not_panic() {
 }
 
 #[test]
+fn utf8_heredoc_body_data_marker_does_not_split_code() -> TestResult {
+    let input = "my $text = <<\"TXT\";\nαβ __DATA__\nTXT\nsay \"ok\";\n__DATA__\npayload\n";
+    let real_marker = input.rfind("__DATA__").ok_or("missing real data marker")?;
+
+    assert_eq!(perl_lexer::find_data_marker_byte_lexed(input), Some(real_marker));
+    assert_eq!(perl_lexer::code_slice(input), &input[..real_marker]);
+    Ok(())
+}
+
+#[test]
+fn data_marker_after_utf8_prefix_reports_byte_offset() -> TestResult {
+    let input = "say \"é\";\n__END__\ntrailer\n";
+    let marker = input.find("__END__").ok_or("missing end marker")?;
+
+    assert_eq!(perl_lexer::find_data_marker_byte_lexed(input), Some(marker));
+    assert_eq!(&input[marker..marker + "__END__".len()], "__END__");
+    Ok(())
+}
+
+#[test]
 fn unterminated_quote_command_degrades_gracefully() -> TestResult {
     let mut lexer = PerlLexer::new("qx{unterminated");
     let token = next_non_trivia(&mut lexer).ok_or("expected token")?;
