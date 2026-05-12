@@ -540,6 +540,15 @@ fn regexp_common_comment_combine_parenthesized_map_args() {
 }
 
 #[test]
+fn extutils_mm_unix_for_list_with_parenthesized_map() {
+    // From ExtUtils::MM_Unix: a for-list may mix qw groups and a parenthesized
+    // map block without treating the next identifier as a missing `)`.
+    assert_clean_parse(
+        r#"for my $macro (qw(PERL_LIB PERL_ARCHLIB), (map { ("INSTALL".$_, "DESTINSTALL".$_) } $self->installvars), qw(PERL_SRC)) { $self->{$macro} ||= ""; }"#,
+    );
+}
+
+#[test]
 fn main_package_variable_in_paren_expr() {
     // From Unicode::Normalize: `$::IS_ASCII` must parse as a main-package
     // variable, not as `$::` followed by a stray bare identifier.
