@@ -189,6 +189,46 @@ impl PerlOracleEnv {
             extra_env: BTreeMap::new(),
         })
     }
+
+    /// Constructor for user-triggered `executeCommand` invocations (`perl.runFile`,
+    /// `perl.runTestSub`).
+    ///
+    /// Unlike the startup `@INC` probe, these are user-explicit commands whose
+    /// scripts may legitimately rely on `PERL5OPT` and `local::lib`. The env
+    /// contract therefore differs:
+    ///
+    /// - `allow_perl5lib`: mirrors `config.use_perl5lib` (user's explicit choice).
+    /// - `allow_perl5opt`: always `true` — user scripts may use `-M` pragmas.
+    /// - `allow_local_lib`: always `true` — user's `local::lib` setup should be
+    ///   available when they run their own scripts.
+    /// - `timeout`: 30 seconds (matches the existing execute-command budget).
+    /// - `cwd`: falls back to the LSP process cwd; callers may pass a more
+    ///   specific directory (e.g., a workspace root).
+    /// - `extra_env`: empty.
+    ///
+    /// Returns `None` if the Perl binary cannot be resolved. The caller should
+    /// fall back to a plain `Command::new("perl")` or surface an error.
+    pub fn for_execute_command(config: &WorkspaceConfig, cwd: PathBuf) -> Option<Self> {
+        use crate::platform::resolve_perl_path_with_toolchain;
+
+        let perl_binary = match config.perl_path.as_deref().filter(|p| !p.is_empty()) {
+            Some(path) => PathBuf::from(path),
+            None => match resolve_perl_path_with_toolchain() {
+                Ok(path) => path,
+                Err(_) => return None,
+            },
+        };
+
+        Some(Self {
+            perl_binary,
+            cwd,
+            timeout: Duration::from_secs(30),
+            allow_perl5lib: config.use_perl5lib,
+            allow_perl5opt: true,
+            allow_local_lib: true,
+            extra_env: BTreeMap::new(),
+        })
+    }
 }
 
 // ── WASM stub ─────────────────────────────────────────────────────────────────
@@ -202,6 +242,14 @@ pub struct PerlOracleEnv;
 impl PerlOracleEnv {
     /// Returns `None` on WASM (no subprocess support).
     pub fn for_startup_inc_probe(_config: &WorkspaceConfig) -> Option<Self> {
+        None
+    }
+
+    /// Returns `None` on WASM (no subprocess support).
+    pub fn for_execute_command(
+        _config: &WorkspaceConfig,
+        _cwd: std::path::PathBuf,
+    ) -> Option<Self> {
         None
     }
 }
@@ -245,6 +293,32 @@ mod tests {
     }
 
     // ── struct-level flag tests (no subprocess needed) ────────────────────────
+
+    /// `for_execute_command` maps config flags correctly:
+    /// - `allow_perl5lib` = `config.use_perl5lib`
+    /// - `allow_perl5opt` = always `true`
+    /// - `allow_local_lib` = always `true`
+    #[test]
+    fn for_execute_command_respects_config_flags() {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        let mut config = WorkspaceConfig::default();
+        config.use_perl5lib = true;
+        let env = PerlOracleEnv::for_execute_command(&config, cwd.clone());
+        if let Some(e) = env {
+            assert!(e.allow_perl5lib, "allow_perl5lib must mirror config.use_perl5lib=true");
+            assert!(e.allow_perl5opt, "allow_perl5opt must always be true for execute-command");
+            assert!(e.allow_local_lib, "allow_local_lib must always be true for execute-command");
+        }
+
+        config.use_perl5lib = false;
+        let env = PerlOracleEnv::for_execute_command(&config, cwd);
+        if let Some(e) = env {
+            assert!(!e.allow_perl5lib, "allow_perl5lib must mirror config.use_perl5lib=false");
+            assert!(e.allow_perl5opt, "allow_perl5opt must always be true for execute-command");
+            assert!(e.allow_local_lib, "allow_local_lib must always be true for execute-command");
+        }
+    }
 
     /// `for_startup_inc_probe` maps `config.use_perl5lib` → `allow_perl5lib`.
     #[test]
