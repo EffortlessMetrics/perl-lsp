@@ -588,6 +588,13 @@ fn unicode_normalize_unpack_u_map_block() {
 }
 
 #[test]
+fn unicode_normalize_printable_map_sprintf_split() {
+    // From Unicode::Normalize: join may take a map block whose expression calls
+    // sprintf, followed by a split expression as the map source list.
+    assert_clean_parse(r#"return join " ", map { sprintf "\\x%02x", ord $_ } split "", $s;"#);
+}
+
+#[test]
 fn x_repetition_prefix_decrement_in_parens() {
     // From Pod::Simple::XHTML: repetition RHS may be a prefix decrement.
     assert_clean_parse(r#"push @out, ('  ' x --$indent) . '</li>';"#);
