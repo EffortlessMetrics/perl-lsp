@@ -696,18 +696,9 @@ fn mixed_use_and_no_lib_on_same_line() {
     let ops = extract_use_lib_operations(source);
 
     assert_eq!(ops.len(), 3);
-    match &ops[0] {
-        UseLibAction::Add(_) => {}
-        _ => panic!("First op should be Add"),
-    }
-    match &ops[1] {
-        UseLibAction::Remove(_) => {}
-        _ => panic!("Second op should be Remove"),
-    }
-    match &ops[2] {
-        UseLibAction::Add(_) => {}
-        _ => panic!("Third op should be Add"),
-    }
+    assert!(matches!(&ops[0], UseLibAction::Add(_)), "First op should be Add");
+    assert!(matches!(&ops[1], UseLibAction::Remove(_)), "Second op should be Remove");
+    assert!(matches!(&ops[2], UseLibAction::Add(_)), "Third op should be Add");
 }
 
 #[test]
@@ -756,7 +747,8 @@ use lib '/path';
 }
 
 #[test]
-fn findbin_variable_with_path_containing_semicolon_in_comment() {
+fn findbin_variable_with_path_containing_semicolon_in_comment()
+-> Result<(), Box<dyn std::error::Error>> {
     // Regression: FindBin extraction should work even with tricky comments.
     let source = "\
 use lib \"$RealBin/../lib\"; # Historical reason; keep this
@@ -766,13 +758,12 @@ use lib \"/override\";
     let ops = extract_use_lib_operations(source);
 
     assert_eq!(ops.len(), 2);
-    match &ops[0] {
-        UseLibAction::Add(paths) => {
-            assert_eq!(paths.len(), 1);
-            assert!(paths[0].from_findbin);
-        }
-        _ => panic!("Expected Add"),
-    }
+    let UseLibAction::Add(paths) = &ops[0] else {
+        return Err("Expected Add for ops[0]".into());
+    };
+    assert_eq!(paths.len(), 1);
+    assert!(paths[0].from_findbin);
+    Ok(())
 }
 
 #[test]

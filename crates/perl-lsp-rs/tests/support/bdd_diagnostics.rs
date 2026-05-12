@@ -2,10 +2,12 @@ use serde_json::{Value, json};
 
 use super::lsp_harness::LspHarness;
 
+#[allow(dead_code)]
 pub struct BddScenario {
     name: &'static str,
 }
 
+#[allow(dead_code)]
 impl BddScenario {
     pub fn new(name: &'static str) -> Self {
         eprintln!("Scenario: {}", name);
@@ -25,11 +27,13 @@ impl BddScenario {
     }
 }
 
+#[allow(dead_code)]
 pub struct DocumentDiagnosticFlow<'a> {
     harness: &'a mut LspHarness,
     uri: String,
 }
 
+#[allow(dead_code)]
 impl<'a> DocumentDiagnosticFlow<'a> {
     pub fn new(harness: &'a mut LspHarness, uri: impl Into<String>) -> Self {
         Self { harness, uri: uri.into() }

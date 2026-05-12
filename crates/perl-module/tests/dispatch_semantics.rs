@@ -168,7 +168,7 @@ fn test_require_empty_double_quoted_path_is_accepted() -> Result<(), String> {
     // the parser should return Some with an empty token, not None.
     let head = parse_module_import_head(r#"require "";"#)
         .ok_or("expected Some for empty double-quoted require")?;
-    if head.token != "" {
+    if !head.token.is_empty() {
         return Err(format!("expected empty token, got {:?}", head.token));
     }
     Ok(())

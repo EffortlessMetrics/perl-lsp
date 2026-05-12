@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 
 /// Information extracted from a `stopped` event.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct StoppedInfo {
     /// Stopped reason, e.g. `"breakpoint"`, `"step"`, `"entry"`.
     pub reason: String,
@@ -32,6 +33,7 @@ pub struct DapWorkflowSession {
     seq: i64,
 }
 
+#[allow(dead_code)]
 impl DapWorkflowSession {
     /// Create a new session and send `initialize`.
     ///

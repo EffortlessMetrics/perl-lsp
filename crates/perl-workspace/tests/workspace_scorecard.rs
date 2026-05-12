@@ -27,8 +27,8 @@ use walkdir::WalkDir;
 // Helper: build a file URI without panic
 // ---------------------------------------------------------------------------
 
-fn uri(path: &str) -> Url {
-    Url::parse(&format!("file://{path}")).expect("valid test URI")
+fn uri(path: &str) -> Result<Url, url::ParseError> {
+    Url::parse(&format!("file://{path}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -42,7 +42,7 @@ fn uri(path: &str) -> Url {
 #[test]
 fn scorecard_stale_definition_after_file_delete() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
-    let file_uri = uri("/workspace/scorecard/stale_def_test.pl");
+    let file_uri = uri("/workspace/scorecard/stale_def_test.pl")?;
 
     // Phase 1: index a file containing `sub stale_helper`
     index.index_file(
@@ -61,7 +61,7 @@ fn scorecard_stale_definition_after_file_delete() -> Result<(), Box<dyn std::err
     );
 
     // Phase 2: delete the file (simulates user deleting the file on disk)
-    index.remove_file(&file_uri.to_string());
+    index.remove_file(file_uri.as_str());
 
     // Phase 3: assert no stale results — defect rate must be 0
     assert!(
@@ -81,7 +81,7 @@ fn scorecard_stale_definition_after_file_delete() -> Result<(), Box<dyn std::err
 #[test]
 fn scorecard_stale_references_after_file_delete() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
-    let file_uri = uri("/workspace/scorecard/stale_refs_test.pl");
+    let file_uri = uri("/workspace/scorecard/stale_refs_test.pl")?;
 
     index.index_file(
         file_uri.clone(),
@@ -94,7 +94,7 @@ fn scorecard_stale_references_after_file_delete() -> Result<(), Box<dyn std::err
         "references should exist before deletion"
     );
 
-    index.remove_file(&file_uri.to_string());
+    index.remove_file(file_uri.as_str());
 
     // After deletion: no stale references
     assert!(
@@ -120,7 +120,7 @@ fn scorecard_stale_references_after_file_delete() -> Result<(), Box<dyn std::err
 #[test]
 fn scorecard_incremental_reindex_removes_old_symbol() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
-    let file_uri = uri("/workspace/scorecard/incremental_test.pl");
+    let file_uri = uri("/workspace/scorecard/incremental_test.pl")?;
 
     // Index v1: contains `old_symbol`
     index
@@ -160,7 +160,7 @@ fn scorecard_incremental_reindex_latency_within_slo() -> Result<(), Box<dyn std:
     let mut latencies_ms = Vec::with_capacity(20);
 
     for i in 0..20u32 {
-        let file_uri = uri(&format!("/workspace/scorecard/latency_slo_{i}.pl"));
+        let file_uri = uri(&format!("/workspace/scorecard/latency_slo_{i}.pl"))?;
         // Initial index
         index.index_file(
             file_uri.clone(),
@@ -199,8 +199,8 @@ fn scorecard_incremental_reindex_latency_within_slo() -> Result<(), Box<dyn std:
 fn scorecard_file_removal_isolation() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
-    let uri_a = uri("/workspace/scorecard/isolation_a.pl");
-    let uri_b = uri("/workspace/scorecard/isolation_b.pl");
+    let uri_a = uri("/workspace/scorecard/isolation_a.pl")?;
+    let uri_b = uri("/workspace/scorecard/isolation_b.pl")?;
 
     index.index_file(uri_a.clone(), "package IsoA;\nsub func_a { return 'a'; }\n".to_string())?;
     index.index_file(uri_b.clone(), "package IsoB;\nsub func_b { return 'b'; }\n".to_string())?;
@@ -210,7 +210,7 @@ fn scorecard_file_removal_isolation() -> Result<(), Box<dyn std::error::Error>> 
     assert!(index.find_definition("IsoB::func_b").is_some());
 
     // Remove only file A
-    index.remove_file(&uri_a.to_string());
+    index.remove_file(uri_a.as_str());
 
     // A's symbol must be gone
     assert!(
@@ -242,7 +242,7 @@ fn scorecard_clear_returns_to_empty() -> Result<(), Box<dyn std::error::Error>> 
     // Index several files
     for i in 0..5 {
         index.index_file(
-            uri(&format!("/workspace/scorecard/clear_test_{i}.pl")),
+            uri(&format!("/workspace/scorecard/clear_test_{i}.pl"))?,
             format!("package Clear{i};\nsub sub_{i} {{ {i} }}\n"),
         )?;
     }

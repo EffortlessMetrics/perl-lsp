@@ -383,8 +383,13 @@ mod tests {
         let perl5lib_path = "perl5lib".to_string();
         let include_paths = vec![perl5lib_path.clone(), "lib".to_string()];
 
-        let enabled =
-            build_effective_inc_roots(&include_paths, &[perl5lib_path.clone()], true, &[], &[]);
+        let enabled = build_effective_inc_roots(
+            &include_paths,
+            std::slice::from_ref(&perl5lib_path),
+            true,
+            &[],
+            &[],
+        );
         assert_eq!(enabled[0].kind, IncRootKind::Perl5LibEnv);
         assert_eq!(enabled[0].source, "perl5lib-env");
         assert_eq!(enabled[1].kind, IncRootKind::WorkspaceRelative);

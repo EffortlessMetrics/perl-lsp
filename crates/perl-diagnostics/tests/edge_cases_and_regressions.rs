@@ -169,7 +169,7 @@ fn edge_case_tag_copy_semantics() {
 // Edge case: DiagnosticSeverity implements Ord for sorting
 #[test]
 fn edge_case_severity_ordering_complete() {
-    let mut severities = vec![
+    let mut severities = [
         DiagnosticSeverity::Hint,
         DiagnosticSeverity::Error,
         DiagnosticSeverity::Information,
@@ -259,7 +259,7 @@ fn regression_note_old_imports_must_fail() {
         perl_diagnostics::codes::DiagnosticCode::ParseError,
     );
 
-    assert!(true); // Test passes
+    // Test passes — old import paths documented above; new paths verified below
 }
 
 // Regression: DiagnosticCode implements Copy and Clone
