@@ -955,8 +955,29 @@ impl LspServer {
                     let ext_resolved =
                         crate::execute_command::normalize_path_for_external_command(&resolved);
 
-                    // Launch perl -d as a detached child process
-                    match std::process::Command::new("perl")
+                    // Launch perl -d as a detached child process.
+                    // PerlOracleEnv strips PERL5LIB/PERL5OPT/ambient env so the
+                    // debug session env is controlled by the LSP workspace config,
+                    // not whatever happens to be in the editor's process env (#8685).
+                    let debug_cwd =
+                        resolved.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| {
+                            std::env::current_dir()
+                                .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                        });
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let mut debug_cmd = {
+                        use perl_lsp_rs_core::config::PerlOracleEnv;
+                        let wc = self.workspace_config.lock().clone();
+                        PerlOracleEnv::for_language_probe(&wc, debug_cwd)
+                            .map(|oracle| oracle.into_command())
+                            .unwrap_or_else(|| std::process::Command::new("perl"))
+                    };
+                    #[cfg(target_arch = "wasm32")]
+                    let mut debug_cmd = {
+                        let _ = debug_cwd;
+                        std::process::Command::new("perl")
+                    };
+                    match debug_cmd
                         .arg("-d")
                         .arg("--")
                         .arg(&ext_resolved)
