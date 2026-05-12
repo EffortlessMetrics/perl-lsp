@@ -13,6 +13,8 @@ use std::time::{Duration, Instant};
 
 /// Information extracted from a `stopped` event.
 #[derive(Debug, Clone)]
+// Shared workflow-test fixture fields are intentionally read by selected
+// scenario helpers only; keep the full event shape available for new DAP flows.
 #[allow(dead_code)]
 pub struct StoppedInfo {
     /// Stopped reason, e.g. `"breakpoint"`, `"step"`, `"entry"`.
@@ -33,6 +35,7 @@ pub struct DapWorkflowSession {
     seq: i64,
 }
 
+// Shared workflow-test helpers are consumed incrementally by DAP scenarios.
 #[allow(dead_code)]
 impl DapWorkflowSession {
     /// Create a new session and send `initialize`.
