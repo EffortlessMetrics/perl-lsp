@@ -65,6 +65,21 @@ fn test_use_if_negation() {
     assert_clean_parse(source);
 }
 
+#[test]
+fn fields_warnings_register_fallback() {
+    // From fields.pm: an unless condition may contain an eval block, followed
+    // by a qualified typeglob assignment to an anonymous sub fallback.
+    let source = r#"
+unless( eval {require warnings::register; warnings::register->import; 1} ) {
+    *warnings::warnif = sub {
+        require Carp;
+        Carp::carp(@_);
+    }
+}
+"#;
+    assert_clean_parse(source);
+}
+
 // --- Combined patterns from CPAN corpus ---
 
 #[test]
