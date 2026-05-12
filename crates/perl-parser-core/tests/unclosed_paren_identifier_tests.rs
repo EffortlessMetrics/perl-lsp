@@ -520,6 +520,15 @@ fn unless_null_in_paren() {
 }
 
 #[test]
+fn unicode_collate_map_expr_in_for_list() {
+    // From Unicode::Collate: map EXPR, LIST inside a for-list must not leave
+    // the parenthesized list waiting for a `)` before the identifier body.
+    assert_clean_parse(
+        r#"for my $vwt (map $self->getWt($_), @$subE) { my($var, @wt) = unpack(VCE_TEMPLATE, $vwt); }"#,
+    );
+}
+
+#[test]
 fn main_package_variable_in_paren_expr() {
     // From Unicode::Normalize: `$::IS_ASCII` must parse as a main-package
     // variable, not as `$::` followed by a stray bare identifier.
