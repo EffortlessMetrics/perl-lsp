@@ -6316,7 +6316,8 @@ fn render_next_pointer_status_receipt(artifact: &ParserAccuracyArtifact) -> Stri
         output.push_str("|---|---|---|\n");
 
         let gaps = next_measurement_gap_rows(artifact);
-        if gaps.is_empty() {
+        let has_no_gaps = gaps.is_empty();
+        if has_no_gaps {
             output.push_str("| none | n/a | n/a |\n");
         } else {
             for gap in gaps {
@@ -6329,8 +6330,14 @@ fn render_next_pointer_status_receipt(artifact: &ParserAccuracyArtifact) -> Stri
             }
         }
         output.push_str(
-            "\nUse this section only when there are no active failure packets. Keep each measurement gap in its own PR and regenerate this file after a lane lands.\n",
+            "\nUse the measurement gap table only when there are no active failure packets. Keep each measurement gap in its own PR and regenerate this file after a lane lands.\n",
         );
+        if has_no_gaps {
+            output.push_str("\n## Capability Handoff\n\n");
+            output.push_str(
+                "Measurement wiring is clear. Follow [`parser.md`](parser.md#parser-failure-worklist-clustered) for capability work; take the largest nonzero parser failure cluster as the next parser lane and keep it separate from measurement-only work.\n",
+            );
+        }
     }
 
     output
@@ -8504,12 +8511,46 @@ sub dynamic_boundary_case {
             "test(parser-accuracy): wire provider gold fixture for provider_goto_definition_hit_rate"
         ));
         assert!(pointer.contains("completion_query_ms_p95"));
+        assert!(!pointer.contains("## Capability Handoff"));
         assert!(matches!(
             (
                 pointer.find("provider_goto_definition_hit_rate"),
                 pointer.find("completion_query_ms_p95")
             ),
             (Some(provider_index), Some(timing_index)) if provider_index < timing_index
+        ));
+    }
+
+    #[test]
+    fn next_pointer_hands_off_when_measurement_queue_is_empty() {
+        let manifest = fixture_manifest();
+        let artifact = ParserAccuracyArtifact {
+            schema_version: 1,
+            subsystem: "parser_accuracy".to_string(),
+            generated_at: "2026-05-05T00:00:00Z".to_string(),
+            commit: "test-commit".to_string(),
+            cadence: Cadence::Pr,
+            denominator: compute_denominator(&manifest),
+            families: summarize_families(&manifest),
+            metrics: vec![measured_count("line_construct_f1", 1, 1, Cadence::Pr)],
+            failure_packets: Vec::new(),
+            gold_drift: GoldDrift::default(),
+            metric_runtime: MetricRuntime::default(),
+        };
+
+        let pointer = render_next_pointer_status_receipt(&artifact);
+
+        assert!(pointer.contains("Pointer: no active failure packets."));
+        assert!(pointer.contains("| none | n/a | n/a |"));
+        assert!(pointer.contains("## Capability Handoff"));
+        assert!(pointer.contains("parser.md#parser-failure-worklist-clustered"));
+        assert!(pointer.contains("largest nonzero parser failure cluster"));
+        assert!(matches!(
+            (
+                pointer.find("Use the measurement gap table only"),
+                pointer.find("## Capability Handoff")
+            ),
+            (Some(guidance_index), Some(handoff_index)) if guidance_index < handoff_index
         ));
     }
 

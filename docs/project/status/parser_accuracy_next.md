@@ -14,4 +14,8 @@ Pointer: no active failure packets.
 |---|---|---|
 | none | n/a | n/a |
 
-Use this section only when there are no active failure packets. Keep each measurement gap in its own PR and regenerate this file after a lane lands.
+Use the measurement gap table only when there are no active failure packets. Keep each measurement gap in its own PR and regenerate this file after a lane lands.
+
+## Capability Handoff
+
+Measurement wiring is clear. Follow [`parser.md`](parser.md#parser-failure-worklist-clustered) for capability work; take the largest nonzero parser failure cluster as the next parser lane and keep it separate from measurement-only work.
