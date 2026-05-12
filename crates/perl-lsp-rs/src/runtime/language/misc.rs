@@ -861,7 +861,8 @@ impl LspServer {
                 }
             }
 
-            let provider = ExecuteCommandProvider::with_workspace_roots(workspace_roots);
+            let provider = ExecuteCommandProvider::with_workspace_roots(workspace_roots)
+                .with_workspace_config(self.workspace_config.lock().clone());
 
             match command {
                 // Keep existing test commands for backward compatibility

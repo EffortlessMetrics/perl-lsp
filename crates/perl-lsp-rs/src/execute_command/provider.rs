@@ -1,6 +1,9 @@
 //! Backend command implementations for run/debug/test and analyzer actions.
 
 use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
+#[cfg(not(target_arch = "wasm32"))]
+use perl_lsp_rs_core::config::PerlOracleEnv;
+use perl_lsp_rs_core::config::WorkspaceConfig;
 use serde_json::{Value, json};
 use std::borrow::Cow;
 #[cfg(windows)]
@@ -63,6 +66,7 @@ pub(crate) fn normalize_path_for_external_command(path: &Path) -> PathBuf {
 /// Execute command provider implementing the LSP executeCommand method.
 pub struct ExecuteCommandProvider {
     workspace_roots: Vec<PathBuf>,
+    workspace_config: Option<WorkspaceConfig>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,15 +82,54 @@ impl Default for ExecuteCommandProvider {
     }
 }
 
+// Private helpers for PerlOracleEnv subprocess isolation.
+impl ExecuteCommandProvider {
+    /// Build a `Command` for a Perl subprocess using `PerlOracleEnv` when a
+    /// workspace config is available; falls back to `Command::new("perl")`
+    /// for backward compatibility when no config is attached.
+    ///
+    /// The `file_path` is used only to derive a `cwd` (its parent directory).
+    /// Callers must append the actual Perl arguments after this call.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn perl_command_for(&self, file_path: &Path) -> Command {
+        let cwd = file_path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        if let Some(ref config) = self.workspace_config {
+            if let Some(oracle) = PerlOracleEnv::for_execute_command(config, cwd) {
+                return oracle.into_command();
+            }
+        }
+        Command::new("perl")
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn perl_command_for(&self, _file_path: &Path) -> Command {
+        Command::new("perl")
+    }
+}
+
 impl ExecuteCommandProvider {
     /// Create a new execute command provider.
     pub fn new() -> Self {
-        Self { workspace_roots: Vec::new() }
+        Self { workspace_roots: Vec::new(), workspace_config: None }
     }
 
     /// Create a provider with workspace root enforcement.
     pub fn with_workspace_roots(workspace_roots: Vec<PathBuf>) -> Self {
-        Self { workspace_roots }
+        Self { workspace_roots, workspace_config: None }
+    }
+
+    /// Attach a workspace configuration to enable PerlOracleEnv isolation for
+    /// Perl subprocess calls (`perl.runFile`, `perl.runTestSub`).
+    ///
+    /// When a config is present, `run_file` and `run_test_sub` use
+    /// `PerlOracleEnv::for_execute_command` instead of a bare
+    /// `Command::new("perl")`, applying the deny-all-ambient env policy.
+    pub fn with_workspace_config(mut self, config: WorkspaceConfig) -> Self {
+        self.workspace_config = Some(config);
+        self
     }
 
     /// Execute a supported command with validated JSON arguments.
@@ -237,7 +280,7 @@ impl ExecuteCommandProvider {
         "#;
         let ext_path = normalize_path_for_external_command(file_path);
 
-        let mut perl_cmd = Command::new("perl");
+        let mut perl_cmd = self.perl_command_for(file_path);
         perl_cmd.arg("-e").arg(perl_code).arg("--").arg(ext_path.as_os_str()).arg(sub_name);
         match crate::util::run_command_with_timeout(perl_cmd, 30) {
             Ok(result) => {
@@ -252,7 +295,7 @@ impl ExecuteCommandProvider {
 
     pub(crate) fn run_file(&self, file_path: &Path) -> Result<Value, String> {
         let ext_path = normalize_path_for_external_command(file_path);
-        let mut perl_cmd = Command::new("perl");
+        let mut perl_cmd = self.perl_command_for(file_path);
         perl_cmd.arg("--").arg(ext_path.as_os_str());
         match crate::util::run_command_with_timeout(perl_cmd, 30) {
             Ok(result) => Ok(self.format_command_result(result, None)),
