@@ -231,6 +231,35 @@ impl PerlOracleEnv {
             extra_env: BTreeMap::new(),
         })
     }
+
+    /// Constructor for Perl version probes.
+    ///
+    /// Used when an already-resolved Perl binary needs to be interrogated for its
+    /// version (e.g. `perl -e 'print $]'`). The binary path is caller-supplied so
+    /// no config lookup is needed, and the constructor is infallible.
+    ///
+    /// Env contract (deny-all-ambient policy):
+    ///
+    /// - `allow_perl5lib`: always `false` — version probes must be deterministic;
+    ///   user `PERL5LIB` state must not affect the reported version.
+    /// - `allow_perl5opt`: always `false` — `PERL5OPT` injects runtime flags that
+    ///   could alter the probe output unpredictably.
+    /// - `allow_local_lib`: always `false` — `local::lib` activation is not part
+    ///   of the version probe contract.
+    /// - `timeout`: 5 seconds (generous for a simple `print $]`).
+    /// - `cwd`: caller-supplied.
+    /// - `extra_env`: empty; callers may extend via `oracle.extra_env.insert(...)`.
+    pub fn for_version_probe(perl_binary: PathBuf, cwd: PathBuf) -> Self {
+        Self {
+            perl_binary,
+            cwd,
+            timeout: Duration::from_secs(5),
+            allow_perl5lib: false,
+            allow_perl5opt: false,
+            allow_local_lib: false,
+            extra_env: BTreeMap::new(),
+        }
+    }
 }
 
 // ── WASM stub ─────────────────────────────────────────────────────────────────
@@ -253,6 +282,11 @@ impl PerlOracleEnv {
         _cwd: std::path::PathBuf,
     ) -> Option<Self> {
         None
+    }
+
+    /// Returns a no-op stub on WASM (no subprocess support).
+    pub fn for_version_probe(_perl_binary: std::path::PathBuf, _cwd: std::path::PathBuf) -> Self {
+        PerlOracleEnv
     }
 }
 
@@ -544,6 +578,76 @@ mod tests {
             stdout.trim(),
             "UNSET",
             "PERL_LOCAL_LIB_ROOT must be stripped when allow_local_lib=false; got: {stdout:?}",
+        );
+        Ok(())
+    }
+
+    // ── for_version_probe tests ───────────────────────────────────────────────
+
+    /// `for_version_probe` always denies PERL5LIB, PERL5OPT, and local::lib.
+    #[test]
+    fn for_version_probe_denies_all_ambient_vars() {
+        let perl_binary = PathBuf::from("perl");
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let oracle = PerlOracleEnv::for_version_probe(perl_binary, cwd);
+
+        assert!(!oracle.allow_perl5lib, "allow_perl5lib must be false for version probe");
+        assert!(!oracle.allow_perl5opt, "allow_perl5opt must be false for version probe");
+        assert!(!oracle.allow_local_lib, "allow_local_lib must be false for version probe");
+        assert!(oracle.extra_env.is_empty(), "extra_env must be empty by default");
+    }
+
+    /// `for_version_probe` uses the caller-supplied binary and cwd verbatim.
+    #[test]
+    fn for_version_probe_uses_caller_supplied_binary_and_cwd() {
+        let binary = PathBuf::from("/usr/bin/perl");
+        let cwd = PathBuf::from("/tmp/test-cwd");
+        let oracle = PerlOracleEnv::for_version_probe(binary.clone(), cwd.clone());
+        assert_eq!(oracle.perl_binary, binary);
+        assert_eq!(oracle.cwd, cwd);
+    }
+
+    /// `for_version_probe` strips PERL5LIB and PERL5OPT from the subprocess
+    /// (canonical acceptance test for the #8688 incident).
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn for_version_probe_strips_poisoned_env() -> TestResult {
+        let perl = match perl_path() {
+            Some(p) => p,
+            None => return Ok(()),
+        };
+
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let oracle = PerlOracleEnv::for_version_probe(perl, cwd);
+
+        let poison_dir = tempfile::tempdir()?;
+        let poison_path = poison_dir.path().to_string_lossy().into_owned();
+
+        unsafe { std::env::set_var("PERL5LIB", &poison_path) };
+        unsafe { std::env::set_var("PERL5OPT", "-Mevil") };
+
+        let mut cmd = oracle.into_command();
+        cmd.args(["-e", "print join('|', $ENV{PERL5LIB}//'UNSET', $ENV{PERL5OPT}//'UNSET')"]);
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        let out = cmd.output()?;
+
+        unsafe { std::env::remove_var("PERL5LIB") };
+        unsafe { std::env::remove_var("PERL5OPT") };
+
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            !stdout.contains(&poison_path),
+            "PERL5LIB poison must NOT appear in version probe subprocess; got: {stdout:?}",
+        );
+        assert!(
+            !stdout.contains("-Mevil"),
+            "PERL5OPT poison must NOT appear in version probe subprocess; got: {stdout:?}",
+        );
+        assert_eq!(
+            stdout.trim(),
+            "UNSET|UNSET",
+            "version probe subprocess must see both PERL5LIB and PERL5OPT as unset; got: {stdout:?}",
         );
         Ok(())
     }
