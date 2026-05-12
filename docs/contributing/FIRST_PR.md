@@ -44,7 +44,7 @@ cargo install just
 just doctor
 ```
 
-Rust toolchain is pinned in `rust-toolchain.toml` (MSRV 1.93, channel `1.93.1`). `rustup` picks it up automatically.
+Rust toolchain is pinned in `rust-toolchain.toml` (MSRV 1.95, channel `1.95.0`). `rustup` picks it up automatically.
 
 **Windows users:** Enable long path support before building (one-time, requires admin terminal):
 

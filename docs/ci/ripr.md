@@ -102,10 +102,8 @@ ripr is **never** used as proof; it is used as a **prompt**.
 
 ## Toolchain
 
-`rust-toolchain.toml` pins `1.93.1`. While the repository is on that toolchain,
-the workflow installs `ripr` `0.4.0`, the latest compatible advisory version for
-the Rust 1.93 line. The Rust 1.95 rollout can unpin or bump this after the repo
-toolchain moves.
+`rust-toolchain.toml` pins `1.95.0`. The workflow installs `ripr` `0.4.0` as
+the current advisory version for this lane.
 
 ---
 

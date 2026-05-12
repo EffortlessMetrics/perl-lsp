@@ -15,6 +15,7 @@
 
 // Import from the parent's common module (test files must declare `mod common;` before `mod test_utils;`)
 use super::LspServer;
+use perl_tdd_support::must;
 use serde_json::{Value, json};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::{Duration, Instant};
@@ -43,16 +44,24 @@ fn send_request_with_timeout(
     super::send_request_no_wait(server, request);
 
     match &id {
-        Value::Number(n) if n.as_i64().is_some() => {
-            // Safety: guard ensures as_i64() is Some
-            let id_num = n.as_i64().unwrap_or(0);
-            super::read_response_matching_i64(server, id_num, timeout).unwrap_or_else(|| {
-                super::protocol_io::error_response_for_request(
-                    Some(id.clone()),
-                    super::protocol_io::ERR_TEST_TIMEOUT,
-                    "test harness timeout",
-                )
-            })
+        Value::Number(n) => {
+            if let Some(id_num) = n.as_i64() {
+                super::read_response_matching_i64(server, id_num, timeout).unwrap_or_else(|| {
+                    super::protocol_io::error_response_for_request(
+                        Some(id.clone()),
+                        super::protocol_io::ERR_TEST_TIMEOUT,
+                        "test harness timeout",
+                    )
+                })
+            } else {
+                super::read_response_matching(server, &id, timeout).unwrap_or_else(|| {
+                    super::protocol_io::error_response_for_request(
+                        Some(id.clone()),
+                        super::protocol_io::ERR_TEST_TIMEOUT,
+                        "test harness timeout",
+                    )
+                })
+            }
         }
         value => super::read_response_matching(server, value, timeout).unwrap_or_else(|| {
             super::protocol_io::error_response_for_request(
@@ -102,6 +111,10 @@ impl TestServerBuilder {
     }
 
     pub fn build(self) -> TestServer {
+        must(self.try_build())
+    }
+
+    pub fn try_build(self) -> Result<TestServer, String> {
         // Build initialization params
         let mut init_params = self.initialization_params.unwrap_or_else(|| {
             json!({
@@ -164,7 +177,7 @@ impl TestServerBuilder {
                     );
                 }
 
-                return TestServer { server, timeout };
+                return Ok(TestServer { server, timeout });
             }
 
             if attempt == 0 {
@@ -172,19 +185,13 @@ impl TestServerBuilder {
                     "TestServerBuilder: Initialize failed on attempt 1, retrying with a fresh server: {init_response:#}"
                 );
             } else {
-                // Initialize failed after retry — this is a hard failure.
-                // We use assert_eq! to produce a descriptive failure without panic!.
-                assert_eq!(
-                    init_response.get("error"),
-                    None,
+                return Err(format!(
                     "TestServerBuilder: Initialize failed after retry: {init_response:#}"
-                );
+                ));
             }
         }
 
-        // Unreachable: loop always returns (success) or fails the assert above.
-        // Return a dummy to satisfy type inference — never actually executed.
-        TestServer { server: super::start_lsp_server(), timeout }
+        Err("TestServerBuilder initialization loop exhausted".to_string())
     }
 }
 

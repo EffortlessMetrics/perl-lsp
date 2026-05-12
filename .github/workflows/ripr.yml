@@ -46,7 +46,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Toolchain (rust-toolchain.toml pins 1.93.1)
+      - name: Toolchain (rust-toolchain.toml pins 1.95.0)
         run: rustc --version
 
       - name: Cache cargo dependencies
