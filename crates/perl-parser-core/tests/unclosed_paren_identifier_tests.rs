@@ -529,6 +529,13 @@ fn unicode_collate_map_expr_in_for_list() {
 }
 
 #[test]
+fn unicode_collate_pack_u_coderef_map_expr() {
+    // From Unicode::Collate: pack arguments may include map EXPR, LIST where
+    // the expression is a lexical coderef invocation.
+    assert_clean_parse(r#"return pack('U*', map $unicode_to_native->($_), @_);"#);
+}
+
+#[test]
 fn regexp_common_comment_combine_parenthesized_map_args() {
     // From Regexp::Common::comment: unary plus before a parenthesized map block
     // in a comma-separated argument list must not leave `combine` waiting for a `)`.
