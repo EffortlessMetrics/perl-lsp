@@ -50,18 +50,3 @@ pub fn enhanced_cancelled_response(
         error: Some(JsonRpcError { code: REQUEST_CANCELLED, message, data: Some(data) }),
     }
 }
-
-/// Macro for early cancellation check in dispatcher arms
-/// Takes the method name to include provider context in cancellation responses
-macro_rules! early_cancel_or {
-    ($self:ident, $id:expr, $method:expr, $handler:expr) => {{
-        if let Some(ref _rid) = $id {
-            if $self.is_cancelled(_rid) {
-                $self.cancel_clear(_rid);
-                return Some(cancelled_response_with_method(_rid, $method));
-            }
-        }
-        $handler
-    }};
-}
-pub(crate) use early_cancel_or;
