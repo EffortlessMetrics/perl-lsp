@@ -561,6 +561,13 @@ fn x_repetition_prefix_decrement_in_parens() {
     assert_clean_parse(r#"push @out, ('  ' x --$indent) . '</li>';"#);
 }
 
+#[test]
+fn local_carp_not_scalar_ternary_caller() {
+    // From Carp: localized package arrays may be assigned from a scalar()
+    // parenthesized ternary without treating caller() as a missing `)`.
+    assert_clean_parse(r#"local @CARP_NOT = scalar( $cgc ? $cgc->() : caller() );"#);
+}
+
 // === Sigil-peek heuristic: imported unary functions without parens (#1943) ===
 // These all fail with "expected ')', found identifier" before the fix because
 // `blessed`, `reftype`, etc. are not in the builtin table. The fix adds a
