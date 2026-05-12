@@ -6335,7 +6335,7 @@ fn render_next_pointer_status_receipt(artifact: &ParserAccuracyArtifact) -> Stri
         if has_no_gaps {
             output.push_str("\n## Capability Handoff\n\n");
             output.push_str(
-                "Measurement wiring is clear. Follow [`parser.md`](parser.md#parser-failure-worklist-clustered) for capability work; take the largest nonzero parser failure cluster as the next parser lane and keep it separate from measurement-only work.\n",
+                "Measurement wiring is clear. Follow [`parser.md`](parser.md#raw-failure-buckets) for capability work; take the largest raw bucket inside the largest nonzero parser failure cluster as the next parser lane and keep it separate from measurement-only work.\n",
             );
         }
     }
@@ -8543,8 +8543,11 @@ sub dynamic_boundary_case {
         assert!(pointer.contains("Pointer: no active failure packets."));
         assert!(pointer.contains("| none | n/a | n/a |"));
         assert!(pointer.contains("## Capability Handoff"));
-        assert!(pointer.contains("parser.md#parser-failure-worklist-clustered"));
-        assert!(pointer.contains("largest nonzero parser failure cluster"));
+        assert!(pointer.contains("parser.md#raw-failure-buckets"));
+        assert!(
+            pointer
+                .contains("largest raw bucket inside the largest nonzero parser failure cluster")
+        );
         assert!(matches!(
             (
                 pointer.find("Use the measurement gap table only"),
