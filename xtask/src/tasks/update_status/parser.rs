@@ -189,6 +189,17 @@ fn short_day(timestamp: &str) -> &str {
     timestamp.get(..10).unwrap_or(timestamp)
 }
 
+fn format_failure_receipt_note(receipt: &ParserSweepReceipt) -> String {
+    format!(
+        "Receipt snapshot: profile `{}`, commit `{}`, generated `{}`, Perl `{}`, `{}` resolved roots. Raw bucket counts are point-in-time compatibility data; before starting a parser-fix lane from a bucket, rerun `cargo xtask parser-corpus-sweep --baseline .ci/parser-corpus-baseline.json --enforce --receipt` on Linux or add a focused fixture when system roots are unavailable.",
+        receipt.corpus_profile,
+        receipt.commit,
+        short_day(&receipt.timestamp),
+        receipt.perl_version,
+        receipt.resolved_roots_count,
+    )
+}
+
 fn ns_to_ms(ns: u128) -> f64 {
     ns as f64 / 1_000_000.0
 }
@@ -409,6 +420,13 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         },
         |receipt| build_failure_worklist(receipt),
     );
+    let failure_receipt_note = metrics.system_receipt.as_ref().map_or_else(
+        || {
+            "Receipt snapshot unavailable. Raw bucket counts are `insufficient_data` until `just corpus-sweep-check` refreshes `.ci/parser-corpus-baseline.json`."
+                .to_string()
+        },
+        format_failure_receipt_note,
+    );
     let failure_bucket_details = metrics.system_receipt.as_ref().map_or_else(
         || {
             "| insufficient_data (no receipt — run `just corpus-sweep-check` to generate) | insufficient_data | insufficient_data |"
@@ -438,6 +456,8 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
     text = replace_parser_status_block(&text, "PARSER_STRICT_CLEAN_ROW", &strict_clean_row)?;
     text = replace_parser_status_block(&text, "PARSER_ACCURACY_SUMMARY", &parser_accuracy_summary)?;
     text = replace_parser_status_block(&text, "PARSER_FAILURE_WORKLIST", &failure_worklist)?;
+    text =
+        replace_parser_status_block(&text, "PARSER_FAILURE_RECEIPT_NOTE", &failure_receipt_note)?;
     text = replace_parser_status_block(&text, "PARSER_FAILURE_BUCKETS", &failure_bucket_details)?;
     Ok(text)
 }
