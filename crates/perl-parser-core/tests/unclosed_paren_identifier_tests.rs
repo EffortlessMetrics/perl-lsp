@@ -581,6 +581,13 @@ fn unicode_normalize_pack_u_map_block() {
 }
 
 #[test]
+fn unicode_normalize_unpack_u_map_block() {
+    // From Unicode::Normalize: map may take an unpack call whose list contains
+    // a shifted argument concatenated with a pack call.
+    assert_clean_parse(r#"return map { from_native($_) } unpack('U*', shift(@_).pack('U*'));"#);
+}
+
+#[test]
 fn x_repetition_prefix_decrement_in_parens() {
     // From Pod::Simple::XHTML: repetition RHS may be a prefix decrement.
     assert_clean_parse(r#"push @out, ('  ' x --$indent) . '</li>';"#);
