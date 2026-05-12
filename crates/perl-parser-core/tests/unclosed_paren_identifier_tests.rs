@@ -526,6 +526,12 @@ fn main_package_variable_in_paren_expr() {
     assert_clean_parse(r#"my $x = ($::IS_ASCII || $] < 5.008);"#);
 }
 
+#[test]
+fn x_repetition_prefix_decrement_in_parens() {
+    // From Pod::Simple::XHTML: repetition RHS may be a prefix decrement.
+    assert_clean_parse(r#"push @out, ('  ' x --$indent) . '</li>';"#);
+}
+
 // === Sigil-peek heuristic: imported unary functions without parens (#1943) ===
 // These all fail with "expected ')', found identifier" before the fix because
 // `blessed`, `reftype`, etc. are not in the builtin table. The fix adds a

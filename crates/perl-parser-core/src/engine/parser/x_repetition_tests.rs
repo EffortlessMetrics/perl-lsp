@@ -96,3 +96,22 @@ fn test_x_with_variable_rhs() {
     let sexp = ast.to_sexp();
     assert!(sexp.contains("binary_x"), "Expected binary_x in: {sexp}");
 }
+
+#[test]
+fn test_x_with_prefix_decrement_rhs() {
+    // Pod::Simple::XHTML uses `('  ' x --$indent)` while constructing lists.
+    let mut parser = Parser::new(r#"my $s = " " x --$indent;"#);
+    let ast = must(parser.parse());
+    let sexp = ast.to_sexp();
+    assert!(!sexp.contains("ERROR"), "Unexpected ERROR in: {sexp}");
+    assert!(sexp.contains("binary_x"), "Expected binary_x in: {sexp}");
+}
+
+#[test]
+fn test_x_with_prefix_increment_rhs() {
+    let mut parser = Parser::new(r#"my $s = " " x ++$indent;"#);
+    let ast = must(parser.parse());
+    let sexp = ast.to_sexp();
+    assert!(!sexp.contains("ERROR"), "Unexpected ERROR in: {sexp}");
+    assert!(sexp.contains("binary_x"), "Expected binary_x in: {sexp}");
+}
