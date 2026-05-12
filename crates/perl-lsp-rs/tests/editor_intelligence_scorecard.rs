@@ -130,7 +130,10 @@ fn test_hover_gold_corpus() {
             eprintln!("SKIP: no hover gold fixtures found in {}", root.display());
             return;
         }
-        Err(e) => panic!("Failed to load hover gold fixtures: {e}"),
+        Err(e) => {
+            assert!(false, "Failed to load hover gold fixtures: {e}");
+            return;
+        }
     };
 
     let server = TestServerBuilder::new().build();
@@ -140,9 +143,14 @@ fn test_hover_gold_corpus() {
     let mut failures: Vec<String> = Vec::new();
 
     for fixture in &fixtures {
-        let code = std::fs::read_to_string(&fixture.fixture_path).unwrap_or_else(|e| {
-            panic!("Cannot read fixture {}: {e}", fixture.fixture_path.display())
-        });
+        let code_result = std::fs::read_to_string(&fixture.fixture_path);
+        assert!(
+            code_result.is_ok(),
+            "Cannot read fixture {}: {:?}",
+            fixture.fixture_path.display(),
+            code_result.as_ref().err()
+        );
+        let code = code_result.unwrap_or_default();
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
         server.open_document(&uri, &code);
@@ -159,7 +167,7 @@ fn test_hover_gold_corpus() {
                     content.as_deref().is_some_and(|c| c.contains(needle.as_str()))
                 }
                 HoverAssertionKind::HoverAbsent { needle } => {
-                    content.as_deref().map_or(true, |c| !c.contains(needle.as_str()))
+                    !content.as_deref().is_some_and(|c| c.contains(needle.as_str()))
                 }
             };
 
@@ -207,7 +215,10 @@ fn test_goto_gold_corpus() {
             eprintln!("SKIP: no goto gold fixtures found in {}", root.display());
             return;
         }
-        Err(e) => panic!("Failed to load goto gold fixtures: {e}"),
+        Err(e) => {
+            assert!(false, "Failed to load goto gold fixtures: {e}");
+            return;
+        }
     };
 
     let server = TestServerBuilder::new().build();
@@ -217,9 +228,14 @@ fn test_goto_gold_corpus() {
     let mut failures: Vec<String> = Vec::new();
 
     for fixture in &fixtures {
-        let code = std::fs::read_to_string(&fixture.fixture_path).unwrap_or_else(|e| {
-            panic!("Cannot read fixture {}: {e}", fixture.fixture_path.display())
-        });
+        let code_result = std::fs::read_to_string(&fixture.fixture_path);
+        assert!(
+            code_result.is_ok(),
+            "Cannot read fixture {}: {:?}",
+            fixture.fixture_path.display(),
+            code_result.as_ref().err()
+        );
+        let code = code_result.unwrap_or_default();
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
         server.open_document(&uri, &code);
@@ -280,7 +296,10 @@ fn test_completion_gold_corpus() {
             eprintln!("SKIP: no completion gold fixtures found in {}", root.display());
             return;
         }
-        Err(e) => panic!("Failed to load completion gold fixtures: {e}"),
+        Err(e) => {
+            assert!(false, "Failed to load completion gold fixtures: {e}");
+            return;
+        }
     };
 
     let server = TestServerBuilder::new().build();
@@ -290,9 +309,14 @@ fn test_completion_gold_corpus() {
     let mut failures: Vec<String> = Vec::new();
 
     for fixture in &fixtures {
-        let code = std::fs::read_to_string(&fixture.fixture_path).unwrap_or_else(|e| {
-            panic!("Cannot read fixture {}: {e}", fixture.fixture_path.display())
-        });
+        let code_result = std::fs::read_to_string(&fixture.fixture_path);
+        assert!(
+            code_result.is_ok(),
+            "Cannot read fixture {}: {:?}",
+            fixture.fixture_path.display(),
+            code_result.as_ref().err()
+        );
+        let code = code_result.unwrap_or_default();
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
         server.open_document(&uri, &code);
@@ -366,7 +390,10 @@ fn test_diagnostics_gold_corpus() {
             eprintln!("SKIP: no diagnostics gold fixtures found in {}", root.display());
             return;
         }
-        Err(e) => panic!("Failed to load diagnostics gold fixtures: {e}"),
+        Err(e) => {
+            assert!(false, "Failed to load diagnostics gold fixtures: {e}");
+            return;
+        }
     };
 
     let server = TestServerBuilder::new().build();
@@ -376,9 +403,14 @@ fn test_diagnostics_gold_corpus() {
     let mut failures: Vec<String> = Vec::new();
 
     for fixture in &fixtures {
-        let code = std::fs::read_to_string(&fixture.fixture_path).unwrap_or_else(|e| {
-            panic!("Cannot read fixture {}: {e}", fixture.fixture_path.display())
-        });
+        let code_result = std::fs::read_to_string(&fixture.fixture_path);
+        assert!(
+            code_result.is_ok(),
+            "Cannot read fixture {}: {:?}",
+            fixture.fixture_path.display(),
+            code_result.as_ref().err()
+        );
+        let code = code_result.unwrap_or_default();
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
         server.open_document(&uri, &code);
@@ -466,7 +498,10 @@ fn test_document_symbols_gold_corpus() {
             eprintln!("SKIP: no document-symbol gold fixtures found in {}", root.display());
             return;
         }
-        Err(e) => panic!("Failed to load document-symbol gold fixtures: {e}"),
+        Err(e) => {
+            assert!(false, "Failed to load document-symbol gold fixtures: {e}");
+            return;
+        }
     };
 
     let server = TestServerBuilder::new().build();
@@ -476,9 +511,14 @@ fn test_document_symbols_gold_corpus() {
     let mut failures: Vec<String> = Vec::new();
 
     for fixture in &fixtures {
-        let code = std::fs::read_to_string(&fixture.fixture_path).unwrap_or_else(|e| {
-            panic!("Cannot read fixture {}: {e}", fixture.fixture_path.display())
-        });
+        let code_result = std::fs::read_to_string(&fixture.fixture_path);
+        assert!(
+            code_result.is_ok(),
+            "Cannot read fixture {}: {:?}",
+            fixture.fixture_path.display(),
+            code_result.as_ref().err()
+        );
+        let code = code_result.unwrap_or_default();
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
         server.open_document(&uri, &code);

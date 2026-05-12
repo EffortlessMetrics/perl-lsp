@@ -182,7 +182,7 @@ fn surface_workspace_parity_bank() -> Result<()> {
                 })?)
             };
 
-        if rhs.is_none() {
+        let Some(rhs) = rhs else {
             assert!(
                 case.actionable_divergence.is_some(),
                 "{}: missing workspace {} without divergence annotation",
@@ -190,8 +190,7 @@ fn surface_workspace_parity_bank() -> Result<()> {
                 case.symbol_name
             );
             continue;
-        }
-        let rhs = rhs.expect("rhs existence already checked");
+        };
 
         let core_fields_match = lhs.name == rhs.name
             && lhs.qualified_name == rhs.qualified_name

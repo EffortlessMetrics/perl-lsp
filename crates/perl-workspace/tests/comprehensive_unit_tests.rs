@@ -180,7 +180,7 @@ fn test_remove_file_clears_references() -> Result<(), Box<dyn std::error::Error>
     assert!(!index.find_references("Refs::keep_me").is_empty());
     assert!(!index.find_references("keep_me").is_empty());
 
-    index.remove_file(&uri.to_string());
+    index.remove_file(uri.as_str());
 
     assert!(
         index.find_references("Refs::keep_me").is_empty(),
@@ -1209,7 +1209,7 @@ fn test_index_coordinator_check_limits_prefers_file_count_over_symbol_count()
         coord.index().index_file(uri, format!("sub f{} {{ 1 }}", i))?;
     }
 
-    let reason = coord.check_limits().expect("limits should be exceeded");
+    let reason = coord.check_limits().ok_or("limits should be exceeded")?;
     assert!(matches!(
         reason,
         IxDegradationReason::ResourceLimit { kind: IxResourceKind::MaxFiles }

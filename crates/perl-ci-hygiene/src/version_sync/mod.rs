@@ -1129,8 +1129,10 @@ perl-token = { path = "../perl-token", version = "0.42.0" }
 
         let content = fs::read_to_string(&path)?;
         // New row is now topmost data row.
-        let row_idx = content.find("| [0.13.4]").expect("row for 0.13.4 should be inserted");
-        let prev_row_idx = content.find("| [0.13.3]").unwrap();
+        let row_idx =
+            content.find("| [0.13.4]").ok_or_else(|| eyre!("row for 0.13.4 should be inserted"))?;
+        let prev_row_idx =
+            content.find("| [0.13.3]").ok_or_else(|| eyre!("row for 0.13.3 not found"))?;
         assert!(row_idx < prev_row_idx, "0.13.4 row should appear above 0.13.3");
 
         // Link refs all present in their respective sections.
@@ -1229,8 +1231,8 @@ perl-token = { path = "../perl-token", version = "0.42.0" }
         let year: i32 = parts[0].parse().unwrap();
         let month: u32 = parts[1].parse().unwrap();
         let day: u32 = parts[2].parse().unwrap();
-        assert!(year >= 2025 && year <= 2100, "year {year} out of expected range");
-        assert!(month >= 1 && month <= 12, "month {month} invalid");
-        assert!(day >= 1 && day <= 31, "day {day} invalid");
+        assert!((2025..=2100).contains(&year), "year {year} out of expected range");
+        assert!((1..=12).contains(&month), "month {month} invalid");
+        assert!((1..=31).contains(&day), "day {day} invalid");
     }
 }

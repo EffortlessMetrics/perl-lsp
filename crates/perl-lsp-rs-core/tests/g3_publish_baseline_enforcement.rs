@@ -39,7 +39,7 @@ fn g3_baseline_matches_cargo_metadata() -> Result<(), Box<dyn std::error::Error>
 
     // Run cargo metadata to count published crates
     let output = Command::new("cargo")
-        .args(&["metadata", "--no-deps", "--format-version", "1"])
+        .args(["metadata", "--no-deps", "--format-version", "1"])
         .current_dir(&root)
         .output()?;
 
@@ -59,7 +59,7 @@ fn g3_baseline_matches_cargo_metadata() -> Result<(), Box<dyn std::error::Error>
             let publish = &p["publish"];
             // If publish is not false and not an empty array, it's published
             !(publish == false
-                || (publish.is_array() && publish.as_array().map_or(false, |a| a.is_empty())))
+                || (publish.is_array() && publish.as_array().is_some_and(|a| a.is_empty())))
         })
         .count();
 

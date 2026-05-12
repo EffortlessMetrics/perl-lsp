@@ -8,7 +8,7 @@
 
 ## Current Framing
 
-- Workspace version line: `v0.13.4`
+- Workspace version line: `v0.14.0`
 - Current release train: `v0.13.4` public-alpha patch prep, with release dispatch intentionally pending
 - Published crate surface target: 31 crates from `[workspace.metadata.publish.allow]`
 - Active work: finish release-prep verification, keep install-surface receipts wired into the runbook, and keep release language public-alpha rather than stable/GA

@@ -3573,14 +3573,9 @@ mod tests {
             let mut occurrences_vec = Vec::new();
             let mut expected: Vec<(AnchorId, PlannedEditCategory)> = Vec::new();
 
-            let mut next_anchor = 20u64;
-            let mut next_occ = 200u64;
-
             for (i, co) in scenario.occurrences.iter().enumerate() {
-                let aid = AnchorId(next_anchor);
-                next_anchor += 1;
-                let oid = OccurrenceId(next_occ);
-                next_occ += 1;
+                let aid = AnchorId(20u64 + i as u64);
+                let oid = OccurrenceId(200u64 + i as u64);
 
                 let start = 100 + (i as u32) * 20;
                 anchors.push(AnchorFact {

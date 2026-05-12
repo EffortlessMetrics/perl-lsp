@@ -13,6 +13,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the proactive CI integrity guards rail ([`docs/development/RUST_1_95_PROACTIVE_GUARDS.md`](docs/development/RUST_1_95_PROACTIVE_GUARDS.md)) as a sibling rollout. Six guard PRs (PG-1 through PG-6) covering label enforcement, risk-pack referential integrity, lane mapping with matrix expansion, net-new workflow-allowlist ledger, CI Actuals emitter + subscription coverage check, and broad-glob justification tightening. Each row mirrors a sibling-repo proven shape.
 - Consolidated the remaining Rust 1.95 → 0.14.0 work into a single canonical roadmap: rewrote [`docs/development/RUST_1_95_ROLLOUT.md`](docs/development/RUST_1_95_ROLLOUT.md) into a post-landing source of truth (already landed / remaining implementation ladder / per-rail acceptance contracts / Claude-Codex operating contract); slimmed [`docs/ci/perl-lsp-rust-1.95-rollout.md`](docs/ci/perl-lsp-rust-1.95-rollout.md) to a historical pointer; added [`docs/ci/test-evidence-lanes.md`](docs/ci/test-evidence-lanes.md) defining the five evidence-lane shapes (PR-fast required / PR-targeted / nightly cron / release-only / advisory) with risk-pack auto-routing, skipped-by-policy receipts, and LEM cost framing. Umbrella tracking: **#8663**.
 
+## [0.14.0] - 2026-05-12
+
+Release notes: [v0.14.0](docs/releases/v0.14.0.md)
+
+### Added
+
+- **Rust 1.95 MSRV** — Minimum supported Rust version raised to 1.95.
+  Consumers must use `rustup update stable` (Rust 1.95+ ships stable).
+- **Runtime-owned TTL completion cache** — Prefix module scan results are
+  now cached with a bounded TTL, eliminating redundant lookups across
+  successive completion requests. (#8514 → PR #8667)
+- **Literal `require`/`use` symbol tracking** — Symbols from `require
+  'Module.pm'` and explicit `use Module` imports are now tracked and offered
+  in completions. (#8623 → PR #8678)
+- **Real-workspace provider baseline** — Integration tests against a real
+  Perl project fixture give confidence that LSP providers work beyond
+  synthetic test data. (#8637 → PRs #8682, #8694)
+- **DAP module-resolution smoke tests** — Catches regressions in debug
+  adapter module loading before they ship. (#8621 → PR #8677)
+- **PerlOracleEnv v1 subprocess contract** — Replaces ambient
+  `$ENV{PERL5LIB}` injection with an explicit typed contract; subprocess
+  environment is now auditable. (#8622 → PRs #8675, #8679)
+- **Non-Rust file policy advisory checker** — `cargo xtask check-file-policy
+  --mode advisory` documents non-Rust file ownership with an enforced
+  allowlist, removing a class of accidental scope drift. (#8566 → PR #8708;
+  #8568 → PR #8711)
+- **PR sticky CI summary and `ci-doctor`** — `cargo xtask ci-doctor` gives
+  clear in-PR feedback without reading raw CI logs. (#4825 → PR #8697;
+  #4826 → PR #8693)
+- **PR title validation** — `cargo xtask pr title-check` catches malformed
+  PR titles before CI. (#8614 → PR #8700)
+- **Freshness-check xtask** — Prevents stale-binary false passes locally.
+  (#8619 → PR #8683)
+
+### Changed
+
+- **Clippy temporary-allow burndown** — 4 of 5 workspace-level
+  `#[allow(clippy::...)]` suppression annotations removed. Only
+  `collapsible_match` remains, tracked in #8561. (PR #8712)
+- **Clippy lint policy MSRV reconcile** — Clippy lint set aligned with
+  actual Rust 1.95 availability. (PR #8707)
+
+### Infrastructure
+
+- All deferred items have verified-open successor issues — nothing dropped,
+  everything tracked. See `docs/releases/0.14.0-readiness.md` for the full
+  queue.
+
 ## [0.13.4] - 2026-05-07
 
 Release notes: [v0.13.4](docs/releases/v0.13.4.md)

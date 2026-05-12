@@ -123,15 +123,12 @@ fn diagnostic_struct_binds_unified_severity_type() {
 // Test 11: Mixed severity assignments in same function
 #[test]
 fn mixed_severity_assignments_from_both_paths() {
-    let mut severities: Vec<TypesSeverity> = vec![];
-
-    // Add from codes path
-    severities.push(CodesSeverity::Error);
-    severities.push(CodesSeverity::Warning);
-
-    // Add from types path
-    severities.push(TypesSeverity::Information);
-    severities.push(TypesSeverity::Hint);
+    let severities: Vec<TypesSeverity> = vec![
+        CodesSeverity::Error,
+        CodesSeverity::Warning,
+        TypesSeverity::Information,
+        TypesSeverity::Hint,
+    ];
 
     assert_eq!(severities.len(), 4);
 }
@@ -139,15 +136,12 @@ fn mixed_severity_assignments_from_both_paths() {
 // Test 12: Mixed tag assignments in same function
 #[test]
 fn mixed_tag_assignments_from_both_paths() {
-    let mut tags: Vec<TypesTag> = vec![];
-
-    // Add from codes path
-    tags.push(CodesTag::Unnecessary);
-    tags.push(CodesTag::Deprecated);
-
-    // Add from types path
-    tags.push(TypesTag::Unnecessary);
-    tags.push(TypesTag::Deprecated);
+    let tags: Vec<TypesTag> = vec![
+        CodesTag::Unnecessary,
+        CodesTag::Deprecated,
+        TypesTag::Unnecessary,
+        TypesTag::Deprecated,
+    ];
 
     assert_eq!(tags.len(), 4);
 }

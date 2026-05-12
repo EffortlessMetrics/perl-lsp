@@ -4821,7 +4821,7 @@ mod tests {
     }
 
     #[test]
-    fn pre_push_hook_has_doc_only_fast_path() {
+    fn pre_push_hook_has_doc_only_fast_path() -> color_eyre::Result<()> {
         let hook = pre_push_hook_script();
         // Doc-only pushes (markdown, text, license, changelog) should run a
         // lighter gate instead of the full ci-gate. The full test suite is
@@ -4840,18 +4840,21 @@ mod tests {
         let doc_idx = hook
             .find("Doc-only push")
             .or_else(|| hook.find("doc-only push"))
-            .expect("doc-only message must exist");
+            .ok_or_else(|| color_eyre::eyre::eyre!("doc-only message must exist in hook script"))?;
         let after_doc = &hook[doc_idx..];
         assert!(
             after_doc.contains("exit 0"),
             "doc-only branch must exit 0 without invoking the full gate"
         );
-        let exit_idx = after_doc.find("exit 0").expect("doc-only branch must exit");
+        let exit_idx = after_doc
+            .find("exit 0")
+            .ok_or_else(|| color_eyre::eyre::eyre!("doc-only branch must contain 'exit 0'"))?;
         let doc_branch = &after_doc[..exit_idx];
         assert!(
             !doc_branch.contains("cargo fmt --all -- --check"),
             "doc-only branch must not run workspace-wide rustfmt checks before exiting"
         );
+        Ok(())
     }
 
     #[test]
@@ -4880,7 +4883,7 @@ mod tests {
     }
 
     #[test]
-    fn pre_push_hook_has_single_crate_tier() {
+    fn pre_push_hook_has_single_crate_tier() -> color_eyre::Result<()> {
         let hook = pre_push_hook_script();
         // When all changed files are under crates/<name>/, run a targeted
         // cargo fmt/clippy/test -p <name> instead of the workspace-wide
@@ -4911,12 +4914,13 @@ mod tests {
         let single_idx = hook
             .find("Single-crate")
             .or_else(|| hook.find("single-crate"))
-            .expect("single-crate message must exist");
+            .ok_or_else(|| color_eyre::eyre::eyre!("single-crate message must exist"))?;
         let after_single = &hook[single_idx..];
         assert!(
             after_single.contains("exit 0"),
             "single-crate branch must exit 0 without invoking just pr-fast"
         );
+        Ok(())
     }
 
     #[test]
@@ -4982,12 +4986,15 @@ mod tests {
     }
 
     #[test]
-    fn e2e_lock_file_path_is_portable() {
+    fn e2e_lock_file_path_is_portable() -> color_eyre::Result<()> {
         let lock = std::env::temp_dir().join("e2e-suite.lock");
-        let lock_str = lock.to_str().expect("temp dir must be valid UTF-8 in CI");
+        let lock_str = lock
+            .to_str()
+            .ok_or_else(|| color_eyre::eyre::eyre!("temp dir must be valid UTF-8 in CI"))?;
         // On Linux CI this will be /tmp/e2e-suite.lock (acceptable)
         // On Windows this will be C:\Users\...\AppData\Local\Temp\e2e-suite.lock
         assert!(!lock_str.is_empty(), "lock file path must be non-empty");
+        Ok(())
     }
 
     /// Regression guard for issue #4229: test files must not write to hardcoded /tmp paths.

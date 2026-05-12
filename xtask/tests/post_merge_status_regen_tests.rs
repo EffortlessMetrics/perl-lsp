@@ -164,12 +164,12 @@ fn test_post_merge_workflow_auto_commits() -> Result<(), Box<dyn std::error::Err
 
 /// The post-merge workflow must commit files in docs/project/status/ — NOT CURRENT_STATUS.md alone.
 #[test]
-fn test_post_merge_workflow_commits_status_directory() {
+fn test_post_merge_workflow_commits_status_directory() -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
     let workflow_path = root.join(".github/workflows/post-merge-status.yml");
 
-    let content =
-        fs::read_to_string(&workflow_path).expect("post-merge-status.yml should be readable");
+    let content = fs::read_to_string(&workflow_path)
+        .map_err(|e| format!("post-merge-status.yml should be readable: {e}"))?;
 
     // The workflow must add files from the status/ subdirectory.
     assert!(
@@ -179,16 +179,18 @@ fn test_post_merge_workflow_commits_status_directory() {
          Workflow content:\n{}",
         content
     );
+    Ok(())
 }
 
 /// The post-merge workflow must NOT git-add CURRENT_STATUS.md (it is now human-owned stable stub).
 #[test]
-fn test_post_merge_workflow_does_not_add_current_status() {
+fn test_post_merge_workflow_does_not_add_current_status() -> Result<(), Box<dyn std::error::Error>>
+{
     let root = project_root();
     let workflow_path = root.join(".github/workflows/post-merge-status.yml");
 
-    let content =
-        fs::read_to_string(&workflow_path).expect("post-merge-status.yml should be readable");
+    let content = fs::read_to_string(&workflow_path)
+        .map_err(|e| format!("post-merge-status.yml should be readable: {e}"))?;
 
     // The workflow must not try to commit CURRENT_STATUS.md — it's a stable human-owned stub now.
     assert!(
@@ -199,17 +201,18 @@ fn test_post_merge_workflow_does_not_add_current_status() {
          Workflow content:\n{}",
         content
     );
+    Ok(())
 }
 
 /// The stub CURRENT_STATUS.md must not contain any <!-- BEGIN: --> markers.
 /// If it does, `xtask update-status --check` will try to patch it and fail.
 #[test]
-fn test_stub_current_status_has_no_begin_markers() {
+fn test_stub_current_status_has_no_begin_markers() -> Result<(), Box<dyn std::error::Error>> {
     let root = project_root();
     let stub_path = root.join("docs/project/CURRENT_STATUS.md");
 
     let content = fs::read_to_string(&stub_path)
-        .expect("docs/project/CURRENT_STATUS.md should exist as a stub");
+        .map_err(|e| format!("docs/project/CURRENT_STATUS.md should exist as a stub: {e}"))?;
 
     assert!(
         !content.contains("<!-- BEGIN:"),
@@ -217,6 +220,7 @@ fn test_stub_current_status_has_no_begin_markers() {
          It is now a stable stub — generated content belongs in docs/project/status/*.md\n\
          Remove all <!-- BEGIN: ... --> blocks from CURRENT_STATUS.md."
     );
+    Ok(())
 }
 
 /// All subsystem status files must contain their expected marker blocks.

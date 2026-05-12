@@ -38,7 +38,9 @@ fn test_unified_api_paths_resolve() {
         // We use the workaround of checking that the unified crate name exists
         // by attempting to construct a path that would need the module.
         let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-        let crate_dir = PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace");
+        let manifest_path = PathBuf::from(&cargo_manifest_dir);
+        let crate_dir =
+            manifest_path.parent().ok_or("manifest has no parent")?.join("perl-workspace");
 
         // The module files must exist after collapse
         let expected_modules = vec![
@@ -64,7 +66,7 @@ fn test_unified_api_paths_resolve() {
         Ok(())
     })();
 
-    assert!(result.is_ok(), "Module paths not yet resolved: {}", result.unwrap_err());
+    assert!(result.is_ok(), "Module paths not yet resolved: {:?}", result.err());
 }
 
 // =============================================================================
@@ -75,10 +77,14 @@ fn test_unified_api_paths_resolve() {
 /// to `perl-workspace` in the Cargo.toml, and old satellite crate directories
 /// are deleted.
 #[test]
-fn test_old_satellite_crates_deleted() {
+fn test_old_satellite_crates_deleted() -> Result<(), Box<dyn std::error::Error>> {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let manifest_path = PathBuf::from(&cargo_manifest_dir);
-    let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
+    let workspace_root = manifest_path
+        .parent()
+        .ok_or("manifest has no parent")?
+        .parent()
+        .ok_or("manifest grandparent not found")?;
 
     let old_crates = vec![
         "perl-workspace-discovery",
@@ -98,6 +104,7 @@ fn test_old_satellite_crates_deleted() {
             crate_dir.display()
         );
     }
+    Ok(())
 }
 
 // =============================================================================
@@ -107,19 +114,24 @@ fn test_old_satellite_crates_deleted() {
 /// Parse Cargo.toml workspace members and verify count dropped by 6
 /// (the 6 deleted satellite crates).
 #[test]
-fn test_workspace_member_count_reduced() {
+fn test_workspace_member_count_reduced() -> Result<(), Box<dyn std::error::Error>> {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let manifest_path = PathBuf::from(&cargo_manifest_dir);
-    let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
+    let workspace_root = manifest_path
+        .parent()
+        .ok_or("manifest has no parent")?
+        .parent()
+        .ok_or("manifest grandparent not found")?;
 
     let cargo_toml_path = workspace_root.join("Cargo.toml");
-    let content =
-        std::fs::read_to_string(&cargo_toml_path).expect("Failed to read workspace Cargo.toml");
+    let content = std::fs::read_to_string(&cargo_toml_path)
+        .map_err(|e| format!("Failed to read workspace Cargo.toml: {e}"))?;
 
     // Count workspace members by extracting only the members = [...] array.
     // We find the section between `members = [` and the closing `]` to avoid
     // counting workspace.dependencies paths (which also contain "crates/").
-    let members_start = content.find("members = [").expect("members array not found");
+    let members_start =
+        content.find("members = [").ok_or("members array not found in Cargo.toml")?;
     let members_section = &content[members_start
         ..content[members_start..].find(']').map_or(content.len(), |i| members_start + i)];
     let member_count = members_section.matches("\"crates/").count();
@@ -133,6 +145,7 @@ fn test_workspace_member_count_reduced() {
          Satellite crates may not have been deleted from workspace members.",
         member_count
     );
+    Ok(())
 }
 
 // =============================================================================
@@ -142,14 +155,18 @@ fn test_workspace_member_count_reduced() {
 /// Verify that the publish allowlist has been updated to remove 6 old crates
 /// and rename `perl-workspace-index` to `perl-workspace`.
 #[test]
-fn test_publish_allowlist_updated() {
+fn test_publish_allowlist_updated() -> Result<(), Box<dyn std::error::Error>> {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let manifest_path = PathBuf::from(&cargo_manifest_dir);
-    let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
+    let workspace_root = manifest_path
+        .parent()
+        .ok_or("manifest has no parent")?
+        .parent()
+        .ok_or("manifest grandparent not found")?;
 
     let cargo_toml_path = workspace_root.join("Cargo.toml");
-    let content =
-        std::fs::read_to_string(&cargo_toml_path).expect("Failed to read workspace Cargo.toml");
+    let content = std::fs::read_to_string(&cargo_toml_path)
+        .map_err(|e| format!("Failed to read workspace Cargo.toml: {e}"))?;
 
     // Verify old satellite crate names are not in the allowlist
     // Note: perl-workspace-discovery is a valid Tier 6 crate (Wave E), so it's allowed
@@ -182,6 +199,7 @@ fn test_publish_allowlist_updated() {
         !allowlist_section.contains("\"perl-workspace-index\""),
         "Old crate name 'perl-workspace-index' should be renamed to 'perl-workspace' in allowlist"
     );
+    Ok(())
 }
 
 // =============================================================================
@@ -191,16 +209,20 @@ fn test_publish_allowlist_updated() {
 /// Verify that consumer crates no longer import from old satellite crates.
 /// We check a few key consumer files for old import patterns.
 #[test]
-fn test_consumer_imports_no_old_names() {
+fn test_consumer_imports_no_old_names() -> Result<(), Box<dyn std::error::Error>> {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let manifest_path = PathBuf::from(&cargo_manifest_dir);
-    let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
+    let workspace_root = manifest_path
+        .parent()
+        .ok_or("manifest has no parent")?
+        .parent()
+        .ok_or("manifest grandparent not found")?;
 
     // Check perl-module for old imports (it's a key consumer)
     let perl_module_lib = workspace_root.join("crates/perl-module/src/lib.rs");
     if perl_module_lib.exists() {
-        let content =
-            std::fs::read_to_string(&perl_module_lib).expect("Failed to read perl-module lib.rs");
+        let content = std::fs::read_to_string(&perl_module_lib)
+            .map_err(|e| format!("Failed to read perl-module lib.rs: {e}"))?;
 
         // Old import patterns that should NOT exist
         let forbidden_imports = vec![
@@ -232,8 +254,8 @@ fn test_consumer_imports_no_old_names() {
     // Check one more consumer: perl-parser
     let perl_parser_lib = workspace_root.join("crates/perl-parser/src/lib.rs");
     if perl_parser_lib.exists() {
-        let content =
-            std::fs::read_to_string(&perl_parser_lib).expect("Failed to read perl-parser lib.rs");
+        let content = std::fs::read_to_string(&perl_parser_lib)
+            .map_err(|e| format!("Failed to read perl-parser lib.rs: {e}"))?;
 
         let forbidden_imports = vec![
             "use perl_workspace::",
@@ -249,6 +271,7 @@ fn test_consumer_imports_no_old_names() {
             );
         }
     }
+    Ok(())
 }
 
 // =============================================================================
@@ -258,10 +281,14 @@ fn test_consumer_imports_no_old_names() {
 /// Verify that grep finds no references to old crate names in source files.
 /// This is a regex-based check of critical source directories.
 #[test]
-fn test_no_old_crate_names_in_source() {
+fn test_no_old_crate_names_in_source() -> Result<(), Box<dyn std::error::Error>> {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let manifest_path = PathBuf::from(&cargo_manifest_dir);
-    let workspace_root = manifest_path.parent().unwrap().parent().unwrap();
+    let workspace_root = manifest_path
+        .parent()
+        .ok_or("manifest has no parent")?
+        .parent()
+        .ok_or("manifest grandparent not found")?;
 
     let crates_dir = workspace_root.join("crates");
 
@@ -281,7 +308,7 @@ fn test_no_old_crate_names_in_source() {
         let cargo_toml = crates_dir.join(format!("{}/Cargo.toml", consumer));
         if cargo_toml.exists() {
             let content = std::fs::read_to_string(&cargo_toml)
-                .expect(&format!("Failed to read {}/Cargo.toml", consumer));
+                .map_err(|e| format!("Failed to read {consumer}/Cargo.toml: {e}"))?;
 
             for old_pattern in &old_crate_patterns {
                 assert!(
@@ -293,6 +320,7 @@ fn test_no_old_crate_names_in_source() {
             }
         }
     }
+    Ok(())
 }
 
 // =============================================================================
@@ -306,15 +334,19 @@ fn test_no_old_crate_names_in_source() {
 /// `workspace` module so that paths like `perl_workspace::workspace::monitoring::`
 /// still work.
 #[test]
-fn test_backward_compat_workspace_module_exists() {
+fn test_backward_compat_workspace_module_exists() -> Result<(), Box<dyn std::error::Error>> {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir = PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace");
+    let crate_dir = PathBuf::from(&cargo_manifest_dir)
+        .parent()
+        .ok_or("manifest has no parent")?
+        .join("perl-workspace");
 
     // Check that workspace/mod.rs exists and declares the modules
     let workspace_mod = crate_dir.join("src/workspace/mod.rs");
     assert!(workspace_mod.exists(), "workspace/mod.rs must exist for backward compatibility");
 
-    let content = std::fs::read_to_string(&workspace_mod).expect("Failed to read workspace/mod.rs");
+    let content = std::fs::read_to_string(&workspace_mod)
+        .map_err(|e| format!("Failed to read workspace/mod.rs: {e}"))?;
 
     // The file should re-export items like:
     // pub use monitoring::*;
@@ -332,6 +364,7 @@ fn test_backward_compat_workspace_module_exists() {
             "workspace/mod.rs should declare or re-export monitoring module"
         );
     }
+    Ok(())
 }
 
 // =============================================================================
@@ -343,14 +376,18 @@ fn test_backward_compat_workspace_module_exists() {
 ///
 /// This test ensures the public API surface is explicit and observable.
 #[test]
-fn test_api_reexport_surface_explicit() {
+fn test_api_reexport_surface_explicit() -> Result<(), Box<dyn std::error::Error>> {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir = PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace");
+    let crate_dir = PathBuf::from(&cargo_manifest_dir)
+        .parent()
+        .ok_or("manifest has no parent")?
+        .join("perl-workspace");
 
     let api_file = crate_dir.join("src/api.rs");
 
     if api_file.exists() {
-        let content = std::fs::read_to_string(&api_file).expect("Failed to read api.rs");
+        let content = std::fs::read_to_string(&api_file)
+            .map_err(|e| format!("Failed to read api.rs: {e}"))?;
 
         // The file should have explicit pub use statements
         // It should NOT have wildcards like: pub use monitoring::*;
@@ -376,6 +413,7 @@ fn test_api_reexport_surface_explicit() {
             );
         }
     }
+    Ok(())
 }
 
 // =============================================================================
@@ -385,14 +423,18 @@ fn test_api_reexport_surface_explicit() {
 /// Verify that `lib.rs` declares all 6 new fold-modules without deleting
 /// any existing modules.
 #[test]
-fn test_lib_rs_declares_new_modules() {
+fn test_lib_rs_declares_new_modules() -> Result<(), Box<dyn std::error::Error>> {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir = PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace");
+    let crate_dir = PathBuf::from(&cargo_manifest_dir)
+        .parent()
+        .ok_or("manifest has no parent")?
+        .join("perl-workspace");
 
     let lib_file = crate_dir.join("src/lib.rs");
     assert!(lib_file.exists(), "lib.rs not found");
 
-    let content = std::fs::read_to_string(&lib_file).expect("Failed to read lib.rs");
+    let content =
+        std::fs::read_to_string(&lib_file).map_err(|e| format!("Failed to read lib.rs: {e}"))?;
 
     // Check that lib.rs declares or references the new modules
     let required_modules =
@@ -414,6 +456,7 @@ fn test_lib_rs_declares_new_modules() {
             module
         );
     }
+    Ok(())
 }
 
 // =============================================================================
@@ -423,14 +466,18 @@ fn test_lib_rs_declares_new_modules() {
 /// Verify that the package name in Cargo.toml has been changed from
 /// `perl-workspace-index` to `perl-workspace`.
 #[test]
-fn test_package_name_renamed_to_perl_workspace() {
+fn test_package_name_renamed_to_perl_workspace() -> Result<(), Box<dyn std::error::Error>> {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let crate_dir = PathBuf::from(&cargo_manifest_dir).parent().unwrap().join("perl-workspace");
+    let crate_dir = PathBuf::from(&cargo_manifest_dir)
+        .parent()
+        .ok_or("manifest has no parent")?
+        .join("perl-workspace");
 
     let cargo_toml = crate_dir.join("Cargo.toml");
     assert!(cargo_toml.exists(), "Cargo.toml not found in perl-workspace");
 
-    let content = std::fs::read_to_string(&cargo_toml).expect("Failed to read Cargo.toml");
+    let content = std::fs::read_to_string(&cargo_toml)
+        .map_err(|e| format!("Failed to read Cargo.toml: {e}"))?;
 
     // The first line after the opening should contain: name = "perl-workspace"
     // or at least not contain: name = "perl-workspace-index"
@@ -460,4 +507,5 @@ fn test_package_name_renamed_to_perl_workspace() {
          Package line: {}",
         package_line
     );
+    Ok(())
 }
