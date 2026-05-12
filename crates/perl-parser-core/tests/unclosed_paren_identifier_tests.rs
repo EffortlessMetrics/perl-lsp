@@ -529,6 +529,17 @@ fn unicode_collate_map_expr_in_for_list() {
 }
 
 #[test]
+fn regexp_common_comment_combine_parenthesized_map_args() {
+    // From Regexp::Common::comment: unary plus before a parenthesized map block
+    // in a comma-separated argument list must not leave `combine` waiting for a `)`.
+    assert_clean_parse(
+        r#"my $pattern = combine +(map {to_eol $_} @{$group -> {to_eol}}),
+                       (map {from_to @$_} @{$group -> {from_to}}),
+                       (map {id       $_} @{$group -> {id}});"#,
+    );
+}
+
+#[test]
 fn main_package_variable_in_paren_expr() {
     // From Unicode::Normalize: `$::IS_ASCII` must parse as a main-package
     // variable, not as `$::` followed by a stray bare identifier.
