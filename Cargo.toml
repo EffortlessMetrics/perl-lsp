@@ -368,15 +368,8 @@ panic = "deny"
 todo = "deny"
 unimplemented = "deny"
 dbg_macro = "deny"
-# Newly-stabilised in Rust 1.94/1.95. Each has a cluster of pre-existing
-# call sites; opt into them once the cleanup follow-ups land (see #8508).
-# `priority = 1` overrides `#![warn(clippy::all)]` (priority 0) that several
-# crate `lib.rs` files declare.
+# collapsible_match: ~20 lib sites across perl-lsp-rs-core; tracked in #8561; defer to post-0.14.0 cleanup.
 collapsible_match = { level = "allow", priority = 1 }
-manual_range_contains = { level = "allow", priority = 1 }
-useless_vec = { level = "allow", priority = 1 }
-vec_init_then_push = { level = "allow", priority = 1 }
-assertions_on_constants = { level = "allow", priority = 1 }
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)', 'cfg(feature, values("slow_tests"))'] }
