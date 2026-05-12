@@ -574,6 +574,13 @@ fn unicode_normalize_typeglob_ternary_native_subs() {
 }
 
 #[test]
+fn unicode_normalize_pack_u_map_block() {
+    // From Unicode::Normalize: pack arguments may include a map block before
+    // the remaining argument list.
+    assert_clean_parse(r#"return pack('U*', map { to_native($_) } @_);"#);
+}
+
+#[test]
 fn x_repetition_prefix_decrement_in_parens() {
     // From Pod::Simple::XHTML: repetition RHS may be a prefix decrement.
     assert_clean_parse(r#"push @out, ('  ' x --$indent) . '</li>';"#);
