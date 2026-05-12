@@ -41,6 +41,25 @@ fn global_substitution_with_eval() {
 }
 
 #[test]
+fn substitution_replacement_after_comment() {
+    let code = r#"
+$value =~ s[^~([^/]+)?(?=/|$)]   # tilde with optional username
+    [$1 ? (eval { (getpwnam $1)[7] } || "~$1") : ($ENV{HOME} || glob("~"))]ex;
+"#;
+    assert_clean_parse(code);
+}
+
+#[test]
+fn substitution_replacement_after_consecutive_comments() {
+    let code = r#"
+$value =~ s{foo} # first comment
+# second comment
+{bar}x;
+"#;
+    assert_clean_parse(code);
+}
+
+#[test]
 fn transliteration() {
     let code = "($count = $str) =~ tr/aeiou//;";
     assert_clean_parse(code);

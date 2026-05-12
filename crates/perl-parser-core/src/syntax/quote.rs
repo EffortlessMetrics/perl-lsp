@@ -127,7 +127,7 @@ pub fn extract_substitution_parts_strict(
     } else {
         // Paired pattern delimiters still allow either paired or non-paired delimiters
         // for the replacement side (e.g. s{foo}/bar/ and s[foo]{bar}).
-        let trimmed = rest1.trim_start();
+        let trimmed = skip_paired_substitution_replacement_gap(rest1);
         if let Some(rd) = trimmed.chars().next() {
             if rd.is_ascii_alphanumeric() || rd.is_whitespace() {
                 return Err(SubstitutionError::MissingReplacement);
@@ -155,6 +155,33 @@ pub fn extract_substitution_parts_strict(
         .map_err(SubstitutionError::InvalidModifier)?;
 
     Ok((pattern, replacement, modifiers))
+}
+
+fn skip_paired_substitution_replacement_gap(mut text: &str) -> &str {
+    let mut comment_eligible = false;
+    loop {
+        let trimmed = text.trim_start_matches(char::is_whitespace);
+        let saw_whitespace = trimmed.len() != text.len();
+        text = trimmed;
+        comment_eligible |= saw_whitespace;
+
+        if comment_eligible && text.starts_with('#') {
+            text = after_line_comment(text);
+            comment_eligible = true;
+            continue;
+        }
+
+        return text;
+    }
+}
+
+fn after_line_comment(text: &str) -> &str {
+    for (idx, ch) in text.char_indices() {
+        if matches!(ch, '\n' | '\r') {
+            return &text[idx + ch.len_utf8()..];
+        }
+    }
+    ""
 }
 
 /// Extract content between delimiters with strict tracking of whether closing was found.
