@@ -129,9 +129,6 @@ pub fn extract_substitution_parts_strict(
         // for the replacement side (e.g. s{foo}/bar/ and s[foo]{bar}).
         let trimmed = skip_paired_substitution_replacement_gap(rest1);
         if let Some(rd) = trimmed.chars().next() {
-            if rd.is_ascii_alphanumeric() || rd.is_whitespace() {
-                return Err(SubstitutionError::MissingReplacement);
-            }
             let repl_closing = get_closing_delimiter(rd);
             extract_delimited_content_strict(trimmed, rd, repl_closing)
         } else {

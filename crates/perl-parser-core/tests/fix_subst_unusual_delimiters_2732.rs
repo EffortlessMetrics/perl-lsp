@@ -250,6 +250,21 @@ fn test_subst_paired_pattern_missing_replacement_errors() {
     assert_has_error(r#"$x =~ s{foo};"#, "Missing");
 }
 
+/// Paired-pattern substitutions may use a closed alphanumeric replacement
+/// delimiter. Perl deparses this as `s/foo/y/`.
+#[test]
+fn test_subst_paired_pattern_alphanumeric_replacement_delimiter() {
+    assert_clean_parse(r#"$x =~ s{foo}xyx;"#);
+}
+
+/// Malformed paired substitution with an unclosed alphanumeric replacement
+/// delimiter should report the missing close, not pretend the replacement is
+/// absent.
+#[test]
+fn test_subst_paired_pattern_unclosed_alphanumeric_replacement_delimiter_errors() {
+    assert_has_error(r#"$x =~ s{foo}xyz;"#, "Missing closing delimiter");
+}
+
 /// Mixed delimiter transliteration: paired search + slash replacement.
 /// Perl accepts `tr{abc}/xyz/`.
 #[test]
