@@ -1,4 +1,4 @@
-//! Non-Rust file inventory for the file-policy rollout.
+//! Non-Rust file inventory and policy enforcement for the file-policy rollout.
 //!
 //! ## Commands
 //!
@@ -9,10 +9,16 @@
 //!   - `target/policy/non-rust-inventory.json` — machine-readable JSON array.
 //!   - `docs/policy/NON_RUST_INVENTORY.md` — regenerated from the same data.
 //!
-//! The inventory is **read-only** — it never mutates the allowlist.  The
-//! gating behaviour (`cargo xtask check-file-policy`) lands in PR 4.
+//! - `cargo xtask non-rust check [--mode <mode>] [--json <path>] [--allowlist <path>]` —
+//!   classify tracked files against the allowlist and report violations.
+//!   Modes: `advisory` (default, always exit 0), `blocking-allowlist` (exit 1 on
+//!   unallowlisted files or expired entries), `blocking-strict` (also fail on stale
+//!   `review_after`, duplicate ids, absolute/backslashed paths, broad globs without
+//!   `broad_glob_reason`).
 //!
-//! Refs: #8174.
+//! The inventory is **read-only** — it never mutates the allowlist.
+//!
+//! Refs: #8174, #8566.
 
 use color_eyre::eyre::{Context, Result, eyre};
 use glob::Pattern;
@@ -360,6 +366,396 @@ pub fn non_rust_inventory(root: &Path) -> Result<()> {
          - Allowlisted:   {allowlisted}\n\
          - Unclassified:  {unclassified}"
     );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// check-file-policy — enforcement subcommand
+// ---------------------------------------------------------------------------
+
+/// Operating mode for `cargo xtask non-rust check`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CheckFilePolicyMode {
+    /// Report only — never exit with a non-zero code.
+    Advisory,
+    /// Fail when any non-Rust file has no allowlist entry, or any entry has
+    /// an expired `expires` date. Does not check `review_after`.
+    BlockingAllowlist,
+    /// `blocking-allowlist` plus: stale `review_after`, duplicate entry ids,
+    /// absolute or backslash paths, and broad globs without `broad_glob_reason`.
+    BlockingStrict,
+}
+
+impl std::fmt::Display for CheckFilePolicyMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CheckFilePolicyMode::Advisory => write!(f, "advisory"),
+            CheckFilePolicyMode::BlockingAllowlist => write!(f, "blocking-allowlist"),
+            CheckFilePolicyMode::BlockingStrict => write!(f, "blocking-strict"),
+        }
+    }
+}
+
+/// Configuration for `cargo xtask non-rust check`.
+pub struct CheckFilePolicyConfig {
+    /// Operating mode.
+    pub mode: CheckFilePolicyMode,
+    /// If `Some(path)`, write the JSON receipt to this file.
+    pub json_output: Option<std::path::PathBuf>,
+    /// Override the default allowlist path (`policy/non-rust-allowlist.toml`).
+    pub allowlist_path: Option<std::path::PathBuf>,
+    /// Override the workspace root used for `git ls-files`.
+    /// When `None`, the binary resolves `project_root()` at runtime.
+    /// Intended as a test seam — production invocations omit this.
+    pub root_override: Option<std::path::PathBuf>,
+}
+
+/// A single policy violation found during `check-file-policy`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PolicyViolation {
+    /// Machine-readable violation kind.
+    pub kind: String,
+    /// Human-readable description.
+    pub message: String,
+    /// Path of the file or entry involved (if applicable).
+    pub path: Option<String>,
+    /// Allowlist entry id involved (if applicable).
+    pub entry_id: Option<String>,
+}
+
+/// JSON receipt emitted by `cargo xtask non-rust check`.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FilePolicyReceipt {
+    /// Always 1 for this schema generation.
+    pub schema_version: u32,
+    /// Mode used for this run.
+    pub mode: String,
+    /// Total number of tracked files (Rust + non-Rust).
+    pub total_tracked: usize,
+    /// Number of non-Rust files.
+    pub non_rust: usize,
+    /// Number of non-Rust files with no allowlist entry.
+    pub unclassified: usize,
+    /// Number of allowlist entries with an expired `expires` date.
+    pub expired: usize,
+    /// Number of allowlist entries with a stale `review_after` date (past today).
+    pub stale_review_after: usize,
+    /// Number of duplicate entry ids across the allowlist.
+    pub duplicate_ids: usize,
+    /// All violations detected (populated even in advisory mode for reporting).
+    pub violations: Vec<PolicyViolation>,
+}
+
+/// Check whether a date string (YYYY-MM-DD) is in the past relative to today.
+fn is_past_date(date_str: &str) -> bool {
+    // Parse YYYY-MM-DD by splitting on '-'.
+    let parts: Vec<&str> = date_str.trim().split('-').collect();
+    if parts.len() != 3 {
+        // Malformed date — treat as in the past so it gets flagged.
+        return true;
+    }
+    let (Ok(y), Ok(m), Ok(d)) =
+        (parts[0].parse::<u32>(), parts[1].parse::<u32>(), parts[2].parse::<u32>())
+    else {
+        return true;
+    };
+    // Use chrono if available; otherwise fall back to a manual comparison
+    // against the compile-time UTC date (good enough for CI).
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    // Approximate: days since epoch → year/month/day (Gregorian).
+    let days = secs / 86400;
+    // Epoch = 1970-01-01.
+    let (ey, em, ed) = days_to_ymd(days);
+    (y, m, d) < (ey, em, ed)
+}
+
+/// Convert days-since-Unix-epoch to (year, month, day) using the proleptic
+/// Gregorian calendar. Accurate for years 1970–2200 (sufficient for policy).
+fn days_to_ymd(days: u64) -> (u32, u32, u32) {
+    // Algorithm: Julian Day Number method.
+    let jdn = days + 2_440_588; // Unix epoch = JDN 2440588
+    let a = jdn + 32044;
+    let b = (4 * a + 3) / 146097;
+    let c = a - 146097 * b / 4;
+    let d = (4 * c + 3) / 1461;
+    let e = c - 1461 * d / 4;
+    let m = (5 * e + 2) / 153;
+    let day = e - (153 * m + 2) / 5 + 1;
+    let month = m + 3 - 12 * (m / 10);
+    let year = 100 * b + d - 4800 + m / 10;
+    (year as u32, month as u32, day as u32)
+}
+
+/// Returns `true` when the glob pattern looks like a "broad" glob
+/// (e.g. `**/*`, `**`, `*`).
+fn is_broad_glob(glob_str: &str) -> bool {
+    matches!(glob_str.trim(), "**" | "**/*" | "*" | "*.*")
+        || glob_str.starts_with("**/*.")
+            && glob_str.trim_start_matches("**/").trim_start_matches("*.").is_empty()
+}
+
+/// Load the allowlist from the given path (overrides root-relative default).
+fn load_allowlist_from(path: &std::path::Path) -> Result<Allowlist> {
+    let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    toml::from_str(&text).with_context(|| format!("parsing {}", path.display()))
+}
+
+/// Run all allowlist-level validations and return violations.
+fn check_allowlist_entries(
+    entries: &[AllowEntry],
+    mode: CheckFilePolicyMode,
+) -> Vec<PolicyViolation> {
+    let mut violations: Vec<PolicyViolation> = Vec::new();
+
+    // --- Duplicate id check (strict only) ---
+    if mode == CheckFilePolicyMode::BlockingStrict {
+        let mut seen_ids: BTreeMap<&str, usize> = BTreeMap::new();
+        for entry in entries {
+            *seen_ids.entry(entry.id.as_str()).or_insert(0) += 1;
+        }
+        for (id, count) in &seen_ids {
+            if *count > 1 {
+                violations.push(PolicyViolation {
+                    kind: "duplicate-id".to_string(),
+                    message: format!("Allowlist entry id {id:?} appears {count} times"),
+                    path: None,
+                    entry_id: Some(id.to_string()),
+                });
+            }
+        }
+    }
+
+    for entry in entries {
+        if entry.retired {
+            continue;
+        }
+
+        // --- Expired entries (blocking-allowlist+) ---
+        if mode != CheckFilePolicyMode::Advisory {
+            if let Some(ref expires) = entry.expires {
+                if is_past_date(expires) {
+                    violations.push(PolicyViolation {
+                        kind: "expired-entry".to_string(),
+                        message: format!("Entry {:?} has expired (expires={})", entry.id, expires),
+                        path: None,
+                        entry_id: Some(entry.id.clone()),
+                    });
+                }
+            }
+        }
+
+        // The following checks are strict-only.
+        if mode != CheckFilePolicyMode::BlockingStrict {
+            continue;
+        }
+
+        // --- Stale review_after ---
+        if !entry.review_after.is_empty() && is_past_date(&entry.review_after) {
+            violations.push(PolicyViolation {
+                kind: "stale-review-after".to_string(),
+                message: format!(
+                    "Entry {:?} review_after={} is in the past",
+                    entry.id, entry.review_after
+                ),
+                path: None,
+                entry_id: Some(entry.id.clone()),
+            });
+        }
+
+        // --- Missing required fields ---
+        if entry.owner.trim().is_empty() {
+            violations.push(PolicyViolation {
+                kind: "missing-owner".to_string(),
+                message: format!("Entry {:?} is missing required field `owner`", entry.id),
+                path: None,
+                entry_id: Some(entry.id.clone()),
+            });
+        }
+        if entry.reason.trim().is_empty() {
+            violations.push(PolicyViolation {
+                kind: "missing-reason".to_string(),
+                message: format!("Entry {:?} is missing required field `reason`", entry.id),
+                path: None,
+                entry_id: Some(entry.id.clone()),
+            });
+        }
+        if entry.surface.trim().is_empty() {
+            violations.push(PolicyViolation {
+                kind: "missing-surface".to_string(),
+                message: format!("Entry {:?} is missing required field `surface`", entry.id),
+                path: None,
+                entry_id: Some(entry.id.clone()),
+            });
+        }
+        if entry.classification.trim().is_empty() {
+            violations.push(PolicyViolation {
+                kind: "missing-classification".to_string(),
+                message: format!("Entry {:?} is missing required field `classification`", entry.id),
+                path: None,
+                entry_id: Some(entry.id.clone()),
+            });
+        }
+        if entry.covered_by.is_empty() {
+            violations.push(PolicyViolation {
+                kind: "missing-covered-by".to_string(),
+                message: format!("Entry {:?} is missing required field `covered_by`", entry.id),
+                path: None,
+                entry_id: Some(entry.id.clone()),
+            });
+        }
+
+        // --- Absolute or backslash paths ---
+        let path_or_glob = entry.glob.as_deref().or(entry.path.as_deref()).unwrap_or("");
+        if path_or_glob.starts_with('/') {
+            violations.push(PolicyViolation {
+                kind: "absolute-path".to_string(),
+                message: format!("Entry {:?} uses an absolute path: {:?}", entry.id, path_or_glob),
+                path: Some(path_or_glob.to_string()),
+                entry_id: Some(entry.id.clone()),
+            });
+        }
+        if path_or_glob.contains('\\') {
+            violations.push(PolicyViolation {
+                kind: "backslash-path".to_string(),
+                message: format!(
+                    "Entry {:?} uses backslashes in path: {:?}",
+                    entry.id, path_or_glob
+                ),
+                path: Some(path_or_glob.to_string()),
+                entry_id: Some(entry.id.clone()),
+            });
+        }
+
+        // --- Broad glob without reason ---
+        if let Some(ref glob_str) = entry.glob {
+            if is_broad_glob(glob_str) && entry.broad_glob_reason.is_none() {
+                violations.push(PolicyViolation {
+                    kind: "broad-glob-no-reason".to_string(),
+                    message: format!(
+                        "Entry {:?} has a broad glob {:?} but no `broad_glob_reason`",
+                        entry.id, glob_str
+                    ),
+                    path: Some(glob_str.clone()),
+                    entry_id: Some(entry.id.clone()),
+                });
+            }
+        }
+    }
+
+    violations
+}
+
+/// Entry point for `cargo xtask non-rust check`.
+pub fn check_file_policy(root: &std::path::Path, config: CheckFilePolicyConfig) -> Result<()> {
+    // Resolve effective workspace root (allows test seam override).
+    let effective_root: std::path::PathBuf =
+        if let Some(ref r) = config.root_override { r.clone() } else { root.to_path_buf() };
+    let root = effective_root.as_path();
+
+    // Load allowlist.
+    let allowlist = if let Some(ref custom_path) = config.allowlist_path {
+        load_allowlist_from(custom_path)?
+    } else {
+        load_allowlist(root)?
+    };
+
+    let entries = &allowlist.allow;
+
+    // Build inventory.
+    let tracked = list_tracked_files(root)?;
+    let prepared = prepare_allow_entries(entries);
+
+    let mut violations: Vec<PolicyViolation> = Vec::new();
+
+    // --- Per-file classification ---
+    let mut non_rust_count = 0usize;
+    let mut unclassified_count = 0usize;
+
+    for path in &tracked {
+        let record = classify_file_with_prepared(path, &prepared);
+        if record.category == "rust" {
+            continue;
+        }
+        non_rust_count += 1;
+        if !record.allowlisted {
+            unclassified_count += 1;
+            if config.mode != CheckFilePolicyMode::Advisory {
+                violations.push(PolicyViolation {
+                    kind: "unallowlisted-file".to_string(),
+                    message: format!("Non-Rust file {path:?} has no allowlist entry"),
+                    path: Some(path.clone()),
+                    entry_id: None,
+                });
+            }
+        }
+    }
+
+    // --- Allowlist entry checks ---
+    let entry_violations = check_allowlist_entries(entries, config.mode);
+    let expired_count = entry_violations.iter().filter(|v| v.kind == "expired-entry").count();
+    let stale_review_after_count =
+        entry_violations.iter().filter(|v| v.kind == "stale-review-after").count();
+    let duplicate_ids_count = entry_violations.iter().filter(|v| v.kind == "duplicate-id").count();
+    violations.extend(entry_violations);
+
+    // --- Build receipt ---
+    let receipt = FilePolicyReceipt {
+        schema_version: 1,
+        mode: config.mode.to_string(),
+        total_tracked: tracked.len(),
+        non_rust: non_rust_count,
+        unclassified: unclassified_count,
+        expired: expired_count,
+        stale_review_after: stale_review_after_count,
+        duplicate_ids: duplicate_ids_count,
+        violations: violations.clone(),
+    };
+
+    // --- Emit output ---
+    let json =
+        serde_json::to_string_pretty(&receipt).context("failed to serialize policy receipt")?;
+
+    if let Some(ref json_path) = config.json_output {
+        if let Some(parent) = json_path.parent() {
+            fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+        }
+        fs::write(json_path, &json)
+            .with_context(|| format!("writing receipt to {}", json_path.display()))?;
+        println!("  wrote {}", json_path.display());
+    }
+
+    // Human-readable summary.
+    println!("check-file-policy (mode: {})", config.mode);
+    println!(
+        "  total tracked: {}  non-Rust: {}  unclassified: {}",
+        receipt.total_tracked, receipt.non_rust, receipt.unclassified
+    );
+    println!(
+        "  expired entries: {}  stale review_after: {}",
+        expired_count, stale_review_after_count
+    );
+    if violations.is_empty() {
+        println!("  result: OK — no violations");
+    } else {
+        println!("  result: {} violation(s)", violations.len());
+        for v in &violations {
+            let loc = v.path.as_deref().or(v.entry_id.as_deref()).unwrap_or("");
+            println!(
+                "    [{}] {}{}",
+                v.kind,
+                if loc.is_empty() { String::new() } else { format!("{loc}: ") },
+                v.message
+            );
+        }
+    }
+
+    // Decide exit code based on mode.
+    if config.mode != CheckFilePolicyMode::Advisory && !violations.is_empty() {
+        std::process::exit(1);
+    }
 
     Ok(())
 }

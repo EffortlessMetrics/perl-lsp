@@ -1445,6 +1445,35 @@ enum Commands {
         command: NonRustCommand,
     },
 
+    /// Check non-Rust files against the policy allowlist and report violations.
+    ///
+    /// Equivalent to `non-rust check`. Default mode is `advisory` (always
+    /// exits 0). Use `--mode blocking-allowlist` or `--mode blocking-strict`
+    /// for enforcement. See #8566.
+    ///
+    /// Examples:
+    ///   `cargo xtask check-file-policy`
+    ///   `cargo xtask check-file-policy --mode advisory`
+    ///   `cargo xtask check-file-policy --mode blocking-allowlist`
+    ///   `cargo xtask check-file-policy --json target/policy/file-policy-report.json`
+    CheckFilePolicy {
+        /// Enforcement mode.
+        #[arg(long, value_enum, default_value = "advisory")]
+        mode: CheckFilePolicyCliMode,
+
+        /// Write the JSON receipt to this path.
+        #[arg(long)]
+        json: Option<PathBuf>,
+
+        /// Override the default allowlist path (`policy/non-rust-allowlist.toml`).
+        #[arg(long)]
+        allowlist: Option<PathBuf>,
+
+        /// Override the workspace root used for `git ls-files`. Test seam only.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
+    },
+
     /// Check whether the current checkout is behind origin/master.
     ///
     /// Emits a JSON receipt (schema_version 1) with staleness metadata.
@@ -1478,12 +1507,44 @@ enum Commands {
     },
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, clap::ValueEnum)]
+enum CheckFilePolicyCliMode {
+    Advisory,
+    BlockingAllowlist,
+    BlockingStrict,
+}
+
 #[derive(Subcommand)]
 enum NonRustCommand {
     /// Walk `git ls-files`, classify tracked files against the allowlist,
     /// and emit `target/policy/non-rust-inventory.{md,json}` plus
     /// `docs/policy/NON_RUST_INVENTORY.md`.
     Inventory,
+
+    /// Check non-Rust files against the allowlist and report violations.
+    ///
+    /// Default mode is `advisory` — always exits 0, reports findings only.
+    /// Use `--mode blocking-allowlist` or `--mode blocking-strict` to enable
+    /// enforcement. Strict mode is NOT promoted to CI in this PR (see #8566).
+    Check {
+        /// Enforcement mode.
+        #[arg(long, value_enum, default_value = "advisory")]
+        mode: CheckFilePolicyCliMode,
+
+        /// Write the JSON receipt to this path instead of stdout.
+        ///
+        /// Example: `--json target/policy/file-policy-report.json`
+        #[arg(long)]
+        json: Option<PathBuf>,
+
+        /// Override the default allowlist path (`policy/non-rust-allowlist.toml`).
+        #[arg(long)]
+        allowlist: Option<PathBuf>,
+
+        /// Override the workspace root used for `git ls-files`. Test seam only.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2969,7 +3030,45 @@ fn main() -> Result<()> {
                 let root = utils::project_root()?;
                 tasks::file_policy::non_rust_inventory(&root)
             }
+            NonRustCommand::Check { mode, json, allowlist, root: root_override } => {
+                use tasks::file_policy::{CheckFilePolicyConfig, CheckFilePolicyMode};
+                let root = utils::project_root()?;
+                let mode = match mode {
+                    CheckFilePolicyCliMode::Advisory => CheckFilePolicyMode::Advisory,
+                    CheckFilePolicyCliMode::BlockingAllowlist => {
+                        CheckFilePolicyMode::BlockingAllowlist
+                    }
+                    CheckFilePolicyCliMode::BlockingStrict => CheckFilePolicyMode::BlockingStrict,
+                };
+                tasks::file_policy::check_file_policy(
+                    &root,
+                    CheckFilePolicyConfig {
+                        mode,
+                        json_output: json,
+                        allowlist_path: allowlist,
+                        root_override,
+                    },
+                )
+            }
         },
+        Commands::CheckFilePolicy { mode, json, allowlist, root: root_override } => {
+            use tasks::file_policy::{CheckFilePolicyConfig, CheckFilePolicyMode};
+            let root = utils::project_root()?;
+            let mode = match mode {
+                CheckFilePolicyCliMode::Advisory => CheckFilePolicyMode::Advisory,
+                CheckFilePolicyCliMode::BlockingAllowlist => CheckFilePolicyMode::BlockingAllowlist,
+                CheckFilePolicyCliMode::BlockingStrict => CheckFilePolicyMode::BlockingStrict,
+            };
+            tasks::file_policy::check_file_policy(
+                &root,
+                CheckFilePolicyConfig {
+                    mode,
+                    json_output: json,
+                    allowlist_path: allowlist,
+                    root_override,
+                },
+            )
+        }
         Commands::FreshnessCheck { base, mode, json, no_fetch, allow_historical, reason } => {
             use tasks::freshness_check::{FreshnessCheckConfig, FreshnessMode};
             let mode = match mode {
