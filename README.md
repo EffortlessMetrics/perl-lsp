@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://crates.io/crates/perl-lsp-rs"><img src="https://img.shields.io/crates/d/perl-lsp-rs.svg?label=crates.io%20downloads" alt="crates.io downloads" /></a>
   <!-- perl-lsp:vs-marketplace-installs-badge:start -->
-  <a href="https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs"><img src="https://img.shields.io/badge/VS%20Marketplace-287%20installs-0078D4" alt="VS Marketplace installs" /></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs"><img src="https://img.shields.io/badge/VS%20Marketplace-313%20installs-0078D4" alt="VS Marketplace installs" /></a>
   <!-- perl-lsp:vs-marketplace-installs-badge:end -->
   <a href="https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs"><img src="https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX%20downloads" alt="Open VSX downloads" /></a>
 </p>
