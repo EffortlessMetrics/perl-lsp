@@ -11,9 +11,12 @@ use perl_lsp_rs_core::providers::navigation::{
     safe_delete_shadow::{SafeDeleteCutoverResult, safe_delete_cutover},
 };
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
-use perl_semantic_facts::PlanBlocker;
+use perl_semantic_facts::{
+    DefinitionCandidate, EntityFact, EntityId, FileId, OccurrenceFact, PlanBlocker,
+    PlanBlockerReason, RenamePlan, SafeDeletePlan, ScopeId, VisibleSymbol,
+};
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
-use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
+use perl_workspace::semantic::queries::{DynamicCallableEvidence, QueryContext, SemanticQueries};
 
 impl LspServer {
     /// Test-only receipt for rename blocker UX proof.
@@ -76,6 +79,20 @@ impl LspServer {
                     "note": "rename blocker UX proof found no symbol at request position"
                 })));
             };
+
+            if let Some(fixture) = params.get("compilerPlanFixture").and_then(Value::as_str) {
+                let compiler_receipt =
+                    rename_fixture_receipt(fixture, &symbol, new_name, live_provider_edit_count);
+                return Ok(Some(json!({
+                    "provider": "rename",
+                    "symbol": symbol,
+                    "compiler_plan_fixture": fixture,
+                    "live_provider_result": live_provider_result,
+                    "live_provider_edit_count": live_provider_edit_count,
+                    "compiler_receipt": compiler_receipt,
+                    "no_live_behavior_change": true
+                })));
+            }
 
             let compiler_receipt = match route_index_access(self.coordinator()) {
                 IndexAccessMode::Full(coordinator) => {
@@ -178,6 +195,20 @@ impl LspServer {
                 })));
             };
 
+            if let Some(fixture) = params.get("compilerPlanFixture").and_then(Value::as_str) {
+                let compiler_receipt =
+                    safe_delete_fixture_receipt(fixture, &symbol, live_provider_edit_count);
+                return Ok(Some(json!({
+                    "provider": "safe_delete",
+                    "symbol": symbol,
+                    "compiler_plan_fixture": fixture,
+                    "live_provider_result": live_provider_result,
+                    "live_provider_edit_count": live_provider_edit_count,
+                    "compiler_receipt": compiler_receipt,
+                    "no_live_behavior_change": true
+                })));
+            }
+
             let compiler_receipt = match route_index_access(self.coordinator()) {
                 IndexAccessMode::Full(coordinator) => {
                     let index = coordinator.index();
@@ -238,6 +269,164 @@ impl LspServer {
             return None;
         }
         Some((symbol, u32::try_from(offset).ok()?))
+    }
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn rename_fixture_receipt(
+    fixture: &str,
+    symbol: &str,
+    new_name: &str,
+    live_provider_edit_count: usize,
+) -> Option<perl_workspace::semantic_shadow_compare::SemanticShadowCompareReceipt> {
+    let blocker = fixture_blocker(fixture)?;
+    let plan = RenamePlan::new(
+        EntityId(1),
+        symbol.to_string(),
+        new_name.to_string(),
+        Vec::new(),
+        vec![blocker],
+        Vec::new(),
+    );
+    let queries = RefactorFixtureQueries { rename_plan: plan, safe_delete_plan: None };
+    let outcome = rename_cutover(live_provider_edit_count > 0, &queries, EntityId(1), new_name);
+    let (compiler_plan_edit_count, blockers) = match &outcome.result {
+        RenameCutoverResult::Allowed { edits } => (edits.len(), Vec::new()),
+        RenameCutoverResult::Blocked { blockers, edits } => (edits.len(), blockers.clone()),
+    };
+    let mut receipt = outcome.receipt;
+    receipt.notes.push(format!(
+        "rename runtime blocker UX: compiler_plan_fixture={fixture}; live_provider_edits={}; compiler_plan_edits={compiler_plan_edit_count}; blocker_count={}; blocker_reasons={}; blocker_ux={}; requires_confirmation={}; no live refactor behavior change",
+        live_provider_edit_count,
+        blockers.len(),
+        runtime_blocker_reasons(&blockers),
+        runtime_blocker_descriptions(&blockers),
+        !blockers.is_empty()
+    ));
+    Some(receipt)
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn safe_delete_fixture_receipt(
+    fixture: &str,
+    symbol: &str,
+    live_provider_edit_count: usize,
+) -> Option<perl_workspace::semantic_shadow_compare::SemanticShadowCompareReceipt> {
+    let blocker = fixture_blocker(fixture)?;
+    let plan = SafeDeletePlan::new(EntityId(1), symbol.to_string(), vec![blocker], Vec::new());
+    let queries = RefactorFixtureQueries {
+        rename_plan: RenamePlan::new(
+            EntityId(1),
+            symbol.to_string(),
+            symbol.to_string(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ),
+        safe_delete_plan: Some(plan),
+    };
+    let outcome = safe_delete_cutover(false, &queries, EntityId(1), symbol);
+    let blockers = match &outcome.result {
+        SafeDeleteCutoverResult::Allowed => Vec::new(),
+        SafeDeleteCutoverResult::Blocked { blockers } => blockers.clone(),
+    };
+    let mut receipt = outcome.receipt;
+    receipt.notes.push(format!(
+        "safe-delete runtime blocker UX: compiler_plan_fixture={fixture}; live_provider_edits={}; compiler_plan_safe={}; blocker_count={}; blocker_reasons={}; blocker_ux={}; requires_confirmation={}; no live refactor behavior change",
+        live_provider_edit_count,
+        blockers.is_empty(),
+        blockers.len(),
+        runtime_blocker_reasons(&blockers),
+        runtime_blocker_descriptions(&blockers),
+        !blockers.is_empty()
+    ));
+    Some(receipt)
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn fixture_blocker(fixture: &str) -> Option<PlanBlocker> {
+    match fixture {
+        "low_confidence" => Some(PlanBlocker::new(
+            PlanBlockerReason::AmbiguousReference,
+            None,
+            "low-confidence ambiguity requires confirmation before editing".to_string(),
+        )),
+        "stale_fact" => Some(PlanBlocker::new(
+            PlanBlockerReason::StaleFact,
+            None,
+            "stale compiler fact must be refreshed before editing".to_string(),
+        )),
+        _ => None,
+    }
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+struct RefactorFixtureQueries {
+    rename_plan: RenamePlan,
+    safe_delete_plan: Option<SafeDeletePlan>,
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+impl SemanticQueries for RefactorFixtureQueries {
+    fn symbol_at(
+        &self,
+        _file_id: FileId,
+        _byte_offset: u32,
+    ) -> Option<(EntityFact, OccurrenceFact)> {
+        None
+    }
+
+    fn definitions(&self, _symbol: &str, _context: &QueryContext) -> Vec<DefinitionCandidate> {
+        Vec::new()
+    }
+
+    fn references(&self, _entity_id: EntityId) -> Vec<OccurrenceFact> {
+        Vec::new()
+    }
+
+    fn visible_symbols_at(
+        &self,
+        _file_id: FileId,
+        _byte_offset: u32,
+        _scope_id: Option<ScopeId>,
+    ) -> Vec<VisibleSymbol> {
+        Vec::new()
+    }
+
+    fn method_candidates(
+        &self,
+        _receiver_package: &str,
+        _method_name: &str,
+    ) -> Vec<DefinitionCandidate> {
+        Vec::new()
+    }
+
+    fn rename_plan(&self, _entity_id: EntityId, _new_name: &str) -> RenamePlan {
+        self.rename_plan.clone()
+    }
+
+    fn safe_delete_plan(&self, _entity_id: EntityId) -> SafeDeletePlan {
+        self.safe_delete_plan.clone().unwrap_or_else(|| {
+            SafeDeletePlan::new(EntityId(1), String::new(), Vec::new(), Vec::new())
+        })
+    }
+
+    fn dynamic_boundary_at(
+        &self,
+        _file_id: FileId,
+        _byte_offset: u32,
+        _symbol: Option<&str>,
+    ) -> Option<OccurrenceFact> {
+        None
+    }
+
+    fn dynamic_callable_may_be_visible_at(
+        &self,
+        _file_id: FileId,
+        _byte_offset: u32,
+        _symbol: &str,
+    ) -> Option<DynamicCallableEvidence> {
+        None
     }
 }
 

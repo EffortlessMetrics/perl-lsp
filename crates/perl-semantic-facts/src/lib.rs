@@ -860,6 +860,8 @@ pub enum PlanBlockerReason {
     ReferencesExist,
     /// Symbol is a generated member without a generator-specific edit plan.
     GeneratedMember,
+    /// Fact freshness is stale, so the plan cannot authorize edits or deletion.
+    StaleFact,
     /// Occurrence could not be classified into a known category.
     UnclassifiedOccurrence,
 }
@@ -1748,6 +1750,7 @@ mod tests {
             PlanBlockerReason::ExportedSymbol,
             PlanBlockerReason::ReferencesExist,
             PlanBlockerReason::GeneratedMember,
+            PlanBlockerReason::StaleFact,
             PlanBlockerReason::UnclassifiedOccurrence,
         ];
         for variant in &variants {

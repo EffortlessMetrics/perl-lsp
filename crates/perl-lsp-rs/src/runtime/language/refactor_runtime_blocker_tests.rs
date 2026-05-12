@@ -123,6 +123,28 @@ fn trace_count(receipt: &Value) -> Result<usize, Box<dyn std::error::Error>> {
     Ok(traces.len())
 }
 
+fn assert_trace_contains(
+    receipt: &Value,
+    expected_source: &str,
+    expected_confidence: &str,
+    expected_freshness: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let traces = receipt
+        .get("fact_source_traces")
+        .and_then(Value::as_array)
+        .ok_or("missing fact_source_traces")?;
+    let found = traces.iter().any(|trace| {
+        trace.get("source").and_then(Value::as_str) == Some(expected_source)
+            && trace.get("confidence").and_then(Value::as_str) == Some(expected_confidence)
+            && trace.get("freshness").and_then(Value::as_str) == Some(expected_freshness)
+    });
+    assert!(
+        found,
+        "expected trace source={expected_source} confidence={expected_confidence} freshness={expected_freshness}; traces={traces:?}"
+    );
+    Ok(())
+}
+
 fn assert_note_contains(
     receipt: &Value,
     expected_parts: &[&str],
@@ -131,6 +153,166 @@ fn assert_note_contains(
     for expected in expected_parts {
         assert!(notes.contains(expected), "receipt notes must contain `{}`: {}", expected, notes);
     }
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_rename_receipt_blocks_low_confidence_fixture()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, REFACTOR_URI, REFACTOR_MODULE)?;
+    let (line, character) = position_of(REFACTOR_MODULE, "renamable")?;
+    let params = json!({
+        "textDocument": {"uri": REFACTOR_URI},
+        "position": {"line": line, "character": character},
+        "newName": "renamed_target",
+        "compilerPlanFixture": "low_confidence"
+    });
+
+    let runtime_receipt = server
+        .test_rename_runtime_blocker_ux_receipt(Some(params))?
+        .ok_or("missing rename runtime receipt")?;
+    let compiler = compiler_receipt(&runtime_receipt)?;
+
+    assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        runtime_receipt.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("low_confidence")
+    );
+    assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_trace_contains(compiler, "SemanticFact", "Low", "Fresh")?;
+    assert_note_contains(
+        compiler,
+        &[
+            "rename runtime blocker UX",
+            "compiler_plan_fixture=low_confidence",
+            "blocker_reasons=AmbiguousReference",
+            "low_confidence=true",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_rename_receipt_blocks_stale_fact_fixture()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, REFACTOR_URI, REFACTOR_MODULE)?;
+    let (line, character) = position_of(REFACTOR_MODULE, "renamable")?;
+    let params = json!({
+        "textDocument": {"uri": REFACTOR_URI},
+        "position": {"line": line, "character": character},
+        "newName": "renamed_target",
+        "compilerPlanFixture": "stale_fact"
+    });
+
+    let runtime_receipt = server
+        .test_rename_runtime_blocker_ux_receipt(Some(params))?
+        .ok_or("missing rename runtime receipt")?;
+    let compiler = compiler_receipt(&runtime_receipt)?;
+
+    assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(
+        runtime_receipt.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("stale_fact")
+    );
+    assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_trace_contains(compiler, "CompilerFact", "Low", "Stale")?;
+    assert_note_contains(
+        compiler,
+        &[
+            "rename runtime blocker UX",
+            "compiler_plan_fixture=stale_fact",
+            "blocker_reasons=StaleFact",
+            "stale_fact=true",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_low_confidence_fixture()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, REFACTOR_URI, REFACTOR_MODULE)?;
+    let (line, character) = position_of(REFACTOR_MODULE, "renamable")?;
+    let params = json!({
+        "textDocument": {"uri": REFACTOR_URI},
+        "position": {"line": line, "character": character},
+        "compilerPlanFixture": "low_confidence"
+    });
+
+    let runtime_receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(params))?
+        .ok_or("missing safe-delete runtime receipt")?;
+    let compiler = compiler_receipt(&runtime_receipt)?;
+
+    assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        runtime_receipt.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("low_confidence")
+    );
+    assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_trace_contains(compiler, "SemanticFact", "Low", "Fresh")?;
+    assert_note_contains(
+        compiler,
+        &[
+            "safe-delete runtime blocker UX",
+            "compiler_plan_fixture=low_confidence",
+            "compiler_plan_safe=false",
+            "blocker_reasons=AmbiguousReference",
+            "low_confidence=true",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_stale_fact_fixture()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    open_document(&server, REFACTOR_URI, REFACTOR_MODULE)?;
+    let (line, character) = position_of(REFACTOR_MODULE, "renamable")?;
+    let params = json!({
+        "textDocument": {"uri": REFACTOR_URI},
+        "position": {"line": line, "character": character},
+        "compilerPlanFixture": "stale_fact"
+    });
+
+    let runtime_receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(params))?
+        .ok_or("missing safe-delete runtime receipt")?;
+    let compiler = compiler_receipt(&runtime_receipt)?;
+
+    assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        runtime_receipt.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("stale_fact")
+    );
+    assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_trace_contains(compiler, "CompilerFact", "Low", "Stale")?;
+    assert_note_contains(
+        compiler,
+        &[
+            "safe-delete runtime blocker UX",
+            "compiler_plan_fixture=stale_fact",
+            "compiler_plan_safe=false",
+            "blocker_reasons=StaleFact",
+            "stale_fact=true",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
     Ok(())
 }
 

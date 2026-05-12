@@ -235,6 +235,8 @@ fn rename_plan_receipt_notes(legacy_allowed: bool, plan: &RenamePlan, phase: &st
         plan.blockers.iter().any(|blocker| blocker.reason == PlanBlockerReason::DynamicBoundary);
     let has_generated_member =
         plan.blockers.iter().any(|blocker| blocker.reason == PlanBlockerReason::GeneratedMember);
+    let has_stale_fact =
+        plan.blockers.iter().any(|blocker| blocker.reason == PlanBlockerReason::StaleFact);
     let has_low_confidence = plan.blockers.iter().any(|blocker| {
         matches!(
             blocker.reason,
@@ -244,7 +246,7 @@ fn rename_plan_receipt_notes(legacy_allowed: bool, plan: &RenamePlan, phase: &st
     let fallback_state = if plan.blockers.is_empty() { "allowed" } else { "blocked" };
 
     vec![format!(
-        "rename {phase} receipt: legacy_allowed={legacy_allowed}; compiler_plan_edits={}; blocker_count={}; blocker_reasons={blocker_reasons}; dynamic_boundary={has_dynamic_boundary}; generated_member={has_generated_member}; stale_fact=false; low_confidence={has_low_confidence}; fallback_state={fallback_state}; blocker_ux={}",
+        "rename {phase} receipt: legacy_allowed={legacy_allowed}; compiler_plan_edits={}; blocker_count={}; blocker_reasons={blocker_reasons}; dynamic_boundary={has_dynamic_boundary}; generated_member={has_generated_member}; stale_fact={has_stale_fact}; low_confidence={has_low_confidence}; fallback_state={fallback_state}; blocker_ux={}",
         plan.edits.len(),
         plan.blockers.len(),
         blocker_ux_list(&plan.blockers)
@@ -306,6 +308,12 @@ fn blocker_fact_trace(blocker: &PlanBlocker) -> ProviderFactTrace {
             Provenance::FrameworkSynthesis,
             Confidence::High,
             ProviderFactFreshness::Fresh,
+        ),
+        PlanBlockerReason::StaleFact => (
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Low,
+            ProviderFactFreshness::Stale,
         ),
         PlanBlockerReason::CrossModuleExport
         | PlanBlockerReason::ImportedSymbol
@@ -635,6 +643,11 @@ mod tests {
                     None,
                     "ambiguous reference has multiple candidates".to_string(),
                 ),
+                PlanBlocker::new(
+                    PlanBlockerReason::StaleFact,
+                    None,
+                    "compiler fact is stale and must be refreshed".to_string(),
+                ),
             ],
             vec![],
         );
@@ -643,19 +656,23 @@ mod tests {
         let outcome = rename_cutover(true, &queries, EntityId(1), "new_name");
         let notes = outcome.receipt.notes.join(" ");
 
-        assert!(notes.contains("blocker_count=3"), "missing blocker count in {}", notes);
+        assert!(notes.contains("blocker_count=4"), "missing blocker count in {}", notes);
         assert!(
-            notes.contains("blocker_reasons=dynamic_boundary,generated_member,ambiguous_reference"),
+            notes.contains(
+                "blocker_reasons=dynamic_boundary,generated_member,ambiguous_reference,stale_fact"
+            ),
             "missing blocker reasons in {}",
             notes
         );
         assert!(notes.contains("dynamic_boundary=true"), "missing dynamic boundary in {}", notes);
         assert!(notes.contains("generated_member=true"), "missing generated member in {}", notes);
+        assert!(notes.contains("stale_fact=true"), "missing stale fact in {}", notes);
         assert!(notes.contains("low_confidence=true"), "missing low confidence in {}", notes);
         assert!(
             notes.contains("symbolic reference may target this symbol")
                 && notes.contains("framework-aware edit plan")
-                && notes.contains("ambiguous reference has multiple candidates"),
+                && notes.contains("ambiguous reference has multiple candidates")
+                && notes.contains("compiler fact is stale"),
             "missing user-facing blocker descriptions in {}",
             notes
         );
@@ -706,6 +723,32 @@ mod tests {
         assert_eq!(trace.provenance, Provenance::NameHeuristic);
         assert_eq!(trace.confidence, Confidence::Low);
         assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        Ok(())
+    }
+
+    #[test]
+    fn rename_compiler_boundaries_stale_fact_uses_stale_compiler_trace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let plan = RenamePlan::new(
+            EntityId(1),
+            "old_name".to_string(),
+            "new_name".to_string(),
+            vec![],
+            vec![make_blocker(PlanBlockerReason::StaleFact)],
+            vec![],
+        );
+        let queries = StubSemanticQueries { rename_plan_result: plan };
+
+        let outcome = rename_cutover(true, &queries, EntityId(1), "new_name");
+        let trace = first_trace(&outcome.receipt)?;
+        let notes = outcome.receipt.notes.join(" ");
+
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Low);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Stale);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        assert!(notes.contains("stale_fact=true"), "missing stale fact in {}", notes);
         Ok(())
     }
 

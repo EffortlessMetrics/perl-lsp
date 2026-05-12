@@ -543,6 +543,7 @@ fn arb_plan_blocker_reason() -> impl Strategy<Value = PlanBlockerReason> {
         Just(PlanBlockerReason::ExportedSymbol),
         Just(PlanBlockerReason::ReferencesExist),
         Just(PlanBlockerReason::GeneratedMember),
+        Just(PlanBlockerReason::StaleFact),
         Just(PlanBlockerReason::UnclassifiedOccurrence),
     ]
 }

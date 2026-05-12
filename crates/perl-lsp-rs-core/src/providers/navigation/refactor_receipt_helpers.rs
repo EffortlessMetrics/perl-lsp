@@ -31,6 +31,7 @@ pub(crate) fn blocker_reason_label(reason: PlanBlockerReason) -> &'static str {
         PlanBlockerReason::ExportedSymbol => "exported_symbol",
         PlanBlockerReason::ReferencesExist => "references_exist",
         PlanBlockerReason::GeneratedMember => "generated_member",
+        PlanBlockerReason::StaleFact => "stale_fact",
         PlanBlockerReason::UnclassifiedOccurrence => "unclassified_occurrence",
         _ => "unknown",
     }
