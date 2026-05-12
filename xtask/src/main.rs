@@ -1461,7 +1461,8 @@ enum Commands {
         #[arg(long, value_enum, default_value = "advisory")]
         mode: CheckFilePolicyCliMode,
 
-        /// Write the JSON receipt to this path.
+        /// Override the default JSON receipt path
+        /// (`target/policy/file-policy-report.json`).
         #[arg(long)]
         json: Option<PathBuf>,
 
@@ -1531,7 +1532,8 @@ enum NonRustCommand {
         #[arg(long, value_enum, default_value = "advisory")]
         mode: CheckFilePolicyCliMode,
 
-        /// Write the JSON receipt to this path instead of stdout.
+        /// Override the default JSON receipt path
+        /// (`target/policy/file-policy-report.json`).
         ///
         /// Example: `--json target/policy/file-policy-report.json`
         #[arg(long)]

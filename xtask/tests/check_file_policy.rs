@@ -5,6 +5,8 @@
 //! with a synthetic allowlist and one or more tracked files, then invokes the
 //! xtask binary and asserts on exit codes and JSON output schema.
 
+// These integration tests assert CLI process behavior; localized expect/unwrap
+// calls keep fixture setup and JSON assertions readable.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use anyhow::Result;
@@ -225,9 +227,9 @@ review_after = "2027-01-01"
     Ok(())
 }
 
-/// blocking-strict must fail when an entry is missing `owner`.
+/// blocking-allowlist must fail when an entry is missing `owner`.
 #[test]
-fn blocking_strict_fails_on_missing_owner() -> Result<()> {
+fn blocking_allowlist_fails_on_missing_owner() -> Result<()> {
     let allowlist = minimal_allowlist(
         r#"
 [[allow]]
@@ -246,10 +248,41 @@ review_after = "2027-01-01"
     );
     let (_tmp, root) = setup_test_repo(&allowlist, &[("README.md", "# hi")])?;
 
-    let output = run_check(&root, &["--mode", "blocking-strict"])?;
+    let output = run_check(&root, &["--mode", "blocking-allowlist"])?;
     assert!(
         !output.status.success(),
-        "blocking-strict must exit 1 when an entry has an empty owner; \
+        "blocking-allowlist must exit 1 when an entry has an empty owner; \
+         stdout={}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    Ok(())
+}
+
+/// blocking-allowlist must fail when an entry has malformed matcher fields.
+#[test]
+fn blocking_allowlist_fails_on_invalid_glob() -> Result<()> {
+    let allowlist = minimal_allowlist(
+        r#"
+[[allow]]
+id = "bad-glob"
+glob = "["
+kind = "documentation"
+language = "markdown"
+surface = "docs"
+classification = "documentation"
+owner = "docs"
+reason = "Invalid glob entry"
+covered_by = ["xtask"]
+created = "2026-01-01"
+review_after = "2027-01-01"
+"#,
+    );
+    let (_tmp, root) = setup_test_repo(&allowlist, &[("README.md", "# hi")])?;
+
+    let output = run_check(&root, &["--mode", "blocking-allowlist"])?;
+    assert!(
+        !output.status.success(),
+        "blocking-allowlist must exit 1 when an entry has an invalid glob; \
          stdout={}",
         String::from_utf8_lossy(&output.stdout)
     );
@@ -397,6 +430,37 @@ review_after = "2027-01-01"
     Ok(())
 }
 
+/// blocking-strict must fail when a non-retired entry matches no tracked file.
+#[test]
+fn blocking_strict_fails_on_unused_entry() -> Result<()> {
+    let allowlist = minimal_allowlist(
+        r#"
+[[allow]]
+id = "missing-file"
+path = "MISSING.md"
+kind = "documentation"
+language = "markdown"
+surface = "docs"
+classification = "documentation"
+owner = "docs"
+reason = "Entry for a file that is not tracked"
+covered_by = ["xtask"]
+created = "2026-01-01"
+review_after = "2027-01-01"
+"#,
+    );
+    let (_tmp, root) = setup_test_repo(&allowlist, &[("README.md", "# hi")])?;
+
+    let output = run_check(&root, &["--mode", "blocking-strict"])?;
+    assert!(
+        !output.status.success(),
+        "blocking-strict must exit 1 when an entry matches no tracked file; \
+         stdout={}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    Ok(())
+}
+
 /// `--json` flag: the receipt file must be created and must match the
 /// expected schema (schema_version 1, required top-level keys).
 #[test]
@@ -428,6 +492,7 @@ fn json_output_schema_v1_valid() -> Result<()> {
     assert!(v["expired"].is_number(), "expired must be a number");
     assert!(v["stale_review_after"].is_number(), "stale_review_after must be a number");
     assert!(v["duplicate_ids"].is_number(), "duplicate_ids must be a number");
+    assert!(v["unused_entries"].is_number(), "unused_entries must be a number");
     assert!(v["violations"].is_array(), "violations must be an array");
 
     // Advisory with one unclassified file: violations must be empty (advisory never populates
@@ -442,6 +507,30 @@ fn json_output_schema_v1_valid() -> Result<()> {
         "advisory mode must not add unallowlisted-file violations"
     );
 
+    Ok(())
+}
+
+/// Without `--json`, the checker writes the default JSON and Markdown receipts.
+#[test]
+fn default_receipts_are_written() -> Result<()> {
+    let allowlist = minimal_allowlist("");
+    let (_tmp, root) = setup_test_repo(&allowlist, &[("README.md", "# hi")])?;
+
+    let output = run_check(&root, &["--mode", "advisory"])?;
+    assert!(
+        output.status.success(),
+        "advisory mode must exit 0 and write default receipts; stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        root.join("target/policy/file-policy-report.json").exists(),
+        "default JSON receipt must be written"
+    );
+    assert!(
+        root.join("target/policy/file-policy-report.md").exists(),
+        "default Markdown report must be written"
+    );
     Ok(())
 }
 
