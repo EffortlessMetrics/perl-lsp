@@ -556,6 +556,13 @@ fn unicode_collate_decomposition_map_block() {
 }
 
 #[test]
+fn unicode_collate_varce_return_map_expr() {
+    // From Unicode::Collate: return may use map EXPR, LIST where the
+    // expression is a method call and the list is a plain array.
+    assert_clean_parse(r#"return map $self->varCE($_), @ce;"#);
+}
+
+#[test]
 fn regexp_common_comment_combine_parenthesized_map_args() {
     // From Regexp::Common::comment: unary plus before a parenthesized map block
     // in a comma-separated argument list must not leave `combine` waiting for a `)`.
