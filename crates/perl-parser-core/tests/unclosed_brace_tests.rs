@@ -80,6 +80,22 @@ unless( eval {require warnings::register; warnings::register->import; 1} ) {
     assert_clean_parse(source);
 }
 
+#[test]
+fn test_more_unless_diag_heredoc() {
+    // From Test::More: heredoc terminators inside an unless block must close the
+    // diagnostic call without leaving the block body waiting for another `}`.
+    let source = r#"unless($ok) {
+    chomp $eval_error;
+    $tb->diag(<<DIAGNOSTIC);
+    Tried to require '$module'.
+    Error:  $eval_error
+DIAGNOSTIC
+
+}
+"#;
+    assert_clean_parse(source);
+}
+
 // --- Combined patterns from CPAN corpus ---
 
 #[test]
