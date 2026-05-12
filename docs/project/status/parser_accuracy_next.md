@@ -2,7 +2,7 @@
 
 Source: `target/metrics/parser_accuracy.json`
 
-Denominator: 49 fixtures / 29 families; 135 scored lines; 115 scored symbols.
+Denominator: 50 fixtures / 29 families; 139 scored lines; 117 scored symbols.
 
 Failure packets: 0 active.
 

@@ -1444,6 +1444,49 @@
       ]
     },
     {
+      "id": "heredoc_utf8_delimiter",
+      "family": "heredoc",
+      "label_mode": "partial",
+      "source_path": "crates/perl-corpus/fixtures/parser_accuracy/heredoc_utf8_delimiter.pl",
+      "scored_lines": 4,
+      "scored_symbols": 2,
+      "fully_labeled_regions": 0,
+      "partial_labeled_regions": 1,
+      "unknown_regions": 1,
+      "negative_regions": 0,
+      "dynamic_boundaries": 0,
+      "unsupported_constructs": 0,
+      "real_project_file": false,
+      "generated": false,
+      "line_expectations": [
+        {
+          "line": 1,
+          "expected_tags": [
+            "package_decl"
+          ]
+        },
+        {
+          "line": 3,
+          "expected_tags": [
+            "import"
+          ]
+        },
+        {
+          "line": 5,
+          "expected_tags": [
+            "variable_decl",
+            "heredoc_opener"
+          ]
+        },
+        {
+          "line": 9,
+          "expected_tags": [
+            "sub_decl"
+          ]
+        }
+      ]
+    },
+    {
       "id": "regex_match",
       "family": "regex",
       "label_mode": "partial",
