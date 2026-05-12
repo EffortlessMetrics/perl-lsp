@@ -32,6 +32,8 @@ use perl_corpus::{DocumentSymbolAssertionKind, DocumentSymbolGoldFixture};
 use serde_json::Value;
 use std::path::PathBuf;
 
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -122,18 +124,15 @@ fn document_symbol_names(resp: &Value) -> Vec<String> {
 /// Run all hover gold fixtures and assert every assertion passes.
 /// Reports a pass-rate summary to stdout under --nocapture.
 #[test]
-fn test_hover_gold_corpus() {
+fn test_hover_gold_corpus() -> TestResult {
     let root = gold_corpus_root();
     let fixtures: Vec<HoverGoldFixture> = match load_hover_gold_fixtures(&root) {
         Ok(f) if !f.is_empty() => f,
         Ok(_) => {
             eprintln!("SKIP: no hover gold fixtures found in {}", root.display());
-            return;
+            return Ok(());
         }
-        Err(e) => {
-            assert!(false, "Failed to load hover gold fixtures: {e}");
-            return;
-        }
+        Err(e) => return Err(e),
     };
 
     let server = TestServerBuilder::new().build();
@@ -143,14 +142,7 @@ fn test_hover_gold_corpus() {
     let mut failures: Vec<String> = Vec::new();
 
     for fixture in &fixtures {
-        let code_result = std::fs::read_to_string(&fixture.fixture_path);
-        assert!(
-            code_result.is_ok(),
-            "Cannot read fixture {}: {:?}",
-            fixture.fixture_path.display(),
-            code_result.as_ref().err()
-        );
-        let code = code_result.unwrap_or_default();
+        let code = std::fs::read_to_string(&fixture.fixture_path)?;
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
         server.open_document(&uri, &code);
@@ -199,6 +191,8 @@ fn test_hover_gold_corpus() {
         total,
         failures.join("\n")
     );
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -207,18 +201,15 @@ fn test_hover_gold_corpus() {
 
 /// Run all goto-definition gold fixtures and assert every assertion passes.
 #[test]
-fn test_goto_gold_corpus() {
+fn test_goto_gold_corpus() -> TestResult {
     let root = gold_corpus_root();
     let fixtures: Vec<GotoGoldFixture> = match load_goto_gold_fixtures(&root) {
         Ok(f) if !f.is_empty() => f,
         Ok(_) => {
             eprintln!("SKIP: no goto gold fixtures found in {}", root.display());
-            return;
+            return Ok(());
         }
-        Err(e) => {
-            assert!(false, "Failed to load goto gold fixtures: {e}");
-            return;
-        }
+        Err(e) => return Err(e),
     };
 
     let server = TestServerBuilder::new().build();
@@ -228,14 +219,7 @@ fn test_goto_gold_corpus() {
     let mut failures: Vec<String> = Vec::new();
 
     for fixture in &fixtures {
-        let code_result = std::fs::read_to_string(&fixture.fixture_path);
-        assert!(
-            code_result.is_ok(),
-            "Cannot read fixture {}: {:?}",
-            fixture.fixture_path.display(),
-            code_result.as_ref().err()
-        );
-        let code = code_result.unwrap_or_default();
+        let code = std::fs::read_to_string(&fixture.fixture_path)?;
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
         server.open_document(&uri, &code);
@@ -279,6 +263,8 @@ fn test_goto_gold_corpus() {
         total,
         failures.join("\n")
     );
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -288,18 +274,15 @@ fn test_goto_gold_corpus() {
 /// Run all completion gold fixtures and assert every assertion passes.
 /// Reports top-1 accuracy, top-5 accuracy, non-empty rate, and noise-free rate.
 #[test]
-fn test_completion_gold_corpus() {
+fn test_completion_gold_corpus() -> TestResult {
     let root = gold_corpus_root();
     let fixtures: Vec<CompletionGoldFixture> = match load_completion_gold_fixtures(&root) {
         Ok(f) if !f.is_empty() => f,
         Ok(_) => {
             eprintln!("SKIP: no completion gold fixtures found in {}", root.display());
-            return;
+            return Ok(());
         }
-        Err(e) => {
-            assert!(false, "Failed to load completion gold fixtures: {e}");
-            return;
-        }
+        Err(e) => return Err(e),
     };
 
     let server = TestServerBuilder::new().build();
@@ -309,14 +292,7 @@ fn test_completion_gold_corpus() {
     let mut failures: Vec<String> = Vec::new();
 
     for fixture in &fixtures {
-        let code_result = std::fs::read_to_string(&fixture.fixture_path);
-        assert!(
-            code_result.is_ok(),
-            "Cannot read fixture {}: {:?}",
-            fixture.fixture_path.display(),
-            code_result.as_ref().err()
-        );
-        let code = code_result.unwrap_or_default();
+        let code = std::fs::read_to_string(&fixture.fixture_path)?;
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
         server.open_document(&uri, &code);
@@ -374,6 +350,8 @@ fn test_completion_gold_corpus() {
         total,
         failures.join("\n")
     );
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -382,18 +360,15 @@ fn test_completion_gold_corpus() {
 
 /// Run all diagnostics gold fixtures (`expected.json`) and assert every assertion passes.
 #[test]
-fn test_diagnostics_gold_corpus() {
+fn test_diagnostics_gold_corpus() -> TestResult {
     let root = gold_corpus_root();
     let fixtures: Vec<GoldFixture> = match load_gold_fixtures(&root) {
         Ok(f) if !f.is_empty() => f,
         Ok(_) => {
             eprintln!("SKIP: no diagnostics gold fixtures found in {}", root.display());
-            return;
+            return Ok(());
         }
-        Err(e) => {
-            assert!(false, "Failed to load diagnostics gold fixtures: {e}");
-            return;
-        }
+        Err(e) => return Err(e),
     };
 
     let server = TestServerBuilder::new().build();
@@ -403,14 +378,7 @@ fn test_diagnostics_gold_corpus() {
     let mut failures: Vec<String> = Vec::new();
 
     for fixture in &fixtures {
-        let code_result = std::fs::read_to_string(&fixture.fixture_path);
-        assert!(
-            code_result.is_ok(),
-            "Cannot read fixture {}: {:?}",
-            fixture.fixture_path.display(),
-            code_result.as_ref().err()
-        );
-        let code = code_result.unwrap_or_default();
+        let code = std::fs::read_to_string(&fixture.fixture_path)?;
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
         server.open_document(&uri, &code);
@@ -482,6 +450,8 @@ fn test_diagnostics_gold_corpus() {
         total,
         failures.join("\n")
     );
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -490,18 +460,15 @@ fn test_diagnostics_gold_corpus() {
 
 /// Run all document-symbol gold fixtures and assert every assertion passes.
 #[test]
-fn test_document_symbols_gold_corpus() {
+fn test_document_symbols_gold_corpus() -> TestResult {
     let root = gold_corpus_root();
     let fixtures: Vec<DocumentSymbolGoldFixture> = match load_document_symbol_gold_fixtures(&root) {
         Ok(f) if !f.is_empty() => f,
         Ok(_) => {
             eprintln!("SKIP: no document-symbol gold fixtures found in {}", root.display());
-            return;
+            return Ok(());
         }
-        Err(e) => {
-            assert!(false, "Failed to load document-symbol gold fixtures: {e}");
-            return;
-        }
+        Err(e) => return Err(e),
     };
 
     let server = TestServerBuilder::new().build();
@@ -511,14 +478,7 @@ fn test_document_symbols_gold_corpus() {
     let mut failures: Vec<String> = Vec::new();
 
     for fixture in &fixtures {
-        let code_result = std::fs::read_to_string(&fixture.fixture_path);
-        assert!(
-            code_result.is_ok(),
-            "Cannot read fixture {}: {:?}",
-            fixture.fixture_path.display(),
-            code_result.as_ref().err()
-        );
-        let code = code_result.unwrap_or_default();
+        let code = std::fs::read_to_string(&fixture.fixture_path)?;
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
         server.open_document(&uri, &code);
@@ -559,4 +519,6 @@ fn test_document_symbols_gold_corpus() {
         total,
         failures.join("\n")
     );
+
+    Ok(())
 }

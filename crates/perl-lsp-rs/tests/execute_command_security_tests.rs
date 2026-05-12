@@ -10,6 +10,7 @@ use perl_lsp::execute_command::ExecuteCommandProvider;
 use serde_json::Value;
 use std::error::Error;
 use std::fs;
+#[cfg(unix)]
 use std::path::Path;
 use tempfile::TempDir;
 
