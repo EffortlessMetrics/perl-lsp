@@ -234,6 +234,8 @@ fn safe_delete_plan_receipt_notes(
         plan.blockers.iter().any(|blocker| blocker.reason == PlanBlockerReason::DynamicBoundary);
     let has_generated_member =
         plan.blockers.iter().any(|blocker| blocker.reason == PlanBlockerReason::GeneratedMember);
+    let has_stale_fact =
+        plan.blockers.iter().any(|blocker| blocker.reason == PlanBlockerReason::StaleFact);
     let has_low_confidence = plan.blockers.iter().any(|blocker| {
         matches!(
             blocker.reason,
@@ -243,7 +245,7 @@ fn safe_delete_plan_receipt_notes(
     let fallback_state = if plan.blockers.is_empty() { "allowed" } else { "blocked" };
 
     vec![format!(
-        "safe-delete {phase} receipt: legacy_allowed={legacy_allowed}; compiler_plan_safe={}; blocker_count={}; blocker_reasons={blocker_reasons}; dynamic_boundary={has_dynamic_boundary}; generated_member={has_generated_member}; stale_fact=false; low_confidence={has_low_confidence}; fallback_state={fallback_state}; blocker_ux={}",
+        "safe-delete {phase} receipt: legacy_allowed={legacy_allowed}; compiler_plan_safe={}; blocker_count={}; blocker_reasons={blocker_reasons}; dynamic_boundary={has_dynamic_boundary}; generated_member={has_generated_member}; stale_fact={has_stale_fact}; low_confidence={has_low_confidence}; fallback_state={fallback_state}; blocker_ux={}",
         plan.blockers.is_empty(),
         plan.blockers.len(),
         blocker_ux_list(&plan.blockers)
@@ -283,6 +285,12 @@ fn blocker_fact_trace(blocker: &PlanBlocker) -> ProviderFactTrace {
             Provenance::FrameworkSynthesis,
             Confidence::High,
             ProviderFactFreshness::Fresh,
+        ),
+        PlanBlockerReason::StaleFact => (
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Low,
+            ProviderFactFreshness::Stale,
         ),
         PlanBlockerReason::CrossModuleExport
         | PlanBlockerReason::ImportedSymbol
@@ -541,6 +549,11 @@ mod tests {
                     None,
                     "low-confidence reference could not be classified".to_string(),
                 ),
+                PlanBlocker::new(
+                    PlanBlockerReason::StaleFact,
+                    None,
+                    "compiler fact is stale and must be refreshed".to_string(),
+                ),
             ],
             vec![],
         );
@@ -549,19 +562,23 @@ mod tests {
         let outcome = safe_delete_cutover(true, &queries, EntityId(1), "accessor");
         let notes = outcome.receipt.notes.join(" ");
 
-        assert!(notes.contains("blocker_count=3"), "missing blocker count in {}", notes);
+        assert!(notes.contains("blocker_count=4"), "missing blocker count in {}", notes);
         assert!(
-            notes.contains("blocker_reasons=dynamic_boundary,generated_member,ambiguous_reference"),
+            notes.contains(
+                "blocker_reasons=dynamic_boundary,generated_member,ambiguous_reference,stale_fact"
+            ),
             "missing blocker reasons in {}",
             notes
         );
         assert!(notes.contains("dynamic_boundary=true"), "missing dynamic boundary in {}", notes);
         assert!(notes.contains("generated_member=true"), "missing generated member in {}", notes);
+        assert!(notes.contains("stale_fact=true"), "missing stale fact in {}", notes);
         assert!(notes.contains("low_confidence=true"), "missing low confidence in {}", notes);
         assert!(
             notes.contains("AUTOLOAD may dispatch")
                 && notes.contains("generator-aware delete plan")
-                && notes.contains("low-confidence reference"),
+                && notes.contains("low-confidence reference")
+                && notes.contains("compiler fact is stale"),
             "missing user-facing blocker descriptions in {}",
             notes
         );
@@ -617,6 +634,26 @@ mod tests {
         assert_eq!(trace.provenance, Provenance::NameHeuristic);
         assert_eq!(trace.confidence, Confidence::Low);
         assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        Ok(())
+    }
+
+    #[test]
+    fn safe_delete_compiler_boundaries_stale_fact_uses_stale_compiler_trace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let blocker = make_blocker(PlanBlockerReason::StaleFact);
+        let plan = SafeDeletePlan::new(EntityId(1), "stale".to_string(), vec![blocker], vec![]);
+        let queries = StubSemanticQueries { safe_delete_plan_result: plan };
+
+        let outcome = safe_delete_cutover(true, &queries, EntityId(1), "stale");
+        let trace = first_trace(&outcome.receipt)?;
+        let notes = outcome.receipt.notes.join(" ");
+
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::SemanticAnalyzer);
+        assert_eq!(trace.confidence, Confidence::Low);
+        assert_eq!(trace.freshness, ProviderFactFreshness::Stale);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
+        assert!(notes.contains("stale_fact=true"), "missing stale fact in {}", notes);
         Ok(())
     }
 
