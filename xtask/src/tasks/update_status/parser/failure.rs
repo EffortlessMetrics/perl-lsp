@@ -26,6 +26,17 @@ impl FailureCluster {
     }
 }
 
+fn ordered_clusters() -> [FailureCluster; 6] {
+    [
+        FailureCluster::TransliterationQuote,
+        FailureCluster::DeclarationPackage,
+        FailureCluster::HeredocDelimiter,
+        FailureCluster::RecoveryOnly,
+        FailureCluster::EncodingMultibyte,
+        FailureCluster::Other,
+    ]
+}
+
 /// Classify a single error bucket name into a [`FailureCluster`].
 ///
 /// Priority order (highest first):
@@ -99,20 +110,42 @@ pub(crate) fn build_failure_worklist(
         *counts.entry(cluster).or_insert(0) += count;
     }
 
-    let clusters = [
-        FailureCluster::TransliterationQuote,
-        FailureCluster::DeclarationPackage,
-        FailureCluster::HeredocDelimiter,
-        FailureCluster::RecoveryOnly,
-        FailureCluster::EncodingMultibyte,
-        FailureCluster::Other,
-    ];
-
-    clusters
+    ordered_clusters()
         .iter()
         .map(|cluster| {
             let count = counts.get(cluster).copied().unwrap_or(0);
             format!("| {} | {} |", cluster.display_name(), count)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Build a markdown table that preserves the raw first-error buckets inside
+/// each generated parser failure cluster.
+///
+/// The rows are ordered by cluster, then by descending count and bucket name.
+pub(crate) fn build_failure_bucket_details(
+    report: &super::super::super::parser_corpus_sweep::SweepReport,
+) -> String {
+    if report.first_error_buckets.is_empty() {
+        return "| none | n/a | 0 |".to_string();
+    }
+
+    let mut rows: Vec<_> = report
+        .first_error_buckets
+        .iter()
+        .map(|(bucket_name, &count)| (classify_failure_bucket(bucket_name), bucket_name, count))
+        .collect();
+    rows.sort_by(|(cluster_a, bucket_a, count_a), (cluster_b, bucket_b, count_b)| {
+        cluster_a
+            .cmp(cluster_b)
+            .then_with(|| count_b.cmp(count_a))
+            .then_with(|| bucket_a.cmp(bucket_b))
+    });
+
+    rows.iter()
+        .map(|(cluster, bucket, count)| {
+            format!("| {} | `{}` | {} |", cluster.display_name(), bucket, count)
         })
         .collect::<Vec<_>>()
         .join("\n")

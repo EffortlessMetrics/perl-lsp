@@ -20,7 +20,7 @@ mod failure;
 use accuracy::{
     ParserAccuracyArtifactSummary, parser_accuracy_rows, read_parser_accuracy_artifact,
 };
-use failure::build_failure_worklist;
+use failure::{build_failure_bucket_details, build_failure_worklist};
 
 fn parser_marker_bounds(marker_name: &str) -> (String, String) {
     (format!("<!-- BEGIN: {marker_name} -->"), format!("<!-- END: {marker_name} -->"))
@@ -409,6 +409,13 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         },
         |receipt| build_failure_worklist(receipt),
     );
+    let failure_bucket_details = metrics.system_receipt.as_ref().map_or_else(
+        || {
+            "| insufficient_data (no receipt — run `just corpus-sweep-check` to generate) | insufficient_data | insufficient_data |"
+                .to_string()
+        },
+        |receipt| build_failure_bucket_details(receipt),
+    );
 
     let parser_coverage_bullets = format!(
         "- **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against the cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against the repo-owned corpus.\n\
@@ -431,6 +438,7 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
     text = replace_parser_status_block(&text, "PARSER_STRICT_CLEAN_ROW", &strict_clean_row)?;
     text = replace_parser_status_block(&text, "PARSER_ACCURACY_SUMMARY", &parser_accuracy_summary)?;
     text = replace_parser_status_block(&text, "PARSER_FAILURE_WORKLIST", &failure_worklist)?;
+    text = replace_parser_status_block(&text, "PARSER_FAILURE_BUCKETS", &failure_bucket_details)?;
     Ok(text)
 }
 

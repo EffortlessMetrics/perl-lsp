@@ -66,6 +66,30 @@ Failures in the system-Perl baseline grouped by cluster. Counts come from `first
 | other | 46 |
 <!-- END: PARSER_FAILURE_WORKLIST -->
 
+### Raw Failure Buckets
+
+Raw first-error buckets from the same system-Perl receipt, grouped by cluster so the generated worklist can be split into one parser-fix lane at a time.
+
+| Cluster | Bucket | Files |
+| --- | --- | --- |
+<!-- BEGIN: PARSER_FAILURE_BUCKETS -->
+| heredoc / delimiter handling | `unclosed_paren_identifier` | 22 |
+| heredoc / delimiter handling | `unclosed_brace` | 10 |
+| heredoc / delimiter handling | `unexpected_rparen_expr` | 8 |
+| heredoc / delimiter handling | `expected_left_brace` | 6 |
+| heredoc / delimiter handling | `unexpected_rbrace_expr` | 6 |
+| heredoc / delimiter handling | `unclosed_bracket` | 2 |
+| heredoc / delimiter handling | `unclosed_paren` | 2 |
+| recovery-only failures | `unexpected_token_in_expr` | 38 |
+| other | `unexpected_assign_expr` | 12 |
+| other | `unexpected_comma_expr` | 10 |
+| other | `unexpected_eq_expr` | 10 |
+| other | `expected_colon` | 4 |
+| other | `expected_comma` | 4 |
+| other | `unexpected_word_op_or` | 4 |
+| other | `substitution_misparse` | 2 |
+<!-- END: PARSER_FAILURE_BUCKETS -->
+
 <!-- BEGIN: PARSER_METRICS_BULLETS -->
 - **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against the cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against the repo-owned corpus.
 - **Strict promise lists**: `just common-corpus-check` and the CPAN known-clean manifest inside `just cpan-corpus-check` pin subsets that must remain clean on top of the broader baseline receipts.
