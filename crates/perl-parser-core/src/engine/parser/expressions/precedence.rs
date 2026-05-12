@@ -957,6 +957,8 @@ impl<'a> Parser<'a> {
                             | TokenKind::Not
                             | TokenKind::Minus
                             | TokenKind::Plus
+                            | TokenKind::Increment
+                            | TokenKind::Decrement
                             | TokenKind::Backslash
                             | TokenKind::BitwiseNot => true,
                             TokenKind::Identifier => {
