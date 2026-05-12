@@ -316,6 +316,30 @@ mod corpus_gap_tests {
         Ok(())
     }
 
+    /// Regression: hash slices accept `qw` word lists with delimiter styles other
+    /// than parentheses, so adjacent `{qw{...}}` braces must not confuse slice
+    /// parsing or quote-word tokenization.
+    #[test]
+    fn test_hash_slice_qw_alternate_delimiters() -> Result<(), Box<dyn std::error::Error>> {
+        for input in [
+            "my %opts = (foo => 1, bar => 2); my @pick = @opts{qw{red blue}};",
+            "my %opts = (foo => 1, bar => 2); my @pick = @opts{qw/red blue/};",
+        ] {
+            let mut parser = Parser::new(input);
+            let ast = parser.parse()?;
+            let sexp = ast.to_sexp();
+
+            assert!(
+                !sexp.contains("ERROR"),
+                "expected no ERROR nodes for hash-slice qw delimiter form, got: {sexp}"
+            );
+            assert!(sexp.contains("'red'"), "expected red key in qw list, got: {sexp}");
+            assert!(sexp.contains("'blue'"), "expected blue key in qw list, got: {sexp}");
+        }
+
+        Ok(())
+    }
+
     // Property-based test for delimiters
     #[test]
     fn test_arbitrary_delimiters() {
