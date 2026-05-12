@@ -536,6 +536,13 @@ fn unicode_collate_pack_u_coderef_map_expr() {
 }
 
 #[test]
+fn unicode_collate_override_hangul_map_expr() {
+    // From Unicode::Collate: map EXPR, LIST may assign the result of a helper
+    // call over a coderef-produced source list.
+    assert_clean_parse(r#"@ce = map _pack_override($_, $u, $der), $hang->($u);"#);
+}
+
+#[test]
 fn regexp_common_comment_combine_parenthesized_map_args() {
     // From Regexp::Common::comment: unary plus before a parenthesized map block
     // in a comma-separated argument list must not leave `combine` waiting for a `)`.
