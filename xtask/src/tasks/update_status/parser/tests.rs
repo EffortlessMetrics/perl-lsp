@@ -3,11 +3,13 @@ use super::accuracy::{
     ParserAccuracyArtifactSummary, ParserAccuracyDenominator, ParserAccuracyFamilySummary,
     ParserAccuracyMetricSummary,
 };
-use super::failure::{FailureCluster, build_failure_worklist, classify_failure_bucket};
+use super::failure::{
+    FailureCluster, build_failure_bucket_details, build_failure_worklist, classify_failure_bucket,
+};
 use super::*;
 use color_eyre::eyre::Result;
 
-const PARSER_STATUS_MARKER_NAMES: [&str; 9] = [
+const PARSER_STATUS_MARKER_NAMES: [&str; 10] = [
     "PARSER_TRACKING_TABLE",
     "PARSER_PERFORMANCE_TABLE",
     "PARSER_METRICS_BULLETS",
@@ -17,6 +19,7 @@ const PARSER_STATUS_MARKER_NAMES: [&str; 9] = [
     "PARSER_STRICT_CLEAN_ROW",
     "PARSER_ACCURACY_SUMMARY",
     "PARSER_FAILURE_WORKLIST",
+    "PARSER_FAILURE_BUCKETS",
 ];
 
 fn parser_status_template() -> &'static str {
@@ -28,7 +31,8 @@ fn parser_status_template() -> &'static str {
          <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
          <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
          <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n\
-         <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n"
+         <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n\
+         <!-- BEGIN: PARSER_FAILURE_BUCKETS -->\nold\n<!-- END: PARSER_FAILURE_BUCKETS -->\n"
 }
 
 #[test]
@@ -530,7 +534,8 @@ fn test_classify_failure_bucket_routing() {
 }
 
 #[test]
-fn test_build_failure_worklist_with_populated_receipt() -> Result<()> {
+fn parser_failure_worklist_builds_cluster_and_bucket_details_with_populated_receipt() -> Result<()>
+{
     use std::collections::BTreeMap;
 
     let mut buckets = BTreeMap::new();
@@ -606,11 +611,86 @@ fn test_build_failure_worklist_with_populated_receipt() -> Result<()> {
     let worklist2 = build_failure_worklist(&report);
     assert_eq!(worklist, worklist2, "cluster worklist must be deterministic");
 
+    let bucket_details = build_failure_bucket_details(&report);
+    assert!(bucket_details.contains("| declaration / package parsing | `expected_variable` | 6 |"));
+    assert!(
+        bucket_details.contains("| heredoc / delimiter handling | `expected_left_brace` | 10 |")
+    );
+    assert!(bucket_details.contains("| recovery-only failures | `unexpected_token_in_expr` | 3 |"));
+    assert!(bucket_details.contains("| other | `expected_colon` | 5 |"));
+    assert!(matches!(
+        (
+            bucket_details.find("expected_variable"),
+            bucket_details.find("expected_left_brace"),
+            bucket_details.find("unexpected_token_in_expr"),
+            bucket_details.find("expected_colon")
+        ),
+        (Some(declaration), Some(heredoc), Some(recovery), Some(other))
+            if declaration < heredoc && heredoc < recovery && recovery < other
+    ));
+
     Ok(())
 }
 
 #[test]
-fn test_build_failure_worklist_empty_buckets() {
+fn parser_failure_worklist_replaces_cluster_and_bucket_status_markers() -> Result<()> {
+    use std::collections::BTreeMap;
+
+    let report = super::super::super::parser_corpus_sweep::SweepReport {
+        schema_version: "1".to_string(),
+        commit: "abc".to_string(),
+        timestamp: "2026-04-09T00:00:00Z".to_string(),
+        corpus_profile: "system".to_string(),
+        corpus_roots: vec![],
+        resolved_roots_count: 0,
+        perl_version: "5.038".to_string(),
+        total_files: 20,
+        files_unreadable: 0,
+        clean_files: 18,
+        files_with_errors: 2,
+        total_dirty_files: 2,
+        files_with_structured_recovery_only: 0,
+        files_with_error_nodes: 2,
+        files_with_catastrophic_parse_failure: 0,
+        total_error_nodes: 2,
+        recovered_node_count: 0,
+        first_unrecovered_error_node_buckets: BTreeMap::new(),
+        first_error_buckets: BTreeMap::from([
+            ("unclosed_paren_identifier".to_string(), 2usize),
+            ("unexpected_token_in_expr".to_string(), 1usize),
+        ]),
+        files_by_bucket: BTreeMap::new(),
+        file_results: vec![],
+        elapsed_secs: 1.0,
+        phase_timings: None,
+        median_error_density_per_1k_loc: None,
+        recovery_salvage_rate: None,
+        slowest_files: vec![],
+    };
+    let metrics = ParserMetrics {
+        syntax_sections: 611,
+        system_receipt: Some(ParserSweepReceipt::with_recovery_shape(report)),
+        cpan_receipt: None,
+        project_corpus: None,
+        common_corpus_receipt: None,
+        common_corpus_pinned: 10,
+        performance_scorecard: None,
+        parser_accuracy: None,
+        token_metrics: token::token_metrics_fixture(),
+    };
+
+    let result = generate_parser_status(&metrics, parser_status_template())?;
+
+    assert!(result.contains("| heredoc / delimiter handling | 2 |"));
+    assert!(result.contains("| recovery-only failures | 1 |"));
+    assert!(result.contains("| heredoc / delimiter handling | `unclosed_paren_identifier` | 2 |"));
+    assert!(result.contains("| recovery-only failures | `unexpected_token_in_expr` | 1 |"));
+    assert!(!result.contains("\nold\n"), "all parser status markers should be replaced");
+    Ok(())
+}
+
+#[test]
+fn parser_failure_worklist_handles_empty_buckets() {
     use super::super::super::parser_corpus_sweep::SweepReport;
     use std::collections::BTreeMap;
 
@@ -644,6 +724,7 @@ fn test_build_failure_worklist_empty_buckets() {
     };
 
     let worklist = build_failure_worklist(&report);
+    let bucket_details = build_failure_bucket_details(&report);
     // All six clusters should appear with 0 counts
     assert!(
         worklist.contains("transliteration / quote parsing"),
@@ -657,6 +738,10 @@ fn test_build_failure_worklist_empty_buckets() {
     // Output should have 6 rows
     let row_count = worklist.lines().count();
     assert_eq!(row_count, 6, "empty worklist must have exactly 6 rows, got {row_count}");
+    assert_eq!(
+        bucket_details, "| none | n/a | 0 |",
+        "raw bucket detail should be explicit when no buckets are present"
+    );
 }
 
 #[test]
