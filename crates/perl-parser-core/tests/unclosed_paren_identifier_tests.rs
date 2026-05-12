@@ -543,6 +543,19 @@ fn unicode_collate_override_hangul_map_expr() {
 }
 
 #[test]
+fn unicode_collate_decomposition_map_block() {
+    // From Unicode::Collate: parenthesized map BLOCK LIST may contain nested
+    // ternaries without leaving the caller waiting for a `)` before @decH.
+    assert_clean_parse(
+        r#"@ce = map({
+            exists $map->{$_} ? @{ $map->{$_} } :
+            $uXS && _exists_simple($_) ? _fetch_simple($_) :
+            $der->($_);
+        } @decH);"#,
+    );
+}
+
+#[test]
 fn regexp_common_comment_combine_parenthesized_map_args() {
     // From Regexp::Common::comment: unary plus before a parenthesized map block
     // in a comma-separated argument list must not leave `combine` waiting for a `)`.
