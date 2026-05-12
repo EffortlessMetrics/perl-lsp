@@ -562,6 +562,15 @@ fn x_repetition_prefix_decrement_in_parens() {
 }
 
 #[test]
+fn pod_simple_xhtml_entity_regex_map_assignment() {
+    // From Pod::Simple::XHTML: a parenthesized lexical assignment may use
+    // map EXPR, LIST followed by a join expression with another map chain.
+    assert_clean_parse(
+        r#"my ($entity_re) = map qr{$_}, join '|', map quotemeta, sort keys %entity_to_char;"#,
+    );
+}
+
+#[test]
 fn local_carp_not_scalar_ternary_caller() {
     // From Carp: localized package arrays may be assigned from a scalar()
     // parenthesized ternary without treating caller() as a missing `)`.
