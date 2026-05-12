@@ -9,7 +9,7 @@ use super::failure::{
 use super::*;
 use color_eyre::eyre::Result;
 
-const PARSER_STATUS_MARKER_NAMES: [&str; 10] = [
+const PARSER_STATUS_MARKER_NAMES: [&str; 11] = [
     "PARSER_TRACKING_TABLE",
     "PARSER_PERFORMANCE_TABLE",
     "PARSER_METRICS_BULLETS",
@@ -19,6 +19,7 @@ const PARSER_STATUS_MARKER_NAMES: [&str; 10] = [
     "PARSER_STRICT_CLEAN_ROW",
     "PARSER_ACCURACY_SUMMARY",
     "PARSER_FAILURE_WORKLIST",
+    "PARSER_FAILURE_RECEIPT_NOTE",
     "PARSER_FAILURE_BUCKETS",
 ];
 
@@ -32,6 +33,7 @@ fn parser_status_template() -> &'static str {
          <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
          <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n\
          <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n\
+         <!-- BEGIN: PARSER_FAILURE_RECEIPT_NOTE -->\nold\n<!-- END: PARSER_FAILURE_RECEIPT_NOTE -->\n\
          <!-- BEGIN: PARSER_FAILURE_BUCKETS -->\nold\n<!-- END: PARSER_FAILURE_BUCKETS -->\n"
 }
 
@@ -683,6 +685,9 @@ fn parser_failure_worklist_replaces_cluster_and_bucket_status_markers() -> Resul
 
     assert!(result.contains("| heredoc / delimiter handling | 2 |"));
     assert!(result.contains("| recovery-only failures | 1 |"));
+    assert!(result.contains("Receipt snapshot: profile `system`, commit `abc`"));
+    assert!(result.contains("generated `2026-04-09`"));
+    assert!(result.contains("before starting a parser-fix lane from a bucket"));
     assert!(result.contains("| heredoc / delimiter handling | `unclosed_paren_identifier` | 2 |"));
     assert!(result.contains("| recovery-only failures | `unexpected_token_in_expr` | 1 |"));
     assert!(!result.contains("\nold\n"), "all parser status markers should be replaced");

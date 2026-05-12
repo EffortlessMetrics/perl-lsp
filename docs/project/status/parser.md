@@ -70,6 +70,10 @@ Failures in the system-Perl baseline grouped by cluster. Counts come from `first
 
 Raw first-error buckets from the same system-Perl receipt, grouped by cluster so the generated worklist can be split into one parser-fix lane at a time.
 
+<!-- BEGIN: PARSER_FAILURE_RECEIPT_NOTE -->
+Receipt snapshot: profile `system`, commit `3c287d7db`, generated `2026-04-28`, Perl `5.038002`, `86` resolved roots. Raw bucket counts are point-in-time compatibility data; before starting a parser-fix lane from a bucket, rerun `cargo xtask parser-corpus-sweep --baseline .ci/parser-corpus-baseline.json --enforce --receipt` on Linux or add a focused fixture when system roots are unavailable.
+<!-- END: PARSER_FAILURE_RECEIPT_NOTE -->
+
 | Cluster | Bucket | Files |
 | --- | --- | --- |
 <!-- BEGIN: PARSER_FAILURE_BUCKETS -->
