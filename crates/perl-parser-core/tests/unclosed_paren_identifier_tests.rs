@@ -556,6 +556,17 @@ fn main_package_variable_in_paren_expr() {
 }
 
 #[test]
+fn unicode_normalize_typeglob_ternary_native_subs() {
+    // From Unicode::Normalize: a typeglob assignment may use a parenthesized
+    // main-package condition followed by ternary anonymous subs.
+    assert_clean_parse(
+        r#"*to_native = ($::IS_ASCII || $] < 5.008)
+             ? sub { return shift }
+             : sub { utf8::unicode_to_native(shift) };"#,
+    );
+}
+
+#[test]
 fn x_repetition_prefix_decrement_in_parens() {
     // From Pod::Simple::XHTML: repetition RHS may be a prefix decrement.
     assert_clean_parse(r#"push @out, ('  ' x --$indent) . '</li>';"#);
