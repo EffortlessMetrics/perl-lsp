@@ -364,6 +364,35 @@ fn substitution_mixed_paired_delimiters() -> R {
 }
 
 #[test]
+fn substitution_paired_replacement_after_comment() -> R {
+    let input =
+        "s[^~([^/]+)?(?=/|$)]   # tilde with optional username\n    [$1 ? $home : glob(\"~\")]ex";
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::Substitution),
+        "Expected Substitution for paired delimiter replacement after comment, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), input);
+    Ok(())
+}
+
+#[test]
+fn substitution_paired_replacement_after_consecutive_comments() -> R {
+    let input = "s{foo} # first comment\n# second comment\n{bar}x";
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::Substitution),
+        "Expected Substitution for paired delimiter replacement after consecutive comments, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), input);
+    Ok(())
+}
+
+#[test]
 fn substitution_with_modifiers_ge() -> R {
     let input = "s/foo/bar/ge";
     let sig = significant(input);

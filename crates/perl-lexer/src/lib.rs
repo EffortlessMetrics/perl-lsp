@@ -2889,9 +2889,7 @@ impl<'a> PerlLexer<'a> {
 
         let pattern_is_paired = quote_handler::paired_close(delimiter).is_some();
         if pattern_is_paired {
-            while self.current_char().is_some_and(char::is_whitespace) {
-                self.advance();
-            }
+            self.skip_paired_substitution_replacement_gap();
 
             if let Some(repl_delim) = self.current_char()
                 && Self::is_quote_delim(repl_delim)
@@ -2929,6 +2927,31 @@ impl<'a> PerlLexer<'a> {
         };
 
         Some(Token { token_type, text: Arc::from(text), start, end: self.position })
+    }
+
+    fn skip_paired_substitution_replacement_gap(&mut self) {
+        let mut comment_eligible = false;
+        loop {
+            let mut saw_whitespace = false;
+            while self.current_char().is_some_and(char::is_whitespace) {
+                self.advance();
+                saw_whitespace = true;
+            }
+            comment_eligible |= saw_whitespace;
+
+            if comment_eligible && self.current_char() == Some('#') {
+                while let Some(ch) = self.current_char() {
+                    self.advance();
+                    if matches!(ch, '\n' | '\r') {
+                        break;
+                    }
+                }
+                comment_eligible = true;
+                continue;
+            }
+
+            break;
+        }
     }
 
     fn read_substitution_replacement_body(&mut self, delim: char) -> (String, bool) {
