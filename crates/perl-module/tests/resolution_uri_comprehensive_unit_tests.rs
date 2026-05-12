@@ -556,7 +556,7 @@ fn dot_slash_include_path_resolves_same_as_bare() -> Result<(), Box<dyn std::err
     let result = resolve_module_uri(
         "DotSlash",
         &[],
-        &[workspace_uri.clone()],
+        std::slice::from_ref(&workspace_uri),
         &["./mylib".to_string(), "mylib/".to_string(), "mylib".to_string()],
         false,
         &[],

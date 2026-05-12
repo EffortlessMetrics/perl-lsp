@@ -94,6 +94,7 @@ fn test_must_panic_message_includes_string_error() {
 // ===========================================================================
 
 #[test]
+#[allow(unused_must_use)]
 fn test_must_some_with_unit_type() -> Result<(), Box<dyn std::error::Error>> {
     let val: Option<()> = Some(());
     must_some(val);
@@ -140,6 +141,7 @@ fn test_must_some_panic_message_is_exact() {
 // ===========================================================================
 
 #[test]
+#[allow(unused_must_use)]
 fn test_must_err_with_unit_error() -> Result<(), Box<dyn std::error::Error>> {
     let val: Result<i32, ()> = Err(());
     must_err(val);
@@ -202,7 +204,7 @@ fn test_must_track_caller_reports_test_file_location() {
 fn test_must_some_track_caller_reports_test_file_location() {
     let result = std::panic::catch_unwind(|| {
         let val: Option<i32> = None;
-        must_some(val);
+        let _ = must_some(val);
     });
     assert!(result.is_err());
 }
@@ -211,7 +213,7 @@ fn test_must_some_track_caller_reports_test_file_location() {
 fn test_must_err_track_caller_reports_test_file_location() {
     let result = std::panic::catch_unwind(|| {
         let val: Result<i32, &str> = Ok(99);
-        must_err(val);
+        let _ = must_err(val);
     });
     assert!(result.is_err());
 }
