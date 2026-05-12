@@ -1,10 +1,16 @@
 # Perl Language Server
 
+[![CI](https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg)](https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/EffortlessMetrics/perl-lsp?display_name=tag)](https://github.com/EffortlessMetrics/perl-lsp/releases)
+[![docs.rs](https://docs.rs/perl-lsp-rs/badge.svg)](https://docs.rs/perl-lsp-rs)
+[![crates.io downloads](https://img.shields.io/crates/d/perl-lsp-rs.svg?label=crates.io%20downloads)](https://crates.io/crates/perl-lsp-rs)
 <!-- perl-lsp:vs-marketplace-installs-badge:start -->
-[![VS Marketplace Installs (manual)](https://img.shields.io/badge/VS%20Marketplace-287%20installs-0078D4)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
+[![VS Marketplace installs](https://img.shields.io/badge/VS%20Marketplace-313%20installs-0078D4)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
 <!-- perl-lsp:vs-marketplace-installs-badge:end -->
-[![Open VSX Version](https://img.shields.io/open-vsx/v/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
-[![Open VSX Downloads](https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
+[![Open VSX downloads](https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
+[![Codecov parser branch coverage](https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg)](https://codecov.io/gh/EffortlessMetrics/perl-lsp)
+[![MSRV](https://img.shields.io/badge/MSRV-1.95-blue)](https://www.rust-lang.org/)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/EffortlessMetrics/perl-lsp/blob/master/LICENSE-MIT)
 
 A fast, native Perl 5 language server extension. Written in Rust for speed and reliability. No runtime dependencies -- just install and code.
 
