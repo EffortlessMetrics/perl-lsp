@@ -13,6 +13,7 @@ use perl_lsp_rs_core::config::WorkspaceConfig;
 use serde_json::Value;
 use std::error::Error;
 use std::fs;
+#[cfg(unix)]
 use std::path::Path;
 use tempfile::TempDir;
 

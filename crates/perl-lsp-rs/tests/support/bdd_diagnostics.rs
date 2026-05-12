@@ -2,6 +2,8 @@ use serde_json::{Value, json};
 
 use super::lsp_harness::LspHarness;
 
+// BDD diagnostic helpers are test-support fixtures retained for scenario-style
+// regression tests even when individual helpers are not used by the current set.
 #[allow(dead_code)]
 pub struct BddScenario {
     name: &'static str,
@@ -27,12 +29,15 @@ impl BddScenario {
     }
 }
 
+// Scenario-style diagnostic flow helpers are intentionally reusable across
+// future LSP diagnostic tests.
 #[allow(dead_code)]
 pub struct DocumentDiagnosticFlow<'a> {
     harness: &'a mut LspHarness,
     uri: String,
 }
 
+// Diagnostic flow helpers are fixture API for BDD-style integration tests.
 #[allow(dead_code)]
 impl<'a> DocumentDiagnosticFlow<'a> {
     pub fn new(harness: &'a mut LspHarness, uri: impl Into<String>) -> Self {
