@@ -761,6 +761,426 @@ pub fn check_file_policy(root: &std::path::Path, config: CheckFilePolicyConfig) 
 }
 
 // ---------------------------------------------------------------------------
+// Proposal generator — `cargo xtask non-rust propose`
+// ---------------------------------------------------------------------------
+
+/// Grouping strategy for `cargo xtask non-rust propose`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProposeGroupBy {
+    /// Group by top-level directory (default).
+    Directory,
+    /// Group by file extension.
+    Extension,
+}
+
+/// Configuration for `cargo xtask non-rust propose`.
+pub struct ProposeConfig {
+    /// Output directory (defaults to `target/policy`).
+    pub output_dir: std::path::PathBuf,
+    /// How to group unclassified files.
+    pub group_by: ProposeGroupBy,
+    /// Override the workspace root used for `git ls-files` (test seam).
+    pub root_override: Option<std::path::PathBuf>,
+}
+
+/// Return today's date as `YYYY-MM-DD` using Unix timestamp arithmetic.
+pub fn today_ymd() -> (u32, u32, u32) {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let days = secs / 86400;
+    days_to_ymd(days)
+}
+
+/// Add `n` days to a `(year, month, day)` tuple using the Julian Day Number
+/// method. Accurate for years 1970-2200.
+pub fn add_days(ymd: (u32, u32, u32), n: u32) -> (u32, u32, u32) {
+    // Convert (y, m, d) → JDN using the standard proleptic Gregorian formula.
+    // All arithmetic is signed to avoid underflow.
+    let (year, month, day) = (ymd.0 as i64, ymd.1 as i64, ymd.2 as i64);
+    let a = (14 - month) / 12;
+    let y = year + 4800 - a;
+    let m = month + 12 * a - 3;
+    let jdn = day + (153 * m + 2) / 5 + 365 * y + y / 4 - y / 100 + y / 400 - 32045;
+    // JDN for Unix epoch (1970-01-01) = 2440588.
+    let unix_days = (jdn - 2_440_588 + n as i64) as u64;
+    days_to_ymd(unix_days)
+}
+
+/// Format a `(year, month, day)` tuple as `YYYY-MM-DD`.
+pub fn fmt_ymd(ymd: (u32, u32, u32)) -> String {
+    format!("{:04}-{:02}-{:02}", ymd.0, ymd.1, ymd.2)
+}
+
+/// Heuristic: infer classification from a top-level directory name.
+fn classify_dir(dir: &str) -> &'static str {
+    match dir {
+        "docs" | "doc" | "book" | "guide" | "guides" | "wiki" | "website" | "pages" => "docs",
+        "test" | "tests" | "t" | "spec" | "specs" | "fixtures" | "test_corpus" | "test-corpus" => {
+            "test"
+        }
+        "vendor" | "third_party" | "third-party" | "extern" | "external" => "vendor",
+        "scripts" | "bin" | "tools" | "tool" | "ci" | ".ci" | ".github" | "xtask" => "build",
+        "data" | "assets" | "static" | "public" | "resources" | "corpus" | "samples" => "data",
+        "vscode-extension" | "vscode" | "editor" | "editors" => "data",
+        _ => "tbd",
+    }
+}
+
+/// Heuristic: infer classification from a file extension.
+fn classify_ext(ext: &str) -> &'static str {
+    match ext {
+        "md" | "rst" | "txt" | "adoc" | "asciidoc" => "docs",
+        "toml" | "yaml" | "yml" | "json" | "ron" | "json5" => "build",
+        "sh" | "bash" | "zsh" | "fish" | "ps1" | "bat" | "cmd" => "build",
+        "py" | "js" | "ts" | "rb" | "pl" | "pm" | "lua" | "tcl" => "build",
+        "png" | "jpg" | "jpeg" | "gif" | "svg" | "ico" | "webp" => "data",
+        "woff" | "woff2" | "ttf" | "eot" | "otf" => "data",
+        "pdf" | "docx" | "xlsx" | "pptx" => "docs",
+        "nix" | "lock" | "makefile" | "mk" | "cmake" => "build",
+        "html" | "css" | "scss" | "less" => "data",
+        "proto" | "thrift" | "avsc" => "data",
+        "csv" | "tsv" | "parquet" => "data",
+        "" => "tbd",
+        _ => "tbd",
+    }
+}
+
+/// Entry point for `cargo xtask non-rust propose`.
+///
+/// Reads the current inventory, groups unclassified files by the chosen
+/// strategy, and writes two output files:
+///
+/// - `<output_dir>/non-rust-proposed-allowlist.toml` — draft allowlist entries.
+/// - `<output_dir>/non-rust-proposal.md` — human-readable summary.
+///
+/// The canonical `policy/non-rust-allowlist.toml` is NEVER modified.
+pub fn non_rust_propose(root: &Path, config: ProposeConfig) -> Result<()> {
+    let effective_root: std::path::PathBuf =
+        if let Some(ref r) = config.root_override { r.clone() } else { root.to_path_buf() };
+    let root = effective_root.as_path();
+
+    println!("Building inventory for proposal generation...");
+
+    let allowlist = load_allowlist(root)?;
+    let tracked = list_tracked_files(root)?;
+    let prepared = prepare_allow_entries(&allowlist.allow);
+
+    // Collect unclassified non-Rust files.
+    let unclassified: Vec<String> = tracked
+        .iter()
+        .filter_map(|p| {
+            let record = classify_file_with_prepared(p, &prepared);
+            if record.category == "unclassified" { Some(p.clone()) } else { None }
+        })
+        .collect();
+
+    println!("  {} unclassified files to group", unclassified.len());
+
+    // Group files.
+    let groups: BTreeMap<String, Vec<String>> = match config.group_by {
+        ProposeGroupBy::Directory => group_by_directory(&unclassified),
+        ProposeGroupBy::Extension => group_by_extension(&unclassified),
+    };
+
+    let today = today_ymd();
+    let review_after = add_days(today, 30);
+    let today_str = fmt_ymd(today);
+    let review_after_str = fmt_ymd(review_after);
+
+    // Build proposed AllowEntry list.
+    let mut entries: Vec<AllowEntry> = Vec::new();
+    for (group_key, files) in &groups {
+        let (glob_pattern, entry_id) = match config.group_by {
+            ProposeGroupBy::Directory => {
+                // "(root)" is a virtual key for files that have no parent directory.
+                // Their glob is simply "*" (all root-level files).
+                let glob = if group_key == "(root)" {
+                    "*".to_string()
+                } else {
+                    format!("{group_key}/**/*")
+                };
+                let sanitized = group_key
+                    .chars()
+                    .map(|c| if c == '/' || c == '.' || c == '(' || c == ')' { '-' } else { c })
+                    .collect::<String>()
+                    .to_lowercase();
+                let id = format!("proposed-dir-{sanitized}");
+                (glob, id)
+            }
+            ProposeGroupBy::Extension => {
+                let glob = if group_key.is_empty() {
+                    // Files with no extension — list individually or use a tbd glob.
+                    "**/*".to_string()
+                } else {
+                    format!("**/*.{group_key}")
+                };
+                let id = if group_key.is_empty() {
+                    "proposed-ext-no-extension".to_string()
+                } else {
+                    format!("proposed-ext-{}", group_key.to_lowercase())
+                };
+                (glob, id)
+            }
+        };
+
+        let classification = match config.group_by {
+            ProposeGroupBy::Directory => {
+                let top = group_key.split('/').next().unwrap_or(group_key.as_str());
+                classify_dir(top)
+            }
+            ProposeGroupBy::Extension => classify_ext(group_key.as_str()),
+        };
+
+        let reason = match config.group_by {
+            ProposeGroupBy::Directory => {
+                format!("auto-proposed: {} files in {}/", files.len(), group_key)
+            }
+            ProposeGroupBy::Extension => {
+                let ext_label = if group_key.is_empty() {
+                    "(no extension)".to_string()
+                } else {
+                    format!(".{group_key}")
+                };
+                format!("auto-proposed: {} {} files", files.len(), ext_label)
+            }
+        };
+
+        let broad_glob_reason = Some(
+            "auto-proposed bulk classification — refine per-directory before promotion".to_string(),
+        );
+
+        entries.push(AllowEntry {
+            id: entry_id,
+            glob: Some(glob_pattern.clone()),
+            path: None,
+            kind: "non-rust".to_string(),
+            language: "mixed".to_string(),
+            surface: "unclassified".to_string(),
+            classification: classification.to_string(),
+            owner: "TBD".to_string(),
+            reason,
+            covered_by: vec![glob_pattern],
+            created: today_str.clone(),
+            review_after: review_after_str.clone(),
+            expires: None,
+            broad_glob_reason,
+            retired: false,
+        });
+    }
+
+    // Write output files.
+    fs::create_dir_all(&config.output_dir)
+        .with_context(|| format!("creating {}", config.output_dir.display()))?;
+
+    let toml_path = config.output_dir.join("non-rust-proposed-allowlist.toml");
+    let md_path = config.output_dir.join("non-rust-proposal.md");
+
+    let toml_content = render_proposed_toml(&entries, config.group_by, today_str.as_str())?;
+    fs::write(&toml_path, &toml_content)
+        .with_context(|| format!("writing {}", toml_path.display()))?;
+    println!("  wrote {}", toml_path.display());
+
+    let md_content = render_proposal_markdown(&groups, &entries, config.group_by, &unclassified);
+    fs::write(&md_path, &md_content).with_context(|| format!("writing {}", md_path.display()))?;
+    println!("  wrote {}", md_path.display());
+
+    println!(
+        "\nProposal complete: {} unclassified files → {} groups\n\
+         Review {} and {} before promoting to policy/non-rust-allowlist.toml",
+        unclassified.len(),
+        groups.len(),
+        toml_path.display(),
+        md_path.display()
+    );
+
+    Ok(())
+}
+
+/// Group files by their top-level directory component.
+fn group_by_directory(files: &[String]) -> BTreeMap<String, Vec<String>> {
+    let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for file in files {
+        let top_dir = file.split('/').next().unwrap_or(file.as_str());
+        // If a file has no directory component, group under "(root)".
+        let key = if file.contains('/') { top_dir.to_string() } else { "(root)".to_string() };
+        groups.entry(key).or_default().push(file.clone());
+    }
+    groups
+}
+
+/// Group files by their file extension (without leading dot).
+fn group_by_extension(files: &[String]) -> BTreeMap<String, Vec<String>> {
+    let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for file in files {
+        let basename = file.rsplit('/').next().unwrap_or(file.as_str());
+        let ext = basename
+            .rsplit_once('.')
+            .filter(|(stem, ext)| !stem.is_empty() && !ext.is_empty())
+            .map(|(_, e)| e)
+            .unwrap_or("")
+            .to_lowercase();
+        groups.entry(ext).or_default().push(file.clone());
+    }
+    groups
+}
+
+/// Render the proposed allowlist as TOML.
+fn render_proposed_toml(
+    entries: &[AllowEntry],
+    group_by: ProposeGroupBy,
+    today: &str,
+) -> Result<String> {
+    let group_label = match group_by {
+        ProposeGroupBy::Directory => "directory",
+        ProposeGroupBy::Extension => "extension",
+    };
+
+    let mut out = String::new();
+    out.push_str("# Non-Rust Proposed Allowlist\n");
+    out.push_str("#\n");
+    out.push_str("# AUTO-GENERATED by `cargo xtask non-rust propose`.\n");
+    out.push_str("# DO NOT edit directly. Review each entry and promote to\n");
+    out.push_str("# policy/non-rust-allowlist.toml after setting owner/surface/classification.\n");
+    out.push_str("#\n");
+    out.push_str(&format!("# Generated: {today}\n"));
+    out.push_str(&format!("# Grouped by: {group_label}\n"));
+    out.push_str("#\n");
+    out.push_str("# Fields marked TBD MUST be set by a human reviewer\n");
+    out.push_str("# before promoting any entry into the canonical ledger.\n\n");
+
+    out.push_str("schema_version = 1\n");
+    out.push_str("policy = \"non-rust-allowlist\"\n");
+    out.push_str("owner = \"TBD\"\n");
+    out.push_str("status = \"proposed\"\n");
+    out.push_str(&format!("updated = \"{today}\"\n\n"));
+
+    out.push_str("[defaults]\n");
+    out.push_str("rust_is_default = true\n");
+    out.push_str("xtask_is_default_for_repo_automation = true\n");
+    out.push_str("new_non_rust_requires_review = true\n");
+    out.push_str("broad_globs_require_reason = true\n");
+    out.push_str("coverage_required_for_production_surfaces = true\n\n");
+
+    for entry in entries {
+        out.push_str("[[allow]]\n");
+        out.push_str(&format!("id = {:?}\n", entry.id));
+        if let Some(ref g) = entry.glob {
+            out.push_str(&format!("glob = {:?}\n", g));
+        }
+        if let Some(ref p) = entry.path {
+            out.push_str(&format!("path = {:?}\n", p));
+        }
+        out.push_str(&format!("kind = {:?}\n", entry.kind));
+        out.push_str(&format!("language = {:?}\n", entry.language));
+        out.push_str(&format!("surface = {:?}\n", entry.surface));
+        out.push_str(&format!("classification = {:?}\n", entry.classification));
+        out.push_str(&format!("owner = {:?}\n", entry.owner));
+        out.push_str(&format!("reason = {:?}\n", entry.reason));
+        // covered_by array
+        out.push_str("covered_by = [");
+        for (i, c) in entry.covered_by.iter().enumerate() {
+            if i > 0 {
+                out.push_str(", ");
+            }
+            out.push_str(&format!("{c:?}"));
+        }
+        out.push_str("]\n");
+        out.push_str(&format!("created = {:?}\n", entry.created));
+        out.push_str(&format!("review_after = {:?}\n", entry.review_after));
+        if let Some(ref bgr) = entry.broad_glob_reason {
+            out.push_str(&format!("broad_glob_reason = {:?}\n", bgr));
+        }
+        out.push('\n');
+    }
+
+    Ok(out)
+}
+
+/// Render a human-readable markdown summary of the proposal.
+fn render_proposal_markdown(
+    groups: &BTreeMap<String, Vec<String>>,
+    entries: &[AllowEntry],
+    group_by: ProposeGroupBy,
+    all_unclassified: &[String],
+) -> String {
+    let group_label = match group_by {
+        ProposeGroupBy::Directory => "directory",
+        ProposeGroupBy::Extension => "extension",
+    };
+
+    // Extension breakdown for summary.
+    let mut ext_counts: BTreeMap<&str, usize> = BTreeMap::new();
+    for file in all_unclassified {
+        let basename = file.rsplit('/').next().unwrap_or(file.as_str());
+        let ext = basename.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
+        *ext_counts.entry(ext).or_insert(0) += 1;
+    }
+
+    let mut out = String::new();
+    out.push_str("# Non-Rust Allowlist Proposal\n\n");
+    out.push_str("> AUTO-GENERATED by `cargo xtask non-rust propose`. Do not edit by hand.\n");
+    out.push_str("> Review each group, set `owner`/`surface`/`classification`, then promote\n");
+    out.push_str("> to `policy/non-rust-allowlist.toml`.\n\n");
+
+    out.push_str("## Summary\n\n");
+    out.push_str(&format!(
+        "| Metric | Value |\n|---|---|\n\
+         | Unclassified files | {} |\n\
+         | Groups ({group_label}) | {} |\n\
+         | Proposed entries | {} |\n\n",
+        all_unclassified.len(),
+        groups.len(),
+        entries.len(),
+    ));
+
+    out.push_str("## Top extensions\n\n");
+    out.push_str("| Extension | Count |\n|---|---|\n");
+    let mut ext_vec: Vec<(&&str, &usize)> = ext_counts.iter().collect();
+    ext_vec.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+    for (ext, count) in ext_vec.iter().take(20) {
+        let label = if ext.is_empty() { "(no ext)" } else { ext };
+        out.push_str(&format!("| `.{label}` | {count} |\n"));
+    }
+    out.push('\n');
+
+    out.push_str(&format!("## Groups by {group_label}\n\n"));
+    for (group_key, files) in groups {
+        let entry_id = entries
+            .iter()
+            .find(|e| {
+                e.reason.contains(&format!("{}/", group_key))
+                    || e.reason.contains(group_key.as_str())
+            })
+            .map(|e| e.id.as_str())
+            .unwrap_or("—");
+        out.push_str(&format!("### `{group_key}` ({} files)\n\n", files.len()));
+        out.push_str(&format!("- Proposed entry: `{entry_id}`\n"));
+        out.push_str("- `owner`: TBD — must be set before promotion\n");
+        out.push_str("- `surface`: unclassified — must be refined\n");
+        // Show first 10 files as examples.
+        if !files.is_empty() {
+            out.push_str("- Sample files:\n");
+            for f in files.iter().take(10) {
+                out.push_str(&format!("  - `{f}`\n"));
+            }
+            if files.len() > 10 {
+                out.push_str(&format!("  - … and {} more\n", files.len() - 10));
+            }
+        }
+        out.push('\n');
+    }
+
+    out.push_str("## Next steps\n\n");
+    out.push_str("1. Review `target/policy/non-rust-proposed-allowlist.toml`.\n");
+    out.push_str("2. For each entry: set `owner`, `surface`, refine `classification`.\n");
+    out.push_str("3. Copy approved entries into `policy/non-rust-allowlist.toml`.\n");
+    out.push_str("4. Run `cargo xtask check-file-policy --mode advisory` to verify.\n");
+    out.push_str("5. Do NOT promote entries with `owner = \"TBD\"`.\n");
+
+    out
+}
+
+// ---------------------------------------------------------------------------
 // Unit tests
 // ---------------------------------------------------------------------------
 

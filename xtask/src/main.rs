@@ -1545,6 +1545,38 @@ enum NonRustCommand {
         #[arg(long, hide = true)]
         root: Option<PathBuf>,
     },
+
+    /// Generate draft allowlist proposals for unclassified non-Rust files.
+    ///
+    /// Writes:
+    ///   - `<output-dir>/non-rust-proposed-allowlist.toml` — draft entries ready for review.
+    ///   - `<output-dir>/non-rust-proposal.md` — human-readable summary.
+    ///
+    /// NEVER modifies `policy/non-rust-allowlist.toml`. The canonical ledger is
+    /// human-curated; this command only generates proposals for review.
+    Propose {
+        /// Output directory (default: `target/policy`).
+        #[arg(long, default_value = "target/policy")]
+        output_dir: PathBuf,
+
+        /// Grouping strategy: `directory` (default) groups by top-level dir;
+        /// `extension` groups by file extension.
+        #[arg(long, value_enum, default_value = "directory")]
+        group_by: ProposeGroupByArg,
+
+        /// Override the workspace root used for `git ls-files`. Test seam only.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
+    },
+}
+
+/// CLI-facing grouping argument (mirrors `file_policy::ProposeGroupBy`).
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum ProposeGroupByArg {
+    /// Group by top-level directory (default).
+    Directory,
+    /// Group by file extension.
+    Extension,
 }
 
 #[derive(Subcommand)]
@@ -3048,6 +3080,18 @@ fn main() -> Result<()> {
                         allowlist_path: allowlist,
                         root_override,
                     },
+                )
+            }
+            NonRustCommand::Propose { output_dir, group_by, root: root_override } => {
+                use tasks::file_policy::{ProposeConfig, ProposeGroupBy};
+                let root = utils::project_root()?;
+                let group_by = match group_by {
+                    ProposeGroupByArg::Directory => ProposeGroupBy::Directory,
+                    ProposeGroupByArg::Extension => ProposeGroupBy::Extension,
+                };
+                tasks::file_policy::non_rust_propose(
+                    &root,
+                    ProposeConfig { output_dir, group_by, root_override },
                 )
             }
         },
