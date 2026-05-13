@@ -90,7 +90,7 @@ pub struct PerlOracleEnv {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl PerlOracleEnv {
-    /// Build a [`Command`] with ALL non-allowlisted env vars stripped.
+    /// Apply this oracle's environment contract to an existing [`Command`].
     ///
     /// The sequence is:
     /// 1. `Command::env_clear()` — drop the entire parent environment.
@@ -102,9 +102,13 @@ impl PerlOracleEnv {
     ///
     /// The working directory is set to `self.cwd` explicitly so the subprocess
     /// never inherits the LSP process's cwd.
-    pub fn into_command(&self) -> Command {
-        let mut cmd = Command::new(&self.perl_binary);
-
+    ///
+    /// Prefer [`into_command`] for ordinary `std::process::Command` callers.
+    /// This lower-level helper exists for call sites that wrap a standard
+    /// command builder, such as `tokio::process::Command::as_std_mut`.
+    ///
+    /// [`into_command`]: PerlOracleEnv::into_command
+    pub fn configure_command(&self, cmd: &mut Command) {
         // 1. Clear entire parent environment — deny-all-ambient policy.
         cmd.env_clear();
 
@@ -142,6 +146,12 @@ impl PerlOracleEnv {
 
         // Explicit cwd — never inherit.
         cmd.current_dir(&self.cwd);
+    }
+
+    /// Build a [`Command`] with ALL non-allowlisted env vars stripped.
+    pub fn into_command(&self) -> Command {
+        let mut cmd = Command::new(&self.perl_binary);
+        self.configure_command(&mut cmd);
 
         cmd
     }
@@ -301,6 +311,46 @@ impl PerlOracleEnv {
         })
     }
 
+    /// Constructor for the Perl::LanguageServer DAP bridge process.
+    ///
+    /// The DAP bridge launches a long-running Perl::LanguageServer process on
+    /// behalf of a debug session. Unlike LSP analysis probes, debug sessions may
+    /// legitimately opt into ambient Perl runtime variables, so this constructor
+    /// accepts the debug configuration's passthrough decisions explicitly.
+    ///
+    /// Env contract:
+    ///
+    /// - `allow_perl5lib`: caller-supplied debug passthrough choice.
+    /// - `allow_perl5opt`: caller-supplied debug passthrough choice.
+    /// - `allow_local_lib`: always `false`; bridge passthrough is limited to
+    ///   the two debug-approved Perl variables until a separate config contract
+    ///   declares more.
+    /// - `PATH`: preserved by [`into_command`] / [`configure_command`] so the
+    ///   bridge process and debuggee can resolve helper commands.
+    /// - `timeout`: 30 seconds as a startup budget marker; the bridge process
+    ///   itself is managed by the adapter lifecycle after spawn.
+    /// - `cwd`: caller-supplied and explicit.
+    /// - `extra_env`: empty.
+    ///
+    /// [`configure_command`]: PerlOracleEnv::configure_command
+    /// [`into_command`]: PerlOracleEnv::into_command
+    pub fn for_dap_bridge(
+        perl_binary: PathBuf,
+        cwd: PathBuf,
+        allow_perl5lib: bool,
+        allow_perl5opt: bool,
+    ) -> Self {
+        Self {
+            perl_binary,
+            cwd,
+            timeout: Duration::from_secs(30),
+            allow_perl5lib,
+            allow_perl5opt,
+            allow_local_lib: false,
+            extra_env: BTreeMap::new(),
+        }
+    }
+
     /// Constructor for Perl version probes.
     ///
     /// Used when an already-resolved Perl binary needs to be interrogated for its
@@ -365,6 +415,16 @@ impl PerlOracleEnv {
 
     /// Returns a no-op stub on WASM (no subprocess support).
     pub fn for_version_probe(_perl_binary: std::path::PathBuf, _cwd: std::path::PathBuf) -> Self {
+        PerlOracleEnv
+    }
+
+    /// Returns a no-op stub on WASM (no subprocess support).
+    pub fn for_dap_bridge(
+        _perl_binary: std::path::PathBuf,
+        _cwd: std::path::PathBuf,
+        _allow_perl5lib: bool,
+        _allow_perl5opt: bool,
+    ) -> Self {
         PerlOracleEnv
     }
 }
@@ -659,6 +719,83 @@ mod tests {
             stdout.trim(),
             "UNSET",
             "PERL5LIB must be stripped when use_perl5lib=false; got: {stdout:?}",
+        );
+
+        Ok(())
+    }
+
+    /// `for_dap_bridge` mirrors the debug configuration passthrough flags.
+    #[test]
+    fn for_dap_bridge_respects_passthrough_flags() {
+        let perl_binary = PathBuf::from("perl");
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        let denied = PerlOracleEnv::for_dap_bridge(perl_binary.clone(), cwd.clone(), false, false);
+        assert!(!denied.allow_perl5lib, "DAP bridge must deny PERL5LIB when disabled");
+        assert!(!denied.allow_perl5opt, "DAP bridge must deny PERL5OPT when disabled");
+        assert!(!denied.allow_local_lib, "DAP bridge must not allow local::lib by default");
+        assert!(denied.extra_env.is_empty(), "DAP bridge extra_env starts empty");
+
+        let allowed = PerlOracleEnv::for_dap_bridge(perl_binary, cwd, true, true);
+        assert!(allowed.allow_perl5lib, "DAP bridge must allow PERL5LIB when opted in");
+        assert!(allowed.allow_perl5opt, "DAP bridge must allow PERL5OPT when opted in");
+        assert!(!allowed.allow_local_lib, "DAP bridge local::lib remains denied");
+    }
+
+    /// `for_dap_bridge` blocks poisoned ambient Perl env unless debug config opts in.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn for_dap_bridge_gates_perl5lib_and_perl5opt() -> TestResult {
+        let _env_guard = env_lock()?;
+        let perl = match perl_path() {
+            Some(p) => p,
+            None => return Ok(()),
+        };
+
+        let poison_dir = tempfile::tempdir()?;
+        let poison_path = poison_dir.path().to_string_lossy().into_owned();
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        unsafe { std::env::set_var("PERL5LIB", &poison_path) };
+        unsafe { std::env::set_var("PERL5OPT", "-Mstrict") };
+
+        let result = (|| -> TestResult<(String, String)> {
+            let denied = PerlOracleEnv::for_dap_bridge(perl.clone(), cwd.clone(), false, false);
+            let mut cmd = denied.into_command();
+            cmd.args(["-e", "print join('|', $ENV{PERL5LIB}//'UNSET', $ENV{PERL5OPT}//'UNSET')"]);
+            cmd.stdout(std::process::Stdio::piped());
+            cmd.stderr(std::process::Stdio::piped());
+            let denied_out = cmd.output()?;
+
+            let allowed = PerlOracleEnv::for_dap_bridge(perl, cwd, true, true);
+            let mut cmd = allowed.into_command();
+            cmd.args(["-e", "print join('|', $ENV{PERL5LIB}//'UNSET', $ENV{PERL5OPT}//'UNSET')"]);
+            cmd.stdout(std::process::Stdio::piped());
+            cmd.stderr(std::process::Stdio::piped());
+            let allowed_out = cmd.output()?;
+
+            Ok((
+                String::from_utf8_lossy(&denied_out.stdout).into_owned(),
+                String::from_utf8_lossy(&allowed_out.stdout).into_owned(),
+            ))
+        })();
+
+        unsafe { std::env::remove_var("PERL5LIB") };
+        unsafe { std::env::remove_var("PERL5OPT") };
+
+        let (denied_stdout, allowed_stdout) = result?;
+        assert_eq!(
+            denied_stdout.trim(),
+            "UNSET|UNSET",
+            "DAP bridge must strip poisoned env when passthrough is disabled; got: {denied_stdout:?}",
+        );
+        assert!(
+            allowed_stdout.contains(&poison_path),
+            "DAP bridge must pass PERL5LIB through when opted in; got: {allowed_stdout:?}",
+        );
+        assert!(
+            allowed_stdout.contains("-Mstrict"),
+            "DAP bridge must pass PERL5OPT through when opted in; got: {allowed_stdout:?}",
         );
 
         Ok(())

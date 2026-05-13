@@ -398,7 +398,7 @@ pub mod tcp_attach;
 // See #455: Implement safe evaluation (AC10)
 
 // Re-export Phase 1 public types
-pub use bridge_adapter::BridgeAdapter;
+pub use bridge_adapter::{BridgeAdapter, DapBridgeEnvConfig};
 pub use configuration::{
     AttachConfiguration, LaunchConfiguration, create_attach_json_snippet,
     create_launch_json_snippet,
