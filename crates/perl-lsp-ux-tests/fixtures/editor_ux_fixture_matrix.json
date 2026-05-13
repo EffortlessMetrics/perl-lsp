@@ -670,6 +670,34 @@
       ]
     },
     {
+      "id": "mojolicious_completion_ranking",
+      "scenario_file": "ux_scenario_28_mojolicious_completion_ranking.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "completion",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request completion over the Mojolicious real-workspace fixture and record ranking quality signals",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "completion probes return without JSON-RPC errors",
+        "repeated requests keep candidate counts and top-N ranking stable",
+        "receipt records useful hits, noise counts, generated labels, and dynamic/fallback labels"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "incremental_text_sync_recovery",
       "scenario_file": "ux_scenario_19_incremental_text_sync.rs",
       "subsystem_owner": "text_sync",
