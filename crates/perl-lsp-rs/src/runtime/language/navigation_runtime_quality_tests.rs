@@ -120,7 +120,14 @@ fn navigation_runtime_quality_definition_receipt_compares_live_and_compiler_path
     let notes = receipt_notes(compiler)?;
 
     assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("definition"));
-    assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        runtime_receipt.get("live_cutover").and_then(Value::as_str),
+        Some("partial_exact_syntax")
+    );
     assert_eq!(
         runtime_receipt.get("live_provider_count").and_then(Value::as_u64),
         Some(u64::try_from(location_count(live_result.as_ref()))?)
@@ -138,8 +145,8 @@ fn navigation_runtime_quality_definition_receipt_compares_live_and_compiler_path
     assert!(trace_count(compiler)? > 0, "definition receipt must carry fact-source traces");
     assert!(
         notes.iter().any(|note| note.contains("definition runtime proof"))
-            && notes.iter().any(|note| note.contains("no live navigation behavior change")),
-        "definition receipt notes must record runtime proof and no live cutover: {notes:?}"
+            && notes.iter().any(|note| note.contains("partial live exact syntax cutover")),
+        "definition receipt notes must record runtime proof and partial live cutover: {notes:?}"
     );
 
     Ok(())

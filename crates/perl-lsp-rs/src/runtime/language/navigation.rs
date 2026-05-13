@@ -9,17 +9,11 @@ use crate::protocol::{req_position, req_uri};
 use crate::util::{read_text_file_with_encoding, token_under_cursor};
 use std::collections::{HashMap, HashSet, VecDeque};
 
-#[cfg(all(
-    feature = "workspace",
-    not(target_arch = "wasm32"),
-    any(test, feature = "expose_lsp_test_api")
-))]
-use perl_lsp_rs_core::providers::navigation::definition_shadow::goto_definition_cutover;
-#[cfg(all(
-    feature = "workspace",
-    not(target_arch = "wasm32"),
-    any(test, feature = "expose_lsp_test_api")
-))]
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+use perl_lsp_rs_core::providers::navigation::definition_shadow::{
+    DefinitionCutoverResult, goto_definition_live_exact,
+};
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use perl_workspace::semantic::queries::QueryContext;
 
 #[cfg(feature = "workspace")]
@@ -863,6 +857,25 @@ fn is_universal_method(name: &str) -> bool {
     UNIVERSAL_METHODS.contains(&name)
 }
 
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn semantic_definition_symbol(key: &crate::workspace_index::SymbolKey) -> String {
+    if key.kind == crate::workspace_index::SymKind::Pack
+        || key.pkg.is_empty()
+        || key.name.contains("::")
+    {
+        key.name.to_string()
+    } else {
+        format!("{}::{}", key.pkg, key.name)
+    }
+}
+
+#[cfg(feature = "workspace")]
+fn cursor_in_regex_capture(regex: &regex::Regex, text: &str, cursor: usize, group: usize) -> bool {
+    regex
+        .captures_iter(text)
+        .any(|cap| cap.get(group).is_some_and(|m| cursor >= m.start() && cursor <= m.end()))
+}
+
 impl LspServer {
     /// Handle textDocument/declaration request
     pub(crate) fn handle_declaration(
@@ -1433,6 +1446,45 @@ impl LspServer {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
+                    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+                    {
+                        let cursor_on_arrow_method = cursor_in_regex_capture(
+                            get_arrow_method_regex()?,
+                            &text_around,
+                            cursor_in_text,
+                            2,
+                        ) || cursor_in_regex_capture(
+                            get_var_method_regex()?,
+                            &text_around,
+                            cursor_in_text,
+                            2,
+                        );
+                        if !cursor_on_arrow_method {
+                            let current_package =
+                                crate::declaration::current_package_at(ast, offset);
+                            if let Some(symbol_key) =
+                                crate::declaration::symbol_at_cursor_with_source(
+                                    ast,
+                                    offset,
+                                    current_package,
+                                    &doc.text,
+                                )
+                            {
+                                let workspace_symbol_key =
+                                    super::to_workspace_symbol_key(&symbol_key);
+                                let semantic_symbol =
+                                    semantic_definition_symbol(&workspace_symbol_key);
+                                if let Some(lsp_location) = self.live_exact_definition_location(
+                                    uri,
+                                    &semantic_symbol,
+                                    offset,
+                                ) {
+                                    return Ok(Some(json!([lsp_location])));
+                                }
+                            }
+                        }
+                    }
+
                     // Try DeclarationProvider first (it handles function calls properly)
                     let provider = crate::declaration::DeclarationProvider::new(
                         Arc::clone(ast),
@@ -1661,11 +1713,11 @@ impl LspServer {
                     index.with_semantic_queries_for_uri(uri, |file_id, queries| {
                         let ctx = QueryContext::new(file_id, None, Some(byte_offset));
                         let mut receipt =
-                            goto_definition_cutover(index.as_ref(), &queries, &symbol, &ctx)
+                            goto_definition_live_exact(index.as_ref(), &queries, &symbol, &ctx)
                                 .receipt;
                         let compiler_result_count = receipt.new_result.match_count;
                         receipt.notes.push(format!(
-                            "definition runtime proof: live_provider_results={live_provider_count}; compiler_fact_candidates={}; compiler_result_count={}; no live navigation behavior change",
+                            "definition runtime proof: live_provider_results={live_provider_count}; compiler_fact_candidates={}; compiler_result_count={}; partial live exact syntax cutover",
                             compiler_result_count, compiler_result_count
                         ));
                         receipt
@@ -1680,7 +1732,8 @@ impl LspServer {
                 "live_provider_result": live_provider_result,
                 "live_provider_count": live_provider_count,
                 "compiler_receipt": compiler_receipt,
-                "no_live_behavior_change": true
+                "no_live_behavior_change": false,
+                "live_cutover": "partial_exact_syntax"
             })))
         }
     }
@@ -1695,12 +1748,49 @@ impl LspServer {
         let documents = self.documents_guard();
         let doc = self.get_document(&documents, uri)?;
         let offset = self.pos16_to_offset(doc, line, character);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(ast) = doc.ast.as_ref() {
+            let current_package = crate::declaration::current_package_at(ast, offset);
+            if let Some(symbol_key) = crate::declaration::symbol_at_cursor_with_source(
+                ast,
+                offset,
+                current_package,
+                &doc.text,
+            ) {
+                let workspace_symbol_key = super::to_workspace_symbol_key(&symbol_key);
+                let symbol = semantic_definition_symbol(&workspace_symbol_key);
+                let byte_offset = u32::try_from(offset).ok()?;
+                return Some((symbol, byte_offset));
+            }
+        }
         let symbol = token_under_cursor(&doc.text, line as usize, character as usize)?;
         if symbol.is_empty() {
             return None;
         }
         let byte_offset = u32::try_from(offset).ok()?;
         Some((symbol, byte_offset))
+    }
+
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    fn live_exact_definition_location(
+        &self,
+        uri: &str,
+        symbol: &str,
+        byte_offset: usize,
+    ) -> Option<Value> {
+        let byte_offset = u32::try_from(byte_offset).ok()?;
+        let workspace_index = self.workspace_index()?;
+        let outcome = workspace_index.with_semantic_queries_for_uri(uri, |file_id, queries| {
+            let ctx = QueryContext::new(file_id, None, Some(byte_offset));
+            goto_definition_live_exact(workspace_index.as_ref(), &queries, symbol, &ctx)
+        })?;
+
+        let DefinitionCutoverResult::Exact(candidate) = outcome.result else {
+            return None;
+        };
+        let def_location = workspace_index.semantic_anchor_wire_location(candidate.anchor_id)?;
+        let location: lsp_types::Location = def_location.into();
+        serde_json::to_value(location).ok()
     }
 
     /// Handle textDocument/typeDefinition request
