@@ -1,7 +1,7 @@
 # Real-Workspace Baseline: mojolicious (windows)
 
 **Date**: 2026-05-13
-**Commit**: 733ad1aed
+**Commit**: 7ee5cec98
 **System**: windows
 **Project**: mojolicious
 
@@ -20,13 +20,13 @@
 
 | p50 | p95 | p99 | Samples |
 |-----|-----|-----|---------|
-| 182 | 863 | 863 | 10 |
+| 192 | 1029 | 1029 | 10 |
 
 ### First Completion (ms)
 
 | p50 | p95 | p99 | Samples |
 |-----|-----|-----|---------|
-| 0 | 0 | 0 | 10 |
+| 0 | 1 | 1 | 10 |
 
 ### Goto-Definition (ms)
 
@@ -38,7 +38,7 @@
 
 | p50 | p95 | p99 | Samples |
 |-----|-----|-----|---------|
-| 1 | 2 | 2 | 10 |
+| 1 | 3 | 3 | 10 |
 
 ### Workspace Symbol Query (ms)
 
@@ -81,7 +81,7 @@ provider cutover by itself.
 
 ## Outliers
 
-- **cold_start_to_hover** p95=863ms exceeds 500ms threshold
+- **cold_start_to_hover** p95=1029ms exceeds 500ms threshold
 
 Outliers are recorded threshold misses for the named metric. They do not block
 the receipt, but they do block promotion of a no-outlier latency claim for that

@@ -147,6 +147,7 @@ do
         OUTLIERS="${OUTLIERS}- **${MNAME}** p95=${MVAL}ms exceeds 500ms threshold"$'\n'
     fi
 done
+OUTLIERS="${OUTLIERS%$'\n'}"
 if [ -z "$OUTLIERS" ]; then
     OUTLIERS="None - all p95 values within 500ms threshold."
 fi

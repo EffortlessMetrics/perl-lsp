@@ -1,6 +1,6 @@
 {
-  "commit": "733ad1aed",
-  "measured_at": "2026-05-13T11:17:08Z",
+  "commit": "7ee5cec98",
+  "measured_at": "2026-05-13T12:21:10Z",
   "projects": {
     "catalyst": {
       "file_count": null,
@@ -76,15 +76,15 @@
       "file_count": 13,
       "metrics": {
         "cold_start_to_hover": {
-          "p50_ms": 182,
-          "p95_ms": 863,
-          "p99_ms": 863,
+          "p50_ms": 192,
+          "p95_ms": 1029,
+          "p99_ms": 1029,
           "samples": 10
         },
         "first_completion": {
           "p50_ms": 0,
-          "p95_ms": 0,
-          "p99_ms": 0,
+          "p95_ms": 1,
+          "p99_ms": 1,
           "samples": 10
         },
         "first_goto_definition": {
@@ -95,8 +95,8 @@
         },
         "incremental_reparse": {
           "p50_ms": 1,
-          "p95_ms": 2,
-          "p99_ms": 2,
+          "p95_ms": 3,
+          "p99_ms": 3,
           "samples": 10
         },
         "workspace_symbol_query": {
