@@ -660,6 +660,15 @@ fn extutils_mm_unix_grep_parens_over_map_arrayref_default() {
 }
 
 #[test]
+fn extutils_mm_unix_to_inst_pm_wraplist_map_sort() {
+    // From ExtUtils::MM_Unix: wraplist() arguments may include map EXPR over
+    // a sorted keys expression while building the TO_INST_PM make macro.
+    assert_clean_parse(
+        r#"push @m, "\n\nTO_INST_PM = ".$self->wraplist(map $self->quote_dep($_), sort keys %{$self->{PM}})."\n";"#,
+    );
+}
+
+#[test]
 fn main_package_variable_in_paren_expr() {
     // From Unicode::Normalize: `$::IS_ASCII` must parse as a main-package
     // variable, not as `$::` followed by a stray bare identifier.
