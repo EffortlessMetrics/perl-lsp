@@ -86,11 +86,12 @@ commands = [
 
 [[work_item]]
 id = "real-workspace-baseline-run"
-status = "ready"
+status = "completed"
 spec = "docs/specs/PLSP-SPEC-0003-real-workspace-editor-baseline.md"
 adr = "docs/adr/PLSP-ADR-0002-confidence-before-cutover.md"
 plan = "plans/real-perl-editor-trust/implementation-plan.md#work-item-real-workspace-baseline-run"
 current_pointer = "docs/development/REAL_WORKSPACE_BASELINE_RAIL.md"
+receipt = "docs/forensics/2026-05-13-real-workspace-baseline-mojolicious.md"
 claim_boundary = "A baseline proves the selected project and host receipt only; it is not all-CPAN proof or live provider cutover."
 commands = [
   "just real-workspace-baseline mojolicious",
