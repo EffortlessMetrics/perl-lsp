@@ -10,6 +10,9 @@ const MAIN_URI: &str = "file:///workspace/main.pl";
 const MODULE: &str = r#"package Real::Nav;
 use strict;
 use warnings;
+use Exporter 'import';
+
+our @EXPORT_OK = qw(target);
 
 sub target {
     return 1;
@@ -26,9 +29,9 @@ sub caller {
 const MAIN: &str = r#"use strict;
 use warnings;
 use lib 'lib';
-use Real::Nav;
+use Real::Nav qw(target);
 
-my $first = Real::Nav::target();
+my $first = target();
 my $second = Real::Nav::target();
 "#;
 
@@ -120,12 +123,29 @@ fn navigation_runtime_quality_definition_receipt_compares_live_and_compiler_path
     let notes = receipt_notes(compiler)?;
 
     assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("definition"));
-    assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        runtime_receipt.get("live_cutover").and_then(Value::as_str),
+        Some("partial_exact_imported")
+    );
     assert_eq!(
         runtime_receipt.get("live_provider_count").and_then(Value::as_u64),
         Some(u64::try_from(location_count(live_result.as_ref()))?)
     );
     assert_eq!(runtime_receipt.get("live_provider_result"), live_result.as_ref());
+    let first_live_location = live_result
+        .as_ref()
+        .and_then(Value::as_array)
+        .and_then(|items| items.first())
+        .ok_or("expected live definition location")?;
+    assert_eq!(
+        first_live_location.get("uri").and_then(Value::as_str),
+        Some(MODULE_URI),
+        "bare imported target should navigate to exporter source"
+    );
     assert_eq!(compiler.get("query").and_then(Value::as_str), Some("find_definition"));
     assert!(
         compiler
@@ -138,8 +158,9 @@ fn navigation_runtime_quality_definition_receipt_compares_live_and_compiler_path
     assert!(trace_count(compiler)? > 0, "definition receipt must carry fact-source traces");
     assert!(
         notes.iter().any(|note| note.contains("definition runtime proof"))
-            && notes.iter().any(|note| note.contains("no live navigation behavior change")),
-        "definition receipt notes must record runtime proof and no live cutover: {notes:?}"
+            && notes.iter().any(|note| note.contains("live_import_export_candidates=1"))
+            && notes.iter().any(|note| note.contains("partial live exact/imported cutover")),
+        "definition receipt notes must record runtime proof and partial live cutover: {notes:?}"
     );
 
     Ok(())

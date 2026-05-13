@@ -30,8 +30,8 @@
 use perl_semantic_facts::{
     AnchorId, DefinitionCandidate, DefinitionRank, DefinitionRankReason, EntityFact, EntityId,
     EntityKind, FileId, OccurrenceFact, OccurrenceKind, PlanBlocker, PlanBlockerReason,
-    PlanWarning, PlannedEdit, PlannedEditCategory, RenamePlan, SafeDeletePlan, ScopeId, ValueShape,
-    VisibleSymbol,
+    PlanWarning, PlannedEdit, PlannedEditCategory, Provenance, RenamePlan, SafeDeletePlan, ScopeId,
+    ValueShape, VisibleSymbol, VisibleSymbolSource,
 };
 
 use super::imports::ImportExportIndex;
@@ -359,6 +359,88 @@ impl<'a> WorkspaceSemanticQueries<'a> {
         });
     }
 
+    fn append_import_export_definition_candidates(
+        &self,
+        symbol: &str,
+        context: &QueryContext,
+        candidates: &mut Vec<DefinitionCandidate>,
+    ) {
+        if symbol.contains("::") {
+            return;
+        }
+
+        let Some(byte_offset) = context.byte_offset else {
+            return;
+        };
+        let Some(query_shard) = self.shard_for_file(context.file_id) else {
+            return;
+        };
+
+        let visible = visibility::visible_symbols_at(
+            context.file_id,
+            byte_offset,
+            context.scope_id,
+            query_shard,
+            self.import_export_index,
+        );
+
+        for visible_symbol in visible {
+            if visible_symbol.name != symbol
+                || !is_import_export_visible_source(&visible_symbol.source)
+            {
+                continue;
+            }
+
+            let Some(source_module) =
+                visible_symbol.context.as_ref().and_then(|context| context.source_module.as_ref())
+            else {
+                continue;
+            };
+            let canonical_name = format!("{source_module}::{symbol}");
+            let (rank, rank_reason) =
+                import_export_definition_rank(&visible_symbol.source, source_module);
+
+            for shard in self.fact_shards.values() {
+                for entity in &shard.entities {
+                    if entity.canonical_name != canonical_name || !is_definition_kind(entity.kind) {
+                        continue;
+                    }
+
+                    let Some(anchor_id) = entity.anchor_id else {
+                        continue;
+                    };
+                    candidates.push(DefinitionCandidate::new(
+                        entity.id,
+                        anchor_id,
+                        entity.canonical_name.clone(),
+                        bare_name(&entity.canonical_name),
+                        extract_package(&entity.canonical_name),
+                        entity.kind,
+                        Provenance::ImportExportInference,
+                        visible_symbol.confidence,
+                        rank,
+                        rank_reason.clone(),
+                    ));
+                }
+            }
+        }
+    }
+
+    fn retain_import_export_context_candidates(
+        &self,
+        symbol: &str,
+        candidates: &mut Vec<DefinitionCandidate>,
+    ) {
+        if symbol.contains("::") || !candidates.iter().any(is_import_export_definition_candidate) {
+            return;
+        }
+
+        candidates.retain(|candidate| {
+            is_import_export_definition_candidate(candidate)
+                || matches!(candidate.rank, DefinitionRank::SamePackage)
+        });
+    }
+
     /// Return `(source_uri, span_start_byte)` for an anchor, used for
     /// deterministic sorting. Returns a fallback tuple when the anchor
     /// cannot be found.
@@ -394,7 +476,7 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
         Some((entity.clone(), occurrence.clone()))
     }
 
-    fn definitions(&self, symbol: &str, _context: &QueryContext) -> Vec<DefinitionCandidate> {
+    fn definitions(&self, symbol: &str, context: &QueryContext) -> Vec<DefinitionCandidate> {
         let mut candidates = Vec::new();
 
         // Search all shards for entities whose canonical name matches the
@@ -439,7 +521,9 @@ impl<'a> SemanticQueries for WorkspaceSemanticQueries<'a> {
             }
         }
 
+        self.append_import_export_definition_candidates(symbol, context, &mut candidates);
         self.sort_candidates(&mut candidates);
+        self.retain_import_export_context_candidates(symbol, &mut candidates);
         candidates
     }
 
@@ -1134,6 +1218,37 @@ fn rank_reason_for(rank: DefinitionRank) -> DefinitionRankReason {
     }
 }
 
+fn is_import_export_visible_source(source: &VisibleSymbolSource) -> bool {
+    matches!(
+        source,
+        VisibleSymbolSource::ExplicitImport
+            | VisibleSymbolSource::DefaultExport
+            | VisibleSymbolSource::ExportTag
+    )
+}
+
+fn import_export_definition_rank(
+    source: &VisibleSymbolSource,
+    module: &str,
+) -> (DefinitionRank, DefinitionRankReason) {
+    match source {
+        VisibleSymbolSource::ExplicitImport => (
+            DefinitionRank::ExplicitImport,
+            DefinitionRankReason::ExplicitImport { module: module.to_string() },
+        ),
+        VisibleSymbolSource::DefaultExport | VisibleSymbolSource::ExportTag => (
+            DefinitionRank::DefaultExport,
+            DefinitionRankReason::DefaultExport { module: module.to_string() },
+        ),
+        _ => (DefinitionRank::WorkspaceCandidate, DefinitionRankReason::WorkspaceSymbol),
+    }
+}
+
+fn is_import_export_definition_candidate(candidate: &DefinitionCandidate) -> bool {
+    matches!(candidate.rank, DefinitionRank::ExplicitImport | DefinitionRank::DefaultExport)
+        && candidate.provenance == Provenance::ImportExportInference
+}
+
 /// Classify an [`OccurrenceKind`] into a [`PlannedEditCategory`] for rename.
 ///
 /// Returns `None` for occurrence kinds that cannot be mapped to a rename
@@ -1168,8 +1283,9 @@ mod tests {
     use super::*;
     use perl_semantic_facts::{
         AnchorFact, AnchorId, Confidence, EdgeFact, EdgeId, EdgeKind, EntityFact, EntityId,
-        EntityKind, FileId, OccurrenceFact, OccurrenceId, OccurrenceKind, PackageEdge,
-        PackageEdgeKind, PlanBlockerReason, PlannedEditCategory, Provenance, ScopeId,
+        EntityKind, ExportSet, ExportTag, FileId, ImportKind, ImportSpec, ImportSymbols,
+        OccurrenceFact, OccurrenceId, OccurrenceKind, PackageEdge, PackageEdgeKind,
+        PlanBlockerReason, PlannedEditCategory, Provenance, ScopeId,
     };
     use std::collections::HashMap;
 
@@ -1388,6 +1504,268 @@ mod tests {
         assert_eq!(candidates[0].entity_id, EntityId(100));
         assert_eq!(candidates[0].display_name, "bar");
         assert_eq!(candidates[0].rank, DefinitionRank::WorkspaceCandidate);
+        Ok(())
+    }
+
+    #[test]
+    fn definitions_promotes_explicit_import_to_ranked_candidate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let foo_id = FileId(1);
+        let other_id = FileId(2);
+        let app_id = FileId(3);
+
+        let foo = make_shard(
+            "file:///lib/Foo.pm",
+            foo_id,
+            vec![AnchorFact {
+                id: AnchorId(10),
+                file_id: foo_id,
+                span_start_byte: 0,
+                span_end_byte: 10,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![EntityFact {
+                id: EntityId(10),
+                kind: EntityKind::Subroutine,
+                canonical_name: "Foo::bar".to_string(),
+                anchor_id: Some(AnchorId(10)),
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![],
+            vec![],
+        );
+        let other = make_shard(
+            "file:///lib/Other.pm",
+            other_id,
+            vec![AnchorFact {
+                id: AnchorId(20),
+                file_id: other_id,
+                span_start_byte: 0,
+                span_end_byte: 10,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![EntityFact {
+                id: EntityId(20),
+                kind: EntityKind::Subroutine,
+                canonical_name: "Other::bar".to_string(),
+                anchor_id: Some(AnchorId(20)),
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![],
+            vec![],
+        );
+        let app = make_shard("file:///app.pl", app_id, vec![], vec![], vec![], vec![]);
+
+        let mut shards = HashMap::new();
+        shards.insert(foo.source_uri.clone(), foo);
+        shards.insert(other.source_uri.clone(), other);
+        shards.insert(app.source_uri.clone(), app);
+
+        let ref_index = ReferenceIndex::new();
+        let mut ie_index = ImportExportIndex::new();
+        ie_index.add_file_imports(
+            "file:///app.pl",
+            app_id,
+            vec![ImportSpec {
+                module: "Foo".to_string(),
+                kind: ImportKind::UseExplicitList,
+                symbols: ImportSymbols::Explicit(vec!["bar".to_string()]),
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+                file_id: Some(app_id),
+                anchor_id: Some(AnchorId(30)),
+                scope_id: None,
+                span_start_byte: Some(0),
+            }],
+        );
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        let ctx = QueryContext::new(app_id, None, Some(100));
+        let candidates = queries.definitions("bar", &ctx);
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].canonical_name, "Foo::bar");
+        assert_eq!(candidates[0].rank, DefinitionRank::ExplicitImport);
+        assert_eq!(
+            candidates[0].rank_reason,
+            DefinitionRankReason::ExplicitImport { module: "Foo".to_string() }
+        );
+        assert_eq!(candidates[0].provenance, Provenance::ImportExportInference);
+        Ok(())
+    }
+
+    #[test]
+    fn definitions_promotes_default_export_to_ranked_candidate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let foo_id = FileId(1);
+        let app_id = FileId(2);
+
+        let foo = make_shard(
+            "file:///lib/Foo.pm",
+            foo_id,
+            vec![AnchorFact {
+                id: AnchorId(10),
+                file_id: foo_id,
+                span_start_byte: 0,
+                span_end_byte: 10,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![EntityFact {
+                id: EntityId(10),
+                kind: EntityKind::Subroutine,
+                canonical_name: "Foo::defaulted".to_string(),
+                anchor_id: Some(AnchorId(10)),
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![],
+            vec![],
+        );
+        let app = make_shard("file:///app.pl", app_id, vec![], vec![], vec![], vec![]);
+
+        let mut shards = HashMap::new();
+        shards.insert(foo.source_uri.clone(), foo);
+        shards.insert(app.source_uri.clone(), app);
+
+        let ref_index = ReferenceIndex::new();
+        let mut ie_index = ImportExportIndex::new();
+        ie_index.add_module_exports(
+            "file:///lib/Foo.pm",
+            "Foo",
+            ExportSet {
+                default_exports: vec!["defaulted".to_string()],
+                optional_exports: vec![],
+                tags: vec![],
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+                module_name: Some("Foo".to_string()),
+                anchor_id: Some(AnchorId(40)),
+            },
+        );
+        ie_index.add_file_imports(
+            "file:///app.pl",
+            app_id,
+            vec![ImportSpec {
+                module: "Foo".to_string(),
+                kind: ImportKind::Use,
+                symbols: ImportSymbols::Default,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+                file_id: Some(app_id),
+                anchor_id: Some(AnchorId(30)),
+                scope_id: None,
+                span_start_byte: Some(0),
+            }],
+        );
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        let ctx = QueryContext::new(app_id, None, Some(100));
+        let candidates = queries.definitions("defaulted", &ctx);
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].canonical_name, "Foo::defaulted");
+        assert_eq!(candidates[0].rank, DefinitionRank::DefaultExport);
+        assert_eq!(
+            candidates[0].rank_reason,
+            DefinitionRankReason::DefaultExport { module: "Foo".to_string() }
+        );
+        assert_eq!(candidates[0].provenance, Provenance::ImportExportInference);
+        Ok(())
+    }
+
+    #[test]
+    fn definitions_promotes_export_tag_to_ranked_candidate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let foo_id = FileId(1);
+        let app_id = FileId(2);
+
+        let foo = make_shard(
+            "file:///lib/Foo.pm",
+            foo_id,
+            vec![AnchorFact {
+                id: AnchorId(10),
+                file_id: foo_id,
+                span_start_byte: 0,
+                span_end_byte: 10,
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![EntityFact {
+                id: EntityId(10),
+                kind: EntityKind::Subroutine,
+                canonical_name: "Foo::tagged".to_string(),
+                anchor_id: Some(AnchorId(10)),
+                scope_id: None,
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+            }],
+            vec![],
+            vec![],
+        );
+        let app = make_shard("file:///app.pl", app_id, vec![], vec![], vec![], vec![]);
+
+        let mut shards = HashMap::new();
+        shards.insert(foo.source_uri.clone(), foo);
+        shards.insert(app.source_uri.clone(), app);
+
+        let ref_index = ReferenceIndex::new();
+        let mut ie_index = ImportExportIndex::new();
+        ie_index.add_module_exports(
+            "file:///lib/Foo.pm",
+            "Foo",
+            ExportSet {
+                default_exports: vec![],
+                optional_exports: vec![],
+                tags: vec![ExportTag {
+                    name: "all".to_string(),
+                    members: vec!["tagged".to_string()],
+                }],
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+                module_name: Some("Foo".to_string()),
+                anchor_id: Some(AnchorId(40)),
+            },
+        );
+        ie_index.add_file_imports(
+            "file:///app.pl",
+            app_id,
+            vec![ImportSpec {
+                module: "Foo".to_string(),
+                kind: ImportKind::UseTag,
+                symbols: ImportSymbols::Tags(vec!["all".to_string()]),
+                provenance: Provenance::ExactAst,
+                confidence: Confidence::High,
+                file_id: Some(app_id),
+                anchor_id: Some(AnchorId(30)),
+                scope_id: None,
+                span_start_byte: Some(0),
+            }],
+        );
+        let queries = build_queries(&ref_index, &ie_index, &shards);
+
+        let ctx = QueryContext::new(app_id, None, Some(100));
+        let candidates = queries.definitions("tagged", &ctx);
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].canonical_name, "Foo::tagged");
+        assert_eq!(candidates[0].rank, DefinitionRank::DefaultExport);
+        assert_eq!(
+            candidates[0].rank_reason,
+            DefinitionRankReason::DefaultExport { module: "Foo".to_string() }
+        );
+        assert_eq!(candidates[0].provenance, Provenance::ImportExportInference);
         Ok(())
     }
 

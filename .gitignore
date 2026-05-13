@@ -202,7 +202,10 @@ agents/
 
 # Old review/planning artifacts
 review/
-plans/
+plans/*
+!plans/real-perl-editor-trust/
+!plans/real-perl-editor-trust/README.md
+!plans/real-perl-editor-trust/implementation-plan.md
 scanner_comparison/
 issue_updates/
 

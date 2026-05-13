@@ -3,6 +3,7 @@
 pub mod agent_lease;
 pub mod agent_receipt;
 pub mod aggregate_receipts;
+pub mod badges;
 pub mod bench;
 pub mod benchmarks;
 #[cfg(feature = "parser-tasks")]
@@ -98,6 +99,7 @@ pub mod semantic_scorecard;
 pub mod semantic_shadow_compare;
 pub mod srp_microcrates;
 pub mod swarm_summary;
+pub mod sync_release_docs;
 pub mod targeted_checks;
 pub mod test;
 pub mod test_lsp;

@@ -74,6 +74,7 @@ For complete workspace membership and canonical crate/version truth, use [`../Ca
 | see the current release plan | [project/ROADMAP.md](project/ROADMAP.md) |
 | understand the compiler-backed LSP direction | [project/COMPILER_BACKED_LSP_ROADMAP.md](project/COMPILER_BACKED_LSP_ROADMAP.md) |
 | inspect the workflow UX scorecard contract | [project/metrics/WORKFLOW_SCORECARDS.md](project/metrics/WORKFLOW_SCORECARDS.md), [reference/UX_TESTING.md](reference/UX_TESTING.md) |
+| verify badges and PR evidence boundaries | [VERIFICATION.md](VERIFICATION.md) |
 | work on the codebase | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 | browse the full docs map | [INDEX.md](INDEX.md) |
 | classify or author docs by Diataxis type | [reference/DIATAXIS_GUIDE.md](reference/DIATAXIS_GUIDE.md) |

@@ -30,6 +30,21 @@ coverage_required_for_production_surfaces = true
 # =============================================================================
 
 [[allow]]
+id = "non-rust-generated-badge-endpoints"
+glob = "badges/*.json"
+kind = "generated_badge_endpoint"
+language = "json"
+surface = "docs"
+classification = "generated"
+owner = "release/ci"
+reason = "Generated Shields endpoint JSON for public README badges."
+generated_by = "cargo xtask badges"
+covered_by = ["cargo xtask badges --check"]
+created = "2026-05-13"
+review_after = "2026-08-13"
+
+
+[[allow]]
 id = "non-rust-docs-tree"
 glob = "docs/**"
 kind = "documentation"

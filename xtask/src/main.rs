@@ -122,6 +122,13 @@ enum Commands {
         coverage: bool,
     },
 
+    /// Regenerate public Shields endpoint JSON for README badges.
+    Badges {
+        /// Check committed endpoints for drift without updating badges/.
+        #[arg(long)]
+        check: bool,
+    },
+
     /// Run benchmarks
     Bench {
         /// Run specific benchmark
@@ -495,6 +502,13 @@ enum Commands {
 
     /// Run version-sync checks from `perl-ci-hygiene`.
     CheckVersionSync,
+
+    /// Sync active release narrative docs from workspace version and publish count.
+    SyncReleaseDocs {
+        /// Write synced files (omit to run a dry check).
+        #[arg(long)]
+        write: bool,
+    },
 
     /// Check for disallowed direct `ExitStatus::from_raw()` usage.
     CheckFromRaw,
@@ -2403,6 +2417,7 @@ fn main() -> Result<()> {
         Commands::Test { release, suite, features, verbose, coverage } => {
             test::run(release, suite, features, verbose, coverage)
         }
+        Commands::Badges { check } => badges::run(check),
         Commands::Bench { name, save, output } => bench::run(name, save, output),
         Commands::BenchRun { output, quick, category } => {
             benchmarks::run_benchmarks(output, quick, category)
@@ -2567,6 +2582,7 @@ fn main() -> Result<()> {
             workflow_trigger_lint::run(policy, receipt, fixture, format)
         }
         Commands::CheckVersionSync => check_version_sync::run(),
+        Commands::SyncReleaseDocs { write } => sync_release_docs::run(write),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
         Commands::CheckMemoryLifecyclePolicy => ci_policy::check_memory_lifecycle(),
         Commands::CheckMemoryRetainedOwnerDrift { base, report_only } => {

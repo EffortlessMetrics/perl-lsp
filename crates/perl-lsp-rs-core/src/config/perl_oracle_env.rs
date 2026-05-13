@@ -192,6 +192,52 @@ impl PerlOracleEnv {
         })
     }
 
+    /// Constructor for language-level Perl invocations that run on behalf of the user
+    /// but must not be affected by ambient runtime injection.
+    ///
+    /// Use this for LSP-triggered actions such as `perl.debugFile` that launch Perl
+    /// directly but are not system probes and not free-form user scripts.
+    ///
+    /// Semantics:
+    ///
+    /// - `allow_perl5lib`: mirrors `config.use_perl5lib` — the user's explicit opt-in
+    ///   to include `PERL5LIB` in the child environment.  This lets a user's libraries
+    ///   be found when they have configured the LSP to honour `PERL5LIB`, but prevents
+    ///   ambient contamination when they have not.
+    /// - `allow_perl5opt`: always `false` — `PERL5OPT` injects module flags into every
+    ///   Perl invocation and can cause language probes to misbehave or load untested
+    ///   code.  The user's Perl file must be runnable without ambient `-M` injections.
+    /// - `allow_local_lib`: always `false` — use the explicit `perl_path` config rather
+    ///   than ambient `local::lib` activation to locate the interpreter.
+    /// - `timeout`: 30 seconds (generous ceiling for interactive/user-facing actions).
+    /// - `cwd`: caller-supplied (typically the parent directory of the file being
+    ///   processed).
+    /// - `extra_env`: empty.
+    ///
+    /// Returns `None` if the Perl binary cannot be resolved.  The caller should fall
+    /// back to `Command::new("perl")` or surface an actionable error to the user.
+    pub fn for_language_probe(config: &WorkspaceConfig, cwd: PathBuf) -> Option<Self> {
+        use crate::platform::resolve_perl_path_with_toolchain;
+
+        let perl_binary = match config.perl_path.as_deref().filter(|p| !p.is_empty()) {
+            Some(path) => PathBuf::from(path),
+            None => match resolve_perl_path_with_toolchain() {
+                Ok(path) => path,
+                Err(_) => return None,
+            },
+        };
+
+        Some(Self {
+            perl_binary,
+            cwd,
+            timeout: Duration::from_secs(30),
+            allow_perl5lib: config.use_perl5lib,
+            allow_perl5opt: false,
+            allow_local_lib: false,
+            extra_env: BTreeMap::new(),
+        })
+    }
+
     /// Constructor for user-triggered `executeCommand` invocations (`perl.runFile`,
     /// `perl.runTestSub`).
     ///
@@ -244,6 +290,11 @@ pub struct PerlOracleEnv;
 impl PerlOracleEnv {
     /// Returns `None` on WASM (no subprocess support).
     pub fn for_startup_inc_probe(_config: &WorkspaceConfig) -> Option<Self> {
+        None
+    }
+
+    /// Returns `None` on WASM (no subprocess support).
+    pub fn for_language_probe(_config: &WorkspaceConfig, _cwd: std::path::PathBuf) -> Option<Self> {
         None
     }
 
@@ -320,6 +371,104 @@ mod tests {
             assert!(e.allow_perl5opt, "allow_perl5opt must always be true for execute-command");
             assert!(e.allow_local_lib, "allow_local_lib must always be true for execute-command");
         }
+    }
+
+    // ── for_language_probe tests ──────────────────────────────────────────────
+
+    /// `for_language_probe` mirrors `config.use_perl5lib` → `allow_perl5lib`
+    /// and always denies `PERL5OPT` and `local::lib`.
+    #[test]
+    fn for_language_probe_respects_config_flags() {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        let mut config = WorkspaceConfig::default();
+        config.use_perl5lib = true;
+        let env = PerlOracleEnv::for_language_probe(&config, cwd.clone());
+        if let Some(e) = env {
+            assert!(e.allow_perl5lib, "allow_perl5lib must mirror config.use_perl5lib=true");
+            assert!(!e.allow_perl5opt, "allow_perl5opt must always be false for language probe");
+            assert!(!e.allow_local_lib, "allow_local_lib must always be false for language probe");
+        }
+
+        config.use_perl5lib = false;
+        let env = PerlOracleEnv::for_language_probe(&config, cwd);
+        if let Some(e) = env {
+            assert!(!e.allow_perl5lib, "allow_perl5lib must mirror config.use_perl5lib=false");
+            assert!(!e.allow_perl5opt, "allow_perl5opt must always be false for language probe");
+            assert!(!e.allow_local_lib, "allow_local_lib must always be false for language probe");
+        }
+    }
+
+    /// `for_language_probe` strips `PERL5OPT` even when set in the parent env —
+    /// poisoned-env regression guard for the #8685 seam.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn for_language_probe_strips_perl5opt() -> TestResult {
+        let perl = match perl_path() {
+            Some(p) => p,
+            None => return Ok(()),
+        };
+
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let mut config = WorkspaceConfig::default();
+        config.perl_path = Some(perl.to_string_lossy().into_owned());
+
+        let oracle = PerlOracleEnv::for_language_probe(&config, cwd)
+            .ok_or("for_language_probe returned None unexpectedly")?;
+
+        unsafe { std::env::set_var("PERL5OPT", "-Mstrict") };
+        let mut cmd = oracle.into_command();
+        cmd.args(["-e", "print $ENV{PERL5OPT} // 'UNSET'"]);
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        let out = cmd.output()?;
+        unsafe { std::env::remove_var("PERL5OPT") };
+
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(
+            stdout.trim(),
+            "UNSET",
+            "PERL5OPT must be stripped by for_language_probe; got: {stdout:?}",
+        );
+        Ok(())
+    }
+
+    /// `for_language_probe` strips `PERL5LIB` when `use_perl5lib=false` —
+    /// poisoned-env regression guard for the #8685 seam.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn for_language_probe_strips_perl5lib_when_disabled() -> TestResult {
+        let perl = match perl_path() {
+            Some(p) => p,
+            None => return Ok(()),
+        };
+
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let mut config = WorkspaceConfig::default();
+        config.use_perl5lib = false;
+        config.perl_path = Some(perl.to_string_lossy().into_owned());
+
+        let oracle = PerlOracleEnv::for_language_probe(&config, cwd)
+            .ok_or("for_language_probe returned None unexpectedly")?;
+
+        let poison_dir = tempfile::tempdir()?;
+        let poison_path = poison_dir.path().to_string_lossy().into_owned();
+
+        unsafe { std::env::set_var("PERL5LIB", &poison_path) };
+        let mut cmd = oracle.into_command();
+        cmd.args(["-e", "print $ENV{PERL5LIB} // 'UNSET'"]);
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        let out = cmd.output()?;
+        unsafe { std::env::remove_var("PERL5LIB") };
+
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(
+            stdout.trim(),
+            "UNSET",
+            "PERL5LIB must be stripped when use_perl5lib=false; got: {stdout:?}",
+        );
+        Ok(())
     }
 
     /// `for_startup_inc_probe` maps `config.use_perl5lib` → `allow_perl5lib`.
