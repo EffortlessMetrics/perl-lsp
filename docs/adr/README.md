@@ -28,6 +28,12 @@ Current generated and human-owned status sources include:
 
 ## ADR Index
 
+### PLSP Real Perl Editor Trust Series
+
+| ADR | Status | Date | Title | Description |
+|-----|--------|------|-------|-------------|
+| [PLSP-ADR-0001](PLSP-ADR-0001-generated-status-is-control-plane.md) | Accepted | 2026-05-13 | Generated Status Is Control Plane | Generated status routes parser and editor-trust work, while specs and plans interpret it without duplicating generated content |
+
 ### Legacy Series (0001–0002)
 
 | ADR | Status | Date | Title | Description |
