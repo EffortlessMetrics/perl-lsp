@@ -72,11 +72,13 @@ commands = [
 
 [[work_item]]
 id = "linux-corpus-refresh"
-status = "ready"
+status = "deferred"
 spec = "docs/specs/PLSP-SPEC-0004-corpus-receipt-freshness.md"
 adr = "docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md"
 plan = "plans/real-perl-editor-trust/implementation-plan.md#work-item-linux-corpus-refresh"
 current_pointer = "docs/project/status/parser.md#raw-failure-buckets"
+successor_issue = "https://github.com/EffortlessMetrics/perl-lsp/issues/8863"
+deferred_reason = "Current Windows worktree lacks the Linux system Perl roots required for a system-profile corpus receipt."
 claim_boundary = "May update parser bucket counts only from refreshed generated corpus status."
 commands = [
   "cargo xtask parser-corpus-sweep --baseline .ci/parser-corpus-baseline.json --enforce --receipt",

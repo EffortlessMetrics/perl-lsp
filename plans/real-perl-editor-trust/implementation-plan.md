@@ -391,7 +391,7 @@ status, revert behavior first and leave fixture evidence for follow-up.
 
 ## Work item: linux-corpus-refresh
 
-Status: ready
+Status: deferred on Windows; successor #8863
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked spec: [PLSP-SPEC-0004](../../docs/specs/PLSP-SPEC-0004-corpus-receipt-freshness.md)
 Linked ADR: [PLSP-ADR-0001](../../docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md)
@@ -416,6 +416,13 @@ Acceptance
 
 Corpus sweep completes on Linux, generated parser status is updated through
 tooling, and the PR states bucket-count claims limited to that receipt.
+
+Deferral note
+
+The current Windows worktree does not have the Linux system roots named by the
+stale receipt (`/usr/share/perl`, `/usr/lib/x86_64-linux-gnu/perl`, and
+`/usr/share/perl5`). The refresh is deferred to successor issue #8863 and must
+run on a Linux host before any parser bucket-count movement is claimed.
 
 Proof commands
 
