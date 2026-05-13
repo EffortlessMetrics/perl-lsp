@@ -7,6 +7,10 @@ Provider cutover is intentionally staged. New compiler facts should first be
 fixture-backed, then shadowed or scorecarded, then consumed by a provider with
 fallback behavior and rollback proof.
 
+For a row-per-provider receipt summary with fact source, confidence, freshness,
+fallback, runtime comparison, live state, and next proof, see
+[provider confidence matrix](provider_confidence_matrix.md).
+
 ## Recent Proof
 
 - Fact-source trace receipt wiring is in place through `ProviderFactTrace`
@@ -159,4 +163,6 @@ the relevant receipt command.
 - Compiler facts: [compiler_facts.md](compiler_facts.md)
 - Semantic scorecard: [semantic_scorecard.md](semantic_scorecard.md)
 - Semantic shadow compare: [semantic_shadow_compare.md](semantic_shadow_compare.md)
+- Provider confidence matrix:
+  [provider_confidence_matrix.md](provider_confidence_matrix.md)
 - Real-workspace baseline tracker: [#7949](https://github.com/EffortlessMetrics/perl-lsp/issues/7949)

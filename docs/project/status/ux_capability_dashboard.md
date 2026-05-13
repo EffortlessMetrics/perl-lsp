@@ -33,6 +33,7 @@ Source-of-truth artifacts:
 | Parser accuracy | [parser.md](parser.md) and parser-accuracy artifacts |
 | Semantic facts / readiness | [semantic_capability_dashboard.md](semantic_capability_dashboard.md) and semantic scorecard artifacts |
 | Shadow comparison | semantic shadow-compare receipts |
+| Provider confidence / cutover | [provider_confidence_matrix.md](provider_confidence_matrix.md) and [provider_cutover.md](provider_cutover.md) |
 | UX status | this dashboard, manually maintained from source artifacts |
 
 When a source value changes, update the source artifact first, then refresh
