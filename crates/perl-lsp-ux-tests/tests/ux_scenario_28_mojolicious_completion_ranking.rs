@@ -210,13 +210,6 @@ fn run_probe(harness: &UxHarness, probe: &CompletionProbe) -> Result<CompletionP
         "completion_probe={} useful_hits={:?} top_labels={:?}",
         probe.name, useful_hits, top_labels
     );
-    anyhow::ensure!(
-        !useful_hits.is_empty(),
-        "completion probe {} did not include any expected useful candidates; expected one of {:?}, top labels: {:?}",
-        probe.name,
-        probe.useful_substrings,
-        labels.iter().take(TOP_N).collect::<Vec<_>>()
-    );
     let top_n_noise_count = top_labels
         .iter()
         .filter(|label| !probe.useful_substrings.iter().any(|needle| label.contains(needle)))
@@ -327,28 +320,11 @@ fn scenario_28_mojolicious_visible_symbol_ranking_receipt() {
             for probe in &probes {
                 recorder.mark_request_start(probe.name);
                 let report = run_probe(&harness, probe)?;
-                recorder.mark_first_useful_result(probe.name);
+                if !report.useful_hits.is_empty() {
+                    recorder.mark_first_useful_result(probe.name);
+                }
                 reports.push(report);
             }
-
-            recorder
-                .check("all completion probes produced reports", reports.len() == probes.len())?;
-            recorder.check(
-                "all completion probes returned candidates",
-                reports.iter().all(|report| report.first_count > 0),
-            )?;
-            recorder.check(
-                "all completion probes returned expected useful candidates",
-                reports.iter().all(|report| !report.useful_hits.is_empty()),
-            )?;
-            recorder.check(
-                "repeated completion requests kept candidate counts stable",
-                reports.iter().all(|report| report.candidate_count_delta == 0),
-            )?;
-            recorder.check(
-                "repeated completion requests kept top-N ranking stable",
-                reports.iter().all(|report| report.top_n_churn == 0),
-            )?;
 
             let useful_hit_total: usize =
                 reports.iter().map(|report| report.useful_hits.len()).sum();
@@ -358,6 +334,11 @@ fn scenario_28_mojolicious_visible_symbol_ranking_receipt() {
                 reports.iter().map(|report| report.generated_provenance_label_hits.len()).sum();
             let dynamic_or_fallback_label_total: usize =
                 reports.iter().map(|report| report.dynamic_or_fallback_label_hits.len()).sum();
+            let missing_useful_hit_probes = reports
+                .iter()
+                .filter(|report| report.useful_hits.is_empty())
+                .map(|report| report.name)
+                .collect::<Vec<_>>();
 
             let receipt = serde_json::json!({
                 "schema_version": 1,
@@ -368,6 +349,8 @@ fn scenario_28_mojolicious_visible_symbol_ranking_receipt() {
                 "fixture_file_count": fixture_files.len(),
                 "probe_count": reports.len(),
                 "useful_hit_total": useful_hit_total,
+                "missing_useful_hit_probe_count": missing_useful_hit_probes.len(),
+                "missing_useful_hit_probes": missing_useful_hit_probes,
                 "generated_candidate_total": generated_candidate_total,
                 "generated_provenance_label_total": generated_provenance_label_total,
                 "dynamic_or_fallback_label_total": dynamic_or_fallback_label_total,
@@ -377,6 +360,25 @@ fn scenario_28_mojolicious_visible_symbol_ranking_receipt() {
                 "mojolicious_completion_ranking_receipt={}",
                 serde_json::to_string_pretty(&receipt)?
             );
+
+            recorder
+                .check("all completion probes produced reports", reports.len() == probes.len())?;
+            recorder.check(
+                "all completion probes returned candidates",
+                reports.iter().all(|report| report.first_count > 0),
+            )?;
+            recorder.check(
+                "all completion probes returned expected useful candidates",
+                missing_useful_hit_probes.is_empty(),
+            )?;
+            recorder.check(
+                "repeated completion requests kept candidate counts stable",
+                reports.iter().all(|report| report.candidate_count_delta == 0),
+            )?;
+            recorder.check(
+                "repeated completion requests kept top-N ranking stable",
+                reports.iter().all(|report| report.top_n_churn == 0),
+            )?;
 
             harness.assert_no_crash();
             Ok(())
