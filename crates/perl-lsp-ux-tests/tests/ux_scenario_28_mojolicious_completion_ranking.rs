@@ -206,6 +206,13 @@ fn run_probe(harness: &UxHarness, probe: &CompletionProbe) -> Result<CompletionP
     let second_labels = labels_for(&second);
     let top_labels = labels.iter().take(TOP_N).cloned().collect::<Vec<_>>();
     let useful_hits = matching_labels(&labels, probe.useful_substrings);
+    anyhow::ensure!(
+        !useful_hits.is_empty(),
+        "completion probe {} did not include any expected useful candidates; expected one of {:?}, top labels: {:?}",
+        probe.name,
+        probe.useful_substrings,
+        labels.iter().take(TOP_N).collect::<Vec<_>>()
+    );
     let top_n_noise_count = top_labels
         .iter()
         .filter(|label| !probe.useful_substrings.iter().any(|needle| label.contains(needle)))
@@ -320,8 +327,12 @@ fn scenario_28_mojolicious_visible_symbol_ranking_receipt() {
             recorder
                 .check("all completion probes produced reports", reports.len() == probes.len())?;
             recorder.check(
-                "completion probes returned at least one candidate somewhere",
-                reports.iter().any(|report| report.first_count > 0),
+                "all completion probes returned candidates",
+                reports.iter().all(|report| report.first_count > 0),
+            )?;
+            recorder.check(
+                "all completion probes returned expected useful candidates",
+                reports.iter().all(|report| !report.useful_hits.is_empty()),
             )?;
             recorder.check(
                 "repeated completion requests kept candidate counts stable",
