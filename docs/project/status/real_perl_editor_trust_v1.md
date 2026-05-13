@@ -66,7 +66,7 @@ framework facts, PIR, formatter, critic, release, and security work.
 
 1. `test(hover): add Mojolicious provenance quality receipt`
 2. `test(navigation): add Mojolicious live navigation receipt`
-3. `docs(provider): wire real-workspace receipts into provider confidence matrix`
+3. `docs(provider): wire additional real-workspace receipts into provider confidence matrix`
 4. `feat(document-symbols): enable source-backed compiler document symbols`
 5. `test(workspace-symbols): add real-workspace compiler symbol noise receipt`
 6. `feat(rename): enable lexical rename from ScopeGraph`
