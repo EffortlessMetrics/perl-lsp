@@ -140,11 +140,13 @@ commands = [
 
 [[work_item]]
 id = "lane-closeout"
-status = "ready"
+status = "completed"
 spec = "docs/specs/PLSP-SPEC-0001-parser-compatibility-bucket-closeout.md"
 adr = "docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md"
 plan = "plans/real-perl-editor-trust/implementation-plan.md#work-item-lane-closeout"
 current_pointer = "plans/real-perl-editor-trust/implementation-plan.md"
+receipt = "plans/real-perl-editor-trust/implementation-plan.md#work-item-lane-closeout"
+completed = "2026-05-13"
 claim_boundary = "Close only when deferred items have explicit successors and status/support claims point to proof."
 commands = [
   "cargo xtask update-status --only parser --check",
