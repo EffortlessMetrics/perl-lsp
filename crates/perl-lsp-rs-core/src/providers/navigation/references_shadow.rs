@@ -209,6 +209,62 @@ pub fn find_references_cutover<Q: SemanticQueries>(
     ReferencesCutoverOutcome { result, receipt }
 }
 
+/// Run the first live find-references slice.
+///
+/// This accepts only source-backed, high-confidence `ExactAst` occurrence
+/// references. Imported/exported, generated, dynamic-boundary, low-confidence,
+/// ambiguous, and no-source occurrences stay on the legacy provider path.
+pub fn find_references_live_exact<Q: SemanticQueries>(
+    workspace_index: &WorkspaceIndex,
+    semantic_queries: &Q,
+    symbol: &str,
+    entity_id: EntityId,
+) -> ReferencesCutoverOutcome {
+    let all_occurrences = semantic_queries.references(entity_id);
+    let new_summary = semantic_occurrences_to_summary(&all_occurrences);
+    let legacy_locations = workspace_index.find_references(symbol);
+    let old_summary = legacy_locations_to_summary(&legacy_locations);
+
+    let live_occurrences = if !all_occurrences.is_empty()
+        && all_occurrences
+            .iter()
+            .all(|occurrence| is_live_exact_reference_occurrence(workspace_index, occurrence))
+    {
+        Some(all_occurrences.clone())
+    } else {
+        None
+    };
+
+    let result = match live_occurrences {
+        Some(occurrences) => ReferencesCutoverResult::Exact(occurrences),
+        None => ReferencesCutoverResult::LegacyFallback(legacy_locations),
+    };
+    let fallback_state = references_cutover_fallback_state(&result);
+
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
+        ShadowQueryName::FindReferences,
+        ShadowQueryInput { symbol: symbol.to_string() },
+        old_summary,
+        new_summary,
+        vec![references_live_exact_quality_note(workspace_index, &result, &all_occurrences)],
+        references_fact_source_traces(&all_occurrences, fallback_state),
+    );
+
+    tracing::debug!(
+        symbol = %symbol,
+        entity_id = ?entity_id,
+        verdict = ?receipt.verdict,
+        classification = match &result {
+            ReferencesCutoverResult::Exact(_) => "live_exact",
+            ReferencesCutoverResult::Ambiguous(_) => "ambiguous_unreachable",
+            ReferencesCutoverResult::LegacyFallback(_) => "legacy_fallback",
+        },
+        "find-references live exact cutover"
+    );
+
+    ReferencesCutoverOutcome { result, receipt }
+}
+
 /// Classify filtered occurrences into the cutover result category.
 fn classify_cutover_result(
     usable: Vec<OccurrenceFact>,
@@ -237,6 +293,24 @@ fn references_cutover_fallback_state(result: &ReferencesCutoverResult) -> Provid
         }
         ReferencesCutoverResult::LegacyFallback(_) => ProviderFallbackState::Fallback,
     }
+}
+
+fn is_live_exact_reference_occurrence(
+    workspace_index: &WorkspaceIndex,
+    occurrence: &OccurrenceFact,
+) -> bool {
+    occurrence.confidence == Confidence::High
+        && occurrence.provenance == Provenance::ExactAst
+        && matches!(
+            occurrence.kind,
+            OccurrenceKind::Reference
+                | OccurrenceKind::Read
+                | OccurrenceKind::Write
+                | OccurrenceKind::Call
+                | OccurrenceKind::MethodCall
+                | OccurrenceKind::StaticMethodCall
+        )
+        && workspace_index.semantic_anchor_wire_location(occurrence.anchor_id).is_some()
 }
 
 fn references_fact_source_traces(
@@ -276,6 +350,45 @@ fn references_fact_source_traces(
     }
 
     traces
+}
+
+fn references_live_exact_quality_note(
+    workspace_index: &WorkspaceIndex,
+    result: &ReferencesCutoverResult,
+    occurrences: &[OccurrenceFact],
+) -> String {
+    let live_exact_occurrences = match result {
+        ReferencesCutoverResult::Exact(refs) => refs.len(),
+        ReferencesCutoverResult::Ambiguous(_) | ReferencesCutoverResult::LegacyFallback(_) => 0,
+    };
+    let legacy_fallbacks =
+        usize::from(matches!(result, ReferencesCutoverResult::LegacyFallback(_)));
+    let dynamic_boundary_blockers =
+        occurrences.iter().filter(|occurrence| is_dynamic_boundary_occurrence(occurrence)).count();
+    let generated_no_source_fallbacks = occurrences
+        .iter()
+        .filter(|occurrence| {
+            occurrence.kind == OccurrenceKind::GeneratedUse
+                || workspace_index.semantic_anchor_wire_location(occurrence.anchor_id).is_none()
+        })
+        .count();
+    let low_confidence_fallbacks =
+        occurrences.iter().filter(|occurrence| occurrence.confidence != Confidence::High).count();
+    let import_export_fallbacks = occurrences
+        .iter()
+        .filter(|occurrence| {
+            matches!(
+                occurrence.provenance,
+                Provenance::ImportExportInference | Provenance::LiteralRequireImport
+            )
+        })
+        .count();
+    let ambiguous_fallbacks = usize::from(!occurrences.is_empty() && live_exact_occurrences == 0);
+
+    format!(
+        "references live exact proof: live_exact_occurrences={live_exact_occurrences}; legacy_fallbacks={legacy_fallbacks}; compiler_fact_candidates={}; ambiguous_fallbacks={ambiguous_fallbacks}; import_export_fallbacks={import_export_fallbacks}; generated_no_source_fallbacks={generated_no_source_fallbacks}; dynamic_boundary_blockers={dynamic_boundary_blockers}; low_confidence_fallbacks={low_confidence_fallbacks}; partial live exact/static references cutover",
+        occurrences.len()
+    )
 }
 
 fn references_shadow_quality_note(
@@ -551,6 +664,33 @@ mod tests {
             "use Real::Nav;\nReal::Nav::legacy_helper();\nlegacy_helper();\n".to_string(),
         )?;
         Ok(index)
+    }
+
+    fn source_backed_exact_references()
+    -> Result<(WorkspaceIndex, EntityId, Vec<OccurrenceFact>), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = file_url("/lib/LiveRefs.pm")?;
+        index.index_file(
+            uri.clone(),
+            "package LiveRefs;\nsub target { 1 }\nsub caller {\n    target();\n    LiveRefs::target();\n}\n1;\n"
+                .to_string(),
+        )?;
+
+        let (entity_id, references) = index
+            .with_semantic_queries_for_uri(uri.as_str(), |file_id, queries| {
+                let ctx = QueryContext::new(file_id, None, Some(0));
+                let candidate = queries.definitions("LiveRefs::target", &ctx).into_iter().next()?;
+                let references = queries.references(candidate.entity_id);
+                Some((candidate.entity_id, references))
+            })
+            .flatten()
+            .ok_or("missing source-backed exact references")?;
+
+        if references.is_empty() {
+            return Err("expected at least one source-backed exact reference".into());
+        }
+
+        Ok((index, entity_id, references))
     }
 
     // ── Shadow mode tests ──
@@ -1036,6 +1176,95 @@ mod tests {
                 && trace.confidence == Confidence::Low
                 && trace.fallback_state == ProviderFallbackState::Fallback
         }));
+        Ok(())
+    }
+
+    #[test]
+    fn references_live_exact_accepts_source_backed_exact_ast_occurrences()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (index, entity_id, references) = source_backed_exact_references()?;
+        let queries = StubSemanticQueries { references_result: references.clone() };
+
+        let outcome = find_references_live_exact(&index, &queries, "LiveRefs::target", entity_id);
+
+        assert_eq!(outcome.result, ReferencesCutoverResult::Exact(references.clone()));
+        assert!(
+            references.iter().all(|reference| index
+                .semantic_anchor_wire_location(reference.anchor_id)
+                .is_some())
+        );
+        let note = outcome.receipt.notes.join(" ");
+        assert!(note.contains("live_exact_occurrences="));
+        assert!(note.contains("legacy_fallbacks=0"));
+        assert!(note.contains("partial live exact/static references cutover"));
+        assert!(outcome.receipt.fact_source_traces.iter().all(|trace| {
+            trace.source == ProviderFactSourceKind::SemanticFact
+                && trace.provenance == Provenance::ExactAst
+                && trace.confidence == Confidence::High
+                && trace.freshness == ProviderFactFreshness::Fresh
+                && trace.fallback_state == ProviderFallbackState::Primary
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn references_live_exact_falls_back_for_non_source_backed_occurrence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let occurrence = make_ref_occurrence(1, 10, 20);
+        let queries = StubSemanticQueries { references_result: vec![occurrence] };
+
+        let outcome = find_references_live_exact(&index, &queries, "Foo::bar", EntityId(20));
+
+        assert!(matches!(outcome.result, ReferencesCutoverResult::LegacyFallback(_)));
+        let note = outcome.receipt.notes.join(" ");
+        assert!(note.contains("generated_no_source_fallbacks=1"));
+        let trace = first_trace(&outcome.receipt)?;
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Fallback);
+        Ok(())
+    }
+
+    #[test]
+    fn references_live_exact_falls_back_for_import_export_occurrence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (index, entity_id, references) = source_backed_exact_references()?;
+        let mut imported = references.first().ok_or("missing reference")?.clone();
+        imported.provenance = Provenance::ImportExportInference;
+        let queries = StubSemanticQueries { references_result: vec![imported] };
+
+        let outcome = find_references_live_exact(&index, &queries, "target", entity_id);
+
+        assert!(matches!(outcome.result, ReferencesCutoverResult::LegacyFallback(_)));
+        let note = outcome.receipt.notes.join(" ");
+        assert!(note.contains("import_export_fallbacks=1"));
+        let trace = first_trace(&outcome.receipt)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Fallback);
+        Ok(())
+    }
+
+    #[test]
+    fn references_live_exact_blocks_dynamic_boundary_occurrence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let dynamic = make_occurrence(
+            1,
+            10,
+            20,
+            OccurrenceKind::DynamicBoundary,
+            Provenance::DynamicBoundary,
+            Confidence::High,
+        );
+        let queries = StubSemanticQueries { references_result: vec![dynamic] };
+
+        let outcome = find_references_live_exact(&index, &queries, "Foo::dynamic", EntityId(20));
+
+        assert!(matches!(outcome.result, ReferencesCutoverResult::LegacyFallback(_)));
+        let note = outcome.receipt.notes.join(" ");
+        assert!(note.contains("dynamic_boundary_blockers=1"));
+        let trace = first_trace(&outcome.receipt)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::DynamicBoundary);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Blocked);
         Ok(())
     }
 

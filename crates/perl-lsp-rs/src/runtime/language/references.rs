@@ -15,17 +15,11 @@ use crate::util::{is_word_boundary, token_under_cursor};
 use std::sync::OnceLock;
 use std::time::Instant;
 
-#[cfg(all(
-    feature = "workspace",
-    not(target_arch = "wasm32"),
-    any(test, feature = "expose_lsp_test_api")
-))]
-use perl_lsp_rs_core::providers::navigation::references_shadow::find_references_cutover;
-#[cfg(all(
-    feature = "workspace",
-    not(target_arch = "wasm32"),
-    any(test, feature = "expose_lsp_test_api")
-))]
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+use perl_lsp_rs_core::providers::navigation::references_shadow::{
+    ReferencesCutoverResult, find_references_live_exact,
+};
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
 
 #[cfg(feature = "workspace")]
@@ -100,6 +94,24 @@ impl LspServer {
                             IndexAccessMode::Full(coordinator) => {
                                 let index = coordinator.index();
                                 if let Some(symbol_key) = workspace_symbol_key.as_ref() {
+                                    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+                                    if let Some(mut live_locations) = self
+                                        .live_exact_reference_locations(
+                                            uri,
+                                            symbol_key.name.as_ref(),
+                                            offset,
+                                            include_declaration,
+                                        )
+                                    {
+                                        live_locations.truncate(cap);
+                                        tracing::debug!(
+                                            count = live_locations.len(),
+                                            elapsed = ?start.elapsed(),
+                                            "References: returned live exact compiler facts"
+                                        );
+                                        return Ok(Some(json!(live_locations)));
+                                    }
+
                                     tracing::debug!(key = ?symbol_key, "Looking for references");
 
                                     // Try to find references using the symbol key
@@ -548,6 +560,68 @@ impl LspServer {
         out
     }
 
+    #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+    fn live_exact_reference_locations(
+        &self,
+        uri: &str,
+        symbol: &str,
+        byte_offset: usize,
+        include_declaration: bool,
+    ) -> Option<Vec<Value>> {
+        if include_declaration {
+            return None;
+        }
+
+        let byte_offset = u32::try_from(byte_offset).ok()?;
+        let workspace_index = self.workspace_index()?;
+        let outcome = workspace_index
+            .with_semantic_queries_for_uri(uri, |file_id, queries| {
+                let ctx = QueryContext::new(file_id, None, Some(byte_offset));
+                let entity_id = queries
+                    .symbol_at(file_id, byte_offset)
+                    .and_then(|(_, occurrence)| occurrence.entity_id)
+                    .or_else(|| {
+                        let exact_candidates: Vec<_> = queries
+                            .definitions(symbol, &ctx)
+                            .into_iter()
+                            .filter(|candidate| {
+                                candidate.confidence == perl_semantic_facts::Confidence::High
+                                    && candidate.provenance
+                                        == perl_semantic_facts::Provenance::ExactAst
+                                    && workspace_index
+                                        .semantic_anchor_wire_location(candidate.anchor_id)
+                                        .is_some()
+                            })
+                            .collect();
+                        match exact_candidates.as_slice() {
+                            [candidate] => Some(candidate.entity_id),
+                            _ => None,
+                        }
+                    })?;
+                Some(find_references_live_exact(
+                    workspace_index.as_ref(),
+                    &queries,
+                    symbol,
+                    entity_id,
+                ))
+            })
+            .flatten()?;
+
+        let ReferencesCutoverResult::Exact(occurrences) = outcome.result else {
+            return None;
+        };
+
+        let mut locations = Vec::with_capacity(occurrences.len());
+        for occurrence in occurrences {
+            let wire_location =
+                workspace_index.semantic_anchor_wire_location(occurrence.anchor_id)?;
+            let location: lsp_types::Location = wire_location.into();
+            locations.push(serde_json::to_value(location).ok()?);
+        }
+
+        if locations.is_empty() { None } else { Some(locations) }
+    }
+
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub(crate) fn references_runtime_quality_receipt(
         &self,
@@ -583,6 +657,11 @@ impl LspServer {
 
             let uri = req_uri(&params)?;
             let (line, character) = req_position(&params)?;
+            let include_declaration = if let Some(context) = params.get("context") {
+                context["includeDeclaration"].as_bool().unwrap_or(true)
+            } else {
+                true
+            };
             let Some((symbol, byte_offset)) = self.references_runtime_symbol(uri, line, character)
             else {
                 return Ok(Some(json!({
@@ -595,7 +674,7 @@ impl LspServer {
                 })));
             };
 
-            let compiler_receipt = match route_index_access(self.coordinator()) {
+            let compiler_receipt_and_cutover = match route_index_access(self.coordinator()) {
                 IndexAccessMode::Full(coordinator) => {
                     let index = coordinator.index();
                     index
@@ -610,23 +689,34 @@ impl LspServer {
                                         .first()
                                         .map(|candidate| candidate.entity_id)
                                 })?;
-                            let mut receipt = find_references_cutover(
+                            let outcome = find_references_live_exact(
                                 index.as_ref(),
                                 &queries,
                                 &symbol,
                                 entity_id,
-                            )
-                            .receipt;
+                            );
+                            let live_cutover = !include_declaration
+                                && matches!(outcome.result, ReferencesCutoverResult::Exact(_));
+                            let mut receipt = outcome.receipt;
                             let compiler_result_count = receipt.new_result.match_count;
+                            let behavior_note = if live_cutover {
+                                "partial live exact/static references cutover"
+                            } else {
+                                "legacy fallback"
+                            };
                             receipt.notes.push(format!(
-                                "references runtime proof: live_provider_results={live_provider_count}; compiler_fact_candidates={}; compiler_result_count={}; no live navigation behavior change",
-                                compiler_result_count, compiler_result_count
+                                "references runtime proof: live_provider_results={live_provider_count}; compiler_fact_candidates={}; compiler_result_count={}; {behavior_note}",
+                                compiler_result_count, compiler_result_count,
                             ));
-                            Some(receipt)
+                            Some((receipt, live_cutover))
                         })
                         .flatten()
                 }
                 IndexAccessMode::Partial(_) | IndexAccessMode::None => None,
+            };
+            let (compiler_receipt, live_cutover) = match compiler_receipt_and_cutover {
+                Some((receipt, live_cutover)) => (Some(receipt), live_cutover),
+                None => (None, false),
             };
 
             Ok(Some(json!({
@@ -635,7 +725,12 @@ impl LspServer {
                 "live_provider_result": live_provider_result,
                 "live_provider_count": live_provider_count,
                 "compiler_receipt": compiler_receipt,
-                "no_live_behavior_change": true
+                "no_live_behavior_change": !live_cutover,
+                "live_cutover": if live_cutover {
+                    Some("partial_exact")
+                } else {
+                    None
+                }
             })))
         }
     }
