@@ -11,6 +11,9 @@ This dashboard is **descriptive**, not generative: parser and semantic metrics
 are consumed from existing artifacts (linked below). Updates here record how
 those metrics translate into user-facing capability claims.
 
+For the proof-command support claim map, see
+[SUPPORT_TIERS.md](SUPPORT_TIERS.md).
+
 ## Status vocabulary
 
 | Status | Meaning |
@@ -34,6 +37,7 @@ Source-of-truth artifacts:
 | Semantic facts / readiness | [semantic_capability_dashboard.md](semantic_capability_dashboard.md) and semantic scorecard artifacts |
 | Shadow comparison | semantic shadow-compare receipts |
 | Provider confidence / cutover | [provider_confidence_matrix.md](provider_confidence_matrix.md) and [provider_cutover.md](provider_cutover.md) |
+| Support claim map | [SUPPORT_TIERS.md](SUPPORT_TIERS.md) |
 | UX status | this dashboard, manually maintained from source artifacts |
 
 When a source value changes, update the source artifact first, then refresh

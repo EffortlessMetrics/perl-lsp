@@ -28,6 +28,9 @@ Active goal: [active.toml](../../.perl-lsp/goals/active.toml)
   [semantic scorecard](../../docs/project/status/semantic_scorecard.md),
   [semantic shadow compare](../../docs/project/status/semantic_shadow_compare.md),
   and [UX capability dashboard](../../docs/project/status/ux_capability_dashboard.md).
+- User-facing support claims route through
+  [SUPPORT_TIERS.md](../../docs/project/status/SUPPORT_TIERS.md), which maps
+  claims to proof commands, status docs, limitations, and next promotion proof.
 
 ## Work item: source-of-truth-scaffolding
 
@@ -525,7 +528,7 @@ provider shadowed or blocked and file a narrow follow-up.
 
 ## Work item: support-claim-refresh
 
-Status: ready
+Status: completed; PR #8855
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked spec: [PLSP-SPEC-0002](../../docs/specs/PLSP-SPEC-0002-provider-confidence-receipts.md), [PLSP-SPEC-0003](../../docs/specs/PLSP-SPEC-0003-real-workspace-editor-baseline.md), [PLSP-SPEC-0004](../../docs/specs/PLSP-SPEC-0004-corpus-receipt-freshness.md)
 Linked ADR: [PLSP-ADR-0001](../../docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md), [PLSP-ADR-0002](../../docs/adr/PLSP-ADR-0002-confidence-before-cutover.md)
@@ -539,8 +542,11 @@ limitations, and next promotion proof.
 
 Production delta
 
-Users and release reviewers can see which parser/provider claims are supported
-and which remain bounded.
+Added [SUPPORT_TIERS.md](../../docs/project/status/SUPPORT_TIERS.md), a
+user-facing claim map for parser compatibility, module resolution, provider
+surfaces, DAP subprocess seams, and real-workspace receipts. Each row links the
+allowed claim to proof commands, status docs, known limitations, and next
+promotion proof.
 
 Non-goals
 

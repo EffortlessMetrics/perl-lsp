@@ -46,6 +46,7 @@ status_docs = [
   "docs/project/status/parser.md",
   "docs/project/status/provider_cutover.md",
   "docs/project/status/provider_confidence_matrix.md",
+  "docs/project/status/SUPPORT_TIERS.md",
   "docs/project/status/ux_capability_dashboard.md",
   "docs/project/status/semantic_scorecard.md",
   "docs/project/status/semantic_shadow_compare.md",
@@ -121,11 +122,12 @@ commands = [
 
 [[work_item]]
 id = "support-claim-refresh"
-status = "ready"
+status = "completed"
 spec = "docs/specs/PLSP-SPEC-0002-provider-confidence-receipts.md"
 adr = "docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md"
 plan = "plans/real-perl-editor-trust/implementation-plan.md#work-item-support-claim-refresh"
 current_pointer = "docs/project/status/ux_capability_dashboard.md"
+receipt = "docs/project/status/SUPPORT_TIERS.md"
 claim_boundary = "Support claims must link to proof commands, status docs, known limitations, and next promotion proof."
 commands = [
   "cargo xtask update-status --only parser --check",
