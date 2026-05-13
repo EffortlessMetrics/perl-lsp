@@ -116,6 +116,7 @@ Shape:
 Representative locked tests:
 
 - `extutils_mm_unix_hash_slice_map_lc_keys_assignment`
+- `extutils_mm_unix_attrs_join_map_qq_hash_lookup`
 - `unicode_collate_hst_join_map_split_expr`
 - `unicode_collate_unpack_u_coderef_map_expr`
 - `extutils_mm_unix_grep_parens_over_map_arrayref_default`
