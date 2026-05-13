@@ -347,8 +347,17 @@ impl PerlOracleEnv {
 #[allow(unsafe_code)] // required for std::env::set_var/remove_var in Rust 2024 (unsafe fn)
 mod tests {
     use super::*;
+    use std::sync::{LazyLock, Mutex, MutexGuard};
 
-    type TestResult = Result<(), Box<dyn std::error::Error>>;
+    type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
+
+    static ENV_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    fn env_lock() -> TestResult<MutexGuard<'static, ()>> {
+        ENV_MUTEX
+            .lock()
+            .map_err(|_| std::io::Error::other("perl oracle env test mutex poisoned").into())
+    }
 
     /// Helper: build a minimal `PerlOracleEnv` for unit tests that don't
     /// need a real Perl binary.
@@ -438,6 +447,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn for_language_probe_strips_perl5opt() -> TestResult {
+        let _env_guard = env_lock()?;
         let perl = match perl_path() {
             Some(p) => p,
             None => return Ok(()),
@@ -472,6 +482,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn for_language_probe_strips_perl5lib_when_disabled() -> TestResult {
+        let _env_guard = env_lock()?;
         let perl = match perl_path() {
             Some(p) => p,
             None => return Ok(()),
@@ -531,6 +542,7 @@ mod tests {
     /// regression guard for the #8493 incident.
     #[test]
     fn for_startup_inc_probe_strips_when_use_perl5lib_false() -> TestResult {
+        let _env_guard = env_lock()?;
         let perl = match perl_path() {
             Some(p) => p,
             None => return Ok(()), // no perl — skip
@@ -580,6 +592,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn perl_oracle_env_strips_perl5lib_by_default() -> TestResult {
+        let _env_guard = env_lock()?;
         let perl = match perl_path() {
             Some(p) => p,
             None => return Ok(()),
@@ -612,6 +625,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn perl_oracle_env_allows_perl5lib_when_opted_in() -> TestResult {
+        let _env_guard = env_lock()?;
         let perl = match perl_path() {
             Some(p) => p,
             None => return Ok(()),
@@ -643,6 +657,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn perl_oracle_env_strips_perl5opt() -> TestResult {
+        let _env_guard = env_lock()?;
         let perl = match perl_path() {
             Some(p) => p,
             None => return Ok(()),
@@ -672,6 +687,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn perl_oracle_env_strips_home() -> TestResult {
+        let _env_guard = env_lock()?;
         let perl = match perl_path() {
             Some(p) => p,
             None => return Ok(()),
@@ -703,6 +719,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn perl_oracle_env_strips_local_lib() -> TestResult {
+        let _env_guard = env_lock()?;
         let perl = match perl_path() {
             Some(p) => p,
             None => return Ok(()),
@@ -761,6 +778,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn for_version_probe_strips_poisoned_env() -> TestResult {
+        let _env_guard = env_lock()?;
         let perl = match perl_path() {
             Some(p) => p,
             None => return Ok(()),
