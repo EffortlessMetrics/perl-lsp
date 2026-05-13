@@ -563,6 +563,15 @@ fn unicode_collate_varce_return_map_expr() {
 }
 
 #[test]
+fn unicode_collate_gmatch_substr_return_map_expr() {
+    // From Unicode::Collate: return may use map EXPR, LIST where the mapped
+    // expression is a builtin call and the source list is a method call.
+    assert_clean_parse(
+        r#"return map substr($str, $_->[0], $_->[1]), $self->index($str, $sub, 0, 'g');"#,
+    );
+}
+
+#[test]
 fn regexp_common_comment_combine_parenthesized_map_args() {
     // From Regexp::Common::comment: unary plus before a parenthesized map block
     // in a comma-separated argument list must not leave `combine` waiting for a `)`.
