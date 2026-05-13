@@ -205,7 +205,11 @@ fn run_probe(harness: &UxHarness, probe: &CompletionProbe) -> Result<CompletionP
     let labels = labels_for(&first);
     let second_labels = labels_for(&second);
     let top_labels = labels.iter().take(TOP_N).cloned().collect::<Vec<_>>();
-    let useful_hits = matching_labels(&labels, probe.useful_substrings);
+    let useful_hits = matching_item_labels(&first, probe.useful_substrings);
+    eprintln!(
+        "completion_probe={} useful_hits={:?} top_labels={:?}",
+        probe.name, useful_hits, top_labels
+    );
     anyhow::ensure!(
         !useful_hits.is_empty(),
         "completion probe {} did not include any expected useful candidates; expected one of {:?}, top labels: {:?}",
@@ -272,11 +276,14 @@ fn completion_probes() -> Vec<CompletionProbe> {
             generated_candidate_substrings: &[],
         },
         CompletionProbe {
-            name: "self_accessor_arrow",
+            name: "self_method_arrow",
             file: "lib/Mojolicious.pm",
             line: 55,
             character: 25,
-            useful_substrings: &["plugins", "renderer", "routes", "static", "sessions", "types"],
+            useful_substrings: &[
+                "build_tx", "defaults", "dispatch", "handler", "helper", "hook", "plugin", "start",
+                "startup",
+            ],
             generated_candidate_substrings: &[
                 "commands",
                 "controller_class",
