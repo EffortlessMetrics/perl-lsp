@@ -153,9 +153,27 @@ Keep these out of the first map/grep/sort grammar repair. They are adjacent
 but they do not share the same list-operator boundary as the repeated map/grep
 fixture train.
 
+## Boundary Receipts
+
+PR #8881 added AST-level boundary receipts in
+`crates/perl-parser-core/tests/list_operator_boundary_receipts.rs`. These tests
+prove that the current parser keeps representative source operands inside the
+intended call tree for:
+
+- DBI-style `map -> grep -> keys`
+- ExtUtils-style `join -> map -> sort -> keys`
+- Unicode::Collate-style `join -> map -> split`
+
+These receipts are stronger than clean-parse fixtures because they assert the
+shape of the parsed call tree, not only the absence of `Error` or `Missing*`
+nodes. They still do not prove current corpus movement or bucket-count
+reduction; that requires the Linux corpus refresh tracked by #8863.
+
 ## Recommended Next Parser PR
 
-Start with the list-operator boundary repair:
+Do not start a runtime repair from this stale bucket note alone. Start the
+list-operator boundary repair only when current evidence supplies a failing
+source-backed case:
 
 ```text
 fix(parser): repair repeated map/grep/sort expression boundary
@@ -165,11 +183,19 @@ Scope:
 
 - one parser behavior change
 - existing `unclosed_paren_identifier_tests` fixtures as the safety net
+- `list_operator_boundary_receipts` as the AST-shape safety net
 - no generated status hand edits
 - no bucket-count movement claim without the Linux corpus refresh
 
-Fixture-only PRs should continue only when a new real-Perl source shape is not
-covered by the existing groups above.
+Valid starting evidence:
+
+- a refreshed Linux receipt shows a current list-operator boundary failure; or
+- a focused, source-backed fixture reproduces a boundary failure against the
+  current parser.
+
+Otherwise, the next bucket-count action is #8863. Fixture-only PRs should
+continue only when a new real-Perl source shape is not covered by the existing
+groups above.
 
 ## Verification
 
@@ -177,6 +203,7 @@ For this analysis note:
 
 ```bash
 cargo test -p perl-parser-core --test unclosed_paren_identifier_tests --profile agent --locked -- --nocapture
+cargo test -p perl-parser-core --test list_operator_boundary_receipts --profile agent --locked -- --nocapture
 cargo xtask metrics parser-accuracy --check
 cargo xtask update-status --only parser --check
 cargo xtask metrics ratchet-check parser_accuracy
