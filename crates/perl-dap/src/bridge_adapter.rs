@@ -31,6 +31,8 @@ use anyhow::{Context, Result};
 use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
+use perl_lsp_rs_core::config::PerlOracleEnv;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 use tokio::io::AsyncWriteExt;
@@ -44,6 +46,23 @@ const PROXY_EXIT_POLL_MS: u64 = 25;
 /// Perl debugger flag to activate DAP protocol mode in Perl::LanguageServer
 const PLS_DAP_FLAG: &str = "-d:LanguageServer::DAP";
 
+/// Environment passthrough policy for the Perl::LanguageServer DAP bridge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct DapBridgeEnvConfig {
+    /// Pass parent `PERL5LIB` through to the bridged Perl process.
+    pub perl5lib_passthrough: bool,
+    /// Pass parent `PERL5OPT` through to the bridged Perl process.
+    pub perl5opt_passthrough: bool,
+}
+
+impl DapBridgeEnvConfig {
+    /// Create an explicit bridge environment policy.
+    pub const fn new(perl5lib_passthrough: bool, perl5opt_passthrough: bool) -> Self {
+        Self { perl5lib_passthrough, perl5opt_passthrough }
+    }
+}
+
 /// Bridge adapter that proxies DAP messages to Perl::LanguageServer
 ///
 /// This adapter spawns Perl::LanguageServer in DAP mode and forwards
@@ -51,6 +70,8 @@ const PLS_DAP_FLAG: &str = "-d:LanguageServer::DAP";
 pub struct BridgeAdapter {
     /// The spawned Perl::LanguageServer process
     child_process: Option<Child>,
+    /// Env passthrough policy for the bridge subprocess.
+    env_config: DapBridgeEnvConfig,
 }
 
 impl BridgeAdapter {
@@ -64,7 +85,12 @@ impl BridgeAdapter {
     /// let adapter = BridgeAdapter::new();
     /// ```
     pub fn new() -> Self {
-        Self { child_process: None }
+        Self::with_env_config(DapBridgeEnvConfig::default())
+    }
+
+    /// Create a bridge adapter with an explicit subprocess environment policy.
+    pub fn with_env_config(env_config: DapBridgeEnvConfig) -> Self {
+        Self { child_process: None, env_config }
     }
 
     /// Spawn Perl::LanguageServer in DAP mode
@@ -102,7 +128,8 @@ impl BridgeAdapter {
             crate::platform::resolve_perl_path().context("Failed to find perl binary on PATH")?;
 
         // Spawn Perl::LanguageServer in DAP mode
-        let child = Command::new(perl_path)
+        let child = self
+            .build_pls_dap_command(perl_path)
             .arg(PLS_DAP_FLAG)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -121,6 +148,19 @@ impl BridgeAdapter {
 
         self.child_process = Some(child);
         Ok(())
+    }
+
+    fn build_pls_dap_command(&self, perl_path: PathBuf) -> Command {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let oracle = PerlOracleEnv::for_dap_bridge(
+            perl_path,
+            cwd,
+            self.env_config.perl5lib_passthrough,
+            self.env_config.perl5opt_passthrough,
+        );
+        let mut command = Command::new(&oracle.perl_binary);
+        oracle.configure_command(command.as_std_mut());
+        command
     }
 
     /// Proxy messages between VS Code and Perl::LanguageServer
@@ -337,8 +377,9 @@ impl Drop for BridgeAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::BridgeAdapter;
+    use super::{BridgeAdapter, DapBridgeEnvConfig};
     use anyhow::Result;
+    use std::path::PathBuf;
     use std::process::Stdio;
     use std::time::Duration;
     use tokio::process::Command;
@@ -391,6 +432,41 @@ mod tests {
         }
     }
 
+    #[test]
+    fn bridge_env_config_defaults_to_deny_ambient_perl_env() {
+        let adapter = BridgeAdapter::new();
+        let command = adapter.build_pls_dap_command(PathBuf::from("perl"));
+        let envs: Vec<_> = command.as_std().get_envs().collect();
+
+        assert!(
+            envs.iter().all(|(key, _)| *key != "PERL5LIB"),
+            "default bridge config must not pass PERL5LIB"
+        );
+        assert!(
+            envs.iter().all(|(key, _)| *key != "PERL5OPT"),
+            "default bridge config must not pass PERL5OPT"
+        );
+        assert!(
+            command.as_std().get_current_dir().is_some(),
+            "bridge command should set cwd explicitly"
+        );
+    }
+
+    #[test]
+    fn bridge_env_config_allows_debug_passthrough_when_opted_in() {
+        let adapter = BridgeAdapter::with_env_config(DapBridgeEnvConfig::new(true, true));
+        let oracle = perl_lsp_rs_core::config::PerlOracleEnv::for_dap_bridge(
+            PathBuf::from("perl"),
+            PathBuf::from("."),
+            adapter.env_config.perl5lib_passthrough,
+            adapter.env_config.perl5opt_passthrough,
+        );
+
+        assert!(oracle.allow_perl5lib, "opt-in bridge config should allow PERL5LIB");
+        assert!(oracle.allow_perl5opt, "opt-in bridge config should allow PERL5OPT");
+        assert!(!oracle.allow_local_lib, "bridge config should not widen local::lib");
+    }
+
     async fn process_is_running(pid: u32) -> Result<bool> {
         #[cfg(unix)]
         {
@@ -406,13 +482,15 @@ mod tests {
 
         #[cfg(windows)]
         {
-            let output = Command::new("cmd")
-                .arg("/C")
-                .arg(format!("tasklist /FI \"PID eq {pid}\" /NH"))
+            let output = Command::new("tasklist")
+                .arg("/FI")
+                .arg(format!("PID eq {pid}"))
+                .arg("/NH")
                 .output()
                 .await?;
             if !output.status.success() {
-                anyhow::bail!("tasklist failed while checking child process {pid}");
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                anyhow::bail!("tasklist failed while checking child process {pid}: {stderr}");
             }
             Ok(String::from_utf8_lossy(&output.stdout).contains(&pid.to_string()))
         }
