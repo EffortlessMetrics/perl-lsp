@@ -79,6 +79,27 @@ fallback behavior and rollback proof.
 - Other provider surfaces remain trace/proof infrastructure only until their
   own cutover proof lands.
 
+## Navigation Live Quality Dashboard
+
+Definition and references now have a narrow live loop for source-backed,
+high-confidence facts. This dashboard is the guardrail before broadening
+navigation to generated, dynamic, or lower-confidence candidates.
+
+The source of truth for current receipt counts remains
+[semantic_shadow_compare.md](semantic_shadow_compare.md); this table records
+which navigation slices are live, fallback-only, or blocked.
+
+| Slice | Live status | Receipt source | Fallback / blocker rule |
+| --- | --- | --- | --- |
+| `definition_exact_live` | `partial live` | [#8803](https://github.com/EffortlessMetrics/perl-lsp/issues/8803), [#8462](https://github.com/EffortlessMetrics/perl-lsp/issues/8462), `FindDefinition` release-readiness receipts | Single fresh, high-confidence, source-backed `ExactAst` candidate may answer live; otherwise legacy fallback. |
+| `definition_imported_live` | `partial live` | [#8803](https://github.com/EffortlessMetrics/perl-lsp/issues/8803), [#8462](https://github.com/EffortlessMetrics/perl-lsp/issues/8462), `FindDefinition` import/export receipts | Single fresh, high-confidence explicit import, default export, or export-tag candidate may answer live; ambiguous or stale import facts fall back. |
+| `references_exact_live` | `partial live` | [#8828](https://github.com/EffortlessMetrics/perl-lsp/issues/8828), [#8462](https://github.com/EffortlessMetrics/perl-lsp/issues/8462), `FindReferences` release-readiness receipts | Fresh, high-confidence, source-backed exact occurrences may answer live when declaration inclusion is off. |
+| `references_imported_live` | `partial live` | [#8836](https://github.com/EffortlessMetrics/perl-lsp/issues/8836), [#8462](https://github.com/EffortlessMetrics/perl-lsp/issues/8462), `FindReferences` import/export receipts | Fresh, high-confidence, source-backed `ImportExportInference` or `LiteralRequireImport` occurrences may answer live when declaration inclusion is off. |
+| `generated_fallback` | `fallback / shadow` | Framework-generated `FindDefinition` and `FindReferences` traces | Generated or virtual members without exact source ranges stay labeled fallback/shadow data. |
+| `dynamic_blocked` | `blocked / fallback` | Dynamic-boundary navigation traces | Dynamic-boundary candidates block compiler-backed navigation and keep legacy fallback. |
+| `stale_blocked` | `blocked / fallback` | Stale-fact navigation traces | Stale compiler facts cannot answer as confirmed live navigation results. |
+| `ambiguous_or_low_confidence_fallback` | `fallback / shadow` | Low-confidence and ambiguous navigation traces | Low-confidence or ambiguous candidates may inform receipts but cannot drive live navigation. |
+
 ## State Definitions
 
 Provider states are acceptance tiers, not release labels. A provider can move to
@@ -102,8 +123,8 @@ the relevant receipt command.
 | Diagnostics | `partial live` | Existing semantic queries suppress selected dynamic false positives, plus high-confidence imported/generated visible-symbol facts; fallback diagnostics remain available | Broader false-positive / false-negative fixture receipts before any additional diagnostic families move live |
 | Completion | `partial live / shadowed` | Existing completion paths remain live; high-confidence imported/exported compiler visible-symbol facts can contribute live candidates with legacy fallback; semantic-shadow fixtures still trace generated labels, rank deltas, and dynamic-boundary blockers without promoting those families | Ranking stability and real-workspace candidate quality before any broader live cutover |
 | Hover | `partial live / provenance-backed` | Runtime hover uses compiler-fact cutover for traced compiler fact, framework-adapter, and dynamic-boundary paths when fresh workspace facts are available; legacy hover remains fallback; hover cutover/shadow code labels imported, generated, dynamic-boundary, and fallback paths with fact-source traces and source/confidence text | Real-workspace hover quality receipts before broader generated/dynamic expansion |
-| Definition / goto | `partial live / ranked-shadowed` | A single fresh, high-confidence, source-backed `ExactAst`, explicit import, default export, or export-tag candidate can drive live `textDocument/definition` with legacy fallback. Generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and broader real-workspace candidates remain traced as fallback/shadow proof. | Navigation quality dashboard before broader generated/dynamic migration |
-| References | `partial live / ranked-shadowed` | Fresh, high-confidence, source-backed `ExactAst`, `ImportExportInference`, or `LiteralRequireImport` occurrence references can drive live `textDocument/references` when `includeDeclaration=false`; generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and declaration-including requests remain traced as fallback/shadow proof. | Navigation quality dashboard before broader references migration |
+| Definition / goto | `partial live / ranked-shadowed` | A single fresh, high-confidence, source-backed `ExactAst`, explicit import, default export, or export-tag candidate can drive live `textDocument/definition` with legacy fallback. Generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and broader real-workspace candidates remain traced as fallback/shadow proof. | Broader generated/dynamic migration requires fresh navigation quality receipts and no false-exact source-location claims |
+| References | `partial live / ranked-shadowed` | Fresh, high-confidence, source-backed `ExactAst`, `ImportExportInference`, or `LiteralRequireImport` occurrence references can drive live `textDocument/references` when `includeDeclaration=false`; generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and declaration-including requests remain traced as fallback/shadow proof. | Broader references migration requires precision/recall receipts for generated, coderef, typeglob, and declaration-including cases |
 | Rename | `boundary-shadowed` | Rename plan receipts trace exact static edits, dynamic-boundary blockers, stale compiler facts, low-confidence ambiguity, runtime blocker UX notes, and live-vs-compiler exact-static receipt data before any live compiler-backed refactor behavior | Real-workspace unsafe-edit receipts and a narrow lexical/package rename live-cutover proof before any broader refactor migration |
 | Safe delete | `boundary-shadowed` | Safe-delete receipts trace exact static allow decisions, dynamic-boundary blockers, framework-generated blockers, stale compiler facts, runtime blocker UX notes, and live-vs-compiler exact-static receipt data before any live compiler-backed refactor behavior | Real-workspace unsafe-delete receipts and explicit blocker UX in live safe-delete surfaces before any broader refactor migration |
 | Workspace symbols | `shadowed` | Existing workspace index remains the live provider source; semantic-shadow fixtures trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates; runtime quality receipts capture live provider counts/results without changing live behavior | Real-workspace workspace-symbol quality receipts ([#8378](https://github.com/EffortlessMetrics/perl-lsp/issues/8378)) before any live cutover |
