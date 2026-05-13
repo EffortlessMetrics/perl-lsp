@@ -213,7 +213,10 @@ fn navigation_runtime_quality_references_receipt_compares_live_and_compiler_path
         runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
         Some(false)
     );
-    assert_eq!(runtime_receipt.get("live_cutover").and_then(Value::as_str), Some("partial_exact"));
+    assert_eq!(
+        runtime_receipt.get("live_cutover").and_then(Value::as_str),
+        Some("partial_exact_imported")
+    );
     assert_eq!(
         runtime_receipt.get("live_provider_count").and_then(Value::as_u64),
         Some(u64::try_from(location_count(live_result.as_ref()))?)
@@ -233,7 +236,7 @@ fn navigation_runtime_quality_references_receipt_compares_live_and_compiler_path
         notes.iter().any(|note| note.contains("references runtime proof"))
             && notes
                 .iter()
-                .any(|note| note.contains("partial live exact/static references cutover")),
+                .any(|note| note.contains("partial live exact/imported references cutover")),
         "references receipt notes must record runtime proof and partial live cutover: {notes:?}"
     );
 

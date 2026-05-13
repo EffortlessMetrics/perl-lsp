@@ -17,7 +17,7 @@ use std::time::Instant;
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use perl_lsp_rs_core::providers::navigation::references_shadow::{
-    ReferencesCutoverResult, find_references_live_exact,
+    ReferencesCutoverResult, find_references_live_source_backed,
 };
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use perl_workspace::semantic::queries::{QueryContext, SemanticQueries};
@@ -96,7 +96,7 @@ impl LspServer {
                                 if let Some(symbol_key) = workspace_symbol_key.as_ref() {
                                     #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
                                     if let Some(mut live_locations) = self
-                                        .live_exact_reference_locations(
+                                        .live_source_backed_reference_locations(
                                             uri,
                                             symbol_key.name.as_ref(),
                                             offset,
@@ -107,7 +107,7 @@ impl LspServer {
                                         tracing::debug!(
                                             count = live_locations.len(),
                                             elapsed = ?start.elapsed(),
-                                            "References: returned live exact compiler facts"
+                                            "References: returned live source-backed compiler facts"
                                         );
                                         return Ok(Some(json!(live_locations)));
                                     }
@@ -561,7 +561,7 @@ impl LspServer {
     }
 
     #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
-    fn live_exact_reference_locations(
+    fn live_source_backed_reference_locations(
         &self,
         uri: &str,
         symbol: &str,
@@ -586,8 +586,12 @@ impl LspServer {
                             .into_iter()
                             .filter(|candidate| {
                                 candidate.confidence == perl_semantic_facts::Confidence::High
-                                    && candidate.provenance
-                                        == perl_semantic_facts::Provenance::ExactAst
+                                    && matches!(
+                                        candidate.provenance,
+                                        perl_semantic_facts::Provenance::ExactAst
+                                            | perl_semantic_facts::Provenance::ImportExportInference
+                                            | perl_semantic_facts::Provenance::LiteralRequireImport
+                                    )
                                     && workspace_index
                                         .semantic_anchor_wire_location(candidate.anchor_id)
                                         .is_some()
@@ -598,7 +602,7 @@ impl LspServer {
                             _ => None,
                         }
                     })?;
-                Some(find_references_live_exact(
+                Some(find_references_live_source_backed(
                     workspace_index.as_ref(),
                     &queries,
                     symbol,
@@ -689,7 +693,7 @@ impl LspServer {
                                         .first()
                                         .map(|candidate| candidate.entity_id)
                                 })?;
-                            let outcome = find_references_live_exact(
+                            let outcome = find_references_live_source_backed(
                                 index.as_ref(),
                                 &queries,
                                 &symbol,
@@ -700,7 +704,7 @@ impl LspServer {
                             let mut receipt = outcome.receipt;
                             let compiler_result_count = receipt.new_result.match_count;
                             let behavior_note = if live_cutover {
-                                "partial live exact/static references cutover"
+                                "partial live exact/imported references cutover"
                             } else {
                                 "legacy fallback"
                             };
@@ -727,7 +731,7 @@ impl LspServer {
                 "compiler_receipt": compiler_receipt,
                 "no_live_behavior_change": !live_cutover,
                 "live_cutover": if live_cutover {
-                    Some("partial_exact")
+                    Some("partial_exact_imported")
                 } else {
                     None
                 }

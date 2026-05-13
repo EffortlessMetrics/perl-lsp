@@ -22,11 +22,12 @@ fallback behavior and rollback proof.
   export, or export-tag candidate can drive `textDocument/definition`;
   generated/no-source, dynamic, stale, low-confidence, and ambiguous candidates
   retain legacy fallback.
-- References now have a narrow live exact/static runtime slice: fresh,
-  high-confidence, source-backed `ExactAst` occurrence references can drive
-  `textDocument/references` when declaration inclusion is off; imported/exported,
-  generated/no-source, dynamic, stale, low-confidence, ambiguous, and
-  declaration-including requests retain legacy fallback.
+- References now have a narrow live source-backed runtime slice: fresh,
+  high-confidence, source-backed `ExactAst`, `ImportExportInference`, or
+  `LiteralRequireImport` occurrence references can drive
+  `textDocument/references` when declaration inclusion is off; generated/no-source,
+  dynamic, stale, low-confidence, ambiguous, and declaration-including requests
+  retain legacy fallback.
 - Completion shadow proof now records compiler visible-symbol candidate deltas,
   generated-member labels, and dynamic-boundary blockers. A narrow live
   completion slice promotes only high-confidence imported/exported
@@ -101,8 +102,8 @@ the relevant receipt command.
 | Diagnostics | `partial live` | Existing semantic queries suppress selected dynamic false positives, plus high-confidence imported/generated visible-symbol facts; fallback diagnostics remain available | Broader false-positive / false-negative fixture receipts before any additional diagnostic families move live |
 | Completion | `partial live / shadowed` | Existing completion paths remain live; high-confidence imported/exported compiler visible-symbol facts can contribute live candidates with legacy fallback; semantic-shadow fixtures still trace generated labels, rank deltas, and dynamic-boundary blockers without promoting those families | Ranking stability and real-workspace candidate quality before any broader live cutover |
 | Hover | `partial live / provenance-backed` | Runtime hover uses compiler-fact cutover for traced compiler fact, framework-adapter, and dynamic-boundary paths when fresh workspace facts are available; legacy hover remains fallback; hover cutover/shadow code labels imported, generated, dynamic-boundary, and fallback paths with fact-source traces and source/confidence text | Real-workspace hover quality receipts before broader generated/dynamic expansion |
-| Definition / goto | `partial live / ranked-shadowed` | A single fresh, high-confidence, source-backed `ExactAst`, explicit import, default export, or export-tag candidate can drive live `textDocument/definition` with legacy fallback. Generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and broader real-workspace candidates remain traced as fallback/shadow proof. | Imported/exported reference occurrence live slice before any broader navigation migration |
-| References | `partial live / ranked-shadowed` | Fresh, high-confidence, source-backed `ExactAst` occurrence references can drive live `textDocument/references` when `includeDeclaration=false`; imported/exported, generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and declaration-including requests remain traced as fallback/shadow proof. | Imported/exported high-confidence occurrence proof before any broader references migration |
+| Definition / goto | `partial live / ranked-shadowed` | A single fresh, high-confidence, source-backed `ExactAst`, explicit import, default export, or export-tag candidate can drive live `textDocument/definition` with legacy fallback. Generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and broader real-workspace candidates remain traced as fallback/shadow proof. | Navigation quality dashboard before broader generated/dynamic migration |
+| References | `partial live / ranked-shadowed` | Fresh, high-confidence, source-backed `ExactAst`, `ImportExportInference`, or `LiteralRequireImport` occurrence references can drive live `textDocument/references` when `includeDeclaration=false`; generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and declaration-including requests remain traced as fallback/shadow proof. | Navigation quality dashboard before broader references migration |
 | Rename | `boundary-shadowed` | Rename plan receipts trace exact static edits, dynamic-boundary blockers, stale compiler facts, low-confidence ambiguity, runtime blocker UX notes, and live-vs-compiler exact-static receipt data before any live compiler-backed refactor behavior | Real-workspace unsafe-edit receipts and a narrow lexical/package rename live-cutover proof before any broader refactor migration |
 | Safe delete | `boundary-shadowed` | Safe-delete receipts trace exact static allow decisions, dynamic-boundary blockers, framework-generated blockers, stale compiler facts, runtime blocker UX notes, and live-vs-compiler exact-static receipt data before any live compiler-backed refactor behavior | Real-workspace unsafe-delete receipts and explicit blocker UX in live safe-delete surfaces before any broader refactor migration |
 | Workspace symbols | `shadowed` | Existing workspace index remains the live provider source; semantic-shadow fixtures trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates; runtime quality receipts capture live provider counts/results without changing live behavior | Real-workspace workspace-symbol quality receipts ([#8378](https://github.com/EffortlessMetrics/perl-lsp/issues/8378)) before any live cutover |
@@ -127,6 +128,7 @@ the relevant receipt command.
 - Definition/reference runtime integration and live-provider quality receipts: [#8462](https://github.com/EffortlessMetrics/perl-lsp/issues/8462)
 - Definition exact/imported live cutover lane: [#8803](https://github.com/EffortlessMetrics/perl-lsp/issues/8803)
 - References exact/static live cutover lane: [#8828](https://github.com/EffortlessMetrics/perl-lsp/issues/8828)
+- References imported/exported live cutover lane: [#8836](https://github.com/EffortlessMetrics/perl-lsp/issues/8836)
 - Rename/safe-delete runtime blocker UX receipts: [#8464](https://github.com/EffortlessMetrics/perl-lsp/issues/8464)
 - Workspace-symbol source/freshness proof: [#8353](https://github.com/EffortlessMetrics/perl-lsp/issues/8353)
 - Workspace-symbol real-workspace quality receipt: [#8378](https://github.com/EffortlessMetrics/perl-lsp/issues/8378)
