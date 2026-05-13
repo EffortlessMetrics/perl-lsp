@@ -597,6 +597,17 @@ fn dbi_registry_map_block_over_grep_block() {
 }
 
 #[test]
+fn extutils_mm_unix_bootstrap_join_interpolated_map() {
+    // From ExtUtils::MM_Unix: a return join list may contain an interpolated
+    // map block in one string and a separate adjacent map block item.
+    assert_clean_parse(
+        r#"return join "\n",
+        "BOOTSTRAP = @{[map { qq{$_.bs} } @exts]}\n",
+        map { $self->_xs_make_bs($_) } @exts;"#,
+    );
+}
+
+#[test]
 fn regexp_common_comment_combine_parenthesized_map_args() {
     // From Regexp::Common::comment: unary plus before a parenthesized map block
     // in a comma-separated argument list must not leave `combine` waiting for a `)`.
