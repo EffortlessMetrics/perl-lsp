@@ -1,40 +1,39 @@
 {
-  "schema_version": 1,
-  "measured_at": "2026-04-28T00:00:00Z",
-  "commit": "5c89a9371",
+  "commit": "733ad1aed",
+  "measured_at": "2026-05-13T11:17:08Z",
   "projects": {
-    "mojolicious": {
-      "file_count": 13,
+    "catalyst": {
+      "file_count": null,
       "metrics": {
         "cold_start_to_hover": {
-          "p50_ms": 463,
-          "p95_ms": 978,
-          "p99_ms": 978,
-          "samples": 10
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
         },
         "first_completion": {
-          "p50_ms": 0,
-          "p95_ms": 1,
-          "p99_ms": 1,
-          "samples": 10
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
         },
         "first_goto_definition": {
-          "p50_ms": 0,
-          "p95_ms": 3,
-          "p99_ms": 3,
-          "samples": 10
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
         },
         "incremental_reparse": {
-          "p50_ms": 1,
-          "p95_ms": 2,
-          "p99_ms": 2,
-          "samples": 10
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
         },
         "workspace_symbol_query": {
-          "p50_ms": 0,
-          "p95_ms": 0,
-          "p99_ms": 0,
-          "samples": 10
+          "p50_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "samples": null
         }
       }
     },
@@ -73,41 +72,42 @@
         }
       }
     },
-    "catalyst": {
-      "file_count": null,
+    "mojolicious": {
+      "file_count": 13,
       "metrics": {
         "cold_start_to_hover": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 182,
+          "p95_ms": 863,
+          "p99_ms": 863,
+          "samples": 10
         },
         "first_completion": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "samples": 10
         },
         "first_goto_definition": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "samples": 10
         },
         "incremental_reparse": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 1,
+          "p95_ms": 2,
+          "p99_ms": 2,
+          "samples": 10
         },
         "workspace_symbol_query": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "samples": 10
         }
       }
     }
   },
+  "schema_version": 1,
   "tolerance_pct": 10
 }

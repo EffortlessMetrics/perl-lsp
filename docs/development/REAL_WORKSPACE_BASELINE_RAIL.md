@@ -8,15 +8,18 @@
 
 | Phase | Issue | Builder-ready? | PR | Receipt |
 |---|---|---|---|---|
-| 1. Real-workspace baseline suite | [#7949](https://github.com/EffortlessMetrics/perl-lsp/issues/7949) | not yet (`needs-assignee`) | _pending_ | `cargo test -p perl-lsp-rs --lib real_workspace` |
+| 1. Real-workspace baseline suite | [#8848](https://github.com/EffortlessMetrics/perl-lsp/issues/8848) | yes | current Real Perl Editor Trust baseline PR | [2026-05-13 Mojolicious Windows receipt](../forensics/2026-05-13-real-workspace-baseline-mojolicious.md) and `.ci/metrics/real_project_latency.json` |
 | 2. Editor-trust roadmap rollup | [#7952](https://github.com/EffortlessMetrics/perl-lsp/issues/7952) | not yet (`needs-spec`, `v0.14.0`, `umbrella`) | _pending_ | `cargo xtask semantic-shadow-compare --check` |
 
 ## Exit criteria
 
 - [ ] All phases land or are explicitly deferred with a successor.
-- [ ] Receipt commands in this doc reproduce the closeout proof.
+- [x] Phase 1 has a current Mojolicious receipt with explicit covered/deferred
+  provider surfaces.
+- [x] Receipt commands in this doc reproduce the closeout proof, with a Git Bash
+  fallback documented for Windows agents whose `just` shell is unavailable.
 - [ ] Status doc updated (`docs/project/status/semantic_capability_dashboard.md` and `docs/project/status/semantic_scorecard.md` regenerated post-merge).
-- [ ] Claim boundary recorded.
+- [x] Claim boundary recorded in the current receipt.
 
 ## Claim boundary
 
@@ -61,4 +64,8 @@ Do **not** roll this rail's PRs into:
 
 ## Lane assignment
 
-**Builder (sonnet)** — phase 1 implementation contract lives in #7949. Phase 2 (#7952) is an umbrella; it will spawn child rails (this one among them) and is not directly built. Until #7949 carries `builder-ready`, this rail's PRs cannot land beyond the docs PR for this rollout file.
+The older #7949 phase-1 tracker is historical. The current Real Perl Editor
+Trust baseline receipt is tracked by #8848 and records the first covered
+Mojolicious fixture/host proof. Phase 2 (#7952) remains an umbrella for broader
+editor-trust rollout work and should spawn focused child rails instead of being
+built directly.

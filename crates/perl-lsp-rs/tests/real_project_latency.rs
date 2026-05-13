@@ -487,6 +487,28 @@ fn summary_to_json(s: &LatencySummary) -> Value {
     })
 }
 
+fn empty_metric_json() -> Value {
+    json!({
+        "p50_ms": Value::Null,
+        "p95_ms": Value::Null,
+        "p99_ms": Value::Null,
+        "samples": Value::Null
+    })
+}
+
+fn placeholder_project_json() -> Value {
+    json!({
+        "file_count": Value::Null,
+        "metrics": {
+            "cold_start_to_hover": empty_metric_json(),
+            "first_completion": empty_metric_json(),
+            "first_goto_definition": empty_metric_json(),
+            "incremental_reparse": empty_metric_json(),
+            "workspace_symbol_query": empty_metric_json()
+        }
+    })
+}
+
 /// Write the baseline JSON file (creates parent directories if needed).
 fn write_baseline(projects: &[ProjectMetrics]) {
     let root = workspace_root();
@@ -506,7 +528,16 @@ fn write_baseline(projects: &[ProjectMetrics]) {
         .trim()
         .to_string();
 
-    let mut projects_map = serde_json::Map::new();
+    let mut projects_map = fs::read_to_string(&output_path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        .and_then(|v| v.get("projects").and_then(Value::as_object).cloned())
+        .unwrap_or_default();
+
+    for name in ["mojolicious", "dancer2", "catalyst"] {
+        projects_map.entry(name.to_string()).or_insert_with(placeholder_project_json);
+    }
+
     for p in projects {
         let metrics = json!({
             "cold_start_to_hover": summary_to_json(&p.cold_start_to_hover),

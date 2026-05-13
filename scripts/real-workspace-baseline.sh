@@ -148,7 +148,7 @@ do
     fi
 done
 if [ -z "$OUTLIERS" ]; then
-    OUTLIERS="None — all p95 values within 500ms threshold."
+    OUTLIERS="None - all p95 values within 500ms threshold."
 fi
 
 # ── Write markdown report ─────────────────────────────────────────────────────
@@ -212,15 +212,50 @@ content = """\
 - **Perl files**: ${FILE_COUNT} (.pm / .pl / .t)
 - **Fixture source**: test_corpus/real_projects/${FIXTURE_DIR}/
 
+## Provider Coverage
+
+| Surface | Status | Receipt |
+|---------|--------|---------|
+| Cold start / first hover | covered | \`cold_start_to_hover\` |
+| Completion latency | covered | \`first_completion\` |
+| Goto definition latency | covered | \`first_goto_definition\` |
+| Incremental reparse | covered | \`incremental_reparse\` |
+| Workspace symbols | covered | \`workspace_symbol_query\` |
+| Workspace indexing | indirect | initialization, document open, and provider requests exercise the fixture workspace; dedicated index-shape receipts remain in provider/status docs |
+| Module resolution | indirect | fixture package layout is exercised through hover, completion, goto, and workspace-symbol requests; dedicated module-resolution receipts remain separate |
+| Diagnostics | deferred | latency harness does not wait for publishDiagnostics; use diagnostics/provider receipts for diagnostic correctness claims |
+| Memory profile | deferred | this harness records wall-clock latency, not heap or RSS |
+
+## Provider Confidence Links
+
+- [Provider cutover](../project/status/provider_cutover.md)
+- [UX capability dashboard](../project/status/ux_capability_dashboard.md)
+- [Semantic scorecard](../project/status/semantic_scorecard.md)
+- [Semantic shadow compare](../project/status/semantic_shadow_compare.md)
+
+## Claim Boundary
+
+This receipt supports a measured editor-latency claim for the selected fixture
+and host system only. It does not claim full CPAN compatibility, broader
+framework coverage, memory/resource ceilings, diagnostic correctness, or live
+provider cutover by itself.
+
 ## Outliers
 
 ${OUTLIERS}
+
+Outliers are recorded threshold misses for the named metric. They do not block
+the receipt, but they do block promotion of a no-outlier latency claim for that
+metric until a follow-up run or fix clears the threshold.
 
 ## Reproducibility Notes
 
 \`\`\`bash
 # Reproduce this measurement
 just real-workspace-baseline ${PROJECT} ${SYSTEM}
+
+# Windows fallback when just cannot locate its shell
+"C:/Program Files/Git/bin/bash.exe" scripts/real-workspace-baseline.sh ${PROJECT} ${SYSTEM}
 \`\`\`
 
 - Binary built with: \`cargo build -p perl-lsp-rs --release\`
@@ -230,7 +265,7 @@ just real-workspace-baseline ${PROJECT} ${SYSTEM}
 
 ## Notes
 
-First baseline run for ${PROJECT} on ${SYSTEM}. Establishes measurement anchor for v0.13.0 release gate.
+Current baseline run for ${PROJECT} on ${SYSTEM}. Establishes a Real Perl Editor Trust measurement anchor for the selected fixture and host.
 """
 with open(path, 'w') as f:
     f.write(content)
