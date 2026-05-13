@@ -11,7 +11,7 @@ Linked specs:
 Linked ADRs:
 - [PLSP-ADR-0001](../../docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md)
 - [PLSP-ADR-0002](../../docs/adr/PLSP-ADR-0002-confidence-before-cutover.md)
-Active goal: planned `.perl-lsp/goals/active.toml`
+Active goal: [active.toml](../../.perl-lsp/goals/active.toml)
 
 ## Current State
 
@@ -23,6 +23,7 @@ Active goal: planned `.perl-lsp/goals/active.toml`
   lock source-backed shapes, but only fresh corpus receipts may claim bucket
   movement.
 - Provider confidence work routes through
+  [provider confidence matrix](../../docs/project/status/provider_confidence_matrix.md),
   [provider cutover](../../docs/project/status/provider_cutover.md),
   [semantic scorecard](../../docs/project/status/semantic_scorecard.md),
   [semantic shadow compare](../../docs/project/status/semantic_shadow_compare.md),
@@ -476,7 +477,7 @@ failure as a blocker issue and do not promote the claim.
 
 ## Work item: provider-confidence-closeout
 
-Status: ready
+Status: completed; PR #8852
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked spec: [PLSP-SPEC-0002](../../docs/specs/PLSP-SPEC-0002-provider-confidence-receipts.md), [PLSP-SPEC-0003](../../docs/specs/PLSP-SPEC-0003-real-workspace-editor-baseline.md)
 Linked ADR: [PLSP-ADR-0002](../../docs/adr/PLSP-ADR-0002-confidence-before-cutover.md)
@@ -491,8 +492,10 @@ receipts before broader cutover.
 
 Production delta
 
-Provider status surfaces explain why each provider acted, fell back, blocked, or
-remained shadowed.
+Added [provider confidence matrix](../../docs/project/status/provider_confidence_matrix.md),
+a row-per-provider status surface that records fact source/provenance,
+confidence/freshness boundaries, fallback/blocker behavior, runtime/live
+comparison receipts, real-workspace links, current live state, and next proof.
 
 Non-goals
 
@@ -501,9 +504,9 @@ bucket or corpus refresh work.
 
 Acceptance
 
-Provider confidence matrix or existing status surface records provider, fact
-source, confidence, freshness, fallback, runtime receipt, live cutover state,
-and next proof.
+Provider confidence matrix records provider, fact source, confidence, freshness,
+fallback, runtime receipt, live cutover state, real-workspace link, and next
+proof.
 
 Proof commands
 
