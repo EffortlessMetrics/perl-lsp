@@ -35,6 +35,24 @@ my $first = target();
 my $second = Real::Nav::target();
 "#;
 
+const LIVE_REFS_URI: &str = "file:///workspace/lib/Live/Refs.pm";
+
+const LIVE_REFS: &str = r#"package Live::Refs;
+use strict;
+use warnings;
+
+sub target {
+    return 1;
+}
+
+sub caller {
+    target();
+    Live::Refs::target();
+}
+
+1;
+"#;
+
 fn create_server() -> LspServer {
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
@@ -60,6 +78,11 @@ fn open_document(
 fn open_navigation_workspace(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
     open_document(server, MODULE_URI, MODULE)?;
     open_document(server, MAIN_URI, MAIN)?;
+    Ok(())
+}
+
+fn open_live_references_workspace(server: &LspServer) -> Result<(), Box<dyn std::error::Error>> {
+    open_document(server, LIVE_REFS_URI, LIVE_REFS)?;
     Ok(())
 }
 
@@ -170,12 +193,12 @@ fn navigation_runtime_quality_definition_receipt_compares_live_and_compiler_path
 fn navigation_runtime_quality_references_receipt_compares_live_and_compiler_paths()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
-    open_navigation_workspace(&server)?;
-    let (line, character) = position_of(MODULE, "target")?;
+    open_live_references_workspace(&server)?;
+    let (line, character) = position_of(LIVE_REFS, "target();")?;
     let params = json!({
-        "textDocument": {"uri": MODULE_URI},
+        "textDocument": {"uri": LIVE_REFS_URI},
         "position": {"line": line, "character": character},
-        "context": {"includeDeclaration": true}
+        "context": {"includeDeclaration": false}
     });
 
     let live_result = server.test_handle_references(Some(params.clone()))?;
@@ -186,7 +209,11 @@ fn navigation_runtime_quality_references_receipt_compares_live_and_compiler_path
     let notes = receipt_notes(compiler)?;
 
     assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("references"));
-    assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(runtime_receipt.get("live_cutover").and_then(Value::as_str), Some("partial_exact"));
     assert_eq!(
         runtime_receipt.get("live_provider_count").and_then(Value::as_u64),
         Some(u64::try_from(location_count(live_result.as_ref()))?)
@@ -204,8 +231,10 @@ fn navigation_runtime_quality_references_receipt_compares_live_and_compiler_path
     assert!(trace_count(compiler)? > 0, "references receipt must carry fact-source traces");
     assert!(
         notes.iter().any(|note| note.contains("references runtime proof"))
-            && notes.iter().any(|note| note.contains("no live navigation behavior change")),
-        "references receipt notes must record runtime proof and no live cutover: {notes:?}"
+            && notes
+                .iter()
+                .any(|note| note.contains("partial live exact/static references cutover")),
+        "references receipt notes must record runtime proof and partial live cutover: {notes:?}"
     );
 
     Ok(())
