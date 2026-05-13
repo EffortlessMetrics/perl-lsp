@@ -669,6 +669,13 @@ fn extutils_mm_unix_to_inst_pm_wraplist_map_sort() {
 }
 
 #[test]
+fn extutils_mm_unix_ignore_map_tuple_qw() {
+    // From ExtUtils::MM_Unix: map BLOCK may return a parenthesized key/value
+    // tuple over a qw list while initializing ignore entries.
+    assert_clean_parse(r#"my %ignore = map {( $_ => 1 )} qw(Makefile.PL Build.PL test.pl t);"#);
+}
+
+#[test]
 fn main_package_variable_in_paren_expr() {
     // From Unicode::Normalize: `$::IS_ASCII` must parse as a main-package
     // variable, not as `$::` followed by a stray bare identifier.
