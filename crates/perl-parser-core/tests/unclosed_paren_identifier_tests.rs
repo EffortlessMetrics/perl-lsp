@@ -694,6 +694,13 @@ fn extutils_mm_unix_split_command_map_quote_literal_pair() {
 }
 
 #[test]
+fn extutils_mm_unix_hash_slice_map_lc_keys_assignment() {
+    // From ExtUtils::MM_Unix: a hash-slice assignment may use map EXPR, LIST
+    // over keys() as the slice index list before a postfix condition.
+    assert_clean_parse(r#"@ignore{map lc, keys %ignore} = values %ignore if $Is{VMS};"#);
+}
+
+#[test]
 fn main_package_variable_in_paren_expr() {
     // From Unicode::Normalize: `$::IS_ASCII` must parse as a main-package
     // variable, not as `$::` followed by a stray bare identifier.
