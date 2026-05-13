@@ -701,6 +701,15 @@ fn extutils_mm_unix_hash_slice_map_lc_keys_assignment() {
 }
 
 #[test]
+fn extutils_mm_unix_map_over_grep_substitution() {
+    // From ExtUtils::MM_Unix: a hash assignment may merge a map BLOCK whose
+    // source list is a grep-like substitution expression over an array.
+    assert_clean_parse(
+        r#"%o = (%o, map { $_ => 1 } grep s/\.c(pp|xx|c)?\z/$self->{OBJ_EXT}/i, @o_files);"#,
+    );
+}
+
+#[test]
 fn main_package_variable_in_paren_expr() {
     // From Unicode::Normalize: `$::IS_ASCII` must parse as a main-package
     // variable, not as `$::` followed by a stray bare identifier.
