@@ -112,7 +112,7 @@ fn document_symbols_runtime_quality_receipt_has_correct_provider_field()
 }
 
 #[test]
-fn document_symbols_runtime_quality_receipt_reports_no_live_behavior_change()
+fn document_symbols_runtime_quality_receipt_reports_source_backed_live_cutover()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
     open_symbol_workspace(&server)?;
@@ -124,8 +124,17 @@ fn document_symbols_runtime_quality_receipt_reports_no_live_behavior_change()
 
     assert_eq!(
         receipt.get("no_live_behavior_change").and_then(Value::as_bool),
-        Some(true),
-        "receipt must confirm no live behavior change"
+        Some(false),
+        "source-backed module symbols should use the partial-live compiler path"
+    );
+    let compiler_receipt = receipt.get("compiler_receipt").ok_or("missing compiler receipt")?;
+    let source_backed_count = compiler_receipt
+        .get("source_backed_count")
+        .and_then(Value::as_u64)
+        .ok_or("missing source_backed_count")?;
+    assert!(
+        source_backed_count > 0,
+        "module fixture must produce source-backed compiler document symbols"
     );
     Ok(())
 }
@@ -178,7 +187,7 @@ fn document_symbols_runtime_quality_receipt_finds_symbols_in_module_with_subs()
 }
 
 #[test]
-fn document_symbols_runtime_quality_receipt_shadow_state_is_shadowed()
+fn document_symbols_runtime_quality_receipt_shadow_state_is_partial_live_source_backed()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
     open_symbol_workspace(&server)?;
@@ -190,8 +199,8 @@ fn document_symbols_runtime_quality_receipt_shadow_state_is_shadowed()
 
     assert_eq!(
         receipt.get("shadow_state").and_then(Value::as_str),
-        Some("shadowed"),
-        "document symbols must report shadowed state (not yet partial live)"
+        Some("partial_live_source_backed"),
+        "document symbols must report the source-backed partial-live state"
     );
     Ok(())
 }
@@ -214,8 +223,10 @@ fn document_symbols_runtime_quality_receipt_notes_record_quality_proof()
         "notes must identify this as a document-symbol runtime quality receipt: {notes:?}"
     );
     assert!(
-        notes.iter().any(|note| note.contains("no live document-symbol behavior change")),
-        "notes must confirm no live behavior change: {notes:?}"
+        notes
+            .iter()
+            .any(|note| note.contains("source-backed parser syntax document symbols are live")),
+        "notes must record the source-backed live cutover: {notes:?}"
     );
     Ok(())
 }
@@ -233,12 +244,20 @@ fn document_symbols_runtime_quality_receipt_handles_unknown_uri_gracefully()
     assert_eq!(
         receipt.get("no_live_behavior_change").and_then(Value::as_bool),
         Some(true),
-        "receipt must report no live behavior change even for unknown URIs"
+        "unknown URI must not take the source-backed live path"
     );
     assert_eq!(
         receipt.get("live_provider_count").and_then(Value::as_u64),
         Some(0),
         "unknown URI must yield zero symbols"
+    );
+    assert_eq!(
+        receipt
+            .get("compiler_receipt")
+            .and_then(|value| value.get("reason"))
+            .and_then(Value::as_str),
+        Some("unknown_uri"),
+        "unknown URI receipt must record fallback reason"
     );
     Ok(())
 }

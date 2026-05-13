@@ -1,10 +1,13 @@
-//! Shadow-only document-symbol source/freshness proof.
+//! Document-symbol provider proof and source-backed live helpers.
 //!
-//! The live `textDocument/documentSymbol` handler still lives in the LSP
-//! runtime and keeps its existing behavior. This module only compares that
-//! legacy result shape against compiler-fact candidates and emits typed
-//! provider fact-source traces for staged cutover proof.
+//! The runtime owns LSP request handling and fallback. This module owns the
+//! compiler-shaped document-symbol facts that are safe to promote live:
+//! fresh, high-confidence, source-backed syntax symbols, plus shadow receipts
+//! for generated, stale, and dynamic candidates that must stay gated.
 
+use perl_parser_core::ast::Node;
+use perl_position_tracking::WireRange;
+use perl_semantic_analyzer::symbol::{ScopeId, Symbol, SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_facts::{
     AnchorId, Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind,
     ProviderFactTrace, ProviderFallbackState, ProviderSurface,
@@ -12,6 +15,230 @@ use perl_semantic_facts::{
 use perl_workspace::semantic_shadow_compare::{
     SemanticShadowCompareReceipt, ShadowQueryInput, ShadowQueryName, summarize_identities,
 };
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// LSP-compatible document symbol produced from source-backed compiler facts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct DocumentSymbol {
+    /// Display name shown by the client.
+    pub name: String,
+    /// Optional symbol detail text.
+    pub detail: String,
+    /// LSP `SymbolKind` numeric value.
+    pub kind: u32,
+    /// Full source-backed range for the symbol.
+    pub range: WireRange,
+    /// Source-backed selection range for the symbol name.
+    pub selection_range: WireRange,
+    /// Nested source-backed symbols.
+    pub children: Vec<DocumentSymbol>,
+}
+
+/// Source-backed document-symbol live result.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct DocumentSymbolLiveResult {
+    /// Symbols safe to return live.
+    pub symbols: Vec<DocumentSymbol>,
+    /// Fact traces proving source/provenance/confidence/freshness.
+    pub fact_traces: Vec<ProviderFactTrace>,
+}
+
+/// Build live document symbols from fresh, source-backed parser/compiler facts.
+///
+/// This helper deliberately excludes virtual generated members, stale facts,
+/// dynamic boundaries, and ambiguous/no-source candidates. The runtime keeps
+/// its existing fallback behavior when parsing is unavailable.
+#[must_use]
+pub fn source_backed_document_symbols_from_ast(
+    ast: &Node,
+    source: &str,
+) -> DocumentSymbolLiveResult {
+    let extractor = SymbolExtractor::new_with_source(source);
+    let symbol_table = extractor.extract(ast);
+    source_backed_document_symbols_from_table(&symbol_table, source)
+}
+
+fn source_backed_document_symbols_from_table(
+    symbol_table: &SymbolTable,
+    source: &str,
+) -> DocumentSymbolLiveResult {
+    let mut symbols_by_scope: HashMap<ScopeId, Vec<Symbol>> = HashMap::new();
+    for symbols in symbol_table.symbols.values() {
+        for symbol in symbols {
+            if is_source_backed(symbol, source) {
+                symbols_by_scope.entry(symbol.scope_id).or_default().push(symbol.clone());
+            }
+        }
+    }
+
+    let empty_vec = Vec::new();
+    let global_symbols = symbols_by_scope.get(&0).unwrap_or(&empty_vec);
+    let mut output = Vec::new();
+    let mut fact_traces = Vec::new();
+
+    for symbol in global_symbols {
+        if let Some(document_symbol) = source_backed_document_symbol(
+            symbol,
+            symbol_table,
+            &symbols_by_scope,
+            source,
+            &mut fact_traces,
+        ) {
+            output.push(document_symbol);
+        }
+    }
+
+    DocumentSymbolLiveResult { symbols: output, fact_traces }
+}
+
+fn source_backed_document_symbol(
+    symbol: &Symbol,
+    symbol_table: &SymbolTable,
+    symbols_by_scope: &HashMap<ScopeId, Vec<Symbol>>,
+    source: &str,
+    fact_traces: &mut Vec<ProviderFactTrace>,
+) -> Option<DocumentSymbol> {
+    if !is_source_backed(symbol, source) {
+        return None;
+    }
+
+    let mut children = Vec::new();
+    if symbol.kind == SymbolKind::Package
+        || symbol.kind == SymbolKind::Class
+        || symbol.kind == SymbolKind::Subroutine
+    {
+        for (scope_id, scope) in &symbol_table.scopes {
+            if scope.location.start == symbol.location.start {
+                if let Some(child_symbols) = symbols_by_scope.get(scope_id) {
+                    for child in child_symbols {
+                        if child.location == symbol.location
+                            && child.kind == symbol.kind
+                            && child.name == symbol.name
+                        {
+                            continue;
+                        }
+                        if let Some(child_symbol) =
+                            source_backed_leaf_symbol(child, source, fact_traces)
+                        {
+                            children.push((
+                                document_symbol_priority(child),
+                                child.location.start,
+                                child.location.end,
+                                child_symbol,
+                            ));
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    children.sort_by_key(|(priority, start, end, _)| (*priority, *start, *end));
+    let children = children.into_iter().map(|(_, _, _, child)| child).collect();
+
+    fact_traces.push(source_backed_trace());
+    Some(DocumentSymbol {
+        name: document_symbol_name(symbol),
+        detail: document_symbol_detail(symbol),
+        kind: document_symbol_kind(symbol),
+        range: symbol_range(source, symbol),
+        selection_range: symbol_range(source, symbol),
+        children,
+    })
+}
+
+fn source_backed_leaf_symbol(
+    symbol: &Symbol,
+    source: &str,
+    fact_traces: &mut Vec<ProviderFactTrace>,
+) -> Option<DocumentSymbol> {
+    if !is_source_backed(symbol, source) {
+        return None;
+    }
+
+    fact_traces.push(source_backed_trace());
+    Some(DocumentSymbol {
+        name: document_symbol_name(symbol),
+        detail: document_symbol_detail(symbol),
+        kind: document_symbol_kind(symbol),
+        range: symbol_range(source, symbol),
+        selection_range: symbol_range(source, symbol),
+        children: Vec::new(),
+    })
+}
+
+fn source_backed_trace() -> ProviderFactTrace {
+    ProviderFactTrace::new(
+        ProviderSurface::DocumentSymbols,
+        ProviderFactSourceKind::ParserSyntax,
+        Provenance::ExactAst,
+        Confidence::High,
+        ProviderFactFreshness::Fresh,
+        ProviderFallbackState::Primary,
+        None,
+        None,
+        Some(1),
+    )
+}
+
+fn is_source_backed(symbol: &Symbol, source: &str) -> bool {
+    symbol.location.start <= symbol.location.end && symbol.location.end <= source.len()
+}
+
+fn symbol_range(source: &str, symbol: &Symbol) -> WireRange {
+    WireRange::from_byte_offsets(source, symbol.location.start, symbol.location.end)
+}
+
+fn document_symbol_kind(symbol: &Symbol) -> u32 {
+    if symbol.declaration.as_deref() == Some("has") && symbol.kind == SymbolKind::scalar() {
+        7
+    } else {
+        symbol.kind.to_lsp_kind_document_symbol()
+    }
+}
+
+fn document_symbol_name(symbol: &Symbol) -> String {
+    if symbol.declaration.as_deref() == Some("has") {
+        symbol.name.clone()
+    } else if let Some(sigil) = symbol.kind.sigil() {
+        format!("{}{}", sigil, symbol.name)
+    } else {
+        symbol.name.clone()
+    }
+}
+
+fn document_symbol_detail(symbol: &Symbol) -> String {
+    if symbol.declaration.as_deref() == Some("has") && symbol.kind == SymbolKind::scalar() {
+        if !symbol.attributes.is_empty() {
+            symbol.attributes.join(", ")
+        } else {
+            symbol.documentation.clone().unwrap_or_default()
+        }
+    } else if symbol.declaration.as_deref() == Some("has") {
+        symbol.documentation.clone().unwrap_or_default()
+    } else {
+        symbol.declaration.as_deref().unwrap_or("").to_string()
+    }
+}
+
+fn document_symbol_priority(symbol: &Symbol) -> u8 {
+    if symbol.declaration.as_deref() == Some("has") && symbol.kind == SymbolKind::scalar() {
+        0
+    } else if symbol.declaration.as_deref() == Some("has") {
+        2
+    } else if matches!(symbol.kind, SymbolKind::Package | SymbolKind::Class | SymbolKind::Role) {
+        1
+    } else if symbol.kind.is_callable() {
+        3
+    } else {
+        4
+    }
+}
 
 /// Legacy document-symbol identity considered by the shadow proof.
 ///
@@ -140,7 +367,67 @@ fn document_symbol_shadow_note(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_parser_core::Parser;
+    use perl_tdd_support::must;
     use perl_workspace::semantic_shadow_compare::ShadowCompareVerdict;
+
+    #[test]
+    fn source_backed_document_symbols_emit_fresh_primary_traces()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "package Foo;\n\nsub greet {\n    return 1;\n}\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let result = source_backed_document_symbols_from_ast(&ast, source);
+
+        assert!(!result.symbols.is_empty(), "expected source-backed symbols");
+        assert!(
+            result.symbols.iter().any(|symbol| symbol.name == "Foo"),
+            "package symbol should be present: {:?}",
+            result.symbols
+        );
+        assert!(
+            result.fact_traces.iter().any(|trace| {
+                trace.source == ProviderFactSourceKind::ParserSyntax
+                    && trace.provenance == Provenance::ExactAst
+                    && trace.confidence == Confidence::High
+                    && trace.freshness == ProviderFactFreshness::Fresh
+                    && trace.fallback_state == ProviderFallbackState::Primary
+            }),
+            "source-backed live result must carry fresh primary parser-syntax traces"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn source_backed_document_symbols_keep_children_source_backed()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let source = "package Foo;\n\nsub greet {\n    return 1;\n}\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let result = source_backed_document_symbols_from_ast(&ast, source);
+        let package = result
+            .symbols
+            .iter()
+            .find(|symbol| symbol.name == "Foo")
+            .ok_or("expected Foo package symbol")?;
+
+        assert!(
+            package.children.iter().any(|symbol| symbol.name == "greet"),
+            "package symbol should contain greet child: {:?}",
+            package.children
+        );
+        assert!(
+            package.children.iter().all(|symbol| {
+                symbol.range.start.line <= symbol.range.end.line
+                    && symbol.selection_range.start.line <= symbol.selection_range.end.line
+            }),
+            "child symbols must carry source-backed ranges: {:?}",
+            package.children
+        );
+        Ok(())
+    }
 
     #[test]
     fn document_symbol_shadow_traces_explicit_syntax_fact() -> Result<(), Box<dyn std::error::Error>>
