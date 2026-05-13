@@ -698,6 +698,34 @@
       ]
     },
     {
+      "id": "mojolicious_hover_provenance",
+      "scenario_file": "ux_scenario_29_mojolicious_hover_provenance.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "hover",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request hover over the Mojolicious real-workspace fixture and record provenance quality signals",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "hover probes return without JSON-RPC errors",
+        "receipt records exact, imported, generated, dynamic-shaped, and fallback/module-resolution surfaces",
+        "receipt records source, provenance, confidence, freshness, generated, dynamic, and fallback labels when exposed"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "incremental_text_sync_recovery",
       "scenario_file": "ux_scenario_19_incremental_text_sync.rs",
       "subsystem_owner": "text_sync",
