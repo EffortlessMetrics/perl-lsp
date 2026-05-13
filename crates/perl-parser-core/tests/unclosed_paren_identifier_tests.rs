@@ -581,6 +581,13 @@ fn unicode_collate_gmatch_substr_return_map_expr() {
 }
 
 #[test]
+fn unicode_collate_hst_join_map_split_expr() {
+    // From Unicode::Collate: join may take map EXPR, LIST where the source
+    // list is a split expression after the mapped function call.
+    assert_clean_parse(r#"my $curHST = join '', map getHST($_, $vers), split /;/, $jcps;"#);
+}
+
+#[test]
 fn regexp_common_comment_combine_parenthesized_map_args() {
     // From Regexp::Common::comment: unary plus before a parenthesized map block
     // in a comma-separated argument list must not leave `combine` waiting for a `)`.
