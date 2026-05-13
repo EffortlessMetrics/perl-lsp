@@ -555,8 +555,11 @@ fn test_sequence_number_increment() {
 
 #[test]
 fn test_dap_full_session_lifecycle() -> TestResult {
-    // Skip if perl is not available
-    if std::process::Command::new("perl").arg("--version").output().is_err() {
+    // Skip if perl is not available (uses OracleEnv so ambient PERL5LIB/PERL5OPT
+    // do not affect the availability check — #8690 hermeticity contract).
+    if perl_lsp_rs_core::config::PerlOracleEnv::for_dap_test_fixture()
+        .map_or(true, |oracle| oracle.into_command().arg("--version").output().is_err())
+    {
         eprintln!("Skipping DAP lifecycle test - perl not available");
         return Ok(());
     }

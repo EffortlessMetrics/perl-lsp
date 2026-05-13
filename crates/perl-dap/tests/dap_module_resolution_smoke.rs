@@ -30,7 +30,8 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 const MODULE_BREAKPOINT_LINE: u64 = 14; // my $x = 1 — first executable line in sub run
 
 fn perl_available() -> bool {
-    std::process::Command::new("perl").arg("--version").output().is_ok()
+    perl_lsp_rs_core::config::PerlOracleEnv::for_dap_test_fixture()
+        .map_or(false, |oracle| oracle.into_command().arg("--version").output().is_ok())
 }
 
 fn smoke_timeout() -> Duration {

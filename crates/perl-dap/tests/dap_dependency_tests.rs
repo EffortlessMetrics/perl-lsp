@@ -9,7 +9,6 @@ mod dap_dependencies {
     use anyhow::Result;
     use serde_json::Value;
     use std::path::PathBuf;
-    use std::process::Command;
 
     fn repo_root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -81,7 +80,14 @@ mod dap_dependencies {
     #[test]
     // AC:18
     fn test_perl_version_compatibility() -> Result<()> {
-        let perl_version = Command::new("perl").arg("-e").arg("print $];").output();
+        // Use OracleEnv so ambient PERL5LIB/PERL5OPT do not affect version
+        // reporting — #8690 hermeticity contract for DAP test fixtures.
+        let perl_version: std::io::Result<std::process::Output> =
+            perl_lsp_rs_core::config::PerlOracleEnv::for_dap_test_fixture()
+                .map(|oracle| oracle.into_command().arg("-e").arg("print $];").output())
+                .unwrap_or_else(|| {
+                    Err(std::io::Error::other("perl not available via toolchain resolver"))
+                });
 
         match perl_version {
             Ok(output) if output.status.success() => {

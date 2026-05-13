@@ -355,7 +355,13 @@ pub fn workflow_timeout() -> Duration {
     }
 }
 
-/// Returns `true` when `perl` is on `PATH`.
+/// Returns `true` when `perl` is reachable via the toolchain resolver.
+///
+/// Uses [`PerlOracleEnv::for_dap_test_fixture`] so the availability check
+/// itself runs under the deny-all-ambient env contract (no PERL5LIB/PERL5OPT
+/// leakage from the CI or developer shell). Returns `false` when Perl cannot
+/// be located or the version probe fails.
 pub fn perl_available() -> bool {
-    std::process::Command::new("perl").arg("--version").output().is_ok()
+    perl_lsp_rs_core::config::PerlOracleEnv::for_dap_test_fixture()
+        .map_or(false, |oracle| oracle.into_command().arg("--version").output().is_ok())
 }

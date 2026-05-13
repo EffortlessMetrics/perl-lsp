@@ -379,6 +379,53 @@ impl PerlOracleEnv {
             extra_env: BTreeMap::new(),
         }
     }
+
+    /// Constructor for DAP integration test and benchmark fixtures.
+    ///
+    /// Used by DAP test helpers that spawn Perl only to check availability or
+    /// query the interpreter version (e.g. `perl --version`, `perl -e 'print $]'`).
+    /// Resolves the Perl binary through the toolchain chain (perlbrew → plenv → PATH)
+    /// and enforces the deny-all-ambient hermeticity contract so that test outcomes
+    /// do not vary based on ambient `PERL5LIB` or `PERL5OPT` in the CI or developer
+    /// shell environment.
+    ///
+    /// Returns `None` when Perl cannot be located; callers should skip the test or
+    /// benchmark gracefully (see the `#8690` seam-migration pattern).
+    ///
+    /// Env contract:
+    ///
+    /// - `allow_perl5lib`: always `false` — DAP test fixtures must be hermetic;
+    ///   ambient library paths must not change which tests pass or skip.
+    /// - `allow_perl5opt`: always `false` — injected runtime flags must not alter
+    ///   fixture behavior or output.
+    /// - `allow_local_lib`: always `false` — the toolchain-resolved binary is used;
+    ///   `local::lib` activation env vars are not part of the test fixture contract.
+    /// - `PATH`: preserved by [`into_command`] / [`configure_command`] so the
+    ///   interpreter can resolve its own helper scripts.
+    /// - `timeout`: 5 seconds (matches [`for_version_probe`]; generous for a probe).
+    /// - `cwd`: current working directory of the test process (stable for version
+    ///   probes that do not depend on cwd).
+    /// - `extra_env`: empty; callers may extend via `oracle.extra_env.insert(...)`.
+    ///
+    /// [`configure_command`]: PerlOracleEnv::configure_command
+    /// [`into_command`]: PerlOracleEnv::into_command
+    /// [`for_version_probe`]: PerlOracleEnv::for_version_probe
+    pub fn for_dap_test_fixture() -> Option<Self> {
+        use crate::platform::resolve_perl_path_with_toolchain;
+
+        let perl_binary = resolve_perl_path_with_toolchain().ok()?;
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        Some(Self {
+            perl_binary,
+            cwd,
+            timeout: Duration::from_secs(5),
+            allow_perl5lib: false,
+            allow_perl5opt: false,
+            allow_local_lib: false,
+            extra_env: BTreeMap::new(),
+        })
+    }
 }
 
 // ── WASM stub ─────────────────────────────────────────────────────────────────
@@ -416,6 +463,11 @@ impl PerlOracleEnv {
     /// Returns a no-op stub on WASM (no subprocess support).
     pub fn for_version_probe(_perl_binary: std::path::PathBuf, _cwd: std::path::PathBuf) -> Self {
         PerlOracleEnv
+    }
+
+    /// Returns `None` on WASM (no subprocess support).
+    pub fn for_dap_test_fixture() -> Option<Self> {
+        None
     }
 
     /// Returns a no-op stub on WASM (no subprocess support).
@@ -1078,6 +1130,66 @@ mod tests {
             stdout.trim(),
             "UNSET|UNSET",
             "version probe subprocess must see both PERL5LIB and PERL5OPT as unset; got: {stdout:?}",
+        );
+        Ok(())
+    }
+
+    // ── for_dap_test_fixture tests (#8690) ────────────────────────────────────
+
+    /// `for_dap_test_fixture` always denies PERL5LIB, PERL5OPT, and local::lib
+    /// when Perl is available — struct-level flag check.
+    #[test]
+    fn for_dap_test_fixture_denies_all_ambient_vars() {
+        let oracle = match PerlOracleEnv::for_dap_test_fixture() {
+            Some(o) => o,
+            None => return, // perl not available; skip
+        };
+        assert!(!oracle.allow_perl5lib, "allow_perl5lib must be false for DAP test fixture");
+        assert!(!oracle.allow_perl5opt, "allow_perl5opt must be false for DAP test fixture");
+        assert!(!oracle.allow_local_lib, "allow_local_lib must be false for DAP test fixture");
+        assert!(oracle.extra_env.is_empty(), "extra_env must be empty by default");
+    }
+
+    /// `for_dap_test_fixture` strips PERL5LIB and PERL5OPT from the subprocess
+    /// (canonical acceptance test for the #8690 hermeticity contract).
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn for_dap_test_fixture_strips_poisoned_env() -> TestResult {
+        let _env_guard = env_lock()?;
+
+        let oracle = match PerlOracleEnv::for_dap_test_fixture() {
+            Some(o) => o,
+            None => return Ok(()), // perl not available; skip
+        };
+
+        let poison_dir = tempfile::tempdir()?;
+        let poison_path = poison_dir.path().to_string_lossy().into_owned();
+
+        unsafe { std::env::set_var("PERL5LIB", &poison_path) };
+        unsafe { std::env::set_var("PERL5OPT", "-Mevil") };
+
+        let mut cmd = oracle.into_command();
+        cmd.args(["-e", "print join('|', $ENV{PERL5LIB}//'UNSET', $ENV{PERL5OPT}//'UNSET')"]);
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        let out = cmd.output()?;
+
+        unsafe { std::env::remove_var("PERL5LIB") };
+        unsafe { std::env::remove_var("PERL5OPT") };
+
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            !stdout.contains(&poison_path),
+            "PERL5LIB poison must NOT appear in DAP test fixture subprocess; got: {stdout:?}",
+        );
+        assert!(
+            !stdout.contains("-Mevil"),
+            "PERL5OPT poison must NOT appear in DAP test fixture subprocess; got: {stdout:?}",
+        );
+        assert_eq!(
+            stdout.trim(),
+            "UNSET|UNSET",
+            "DAP test fixture subprocess must see PERL5LIB and PERL5OPT as unset; got: {stdout:?}",
         );
         Ok(())
     }

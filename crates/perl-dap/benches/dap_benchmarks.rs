@@ -312,7 +312,8 @@ fn benchmark_dap_dispatch(c: &mut Criterion) {
 // ========== Phase 3: Live Session Benchmarks ==========
 
 fn perl_available() -> bool {
-    std::process::Command::new("perl").arg("--version").output().is_ok()
+    perl_lsp_rs_core::config::PerlOracleEnv::for_dap_test_fixture()
+        .map_or(false, |oracle| oracle.into_command().arg("--version").output().is_ok())
 }
 
 fn write_script(path: &Path, line_count: usize) -> std::io::Result<()> {

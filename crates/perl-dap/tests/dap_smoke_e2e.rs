@@ -10,7 +10,8 @@ use tempfile::tempdir;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn perl_available() -> bool {
-    std::process::Command::new("perl").arg("--version").output().is_ok()
+    perl_lsp_rs_core::config::PerlOracleEnv::for_dap_test_fixture()
+        .map_or(false, |oracle| oracle.into_command().arg("--version").output().is_ok())
 }
 
 fn smoke_timeout() -> Duration {
