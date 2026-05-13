@@ -784,6 +784,35 @@
       ]
     },
     {
+      "id": "mojolicious_document_symbols_quality",
+      "scenario_file": "ux_scenario_32_mojolicious_document_symbols_quality.rs",
+      "subsystem_owner": "workspace_indexing",
+      "ci_tier": "pr",
+      "component": "workspace_symbols",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request document symbols over the Mojolicious real-workspace fixture and record source-backed symbol quality boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "document-symbol probes return without JSON-RPC errors",
+        "non-empty symbol results use valid LSP DocumentSymbol or SymbolInformation shapes",
+        "selected package and subroutine names appear as source-backed symbols",
+        "generated and dynamic route-method labels are not promoted as exact document symbols"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "incremental_text_sync_recovery",
       "scenario_file": "ux_scenario_19_incremental_text_sync.rs",
       "subsystem_owner": "text_sync",
