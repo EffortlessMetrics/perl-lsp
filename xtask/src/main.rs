@@ -68,6 +68,9 @@ enum Commands {
     /// Verify DevEx docs match the toolchain and command surface.
     CheckDevexDocs,
 
+    /// Validate Real Perl Editor Trust provider/support claim tables.
+    CheckProviderConfidenceMatrix,
+
     /// Capture a GitHub PR queue snapshot for disconnected maintainership.
     Queue {
         #[command(subcommand)]
@@ -2395,6 +2398,7 @@ fn main() -> Result<()> {
         Commands::CheckLintPolicy => check_lint_policy::run(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
         Commands::CheckDevexDocs => devex_docs::run(),
+        Commands::CheckProviderConfidenceMatrix => provider_confidence_matrix::run(),
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
             QueueCommand::Health { receipt, fixture } => {
