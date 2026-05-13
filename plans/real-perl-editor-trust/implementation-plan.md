@@ -395,8 +395,8 @@ Status: deferred on Windows; successor #8863
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked spec: [PLSP-SPEC-0004](../../docs/specs/PLSP-SPEC-0004-corpus-receipt-freshness.md)
 Linked ADR: [PLSP-ADR-0001](../../docs/adr/PLSP-ADR-0001-generated-status-is-control-plane.md)
-Blocks: support-claim-refresh, lane-closeout
-Blocked by: raw-bucket-fixture-lane or explicit decision to refresh now
+Blocks: none for this closeout; successor #8863 owns future bucket-count claims
+Blocked by: Linux system-Perl roots unavailable on this Windows host
 
 Goal
 
