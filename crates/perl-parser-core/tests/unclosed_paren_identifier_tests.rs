@@ -1075,6 +1075,15 @@ fn print_parens_block_filehandle_typeglob_deref() {
 }
 
 #[test]
+fn path_tiny_print_braced_filehandle_map_block() {
+    // From Path::Tiny: print with explicit parens may combine a braced
+    // filehandle and a map BLOCK source list.
+    assert_clean_parse(
+        r#"print( {$fh} map { ref eq 'ARRAY' ? @$_ : $_ } @data ) or $self->_throw('print');"#,
+    );
+}
+
+#[test]
 fn undef_in_return_expr() {
     // return undef — undef at statement boundary, no sigil follows
     assert_clean_parse(r#"sub f { return undef; }"#);
