@@ -536,6 +536,15 @@ fn unicode_collate_pack_u_coderef_map_expr() {
 }
 
 #[test]
+fn unicode_collate_unpack_u_coderef_map_expr() {
+    // From Unicode::Collate: return may use map EXPR, LIST where the
+    // expression is a lexical coderef call and the list is an unpack call.
+    assert_clean_parse(
+        r#"return map $native_to_unicode->($_), unpack('U*', shift(@_).pack('U*'));"#,
+    );
+}
+
+#[test]
 fn unicode_collate_override_hangul_map_expr() {
     // From Unicode::Collate: map EXPR, LIST may assign the result of a helper
     // call over a coderef-produced source list.
