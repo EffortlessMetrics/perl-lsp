@@ -258,6 +258,65 @@ pub fn goto_definition_live_exact<Q: SemanticQueries>(
     DefinitionCutoverOutcome { result, receipt }
 }
 
+/// Run the second live goto-definition slice.
+///
+/// This accepts the first exact syntax slice plus a single source-backed
+/// explicit import/default export candidate. Generated, dynamic-boundary,
+/// low-confidence, ambiguous, stale/no-source, and broad workspace candidates
+/// stay on the legacy provider path.
+pub fn goto_definition_live_exact_or_imported<Q: SemanticQueries>(
+    workspace_index: &WorkspaceIndex,
+    semantic_queries: &Q,
+    symbol: &str,
+    context: &QueryContext,
+) -> DefinitionCutoverOutcome {
+    let all_candidates = semantic_queries.definitions(symbol, context);
+    let new_summary = semantic_candidates_to_summary(&all_candidates);
+    let legacy_location = workspace_index.find_definition(symbol);
+    let old_summary = legacy_location_to_summary(legacy_location.as_ref());
+
+    let live_candidate = match all_candidates.as_slice() {
+        [candidate] if is_live_exact_or_imported_candidate(workspace_index, candidate) => {
+            Some(candidate.clone())
+        }
+        _ => None,
+    };
+
+    let result = match live_candidate {
+        Some(candidate) => DefinitionCutoverResult::Exact(candidate),
+        None => DefinitionCutoverResult::LegacyFallback(legacy_location),
+    };
+    let fallback_state = definition_cutover_fallback_state(&result);
+
+    let receipt = SemanticShadowCompareReceipt::from_summaries_with_fact_source_traces(
+        ShadowQueryName::FindDefinition,
+        ShadowQueryInput { symbol: symbol.to_string() },
+        old_summary,
+        new_summary,
+        vec![definition_live_exact_or_imported_quality_note(
+            workspace_index,
+            &result,
+            &all_candidates,
+        )],
+        definition_fact_source_traces(&all_candidates, fallback_state),
+    );
+
+    tracing::debug!(
+        symbol = %symbol,
+        verdict = ?receipt.verdict,
+        classification = match &result {
+            DefinitionCutoverResult::Exact(candidate)
+                if is_import_export_candidate(candidate) => "live_import_export",
+            DefinitionCutoverResult::Exact(_) => "live_exact",
+            DefinitionCutoverResult::Ambiguous(_) => "ambiguous_unreachable",
+            DefinitionCutoverResult::LegacyFallback(_) => "legacy_fallback",
+        },
+        "goto-definition live exact/imported cutover"
+    );
+
+    DefinitionCutoverOutcome { result, receipt }
+}
+
 /// Classify filtered candidates into the cutover result category.
 fn classify_cutover_result(
     usable: Vec<DefinitionCandidate>,
@@ -298,6 +357,31 @@ fn is_live_exact_syntax_candidate(
         && workspace_index.semantic_anchor_wire_location(candidate.anchor_id).is_some()
 }
 
+fn is_live_import_export_candidate(
+    workspace_index: &WorkspaceIndex,
+    candidate: &DefinitionCandidate,
+) -> bool {
+    candidate.confidence == Confidence::High
+        && is_import_export_candidate(candidate)
+        && candidate.kind != EntityKind::GeneratedMember
+        && workspace_index.semantic_anchor_wire_location(candidate.anchor_id).is_some()
+}
+
+fn is_import_export_candidate(candidate: &DefinitionCandidate) -> bool {
+    matches!(
+        candidate.provenance,
+        Provenance::ImportExportInference | Provenance::LiteralRequireImport
+    ) && matches!(candidate.rank, DefinitionRank::ExplicitImport | DefinitionRank::DefaultExport)
+}
+
+fn is_live_exact_or_imported_candidate(
+    workspace_index: &WorkspaceIndex,
+    candidate: &DefinitionCandidate,
+) -> bool {
+    is_live_exact_syntax_candidate(workspace_index, candidate)
+        || is_live_import_export_candidate(workspace_index, candidate)
+}
+
 fn definition_live_exact_quality_note(
     workspace_index: &WorkspaceIndex,
     result: &DefinitionCutoverResult,
@@ -331,6 +415,61 @@ fn definition_live_exact_quality_note(
 
     format!(
         "definition live exact proof: live_exact_candidates={live_count}; legacy_fallbacks={fallback_count}; candidate_count={}; ambiguous_fallbacks={ambiguous_fallbacks}; import_export_fallbacks={import_export_fallbacks}; generated_no_source_fallbacks={generated_no_source_fallbacks}; dynamic_boundary_blockers={dynamic_boundary_blockers}; low_confidence_fallbacks={low_confidence_fallbacks}; partial live exact syntax cutover",
+        candidates.len()
+    )
+}
+
+fn definition_live_exact_or_imported_quality_note(
+    workspace_index: &WorkspaceIndex,
+    result: &DefinitionCutoverResult,
+    candidates: &[DefinitionCandidate],
+) -> String {
+    let live_exact_count = usize::from(matches!(
+        result,
+        DefinitionCutoverResult::Exact(candidate)
+            if is_live_exact_syntax_candidate(workspace_index, candidate)
+    ));
+    let live_import_export_count = usize::from(matches!(
+        result,
+        DefinitionCutoverResult::Exact(candidate) if is_live_import_export_candidate(
+            workspace_index,
+            candidate
+        )
+    ));
+    let fallback_count = usize::from(matches!(result, DefinitionCutoverResult::LegacyFallback(_)));
+    let dynamic_boundary_blockers = candidates
+        .iter()
+        .filter(|candidate| candidate.provenance == Provenance::DynamicBoundary)
+        .count();
+    let generated_no_source_fallbacks = candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.kind == EntityKind::GeneratedMember
+                || workspace_index.semantic_anchor_wire_location(candidate.anchor_id).is_none()
+        })
+        .count();
+    let low_confidence_fallbacks =
+        candidates.iter().filter(|candidate| candidate.confidence != Confidence::High).count();
+    let import_export_candidates = candidates.iter().filter(|candidate| {
+        matches!(
+            candidate.provenance,
+            Provenance::ImportExportInference | Provenance::LiteralRequireImport
+        )
+    });
+    let import_export_candidate_count = import_export_candidates.count();
+    let import_export_fallbacks = candidates
+        .iter()
+        .filter(|candidate| {
+            matches!(
+                candidate.provenance,
+                Provenance::ImportExportInference | Provenance::LiteralRequireImport
+            ) && !matches!(result, DefinitionCutoverResult::Exact(selected) if selected == *candidate)
+        })
+        .count();
+    let ambiguous_fallbacks = usize::from(candidates.len() > 1);
+
+    format!(
+        "definition live exact/imported proof: live_exact_candidates={live_exact_count}; live_import_export_candidates={live_import_export_count}; legacy_fallbacks={fallback_count}; candidate_count={}; ambiguous_fallbacks={ambiguous_fallbacks}; import_export_candidates={import_export_candidate_count}; import_export_fallbacks={import_export_fallbacks}; generated_no_source_fallbacks={generated_no_source_fallbacks}; dynamic_boundary_blockers={dynamic_boundary_blockers}; low_confidence_fallbacks={low_confidence_fallbacks}; partial live exact/imported cutover",
         candidates.len()
     )
 }
@@ -1218,6 +1357,124 @@ mod tests {
         assert!(note.contains("import_export_fallbacks=1"));
         let trace = first_trace(&outcome.receipt)?;
         assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Fallback);
+        Ok(())
+    }
+
+    #[test]
+    fn definition_live_exact_or_imported_accepts_single_source_backed_import_export_candidate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (index, source_backed) = source_backed_exact_candidate()?;
+        let imported = make_candidate_with_trace_fields(
+            "LiveExact::target",
+            source_backed.anchor_id.0,
+            source_backed.entity_id.0,
+            EntityKind::Subroutine,
+            Confidence::High,
+            Provenance::ImportExportInference,
+            DefinitionRank::ExplicitImport,
+            DefinitionRankReason::ExplicitImport { module: "LiveExact".to_string() },
+        );
+        let queries = StubSemanticQueries { definitions_result: vec![imported.clone()] };
+        let ctx = QueryContext::new(FileId(1), None, Some(0));
+
+        let outcome = goto_definition_live_exact_or_imported(&index, &queries, "target", &ctx);
+
+        assert_eq!(outcome.result, DefinitionCutoverResult::Exact(imported));
+        let note = outcome.receipt.notes.join(" ");
+        assert!(note.contains("live_import_export_candidates=1"));
+        assert!(note.contains("partial live exact/imported cutover"));
+        let trace = first_trace(&outcome.receipt)?;
+        assert_eq!(trace.source, ProviderFactSourceKind::CompilerFact);
+        assert_eq!(trace.provenance, Provenance::ImportExportInference);
+        assert_eq!(trace.confidence, Confidence::High);
+        assert_eq!(trace.fallback_state, ProviderFallbackState::Primary);
+        Ok(())
+    }
+
+    #[test]
+    fn definition_live_exact_or_imported_accepts_single_default_export_candidate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (index, source_backed) = source_backed_exact_candidate()?;
+        let default_export = make_candidate_with_trace_fields(
+            "LiveExact::target",
+            source_backed.anchor_id.0,
+            source_backed.entity_id.0,
+            EntityKind::Subroutine,
+            Confidence::High,
+            Provenance::ImportExportInference,
+            DefinitionRank::DefaultExport,
+            DefinitionRankReason::DefaultExport { module: "LiveExact".to_string() },
+        );
+        let queries = StubSemanticQueries { definitions_result: vec![default_export.clone()] };
+        let ctx = QueryContext::new(FileId(1), None, Some(0));
+
+        let outcome = goto_definition_live_exact_or_imported(&index, &queries, "target", &ctx);
+
+        assert_eq!(outcome.result, DefinitionCutoverResult::Exact(default_export));
+        let note = outcome.receipt.notes.join(" ");
+        assert!(note.contains("live_import_export_candidates=1"));
+        Ok(())
+    }
+
+    #[test]
+    fn definition_live_exact_or_imported_falls_back_for_ambiguous_imports()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (index, source_backed) = source_backed_exact_candidate()?;
+        let first = make_candidate_with_trace_fields(
+            "LiveExact::target",
+            source_backed.anchor_id.0,
+            source_backed.entity_id.0,
+            EntityKind::Subroutine,
+            Confidence::High,
+            Provenance::ImportExportInference,
+            DefinitionRank::ExplicitImport,
+            DefinitionRankReason::ExplicitImport { module: "LiveExact".to_string() },
+        );
+        let mut second = first.clone();
+        second.entity_id = EntityId(first.entity_id.0 + 1);
+        let queries = StubSemanticQueries { definitions_result: vec![first, second] };
+        let ctx = QueryContext::new(FileId(1), None, Some(0));
+
+        let outcome = goto_definition_live_exact_or_imported(&index, &queries, "target", &ctx);
+
+        assert!(matches!(outcome.result, DefinitionCutoverResult::LegacyFallback(_)));
+        let note = outcome.receipt.notes.join(" ");
+        assert!(note.contains("ambiguous_fallbacks=1"));
+        assert!(note.contains("import_export_fallbacks=2"));
+        assert!(
+            outcome
+                .receipt
+                .fact_source_traces
+                .iter()
+                .all(|trace| trace.fallback_state == ProviderFallbackState::Fallback)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn definition_live_exact_or_imported_falls_back_for_low_confidence_import()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (index, source_backed) = source_backed_exact_candidate()?;
+        let imported = make_candidate_with_trace_fields(
+            "LiveExact::target",
+            source_backed.anchor_id.0,
+            source_backed.entity_id.0,
+            EntityKind::Subroutine,
+            Confidence::Medium,
+            Provenance::ImportExportInference,
+            DefinitionRank::ExplicitImport,
+            DefinitionRankReason::ExplicitImport { module: "LiveExact".to_string() },
+        );
+        let queries = StubSemanticQueries { definitions_result: vec![imported] };
+        let ctx = QueryContext::new(FileId(1), None, Some(0));
+
+        let outcome = goto_definition_live_exact_or_imported(&index, &queries, "target", &ctx);
+
+        assert!(matches!(outcome.result, DefinitionCutoverResult::LegacyFallback(_)));
+        let note = outcome.receipt.notes.join(" ");
+        assert!(note.contains("low_confidence_fallbacks=1"));
+        let trace = first_trace(&outcome.receipt)?;
         assert_eq!(trace.fallback_state, ProviderFallbackState::Fallback);
         Ok(())
     }

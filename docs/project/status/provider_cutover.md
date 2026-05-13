@@ -17,10 +17,11 @@ fallback behavior and rollback proof.
 - Definition/reference shadow proof now records imported-symbol,
   framework-generated, dynamic-boundary, low-confidence fallback, stale fact, and
   real-workspace quality candidate/occurrence traces.
-- Definition now has a narrow live exact-syntax runtime slice: a single fresh,
-  high-confidence, source-backed `ExactAst` candidate can drive
-  `textDocument/definition`; imported/exported, generated/no-source, dynamic,
-  low-confidence, and ambiguous candidates retain legacy fallback.
+- Definition now has a narrow live exact/imported runtime slice: a single
+  fresh, high-confidence, source-backed `ExactAst`, explicit import, default
+  export, or export-tag candidate can drive `textDocument/definition`;
+  generated/no-source, dynamic, stale, low-confidence, and ambiguous candidates
+  retain legacy fallback.
 - References remain shadowed. Definition/reference runtime quality receipts
   exercise the live `textDocument/definition` and `textDocument/references`
   handlers against compiler-fact receipts in the same runtime workspace.
@@ -98,7 +99,7 @@ the relevant receipt command.
 | Diagnostics | `partial live` | Existing semantic queries suppress selected dynamic false positives, plus high-confidence imported/generated visible-symbol facts; fallback diagnostics remain available | Broader false-positive / false-negative fixture receipts before any additional diagnostic families move live |
 | Completion | `partial live / shadowed` | Existing completion paths remain live; high-confidence imported/exported compiler visible-symbol facts can contribute live candidates with legacy fallback; semantic-shadow fixtures still trace generated labels, rank deltas, and dynamic-boundary blockers without promoting those families | Ranking stability and real-workspace candidate quality before any broader live cutover |
 | Hover | `partial live / provenance-backed` | Runtime hover uses compiler-fact cutover for traced compiler fact, framework-adapter, and dynamic-boundary paths when fresh workspace facts are available; legacy hover remains fallback; hover cutover/shadow code labels imported, generated, dynamic-boundary, and fallback paths with fact-source traces and source/confidence text | Real-workspace hover quality receipts before broader generated/dynamic expansion |
-| Definition / goto | `partial live / ranked-shadowed` | A single fresh, high-confidence, source-backed `ExactAst` candidate can drive live `textDocument/definition` with legacy fallback. Imported/exported, generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and broader real-workspace candidates remain traced as fallback/shadow proof. | Imported/exported high-confidence definition slice before any broader navigation migration |
+| Definition / goto | `partial live / ranked-shadowed` | A single fresh, high-confidence, source-backed `ExactAst`, explicit import, default export, or export-tag candidate can drive live `textDocument/definition` with legacy fallback. Generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and broader real-workspace candidates remain traced as fallback/shadow proof. | Reference exact/static live slice before any broader navigation migration |
 | References | `ranked-shadowed` | Reference shadow compare tracks imported, generated, dynamic-boundary, low-confidence fallback, stale fact, and real-workspace quality occurrence traces before live migration. Runtime quality receipts compare the live `textDocument/references` result with the compiler cutover receipt without changing live behavior. | Narrow live cutover proof for exact/imported high-confidence occurrences before any broader navigation migration |
 | Rename | `boundary-shadowed` | Rename plan receipts trace exact static edits, dynamic-boundary blockers, stale compiler facts, low-confidence ambiguity, runtime blocker UX notes, and live-vs-compiler exact-static receipt data before any live compiler-backed refactor behavior | Real-workspace unsafe-edit receipts and a narrow lexical/package rename live-cutover proof before any broader refactor migration |
 | Safe delete | `boundary-shadowed` | Safe-delete receipts trace exact static allow decisions, dynamic-boundary blockers, framework-generated blockers, stale compiler facts, runtime blocker UX notes, and live-vs-compiler exact-static receipt data before any live compiler-backed refactor behavior | Real-workspace unsafe-delete receipts and explicit blocker UX in live safe-delete surfaces before any broader refactor migration |

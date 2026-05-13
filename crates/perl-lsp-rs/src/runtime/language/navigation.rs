@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use perl_lsp_rs_core::providers::navigation::definition_shadow::{
-    DefinitionCutoverResult, goto_definition_live_exact,
+    DefinitionCutoverResult, goto_definition_live_exact_or_imported,
 };
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
 use perl_workspace::semantic::queries::QueryContext;
@@ -869,6 +869,21 @@ fn semantic_definition_symbol(key: &crate::workspace_index::SymbolKey) -> String
     }
 }
 
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn semantic_definition_query_symbol(
+    key: &crate::workspace_index::SymbolKey,
+    current_package: &str,
+    import_source: Option<&str>,
+) -> String {
+    let is_import_resolved_bare_sub = key.kind == crate::workspace_index::SymKind::Sub
+        && key.sigil.is_none()
+        && !key.name.contains("::")
+        && key.pkg.as_ref() != current_package
+        && import_source.is_some_and(|source| source == key.pkg.as_ref());
+
+    if is_import_resolved_bare_sub { key.name.to_string() } else { semantic_definition_symbol(key) }
+}
+
 #[cfg(feature = "workspace")]
 fn cursor_in_regex_capture(regex: &regex::Regex, text: &str, cursor: usize, group: usize) -> bool {
     regex
@@ -1472,8 +1487,13 @@ impl LspServer {
                             {
                                 let workspace_symbol_key =
                                     super::to_workspace_symbol_key(&symbol_key);
-                                let semantic_symbol =
-                                    semantic_definition_symbol(&workspace_symbol_key);
+                                let import_source =
+                                    self.find_import_source(ast, &workspace_symbol_key.name);
+                                let semantic_symbol = semantic_definition_query_symbol(
+                                    &workspace_symbol_key,
+                                    current_package,
+                                    import_source.as_deref(),
+                                );
                                 if let Some(lsp_location) = self.live_exact_definition_location(
                                     uri,
                                     &semantic_symbol,
@@ -1712,12 +1732,16 @@ impl LspServer {
                     let index = coordinator.index();
                     index.with_semantic_queries_for_uri(uri, |file_id, queries| {
                         let ctx = QueryContext::new(file_id, None, Some(byte_offset));
-                        let mut receipt =
-                            goto_definition_live_exact(index.as_ref(), &queries, &symbol, &ctx)
-                                .receipt;
+                        let mut receipt = goto_definition_live_exact_or_imported(
+                            index.as_ref(),
+                            &queries,
+                            &symbol,
+                            &ctx,
+                        )
+                        .receipt;
                         let compiler_result_count = receipt.new_result.match_count;
                         receipt.notes.push(format!(
-                            "definition runtime proof: live_provider_results={live_provider_count}; compiler_fact_candidates={}; compiler_result_count={}; partial live exact syntax cutover",
+                            "definition runtime proof: live_provider_results={live_provider_count}; compiler_fact_candidates={}; compiler_result_count={}; partial live exact/imported cutover",
                             compiler_result_count, compiler_result_count
                         ));
                         receipt
@@ -1733,7 +1757,7 @@ impl LspServer {
                 "live_provider_count": live_provider_count,
                 "compiler_receipt": compiler_receipt,
                 "no_live_behavior_change": false,
-                "live_cutover": "partial_exact_syntax"
+                "live_cutover": "partial_exact_imported"
             })))
         }
     }
@@ -1758,7 +1782,12 @@ impl LspServer {
                 &doc.text,
             ) {
                 let workspace_symbol_key = super::to_workspace_symbol_key(&symbol_key);
-                let symbol = semantic_definition_symbol(&workspace_symbol_key);
+                let import_source = self.find_import_source(ast, &workspace_symbol_key.name);
+                let symbol = semantic_definition_query_symbol(
+                    &workspace_symbol_key,
+                    current_package,
+                    import_source.as_deref(),
+                );
                 let byte_offset = u32::try_from(offset).ok()?;
                 return Some((symbol, byte_offset));
             }
@@ -1782,7 +1811,7 @@ impl LspServer {
         let workspace_index = self.workspace_index()?;
         let outcome = workspace_index.with_semantic_queries_for_uri(uri, |file_id, queries| {
             let ctx = QueryContext::new(file_id, None, Some(byte_offset));
-            goto_definition_live_exact(workspace_index.as_ref(), &queries, symbol, &ctx)
+            goto_definition_live_exact_or_imported(workspace_index.as_ref(), &queries, symbol, &ctx)
         })?;
 
         let DefinitionCutoverResult::Exact(candidate) = outcome.result else {
