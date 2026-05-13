@@ -15,6 +15,7 @@ details remain in [semantic shadow compare](semantic_shadow_compare.md),
 Provider cutover state remains in [provider cutover](provider_cutover.md).
 Real-workspace timing proof lives in the
 [2026-05-13 Mojolicious baseline](../../forensics/2026-05-13-real-workspace-baseline-mojolicious.md).
+User-facing support claims are mapped in [SUPPORT_TIERS.md](SUPPORT_TIERS.md).
 
 ## Claim Boundary
 
