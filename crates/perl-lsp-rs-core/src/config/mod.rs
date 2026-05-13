@@ -720,7 +720,7 @@ impl WorkspaceConfig {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn fetch_perl_inc(config: &WorkspaceConfig, perl_args: &[String]) -> Vec<PathBuf> {
-        let oracle = match PerlOracleEnv::for_startup_inc_probe(config) {
+        let oracle = match PerlOracleEnv::for_module_resolution(config) {
             Some(o) => o,
             None => return Vec::new(),
         };
