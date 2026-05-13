@@ -690,6 +690,13 @@ fn extutils_mm_unix_mpl_args_join_map_qq_brackets() {
 }
 
 #[test]
+fn extutils_mm_unix_attrs_join_map_qq_hash_lookup() {
+    // From ExtUtils::MM_Unix: join may take a map BLOCK source over sorted
+    // attribute keys while the mapped qq[] expression interpolates a hash lookup.
+    assert_clean_parse(r#"my $attrs = join " ", map { qq[$_="$attrs{$_}"] } sort keys %attrs;"#);
+}
+
+#[test]
 fn extutils_mm_unix_split_command_map_quote_literal_pair() {
     // From ExtUtils::MM_Unix: function arguments may include map EXPR, LIST
     // where the expression is a unary-plus parenthesized key/value pair.
