@@ -747,6 +747,27 @@ review_after = "2026-06-07"
 expires = "2026-11-07"
 
 [[lane]]
+id = "badge_endpoints"
+workflow = ".github/workflows/badge-endpoints.yml"
+job = "refresh"
+tier = "frontdoor"
+kind = "automation"
+blocking = false
+default_pr = false
+runner = "ubuntu_latest"
+base_lem = 3
+owner = "ci"
+intent = "Regenerate repository-scoped public Shields endpoint JSON for README badges."
+failure_mode = "Public badge endpoint JSON drifts from the checked badge generator."
+proof_obligation = "Run cargo xtask badges and open a refresh PR only when badge JSON changes."
+evidence = ["badges/*.json", "refresh PR diff"]
+allowed_triggers = ["push", "workflow_dispatch"]
+expensive = false
+duplicate_of = []
+review_after = "2026-06-13"
+expires = "2026-11-13"
+
+[[lane]]
 id = "ux_regression_gate_path_filtered"
 workflow = ".github/workflows/ux-regression-gate.yml"
 job = "ux-regression-gate"

@@ -529,6 +529,108 @@ fn unicode_collate_map_expr_in_for_list() {
 }
 
 #[test]
+fn unicode_collate_pack_u_coderef_map_expr() {
+    // From Unicode::Collate: pack arguments may include map EXPR, LIST where
+    // the expression is a lexical coderef invocation.
+    assert_clean_parse(r#"return pack('U*', map $unicode_to_native->($_), @_);"#);
+}
+
+#[test]
+fn unicode_collate_unpack_u_coderef_map_expr() {
+    // From Unicode::Collate: return may use map EXPR, LIST where the
+    // expression is a lexical coderef call and the list is an unpack call.
+    assert_clean_parse(
+        r#"return map $native_to_unicode->($_), unpack('U*', shift(@_).pack('U*'));"#,
+    );
+}
+
+#[test]
+fn unicode_collate_override_hangul_map_expr() {
+    // From Unicode::Collate: map EXPR, LIST may assign the result of a helper
+    // call over a coderef-produced source list.
+    assert_clean_parse(r#"@ce = map _pack_override($_, $u, $der), $hang->($u);"#);
+}
+
+#[test]
+fn unicode_collate_decomposition_map_block() {
+    // From Unicode::Collate: parenthesized map BLOCK LIST may contain nested
+    // ternaries without leaving the caller waiting for a `)` before @decH.
+    assert_clean_parse(
+        r#"@ce = map({
+            exists $map->{$_} ? @{ $map->{$_} } :
+            $uXS && _exists_simple($_) ? _fetch_simple($_) :
+            $der->($_);
+        } @decH);"#,
+    );
+}
+
+#[test]
+fn unicode_collate_varce_return_map_expr() {
+    // From Unicode::Collate: return may use map EXPR, LIST where the
+    // expression is a method call and the list is a plain array.
+    assert_clean_parse(r#"return map $self->varCE($_), @ce;"#);
+}
+
+#[test]
+fn unicode_collate_gmatch_substr_return_map_expr() {
+    // From Unicode::Collate: return may use map EXPR, LIST where the mapped
+    // expression is a builtin call and the source list is a method call.
+    assert_clean_parse(
+        r#"return map substr($str, $_->[0], $_->[1]), $self->index($str, $sub, 0, 'g');"#,
+    );
+}
+
+#[test]
+fn unicode_collate_sort_map_arrayref_pipeline() {
+    // From Unicode::Collate: a return may pipeline map BLOCK, sort BLOCK, and
+    // map EXPR arrayref construction without leaving the statement open.
+    assert_clean_parse(
+        r#"return map { $_->[1] } sort { $a->[0] cmp $b->[0] } map [ $obj->getSortKey($_), $_ ], @_;"#,
+    );
+}
+
+#[test]
+fn unicode_collate_hst_join_map_split_expr() {
+    // From Unicode::Collate: join may take map EXPR, LIST where the source
+    // list is a split expression after the mapped function call.
+    assert_clean_parse(r#"my $curHST = join '', map getHST($_, $vers), split /;/, $jcps;"#);
+}
+
+#[test]
+fn dbi_registry_map_block_over_grep_block() {
+    // From DBI: map BLOCK LIST may take a grep BLOCK expression as the source
+    // list before a keys expression without leaving the parent assignment open.
+    assert_clean_parse(
+        r#"my %dbd_class_registry = map { $dbd_prefix_registry->{$_}->{class} => { prefix => $_ } } grep { exists $dbd_prefix_registry->{$_}->{class} } keys %{$dbd_prefix_registry};"#,
+    );
+}
+
+#[test]
+fn extutils_mm_unix_bootstrap_join_interpolated_map() {
+    // From ExtUtils::MM_Unix: a return join list may contain an interpolated
+    // map block in one string and a separate adjacent map block item.
+    assert_clean_parse(
+        r#"return join "\n",
+        "BOOTSTRAP = @{[map { qq{$_.bs} } @exts]}\n",
+        map { $self->_xs_make_bs($_) } @exts;"#,
+    );
+}
+
+#[test]
+fn capture_tiny_return_if_grep_comparison() {
+    // From Capture::Tiny: a postfix-if return condition may compare @_ with a
+    // grep BLOCK expression without treating the block as an unclosed list.
+    assert_clean_parse(r#"return 1 if @_ == grep { -f } @_;"#);
+}
+
+#[test]
+fn capture_tiny_stash_map_list_assignment() {
+    // From Capture::Tiny: lexical list assignment may consume a map BLOCK over
+    // a qw list without leaving the parenthesized declaration open.
+    assert_clean_parse(r#"my ($fh, $pos) = map { $stash->{$_}{$name} } qw/capture pos/;"#);
+}
+
+#[test]
 fn regexp_common_comment_combine_parenthesized_map_args() {
     // From Regexp::Common::comment: unary plus before a parenthesized map block
     // in a comma-separated argument list must not leave `combine` waiting for a `)`.
@@ -556,9 +658,50 @@ fn main_package_variable_in_paren_expr() {
 }
 
 #[test]
+fn unicode_normalize_typeglob_ternary_native_subs() {
+    // From Unicode::Normalize: a typeglob assignment may use a parenthesized
+    // main-package condition followed by ternary anonymous subs.
+    assert_clean_parse(
+        r#"*to_native = ($::IS_ASCII || $] < 5.008)
+             ? sub { return shift }
+             : sub { utf8::unicode_to_native(shift) };"#,
+    );
+}
+
+#[test]
+fn unicode_normalize_pack_u_map_block() {
+    // From Unicode::Normalize: pack arguments may include a map block before
+    // the remaining argument list.
+    assert_clean_parse(r#"return pack('U*', map { to_native($_) } @_);"#);
+}
+
+#[test]
+fn unicode_normalize_unpack_u_map_block() {
+    // From Unicode::Normalize: map may take an unpack call whose list contains
+    // a shifted argument concatenated with a pack call.
+    assert_clean_parse(r#"return map { from_native($_) } unpack('U*', shift(@_).pack('U*'));"#);
+}
+
+#[test]
+fn unicode_normalize_printable_map_sprintf_split() {
+    // From Unicode::Normalize: join may take a map block whose expression calls
+    // sprintf, followed by a split expression as the map source list.
+    assert_clean_parse(r#"return join " ", map { sprintf "\\x%02x", ord $_ } split "", $s;"#);
+}
+
+#[test]
 fn x_repetition_prefix_decrement_in_parens() {
     // From Pod::Simple::XHTML: repetition RHS may be a prefix decrement.
     assert_clean_parse(r#"push @out, ('  ' x --$indent) . '</li>';"#);
+}
+
+#[test]
+fn pod_simple_xhtml_entity_regex_map_assignment() {
+    // From Pod::Simple::XHTML: a parenthesized lexical assignment may use
+    // map EXPR, LIST followed by a join expression with another map chain.
+    assert_clean_parse(
+        r#"my ($entity_re) = map qr{$_}, join '|', map quotemeta, sort keys %entity_to_char;"#,
+    );
 }
 
 #[test]

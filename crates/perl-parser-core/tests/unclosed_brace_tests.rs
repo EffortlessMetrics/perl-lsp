@@ -96,6 +96,24 @@ DIAGNOSTIC
     assert_clean_parse(source);
 }
 
+#[test]
+fn test_more_use_ok_regex_then_diag_heredoc() {
+    // From Test::More: a regex substitution before the heredoc diagnostic should
+    // not leave the enclosing unless block classified as an unclosed brace.
+    let source = r#"unless($ok) {
+    chomp $eval_error;
+    $@ =~ s{^BEGIN failed--compilation aborted at .*$}
+            {BEGIN failed--compilation aborted at $filename line $line.}m;
+    $tb->diag(<<DIAGNOSTIC);
+    Tried to use '$module'.
+    Error:  $eval_error
+DIAGNOSTIC
+
+}
+"#;
+    assert_clean_parse(source);
+}
+
 // --- Combined patterns from CPAN corpus ---
 
 #[test]

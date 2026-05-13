@@ -5,8 +5,8 @@
 
 ## Current Release Call
 
-**Current release train**: `v0.13.2` public-alpha patch prep
-**Workspace version line**: `v0.13.2`
+**Current release train**: `v0.14.0` public-alpha patch prep
+**Workspace version line**: `v0.14.0`
 **Published crate surface**: 31 crates
 **Release target**: channel verification across GitHub Releases, crates.io, Docker, VS Code Marketplace, Open VSX, and the owned Homebrew tap
 **Ship readiness**: release dispatch is intentionally pending. Run the release-prep checks, then use release orchestration only after the prep PR is merged.
@@ -14,7 +14,14 @@
 ## Active Blockers
 
 - No known install-surface blocker after the Homebrew, GNU/musl, installer, and VS Code managed-binary guards landed
-- Remaining work is operational: finish `v0.13.2` prep verification, then publish and record final channel receipts
+- Remaining work is operational: finish `v0.14.0` prep verification, then publish and record final channel receipts
+
+## 0.14.0 Prep Receipts (2026-05-12)
+
+- Release notes file: `docs/releases/0.14.0.md`
+- Changelog entry: `CHANGELOG.md` `[0.14.0]`
+- Version surfaces: workspace crates, feature catalog metadata, and VS Code extension package staged at `0.14.0`
+- Required pre-dispatch checks: version sync, release-history gating, release surface verification, release artifact checks, and install/receipts coverage (see [0.14.0 readiness queue](../../releases/0.14.0-readiness.md))
 
 ## 0.13.2 Prep Receipts (2026-05-02)
 
@@ -85,4 +92,4 @@ Native + Bridge preview. Harden preview flows is active work.
 
 ---
 
-*Last Updated: 2026-05-10*
+*Last Updated: 2026-05-12*
