@@ -726,6 +726,35 @@
       ]
     },
     {
+      "id": "mojolicious_navigation_quality",
+      "scenario_file": "ux_scenario_30_mojolicious_navigation_quality.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "goto_definition",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request definition and references over the Mojolicious real-workspace fixture and record navigation quality signals",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "definition and references probes return without JSON-RPC errors",
+        "non-empty navigation results use valid LSP Location or LocationLink shapes",
+        "receipt records exact, imported, module-resolution, dynamic-shaped, and declaration-including fallback surfaces"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "incremental_text_sync_recovery",
       "scenario_file": "ux_scenario_19_incremental_text_sync.rs",
       "subsystem_owner": "text_sync",
