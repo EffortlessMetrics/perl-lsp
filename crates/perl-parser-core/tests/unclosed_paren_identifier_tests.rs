@@ -615,6 +615,13 @@ fn capture_tiny_return_if_grep_comparison() {
 }
 
 #[test]
+fn capture_tiny_stash_map_list_assignment() {
+    // From Capture::Tiny: lexical list assignment may consume a map BLOCK over
+    // a qw list without leaving the parenthesized declaration open.
+    assert_clean_parse(r#"my ($fh, $pos) = map { $stash->{$_}{$name} } qw/capture pos/;"#);
+}
+
+#[test]
 fn regexp_common_comment_combine_parenthesized_map_args() {
     // From Regexp::Common::comment: unary plus before a parenthesized map block
     // in a comma-separated argument list must not leave `combine` waiting for a `)`.
