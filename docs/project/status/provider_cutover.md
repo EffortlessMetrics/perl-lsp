@@ -40,6 +40,10 @@ support claims, real-workspace receipts, and next PRs, see
   completion slice promotes only high-confidence imported/exported
   visible-symbol facts; generated and dynamic-boundary candidates remain
   shadowed or blocked.
+- The Mojolicious scenario 28 completion ranking receipt now records
+  real-workspace visible-symbol candidate counts, top-N churn, useful/noisy
+  additions, generated labels, and dynamic/fallback labels without broadening
+  live completion behavior.
 - Hover provenance proof now records imported-symbol, framework-generated,
   dynamic-boundary, and fallback paths with typed fact-source traces and source /
   confidence labels.
@@ -128,7 +132,7 @@ the relevant receipt command.
 | Provider surface | Current state | Current source of truth | Next proof |
 | --- | --- | --- | --- |
 | Diagnostics | `partial live` | Existing semantic queries suppress selected dynamic false positives, plus high-confidence imported/generated visible-symbol facts; fallback diagnostics remain available | Broader false-positive / false-negative fixture receipts before any additional diagnostic families move live |
-| Completion | `partial live / shadowed` | Existing completion paths remain live; high-confidence imported/exported compiler visible-symbol facts can contribute live candidates with legacy fallback; semantic-shadow fixtures still trace generated labels, rank deltas, and dynamic-boundary blockers without promoting those families | Ranking stability and real-workspace candidate quality before any broader live cutover |
+| Completion | `partial live / shadowed` | Existing completion paths remain live; high-confidence imported/exported compiler visible-symbol facts can contribute live candidates with legacy fallback; semantic-shadow fixtures and the Mojolicious scenario 28 ranking receipt trace generated labels, rank deltas, useful/noisy additions, and dynamic-boundary blockers without promoting those families | Additional real-workspace candidate quality across more project shapes before any broader generated, dynamic, method, or workspace-wide live cutover |
 | Hover | `partial live / provenance-backed` | Runtime hover uses compiler-fact cutover for traced compiler fact, framework-adapter, and dynamic-boundary paths when fresh workspace facts are available; legacy hover remains fallback; hover cutover/shadow code labels imported, generated, dynamic-boundary, and fallback paths with fact-source traces and source/confidence text | Real-workspace hover quality receipts before broader generated/dynamic expansion |
 | Definition / goto | `partial live / ranked-shadowed` | A single fresh, high-confidence, source-backed `ExactAst`, explicit import, default export, or export-tag candidate can drive live `textDocument/definition` with legacy fallback. Generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and broader real-workspace candidates remain traced as fallback/shadow proof. | Broader generated/dynamic migration requires fresh navigation quality receipts and no false-exact source-location claims |
 | References | `partial live / ranked-shadowed` | Fresh, high-confidence, source-backed `ExactAst`, `ImportExportInference`, or `LiteralRequireImport` occurrence references can drive live `textDocument/references` when `includeDeclaration=false`; generated/no-source, dynamic-boundary, low-confidence, ambiguous, stale, and declaration-including requests remain traced as fallback/shadow proof. | Broader references migration requires precision/recall receipts for generated, coderef, typeglob, and declaration-including cases |
