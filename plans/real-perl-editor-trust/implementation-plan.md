@@ -358,6 +358,9 @@ Goal
 Continue source-backed fixture or narrow parser-fix work from
 `parser.md#raw-failure-buckets`.
 
+Current shape analysis:
+[unclosed_paren_identifier shape analysis](../../docs/project/status/parser_unclosed_paren_identifier_shapes.md).
+
 Production delta
 
 Each PR locks one real-Perl parser shape or fixes one narrow parser behavior
