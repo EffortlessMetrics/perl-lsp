@@ -153,26 +153,28 @@ Keep these out of the first map/grep/sort grammar repair. They are adjacent
 but they do not share the same list-operator boundary as the repeated map/grep
 fixture train.
 
-## Boundary Receipts
+## AST Boundary Receipts
 
-PR #8881 added AST-level boundary receipts in
-`crates/perl-parser-core/tests/list_operator_boundary_receipts.rs`. These tests
-prove that the current parser keeps representative source operands inside the
-intended call tree for:
+`crates/perl-parser-core/tests/list_operator_boundary_receipts.rs` now asserts
+AST ownership for three representative list-operator shapes:
 
-- DBI-style `map -> grep -> keys`
-- ExtUtils-style `join -> map -> sort -> keys`
-- Unicode::Collate-style `join -> map -> split`
+- DBI map/grep/keys: the outer `map` owns the `grep` source, and the nested
+  `grep` owns the `keys` source.
+- ExtUtils attrs map/sort/keys: the outer `join` owns the `map` result, the
+  `map` owns the `sort` source, and `sort` owns the `keys` source.
+- Unicode::Collate map/split: the outer `join` owns the `map` result, and the
+  `map` owns the `split` source.
 
-These receipts are stronger than clean-parse fixtures because they assert the
-shape of the parsed call tree, not only the absence of `Error` or `Missing*`
-nodes. They still do not prove current corpus movement or bucket-count
-reduction; that requires the Linux corpus refresh tracked by #8863.
+These receipt tests prove current AST shape for the representative cases above.
+They are stronger than clean-parse fixtures because they assert the parsed call
+tree shape, not only the absence of `Error` or `Missing*` nodes. They do not
+prove Linux corpus movement, and they do not remove the need for a fresh corpus
+receipt before any raw bucket-count claim.
 
 ## Recommended Next Parser PR
 
 Do not start a runtime repair from this stale bucket note alone. Start the
-list-operator boundary repair only when current evidence supplies a failing
+list-operator boundary lane only when current evidence supplies a failing
 source-backed case:
 
 ```text
@@ -182,8 +184,10 @@ fix(parser): repair repeated map/grep/sort expression boundary
 Scope:
 
 - one parser behavior change
-- existing `unclosed_paren_identifier_tests` fixtures as the safety net
-- `list_operator_boundary_receipts` as the AST-shape safety net
+- existing `unclosed_paren_identifier_tests` and
+  `list_operator_boundary_receipts` fixtures as the safety net
+- a failing source-backed case or fresh Linux receipt evidence before changing
+  runtime parser behavior
 - no generated status hand edits
 - no bucket-count movement claim without the Linux corpus refresh
 
