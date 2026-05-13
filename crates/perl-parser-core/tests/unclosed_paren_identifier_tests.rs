@@ -608,6 +608,13 @@ fn extutils_mm_unix_bootstrap_join_interpolated_map() {
 }
 
 #[test]
+fn capture_tiny_return_if_grep_comparison() {
+    // From Capture::Tiny: a postfix-if return condition may compare @_ with a
+    // grep BLOCK expression without treating the block as an unclosed list.
+    assert_clean_parse(r#"return 1 if @_ == grep { -f } @_;"#);
+}
+
+#[test]
 fn regexp_common_comment_combine_parenthesized_map_args() {
     // From Regexp::Common::comment: unary plus before a parenthesized map block
     // in a comma-separated argument list must not leave `combine` waiting for a `)`.
