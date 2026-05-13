@@ -1416,11 +1416,20 @@ use Overlay::OpenDoc;
     fn test_resolve_module_path_with_uri_honors_system_inc_opt_in() -> TestResult {
         // This test shells out to `perl -I <path> -e 'print join("\n", @INC)'`.
         // Skip gracefully on machines where perl is not installed.
-        let perl_available = std::process::Command::new("perl")
-            .arg("--version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
+        let mut availability_config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+        availability_config.use_system_inc = true;
+        availability_config.perl_path = Some("perl".to_string());
+        let perl_available =
+            perl_lsp_rs_core::config::PerlOracleEnv::for_module_resolution(&availability_config)
+                .map(|oracle| {
+                    let mut command = oracle.into_command();
+                    command
+                        .arg("--version")
+                        .output()
+                        .map(|output| output.status.success())
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false);
         if !perl_available {
             eprintln!(
                 "SKIP: test_resolve_module_path_with_uri_honors_system_inc_opt_in — perl not found on PATH"

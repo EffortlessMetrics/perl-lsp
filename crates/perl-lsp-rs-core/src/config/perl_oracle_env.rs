@@ -192,6 +192,29 @@ impl PerlOracleEnv {
         })
     }
 
+    /// Constructor for module-resolution system `@INC` probes.
+    ///
+    /// Module resolution should only ask the interpreter for startup `@INC`
+    /// when the user has opted into system includes. When enabled, its
+    /// subprocess contract matches the startup probe:
+    ///
+    /// - `allow_perl5lib`: mirrors `config.use_perl5lib`.
+    /// - `allow_perl5opt`: always `false` so ambient runtime flags cannot
+    ///   alter module lookup.
+    /// - `allow_local_lib`: always `false`; explicit config owns lookup.
+    /// - `timeout`: `SYSTEM_INC_PROBE_TIMEOUT`.
+    /// - `cwd` and `perl_binary`: resolved by the startup `@INC` probe helper.
+    ///
+    /// Returns `None` when `use_system_inc` is disabled or the Perl binary
+    /// cannot be resolved.
+    pub fn for_module_resolution(config: &WorkspaceConfig) -> Option<Self> {
+        if !config.use_system_inc {
+            return None;
+        }
+
+        Self::for_startup_inc_probe(config)
+    }
+
     /// Constructor for language-level Perl invocations that run on behalf of the user
     /// but must not be affected by ambient runtime injection.
     ///
@@ -319,6 +342,11 @@ pub struct PerlOracleEnv;
 impl PerlOracleEnv {
     /// Returns `None` on WASM (no subprocess support).
     pub fn for_startup_inc_probe(_config: &WorkspaceConfig) -> Option<Self> {
+        None
+    }
+
+    /// Returns `None` on WASM (no subprocess support).
+    pub fn for_module_resolution(_config: &WorkspaceConfig) -> Option<Self> {
         None
     }
 
@@ -536,6 +564,104 @@ mod tests {
             assert!(!e.allow_perl5opt, "allow_perl5opt must always be false for startup probe");
             assert!(!e.allow_local_lib, "allow_local_lib must always be false for startup probe");
         }
+    }
+
+    /// `for_module_resolution` maps system-include and PERL5LIB config to the
+    /// module-resolution oracle contract.
+    #[test]
+    fn for_module_resolution_respects_config_flags() -> TestResult {
+        let disabled_config = WorkspaceConfig {
+            perl_path: Some("perl".to_string()),
+            use_system_inc: false,
+            use_perl5lib: true,
+            ..WorkspaceConfig::default()
+        };
+        assert!(
+            PerlOracleEnv::for_module_resolution(&disabled_config).is_none(),
+            "module resolution oracle must be disabled when use_system_inc=false"
+        );
+
+        let enabled_config = WorkspaceConfig { use_system_inc: true, ..disabled_config };
+        let env = PerlOracleEnv::for_module_resolution(&enabled_config)
+            .ok_or("for_module_resolution returned None unexpectedly")?;
+        assert!(env.allow_perl5lib, "allow_perl5lib should mirror use_perl5lib=true");
+        assert!(!env.allow_perl5opt, "module resolution must strip PERL5OPT");
+        assert!(!env.allow_local_lib, "module resolution must strip local::lib env vars");
+
+        let no_perl5lib_config = WorkspaceConfig { use_perl5lib: false, ..enabled_config };
+        let env = PerlOracleEnv::for_module_resolution(&no_perl5lib_config)
+            .ok_or("for_module_resolution returned None unexpectedly")?;
+        assert!(!env.allow_perl5lib, "allow_perl5lib should mirror use_perl5lib=false");
+
+        Ok(())
+    }
+
+    /// `for_module_resolution` strips PERL5OPT and respects PERL5LIB opt-in.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn for_module_resolution_strips_perl5opt_and_gates_perl5lib() -> TestResult {
+        let _env_guard = env_lock()?;
+        let perl = match perl_path() {
+            Some(p) => p,
+            None => return Ok(()),
+        };
+
+        let poison_dir = tempfile::tempdir()?;
+        let poison_path = poison_dir.path().to_string_lossy().into_owned();
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        let config = WorkspaceConfig {
+            perl_path: Some(perl.to_string_lossy().to_string()),
+            use_system_inc: true,
+            use_perl5lib: true,
+            ..WorkspaceConfig::default()
+        };
+
+        unsafe { std::env::set_var("PERL5LIB", &poison_path) };
+        unsafe { std::env::set_var("PERL5OPT", "-Mstrict") };
+        let mut oracle = PerlOracleEnv::for_module_resolution(&config)
+            .ok_or("for_module_resolution returned None unexpectedly")?;
+        oracle.cwd = cwd.clone();
+        let mut cmd = oracle.into_command();
+        cmd.args([
+            "-e",
+            "print (($ENV{PERL5LIB} // 'UNSET') . \"\\n\" . ($ENV{PERL5OPT} // 'UNSET'))",
+        ]);
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        let out = cmd.output()?;
+
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            stdout.lines().next().is_some_and(|line| line.contains(&poison_path)),
+            "PERL5LIB must pass through when use_perl5lib=true; got: {stdout:?}"
+        );
+        assert!(
+            stdout.lines().nth(1).is_some_and(|line| line == "UNSET"),
+            "PERL5OPT must be stripped for module resolution; got: {stdout:?}"
+        );
+
+        let no_perl5lib_config = WorkspaceConfig { use_perl5lib: false, ..config };
+        let mut oracle = PerlOracleEnv::for_module_resolution(&no_perl5lib_config)
+            .ok_or("for_module_resolution returned None unexpectedly")?;
+        oracle.cwd = cwd;
+        let mut cmd = oracle.into_command();
+        cmd.args(["-e", "print $ENV{PERL5LIB} // 'UNSET'"]);
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        let out = cmd.output()?;
+
+        unsafe { std::env::remove_var("PERL5LIB") };
+        unsafe { std::env::remove_var("PERL5OPT") };
+
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(
+            stdout.trim(),
+            "UNSET",
+            "PERL5LIB must be stripped when use_perl5lib=false; got: {stdout:?}",
+        );
+
+        Ok(())
     }
 
     /// `for_startup_inc_probe` with `usePerl5lib=false` must strip PERL5LIB:
