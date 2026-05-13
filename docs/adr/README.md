@@ -33,6 +33,7 @@ Current generated and human-owned status sources include:
 | ADR | Status | Date | Title | Description |
 |-----|--------|------|-------|-------------|
 | [PLSP-ADR-0001](PLSP-ADR-0001-generated-status-is-control-plane.md) | Accepted | 2026-05-13 | Generated Status Is Control Plane | Generated status routes parser and editor-trust work, while specs and plans interpret it without duplicating generated content |
+| [PLSP-ADR-0002](PLSP-ADR-0002-confidence-before-cutover.md) | Accepted | 2026-05-13 | Confidence Before Provider Cutover | Compiler-backed provider behavior requires confidence, freshness, fallback, blocker, and live-comparison receipts before broader cutover |
 
 ### Legacy Series (0001–0002)
 
