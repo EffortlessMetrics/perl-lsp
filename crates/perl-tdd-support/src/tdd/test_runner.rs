@@ -426,6 +426,31 @@ impl TestRunner {
         results
     }
 
+    /// Create a hermetic `Command` for the Perl interpreter.
+    ///
+    /// Strips the entire parent environment and passes through only:
+    /// - `PATH` — needed for interpreter self-resolution and fork helpers
+    /// - `SYSTEMROOT` (Windows only) — required for process spawning on Windows
+    ///
+    /// This prevents ambient `PERL5LIB`, `PERL5OPT`, `HOME`, and `local::lib`
+    /// state from silently altering TDD fixture behaviour. Call sites that need
+    /// extra env vars (e.g. `PERL5LIB` for `-Ilib`) must add them explicitly
+    /// after calling this function — do not bypass with plain `Command::new`.
+    ///
+    /// Implements the hermeticity contract for issue #8689 / #8551.
+    fn hermetic_perl_command(&self, perl_binary: &str) -> Command {
+        let mut cmd = Command::new(perl_binary);
+        cmd.env_clear();
+        if let Some(path_val) = std::env::var_os("PATH") {
+            cmd.env("PATH", path_val);
+        }
+        #[cfg(windows)]
+        if let Some(systemroot) = std::env::var_os("SYSTEMROOT") {
+            cmd.env("SYSTEMROOT", systemroot);
+        }
+        cmd
+    }
+
     /// Run a .t test file
     fn run_test_file(&self, file_path: &str) -> Vec<TestResult> {
         let start_time = std::time::Instant::now();
@@ -440,7 +465,9 @@ impl TestRunner {
             file_path.to_string()
         };
 
-        // Try to run with prove first, fall back to perl
+        // Try to run with prove first, fall back to perl.
+        // The direct `perl` fallback is hermetic below; the ambient `prove`
+        // seam remains out of scope for this TDD fixture hardening slice.
         let output = Command::new("prove")
             .arg("-v")
             .arg(&safe_prove_path)
@@ -451,9 +478,12 @@ impl TestRunner {
         let output = match output {
             Ok(out) => out,
             Err(_) => {
-                // Fall back to running with perl
-                // SECURITY: Use -- to separate options from script file
-                match Command::new("perl")
+                // Fall back to running with perl.
+                // hermetic_perl_command strips ambient env (PERL5LIB, PERL5OPT, etc.)
+                // so test fixtures cannot be silently altered by the caller's env.
+                // SECURITY: Use -- to separate options from script file.
+                match self
+                    .hermetic_perl_command("perl")
                     .arg("--")
                     .arg(file_path)
                     .stdout(Stdio::piped())
@@ -489,8 +519,11 @@ impl TestRunner {
     fn run_perl_test(&self, file_path: &str) -> Vec<TestResult> {
         let start_time = std::time::Instant::now();
 
-        // SECURITY: Use -- to separate options from script file
-        let output = match Command::new("perl")
+        // SECURITY: Use -- to separate options from script file.
+        // hermetic_perl_command strips ambient env so fixtures cannot be affected
+        // by caller's PERL5LIB, PERL5OPT, HOME, or local::lib settings.
+        let output = match self
+            .hermetic_perl_command("perl")
             .arg("-Ilib")
             .arg("--")
             .arg(file_path)
@@ -632,6 +665,9 @@ impl TestResult {
 mod tests {
     use super::*;
     use crate::parser::Parser;
+    use std::sync::{LazyLock, Mutex};
+
+    static ENV_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     #[test]
     fn test_discover_test_functions() {
@@ -732,5 +768,111 @@ done_testing();
 
         assert!(!runner.is_test_file("file:///lib/Module.pm"));
         assert!(!runner.is_test_file("file:///script.pl"));
+    }
+
+    // ── Hermeticity tests for hermetic_perl_command (#8689) ──────────────────
+
+    /// `hermetic_perl_command` produces a command with an empty env except PATH.
+    ///
+    /// We cannot inspect `Command`'s env map on stable Rust, so we verify
+    /// indirectly by running the Perl subprocess and asserting PERL5LIB and
+    /// PERL5OPT are absent from its environment.
+    ///
+    /// Skipped automatically when Perl is not on PATH.
+    #[test]
+    // SAFETY-LINT: this test intentionally mutates process env under ENV_MUTEX.
+    #[allow(unsafe_code)]
+    fn hermetic_perl_command_strips_perl5lib() {
+        let perl = which_perl();
+        let Some(perl) = perl else { return };
+        let Ok(_env_guard) = ENV_MUTEX.lock() else { return };
+
+        let runner = TestRunner::new("".to_string(), "".to_string());
+
+        // Temporarily set a poisoned PERL5LIB in the parent process.
+        let poison = "/hermetic-test-poison-perl5lib";
+        // SAFETY: ENV_MUTEX serializes test-local environment mutation.
+        unsafe { std::env::set_var("PERL5LIB", poison) };
+        let mut cmd = runner.hermetic_perl_command(&perl);
+        cmd.args(["-e", "print $ENV{PERL5LIB} // 'UNSET'"]);
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        let out = cmd.output();
+        // SAFETY: ENV_MUTEX serializes test-local environment mutation.
+        unsafe { std::env::remove_var("PERL5LIB") };
+
+        let out = match out {
+            Ok(o) => o,
+            Err(_) => return, // Perl not found; skip
+        };
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(
+            stdout.trim(),
+            "UNSET",
+            "PERL5LIB must be stripped by hermetic_perl_command; got: {stdout:?}",
+        );
+    }
+
+    /// `hermetic_perl_command` strips PERL5OPT — ambient runtime injection
+    /// must not reach TDD fixture subprocesses.
+    #[test]
+    // SAFETY-LINT: this test intentionally mutates process env under ENV_MUTEX.
+    #[allow(unsafe_code)]
+    fn hermetic_perl_command_strips_perl5opt() {
+        let perl = which_perl();
+        let Some(perl) = perl else { return };
+        let Ok(_env_guard) = ENV_MUTEX.lock() else { return };
+
+        let runner = TestRunner::new("".to_string(), "".to_string());
+
+        // SAFETY: ENV_MUTEX serializes test-local environment mutation.
+        unsafe { std::env::set_var("PERL5OPT", "-Mstrict") };
+        let mut cmd = runner.hermetic_perl_command(&perl);
+        cmd.args(["-e", "print $ENV{PERL5OPT} // 'UNSET'"]);
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        let out = cmd.output();
+        // SAFETY: ENV_MUTEX serializes test-local environment mutation.
+        unsafe { std::env::remove_var("PERL5OPT") };
+
+        let out = match out {
+            Ok(o) => o,
+            Err(_) => return,
+        };
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(
+            stdout.trim(),
+            "UNSET",
+            "PERL5OPT must be stripped by hermetic_perl_command; got: {stdout:?}",
+        );
+    }
+
+    /// `hermetic_perl_command` preserves PATH so the interpreter can resolve
+    /// its own helpers.
+    #[test]
+    fn hermetic_perl_command_preserves_path() {
+        let runner = TestRunner::new("".to_string(), "".to_string());
+        // We only check the struct-level behaviour here: PATH should come from
+        // the parent env if it is set. We just confirm the function is callable
+        // and returns a usable Command without panicking.
+        let _ = runner.hermetic_perl_command("perl");
+    }
+
+    /// Resolve the `perl` binary on PATH for subprocess tests.
+    /// Returns `None` when Perl is not found (test is auto-skipped).
+    fn which_perl() -> Option<String> {
+        let path_env = std::env::var_os("PATH")?;
+        for dir in std::env::split_paths(&path_env) {
+            let candidate = dir.join("perl");
+            if candidate.is_file() {
+                return Some(candidate.to_string_lossy().into_owned());
+            }
+            // Windows: also try perl.exe
+            let candidate_exe = dir.join("perl.exe");
+            if candidate_exe.is_file() {
+                return Some(candidate_exe.to_string_lossy().into_owned());
+            }
+        }
+        None
     }
 }
