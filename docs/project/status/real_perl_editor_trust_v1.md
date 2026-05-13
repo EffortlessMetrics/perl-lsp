@@ -49,9 +49,9 @@ blocker when relevant.
 | Surface | Current state | Real-workspace receipt state | Fallback / blocker coverage | Next proof |
 | --- | --- | --- | --- | --- |
 | Completion | `partial live / shadowed` | Mojolicious visible-symbol ranking receipt covers candidate counts, top-N churn, useful/noisy additions, generated labels, and dynamic/fallback labels for scenario 28 | Legacy fallback; generated and dynamic-boundary candidates remain shadowed or blocked | Additional project-shape completion quality receipts before broader generated, dynamic, method, or workspace-wide completion cutover |
-| Hover | `partial live / provenance-backed` | Mojolicious baseline covers first-hover latency only; provenance quality receipt pending | Legacy fallback; imported, generated, dynamic-boundary, and fallback paths are labeled in receipts | Mojolicious hover provenance receipt for exact, imported, generated, dynamic, fallback, stale/missing fact cases |
-| Goto definition | `partial live exact/imported` | Navigation real-workspace quality candidates are in shadow compare; Mojolicious baseline covers goto latency only | Legacy fallback for generated/no-source, dynamic, stale, low-confidence, and ambiguous candidates | Navigation quality receipt proving current live exact/import/export behavior and fallback counts on the real-workspace fixture |
-| References | `partial live exact/imported` | References real-workspace quality candidates are in shadow compare; broader precision/recall receipt pending | Legacy fallback for generated/no-source, declaration-including, coderef, typeglob, dynamic, stale, low-confidence, and ambiguous cases | Navigation quality receipt for exact/import/export/literal-require hits, blockers, and fallback counts |
+| Hover | `partial live / provenance-backed` | Mojolicious scenario 29 records exact, imported, generated/framework, dynamic-shaped, module-resolution, and fallback/missing-fact hover surfaces | Legacy fallback; imported, generated, dynamic-boundary, and fallback paths are labeled in receipts | Additional project-shape hover quality receipts before broader generated/dynamic expansion |
+| Goto definition | `partial live exact/imported` | Mojolicious scenario 30 records module-resolution, exact-local, imported-symbol, and dynamic-boundary-shaped definition probes | Legacy fallback for generated/no-source, dynamic, stale, low-confidence, and ambiguous candidates | Additional generated/dynamic project-shape receipts with no false-exact source-location claims |
+| References | `partial live exact/imported` | Mojolicious scenario 30 records exact-local, imported-symbol, and declaration-including boundary reference probes | Legacy fallback for generated/no-source, declaration-including, coderef, typeglob, dynamic, stale, low-confidence, and ambiguous cases | Precision/recall receipts for generated, coderef, typeglob, dynamic, and broader declaration-including cases |
 | Diagnostics | `partial live` | Mojolicious baseline explicitly defers diagnostic correctness | Conservative diagnostics remain when semantic evidence is absent, ambiguous, stale, or dynamic | Broader false-positive / false-negative receipts plus real-workspace diagnostic correctness proof |
 | Document symbols | `shadowed` | No dedicated real-workspace document-symbol quality receipt yet | Existing provider remains live; compiler/source/freshness candidates stay shadowed | Real-workspace document-symbol quality receipt, then source-backed compiler document-symbol live slice |
 | Workspace symbols | `shadowed` | Shadow compare records quality candidates; noise/rank receipt pending | Existing workspace index remains live; stale/dynamic/generated candidates stay gated | Real-workspace workspace-symbol noise receipt before live high-confidence compiler symbols |
@@ -64,13 +64,10 @@ blocker when relevant.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `test(hover): add Mojolicious provenance quality receipt`
-2. `test(navigation): add Mojolicious live navigation receipt`
-3. `docs(provider): wire additional real-workspace receipts into provider confidence matrix`
-4. `feat(document-symbols): enable source-backed compiler document symbols`
-5. `test(workspace-symbols): add real-workspace compiler symbol noise receipt`
-6. `feat(rename): enable lexical rename from ScopeGraph`
-7. `feat(framework): add Class::Tiny generated-member facts`
+1. `feat(document-symbols): enable source-backed compiler document symbols`
+2. `test(workspace-symbols): add real-workspace compiler symbol noise receipt`
+3. `feat(rename): enable lexical rename from ScopeGraph`
+4. `feat(framework): add Class::Tiny generated-member facts`
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
 Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain
