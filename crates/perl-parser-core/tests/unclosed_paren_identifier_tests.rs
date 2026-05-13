@@ -588,6 +588,15 @@ fn unicode_collate_hst_join_map_split_expr() {
 }
 
 #[test]
+fn dbi_registry_map_block_over_grep_block() {
+    // From DBI: map BLOCK LIST may take a grep BLOCK expression as the source
+    // list before a keys expression without leaving the parent assignment open.
+    assert_clean_parse(
+        r#"my %dbd_class_registry = map { $dbd_prefix_registry->{$_}->{class} => { prefix => $_ } } grep { exists $dbd_prefix_registry->{$_}->{class} } keys %{$dbd_prefix_registry};"#,
+    );
+}
+
+#[test]
 fn regexp_common_comment_combine_parenthesized_map_args() {
     // From Regexp::Common::comment: unary plus before a parenthesized map block
     // in a comma-separated argument list must not leave `combine` waiting for a `)`.
