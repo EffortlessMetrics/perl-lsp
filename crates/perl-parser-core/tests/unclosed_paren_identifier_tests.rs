@@ -651,6 +651,15 @@ fn extutils_mm_unix_for_list_with_parenthesized_map() {
 }
 
 #[test]
+fn extutils_mm_unix_grep_parens_over_map_arrayref_default() {
+    // From ExtUtils::MM_Unix: grep() may take a map BLOCK source over an
+    // array dereference whose container falls back through word `or`.
+    assert_clean_parse(
+        r#"my @dirs = grep( -d $_, map { $self->catdir($_, 'auto') } @{$searchdirs || []} );"#,
+    );
+}
+
+#[test]
 fn main_package_variable_in_paren_expr() {
     // From Unicode::Normalize: `$::IS_ASCII` must parse as a main-package
     // variable, not as `$::` followed by a stray bare identifier.
