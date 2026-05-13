@@ -2627,6 +2627,38 @@ impl WorkspaceIndex {
         self.fact_shards.read().get(&key).cloned()
     }
 
+    /// Resolve a semantic anchor to a source-backed LSP-wire location.
+    ///
+    /// Returns `None` for missing anchors, zero-width fallback anchors, or
+    /// anchors whose source text is unavailable from the document store. If
+    /// more than one shard contains the same anchor ID, this fails closed
+    /// instead of choosing an arbitrary hash-map iteration result.
+    pub fn semantic_anchor_wire_location(&self, anchor_id: AnchorId) -> Option<WireLocation> {
+        let shards = self.fact_shards.read();
+        let mut location = None;
+
+        for shard in shards.values() {
+            for anchor in shard.anchors.iter().filter(|anchor| anchor.id == anchor_id) {
+                if anchor.span_end_byte <= anchor.span_start_byte {
+                    return None;
+                }
+
+                let doc = self.document_store.get(&shard.source_uri)?;
+                let start = usize::try_from(anchor.span_start_byte).ok()?;
+                let end = usize::try_from(anchor.span_end_byte).ok()?;
+                let next_location = WireLocation::new(
+                    shard.source_uri.clone(),
+                    WireRange::from_byte_offsets(&doc.text, start, end),
+                );
+                if location.replace(next_location).is_some() {
+                    return None;
+                }
+            }
+        }
+
+        location
+    }
+
     /// Compute the [`FileId`] for a URI using the same hash used during indexing.
     ///
     /// Returns `None` if the URI has not been indexed (no fact shard is present).
@@ -6865,6 +6897,90 @@ MixedMod->import(qw(qw_one qw_two));
         must(index.index_file(must(url::Url::parse(uri)), code2.to_string()));
         let shard3 = must_some(index.file_fact_shard(uri));
         assert_ne!(shard1.content_hash, shard3.content_hash);
+
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_anchor_wire_location_uses_lsp_utf16_columns()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::semantic::queries::SemanticQueries;
+
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/UnicodeAnchor.pm";
+        let code = "package UnicodeAnchor; my $emoji = \"😀\"; sub target { 1 }\n1;\n";
+
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let candidates = index
+            .with_semantic_queries_for_uri(uri, |file_id, queries| {
+                let ctx = crate::semantic::queries::QueryContext::new(file_id, None, Some(0));
+                queries.definitions("UnicodeAnchor::target", &ctx)
+            })
+            .ok_or("missing semantic queries")?;
+        let anchor_id = candidates
+            .first()
+            .map(|candidate| candidate.anchor_id)
+            .ok_or("missing unicode definition candidate")?;
+        let shard = index.file_fact_shard(uri).ok_or("missing fact shard")?;
+        let anchor = shard
+            .anchors
+            .iter()
+            .find(|anchor| anchor.id == anchor_id)
+            .ok_or("missing unicode anchor")?;
+        let start = usize::try_from(anchor.span_start_byte)?;
+        let end = usize::try_from(anchor.span_end_byte)?;
+        let expected = WireRange::from_byte_offsets(code, start, end);
+
+        let location =
+            index.semantic_anchor_wire_location(anchor_id).ok_or("missing wire location")?;
+
+        assert_eq!(location.range, expected);
+        let wire_column = usize::try_from(location.range.start.character)?;
+        let scalar_column = code[..start].chars().count();
+        assert!(
+            wire_column > scalar_column,
+            "fixture must prove the wire column counts UTF-16 units, not Unicode scalar values"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_anchor_wire_location_fails_closed_for_duplicate_anchor_ids()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::semantic::queries::SemanticQueries;
+
+        let index = WorkspaceIndex::new();
+        let code = "package DuplicateAnchor;\nsub target { 1 }\n1;\n";
+
+        must(
+            index.index_file(must(url::Url::parse("file:///lib/DuplicateA.pm")), code.to_string()),
+        );
+        must(
+            index.index_file(must(url::Url::parse("file:///lib/DuplicateB.pm")), code.to_string()),
+        );
+
+        let candidates = index
+            .with_semantic_queries_for_uri("file:///lib/DuplicateA.pm", |file_id, queries| {
+                let ctx = crate::semantic::queries::QueryContext::new(file_id, None, Some(0));
+                queries.definitions("DuplicateAnchor::target", &ctx)
+            })
+            .ok_or("missing semantic queries")?;
+
+        let anchor_id = candidates
+            .first()
+            .map(|candidate| candidate.anchor_id)
+            .ok_or("missing duplicate definition candidate")?;
+        assert!(
+            candidates.iter().filter(|candidate| candidate.anchor_id == anchor_id).count() > 1,
+            "fixture must produce duplicate anchor IDs to prove fail-closed behavior"
+        );
+        assert_eq!(
+            index.semantic_anchor_wire_location(anchor_id),
+            None,
+            "duplicate source-backed anchors must not resolve to an arbitrary file"
+        );
 
         Ok(())
     }
