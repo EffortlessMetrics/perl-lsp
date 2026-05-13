@@ -122,6 +122,13 @@ enum Commands {
         coverage: bool,
     },
 
+    /// Regenerate public Shields endpoint JSON for README badges.
+    Badges {
+        /// Check committed endpoints for drift without updating badges/.
+        #[arg(long)]
+        check: bool,
+    },
+
     /// Run benchmarks
     Bench {
         /// Run specific benchmark
@@ -2403,6 +2410,7 @@ fn main() -> Result<()> {
         Commands::Test { release, suite, features, verbose, coverage } => {
             test::run(release, suite, features, verbose, coverage)
         }
+        Commands::Badges { check } => badges::run(check),
         Commands::Bench { name, save, output } => bench::run(name, save, output),
         Commands::BenchRun { output, quick, category } => {
             benchmarks::run_benchmarks(output, quick, category)
