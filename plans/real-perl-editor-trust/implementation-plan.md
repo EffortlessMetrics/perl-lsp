@@ -430,7 +430,7 @@ with an explicit deferral note and keep fixture-only work in scope.
 
 ## Work item: real-workspace-baseline-run
 
-Status: ready
+Status: completed; receipt [2026-05-13 Mojolicious Windows baseline](../../docs/forensics/2026-05-13-real-workspace-baseline-mojolicious.md)
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked spec: [PLSP-SPEC-0003](../../docs/specs/PLSP-SPEC-0003-real-workspace-editor-baseline.md)
 Linked ADR: [PLSP-ADR-0002](../../docs/adr/PLSP-ADR-0002-confidence-before-cutover.md)
@@ -444,7 +444,10 @@ module resolution, provider behavior, and confidence boundaries.
 
 Production delta
 
-Adds a receipt or forensic/status link for the selected CPAN-style project.
+Recorded a current Mojolicious Windows editor-latency receipt, refreshed the
+raw latency JSON for that fixture, and updated the report generator/template to
+state provider coverage, explicit deferrals, confidence/status links, outlier
+interpretation, and claim boundaries.
 
 Non-goals
 
