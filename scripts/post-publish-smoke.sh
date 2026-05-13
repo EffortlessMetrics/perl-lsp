@@ -220,16 +220,20 @@ section "Library crate consumption"
 # `cargo init --lib` project.
 #
 # Crates covered:
-#   tree-sitter-perl-c  — C-backed tree-sitter grammar facade
-#   perl-parser         — Native v3 recursive descent parser
-#   perl-lexer          — Context-aware lexer
-#   perl-token          — Token type definitions
-#   perl-ast            — AST node types
-#   perl-error          — Structured error types
-#   perl-lsp-protocol   — LSP protocol data structures
-#   perl-lsp-transport  — LSP message transport layer
-#   perl-parser-core    — Core parsing infrastructure
+#   tree-sitter-perl-c     — C-backed tree-sitter grammar facade
+#   perl-parser            — Native v3 recursive descent parser
+#   perl-lexer             — Context-aware lexer
+#   perl-token             — Token type definitions
+#   perl-ast               — AST node types
+#   perl-uri               — URI/path utilities for LSP file references
+#   perl-line-index        — Byte-offset to line/column mapping
+#   perl-semantic-facts    — Strongly-typed semantic fact vocabulary
+#   perl-parser-core       — Core parsing infrastructure
 #   perl-position-tracking — Source position utilities
+#
+# NOTE: perl-error, perl-lsp-protocol, and perl-lsp-transport were absorbed
+# into perl-parser-core / perl-lsp-rs-core during the workspace microcrate
+# collapse (Wave D and Wave G3) and are no longer published separately.
 
 declare -a LIB_CRATES=(
     "tree-sitter-perl-c"
@@ -237,9 +241,9 @@ declare -a LIB_CRATES=(
     "perl-lexer"
     "perl-token"
     "perl-ast"
-    "perl-error"
-    "perl-lsp-protocol"
-    "perl-lsp-transport"
+    "perl-uri"
+    "perl-line-index"
+    "perl-semantic-facts"
     "perl-parser-core"
     "perl-position-tracking"
 )
@@ -301,40 +305,45 @@ fn smoke_perl_ast() {
 }
 '
 
-LIB_SMOKE_CODE["perl-error"]='
+LIB_SMOKE_CODE["perl-uri"]='
 #[test]
-fn smoke_perl_error() {
-    use perl_error::ParseError;
-    // ParseError is an enum; construct a variant and confirm Display works
-    let e = ParseError::UnexpectedEof;
-    assert!(!format!("{}", e).is_empty());
+fn smoke_perl_uri() {
+    // Round-trip: fs_path_to_uri then uri_to_fs_path must recover the original path.
+    let path = std::env::current_dir()
+        .expect("current_dir failed")
+        .join("smoke_test.pl");
+    let uri = perl_uri::fs_path_to_uri(&path).expect("fs_path_to_uri failed");
+    assert!(uri.starts_with("file://"), "URI must start with file://");
+    let recovered = perl_uri::uri_to_fs_path(&uri).expect("uri_to_fs_path failed");
+    assert_eq!(recovered, path, "round-trip must recover original path");
 }
 '
 
-LIB_SMOKE_CODE["perl-lsp-protocol"]='
+LIB_SMOKE_CODE["perl-line-index"]='
 #[test]
-fn smoke_perl_lsp_protocol() {
-    use perl_lsp_protocol::JsonRpcResponse;
-    // JsonRpcResponse is the primary serialisable outbound type
-    let resp = JsonRpcResponse::success(Some(serde_json::Value::Number(1.into())), serde_json::json!({}));
-    let json = serde_json::to_string(&resp).expect("serialize");
-    assert!(json.contains("2.0"), "should contain jsonrpc version");
+fn smoke_perl_line_index() {
+    // Verify byte_to_position and position_to_byte round-trip.
+    let idx = perl_line_index::LineIndex::new("hello\nworld\n");
+    let (line, col) = idx.byte_to_position(6); // first byte of "world"
+    assert_eq!(line, 1, "line must be 1");
+    assert_eq!(col, 0, "column must be 0");
+    let byte = idx.position_to_byte(1, 0).expect("position_to_byte failed");
+    assert_eq!(byte, 6, "byte offset must round-trip to 6");
 }
 '
 
-LIB_SMOKE_CODE["perl-lsp-transport"]='
+LIB_SMOKE_CODE["perl-semantic-facts"]='
 #[test]
-fn smoke_perl_lsp_transport() {
-    // Verify the crate loads: frame() wraps a byte slice in Content-Length framing
-    use perl_lsp_transport::frame;
-    let payload = b"{}";
-    let framed = frame(payload);
-    // framed must start with "Content-Length:" header
-    assert!(
-        framed.starts_with(b"Content-Length:"),
-        "frame output must start with Content-Length header"
-    );
-    assert!(framed.len() > payload.len(), "framed output must be longer than payload");
+fn smoke_perl_semantic_facts() {
+    // EntityKind and OccurrenceKind are the core discriminants; verify
+    // they can be constructed and compared without external dependencies.
+    use perl_semantic_facts::{EntityKind, OccurrenceKind, FileId};
+    let kind = EntityKind::Subroutine;
+    assert_eq!(kind, EntityKind::Subroutine, "EntityKind must support equality");
+    let occ = OccurrenceKind::Definition;
+    assert_ne!(occ, OccurrenceKind::Reference, "OccurrenceKind variants must differ");
+    let fid = FileId(42);
+    assert_eq!(fid.0, 42, "FileId must store inner value");
 }
 '
 
@@ -374,10 +383,6 @@ for CRATE in "${LIB_CRATES[@]}"; do
         if ! (cd "$CRATE_PROJ" && cargo add "${CRATE}@${VERSION}" --quiet 2>&1); then
             fail "cargo add $CRATE@$VERSION failed"
             continue
-        fi
-        # perl-lsp-protocol smoke uses serde_json directly for round-trip test
-        if [[ "$CRATE" == "perl-lsp-protocol" ]]; then
-            (cd "$CRATE_PROJ" && cargo add serde_json --quiet 2>&1) || true
         fi
     fi
 
