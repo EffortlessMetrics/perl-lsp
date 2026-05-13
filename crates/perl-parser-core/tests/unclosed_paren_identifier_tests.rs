@@ -683,6 +683,17 @@ fn extutils_mm_unix_ldrun_join_map_qq_rpath() {
 }
 
 #[test]
+fn extutils_mm_unix_split_command_map_quote_literal_pair() {
+    // From ExtUtils::MM_Unix: function arguments may include map EXPR, LIST
+    // where the expression is a unary-plus parenthesized key/value pair.
+    assert_clean_parse(
+        r#"my @cmds = $self->split_command($pm_to_blib,
+            map +($self->quote_literal($_) => $self->quote_literal($self->{PM}{$_})),
+            sort keys %{$self->{PM}});"#,
+    );
+}
+
+#[test]
 fn main_package_variable_in_paren_expr() {
     // From Unicode::Normalize: `$::IS_ASCII` must parse as a main-package
     // variable, not as `$::` followed by a stray bare identifier.
