@@ -10,6 +10,9 @@ fallback behavior and rollback proof.
 For a row-per-provider receipt summary with fact source, confidence, freshness,
 fallback, runtime comparison, live state, and next proof, see
 [provider confidence matrix](provider_confidence_matrix.md).
+For the Real Perl Editor Trust v1 routing dashboard that ties provider state to
+support claims, real-workspace receipts, and next PRs, see
+[real_perl_editor_trust_v1.md](real_perl_editor_trust_v1.md).
 
 ## Recent Proof
 

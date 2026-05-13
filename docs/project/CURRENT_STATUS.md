@@ -14,6 +14,7 @@
 | Parser corpus & coverage | [status/parser.md](status/parser.md) |
 | Quality metrics | [status/quality.md](status/quality.md) |
 | Semantic capability dashboard | [status/semantic_capability_dashboard.md](status/semantic_capability_dashboard.md) |
+| Real Perl Editor Trust v1 dashboard | [status/real_perl_editor_trust_v1.md](status/real_perl_editor_trust_v1.md) |
 | Editor UX planning scaffold | [status/editor_ux.json](status/editor_ux.json) |
 | Compiler-backed LSP roadmap | [COMPILER_BACKED_LSP_ROADMAP.md](COMPILER_BACKED_LSP_ROADMAP.md) |
 | Release readiness & blockers | [status/release.md](status/release.md) |
