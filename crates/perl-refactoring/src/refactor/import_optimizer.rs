@@ -43,9 +43,14 @@
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::LazyLock;
+
+mod duplicates;
+mod parsing;
+mod suggestions;
+mod usage;
 
 /// TextEdit for import optimization (local type for byte-offset ranges)
 ///
@@ -276,242 +281,13 @@ impl ImportOptimizer {
     /// # Ok::<(), String>(())
     /// ```
     pub fn analyze_content(&self, content: &str) -> Result<ImportAnalysis, String> {
-        let mut imports = Vec::new();
-        for (idx, line) in content.lines().enumerate() {
-            if let Some(caps) = USE_STATEMENT_RE.as_ref().map_err(|e| e.to_string())?.captures(line)
-            {
-                let module = caps[1].to_string();
-                let symbols_str = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-                let symbols = if symbols_str.is_empty() {
-                    Vec::new()
-                } else {
-                    symbols_str
-                        .split_whitespace()
-                        .filter(|s| !s.is_empty())
-                        .map(|s| s.trim_matches(|c| c == ',' || c == ';' || c == '"'))
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>()
-                };
-                imports.push(ImportEntry { module, symbols, line: idx + 1 });
-            }
-        }
-
-        // Build map for duplicate detection
-        let mut module_to_lines: BTreeMap<String, Vec<usize>> = BTreeMap::new();
-        for imp in &imports {
-            module_to_lines.entry(imp.module.clone()).or_default().push(imp.line);
-        }
-        let duplicate_imports = module_to_lines
-            .iter()
-            .filter(|(_, lines)| lines.len() > 1)
-            .map(|(module, lines)| DuplicateImport {
-                module: module.clone(),
-                lines: lines.clone(),
-                can_merge: true,
-            })
-            .collect::<Vec<_>>();
-
-        // Build content without `use` lines for symbol usage detection
-        let non_use_content = content
-            .lines()
-            .filter(
-                |line| {
-                    !line.trim_start().starts_with("use ") && !line.trim_start().starts_with("#")
-                }, // Exclude comment lines
-            )
-            .collect::<Vec<_>>()
-            .join(
-                "
-",
-            );
-
-        // Determine unused symbols for each import entry
-        let mut unused_imports = Vec::new();
-        for imp in &imports {
-            let mut unused_symbols = Vec::new();
-
-            // If there are explicit symbols (like qw()), check each one
-            if !imp.symbols.is_empty() {
-                for sym in &imp.symbols {
-                    let re = Regex::new(&format!(r"\b{}\b", regex::escape(sym)))
-                        .map_err(|e| e.to_string())?;
-
-                    // Check if symbol is used in non-use content
-                    if !re.is_match(&non_use_content) {
-                        unused_symbols.push(sym.clone());
-                    }
-                }
-            } else {
-                // Skip pragma modules like strict, warnings, etc.
-                let is_pragma = matches!(
-                    imp.module.as_str(),
-                    "strict"
-                        | "warnings"
-                        | "utf8"
-                        | "bytes"
-                        | "integer"
-                        | "locale"
-                        | "overload"
-                        | "sigtrap"
-                        | "subs"
-                        | "vars"
-                );
-
-                if !is_pragma {
-                    // For bare imports (without qw()), check if the module or any of its known exports are used
-                    let (is_known_module, known_exports) =
-                        match get_known_module_exports(&imp.module) {
-                            Some(exports) => (true, exports),
-                            None => (false, Vec::new()),
-                        };
-                    let mut is_used = false;
-
-                    // First check if the module is directly referenced (e.g., Module::function)
-                    let module_pattern = format!(r"\b{}\b", regex::escape(&imp.module));
-                    let module_re = Regex::new(&module_pattern).map_err(|e| e.to_string())?;
-                    if module_re.is_match(&non_use_content) {
-                        is_used = true;
-                    }
-
-                    // Also check for qualified function calls like Module::function
-                    if !is_used {
-                        let qualified_pattern = format!(r"{}::", regex::escape(&imp.module));
-                        let qualified_re =
-                            Regex::new(&qualified_pattern).map_err(|e| e.to_string())?;
-                        if qualified_re.is_match(&non_use_content) {
-                            is_used = true;
-                        }
-                    }
-
-                    // Special handling for Data::Dumper - check for Dumper function usage
-                    if !is_used && imp.module == "Data::Dumper" {
-                        if DUMPER_RE.as_ref().map_err(|e| e.to_string())?.is_match(&non_use_content)
-                        {
-                            is_used = true;
-                        }
-                    }
-
-                    // Then check if any known exports are used
-                    if !is_used && !known_exports.is_empty() {
-                        for export in &known_exports {
-                            let export_pattern = format!(r"\b{}\b", regex::escape(export));
-                            let export_re =
-                                Regex::new(&export_pattern).map_err(|e| e.to_string())?;
-                            if export_re.is_match(&non_use_content) {
-                                is_used = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Conservative approach: Don't flag bare imports as unused if they have exports
-                    // Modules with exports might have side effects or implicit behavior we can't detect
-                    // But modules with no exports (like LWP::UserAgent) can still be flagged if unused
-                    if !is_used && is_known_module && known_exports.is_empty() {
-                        unused_symbols.push("(bare import)".to_string());
-                    }
-                }
-            }
-
-            // Create unused import entry if there are unused symbols
-            if !unused_symbols.is_empty() {
-                unused_imports.push(UnusedImport {
-                    module: imp.module.clone(),
-                    symbols: unused_symbols,
-                    line: imp.line,
-                    reason: "Symbols not used in code".to_string(),
-                });
-            }
-        }
-
-        // Missing import detection
-        let imported_modules: BTreeSet<String> =
-            imports.iter().map(|imp| imp.module.clone()).collect();
-
-        // Strip strings and comments before scanning for Module::symbol patterns
-        let stripped =
-            STRING_RE.as_ref().map_err(|e| e.to_string())?.replace_all(content, " ").to_string();
-        let stripped = REGEX_LITERAL_RE
-            .as_ref()
-            .map_err(|e| e.to_string())?
-            .replace_all(&stripped, " ")
-            .to_string();
-        let stripped =
-            COMMENT_RE.as_ref().map_err(|e| e.to_string())?.replace_all(&stripped, " ").to_string();
-
-        let mut usage_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        for caps in QUALIFIED_USAGE_RE.as_ref().map_err(|e| e.to_string())?.captures_iter(&stripped)
-        {
-            // Only process if both capture groups matched
-            if let (Some(module_match), Some(symbol_match)) = (caps.get(1), caps.get(2)) {
-                let module = module_match.as_str().to_string();
-                let symbol = symbol_match.as_str().to_string();
-
-                if imported_modules.contains(&module) || is_pragma_module(&module) {
-                    continue;
-                }
-
-                usage_map.entry(module).or_default().push(symbol);
-            }
-        }
-        let last_import_line = imports.iter().map(|i| i.line).max().unwrap_or(0);
-        let missing_imports = usage_map
-            .into_iter()
-            .map(|(module, mut symbols)| {
-                symbols.sort();
-                symbols.dedup();
-                MissingImport {
-                    module,
-                    symbols,
-                    suggested_location: last_import_line + 1,
-                    confidence: 0.8,
-                }
-            })
-            .collect::<Vec<_>>();
-
-        // Generate organization suggestions
-        let mut organization_suggestions = Vec::new();
-
-        // Suggest sorting of import statements
-        let module_order: Vec<String> = imports.iter().map(|i| i.module.clone()).collect();
-        let mut sorted_order = module_order.clone();
-        sorted_order.sort();
-        if module_order != sorted_order {
-            organization_suggestions.push(OrganizationSuggestion {
-                description: "Sort import statements alphabetically".to_string(),
-                priority: SuggestionPriority::Low,
-            });
-        }
-
-        // Suggest removing duplicate imports
-        if !duplicate_imports.is_empty() {
-            let modules =
-                duplicate_imports.iter().map(|d| d.module.clone()).collect::<Vec<_>>().join(", ");
-            organization_suggestions.push(OrganizationSuggestion {
-                description: format!("Remove duplicate imports for modules: {}", modules),
-                priority: SuggestionPriority::Medium,
-            });
-        }
-
-        // Suggest sorting/deduplicating symbols within imports
-        let mut symbols_need_org = false;
-        for imp in &imports {
-            if imp.symbols.len() > 1 {
-                let mut sorted = imp.symbols.clone();
-                sorted.sort();
-                sorted.dedup();
-                if sorted != imp.symbols {
-                    symbols_need_org = true;
-                    break;
-                }
-            }
-        }
-        if symbols_need_org {
-            organization_suggestions.push(OrganizationSuggestion {
-                description: "Sort and deduplicate symbols within import statements".to_string(),
-                priority: SuggestionPriority::Low,
-            });
-        }
+        let imports = parsing::parse_imports(content)?;
+        let duplicate_imports = duplicates::find_duplicate_imports(&imports);
+        let non_use_content = parsing::non_use_content(content);
+        let unused_imports = usage::find_unused_imports(&imports, &non_use_content)?;
+        let missing_imports = usage::find_missing_imports(content, &imports)?;
+        let organization_suggestions =
+            suggestions::organization_suggestions(&imports, &duplicate_imports);
 
         Ok(ImportAnalysis {
             imports,
