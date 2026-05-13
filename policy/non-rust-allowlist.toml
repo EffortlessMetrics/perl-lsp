@@ -955,3 +955,29 @@ covered_by = [
 broad_glob_reason = ".config/ holds per-tool XDG-style config as a tree."
 created = "2026-05-07"
 review_after = "2026-08-07"
+
+[[allow]]
+id = "non-rust-generated-badge-endpoints"
+glob = "badges/*.json"
+kind = "generated_badge_endpoint"
+language = "json"
+surface = "docs"
+classification = "generated"
+owner = "release/ci"
+reason = "Generated Shields endpoint JSON for public README badges."
+covered_by = ["cargo xtask badges --check"]
+created = "2026-05-13"
+review_after = "2026-11-13"
+
+[[allow]]
+id = "non-rust-badge-endpoint-docs"
+glob = "badges/*.md"
+kind = "documentation"
+language = "markdown"
+surface = "docs"
+classification = "documentation"
+owner = "docs"
+reason = "Documentation for generated public README badge endpoint files."
+covered_by = ["cargo xtask check-file-policy"]
+created = "2026-05-13"
+review_after = "2026-11-13"

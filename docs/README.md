@@ -4,6 +4,8 @@ Use this directory as the short docs front door. It tells you where to go next
 without making you learn the workspace layout first. For the full Diataxis-style
 map of the docs tree, use [INDEX.md](INDEX.md).
 
+- [VERIFICATION.md](VERIFICATION.md) — README badge meanings, generated endpoints, and PR evidence boundaries
+
 ## Diataxis in This Repository
 
 When adding or moving docs, choose the content type first, then the file:

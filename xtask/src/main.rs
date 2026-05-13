@@ -43,6 +43,13 @@ enum Commands {
     #[command(name = "list-commands")]
     List,
 
+    /// Regenerate public Shields endpoint badge JSON.
+    Badges {
+        /// Check committed endpoint JSON for drift without updating it.
+        #[arg(long)]
+        check: bool,
+    },
+
     /// Run lean CI suite (format, clippy, tests) for constrained environments.
     /// Use `ci doctor` to check local/CI parity without running the full suite.
     Ci {
@@ -2377,6 +2384,7 @@ fn main() -> Result<()> {
             None => ci::run(),
             Some(CiSubcommand::Doctor) => ci_doctor::run(),
         },
+        Commands::Badges { check } => tasks::badges::run(check),
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckLintPolicy => check_lint_policy::run(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),

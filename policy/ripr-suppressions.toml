@@ -1,30 +1,24 @@
 # RIPR Suppressions
 #
 # Suppressions for ripr static exposure analysis findings. Each suppression
-# requires owner, reason, created, review_after, and expires. Suppressions
-# are the documented exception path; the default is to leave findings
-# advisory-visible.
+# must use ripr's native suppression schema so public badge generation and PR
+# evidence can validate policy before applying exceptions.
 #
-# Read by .github/workflows/ripr.yml (PR 06+) and ripr.toml.
+# Supported entries:
+#
+# [[suppressions]]
+# kind = "exposure_gap"
+# finding_id = "probe:src/lib.rs:42:predicate"
+# reason = "Covered by integration test."
+# owner = "team"
+# expires = "2026-09-01"
+#
+# [[suppressions]]
+# kind = "test_efficiency"
+# test = "cli_prints_help"
+# path = "tests/cli.rs"
+# reason = "Intentionally broad CLI smoke."
+# owner = "devtools"
+# expires = "2026-09-01"
 
 schema_version = 1
-policy = "ripr-suppressions"
-owner = "EffortlessMetrics"
-status = "advisory"
-updated = "2026-05-07"
-
-# -----------------------------------------------------------------------------
-# Generated status docs: validated through status-generation checks, not
-# Rust test oracle exposure.
-# -----------------------------------------------------------------------------
-[[suppress]]
-id = "ripr-suppress-generated-status-docs"
-kind = "generated_or_non_production_surface"
-paths = ["docs/project/status/**"]
-classification = ["static_unknown", "no_static_path"]
-owner = "repo-owner"
-issue = "TODO"
-reason = "Generated status docs are verified through status-generation checks, not Rust test oracle exposure."
-created = "2026-05-07"
-review_after = "2026-06-07"
-expires = "2026-08-07"
