@@ -676,6 +676,13 @@ fn extutils_mm_unix_ignore_map_tuple_qw() {
 }
 
 #[test]
+fn extutils_mm_unix_ldrun_join_map_qq_rpath() {
+    // From ExtUtils::MM_Unix: join may take map(qq{...}, LIST) where the
+    // mapped expression interpolates $_ inside a quote-like operator.
+    assert_clean_parse(r#"$ldrun = join " ", map(qq{-Wl,-rpath,"$_"}, @dirs);"#);
+}
+
+#[test]
 fn main_package_variable_in_paren_expr() {
     // From Unicode::Normalize: `$::IS_ASCII` must parse as a main-package
     // variable, not as `$::` followed by a stray bare identifier.
