@@ -43,6 +43,7 @@ fn init_synced_repo() -> Result<(TempDir, TempDir)> {
         .or_else(|_| git_cmd(&["init", source_dir.path().to_str().expect("path")], None))?;
     git_cmd(&["config", "user.email", "test@test.com"], Some(source_dir.path()))?;
     git_cmd(&["config", "user.name", "Test"], Some(source_dir.path()))?;
+    git_cmd(&["config", "commit.gpgsign", "false"], Some(source_dir.path()))?;
     // Ensure branch is named master (for older git).
     let _ = git_cmd(&["checkout", "-b", "master"], Some(source_dir.path()));
     fs::write(source_dir.path().join("README.md"), "init")?;
@@ -65,6 +66,7 @@ fn init_synced_repo() -> Result<(TempDir, TempDir)> {
     )?;
     git_cmd(&["config", "user.email", "test@test.com"], Some(work_dir.path()))?;
     git_cmd(&["config", "user.name", "Test"], Some(work_dir.path()))?;
+    git_cmd(&["config", "commit.gpgsign", "false"], Some(work_dir.path()))?;
     // Ensure work_dir is on master.
     let _ = git_cmd(&["checkout", "master"], Some(work_dir.path()));
 
@@ -89,13 +91,19 @@ fn push_to_remote(repo_dir: &Path) -> Result<()> {
 /// Run a git command with optional working directory. Panics on failure.
 fn git_cmd(args: &[&str], cwd: Option<&Path>) -> Result<()> {
     let mut cmd = Command::new("git");
-    cmd.args(args).stdout(Stdio::null()).stderr(Stdio::null());
+    cmd.args(args).stdout(Stdio::null()).stderr(Stdio::piped());
+    // Clear worktree-inherited git env vars so isolated repos are fully self-contained.
+    cmd.env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_COMMON_DIR")
+        .env_remove("GIT_INDEX_FILE");
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
-    let status = cmd.status()?;
-    if !status.success() {
-        anyhow::bail!("git {:?} failed with {:?}", args, status.code());
+    let output = cmd.output()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("git {:?} failed ({}): {}", args, output.status, stderr.trim());
     }
     Ok(())
 }
@@ -153,6 +161,7 @@ fn reports_nonzero_behind_when_stale() -> Result<()> {
     )?;
     git_cmd(&["config", "user.email", "test@test.com"], Some(source2.path()))?;
     git_cmd(&["config", "user.name", "Test"], Some(source2.path()))?;
+    git_cmd(&["config", "commit.gpgsign", "false"], Some(source2.path()))?;
     add_commit(source2.path(), "remote change")?;
     push_to_remote(source2.path())?;
 
@@ -193,6 +202,7 @@ fn warn_mode_returns_zero_even_when_stale() -> Result<()> {
     )?;
     git_cmd(&["config", "user.email", "test@test.com"], Some(source2.path()))?;
     git_cmd(&["config", "user.name", "Test"], Some(source2.path()))?;
+    git_cmd(&["config", "commit.gpgsign", "false"], Some(source2.path()))?;
     add_commit(source2.path(), "another change")?;
     push_to_remote(source2.path())?;
     git_cmd(&["fetch", "origin"], Some(work_dir.path()))?;
@@ -222,6 +232,7 @@ fn block_mode_returns_one_when_stale() -> Result<()> {
     )?;
     git_cmd(&["config", "user.email", "test@test.com"], Some(source2.path()))?;
     git_cmd(&["config", "user.name", "Test"], Some(source2.path()))?;
+    git_cmd(&["config", "commit.gpgsign", "false"], Some(source2.path()))?;
     add_commit(source2.path(), "blocking change")?;
     push_to_remote(source2.path())?;
     git_cmd(&["fetch", "origin"], Some(work_dir.path()))?;
@@ -252,6 +263,7 @@ fn allow_historical_bypasses_block_with_reason() -> Result<()> {
     )?;
     git_cmd(&["config", "user.email", "test@test.com"], Some(source2.path()))?;
     git_cmd(&["config", "user.name", "Test"], Some(source2.path()))?;
+    git_cmd(&["config", "commit.gpgsign", "false"], Some(source2.path()))?;
     add_commit(source2.path(), "historical change")?;
     push_to_remote(source2.path())?;
     git_cmd(&["fetch", "origin"], Some(work_dir.path()))?;

@@ -1519,6 +1519,13 @@ enum Commands {
         /// Reason text for the historical override (required with --allow-historical).
         #[arg(long)]
         reason: Option<String>,
+
+        /// Also check binary freshness: verify that target/debug/perl-lsp and
+        /// target/release/perl-lsp are newer than the HEAD commit timestamp.
+        /// Exits non-zero when a binary exists and is stale. Missing binaries
+        /// are reported but do not cause a non-zero exit.
+        #[arg(long)]
+        binaries: bool,
     },
 }
 
@@ -3131,7 +3138,15 @@ fn main() -> Result<()> {
                 },
             )
         }
-        Commands::FreshnessCheck { base, mode, json, no_fetch, allow_historical, reason } => {
+        Commands::FreshnessCheck {
+            base,
+            mode,
+            json,
+            no_fetch,
+            allow_historical,
+            reason,
+            binaries,
+        } => {
             use tasks::freshness_check::{FreshnessCheckConfig, FreshnessMode};
             let mode = match mode {
                 FreshnessCheckMode::Warn => FreshnessMode::Warn,
@@ -3144,6 +3159,7 @@ fn main() -> Result<()> {
                 no_fetch,
                 allow_historical,
                 reason,
+                check_binaries: binaries,
             })
         }
     }

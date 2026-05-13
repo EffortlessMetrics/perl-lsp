@@ -1,13 +1,18 @@
-//! `cargo xtask freshness-check` — source-tree staleness guard.
+//! `cargo xtask freshness-check` — source-tree and binary staleness guard.
 //!
 //! Detects whether the current checkout is behind `origin/master` (or another
 //! base ref) and emits a JSON receipt that downstream tools and hooks can
 //! consume.
 //!
+//! With `--binaries`, also verifies that the compiled `perl-lsp` binaries are
+//! newer than the HEAD commit timestamp, catching the stale-binary failure
+//! mode documented in incident #8624.
+//!
 //! # Exit codes
 //! - `0` — always in warn mode (default).
 //! - `0` — block mode AND `safe_for_code_state_claims == true`.
 //! - `1` — block mode AND stale (unless `--allow-historical` was passed).
+//! - `1` — `--binaries` AND any found binary is stale (always blocking).
 //!
 //! # JSON receipt (schema_version 1)
 //! ```json
@@ -22,15 +27,21 @@
 //!   "safe_for_code_state_claims": false,
 //!   "mode": "warn",
 //!   "allow_historical": false,
-//!   "bypass_reason": null
+//!   "bypass_reason": null,
+//!   "binaries_checked": [
+//!     {"path": "target/debug/perl-lsp", "mtime": 1778500000, "source_sha": null, "stale": false}
+//!   ],
+//!   "binary_freshness_safe": true
 //! }
 //! ```
+//! The `binaries_checked` and `binary_freshness_safe` fields are omitted when
+//! `--binaries` was not passed.
 
 use color_eyre::eyre::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
@@ -67,6 +78,21 @@ pub struct FreshnessCheckConfig {
     pub allow_historical: bool,
     /// Reason string required when `allow_historical` is true.
     pub reason: Option<String>,
+    /// When true, also check binary mtime vs HEAD commit timestamp.
+    pub check_binaries: bool,
+}
+
+/// One entry in the `binaries_checked` receipt array.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BinaryEntry {
+    /// Absolute or workspace-relative path to the binary.
+    pub path: String,
+    /// Unix mtime of the binary in seconds, or `null` when the binary is absent.
+    pub mtime: Option<u64>,
+    /// Reserved for build-stamp SHA correlation (always `null` in this PR).
+    pub source_sha: Option<String>,
+    /// `true` when the binary exists and its mtime is older than the HEAD commit.
+    pub stale: bool,
 }
 
 /// The JSON receipt schema emitted by freshness-check.
@@ -95,13 +121,22 @@ pub struct FreshnessReceipt {
     pub allow_historical: bool,
     /// The caller-provided bypass reason, when `allow_historical` is `true`.
     pub bypass_reason: Option<String>,
+    /// Binary freshness entries (present only when `--binaries` was passed).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binaries_checked: Option<Vec<BinaryEntry>>,
+    /// `true` when all found binaries are newer than the HEAD commit.
+    /// `false` when any found binary is stale. Omitted when `--binaries` was
+    /// not passed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binary_freshness_safe: Option<bool>,
 }
 
 /// Run the freshness-check subcommand.
 ///
 /// Returns `Ok(())` when the check passes or when in warn mode.
 /// Returns `Err` on fatal errors. Exits with code 1 when in block mode and
-/// the checkout is stale (unless `--allow-historical` was passed).
+/// the checkout is stale (unless `--allow-historical` was passed), or when
+/// `--binaries` is active and any binary is stale.
 pub fn run(config: FreshnessCheckConfig) -> Result<()> {
     // Validate allow-historical usage.
     if config.allow_historical && config.reason.is_none() {
@@ -124,6 +159,17 @@ pub fn run(config: FreshnessCheckConfig) -> Result<()> {
     let worktree_dirty = is_worktree_dirty()?;
     let safe_for_code_state_claims = behind_by == 0;
 
+    // Optionally gather binary data.
+    let (binaries_checked, binary_freshness_safe) = if config.check_binaries {
+        let target_dir = resolve_target_dir();
+        let commit_time = git_commit_time_secs("HEAD");
+        let entries = gather_binary_entries(&target_dir, commit_time);
+        let all_fresh = !entries.iter().any(|b| b.stale);
+        (Some(entries), Some(all_fresh))
+    } else {
+        (None, None)
+    };
+
     let receipt = FreshnessReceipt {
         schema_version: 1,
         base_ref: base_ref.clone(),
@@ -136,6 +182,8 @@ pub fn run(config: FreshnessCheckConfig) -> Result<()> {
         mode: config.mode,
         allow_historical: config.allow_historical,
         bypass_reason: config.reason.clone(),
+        binaries_checked,
+        binary_freshness_safe,
     };
 
     // Emit receipt.
@@ -157,14 +205,73 @@ pub fn run(config: FreshnessCheckConfig) -> Result<()> {
         emit_human_summary(&receipt);
     }
 
-    // Decide exit code.
-    let stale = !safe_for_code_state_claims;
-    if config.mode == FreshnessMode::Block && stale && !config.allow_historical {
-        // Use std::process::exit so tests can observe the exit code.
+    // Source-staleness exit: block mode + stale source.
+    let source_stale = !safe_for_code_state_claims;
+    if config.mode == FreshnessMode::Block && source_stale && !config.allow_historical {
         std::process::exit(1);
     }
 
+    // Binary-staleness exit: always blocks when --binaries is active.
+    if config.check_binaries {
+        if let Some(false) = receipt.binary_freshness_safe {
+            eprintln!(
+                "freshness-check: stale binary detected — rebuild with `cargo build` or `cargo build --release`"
+            );
+            std::process::exit(1);
+        }
+    }
+
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Binary helpers
+// ---------------------------------------------------------------------------
+
+/// Resolve the target directory, honouring `$CARGO_TARGET_DIR` when set.
+fn resolve_target_dir() -> PathBuf {
+    std::env::var("CARGO_TARGET_DIR").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("target"))
+}
+
+/// Return the Unix commit timestamp (seconds) for `rev`, or `None` on failure.
+fn git_commit_time_secs(rev: &str) -> Option<u64> {
+    git_output(&["log", "-1", "--format=%ct", rev]).and_then(|s| s.trim().parse::<u64>().ok())
+}
+
+/// Return the host-platform binary file name for the `perl-lsp` executable.
+fn perl_lsp_binary_name() -> String {
+    format!("perl-lsp{}", std::env::consts::EXE_SUFFIX)
+}
+
+/// Check the mtime of each well-known perl-lsp binary against `commit_time`.
+fn gather_binary_entries(target_dir: &Path, commit_time: Option<u64>) -> Vec<BinaryEntry> {
+    let binary_name = perl_lsp_binary_name();
+    let profiles = ["debug", "release"];
+    profiles
+        .iter()
+        .map(|profile| {
+            let path = target_dir.join(profile).join(&binary_name);
+            let path_str = path.to_string_lossy().into_owned();
+            match fs::metadata(&path) {
+                Ok(meta) => {
+                    let mtime = meta
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs());
+                    let stale = match (mtime, commit_time) {
+                        (Some(m), Some(c)) => m < c,
+                        _ => false,
+                    };
+                    BinaryEntry { path: path_str, mtime, source_sha: None, stale }
+                }
+                Err(_) => {
+                    // Missing binary: informational only, not stale.
+                    BinaryEntry { path: path_str, mtime: None, source_sha: None, stale: false }
+                }
+            }
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -265,6 +372,23 @@ fn emit_human_summary(receipt: &FreshnessReceipt) {
             );
         } else {
             eprintln!("  (block mode — exit 1; run `git pull --rebase` to update)");
+        }
+    }
+
+    if let Some(ref entries) = receipt.binaries_checked {
+        let stale_count = entries.iter().filter(|b| b.stale).count();
+        let found_count = entries.iter().filter(|b| b.mtime.is_some()).count();
+        if stale_count == 0 {
+            eprintln!(
+                "freshness-check: binaries — {found_count} found, all fresh (binary_freshness_safe=true)"
+            );
+        } else {
+            eprintln!(
+                "freshness-check: binaries — {stale_count} stale of {found_count} found (binary_freshness_safe=false)"
+            );
+            for entry in entries.iter().filter(|b| b.stale) {
+                eprintln!("  stale: {}", entry.path);
+            }
         }
     }
 }

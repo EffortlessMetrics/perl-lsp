@@ -33,8 +33,13 @@ fn detect_perl_version_cached(perl_path: &Path) -> Option<String> {
         return cached_version.clone();
     }
 
+    // PerlOracleEnv denies PERL5LIB/PERL5OPT so the version number is
+    // deterministic regardless of the editor's ambient environment (#8688).
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let oracle =
+        perl_lsp_rs_core::config::PerlOracleEnv::for_version_probe(perl_path.to_path_buf(), cwd);
     let detected_version =
-        Command::new(perl_path).arg("-e").arg("print $]").output().ok().and_then(|out| {
+        oracle.into_command().arg("-e").arg("print $]").output().ok().and_then(|out| {
             if out.status.success() { String::from_utf8(out.stdout).ok() } else { None }
         });
 
@@ -404,7 +409,20 @@ impl DebugAdapter {
         // Perl debugger" failure after `perl -d` exits immediately.
         Self::check_syntax(perl_interpreter, program, &env_overrides)?;
 
-        let mut cmd = Command::new(perl_interpreter);
+        // Use PerlOracleEnv to deny ambient PERL5LIB/PERL5OPT so the debug
+        // session env is controlled entirely by launch.json `env` (#8688).
+        // `env_overrides` (explicit launch.json entries) are added via
+        // extra_env so they reach the subprocess unconditionally.
+        let prog_cwd = Path::new(program)
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        let mut oracle = perl_lsp_rs_core::config::PerlOracleEnv::for_version_probe(
+            PathBuf::from(perl_interpreter),
+            prog_cwd,
+        );
+        oracle.extra_env.extend(env_overrides.iter().map(|(k, v)| (k.clone(), v.clone())));
+        let mut cmd = oracle.into_command();
         cmd.arg("-d");
 
         // Perl debugger stops on the first line by default
@@ -415,7 +433,6 @@ impl DebugAdapter {
         cmd.arg("--");
         cmd.arg(program);
         cmd.args(&args);
-        cmd.envs(env_overrides);
 
         // Set up pipes
         cmd.stdin(Stdio::piped());
@@ -480,11 +497,22 @@ impl DebugAdapter {
         program: &str,
         env_overrides: &HashMap<String, String>,
     ) -> Result<(), String> {
-        let output = match Command::new(perl_interpreter)
+        // PerlOracleEnv denies ambient PERL5LIB/PERL5OPT (#8688); explicit
+        // env_overrides from launch.json are honored via extra_env.
+        let prog_cwd = Path::new(program)
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        let mut oracle = perl_lsp_rs_core::config::PerlOracleEnv::for_version_probe(
+            PathBuf::from(perl_interpreter),
+            prog_cwd,
+        );
+        oracle.extra_env.extend(env_overrides.iter().map(|(k, v)| (k.clone(), v.clone())));
+        let output = match oracle
+            .into_command()
             .arg("-c")
             .arg("--")
             .arg(program)
-            .envs(env_overrides)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
