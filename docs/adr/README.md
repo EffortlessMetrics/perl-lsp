@@ -2,6 +2,30 @@
 
 This directory contains Architecture Decision Records (ADRs) for significant design decisions in the Perl LSP project.
 
+## Source-of-Truth Layer
+
+ADRs describe durable decisions: the architecture, policy, or operating model
+that the repo should continue to follow after the current PR queue has moved
+on.
+
+| Layer | Owns | Must not do |
+|---|---|---|
+| ADR | Durable decision, context, considered options, consequences, follow-up obligations | Test queue, raw worklist, point-in-time metric claims, PR sequencing |
+
+Use ADRs for decisions that change how maintainers and agents interpret the
+repo. For lane execution, link ADRs to proposals, specs, plans, and current
+status surfaces instead of copying generated status content.
+
+Current generated and human-owned status sources include:
+
+- [parser accuracy next](../project/status/parser_accuracy_next.md)
+- [parser status](../project/status/parser.md)
+- [provider cutover](../project/status/provider_cutover.md)
+- [semantic scorecard](../project/status/semantic_scorecard.md)
+- [semantic shadow compare](../project/status/semantic_shadow_compare.md)
+- [semantic capability dashboard](../project/status/semantic_capability_dashboard.md)
+- [UX capability dashboard](../project/status/ux_capability_dashboard.md)
+
 ## ADR Index
 
 ### Legacy Series (0001–0002)
@@ -87,6 +111,6 @@ Architecture Decision Records (ADRs) capture important architectural decisions a
 
 ## Cross-References
 
-- [CLAUDE.md](../CLAUDE.md) - Project overview and capabilities
+- [CLAUDE.md](../../CLAUDE.md) - Project overview and capabilities
 - [CRATE_ARCHITECTURE_GUIDE.md](../reference/CRATE_ARCHITECTURE_GUIDE.md) - System architecture
 - [PARSER_COMPARISON.md](../reference/PARSER_COMPARISON.md) - Parser implementation details
