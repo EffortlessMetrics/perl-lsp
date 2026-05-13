@@ -30,6 +30,17 @@ const SUPPORT_HEADER: &[&str] = &[
     "Next promotion proof",
 ];
 
+const SUPPORT_TIERS_ALLOWED: &[&str] =
+    &["measured-bounded", "partial-live-with-fallback", "shadowed", "deferred"];
+
+const FORBIDDEN_SUPPORT_CLAIM_PHRASES: &[&str] = &[
+    "full CPAN support",
+    "all CPAN support",
+    "all-CPAN support",
+    "fully supports CPAN",
+    "full dynamic Perl inference",
+];
+
 const REQUIRED_PROVIDER_SURFACES: &[&str] = &[
     "Completion",
     "Goto definition",
@@ -90,6 +101,16 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
+pub fn run_support_claims() -> Result<()> {
+    let root = project_root()?;
+    let stats = validate_support_claim_doc(&root, SUPPORT_TIERS)?;
+    println!(
+        "support claim map check passed: {} support rows, {} relative links",
+        stats.support_rows, stats.links_checked
+    );
+    Ok(())
+}
+
 fn validate_docs(root: &Path, provider_rel: &str, support_rel: &str) -> Result<ValidationStats> {
     let provider_text = read_doc(root, provider_rel)?;
     let support_text = read_doc(root, support_rel)?;
@@ -121,6 +142,27 @@ fn validate_docs(root: &Path, provider_rel: &str, support_rel: &str) -> Result<V
         support_rows: support_table.rows.len(),
         links_checked,
     })
+}
+
+fn validate_support_claim_doc(root: &Path, support_rel: &str) -> Result<ValidationStats> {
+    let support_text = read_doc(root, support_rel)?;
+    let mut violations = Vec::new();
+    let support_table = parse_table(&support_text, "Surface / claim")
+        .ok_or_else(|| eyre!("support tier table not found in {support_rel}"))?;
+
+    validate_header(support_rel, &support_table.header, SUPPORT_HEADER, &mut violations);
+    validate_support_rows(support_rel, &support_table, &mut violations);
+    let links_checked = check_relative_links(root, support_rel, &support_text, &mut violations);
+
+    if !violations.is_empty() {
+        eprintln!("support claim map violations:");
+        for violation in &violations {
+            eprintln!("  - {violation}");
+        }
+        bail!("support claim map check failed with {} violation(s)", violations.len());
+    }
+
+    Ok(ValidationStats { provider_rows: 0, support_rows: support_table.rows.len(), links_checked })
 }
 
 fn read_doc(root: &Path, rel: &str) -> Result<String> {
@@ -210,6 +252,7 @@ fn validate_support_rows(doc: &str, table: &MarkdownTable, violations: &mut Vec<
         for (column, label) in SUPPORT_HEADER.iter().enumerate().skip(1) {
             require_meaningful_cell(doc, row, column, label, violations);
         }
+        require_valid_support_tier(doc, row, violations);
         require_markdown_link(doc, row, 4, "Status docs", violations);
         if !row.cells[3].contains('`') {
             violations.push(format!(
@@ -217,6 +260,8 @@ fn validate_support_rows(doc: &str, table: &MarkdownTable, violations: &mut Vec<
                 row.line_number, surface
             ));
         }
+        reject_forbidden_support_claims(doc, row, violations);
+        reject_shadow_live_cutover_claim(doc, row, violations);
     }
 
     for required in REQUIRED_SUPPORT_SURFACES {
@@ -224,6 +269,71 @@ fn validate_support_rows(doc: &str, table: &MarkdownTable, violations: &mut Vec<
             violations.push(format!("{doc}: missing support tier row for {required:?}"));
         }
     }
+}
+
+fn require_valid_support_tier(doc: &str, row: &TableRow, violations: &mut Vec<String>) {
+    let tier = normalize_inline_code(&row.cells[1]);
+    if !SUPPORT_TIERS_ALLOWED.iter().any(|allowed| tier == *allowed) {
+        violations.push(format!(
+            "{doc}:{}: support row {:?} has unsupported tier {:?}",
+            row.line_number, row.cells[0], row.cells[1]
+        ));
+    }
+}
+
+fn reject_forbidden_support_claims(doc: &str, row: &TableRow, violations: &mut Vec<String>) {
+    let row_text = row.cells.join(" ");
+    for phrase in FORBIDDEN_SUPPORT_CLAIM_PHRASES {
+        if contains_ascii_case_insensitive(&row_text, phrase) {
+            violations.push(format!(
+                "{doc}:{}: support row {:?} contains forbidden broad claim phrase {:?}",
+                row.line_number, row.cells[0], phrase
+            ));
+        }
+    }
+}
+
+fn reject_shadow_live_cutover_claim(doc: &str, row: &TableRow, violations: &mut Vec<String>) {
+    let tier = normalize_inline_code(&row.cells[1]);
+    if tier != "shadowed" {
+        return;
+    }
+
+    let claim = row.cells[2].to_ascii_lowercase();
+    if contains_live_cutover_language(&claim) && !contains_cutover_negation(&claim) {
+        violations.push(format!(
+            "{doc}:{}: shadowed support row {:?} must not make a positive live-cutover claim",
+            row.line_number, row.cells[0]
+        ));
+    }
+}
+
+fn normalize_inline_code(value: &str) -> String {
+    value.trim().trim_matches('`').trim().to_string()
+}
+
+fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
+    haystack.to_ascii_lowercase().contains(&needle.to_ascii_lowercase())
+}
+
+fn contains_live_cutover_language(value: &str) -> bool {
+    ["live cutover", "live provider", "partial-live", "live behavior", "answer live"]
+        .iter()
+        .any(|needle| value.contains(needle))
+}
+
+fn contains_cutover_negation(value: &str) -> bool {
+    [
+        "without claiming",
+        "does not claim",
+        "do not claim",
+        "not claim",
+        "no broad",
+        "no dedicated",
+        "before cutover",
+    ]
+    .iter()
+    .any(|needle| value.contains(needle))
 }
 
 fn require_meaningful_cell(
@@ -448,6 +558,21 @@ after";
     }
 
     #[test]
+    fn support_claim_map_validates_minimal_support_doc() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        let status_dir = root.join("docs").join("project").join("status");
+        fs::create_dir_all(&status_dir)?;
+        fs::write(status_dir.join("provider_confidence_matrix.md"), provider_fixture())?;
+        fs::write(status_dir.join("SUPPORT_TIERS.md"), support_fixture())?;
+
+        let stats = validate_support_claim_doc(root, "docs/project/status/SUPPORT_TIERS.md")?;
+        assert_eq!(stats.support_rows, REQUIRED_SUPPORT_SURFACES.len());
+        assert!(stats.links_checked > 0);
+        Ok(())
+    }
+
+    #[test]
     fn rejects_missing_required_provider_rows() -> Result<()> {
         let temp = tempfile::tempdir()?;
         let root = temp.path();
@@ -467,6 +592,71 @@ after";
             "docs/project/status/SUPPORT_TIERS.md",
         );
         assert!(result.is_err(), "missing provider rows must fail validation");
+        Ok(())
+    }
+
+    #[test]
+    fn support_claim_map_rejects_forbidden_broad_claim() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        let status_dir = root.join("docs").join("project").join("status");
+        fs::create_dir_all(&status_dir)?;
+        fs::write(status_dir.join("provider_confidence_matrix.md"), provider_fixture())?;
+        fs::write(
+            status_dir.join("SUPPORT_TIERS.md"),
+            support_fixture_for_claim(
+                REQUIRED_SUPPORT_SURFACES,
+                "provider_confidence_matrix.md",
+                "Parser compatibility",
+                "perl-lsp has full CPAN support",
+            ),
+        )?;
+
+        let result = validate_support_claim_doc(root, "docs/project/status/SUPPORT_TIERS.md");
+        assert!(result.is_err(), "forbidden broad claims must fail validation");
+        Ok(())
+    }
+
+    #[test]
+    fn support_claim_map_rejects_shadowed_live_cutover_claim() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        let status_dir = root.join("docs").join("project").join("status");
+        fs::create_dir_all(&status_dir)?;
+        fs::write(status_dir.join("provider_confidence_matrix.md"), provider_fixture())?;
+        fs::write(
+            status_dir.join("SUPPORT_TIERS.md"),
+            support_fixture_for_claim(
+                REQUIRED_SUPPORT_SURFACES,
+                "provider_confidence_matrix.md",
+                "Rename",
+                "Rename has live cutover for compiler-backed facts",
+            ),
+        )?;
+
+        let result = validate_support_claim_doc(root, "docs/project/status/SUPPORT_TIERS.md");
+        assert!(result.is_err(), "shadowed live-cutover claims must fail validation");
+        Ok(())
+    }
+
+    #[test]
+    fn support_claim_map_allows_negated_shadow_live_cutover_boundary() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path();
+        let status_dir = root.join("docs").join("project").join("status");
+        fs::create_dir_all(&status_dir)?;
+        fs::write(status_dir.join("provider_confidence_matrix.md"), provider_fixture())?;
+        fs::write(
+            status_dir.join("SUPPORT_TIERS.md"),
+            support_fixture_for_claim(
+                REQUIRED_SUPPORT_SURFACES,
+                "provider_confidence_matrix.md",
+                "Document symbols",
+                "Document-symbol receipts exist without claiming compiler-backed live cutover",
+            ),
+        )?;
+
+        validate_support_claim_doc(root, "docs/project/status/SUPPORT_TIERS.md")?;
         Ok(())
     }
 
@@ -539,14 +729,24 @@ after";
     }
 
     fn support_fixture_for(surfaces: &[&str], status_link: &str) -> String {
+        support_fixture_for_claim(surfaces, status_link, "", "claim")
+    }
+
+    fn support_fixture_for_claim(
+        surfaces: &[&str],
+        status_link: &str,
+        claim_surface: &str,
+        claim_text: &str,
+    ) -> String {
         let mut text = String::from("| ");
         text.push_str(&SUPPORT_HEADER.join(" | "));
         text.push_str(" |\n| ");
         text.push_str(&SUPPORT_HEADER.iter().map(|_| "---").collect::<Vec<_>>().join(" | "));
         text.push_str(" |\n");
         for surface in surfaces {
+            let claim = if *surface == claim_surface { claim_text } else { "claim" };
             text.push_str(&format!(
-                "| {surface} | `shadowed` | claim | `cargo xtask semantic-shadow-compare --check` | [matrix]({status_link}) | limitation | next proof |\n"
+                "| {surface} | `shadowed` | {claim} | `cargo xtask semantic-shadow-compare --check` | [matrix]({status_link}) | limitation | next proof |\n"
             ));
         }
         text
