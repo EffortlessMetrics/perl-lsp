@@ -581,12 +581,12 @@ the limitation visible.
 
 ## Work item: lane-closeout
 
-Status: ready
+Status: completed; issue #8866
 Linked proposal: [PLSP-PROP-0001](../../docs/proposals/PLSP-PROP-0001-real-perl-editor-trust.md)
 Linked spec: all Real Perl Editor Trust specs
 Linked ADR: all Real Perl Editor Trust ADRs
 Blocks: none
-Blocked by: active goal manifest, support-claim-refresh, provider-confidence-closeout, linux-corpus-refresh or explicit deferral
+Blocked by: none
 
 Goal
 
@@ -608,6 +608,25 @@ Acceptance
 Active manifest points to this plan and current status docs; implementation plan
 has no missing required fields; status/support surfaces link claims to proof;
 deferred items name successor work.
+
+Completion audit
+
+- Source-of-truth stack: proposal, specs, ADRs, implementation plan, and active
+  goal manifest are present.
+- Parser control plane: `parser_accuracy_next.md` reports 0 active failure
+  packets and routes capability work to `parser.md#raw-failure-buckets`.
+- Parser claim boundary: `parser.md` records the stale system-Perl receipt and
+  the raw `unclosed_paren_identifier` bucket; fixture-only work remains active
+  and must not claim bucket-count movement.
+- Linux corpus refresh: deferred on this Windows host because the Linux
+  system-Perl roots are unavailable; successor #8863 owns the fresh receipt.
+- Provider confidence: `provider_confidence_matrix.md` maps provider source,
+  confidence, freshness, fallback, runtime comparison, real-workspace links,
+  live state, and next proof.
+- Real-workspace proof: the 2026-05-13 Mojolicious Windows receipt records the
+  covered editor-latency surfaces and explicit deferrals.
+- Support claims: `SUPPORT_TIERS.md` maps user-facing claims to proof commands,
+  status docs, known limitations, and next promotion proof.
 
 Proof commands
 
