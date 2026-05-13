@@ -360,6 +360,12 @@ Continue source-backed fixture or narrow parser-fix work from
 
 Current shape analysis:
 [unclosed_paren_identifier shape analysis](../../docs/project/status/parser_unclosed_paren_identifier_shapes.md).
+AST boundary receipts:
+`../../crates/perl-parser-core/tests/list_operator_boundary_receipts.rs`.
+
+Next parser runtime work should start only from current failing evidence: a
+fresh Linux receipt or a focused source-backed fixture that fails against the
+current parser. Otherwise #8863 owns bucket-count movement.
 
 Production delta
 
@@ -380,6 +386,7 @@ Proof commands
 
 ```bash
 cargo test -p perl-parser-core --test <bucket-test> --profile agent --locked -- --nocapture
+cargo test -p perl-parser-core --test list_operator_boundary_receipts --profile agent --locked -- --nocapture
 cargo xtask metrics parser-accuracy --check
 cargo xtask update-status --only parser --check
 cargo xtask metrics ratchet-check parser_accuracy

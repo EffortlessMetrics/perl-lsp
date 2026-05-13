@@ -162,17 +162,20 @@ AST ownership for three representative list-operator shapes:
   `grep` owns the `keys` source.
 - ExtUtils attrs map/sort/keys: the outer `join` owns the `map` result, the
   `map` owns the `sort` source, and `sort` owns the `keys` source.
-- Unicode Collate map/split: the outer `join` owns the `map` result, and the
+- Unicode::Collate map/split: the outer `join` owns the `map` result, and the
   `map` owns the `split` source.
 
 These receipt tests prove current AST shape for the representative cases above.
-They do not prove Linux corpus movement, and they do not remove the need for a
-fresh corpus receipt before any raw bucket-count claim.
+They are stronger than clean-parse fixtures because they assert the parsed call
+tree shape, not only the absence of `Error` or `Missing*` nodes. They do not
+prove Linux corpus movement, and they do not remove the need for a fresh corpus
+receipt before any raw bucket-count claim.
 
 ## Recommended Next Parser PR
 
-If a runtime parser repair is still needed, start with the list-operator
-boundary lane:
+Do not start a runtime repair from this stale bucket note alone. Start the
+list-operator boundary lane only when current evidence supplies a failing
+source-backed case:
 
 ```text
 fix(parser): repair repeated map/grep/sort expression boundary
@@ -188,8 +191,15 @@ Scope:
 - no generated status hand edits
 - no bucket-count movement claim without the Linux corpus refresh
 
-Fixture-only PRs should continue only when a new real-Perl source shape is not
-covered by the existing groups above.
+Valid starting evidence:
+
+- a refreshed Linux receipt shows a current list-operator boundary failure; or
+- a focused, source-backed fixture reproduces a boundary failure against the
+  current parser.
+
+Otherwise, the next bucket-count action is #8863. Fixture-only PRs should
+continue only when a new real-Perl source shape is not covered by the existing
+groups above.
 
 ## Verification
 
@@ -197,6 +207,7 @@ For this analysis note:
 
 ```bash
 cargo test -p perl-parser-core --test unclosed_paren_identifier_tests --profile agent --locked -- --nocapture
+cargo test -p perl-parser-core --test list_operator_boundary_receipts --profile agent --locked -- --nocapture
 cargo xtask metrics parser-accuracy --check
 cargo xtask update-status --only parser --check
 cargo xtask metrics ratchet-check parser_accuracy
