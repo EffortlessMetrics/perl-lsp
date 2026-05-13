@@ -720,6 +720,25 @@ fn local_carp_not_scalar_ternary_caller() {
     assert_clean_parse(r#"local @CARP_NOT = scalar( $cgc ? $cgc->() : caller() );"#);
 }
 
+#[test]
+fn carp_db_args_map_eval_or_do() {
+    // From Carp: map BLOCK over @DB::args may contain local assignment, eval,
+    // and an `or do` fallback without leaving the map source list unclosed.
+    assert_clean_parse(
+        r#"my @args = map {
+            my $arg;
+            local $@ = $@;
+            eval {
+                $arg = $_;
+                1;
+            } or do {
+                $arg = '** argument not available anymore **';
+            };
+            $arg;
+        } @DB::args;"#,
+    );
+}
+
 // === Sigil-peek heuristic: imported unary functions without parens (#1943) ===
 // These all fail with "expected ')', found identifier" before the fix because
 // `blessed`, `reftype`, etc. are not in the builtin table. The fix adds a
