@@ -76,8 +76,12 @@ fn head_commit_time(repo: &Path) -> Result<u64> {
     Ok(ts)
 }
 
-/// Write a fake binary at `target/<profile>/perl-lsp` with a mtime relative
-/// to the HEAD commit timestamp.
+fn perl_lsp_binary_name() -> String {
+    format!("perl-lsp{}", std::env::consts::EXE_SUFFIX)
+}
+
+/// Write a fake binary at the host-platform `target/<profile>/perl-lsp*`
+/// executable path with a mtime relative to the HEAD commit timestamp.
 ///
 /// `offset_secs > 0` → fresh (mtime is that many seconds after the commit).
 /// `offset_secs < 0` → stale (mtime is |offset| seconds before the commit).
@@ -85,7 +89,7 @@ fn write_fake_binary(repo: &Path, profile: &str, offset_secs: i64) -> Result<()>
     let commit_time = head_commit_time(repo)? as i64;
     let target = repo.join("target").join(profile);
     fs::create_dir_all(&target)?;
-    let binary_path = target.join("perl-lsp");
+    let binary_path = target.join(perl_lsp_binary_name());
     fs::write(&binary_path, b"fake binary")?;
 
     // Set mtime via filetime arithmetic using SystemTime.
@@ -119,7 +123,12 @@ fn missing_binaries_are_not_stale() -> Result<()> {
     assert_eq!(receipt["binary_freshness_safe"], true);
     let binaries = receipt["binaries_checked"].as_array().expect("array");
     assert_eq!(binaries.len(), 2, "should check debug and release");
+    let binary_name = perl_lsp_binary_name();
     for entry in binaries {
+        assert!(
+            entry["path"].as_str().expect("path").ends_with(&binary_name),
+            "path should use the host executable suffix"
+        );
         assert_eq!(entry["mtime"], Value::Null, "missing binary has null mtime");
         assert_eq!(entry["stale"], false, "missing binary is not stale");
         assert_eq!(entry["source_sha"], Value::Null);
@@ -273,7 +282,7 @@ fn cargo_target_dir_override_is_honoured() -> Result<()> {
     let debug_dir = custom_target.join("debug");
     fs::create_dir_all(&debug_dir)?;
     // Write a fresh binary inside the custom target dir.
-    let binary_path = debug_dir.join("perl-lsp");
+    let binary_path = debug_dir.join(perl_lsp_binary_name());
     fs::write(&binary_path, b"custom target binary")?;
 
     // Set mtime to 60 seconds after HEAD commit → fresh.
