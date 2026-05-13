@@ -71,6 +71,9 @@ enum Commands {
     /// Validate Real Perl Editor Trust provider/support claim tables.
     CheckProviderConfidenceMatrix,
 
+    /// Validate Real Perl Editor Trust support claim map.
+    CheckSupportClaims,
+
     /// Capture a GitHub PR queue snapshot for disconnected maintainership.
     Queue {
         #[command(subcommand)]
@@ -2399,6 +2402,7 @@ fn main() -> Result<()> {
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
         Commands::CheckDevexDocs => devex_docs::run(),
         Commands::CheckProviderConfidenceMatrix => provider_confidence_matrix::run(),
+        Commands::CheckSupportClaims => provider_confidence_matrix::run_support_claims(),
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
             QueueCommand::Health { receipt, fixture } => {
