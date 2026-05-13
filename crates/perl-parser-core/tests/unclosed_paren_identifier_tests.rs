@@ -683,6 +683,13 @@ fn extutils_mm_unix_ldrun_join_map_qq_rpath() {
 }
 
 #[test]
+fn extutils_mm_unix_mpl_args_join_map_qq_brackets() {
+    // From ExtUtils::MM_Unix: join may take a bare map EXPR, LIST where the
+    // mapped expression is a qq[] literal over @ARGV.
+    assert_clean_parse(r#"my $mpl_args = join " ", map qq["$_"], @ARGV;"#);
+}
+
+#[test]
 fn extutils_mm_unix_split_command_map_quote_literal_pair() {
     // From ExtUtils::MM_Unix: function arguments may include map EXPR, LIST
     // where the expression is a unary-plus parenthesized key/value pair.
