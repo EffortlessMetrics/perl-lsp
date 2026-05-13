@@ -755,6 +755,35 @@
       ]
     },
     {
+      "id": "mojolicious_diagnostics_quality",
+      "scenario_file": "ux_scenario_31_mojolicious_diagnostics_quality.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "diagnostics",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "open the Mojolicious real-workspace fixture and record diagnostics quality boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "diagnostic notifications arrive for selected probes",
+        "diagnostics use valid LSP payload shape",
+        "workspace-present Mojolicious imports do not emit PL701",
+        "missing-module probe emits PL701 without promoting broad diagnostics claims"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "incremental_text_sync_recovery",
       "scenario_file": "ux_scenario_19_incremental_text_sync.rs",
       "subsystem_owner": "text_sync",
