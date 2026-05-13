@@ -77,115 +77,15 @@ impl LspServer {
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(ref ast) = doc.ast {
-                    // Extract symbols from AST
-                    let extractor = crate::symbol::SymbolExtractor::new_with_source(&doc.text);
-                    let symbol_table = extractor.extract(ast);
-
-                    // Convert to DocumentSymbol format
-                    let mut document_symbols = Vec::new();
-
-                    // Group symbols by scope and kind
-                    let mut symbols_by_scope: std::collections::HashMap<
-                        crate::symbol::ScopeId,
-                        Vec<crate::symbol::Symbol>,
-                    > = std::collections::HashMap::new();
-                    for symbols in symbol_table.symbols.values() {
-                        for symbol in symbols {
-                            symbols_by_scope
-                                .entry(symbol.scope_id)
-                                .or_default()
-                                .push(symbol.clone());
-                        }
-                    }
-
-                    // Build hierarchical structure starting from global scope
-                    let empty_vec = Vec::new();
-                    let global_symbols = symbols_by_scope.get(&0).unwrap_or(&empty_vec);
-
-                    for symbol in global_symbols {
-                        let (start_line, start_char) =
-                            self.offset_to_pos16(doc, symbol.location.start);
-                        let (end_line, end_char) = self.offset_to_pos16(doc, symbol.location.end);
-
-                        let symbol_kind = document_symbol_kind(symbol);
-                        let display_name = document_symbol_name(symbol);
-                        let detail = document_symbol_detail(symbol);
-
-                        // Find child symbols for this scope (if it's a package or subroutine)
-                        let mut children = Vec::new();
-                        if symbol.kind == crate::symbol::SymbolKind::Package
-                            || symbol.kind == crate::symbol::SymbolKind::Class
-                            || symbol.kind == crate::symbol::SymbolKind::Subroutine
-                        {
-                            // Find scope ID for this symbol
-                            for (scope_id, scope) in &symbol_table.scopes {
-                                if scope.location.start == symbol.location.start {
-                                    // Get symbols in this scope
-                                    if let Some(child_symbols) = symbols_by_scope.get(scope_id) {
-                                        for child in child_symbols {
-                                            let (child_start_line, child_start_char) =
-                                                self.offset_to_pos16(doc, child.location.start);
-                                            let (child_end_line, child_end_char) =
-                                                self.offset_to_pos16(doc, child.location.end);
-
-                                            let child_kind = document_symbol_kind(child);
-                                            let child_display_name = document_symbol_name(child);
-                                            let child_detail = document_symbol_detail(child);
-
-                                            if child.location == symbol.location
-                                                && child.kind == symbol.kind
-                                                && child.name == symbol.name
-                                            {
-                                                continue;
-                                            }
-
-                                            children.push((
-                                                document_symbol_priority(child),
-                                                child.location.start,
-                                                child.location.end,
-                                                json!({
-                                                    "name": child_display_name,
-                                                    "detail": child_detail,
-                                                    "kind": child_kind,
-                                                    "range": {
-                                                        "start": { "line": child_start_line, "character": child_start_char },
-                                                        "end": { "line": child_end_line, "character": child_end_char }
-                                                    },
-                                                    "selectionRange": {
-                                                        "start": { "line": child_start_line, "character": child_start_char },
-                                                        "end": { "line": child_end_line, "character": child_end_char }
-                                                    },
-                                                    "children": []
-                                                }),
-                                            ));
-                                        }
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-
-                        children.sort_by_key(|(priority, start, end, _)| (*priority, *start, *end));
-                        let children: Vec<Value> =
-                            children.into_iter().map(|(_, _, _, child)| child).collect();
-
-                        let symbol_info = json!({
-                            "name": display_name,
-                            "detail": detail,
-                            "kind": symbol_kind,
-                            "range": {
-                                "start": { "line": start_line, "character": start_char },
-                                "end": { "line": end_line, "character": end_char }
-                            },
-                            "selectionRange": {
-                                "start": { "line": start_line, "character": start_char },
-                                "end": { "line": end_line, "character": end_char }
-                            },
-                            "children": children
-                        });
-
-                        document_symbols.push(symbol_info);
-                    }
+                    // Source-backed compiler document symbols are live for fresh,
+                    // high-confidence parser syntax facts. Astless documents keep
+                    // the legacy text fallback below.
+                    let live_result =
+                        perl_lsp_rs_core::providers::document_symbols::source_backed_document_symbols_from_ast(
+                            ast,
+                            &doc.text,
+                        );
+                    let mut document_symbols = document_symbols_to_json(live_result.symbols);
 
                     // Append POD section symbols from a direct line scan
                     document_symbols.extend(pod_section_symbols(&doc.text));
@@ -393,69 +293,12 @@ impl LspServer {
     }
 }
 
-/// Map symbol kind to LSP SymbolKind numeric value for document symbols.
-///
-/// Uses the richer document symbol profile that distinguishes
-/// array and hash variables with distinct icons.
-#[inline]
-fn symbol_kind_to_lsp(kind: crate::symbol::SymbolKind) -> u32 {
-    kind.to_lsp_kind_document_symbol()
-}
-
-fn document_symbol_kind(symbol: &crate::symbol::Symbol) -> u32 {
-    if symbol.declaration.as_deref() == Some("has")
-        && symbol.kind == crate::symbol::SymbolKind::scalar()
-    {
-        7
-    } else {
-        symbol_kind_to_lsp(symbol.kind)
-    }
-}
-
-fn document_symbol_name(symbol: &crate::symbol::Symbol) -> String {
-    if symbol.declaration.as_deref() == Some("has") {
-        symbol.name.clone()
-    } else if let Some(sigil) = symbol.kind.sigil() {
-        format!("{}{}", sigil, symbol.name)
-    } else {
-        symbol.name.clone()
-    }
-}
-
-fn document_symbol_detail(symbol: &crate::symbol::Symbol) -> String {
-    if symbol.declaration.as_deref() == Some("has")
-        && symbol.kind == crate::symbol::SymbolKind::scalar()
-    {
-        if !symbol.attributes.is_empty() {
-            symbol.attributes.join(", ")
-        } else {
-            symbol.documentation.clone().unwrap_or_default()
-        }
-    } else if symbol.declaration.as_deref() == Some("has") {
-        symbol.documentation.clone().unwrap_or_default()
-    } else {
-        symbol.declaration.as_deref().unwrap_or("").to_string()
-    }
-}
-
-fn document_symbol_priority(symbol: &crate::symbol::Symbol) -> u8 {
-    if symbol.declaration.as_deref() == Some("has")
-        && symbol.kind == crate::symbol::SymbolKind::scalar()
-    {
-        0
-    } else if symbol.declaration.as_deref() == Some("has") {
-        2
-    } else if matches!(
-        symbol.kind,
-        crate::symbol::SymbolKind::Package
-            | crate::symbol::SymbolKind::Class
-            | crate::symbol::SymbolKind::Role
-    ) {
-        1
-    } else if symbol.kind.is_callable() {
-        3
-    } else {
-        4
+fn document_symbols_to_json(
+    symbols: Vec<perl_lsp_rs_core::providers::document_symbols::DocumentSymbol>,
+) -> Vec<Value> {
+    match serde_json::to_value(symbols) {
+        Ok(Value::Array(items)) => items,
+        Ok(_) | Err(_) => Vec::new(),
     }
 }
 
@@ -465,40 +308,89 @@ fn offset_to_line(content: &str, offset: usize) -> usize {
 }
 
 impl LspServer {
-    /// Document symbol runtime quality receipt — shadow-only proof.
+    /// Document symbol runtime quality receipt for the source-backed live slice.
     ///
     /// Calls the live `textDocument/documentSymbol` handler and wraps the result
-    /// in a typed receipt that can be used for staged cutover proof. Document symbols
-    /// is in `shadowed` state: the live provider is the source of truth; compiler-fact
-    /// candidates are not yet promoted to the runtime path.
-    ///
-    /// Does not change live provider behavior (`no_live_behavior_change: true`).
+    /// in a typed receipt that records the fresh parser-syntax symbols promoted
+    /// live. Astless, generated/no-source, stale, dynamic, low-confidence, and
+    /// ambiguous cases keep fallback or gated behavior.
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub(crate) fn document_symbols_runtime_quality_receipt(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        let (compiler_receipt, source_backed_count) =
+            self.document_symbols_source_backed_receipt(params.as_ref())?;
         let live_provider_result = self.handle_document_symbol(params)?;
         let live_provider_count = match live_provider_result.as_ref() {
             Some(Value::Array(items)) => items.len(),
             _ => 0,
         };
+        let no_live_behavior_change = source_backed_count == 0;
 
         Ok(Some(json!({
             "provider": "document_symbols",
             "live_provider_result": live_provider_result,
             "live_provider_count": live_provider_count,
-            "shadow_state": "shadowed",
-            "compiler_receipt": null,
-            "no_live_behavior_change": true,
+            "shadow_state": "partial_live_source_backed",
+            "compiler_receipt": compiler_receipt,
+            "no_live_behavior_change": no_live_behavior_change,
             "notes": [
                 format!(
                     "document-symbol runtime quality receipt: live_provider_count={}; \
-                     compiler-fact candidates pending staged cutover; \
-                     no live document-symbol behavior change",
-                    live_provider_count
+                     source_backed_compiler_symbols={}; \
+                     source-backed parser syntax document symbols are live; \
+                     astless, stale, dynamic, generated/no-source, and ambiguous cases keep fallback",
+                    live_provider_count,
+                    source_backed_count
                 )
             ]
         })))
     }
+
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
+    fn document_symbols_source_backed_receipt(
+        &self,
+        params: Option<&Value>,
+    ) -> Result<(Value, usize), JsonRpcError> {
+        let Some(params) = params else {
+            return Ok((document_symbols_empty_compiler_receipt("missing_params"), 0));
+        };
+        let uri = req_uri(params)?;
+        let documents = self.documents_guard();
+        let Some(doc) = self.get_document(&documents, uri) else {
+            return Ok((document_symbols_empty_compiler_receipt("unknown_uri"), 0));
+        };
+        let Some(ast) = doc.ast.as_ref() else {
+            return Ok((document_symbols_empty_compiler_receipt("ast_unavailable"), 0));
+        };
+
+        let live_result =
+            perl_lsp_rs_core::providers::document_symbols::source_backed_document_symbols_from_ast(
+                ast, &doc.text,
+            );
+        let source_backed_count = live_result.fact_traces.len();
+        Ok((
+            json!({
+                "source": "ParserSyntax",
+                "provenance": "ExactAst",
+                "confidence": "High",
+                "freshness": "Fresh",
+                "fallback_state": "Primary",
+                "source_backed_count": source_backed_count,
+                "fact_source_traces": live_result.fact_traces,
+            }),
+            source_backed_count,
+        ))
+    }
+}
+
+#[cfg(any(test, feature = "expose_lsp_test_api"))]
+fn document_symbols_empty_compiler_receipt(reason: &str) -> Value {
+    json!({
+        "source_backed_count": 0,
+        "fallback_state": "Fallback",
+        "reason": reason,
+        "fact_source_traces": [],
+    })
 }
