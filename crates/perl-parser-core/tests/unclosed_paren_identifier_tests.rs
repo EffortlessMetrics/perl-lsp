@@ -581,6 +581,15 @@ fn unicode_collate_gmatch_substr_return_map_expr() {
 }
 
 #[test]
+fn unicode_collate_sort_map_arrayref_pipeline() {
+    // From Unicode::Collate: a return may pipeline map BLOCK, sort BLOCK, and
+    // map EXPR arrayref construction without leaving the statement open.
+    assert_clean_parse(
+        r#"return map { $_->[1] } sort { $a->[0] cmp $b->[0] } map [ $obj->getSortKey($_), $_ ], @_;"#,
+    );
+}
+
+#[test]
 fn unicode_collate_hst_join_map_split_expr() {
     // From Unicode::Collate: join may take map EXPR, LIST where the source
     // list is a split expression after the mapped function call.
