@@ -9,12 +9,12 @@
 ## Current Framing
 
 - Workspace version line: `v0.14.0`
-- Current release train: `v0.13.4` public-alpha patch prep, with release dispatch intentionally pending
+- Current release train: `v0.14.0` public-alpha patch prep, with release dispatch intentionally pending
 - Published crate surface target: 31 crates from `[workspace.metadata.publish.allow]`
 - Active work: finish release-prep verification, keep install-surface receipts wired into the runbook, and keep release language public-alpha rather than stable/GA
 - Canonical local receipt: `nix develop -c just ci-gate`
 
-Publication discipline: `v0.13.4` uses a normal SemVer package version for release channels while the human-facing product posture remains public alpha. See [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md) for the cross-channel ledger, and do not dispatch the release until the prep checks pass.
+Publication discipline: `v0.14.0` uses a normal SemVer package version for release channels while the human-facing product posture remains public alpha. See [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md) for the cross-channel ledger, and do not dispatch the release until the prep checks pass.
 
 ## How To Read This File
 
@@ -90,7 +90,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - End-to-end LSP feature development guide (#3027, PR #3115)
 - GIF recording guide and asset structure (#2336, PR #3130)
 
-## Active: Public-Alpha Release Prep (v0.13.2)
+## Active: Public-Alpha Release Prep (v0.14.0)
 
 - GitHub Release, crates.io, Docker, VS Code Marketplace, Open VSX, and Homebrew tap receipts are tracked separately
 - The owned Homebrew path is `brew install effortlessmetrics/tap/perllsp`
@@ -99,7 +99,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 
 ## Now / Next / Later
 
-### Now (v0.13.2 public-alpha patch prep)
+### Now (v0.14.0 public-alpha patch prep)
 
 - CI/control-plane Wave 2 substrate already landed and should not be re-implemented in parallel follow-up PRs:
   - Per-gate timeout regression coverage in gate receipts (#7525)
@@ -116,7 +116,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
   6. Merge-train planner/receipt protocol with stop conditions
   7. Tokmd advisory stabilization (explicitly non-required while calibrating signal)
 - Wave guardrails: no bulk stale-closure automation, no full merge bot scope, no global pre-push hooks, no broad CI architecture rewrite in this pass.
-- `v0.13.2` is staged as the next public-alpha patch release; run the release-prep checks before dispatching the train
+- `v0.14.0` is staged as the next public-alpha patch release; run the release-prep checks before dispatching the train
 - Pre-announcement license badge fix (PR #3193): canonical SPDX text in all 126 LICENSE files
 - Pre-announcement Docker arm64 timeout fix (#3188 → PR #3191, merged)
 - Per-release dependency triage: 7 dependabot PRs merged 2026-04-07 (#3178–#3184)
@@ -129,9 +129,9 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Semantic substrate migration status now tracks Wave 2/Wave 3 reality in [SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md](SEMANTIC_SUBSTRATE_FIRST_WAVE_PLAN.md): core semantic facts, HIR-backed `ImportSpec` / `ExportSet`, `visible_symbols_at`, and shadow receipts have fixture evidence; fact-source trace receipts are in place, and provider cutover now has narrow diagnostics and hover live-with-fallback behavior plus shadow/provenance receipts for completion, definition/reference, rename, safe-delete, workspace symbols, document symbols, and semantic tokens. The longer compiler-backed LSP direction is tracked in [COMPILER_BACKED_LSP_ROADMAP.md](COMPILER_BACKED_LSP_ROADMAP.md), with lane status in [COMPILER_CAPABILITY_STATUS.md](COMPILER_CAPABILITY_STATUS.md), fact-layer state in [compiler_facts.md](status/compiler_facts.md), and provider staging in [provider_cutover.md](status/provider_cutover.md). The import/export proof lane [#8264](https://github.com/EffortlessMetrics/perl-lsp/issues/8264), compile-environment state lane [#8280](https://github.com/EffortlessMetrics/perl-lsp/issues/8280), Exporter adapter registry lane [#8245](https://github.com/EffortlessMetrics/perl-lsp/issues/8245), first compile-effect log slice [#8291](https://github.com/EffortlessMetrics/perl-lsp/pull/8291), symbolic-ref boundary slice [#8297](https://github.com/EffortlessMetrics/perl-lsp/pull/8297), differential oracle proof [#8300](https://github.com/EffortlessMetrics/perl-lsp/pull/8300), provider fact-source trace receipts [#8305](https://github.com/EffortlessMetrics/perl-lsp/pull/8305), diagnostics proof/cutover [#8319](https://github.com/EffortlessMetrics/perl-lsp/issues/8319) / [#8327](https://github.com/EffortlessMetrics/perl-lsp/issues/8327), completion proof [#8342](https://github.com/EffortlessMetrics/perl-lsp/pull/8342), hover proof [#8344](https://github.com/EffortlessMetrics/perl-lsp/pull/8344), hover live provenance slice [#8369](https://github.com/EffortlessMetrics/perl-lsp/issues/8369), definition/reference proof [#8349](https://github.com/EffortlessMetrics/perl-lsp/pull/8349), rename/safe-delete proof [#8351](https://github.com/EffortlessMetrics/perl-lsp/pull/8351), workspace-symbol source/freshness proof [#8353](https://github.com/EffortlessMetrics/perl-lsp/issues/8353), document-symbol source/freshness proof [#8359](https://github.com/EffortlessMetrics/perl-lsp/issues/8359), and semantic-token source/freshness proof [#8360](https://github.com/EffortlessMetrics/perl-lsp/issues/8360) are complete; broader real-Perl conformance expansion remains tracked under [#8199](https://github.com/EffortlessMetrics/perl-lsp/issues/8199).
 - CI/control-plane next-wave execution sequencing is tracked in [CI_WAVE_EXECUTION_PLAN.md](CI_WAVE_EXECUTION_PLAN.md), with #7404 (`update-status --write` streaming) as the top urgency lane.
 
-### Next (post v0.13.2)
+### Next (post v0.14.0)
 
-- The 0.12.x line has built confidence across parser, diagnostics, refactoring, and distribution
+- The 0.13.x line has built confidence across parser, diagnostics, refactoring, and distribution
 - Resume parser, corpus, semantic, and DAP hardening after the release-channel receipts close
 - Run the editor-trust wave through [EDITOR_TRUST_WAVE.md](EDITOR_TRUST_WAVE.md): one lane, one canonical PR, one acceptance checklist, one verification receipt
 - Keep the install story verified across all distribution channels
@@ -178,7 +178,13 @@ Initial public alpha announcement. The 0.12.x line built confidence
 across parser corpus, diagnostics, refactoring, and distribution.
 0.13.0 is the announcement version.
 
-### Beyond v0.13.0
+### v0.14.0
+
+Public-alpha minor release train in progress for the Rust 1.95 MSRV line.
+RP-1 (readiness queue) is complete and RP-2 (dry-run publish readiness)
+is open on `master` readiness tracking.
+
+### Beyond v0.14.0
 
 - Stability contract for APIs and advertised wire behavior
 - Performance hardening for larger workspaces
@@ -213,4 +219,4 @@ For live capability posture, run `just status-check` or read [CURRENT_STATUS.md]
 | Evidence-backed metrics | [CURRENT_STATUS.md](CURRENT_STATUS.md) |
 | Top-level summary docs | [../../ROADMAP.md](../../ROADMAP.md), [../../NOW_NEXT_LATER.md](../../NOW_NEXT_LATER.md) |
 
-<!-- Last Updated: 2026-05-01 -->
+<!-- Last Updated: 2026-05-12 -->

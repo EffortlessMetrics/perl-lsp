@@ -2402,6 +2402,11 @@ release-build:
 version-check:
     @cargo xtask check-version-sync
 
+# Sync active release narrative docs (version + published crate surface count)
+# from `Cargo.toml` and `[workspace.metadata.publish.allow]`.
+sync-release-docs:
+    @cargo xtask sync-release-docs --write
+
 # Bump the workspace version across every tracked site.
 #
 # Usage: just bump-version 0.13.0
