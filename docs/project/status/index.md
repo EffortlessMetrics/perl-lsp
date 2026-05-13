@@ -23,6 +23,7 @@
 | Parser corpus & coverage | [parser.md](parser.md) | Generator | Every parser-touching merge |
 | HIR lowering coverage | [hir_lowering.md](hir_lowering.md) | Generator | Every HIR lowering merge |
 | Compiler fact substrate | [compiler_facts.md](compiler_facts.md) | Human | Compiler-substrate lane changes |
+| Real Perl Editor Trust v1 dashboard | [real_perl_editor_trust_v1.md](real_perl_editor_trust_v1.md) | Human | Provider trust, support-claim, or real-workspace receipt changes |
 | Provider cutover matrix | [provider_cutover.md](provider_cutover.md) | Human | Provider shadow/live state changes |
 | Module resolution conformance | [module_resolution.md](module_resolution.md) | Human | Module-resolution behavior or tracking changes |
 | Quality metrics | [quality.md](quality.md) | Generator | Every merge |
