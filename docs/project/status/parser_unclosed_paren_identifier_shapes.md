@@ -133,6 +133,7 @@ Shape:
 
 - main-package variable parsing inside parenthesized expressions
 - typeglob assignment with ternary anonymous subs
+- dynamic typeglob operands in condition declarations
 - scalar ternary/caller expressions
 - prefix-decrement in repetition expressions
 - filehandle and builtin-call parentheses
@@ -141,6 +142,7 @@ Representative locked tests:
 
 - `main_package_variable_in_paren_expr`
 - `unicode_normalize_typeglob_ternary_native_subs`
+- `dynamic_glob_double_scalar_in_condition_decl`
 - `local_carp_not_scalar_ternary_caller`
 - `x_repetition_prefix_decrement_in_parens`
 - `print_filehandle_in_unless`
@@ -149,9 +151,15 @@ Representative locked tests:
 Repair hypothesis:
 
 Keep these out of the first map/grep/sort grammar repair. They are adjacent
-`unclosed_paren_identifier` regressions or older locked false-positive shapes,
-but they do not share the same list-operator boundary as the repeated map/grep
-fixture train.
+`unclosed_paren_identifier` regressions, current follow-up discoveries, or older
+locked false-positive shapes, but they do not share the same list-operator
+boundary as the repeated map/grep fixture train.
+
+`dynamic_glob_double_scalar_in_condition_decl` is the Data::Printer::Filter::GLOB
+shape fixed by #8917. It proves that `*$$glob` in a condition declaration must
+be treated as a dynamic typeglob operand, not a static typeglob name followed by
+a stray scalar identifier. This is source-backed parser capability evidence,
+not Linux raw-bucket movement proof.
 
 ## AST Boundary Receipts
 
@@ -200,6 +208,12 @@ Valid starting evidence:
 Otherwise, the next bucket-count action is #8863. Fixture-only PRs should
 continue only when a new real-Perl source shape is not covered by the existing
 groups above.
+
+Recent closeouts:
+
+- #8917 locked and repaired the Data::Printer::Filter::GLOB dynamic typeglob
+  condition shape with `dynamic_glob_double_scalar_in_condition_decl`. It did
+  not refresh the Linux corpus receipt or claim bucket-count movement.
 
 ## Verification
 
