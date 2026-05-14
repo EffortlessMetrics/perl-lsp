@@ -8,7 +8,7 @@
 
 | Phase | Issue | Builder-ready? | PR | Receipt |
 |---|---|---|---|---|
-| 1. Real-workspace baseline suite | [#8848](https://github.com/EffortlessMetrics/perl-lsp/issues/8848) | yes | current Real Perl Editor Trust baseline PR | [2026-05-13 Mojolicious Windows receipt](../forensics/2026-05-13-real-workspace-baseline-mojolicious.md) and `.ci/metrics/real_project_latency.json` |
+| 1. Real-workspace baseline suite | [#8848](https://github.com/EffortlessMetrics/perl-lsp/issues/8848) | yes | current Real Perl Editor Trust baseline PR | [2026-05-13 Mojolicious Windows receipt](../forensics/2026-05-13-real-workspace-baseline-mojolicious.md), [2026-05-14 Dancer2 Windows receipt](../forensics/2026-05-14-real-workspace-baseline-dancer2.md), and `.ci/metrics/real_project_latency.json` |
 | 2. Editor-trust roadmap rollup | [#7952](https://github.com/EffortlessMetrics/perl-lsp/issues/7952) | not yet (`needs-spec`, `v0.14.0`, `umbrella`) | _pending_ | `cargo xtask semantic-shadow-compare --check` |
 
 ## Exit criteria
@@ -16,6 +16,7 @@
 - [ ] All phases land or are explicitly deferred with a successor.
 - [x] Phase 1 has a current Mojolicious receipt with explicit covered/deferred
   provider surfaces.
+- [x] Phase 1 has a second Dancer2 receipt with the same latency claim boundary.
 - [x] Receipt commands in this doc reproduce the closeout proof, with a Git Bash
   fallback documented for Windows agents whose `just` shell is unavailable.
 - [ ] Status doc updated (`docs/project/status/semantic_capability_dashboard.md` and `docs/project/status/semantic_scorecard.md` regenerated post-merge).

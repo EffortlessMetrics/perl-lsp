@@ -1,6 +1,6 @@
 {
-  "commit": "7ee5cec98",
-  "measured_at": "2026-05-13T12:21:10Z",
+  "commit": "003176984",
+  "measured_at": "2026-05-14T10:25:21Z",
   "projects": {
     "catalyst": {
       "file_count": null,
@@ -38,37 +38,37 @@
       }
     },
     "dancer2": {
-      "file_count": null,
+      "file_count": 8,
       "metrics": {
         "cold_start_to_hover": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 178,
+          "p95_ms": 458,
+          "p99_ms": 458,
+          "samples": 10
         },
         "first_completion": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "samples": 10
         },
         "first_goto_definition": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "samples": 10
         },
         "incremental_reparse": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 1,
+          "p95_ms": 2,
+          "p99_ms": 2,
+          "samples": 10
         },
         "workspace_symbol_query": {
-          "p50_ms": null,
-          "p95_ms": null,
-          "p99_ms": null,
-          "samples": null
+          "p50_ms": 0,
+          "p95_ms": 0,
+          "p99_ms": 0,
+          "samples": 10
         }
       }
     },
