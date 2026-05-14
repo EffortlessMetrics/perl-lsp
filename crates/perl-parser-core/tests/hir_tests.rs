@@ -2,8 +2,9 @@ use perl_parser_core::hir::{
     COMPILE_EFFECT_MODEL_VERSION, CompileConfidence, CompileEffectFactKind, CompileEffectKind,
     CompileEffectSourceKind, CompileEnvironment, CompileEnvironmentBoundaryKind, CompileProvenance,
     DynamicBoundaryKind, FrameworkAdapterKind, FrameworkAdapterRegistry,
-    FrameworkExportedSymbolKind, HirFile, HirKind, IncRootKind, ModuleResolutionRoot,
-    PragmaArgumentKind, RecoveryConfidence, ScopeGraph, StashGraph, lower_ast,
+    FrameworkExportedSymbolKind, GlobSlotSource, HirFile, HirKind, IncRootKind,
+    ModuleResolutionRoot, PragmaArgumentKind, RecoveryConfidence, ScopeGraph, StashConfidence,
+    StashGraph, StashProvenance, lower_ast,
 };
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 use perl_semantic_facts::{
@@ -778,6 +779,58 @@ fn hir_stash_graph_records_package_slots_inheritance_and_dynamic_boundaries()
         }),
         "AUTOLOAD should emit a HIR dynamic boundary"
     );
+
+    Ok(())
+}
+
+#[test]
+fn hir_stash_graph_projects_constant_table_from_static_slots()
+-> Result<(), Box<dyn std::error::Error>> {
+    let file = lower_source(
+        "package Constants;\n\
+         use constant PI => 3.14;\n\
+         use constant { MIN => 1, MAX => 100 };\n\
+         sub ANSWER () { 42; }\n\
+         sub ordinary { 1; }\n\
+         *alias = \\&ordinary;\n",
+    );
+
+    let table = file.stash_graph.constant_table();
+    assert!(!table.is_empty(), "constant table should contain static constants");
+
+    let names: Vec<_> = table.entries.iter().map(|entry| entry.canonical_name.as_str()).collect();
+    assert_eq!(
+        names,
+        vec!["Constants::PI", "Constants::MAX", "Constants::MIN", "Constants::ANSWER"]
+    );
+    assert!(
+        !names.contains(&"Constants::ordinary"),
+        "ordinary subs must not be promoted into the constant table"
+    );
+    assert!(
+        !names.contains(&"Constants::alias"),
+        "typeglob aliases must not be promoted into the constant table"
+    );
+
+    let pi = table
+        .entries
+        .iter()
+        .find(|entry| entry.canonical_name == "Constants::PI")
+        .ok_or("missing PI constant entry")?;
+    assert_eq!(pi.package, "Constants");
+    assert_eq!(pi.name, "PI");
+    assert_eq!(pi.source, GlobSlotSource::ConstantDeclaration);
+    assert_eq!(pi.provenance, StashProvenance::DesugaredAst);
+    assert_eq!(pi.confidence, StashConfidence::High);
+
+    let answer = table
+        .entries
+        .iter()
+        .find(|entry| entry.canonical_name == "Constants::ANSWER")
+        .ok_or("missing ANSWER constant entry")?;
+    assert_eq!(answer.source, GlobSlotSource::ConstantDeclaration);
+    assert_eq!(answer.provenance, StashProvenance::ExactAst);
+    assert_eq!(answer.confidence, StashConfidence::High);
 
     Ok(())
 }
