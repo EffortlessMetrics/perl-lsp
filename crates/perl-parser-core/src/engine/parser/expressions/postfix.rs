@@ -108,7 +108,10 @@ impl<'a> Parser<'a> {
             }
 
             match self.peek_kind() {
-                Some(k) if Self::is_postfix_op(Some(k)) => {
+                Some(k)
+                    if Self::is_postfix_op(Some(k))
+                        && !self.should_parse_incdec_as_block_list_arg(&expr) =>
+                {
                     let op_token = self.consume_token()?;
                     let start = expr.location.start;
                     let end = op_token.end;
@@ -1218,6 +1221,20 @@ impl<'a> Parser<'a> {
         }
 
         Ok(expr)
+    }
+
+    fn should_parse_incdec_as_block_list_arg(&mut self, expr: &Node) -> bool {
+        let NodeKind::Identifier { name } = &expr.kind else {
+            return false;
+        };
+        let bare_name = Self::core_qualified_builtin_name(name).unwrap_or(name.as_str());
+        if !Self::is_block_list_func(bare_name) {
+            return false;
+        }
+        self.tokens.peek().ok().is_some_and(|token| {
+            matches!(token.kind, TokenKind::Increment | TokenKind::Decrement)
+                && token.start > expr.location.end
+        })
     }
 
     /// Check if we're at a statement boundary
