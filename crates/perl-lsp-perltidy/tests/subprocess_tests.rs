@@ -150,6 +150,7 @@ impl SubprocessRuntime for TrackingRuntime {
 }
 
 #[test]
+#[allow(clippy::expect_used)]
 fn format_file_storm_does_not_retain_subprocess_outputs_or_temp_state() {
     let temp = tempfile::tempdir().expect("create tempdir");
     let runtime = Arc::new(TrackingRuntime::new());

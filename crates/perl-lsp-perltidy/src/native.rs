@@ -807,25 +807,6 @@ fn append_trailing_comment(mut formatted: String, trailing_comment: Option<&str>
     formatted
 }
 
-#[cfg(test)]
-mod tests {
-    use super::split_trailing_comment;
-
-    #[test]
-    fn split_trailing_comment_ignores_hash_inside_backticks()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let (code, comment) = split_trailing_comment("my$out=`printf '#value'`; # trailing");
-        assert_eq!(code, "my$out=`printf '#value'`;");
-        assert_eq!(comment, Some("# trailing"));
-
-        let (code, comment) = split_trailing_comment("my$out=`printf '#value'`;");
-        assert_eq!(code, "my$out=`printf '#value'`;");
-        assert_eq!(comment, None);
-
-        Ok(())
-    }
-}
-
 fn format_simple_subroutine_tokens(
     tokens: &[perl_parser_core::Token],
     indent: &str,
@@ -2157,5 +2138,24 @@ impl TextRange {
         let character = utf16_len(&source[line_start..clamped]) as u32;
         let position = TextPosition::new(line, character);
         Self::new(position, position)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_trailing_comment;
+
+    #[test]
+    fn split_trailing_comment_ignores_hash_inside_backticks()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (code, comment) = split_trailing_comment("my$out=`printf '#value'`; # trailing");
+        assert_eq!(code, "my$out=`printf '#value'`;");
+        assert_eq!(comment, Some("# trailing"));
+
+        let (code, comment) = split_trailing_comment("my$out=`printf '#value'`;");
+        assert_eq!(code, "my$out=`printf '#value'`;");
+        assert_eq!(comment, None);
+
+        Ok(())
     }
 }
