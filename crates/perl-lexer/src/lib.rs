@@ -1898,7 +1898,11 @@ impl<'a> PerlLexer<'a> {
             // Check for substitution/transliteration operators
             // Skip if after '->'  -- these are method names, not operators.
             #[allow(clippy::collapsible_if)]
-            if !self.after_arrow && self.hash_brace_depth == 0 && matches!(text, "s" | "tr" | "y") {
+            if !self.after_sub
+                && !self.after_arrow
+                && self.hash_brace_depth == 0
+                && matches!(text, "s" | "tr" | "y")
+            {
                 let immediate = self.current_char();
                 let (candidate, char_after_next, has_whitespace) =
                     if immediate.is_some_and(|c| c.is_whitespace()) {
@@ -1967,7 +1971,8 @@ impl<'a> PerlLexer<'a> {
                     // Inside hash subscript braces, regex-like operators stay bareword
                     // keys (`@h{m, s}`), but q-family operators can still introduce real
                     // quote expressions in slices (`@h{qw/a b/}`).
-                    op if !self.after_arrow
+                    op if !self.after_sub
+                        && !self.after_arrow
                         && quote_handler::is_quote_operator(op)
                         && (self.hash_brace_depth == 0
                             || matches!(op, "q" | "qq" | "qw" | "qr" | "qx")) =>

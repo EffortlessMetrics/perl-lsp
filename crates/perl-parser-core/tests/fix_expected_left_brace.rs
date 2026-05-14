@@ -118,6 +118,16 @@ fn test_sub_named_cmp() {
 }
 
 #[test]
+fn test_sub_named_m_with_comment_after_block_open() {
+    // CPAN/Shell.pm: `m` is a subroutine name here, not an m{...} regex.
+    assert_no_diagnostics(
+        r#"sub m { # emacs confused here }; sub mimimimimi { # emacs in sync here
+    my $self = shift;
+}"#,
+    );
+}
+
+#[test]
 fn test_sub_named_for() {
     assert_no_diagnostics(r#"sub for { 1 }"#);
 }
