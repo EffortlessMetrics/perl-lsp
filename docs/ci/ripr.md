@@ -63,6 +63,8 @@ Do **not** translate these into `killed` / `survived`. They mean something diffe
 - `continue-on-error: true` - does **not** block merges.
 - Produces diff-scoped PR evidence under `target/ripr/pr/`.
 - Produces review guidance under `target/ripr/review/`.
+- In CI, review guidance has an explicit timeout and falls back to an
+  advisory `error` artifact instead of blocking the workflow.
 - Emits non-blocking warning annotations from `comments[]` only.
 - Produces mutation-routing evidence under
   `target/xtask/impacted-evidence/`.

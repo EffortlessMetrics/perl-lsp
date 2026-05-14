@@ -162,6 +162,9 @@ enum Commands {
         /// Head revision for the PR diff.
         #[arg(long, default_value = "HEAD")]
         head: String,
+        /// Bound RIPR review guidance generation; timeout writes an advisory error artifact.
+        #[arg(long)]
+        timeout_seconds: Option<u64>,
         /// Validate existing target/ripr/review artifacts instead of regenerating.
         #[arg(long)]
         check: bool,
@@ -2497,8 +2500,8 @@ fn main() -> Result<()> {
         Commands::RiprPr { root, base, head, check } => {
             ripr_evidence::ripr_pr(&root, &base, &head, check)
         }
-        Commands::RiprReviewComments { root, base, head, check } => {
-            ripr_evidence::ripr_review_comments(&root, &base, &head, check)
+        Commands::RiprReviewComments { root, base, head, timeout_seconds, check } => {
+            ripr_evidence::ripr_review_comments(&root, &base, &head, timeout_seconds, check)
         }
         Commands::RiprPrSummary { check } => ripr_evidence::ripr_pr_summary(check),
         Commands::RiprAnnotations { comments, out, check } => {

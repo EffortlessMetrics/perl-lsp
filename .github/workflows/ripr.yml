@@ -63,7 +63,7 @@ jobs:
 
       - name: Generate review guidance
         if: always()
-        run: cargo xtask ripr-review-comments --base "origin/${{ github.base_ref || 'master' }}" --head HEAD
+        run: cargo xtask ripr-review-comments --base "origin/${{ github.base_ref || 'master' }}" --head HEAD --timeout-seconds 210
 
       - name: Generate impacted evidence
         if: always()

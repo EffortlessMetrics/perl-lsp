@@ -9,7 +9,8 @@ use std::collections::BTreeSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 const DEFAULT_ROOT: &str = ".";
 const DEFAULT_BASE: &str = "origin/master";
@@ -35,12 +36,19 @@ pub fn ripr_pr(root: &str, base: &str, head: &str, check: bool) -> Result<()> {
     if check { check_pr_evidence(&repo, &options) } else { write_pr_evidence(&repo, &options) }
 }
 
-pub fn ripr_review_comments(root: &str, base: &str, head: &str, check: bool) -> Result<()> {
+pub fn ripr_review_comments(
+    root: &str,
+    base: &str,
+    head: &str,
+    timeout_seconds: Option<u64>,
+    check: bool,
+) -> Result<()> {
     let repo = repo_root()?;
     let options = ReviewCommentsOptions {
         root: normalized_option(root, DEFAULT_ROOT),
         base: normalized_option(base, DEFAULT_BASE),
         head: normalized_option(head, DEFAULT_HEAD),
+        timeout_seconds: timeout_seconds.filter(|seconds| *seconds > 0),
     };
     if check {
         check_review_comments(&repo, &options)
@@ -404,6 +412,7 @@ struct ReviewCommentsOptions {
     root: String,
     base: String,
     head: String,
+    timeout_seconds: Option<u64>,
 }
 
 fn write_review_comments(repo: &Path, options: &ReviewCommentsOptions) -> Result<()> {
@@ -438,17 +447,20 @@ fn run_ripr_review_comments(
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
     let out_arg = out.display().to_string();
-    run_ripr(&[
-        "review-comments".to_string(),
-        "--root".to_string(),
-        root.to_string(),
-        "--base".to_string(),
-        options.base.clone(),
-        "--head".to_string(),
-        options.head.clone(),
-        "--out".to_string(),
-        out_arg,
-    ])
+    run_ripr_with_timeout(
+        &[
+            "review-comments".to_string(),
+            "--root".to_string(),
+            root.to_string(),
+            "--base".to_string(),
+            options.base.clone(),
+            "--head".to_string(),
+            options.head.clone(),
+            "--out".to_string(),
+            out_arg,
+        ],
+        options.timeout_seconds,
+    )
     .map(|_| ())
 }
 
@@ -1031,9 +1043,54 @@ fn run_ripr(args: &[String]) -> Result<String> {
     run_output(&binary, args)
 }
 
+fn run_ripr_with_timeout(args: &[String], timeout_seconds: Option<u64>) -> Result<String> {
+    let binary = match env::var("RIPR_BIN") {
+        Ok(value) if !value.trim().is_empty() => value,
+        Ok(_) => bail!("RIPR_BIN is set but empty"),
+        Err(_) => "ripr".to_string(),
+    };
+    match timeout_seconds {
+        Some(seconds) => run_output_with_timeout(&binary, args, Duration::from_secs(seconds)),
+        None => run_output(&binary, args),
+    }
+}
+
 fn run_output(cmd: &str, args: &[String]) -> Result<String> {
     let output =
         Command::new(cmd).args(args).output().with_context(|| format!("failed to run {cmd}"))?;
+    output_to_string(cmd, output)
+}
+
+fn run_output_with_timeout(cmd: &str, args: &[String], timeout: Duration) -> Result<String> {
+    let mut child = Command::new(cmd)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("failed to run {cmd}"))?;
+    let started = Instant::now();
+    loop {
+        if child.try_wait().with_context(|| format!("failed to poll {cmd}"))?.is_some() {
+            let output =
+                child.wait_with_output().with_context(|| format!("failed to collect {cmd}"))?;
+            return output_to_string(cmd, output);
+        }
+        if started.elapsed() >= timeout {
+            let _ = child.kill();
+            let output =
+                child.wait_with_output().with_context(|| format!("failed to collect {cmd}"))?;
+            bail!(
+                "{cmd} timed out after {}s\nstdout:\n{}\nstderr:\n{}",
+                timeout.as_secs(),
+                String::from_utf8_lossy(&output.stdout).trim(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+fn output_to_string(cmd: &str, output: std::process::Output) -> Result<String> {
     if !output.status.success() {
         bail!(
             "{cmd} failed with status {}\nstdout:\n{}\nstderr:\n{}",
