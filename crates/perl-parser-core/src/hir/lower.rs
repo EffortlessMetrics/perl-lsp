@@ -563,7 +563,10 @@ impl Lowerer {
                 attributes,
                 initializer,
             } => {
-                let bindings = variables.iter().filter_map(variable_binding).collect::<Vec<_>>();
+                let bindings = variables
+                    .iter()
+                    .flat_map(|variable| variable_decl_bindings(variable).0)
+                    .collect::<Vec<_>>();
                 let item_id = self.push_item(
                     node,
                     None,
@@ -1604,9 +1607,17 @@ impl Lowerer {
         confidence: RecoveryConfidence,
     ) {
         for variable in variables {
-            if !is_declaration_binding_node(variable) {
-                self.visit(variable, confidence);
+            self.visit_declaration_list_entry(variable, confidence);
+        }
+    }
+
+    fn visit_declaration_list_entry(&mut self, variable: &Node, confidence: RecoveryConfidence) {
+        if let NodeKind::ArrayLiteral { elements } = &variable.kind {
+            for element in elements {
+                self.visit_declaration_list_entry(element, confidence);
             }
+        } else if !is_declaration_binding_node(variable) {
+            self.visit(variable, confidence);
         }
     }
 }
@@ -2008,6 +2019,18 @@ fn variable_decl_bindings(node: &Node) -> (Vec<VariableBinding>, bool) {
     match &node.kind {
         NodeKind::Assignment { lhs, .. } => (variable_binding(lhs).into_iter().collect(), true),
         NodeKind::VariableWithAttributes { variable, .. } => variable_decl_bindings(variable),
+        NodeKind::ArrayLiteral { elements } => {
+            let mut bindings = Vec::new();
+            let mut has_embedded_initializer = false;
+            for element in elements {
+                let (mut element_bindings, element_has_initializer) =
+                    variable_decl_bindings(element);
+                bindings.append(&mut element_bindings);
+                has_embedded_initializer |= element_has_initializer;
+            }
+            (bindings, has_embedded_initializer)
+        }
+        NodeKind::Undef => (Vec::new(), false),
         _ => (variable_binding(node).into_iter().collect(), false),
     }
 }
@@ -2040,6 +2063,7 @@ fn is_declaration_binding_node(node: &Node) -> bool {
     match &node.kind {
         NodeKind::Variable { .. } | NodeKind::Typeglob { .. } => true,
         NodeKind::VariableWithAttributes { variable, .. } => is_declaration_binding_node(variable),
+        NodeKind::ArrayLiteral { elements } => elements.iter().all(is_declaration_binding_node),
         _ => false,
     }
 }

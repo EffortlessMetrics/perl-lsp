@@ -13,42 +13,7 @@ impl<'a> Parser<'a> {
 
             // Parse comma-separated list of variables with their individual attributes
             while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                // `undef` is valid as a placeholder in list destructuring:
-                //   my ($self, undef, $src) = @_;
-                let var = if self.peek_kind() == Some(TokenKind::Undef) {
-                    let undef_token = self.consume_token()?;
-                    Node::new(
-                        NodeKind::Undef,
-                        SourceLocation { start: undef_token.start, end: undef_token.end },
-                    )
-                } else {
-                    self.parse_variable()?
-                };
-
-                // Parse optional attributes for this specific variable
-                let mut var_attributes = Vec::new();
-                while self.peek_kind() == Some(TokenKind::Colon) {
-                    self.tokens.next()?; // consume colon
-                    let attr_token = self.expect(TokenKind::Identifier)?;
-                    var_attributes.push(attr_token.text.to_string());
-                }
-
-                // Create a node that includes both the variable and its attributes
-                let var_with_attrs = if var_attributes.is_empty() {
-                    var
-                } else {
-                    let start = var.location.start;
-                    let end = self.previous_position();
-                    Node::new(
-                        NodeKind::VariableWithAttributes {
-                            variable: Box::new(var),
-                            attributes: var_attributes,
-                        },
-                        SourceLocation { start, end },
-                    )
-                };
-
-                variables.push(var_with_attrs);
+                variables.push(self.parse_declaration_list_entry(true)?);
 
                 if self.peek_kind() == Some(TokenKind::Comma) {
                     self.consume_token()?; // consume comma
@@ -205,6 +170,68 @@ impl<'a> Parser<'a> {
         }
 
         Ok(())
+    }
+
+    fn parse_declaration_list_entry(&mut self, allow_attributes: bool) -> ParseResult<Node> {
+        let var = match self.peek_kind() {
+            Some(TokenKind::Undef) => {
+                let undef_token = self.consume_token()?;
+                Node::new(
+                    NodeKind::Undef,
+                    SourceLocation { start: undef_token.start, end: undef_token.end },
+                )
+            }
+            Some(TokenKind::LeftParen) => self.parse_declaration_list_group(allow_attributes)?,
+            _ => self.parse_variable()?,
+        };
+
+        if !allow_attributes {
+            return Ok(var);
+        }
+
+        let mut var_attributes = Vec::new();
+        while self.peek_kind() == Some(TokenKind::Colon) {
+            self.tokens.next()?; // consume colon
+            let attr_token = self.expect(TokenKind::Identifier)?;
+            var_attributes.push(attr_token.text.to_string());
+        }
+
+        if var_attributes.is_empty() {
+            Ok(var)
+        } else {
+            let start = var.location.start;
+            let end = self.previous_position();
+            Ok(Node::new(
+                NodeKind::VariableWithAttributes {
+                    variable: Box::new(var),
+                    attributes: var_attributes,
+                },
+                SourceLocation { start, end },
+            ))
+        }
+    }
+
+    fn parse_declaration_list_group(&mut self, allow_attributes: bool) -> ParseResult<Node> {
+        let open = self.consume_token()?; // consume (
+        let start = open.start;
+        let mut elements = Vec::new();
+
+        while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
+            elements.push(self.parse_declaration_list_entry(allow_attributes)?);
+
+            if self.peek_kind() == Some(TokenKind::Comma) {
+                self.consume_token()?; // consume comma
+            } else if self.peek_kind() != Some(TokenKind::RightParen) {
+                return Err(ParseError::syntax(
+                    "Expected comma or closing parenthesis in variable list",
+                    self.current_position(),
+                ));
+            }
+        }
+
+        self.expect_closing_delimiter(TokenKind::RightParen)?;
+        let end = self.previous_position();
+        Ok(Node::new(NodeKind::ArrayLiteral { elements }, SourceLocation { start, end }))
     }
 
     /// Parse local statement (can localize any lvalue, not just simple variables)
