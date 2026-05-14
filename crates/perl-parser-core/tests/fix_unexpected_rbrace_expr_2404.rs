@@ -65,3 +65,21 @@ fn test_do_empty_block_condition() {
 fn test_do_empty_block_with_space() {
     assert_clean_parse("do { };");
 }
+
+#[test]
+fn test_dbix_hash_splice_with_semicolon_terminated_deref_body() {
+    // From DBIx::Class::Storage::DBIHacks: a hash constructor may splice a
+    // hash dereference whose braced expression is terminated with `;`.
+    assert_clean_parse(
+        r#"sub x {
+    my $return = {
+        %{
+            $colinfos->{$source_alias}->{$colname}
+              ||
+            $self->throw_exception("No such column");
+        },
+        -result_source => $rsrc,
+    };
+}"#,
+    );
+}

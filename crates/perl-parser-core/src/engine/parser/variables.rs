@@ -278,6 +278,7 @@ impl<'a> Parser<'a> {
             // Parse the expression inside the braces
             let expr = self.parse_expression()?;
 
+            self.consume_deref_body_terminators()?;
             self.expect(TokenKind::RightBrace)?;
             let end = self.previous_position();
 
@@ -330,6 +331,7 @@ impl<'a> Parser<'a> {
             // Parse postfix chain (handles function call parens, method calls, etc.)
             inner = self.parse_postfix_chain(inner)?;
 
+            self.consume_deref_body_terminators()?;
             self.expect(TokenKind::RightBrace)?;
             let end = self.previous_position();
 
@@ -361,6 +363,7 @@ impl<'a> Parser<'a> {
                 // $#{expr} — last index via block dereference
                 self.tokens.next()?; // consume {
                 let inner = self.parse_expression()?;
+                self.consume_deref_body_terminators()?;
                 self.expect(TokenKind::RightBrace)?;
                 let brace_end = self.previous_position();
                 return Ok(Node::new(
@@ -420,6 +423,13 @@ impl<'a> Parser<'a> {
                 SourceLocation { start: token.start, end },
             ))
         }
+    }
+
+    fn consume_deref_body_terminators(&mut self) -> ParseResult<()> {
+        while self.peek_kind() == Some(TokenKind::Semicolon) {
+            self.consume_token()?;
+        }
+        Ok(())
     }
 
     /// Parse a variable when we have a sigil token first
@@ -638,6 +648,7 @@ impl<'a> Parser<'a> {
             // Parse the expression inside the braces
             let expr = self.parse_expression()?;
 
+            self.consume_deref_body_terminators()?;
             self.expect(TokenKind::RightBrace)?;
             let end = self.previous_position();
 
@@ -696,6 +707,7 @@ impl<'a> Parser<'a> {
     /// `start` is the position of the `&` sigil.
     fn parse_code_dereference(&mut self, start: usize) -> ParseResult<Node> {
         let inner_expr = self.parse_expression()?;
+        self.consume_deref_body_terminators()?;
         self.expect(TokenKind::RightBrace)?;
         let deref_end = self.previous_position();
         let deref_node = Node::new(
