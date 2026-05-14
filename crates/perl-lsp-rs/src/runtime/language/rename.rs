@@ -75,6 +75,56 @@ impl LspServer {
         Some((start, end))
     }
 
+    fn offset_is_inside_quoted_string(content: &str, offset: usize) -> bool {
+        let chars = content.chars().collect::<Vec<_>>();
+        let limit = offset.min(chars.len());
+        let mut in_single = false;
+        let mut in_double = false;
+        let mut escaped = false;
+        let mut in_comment = false;
+
+        for ch in chars.iter().take(limit) {
+            if in_comment {
+                if *ch == '\n' {
+                    in_comment = false;
+                }
+                continue;
+            }
+
+            if escaped {
+                escaped = false;
+                continue;
+            }
+
+            if in_single {
+                match ch {
+                    '\\' => escaped = true,
+                    '\'' => in_single = false,
+                    _ => {}
+                }
+                continue;
+            }
+
+            if in_double {
+                match ch {
+                    '\\' => escaped = true,
+                    '"' => in_double = false,
+                    _ => {}
+                }
+                continue;
+            }
+
+            match ch {
+                '#' => in_comment = true,
+                '\'' => in_single = true,
+                '"' => in_double = true,
+                _ => {}
+            }
+        }
+
+        in_single || in_double
+    }
+
     /// Normalize a rename target against the current symbol, validating the sigil and identifier.
     ///
     /// If `current_symbol` starts with a sigil, the returned name is sigil-prefixed.
@@ -156,6 +206,9 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(_ast) = &doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
+                    if Self::offset_is_inside_quoted_string(&doc.text, offset) {
+                        return Ok(Some(json!(null)));
+                    }
 
                     // Get the token at the current position
                     let token = self.get_token_at_position(&doc.text, offset);
@@ -209,6 +262,19 @@ impl LspServer {
                 p.get("position").and_then(|p| p.get("character")).and_then(|n| n.as_u64()),
                 p.get("newName").and_then(|s| s.as_str()),
             ) {
+                let rename_starts_in_quoted_string = {
+                    let documents = self.documents_guard();
+                    self.get_document(&documents, uri)
+                        .map(|doc| {
+                            let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
+                            Self::offset_is_inside_quoted_string(&doc.text, offset)
+                        })
+                        .unwrap_or(false)
+                };
+                if rename_starts_in_quoted_string {
+                    return Ok(Some(json!({"changes": {}})));
+                }
+
                 // Check index access mode using routing helper
                 #[cfg(feature = "workspace")]
                 {
@@ -452,6 +518,18 @@ mod tests {
             &text.chars().collect::<Vec<_>>()[start..end].iter().collect::<String>(),
             "$value"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn rename_guard_detects_dynamic_typeglob_string_positions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let text = r#"*{"Mojolicious::Routes::Route::$name"} = sub { $cb->(@_) };"#;
+        let string_offset = text.find("Routes::Route").ok_or("missing dynamic package")? + 2;
+        let code_offset = text.find("$cb").ok_or("missing callback")? + 1;
+
+        assert!(LspServer::offset_is_inside_quoted_string(text, string_offset));
+        assert!(!LspServer::offset_is_inside_quoted_string(text, code_offset));
         Ok(())
     }
 }
