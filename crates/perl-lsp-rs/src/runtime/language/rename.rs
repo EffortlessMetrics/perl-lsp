@@ -94,6 +94,50 @@ impl LspServer {
         Some((start, end))
     }
 
+    fn generated_accessor_prefix_matches(prefix: &str) -> bool {
+        let mut rest = prefix.trim_start();
+
+        if let Some(after_paren) = rest.strip_prefix('(') {
+            rest = after_paren.trim_start();
+        }
+
+        if let Some(after_plus) = rest.strip_prefix('+') {
+            rest = after_plus.trim_start();
+        }
+
+        matches!(rest, "" | "'" | "\"")
+    }
+
+    fn generated_accessor_arrow_follows(suffix: &str) -> bool {
+        let mut rest = suffix.trim_start();
+        if let Some(quote) = rest.chars().next().filter(|ch| matches!(ch, '\'' | '"')) {
+            rest = rest[quote.len_utf8()..].trim_start();
+        }
+        rest.starts_with("=>")
+    }
+
+    fn has_generated_accessor_marker_before(line: &str, token_start: usize) -> bool {
+        let mut search_from = 0;
+
+        while let Some(relative_idx) = line[search_from..token_start].find("has") {
+            let idx = search_from + relative_idx;
+            let after_idx = idx + "has".len();
+            let before_is_boundary = idx == 0
+                || line[..idx]
+                    .chars()
+                    .next_back()
+                    .is_none_or(|ch| !ch.is_alphanumeric() && ch != '_');
+            if before_is_boundary
+                && Self::generated_accessor_prefix_matches(&line[after_idx..token_start])
+            {
+                return true;
+            }
+            search_from = after_idx;
+        }
+
+        false
+    }
+
     fn offset_is_generated_accessor_declaration(source: &str, offset: usize) -> bool {
         let clamped_offset = offset.min(source.len());
         let line_start = if clamped_offset == 0 {
@@ -112,20 +156,16 @@ impl LspServer {
             return false;
         };
 
-        let before_token = line[..token_start].trim_start();
-        let Some(after_has) = before_token.strip_prefix("has") else {
-            return false;
-        };
-        if !after_has.chars().next().is_some_and(char::is_whitespace) {
+        if !Self::has_generated_accessor_marker_before(line, token_start) {
             return false;
         }
 
-        let accessor_prefix = after_has.trim_start();
-        if !matches!(accessor_prefix, "" | "'" | "\"" | "+") {
-            return false;
-        }
+        Self::generated_accessor_arrow_follows(&line[token_end..])
+    }
 
-        line[token_end..].contains("=>")
+    fn rename_blocked_at(doc: &crate::state::DocumentState, offset: usize) -> bool {
+        Self::offset_is_generated_accessor_declaration(&doc.text, offset)
+            || Self::offset_is_inside_quoted_string(&doc.text, offset)
     }
 
     fn scoped_lexical_rename_edits(
@@ -401,10 +441,7 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(_ast) = &doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
-                    if Self::offset_is_generated_accessor_declaration(&doc.text, offset) {
-                        return Ok(Some(json!(null)));
-                    }
-                    if Self::offset_is_inside_quoted_string(&doc.text, offset) {
+                    if Self::rename_blocked_at(doc, offset) {
                         return Ok(Some(json!(null)));
                     }
 
@@ -460,19 +497,16 @@ impl LspServer {
                 p.get("position").and_then(|p| p.get("character")).and_then(|n| n.as_u64()),
                 p.get("newName").and_then(|s| s.as_str()),
             ) {
-                let (rename_starts_in_quoted_string, rename_starts_in_generated_accessor) = {
+                let rename_starts_in_blocked_context = {
                     let documents = self.documents_guard();
                     self.get_document(&documents, uri)
                         .map(|doc| {
                             let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
-                            (
-                                Self::offset_is_inside_quoted_string(&doc.text, offset),
-                                Self::offset_is_generated_accessor_declaration(&doc.text, offset),
-                            )
+                            Self::rename_blocked_at(doc, offset)
                         })
-                        .unwrap_or((false, false))
+                        .unwrap_or(false)
                 };
-                if rename_starts_in_quoted_string || rename_starts_in_generated_accessor {
+                if rename_starts_in_blocked_context {
                     return Ok(Some(json!({"changes": {}})));
                 }
 
@@ -756,22 +790,31 @@ mod tests {
     #[test]
     fn rename_guard_detects_unquoted_generated_accessors() -> Result<(), Box<dyn std::error::Error>>
     {
-        let text = "use Moo;\nhas routes      => (is => 'ro');\nsub routes { 1 }\n";
+        let text = "use Moo;\nhas routes      => (is => 'ro');\nhas title => 1; has slug => 1;\nsub routes { 1 }\n";
         let accessor_offset = text.find("routes      =>").ok_or("missing has accessor")? + 2;
+        let same_line_accessor_offset =
+            text.find("slug =>").ok_or("missing same-line has accessor")? + 2;
         let sub_offset = text.rfind("routes").ok_or("missing sub name")? + 2;
 
         assert!(LspServer::offset_is_generated_accessor_declaration(text, accessor_offset));
+        assert!(LspServer::offset_is_generated_accessor_declaration(
+            text,
+            same_line_accessor_offset
+        ));
         assert!(!LspServer::offset_is_generated_accessor_declaration(text, sub_offset));
         Ok(())
     }
 
     #[test]
     fn rename_guard_detects_quoted_generated_accessors() -> Result<(), Box<dyn std::error::Error>> {
-        let text = "use Moose;\nhas 'name' => (is => 'rw');\nhash name => 1;\n";
+        let text = "use Moose;\nhas 'name' => (is => 'rw');\nhas'compact' => 1;\nhash name => 1;\n";
         let accessor_offset = text.find("name' =>").ok_or("missing quoted accessor")? + 1;
+        let compact_accessor_offset =
+            text.find("compact' =>").ok_or("missing compact accessor")? + 1;
         let hash_offset = text.rfind("name").ok_or("missing hash key")? + 1;
 
         assert!(LspServer::offset_is_generated_accessor_declaration(text, accessor_offset));
+        assert!(LspServer::offset_is_generated_accessor_declaration(text, compact_accessor_offset));
         assert!(!LspServer::offset_is_generated_accessor_declaration(text, hash_offset));
         Ok(())
     }
