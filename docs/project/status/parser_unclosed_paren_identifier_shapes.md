@@ -134,6 +134,7 @@ Shape:
 - main-package variable parsing inside parenthesized expressions
 - typeglob assignment with ternary anonymous subs
 - dynamic typeglob operands in condition declarations
+- imported unary-style calls wrapping builtin typeglob operands
 - scalar ternary/caller expressions
 - prefix-decrement in repetition expressions
 - filehandle and builtin-call parentheses
@@ -143,6 +144,7 @@ Representative locked tests:
 - `main_package_variable_in_paren_expr`
 - `unicode_normalize_typeglob_ternary_native_subs`
 - `dynamic_glob_double_scalar_in_condition_decl`
+- `reftype_tied_typeglob_comparison`
 - `local_carp_not_scalar_ternary_caller`
 - `x_repetition_prefix_decrement_in_parens`
 - `print_filehandle_in_unless`
@@ -160,6 +162,12 @@ shape fixed by #8917. It proves that `*$$glob` in a condition declaration must
 be treated as a dynamic typeglob operand, not a static typeglob name followed by
 a stray scalar identifier. This is source-backed parser capability evidence,
 not Linux raw-bucket movement proof.
+
+`reftype_tied_typeglob_comparison` is the Capture::Tiny shape fixed by #8919.
+It proves that an imported unary-style call such as `reftype` may take a nested
+builtin bare call whose operand is an explicit typeglob, as in
+`reftype tied *STDOUT`. This is source-backed parser capability evidence, not
+Linux raw-bucket movement proof.
 
 ## AST Boundary Receipts
 
@@ -214,6 +222,9 @@ Recent closeouts:
 - #8917 locked and repaired the Data::Printer::Filter::GLOB dynamic typeglob
   condition shape with `dynamic_glob_double_scalar_in_condition_decl`. It did
   not refresh the Linux corpus receipt or claim bucket-count movement.
+- #8919 locked and repaired the Capture::Tiny `reftype tied *STDOUT`
+  condition shape with `reftype_tied_typeglob_comparison`. It did not refresh
+  the Linux corpus receipt or claim bucket-count movement.
 
 ## Verification
 
