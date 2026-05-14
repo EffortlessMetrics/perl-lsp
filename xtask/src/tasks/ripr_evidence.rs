@@ -188,10 +188,11 @@ fn check_pr_evidence(repo: &Path, options: &PrEvidenceOptions) -> Result<()> {
 
 fn run_ripr_check(repo: &Path, options: &PrEvidenceOptions) -> Result<String> {
     let diff = repo.join(PR_DIFF).display().to_string();
+    let root = command_root_arg(repo, &options.root)?;
     run_ripr(&[
         "check".to_string(),
         "--root".to_string(),
-        command_root_arg(repo, &options.root),
+        root,
         "--diff".to_string(),
         diff,
         "--format".to_string(),
@@ -408,8 +409,9 @@ struct ReviewCommentsOptions {
 fn write_review_comments(repo: &Path, options: &ReviewCommentsOptions) -> Result<()> {
     verify_revision(repo, &options.base)?;
     verify_revision(repo, &options.head)?;
-    if let Err(err) = run_ripr_review_comments(repo, options) {
-        write_error_review_comments(repo, options, &err.to_string())?;
+    let root = command_root_arg(repo, &options.root)?;
+    if let Err(err) = run_ripr_review_comments(repo, options, &root) {
+        write_error_review_comments(repo, options, &root, &err.to_string())?;
     }
     validate_review_comments(repo, options, true)?;
     println!("Wrote {REVIEW_COMMENTS_JSON}");
@@ -425,7 +427,11 @@ fn check_review_comments(repo: &Path, options: &ReviewCommentsOptions) -> Result
     Ok(())
 }
 
-fn run_ripr_review_comments(repo: &Path, options: &ReviewCommentsOptions) -> Result<()> {
+fn run_ripr_review_comments(
+    repo: &Path,
+    options: &ReviewCommentsOptions,
+    root: &str,
+) -> Result<()> {
     let out = repo.join(REVIEW_COMMENTS_JSON);
     if let Some(parent) = out.parent() {
         fs::create_dir_all(parent)
@@ -435,7 +441,7 @@ fn run_ripr_review_comments(repo: &Path, options: &ReviewCommentsOptions) -> Res
     run_ripr(&[
         "review-comments".to_string(),
         "--root".to_string(),
-        command_root_arg(repo, &options.root),
+        root.to_string(),
         "--base".to_string(),
         options.base.clone(),
         "--head".to_string(),
@@ -486,13 +492,14 @@ fn validate_review_comments(
 fn write_error_review_comments(
     repo: &Path,
     options: &ReviewCommentsOptions,
+    root: &str,
     error: &str,
 ) -> Result<()> {
     let packet = json!({
         "schema_version": "0.1",
         "tool": "ripr",
         "status": "error",
-        "root": normalize_path_text(&command_root_arg(repo, &options.root)),
+        "root": normalize_path_text(root),
         "base": options.base,
         "head": options.head,
         "mode": "fast",
@@ -1038,12 +1045,24 @@ fn run_output(cmd: &str, args: &[String]) -> Result<String> {
     String::from_utf8(output.stdout).with_context(|| format!("{cmd} stdout was not UTF-8"))
 }
 
-fn command_root_arg(repo: &Path, root: &str) -> String {
+fn command_root_arg(repo: &Path, root: &str) -> Result<String> {
+    let repo = repo
+        .canonicalize()
+        .with_context(|| format!("failed to resolve repository root {}", repo.display()))?;
     let root_path = Path::new(root);
-    if root_path.is_absolute() {
-        return root.to_string();
+    let candidate =
+        if root_path.is_absolute() { root_path.to_path_buf() } else { repo.join(root_path) };
+    let canonical = candidate
+        .canonicalize()
+        .with_context(|| format!("failed to resolve RIPR root {}", candidate.display()))?;
+    if !canonical.starts_with(&repo) {
+        bail!(
+            "RIPR root {} resolves outside repository root {}",
+            canonical.display(),
+            repo.display()
+        );
     }
-    repo.join(root_path).display().to_string()
+    Ok(canonical.display().to_string())
 }
 
 fn write_text(path: &Path, text: &str) -> Result<()> {
@@ -1191,6 +1210,40 @@ fn bullet_list(values: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn command_root_arg_allows_repo_relative_root() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path();
+        fs::create_dir(repo.join("crates"))?;
+
+        let root = command_root_arg(repo, "crates")?;
+
+        assert_eq!(PathBuf::from(root), repo.join("crates").canonicalize()?);
+        Ok(())
+    }
+
+    #[test]
+    fn command_root_arg_rejects_absolute_root_outside_repo() -> Result<()> {
+        let repo = tempfile::tempdir()?;
+        let outside = tempfile::tempdir()?;
+        let outside_arg = outside.path().display().to_string();
+
+        assert!(command_root_arg(repo.path(), &outside_arg).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn command_root_arg_rejects_relative_parent_escape() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let repo = temp.path().join("repo");
+        let outside = temp.path().join("outside");
+        fs::create_dir(&repo)?;
+        fs::create_dir(&outside)?;
+
+        assert!(command_root_arg(&repo, "../outside").is_err());
+        Ok(())
+    }
 
     #[test]
     fn mutation_label_routes_targeted() {
