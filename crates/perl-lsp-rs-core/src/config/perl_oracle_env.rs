@@ -31,7 +31,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
 #[cfg(not(target_arch = "wasm32"))]
@@ -40,6 +40,52 @@ use std::time::Duration;
 #[cfg(not(target_arch = "wasm32"))]
 use super::SYSTEM_INC_PROBE_TIMEOUT;
 use super::WorkspaceConfig;
+
+#[cfg(all(not(target_arch = "wasm32"), windows))]
+const PERLDOC_EXECUTABLE_CANDIDATES: &[&str] =
+    &["perldoc.bat", "perldoc.cmd", "perldoc.exe", "perldoc"];
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
+const PERLDOC_EXECUTABLE_CANDIDATES: &[&str] = &["perldoc"];
+
+#[cfg(not(target_arch = "wasm32"))]
+fn perldoc_binary_near_perl(perl_binary: &Path) -> Option<PathBuf> {
+    let dir = perl_binary.parent()?;
+    if dir.as_os_str().is_empty() {
+        return None;
+    }
+
+    for candidate_name in PERLDOC_EXECUTABLE_CANDIDATES {
+        let candidate = dir.join(candidate_name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn default_perldoc_binary() -> PathBuf {
+    PathBuf::from("perldoc")
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn resolve_perldoc_binary(config: &WorkspaceConfig) -> PathBuf {
+    if let Some(configured_perl) = config.perl_path.as_deref().filter(|path| !path.is_empty())
+        && let Some(perldoc) = perldoc_binary_near_perl(Path::new(configured_perl))
+    {
+        return perldoc;
+    }
+
+    if let Ok(perl_binary) = crate::platform::resolve_perl_path_with_toolchain()
+        && let Some(perldoc) = perldoc_binary_near_perl(&perl_binary)
+    {
+        return perldoc;
+    }
+
+    default_perldoc_binary()
+}
 
 /// Controlled subprocess environment for a single Perl oracle seam.
 ///
@@ -311,6 +357,35 @@ impl PerlOracleEnv {
         })
     }
 
+    /// Constructor for `perldoc` hover documentation lookups.
+    ///
+    /// `perldoc` is not the editor's semantic source of truth; it is a bridge for
+    /// user-requested documentation. It still runs inside the editor session, so
+    /// ambient Perl state must be explicit:
+    ///
+    /// - `allow_perl5lib`: mirrors `config.use_perl5lib` so project-local docs
+    ///   are visible only when the user opted into `PERL5LIB`.
+    /// - `allow_perl5opt`: always `false` because `PERL5OPT` injects runtime
+    ///   flags into every Perl-family subprocess.
+    /// - `allow_local_lib`: always `false`; the perldoc binary is resolved from
+    ///   the configured Perl toolchain when possible.
+    /// - `LC_ALL`: forced to `C` for deterministic plain-text output.
+    /// - `timeout`: 10 seconds, matching the existing hover budget.
+    pub fn for_perldoc(config: &WorkspaceConfig, cwd: PathBuf) -> Self {
+        let mut extra_env = BTreeMap::new();
+        extra_env.insert("LC_ALL".to_string(), "C".to_string());
+
+        Self {
+            perl_binary: resolve_perldoc_binary(config),
+            cwd,
+            timeout: Duration::from_secs(10),
+            allow_perl5lib: config.use_perl5lib,
+            allow_perl5opt: false,
+            allow_local_lib: false,
+            extra_env,
+        }
+    }
+
     /// Constructor for the Perl::LanguageServer DAP bridge process.
     ///
     /// The DAP bridge launches a long-running Perl::LanguageServer process on
@@ -464,6 +539,11 @@ impl PerlOracleEnv {
     }
 
     /// Returns a no-op stub on WASM (no subprocess support).
+    pub fn for_perldoc(_config: &WorkspaceConfig, _cwd: std::path::PathBuf) -> Self {
+        PerlOracleEnv
+    }
+
+    /// Returns a no-op stub on WASM (no subprocess support).
     pub fn for_version_probe(_perl_binary: std::path::PathBuf, _cwd: std::path::PathBuf) -> Self {
         PerlOracleEnv
     }
@@ -557,6 +637,163 @@ mod tests {
             assert!(e.allow_perl5opt, "allow_perl5opt must always be true for execute-command");
             assert!(e.allow_local_lib, "allow_local_lib must always be true for execute-command");
         }
+    }
+
+    // ── for_perldoc tests ─────────────────────────────────────────────────────
+
+    /// `for_perldoc` mirrors `config.use_perl5lib` while denying `PERL5OPT`
+    /// and `local::lib`, and pins locale for stable plain-text docs.
+    #[test]
+    fn for_perldoc_respects_config_flags() {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        let mut config = WorkspaceConfig::default();
+        config.use_perl5lib = true;
+        let env = PerlOracleEnv::for_perldoc(&config, cwd.clone());
+        assert!(env.allow_perl5lib, "perldoc should honor explicit use_perl5lib=true");
+        assert!(!env.allow_perl5opt, "perldoc must strip PERL5OPT");
+        assert!(!env.allow_local_lib, "perldoc must strip local::lib activation vars");
+        assert_eq!(env.extra_env.get("LC_ALL").map(String::as_str), Some("C"));
+
+        config.use_perl5lib = false;
+        let env = PerlOracleEnv::for_perldoc(&config, cwd);
+        assert!(!env.allow_perl5lib, "perldoc should honor explicit use_perl5lib=false");
+        assert!(!env.allow_perl5opt, "perldoc must strip PERL5OPT");
+        assert!(!env.allow_local_lib, "perldoc must strip local::lib activation vars");
+        assert_eq!(env.extra_env.get("LC_ALL").map(String::as_str), Some("C"));
+    }
+
+    #[test]
+    fn for_perldoc_prefers_configured_perl_sibling() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let perl_name = if cfg!(windows) { "perl.exe" } else { "perl" };
+        let perldoc_name =
+            PERLDOC_EXECUTABLE_CANDIDATES.first().ok_or("missing perldoc executable candidate")?;
+        let perl_path = temp.path().join(perl_name);
+        let perldoc_path = temp.path().join(perldoc_name);
+        std::fs::write(&perl_path, "")?;
+        std::fs::write(&perldoc_path, "")?;
+
+        let config = WorkspaceConfig {
+            perl_path: Some(perl_path.to_string_lossy().into_owned()),
+            ..WorkspaceConfig::default()
+        };
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let env = PerlOracleEnv::for_perldoc(&config, cwd);
+
+        assert_eq!(
+            env.perl_binary, perldoc_path,
+            "perldoc should resolve from the configured Perl toolchain directory"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn for_perldoc_does_not_use_missing_configured_sibling() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let perl_name = if cfg!(windows) { "perl.exe" } else { "perl" };
+        let perl_path = temp.path().join(perl_name);
+        let missing_perldoc_path = temp.path().join(
+            PERLDOC_EXECUTABLE_CANDIDATES.first().ok_or("missing perldoc executable candidate")?,
+        );
+        std::fs::write(&perl_path, "")?;
+
+        let config = WorkspaceConfig {
+            perl_path: Some(perl_path.to_string_lossy().into_owned()),
+            ..WorkspaceConfig::default()
+        };
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let env = PerlOracleEnv::for_perldoc(&config, cwd);
+
+        assert_ne!(
+            env.perl_binary, missing_perldoc_path,
+            "missing configured-toolchain perldoc must not be used as an explicit binary"
+        );
+        Ok(())
+    }
+
+    /// The perldoc oracle strips poisoned ambient env by default, while still
+    /// allowing `PERL5LIB` only when the user explicitly enabled it.
+    #[test]
+    fn for_perldoc_strips_poisoned_env_and_gates_perl5lib() -> TestResult {
+        let _env_guard = env_lock()?;
+        let perl = match perl_path() {
+            Some(p) => p,
+            None => return Ok(()),
+        };
+        let poison_dir = tempfile::tempdir()?;
+        let poison_path = poison_dir.path().to_string_lossy().into_owned();
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        unsafe { std::env::set_var("PERL5LIB", &poison_path) };
+        unsafe { std::env::set_var("PERL5OPT", "-Mstrict") };
+        unsafe { std::env::set_var("PERL_LOCAL_LIB_ROOT", &poison_path) };
+        unsafe { std::env::set_var("PERL_LOCAL_LIB_PREFIX", &poison_path) };
+
+        let result = (|| -> TestResult<(String, String)> {
+            let denied_config = WorkspaceConfig {
+                perl_path: Some(perl.to_string_lossy().into_owned()),
+                use_perl5lib: false,
+                ..WorkspaceConfig::default()
+            };
+            let denied = PerlOracleEnv::for_perldoc(&denied_config, cwd.clone());
+            let mut cmd = std::process::Command::new(&perl);
+            denied.configure_command(&mut cmd);
+            cmd.args([
+                "-e",
+                "print join('|', $ENV{PERL5LIB}//'UNSET', $ENV{PERL5OPT}//'UNSET', \
+                 $ENV{PERL_LOCAL_LIB_ROOT}//'UNSET', $ENV{PERL_LOCAL_LIB_PREFIX}//'UNSET', \
+                 $ENV{LC_ALL}//'UNSET')",
+            ]);
+            cmd.stdout(std::process::Stdio::piped());
+            cmd.stderr(std::process::Stdio::piped());
+            let denied_out = cmd.output()?;
+
+            let allowed_config = WorkspaceConfig {
+                perl_path: Some(perl.to_string_lossy().into_owned()),
+                use_perl5lib: true,
+                ..WorkspaceConfig::default()
+            };
+            let allowed = PerlOracleEnv::for_perldoc(&allowed_config, cwd);
+            let mut cmd = std::process::Command::new(&perl);
+            allowed.configure_command(&mut cmd);
+            cmd.args([
+                "-e",
+                "print join('|', $ENV{PERL5LIB}//'UNSET', $ENV{PERL5OPT}//'UNSET', \
+                 $ENV{PERL_LOCAL_LIB_ROOT}//'UNSET', $ENV{PERL_LOCAL_LIB_PREFIX}//'UNSET', \
+                 $ENV{LC_ALL}//'UNSET')",
+            ]);
+            cmd.stdout(std::process::Stdio::piped());
+            cmd.stderr(std::process::Stdio::piped());
+            let allowed_out = cmd.output()?;
+
+            Ok((
+                String::from_utf8_lossy(&denied_out.stdout).into_owned(),
+                String::from_utf8_lossy(&allowed_out.stdout).into_owned(),
+            ))
+        })();
+
+        unsafe { std::env::remove_var("PERL5LIB") };
+        unsafe { std::env::remove_var("PERL5OPT") };
+        unsafe { std::env::remove_var("PERL_LOCAL_LIB_ROOT") };
+        unsafe { std::env::remove_var("PERL_LOCAL_LIB_PREFIX") };
+
+        let (denied_stdout, allowed_stdout) = result?;
+        assert_eq!(
+            denied_stdout.trim(),
+            "UNSET|UNSET|UNSET|UNSET|C",
+            "perldoc must strip poisoned env when PERL5LIB is disabled; got: {denied_stdout:?}",
+        );
+        assert!(
+            allowed_stdout.starts_with(&poison_path),
+            "perldoc should pass PERL5LIB through only when opted in; got: {allowed_stdout:?}",
+        );
+        assert!(
+            allowed_stdout.ends_with("|UNSET|UNSET|UNSET|C"),
+            "perldoc must still strip PERL5OPT/local::lib and set LC_ALL; got: {allowed_stdout:?}",
+        );
+
+        Ok(())
     }
 
     // ── for_language_probe tests ──────────────────────────────────────────────
