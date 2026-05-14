@@ -13,17 +13,7 @@ impl<'a> Parser<'a> {
 
             // Parse comma-separated list of variables with their individual attributes
             while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                // `undef` is valid as a placeholder in list destructuring:
-                //   my ($self, undef, $src) = @_;
-                let var = if self.peek_kind() == Some(TokenKind::Undef) {
-                    let undef_token = self.consume_token()?;
-                    Node::new(
-                        NodeKind::Undef,
-                        SourceLocation { start: undef_token.start, end: undef_token.end },
-                    )
-                } else {
-                    self.parse_variable()?
-                };
+                let var = self.parse_variable_list_item()?;
 
                 // Parse optional attributes for this specific variable
                 let mut var_attributes = Vec::new();
@@ -159,6 +149,26 @@ impl<'a> Parser<'a> {
                 SourceLocation { start, end },
             );
             Ok(node)
+        }
+    }
+
+    /// Parse one slot in a lexical list declaration.
+    fn parse_variable_list_item(&mut self) -> ParseResult<Node> {
+        match self.peek_kind() {
+            Some(TokenKind::Undef) => {
+                let undef_token = self.consume_token()?;
+                Ok(Node::new(
+                    NodeKind::Undef,
+                    SourceLocation { start: undef_token.start, end: undef_token.end },
+                ))
+            }
+            Some(TokenKind::LeftParen) => {
+                self.consume_token()?;
+                let item = self.parse_variable_list_item()?;
+                self.expect_closing_delimiter(TokenKind::RightParen)?;
+                Ok(item)
+            }
+            _ => self.parse_variable(),
         }
     }
 

@@ -86,6 +86,12 @@ fn test_my_list_with_rest_array() {
 }
 
 #[test]
+fn test_grouped_scalar_in_my_list() {
+    // From Perl::Tidy::FileWriter: lexical destructuring may group a scalar slot.
+    assert_clean_parse("my ( $self, ($forced) ) = @_;");
+}
+
+#[test]
 fn test_my_hash_fat_comma_initializer() {
     assert_clean_parse("my %opts = (verbose => 1, debug => 0);");
 }
