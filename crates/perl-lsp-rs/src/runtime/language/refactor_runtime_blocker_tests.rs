@@ -63,6 +63,7 @@ sub caller {
 "#;
 
 const DANCER2_DSL_URI: &str = "file:///workspace/lib/Dancer2/Core/DSL.pm";
+const REAL_BASELINE_UTIL_URI: &str = "file:///workspace/lib/RealBaseline/Util.pm";
 
 fn create_server() -> LspServer {
     let output =
@@ -120,7 +121,27 @@ fn collect_perl_files(
 }
 
 fn load_dancer2_fixture_files() -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
-    let root = workspace_root()?.join("test_corpus").join("real_projects").join("dancer2_skeleton");
+    load_real_project_fixture_files("dancer2_skeleton")
+}
+
+fn load_semantic_real_workspace_files()
+-> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let root = workspace_root()?
+        .join("crates")
+        .join("perl-workspace")
+        .join("tests")
+        .join("fixtures")
+        .join("semantic_real_workspace")
+        .join("cpan_style");
+    let mut files = BTreeMap::new();
+    collect_perl_files(&root, &root, &mut files)?;
+    Ok(files)
+}
+
+fn load_real_project_fixture_files(
+    project: &str,
+) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let root = workspace_root()?.join("test_corpus").join("real_projects").join(project);
     let mut files = BTreeMap::new();
     collect_perl_files(&root, &root, &mut files)?;
     Ok(files)
@@ -130,6 +151,16 @@ fn open_dancer2_workspace(
     server: &LspServer,
 ) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
     let files = load_dancer2_fixture_files()?;
+    for (relative_path, content) in &files {
+        open_document(server, &format!("file:///workspace/{relative_path}"), content)?;
+    }
+    Ok(files)
+}
+
+fn open_semantic_real_workspace(
+    server: &LspServer,
+) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let files = load_semantic_real_workspace_files()?;
     for (relative_path, content) in &files {
         open_document(server, &format!("file:///workspace/{relative_path}"), content)?;
     }
@@ -611,6 +642,46 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_stale_symbol_f
             "compiler_plan_safe=false",
             "blocker_reasons=StaleFact",
             "stale_fact=true",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_real_workspace_imported_symbol()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let util = files.get("lib/RealBaseline/Util.pm").ok_or("missing RealBaseline Util fixture")?;
+
+    let (helper_line, helper_character) = position_of(util, "helper {")?;
+    let helper_params = json!({
+        "textDocument": {"uri": REAL_BASELINE_UTIL_URI},
+        "position": {"line": helper_line, "character": helper_character}
+    });
+    let helper_receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(helper_params))?
+        .ok_or("missing real-workspace referenced-symbol safe-delete receipt")?;
+    let helper_compiler = compiler_receipt(&helper_receipt)?;
+
+    assert_eq!(helper_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(helper_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(helper_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_eq!(helper_receipt.get("symbol").and_then(Value::as_str), Some("helper"));
+    assert_eq!(helper_compiler.get("query").and_then(Value::as_str), Some("safe_delete_plan"));
+    assert_trace_contains(helper_compiler, "CompilerFact", "High", "Fresh")?;
+    assert!(trace_count(helper_compiler)? > 0, "helper receipt must carry fact-source traces");
+    assert_note_contains(
+        helper_compiler,
+        &[
+            "safe-delete runtime blocker UX",
+            "compiler_plan_safe=false",
+            "blocker_reasons=",
+            "ImportedSymbol",
+            "imported by another file",
             "requires_confirmation=true",
             "no live refactor behavior change",
         ],
