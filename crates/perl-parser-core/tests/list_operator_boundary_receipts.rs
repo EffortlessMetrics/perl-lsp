@@ -85,6 +85,31 @@ fn map_quote_like_expression_keeps_sort_source_inside_map() -> Result<(), String
 }
 
 #[test]
+fn map_sort_source_stops_before_ternary_colon() -> Result<(), String> {
+    let source = r#"my @params = ref $data eq 'HASH' ? map { ($_ => $data->{$_}) } sort keys %$data : @$data;"#;
+    assert_clean_parse(source);
+
+    let statement = program_statement(source, "HTTP::Tiny map/sort ternary boundary")?;
+    let initializer = declaration_initializer(&statement, "HTTP::Tiny map/sort ternary boundary")?;
+
+    let NodeKind::Ternary { then_expr, .. } = &initializer.kind else {
+        return Err(format!(
+            "expected ternary initializer for HTTP::Tiny map/sort boundary, got {:?}",
+            initializer.kind
+        ));
+    };
+
+    let map_args = function_call(then_expr, "map", "HTTP::Tiny ternary then map boundary")?;
+    assert_eq!(map_args.len(), 2, "map should contain block and sort source");
+
+    let sort_args = function_call(arg(map_args, 1, "map source")?, "sort", "sort source boundary")?;
+    assert_eq!(sort_args.len(), 1, "sort should contain keys source before ternary colon");
+    function_call(arg(sort_args, 0, "sort source")?, "keys", "keys source boundary")?;
+
+    Ok(())
+}
+
+#[test]
 fn map_expression_keeps_split_source_inside_map() -> Result<(), String> {
     let source = r#"my $curHST = join '', map getHST($_, $vers), split /;/, $jcps;"#;
     assert_clean_parse(source);

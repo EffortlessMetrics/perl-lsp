@@ -499,7 +499,7 @@ impl<'a> Parser<'a> {
                                 if (if is_bare_func {
                                     self.should_continue_bare_call_after_block()
                                 } else {
-                                    !self.is_at_statement_end()
+                                    !self.is_implicit_arg_terminator()
                                 }) && !matches!(
                                     self.peek_kind(),
                                     Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
@@ -517,7 +517,7 @@ impl<'a> Parser<'a> {
                                         if !self.should_continue_bare_call_after_block() {
                                             break;
                                         }
-                                    } else if self.is_at_statement_end() {
+                                    } else if self.is_implicit_arg_terminator() {
                                         break;
                                     }
                                     args.push(self.parse_assignment_or_declaration()?);
@@ -534,14 +534,14 @@ impl<'a> Parser<'a> {
                                     "print" | "say" | "printf" | "exec" | "system" | "send"
                                 );
                                 if is_fh_builtin
-                                    && !self.is_at_statement_end()
+                                    && !self.is_implicit_arg_terminator()
                                     && !matches!(
                                         self.peek_kind(),
                                         Some(TokenKind::Comma | TokenKind::FatArrow)
                                     )
                                 {
                                     // No comma — treat the block as a filehandle and parse the list.
-                                    while !self.is_at_statement_end()
+                                    while !self.is_implicit_arg_terminator()
                                         && !matches!(
                                             self.peek_kind(),
                                             Some(
@@ -558,7 +558,7 @@ impl<'a> Parser<'a> {
                                         ) {
                                             self.consume_token()?;
                                         }
-                                        if self.is_at_statement_end() {
+                                        if self.is_implicit_arg_terminator() {
                                             break;
                                         }
                                         args.push(self.parse_ternary()?);
@@ -570,7 +570,7 @@ impl<'a> Parser<'a> {
                                         Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
                                     ) {
                                         self.consume_token()?; // consume comma or fat arrow
-                                        if self.is_at_statement_end() {
+                                        if self.is_implicit_arg_terminator() {
                                             break;
                                         }
                                         args.push(self.parse_comma()?);
@@ -843,7 +843,7 @@ impl<'a> Parser<'a> {
                                     )
                                 });
 
-                            if self.is_at_statement_end()
+                            if self.is_implicit_arg_terminator()
                                 || is_nullary_without_args
                                 || is_comma_terminated
                                 || is_str_op_terminated
@@ -866,10 +866,10 @@ impl<'a> Parser<'a> {
                                     args.push(self.parse_builtin_block()?);
 
                                     // Parse remaining arguments without requiring commas
-                                    // But respect statement boundaries including ] and )
+                                    // But respect statement and ternary branch boundaries.
                                     // Word operators terminate argument collection since
                                     // they bind less tightly than list operators.
-                                    while !self.is_at_statement_end()
+                                    while !self.is_implicit_arg_terminator()
                                         && !matches!(
                                             self.peek_kind(),
                                             Some(
@@ -888,7 +888,7 @@ impl<'a> Parser<'a> {
                                             self.consume_token()?;
                                         }
                                         // Check again after potential comma/fat arrow
-                                        if self.is_at_statement_end() {
+                                        if self.is_implicit_arg_terminator() {
                                             break;
                                         }
                                         args.push(self.parse_ternary()?);
@@ -925,7 +925,7 @@ impl<'a> Parser<'a> {
                                     // then collect the list to sort.
                                     args.push(self.parse_ternary()?);
 
-                                    while !self.is_at_statement_end()
+                                    while !self.is_implicit_arg_terminator()
                                         && !matches!(
                                             self.peek_kind(),
                                             Some(
@@ -942,7 +942,7 @@ impl<'a> Parser<'a> {
                                         ) {
                                             self.consume_token()?;
                                         }
-                                        if self.is_at_statement_end() {
+                                        if self.is_implicit_arg_terminator() {
                                             break;
                                         }
                                         args.push(self.parse_ternary()?);
@@ -959,7 +959,7 @@ impl<'a> Parser<'a> {
                                     // arg, then collect the list to sort (issue #2750 Pattern C).
                                     args.push(self.parse_ternary()?);
 
-                                    while !self.is_at_statement_end()
+                                    while !self.is_implicit_arg_terminator()
                                         && !matches!(
                                             self.peek_kind(),
                                             Some(
@@ -976,7 +976,7 @@ impl<'a> Parser<'a> {
                                         ) {
                                             self.consume_token()?;
                                         }
-                                        if self.is_at_statement_end() {
+                                        if self.is_implicit_arg_terminator() {
                                             break;
                                         }
                                         args.push(self.parse_ternary()?);
@@ -1047,6 +1047,10 @@ impl<'a> Parser<'a> {
                                         }
                                         args.push(self.parse_ternary()?);
                                     }
+                                } else if Self::is_optional_arg_builtin(bare_name)
+                                    && self.peek_kind() != Some(TokenKind::LeftParen)
+                                {
+                                    args.push(self.parse_shift()?);
                                 } else {
                                     // Parse the first argument
                                     args.push(self.parse_assignment_or_declaration()?);
@@ -1197,6 +1201,12 @@ impl<'a> Parser<'a> {
             None => true,
             _ => false,
         }
+    }
+
+    /// Stop implicit list-operator argument collection at ordinary statement
+    /// boundaries and at a ternary `:` separator owned by the enclosing branch.
+    fn is_implicit_arg_terminator(&mut self) -> bool {
+        self.is_at_statement_end() || self.peek_kind() == Some(TokenKind::Colon)
     }
 
     /// Check whether the current peek token is a quote-op name that should be
