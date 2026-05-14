@@ -727,11 +727,14 @@ impl<'a> Parser<'a> {
 
                 match s.peek_kind() {
                     Some(TokenKind::Comma) | Some(TokenKind::FatArrow) => {
-                        s.tokens.next()?;
+                        let separator = s.consume_token()?;
+                        if separator.kind == TokenKind::Comma {
+                            s.consume_redundant_commas()?;
+                        }
                         // Handle `, =>` (comma then fat arrow) — consume the
                         // redundant separator.
                         if s.peek_kind() == Some(TokenKind::FatArrow) {
-                            s.tokens.next()?;
+                            s.consume_token()?;
                         }
                     }
                     _ => break,
