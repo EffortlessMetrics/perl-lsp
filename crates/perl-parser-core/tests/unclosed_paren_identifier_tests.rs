@@ -857,6 +857,18 @@ fn dbi_each_hash_over_scalar_deref_slice() {
 }
 
 #[test]
+fn dbic_sybase_subname_fat_arrow_coderef_arg() {
+    // From DBIx::Class::Storage::DBI::Sybase::ASE: a qualified imported
+    // list-style call may use a bare subname before `=> sub { ... }` while it
+    // is itself an argument to another function call.
+    assert_clean_parse(
+        r#"my $orig_cslib_cb = DBD::Sybase::set_cslib_cb(
+            Sub::Name::subname _insert_bulk_cslib_errhandler => sub { return 1; }
+        );"#,
+    );
+}
+
+#[test]
 fn looks_like_number_sigil() {
     // looks_like_number $val — common in Type::Tiny and Params::Util
     assert_clean_parse(r#"return 0 unless looks_like_number $val;"#);
