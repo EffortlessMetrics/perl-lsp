@@ -333,8 +333,8 @@ mod corpus_gap_tests {
                 !sexp.contains("ERROR"),
                 "expected no ERROR nodes for hash-slice qw delimiter form, got: {sexp}"
             );
-            assert!(sexp.contains("'red'"), "expected red key in qw list, got: {sexp}");
-            assert!(sexp.contains("'blue'"), "expected blue key in qw list, got: {sexp}");
+            assert!(sexp.contains("\"red\""), "expected red key in qw list, got: {sexp}");
+            assert!(sexp.contains("\"blue\""), "expected blue key in qw list, got: {sexp}");
         }
 
         Ok(())
