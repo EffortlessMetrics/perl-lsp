@@ -57,6 +57,7 @@ const VALID_COMPONENTS: &[&str] = &[
     "rename",
     "hover",
     "goto_definition",
+    "semantic_tokens",
     "infra",
     "ai_completion",
 ];
