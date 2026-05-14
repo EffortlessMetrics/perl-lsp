@@ -92,6 +92,14 @@ my $i = 0;
 }
 
 #[test]
+fn alien_build_basic_braced_scalar_ternary() {
+    // From Alien::Build::Version::Basic: a braced scalar dereference may choose
+    // the referenced scalar through a ternary expression.
+    let source = r#"my @y = split /\./, ${ref($_[1]) ? $_[1] : version($_[1])};"#;
+    assert_clean_parse(source);
+}
+
+#[test]
 fn test_more_unless_diag_heredoc() {
     // From Test::More: heredoc terminators inside an unless block must close the
     // diagnostic call without leaving the block body waiting for another `}`.

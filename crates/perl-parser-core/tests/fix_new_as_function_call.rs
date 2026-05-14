@@ -51,6 +51,13 @@ fn test_new_qualified_class_still_works() {
     assert_clean_parse(r#"my $fh = new IO::Handle();"#);
 }
 
+#[test]
+fn test_new_indirect_class_or_tail() {
+    assert_clean_parse(
+        r#"my $handle = new IO::File ">$got->{ErrFile}" or croak "Cannot open file: $!";"#,
+    );
+}
+
 /// new() result used in method chain: new($x)->method() must chain correctly.
 /// The FunctionCall node must surface to parse_postfix for chaining.
 #[test]
