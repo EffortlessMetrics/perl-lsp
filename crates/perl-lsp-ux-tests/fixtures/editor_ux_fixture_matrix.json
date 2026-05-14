@@ -794,7 +794,7 @@
         "first_useful_result": true,
         "protocol_goldens": false
       },
-      "user_journey": "request document symbols over the Mojolicious real-workspace fixture and record source-backed symbol quality boundaries",
+      "user_journey": "request document symbols over the Mojolicious real-workspace fixture and record source-backed symbol quality",
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
@@ -802,9 +802,8 @@
       ],
       "expected_outcomes": [
         "document-symbol probes return without JSON-RPC errors",
-        "non-empty symbol results use valid LSP DocumentSymbol or SymbolInformation shapes",
-        "selected package and subroutine names appear as source-backed symbols",
-        "generated and dynamic route-method labels are not promoted as exact document symbols"
+        "returned symbols use valid source-backed LSP DocumentSymbol shapes",
+        "receipt records expected explicit symbols, generated candidate counts, dynamic-boundary-shaped names, and edit freshness"
       ],
       "confidence_signals": [
         "first_five_minutes_harness",

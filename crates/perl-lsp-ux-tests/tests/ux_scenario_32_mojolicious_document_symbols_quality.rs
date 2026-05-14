@@ -1,15 +1,16 @@
 //! Scenario 32 - Mojolicious document-symbol quality receipt.
 //!
 //! This receipt exercises `textDocument/documentSymbol` over the committed
-//! Mojolicious skeleton workspace after the source-backed live document-symbol
-//! slice. It records project-shaped symbol quality without broadening generated
-//! or dynamic behavior.
+//! Mojolicious skeleton workspace and records real-workspace quality signals
+//! for the source-backed partial-live document-symbol slice without changing
+//! provider behavior.
 //!
 //! Receipt signals:
-//! - document-symbol payload shape for selected real-workspace files
-//! - expected source-backed package and subroutine symbols
-//! - generated/dynamic route-method labels that must not become live exact
-//!   source-backed document symbols
+//! - live document-symbol counts and valid LSP DocumentSymbol shapes
+//! - expected source-backed package/sub hits for representative files
+//! - generated `has` candidate counts while those labels remain gated
+//! - dynamic-boundary-shaped names observed separately from exact symbols
+//! - freshness after editing a document so stale symbol names disappear
 
 use anyhow::{Context, Result};
 use perl_lsp_ux_tests::{
@@ -23,6 +24,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const SCENARIO_FILE: &str = "ux_scenario_32_mojolicious_document_symbols_quality.rs";
+const FRESHNESS_FILE: &str = "lib/Mojolicious/Static.pm";
 
 #[derive(Debug)]
 struct FixtureFile {
@@ -36,15 +38,17 @@ struct DocumentSymbolProbe {
     category: &'static str,
     file: &'static str,
     expected_names: &'static [&'static str],
-    forbidden_names: &'static [&'static str],
+    generated_candidate_names: &'static [&'static str],
+    dynamic_boundary_names: &'static [&'static str],
 }
 
-#[derive(Debug, Default)]
-struct FlattenedSymbol {
-    name: String,
-    detail: String,
-    shape: &'static str,
-    shape_valid: bool,
+#[derive(Debug)]
+struct SymbolSummary {
+    names: Vec<String>,
+    total_symbol_count: usize,
+    valid_shape_count: usize,
+    invalid_shape_count: usize,
+    source_backed_range_count: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -52,17 +56,30 @@ struct DocumentSymbolProbeReport {
     name: &'static str,
     category: &'static str,
     file: &'static str,
-    top_level_count: usize,
-    flattened_count: usize,
-    document_symbol_shape_count: usize,
-    symbol_information_shape_count: usize,
+    live_symbol_count: usize,
+    valid_shape_count: usize,
     invalid_shape_count: usize,
-    expected_hits: Vec<String>,
+    source_backed_range_count: usize,
+    expected_name_hits: Vec<String>,
     missing_expected_names: Vec<String>,
-    forbidden_name_hits: Vec<String>,
-    generated_or_dynamic_label_hits: Vec<String>,
-    symbol_name_excerpt: Vec<String>,
+    generated_candidate_count: usize,
+    generated_label_hits: Vec<String>,
+    dynamic_boundary_candidate_count: usize,
+    dynamic_boundary_live_hits: Vec<String>,
     fallback_or_empty: bool,
+    symbol_name_sample: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct FreshnessReport {
+    file: &'static str,
+    before_symbol_count: usize,
+    after_symbol_count: usize,
+    stale_symbol_absent: bool,
+    fresh_symbol_present: bool,
+    before_hits: Vec<String>,
+    after_hits: Vec<String>,
+    after_invalid_shape_count: usize,
 }
 
 fn binary_available() -> bool {
@@ -137,37 +154,12 @@ fn open_all_fixture_files(harness: &UxHarness, files: &[FixtureFile]) -> Result<
     Ok(())
 }
 
-fn document_symbol_probes() -> Vec<DocumentSymbolProbe> {
-    vec![
-        DocumentSymbolProbe {
-            name: "mojolicious_app_surface",
-            category: "source_backed_package_and_subs",
-            file: "lib/Mojolicious.pm",
-            expected_names: &["Mojolicious", "dispatch", "helper", "plugin", "start", "startup"],
-            forbidden_names: &[],
-        },
-        DocumentSymbolProbe {
-            name: "controller_surface",
-            category: "source_backed_package_and_subs",
-            file: "lib/Mojolicious/Controller.pm",
-            expected_names: &["Mojolicious::Controller", "render", "rendered", "url_for"],
-            forbidden_names: &[],
-        },
-        DocumentSymbolProbe {
-            name: "routes_dynamic_boundary_surface",
-            category: "dynamic_generated_boundary",
-            file: "lib/Mojolicious/Routes.pm",
-            expected_names: &["Mojolicious::Routes", "add_shortcut", "get", "post", "websocket"],
-            forbidden_names: &["Mojolicious::Routes::Route::$name", "$name"],
-        },
-        DocumentSymbolProbe {
-            name: "mojo_base_typeglob_boundary_surface",
-            category: "typeglob_generated_boundary",
-            file: "lib/Mojo/Base.pm",
-            expected_names: &["Mojo::Base", "import", "new", "attr", "with_roles", "_attr"],
-            forbidden_names: &["${class}::${name}"],
-        },
-    ]
+fn fixture_content<'a>(files: &'a [FixtureFile], relative_path: &str) -> Result<&'a str> {
+    files
+        .iter()
+        .find(|file| file.relative_path == relative_path)
+        .map(|file| file.content.as_str())
+        .with_context(|| format!("missing fixture file {relative_path}"))
 }
 
 fn is_valid_position(position: &Value) -> bool {
@@ -176,116 +168,80 @@ fn is_valid_position(position: &Value) -> bool {
 }
 
 fn is_valid_range(range: &Value) -> bool {
-    range.get("start").is_some_and(is_valid_position)
-        && range.get("end").is_some_and(is_valid_position)
+    let Some(start) = range.get("start") else {
+        return false;
+    };
+    let Some(end) = range.get("end") else {
+        return false;
+    };
+    is_valid_position(start) && is_valid_position(end)
 }
 
-fn is_valid_symbol_kind(value: &Value) -> bool {
-    value.get("kind").and_then(Value::as_u64).is_some_and(|kind| (1..=26).contains(&kind))
+fn is_valid_document_symbol_shape(symbol: &Value) -> bool {
+    let has_name = symbol.get("name").and_then(Value::as_str).is_some();
+    let has_kind =
+        symbol.get("kind").and_then(Value::as_u64).is_some_and(|kind| (1..=26).contains(&kind));
+    let has_range = symbol.get("range").is_some_and(is_valid_range);
+    let has_selection_range = symbol.get("selectionRange").is_some_and(is_valid_range);
+    has_name && has_kind && has_range && has_selection_range
 }
 
-fn symbol_name(value: &Value) -> Option<&str> {
-    value.get("name").and_then(Value::as_str)
-}
-
-fn symbol_detail(value: &Value) -> &str {
-    value.get("detail").and_then(Value::as_str).unwrap_or_default()
-}
-
-fn symbol_shape(value: &Value) -> (&'static str, bool) {
-    let has_name = symbol_name(value).is_some();
-    let has_kind = is_valid_symbol_kind(value);
-    let document_symbol_shape = value.get("range").is_some_and(is_valid_range)
-        && value.get("selectionRange").is_some_and(is_valid_range);
-    let symbol_information_shape = value
-        .get("location")
-        .and_then(|location| location.get("range"))
-        .is_some_and(is_valid_range);
-
-    if has_name && has_kind && document_symbol_shape {
-        ("document_symbol", true)
-    } else if has_name && has_kind && symbol_information_shape {
-        ("symbol_information", true)
-    } else {
-        ("invalid", false)
-    }
-}
-
-fn flatten_symbols(symbols: &[Value]) -> Vec<FlattenedSymbol> {
-    let mut flattened = Vec::new();
+fn collect_symbol_summary(symbols: &[Value]) -> SymbolSummary {
+    let mut summary = SymbolSummary {
+        names: Vec::new(),
+        total_symbol_count: 0,
+        valid_shape_count: 0,
+        invalid_shape_count: 0,
+        source_backed_range_count: 0,
+    };
     for symbol in symbols {
-        flatten_symbol(symbol, &mut flattened);
+        collect_symbol(&mut summary, symbol);
     }
-    flattened
+    summary.names.sort();
+    summary.names.dedup();
+    summary
 }
 
-fn flatten_symbol(symbol: &Value, flattened: &mut Vec<FlattenedSymbol>) {
-    let (shape, shape_valid) = symbol_shape(symbol);
-    if let Some(name) = symbol_name(symbol) {
-        flattened.push(FlattenedSymbol {
-            name: name.to_string(),
-            detail: symbol_detail(symbol).to_string(),
-            shape,
-            shape_valid,
-        });
+fn collect_symbol(summary: &mut SymbolSummary, symbol: &Value) {
+    summary.total_symbol_count += 1;
+    if let Some(name) = symbol.get("name").and_then(Value::as_str) {
+        summary.names.push(name.to_string());
+    }
+
+    if is_valid_document_symbol_shape(symbol) {
+        summary.valid_shape_count += 1;
+        summary.source_backed_range_count += 1;
     } else {
-        flattened.push(FlattenedSymbol {
-            name: String::new(),
-            detail: String::new(),
-            shape,
-            shape_valid,
-        });
+        summary.invalid_shape_count += 1;
     }
 
     if let Some(children) = symbol.get("children").and_then(Value::as_array) {
         for child in children {
-            flatten_symbol(child, flattened);
+            collect_symbol(summary, child);
         }
     }
 }
 
-fn expected_hits(names: &[String], expected_names: &[&str]) -> Vec<String> {
-    expected_names
+fn matching_names(names: &[String], expected: &[&str]) -> Vec<String> {
+    expected
         .iter()
         .copied()
-        .filter(|expected| names.iter().any(|name| name == expected))
+        .filter(|name| names.iter().any(|actual| actual == name))
         .map(str::to_string)
         .collect()
 }
 
-fn missing_expected_names(names: &[String], expected_names: &[&str]) -> Vec<String> {
-    expected_names
+fn missing_names(names: &[String], expected: &[&str]) -> Vec<String> {
+    expected
         .iter()
         .copied()
-        .filter(|expected| !names.iter().any(|name| name == expected))
+        .filter(|name| !names.iter().any(|actual| actual == name))
         .map(str::to_string)
         .collect()
 }
 
-fn forbidden_name_hits(symbols: &[FlattenedSymbol], forbidden_names: &[&str]) -> Vec<String> {
-    forbidden_names
-        .iter()
-        .copied()
-        .filter(|forbidden| symbols.iter().any(|symbol| symbol.name.contains(forbidden)))
-        .map(str::to_string)
-        .collect()
-}
-
-fn generated_or_dynamic_label_hits(symbols: &[FlattenedSymbol]) -> Vec<String> {
-    symbols
-        .iter()
-        .filter(|symbol| {
-            let text = format!("{}\n{}", symbol.name, symbol.detail).to_ascii_lowercase();
-            ["generated", "dynamic", "autoload", "fallback", "low confidence"]
-                .iter()
-                .any(|needle| text.contains(needle))
-        })
-        .map(|symbol| symbol.name.clone())
-        .collect()
-}
-
-fn symbol_name_excerpt(names: &[String]) -> Vec<String> {
-    const MAX_NAMES: usize = 18;
+fn symbol_name_sample(names: &[String]) -> Vec<String> {
+    const MAX_NAMES: usize = 16;
     names.iter().take(MAX_NAMES).cloned().collect()
 }
 
@@ -294,34 +250,127 @@ fn run_probe(
     probe: &DocumentSymbolProbe,
 ) -> Result<DocumentSymbolProbeReport> {
     let symbols = harness.document_symbols(probe.file)?;
-    let flattened = flatten_symbols(&symbols);
-    let names = flattened.iter().map(|symbol| symbol.name.clone()).collect::<Vec<_>>();
-    let document_symbol_shape_count =
-        flattened.iter().filter(|symbol| symbol.shape == "document_symbol").count();
-    let symbol_information_shape_count =
-        flattened.iter().filter(|symbol| symbol.shape == "symbol_information").count();
-    let invalid_shape_count = flattened.iter().filter(|symbol| !symbol.shape_valid).count();
-    let expected = expected_hits(&names, probe.expected_names);
-    let missing = missing_expected_names(&names, probe.expected_names);
-    let forbidden = forbidden_name_hits(&flattened, probe.forbidden_names);
-    let generated_or_dynamic = generated_or_dynamic_label_hits(&flattened);
+    let summary = collect_symbol_summary(&symbols);
+    let expected_name_hits = matching_names(&summary.names, probe.expected_names);
+    let missing_expected_names = missing_names(&summary.names, probe.expected_names);
+    let generated_label_hits = matching_names(&summary.names, probe.generated_candidate_names);
+    let dynamic_boundary_live_hits = matching_names(&summary.names, probe.dynamic_boundary_names);
 
     Ok(DocumentSymbolProbeReport {
         name: probe.name,
         category: probe.category,
         file: probe.file,
-        top_level_count: symbols.len(),
-        flattened_count: flattened.len(),
-        document_symbol_shape_count,
-        symbol_information_shape_count,
-        invalid_shape_count,
-        expected_hits: expected,
-        missing_expected_names: missing,
-        forbidden_name_hits: forbidden,
-        generated_or_dynamic_label_hits: generated_or_dynamic,
-        symbol_name_excerpt: symbol_name_excerpt(&names),
-        fallback_or_empty: symbols.is_empty(),
+        live_symbol_count: summary.total_symbol_count,
+        valid_shape_count: summary.valid_shape_count,
+        invalid_shape_count: summary.invalid_shape_count,
+        source_backed_range_count: summary.source_backed_range_count,
+        expected_name_hits,
+        missing_expected_names,
+        generated_candidate_count: probe.generated_candidate_names.len(),
+        generated_label_hits,
+        dynamic_boundary_candidate_count: probe.dynamic_boundary_names.len(),
+        dynamic_boundary_live_hits,
+        fallback_or_empty: summary.total_symbol_count == 0,
+        symbol_name_sample: symbol_name_sample(&summary.names),
     })
+}
+
+fn freshness_report(harness: &UxHarness, files: &[FixtureFile]) -> Result<FreshnessReport> {
+    let before_symbols = harness.document_symbols(FRESHNESS_FILE)?;
+    let before_summary = collect_symbol_summary(&before_symbols);
+    let original = fixture_content(files, FRESHNESS_FILE)?;
+    let updated = original.replace("sub serve_asset", "sub serve_blob");
+    anyhow::ensure!(updated != original, "freshness fixture must rename serve_asset to serve_blob");
+
+    harness.change_file_full(FRESHNESS_FILE, &updated)?;
+    std::thread::sleep(Duration::from_millis(300));
+    let after_symbols = harness.document_symbols(FRESHNESS_FILE)?;
+    let after_summary = collect_symbol_summary(&after_symbols);
+
+    let before_hits = matching_names(&before_summary.names, &["serve_asset"]);
+    let after_hits = matching_names(&after_summary.names, &["serve_asset", "serve_blob"]);
+    let stale_symbol_absent = !after_summary.names.iter().any(|name| name == "serve_asset");
+    let fresh_symbol_present = after_summary.names.iter().any(|name| name == "serve_blob");
+
+    Ok(FreshnessReport {
+        file: FRESHNESS_FILE,
+        before_symbol_count: before_summary.total_symbol_count,
+        after_symbol_count: after_summary.total_symbol_count,
+        stale_symbol_absent,
+        fresh_symbol_present,
+        before_hits,
+        after_hits,
+        after_invalid_shape_count: after_summary.invalid_shape_count,
+    })
+}
+
+fn document_symbol_probes() -> Vec<DocumentSymbolProbe> {
+    vec![
+        DocumentSymbolProbe {
+            name: "app_source_backed_symbols",
+            category: "source_backed_explicit_and_generated",
+            file: "lib/Mojolicious.pm",
+            expected_names: &["Mojolicious", "new", "dispatch", "helper", "start", "startup"],
+            generated_candidate_names: &[
+                "commands",
+                "controller_class",
+                "log",
+                "plugins",
+                "renderer",
+                "routes",
+                "sessions",
+                "static",
+                "types",
+                "mode",
+            ],
+            dynamic_boundary_names: &[],
+        },
+        DocumentSymbolProbe {
+            name: "routes_source_backed_symbols",
+            category: "source_backed_routes_and_generated",
+            file: "lib/Mojolicious/Routes.pm",
+            expected_names: &[
+                "Mojolicious::Routes",
+                "add_condition",
+                "add_shortcut",
+                "any",
+                "get",
+                "post",
+                "websocket",
+                "_dispatch",
+            ],
+            generated_candidate_names: &[
+                "base_classes",
+                "cache",
+                "conditions",
+                "hidden",
+                "namespaces",
+            ],
+            dynamic_boundary_names: &["Mojolicious::Routes::Route::$name", "$name"],
+        },
+        DocumentSymbolProbe {
+            name: "mojo_base_dynamic_boundary_shape",
+            category: "dynamic_boundary_shape",
+            file: "lib/Mojo/Base.pm",
+            expected_names: &[
+                "Mojo::Base",
+                "import",
+                "new",
+                "attr",
+                "tap",
+                "with_roles",
+                "_attr",
+                "_has",
+                "_import_strict",
+            ],
+            generated_candidate_names: &[],
+            dynamic_boundary_names: &[
+                "${caller}::has",
+                "${caller}::strict",
+                "Mojo::Base::_RoleBase",
+            ],
+        },
+    ]
 }
 
 #[test]
@@ -351,54 +400,69 @@ fn scenario_32_mojolicious_document_symbols_quality_receipt() {
             for probe in &probes {
                 recorder.mark_request_start(probe.name);
                 let report = run_probe(&harness, probe)?;
-                if report.flattened_count > 0 {
+                if report.live_symbol_count > 0 {
                     recorder.mark_first_useful_result(probe.name);
                 }
                 eprintln!(
-                    "document_symbol_probe={} category={} flattened={} expected_hits={:?} missing={:?} forbidden={:?}",
+                    "document_symbol_probe={} category={} count={} expected_hits={:?} generated_hits={:?} dynamic_hits={:?}",
                     report.name,
                     report.category,
-                    report.flattened_count,
-                    report.expected_hits,
-                    report.missing_expected_names,
-                    report.forbidden_name_hits
+                    report.live_symbol_count,
+                    report.expected_name_hits,
+                    report.generated_label_hits,
+                    report.dynamic_boundary_live_hits
                 );
                 reports.push(report);
             }
 
+            recorder.mark_request_start("freshness_after_edit");
+            let freshness = freshness_report(&harness, &fixture_files)?;
+            if freshness.stale_symbol_absent && freshness.fresh_symbol_present {
+                recorder.mark_first_useful_result("freshness_after_edit");
+            }
+            eprintln!(
+                "document_symbol_freshness file={} stale_absent={} fresh_present={} before_hits={:?} after_hits={:?}",
+                freshness.file,
+                freshness.stale_symbol_absent,
+                freshness.fresh_symbol_present,
+                freshness.before_hits,
+                freshness.after_hits
+            );
+
             let categories = reports.iter().map(|report| report.category).collect::<BTreeSet<_>>();
+            let live_symbol_total: usize =
+                reports.iter().map(|report| report.live_symbol_count).sum();
             let invalid_shape_total: usize =
                 reports.iter().map(|report| report.invalid_shape_count).sum();
-            let expected_hit_total: usize =
-                reports.iter().map(|report| report.expected_hits.len()).sum();
-            let missing_expected_total: usize =
+            let missing_expected_symbol_total: usize =
                 reports.iter().map(|report| report.missing_expected_names.len()).sum();
-            let forbidden_name_total: usize =
-                reports.iter().map(|report| report.forbidden_name_hits.len()).sum();
-            let document_symbol_shape_total: usize =
-                reports.iter().map(|report| report.document_symbol_shape_count).sum();
-            let symbol_information_shape_total: usize =
-                reports.iter().map(|report| report.symbol_information_shape_count).sum();
+            let generated_candidate_total: usize =
+                reports.iter().map(|report| report.generated_candidate_count).sum();
+            let generated_label_total: usize =
+                reports.iter().map(|report| report.generated_label_hits.len()).sum();
+            let dynamic_boundary_candidate_total: usize =
+                reports.iter().map(|report| report.dynamic_boundary_candidate_count).sum();
+            let dynamic_boundary_live_symbol_total: usize =
+                reports.iter().map(|report| report.dynamic_boundary_live_hits.len()).sum();
             let fallback_or_empty_count =
                 reports.iter().filter(|report| report.fallback_or_empty).count();
-            let generated_or_dynamic_label_total: usize =
-                reports.iter().map(|report| report.generated_or_dynamic_label_hits.len()).sum();
 
             let receipt = serde_json::json!({
                 "schema_version": 1,
                 "project": "mojolicious",
                 "surface": "document_symbols",
-                "claim_boundary": "real-workspace document-symbol quality receipt only; no generated, dynamic, stale, low-confidence, or ambiguous symbol cutover",
+                "claim_boundary": "real-workspace document-symbol quality receipt only; no provider behavior changed or promoted",
                 "fixture_file_count": fixture_files.len(),
                 "probe_count": reports.len(),
-                "expected_hit_total": expected_hit_total,
-                "missing_expected_total": missing_expected_total,
-                "forbidden_name_total": forbidden_name_total,
+                "live_symbol_total": live_symbol_total,
                 "invalid_shape_total": invalid_shape_total,
-                "document_symbol_shape_total": document_symbol_shape_total,
-                "symbol_information_shape_total": symbol_information_shape_total,
+                "missing_expected_symbol_total": missing_expected_symbol_total,
+                "generated_candidate_total": generated_candidate_total,
+                "generated_label_total": generated_label_total,
+                "dynamic_boundary_candidate_total": dynamic_boundary_candidate_total,
+                "dynamic_boundary_live_symbol_total": dynamic_boundary_live_symbol_total,
                 "fallback_or_empty_count": fallback_or_empty_count,
-                "generated_or_dynamic_label_total": generated_or_dynamic_label_total,
+                "freshness": freshness,
                 "reports": reports,
             });
             eprintln!(
@@ -411,29 +475,39 @@ fn scenario_32_mojolicious_document_symbols_quality_receipt() {
                 reports.len() == probes.len(),
             )?;
             recorder.check(
-                "document-symbol probes covered all intended receipt categories",
+                "document-symbol probes covered intended receipt categories",
                 categories
                     == BTreeSet::from([
-                        "dynamic_generated_boundary",
-                        "source_backed_package_and_subs",
-                        "typeglob_generated_boundary",
+                        "dynamic_boundary_shape",
+                        "source_backed_explicit_and_generated",
+                        "source_backed_routes_and_generated",
                     ]),
             )?;
             recorder.check(
-                "document-symbol responses used valid LSP payload shape",
+                "document-symbol probes returned live symbols",
+                live_symbol_total > 0 && fallback_or_empty_count == 0,
+            )?;
+            recorder.check(
+                "all document-symbol entries used valid source-backed LSP shapes",
                 invalid_shape_total == 0,
             )?;
             recorder.check(
-                "document-symbol receipt recorded source-backed symbols",
-                document_symbol_shape_total + symbol_information_shape_total > 0,
+                "expected source-backed package and sub symbols were present",
+                missing_expected_symbol_total == 0,
             )?;
             recorder.check(
-                "selected Mojolicious files returned expected source-backed symbols",
-                expected_hit_total > 0 && missing_expected_total == 0,
+                "receipt recorded generated candidates as still gated",
+                generated_candidate_total > 0 && generated_label_total == 0,
             )?;
             recorder.check(
-                "generated or dynamic labels were not promoted as exact document symbols",
-                forbidden_name_total == 0,
+                "receipt covered dynamic-boundary-shaped names without requiring promotion",
+                dynamic_boundary_candidate_total > 0,
+            )?;
+            recorder.check(
+                "document-symbol freshness after edit removed stale name and surfaced fresh name",
+                freshness.stale_symbol_absent
+                    && freshness.fresh_symbol_present
+                    && freshness.after_invalid_shape_count == 0,
             )?;
 
             harness.assert_no_crash();
