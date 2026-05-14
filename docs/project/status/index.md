@@ -74,7 +74,7 @@ See [ROADMAP.md](../ROADMAP.md) for milestone details.
 4. Run `just ci-gate` to verify the repo-level receipt still passes
 5. Edit narrative sections (this file, `release.md`) only after the evidence is current
 
-**Historical archives**: see `docs/archive/status_snapshots/` for sprint logs and completion history.
+**Historical archives**: see [reference archive](../../reference/archive/) for retained historical docs and completion history.
 
 ---
 

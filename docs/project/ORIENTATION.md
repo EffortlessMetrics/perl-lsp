@@ -1,6 +1,6 @@
 # Project Orientation
 
-> For the documentation hub, see [README.md](README.md). This page provides project orientation for active contributors.
+> For the documentation hub, see [README.md](../README.md). This page provides project orientation for active contributors.
 
 > **SNAPSHOT DISCLAIMER**: Orientation-only. For live status and metrics, see `docs/project/CURRENT_STATUS.md` and GitHub milestones/issues.
 
