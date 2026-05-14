@@ -5,6 +5,7 @@
 //! set against compiler-fact token classification candidates and emits typed
 //! provider fact-source traces for staged cutover proof.
 
+use perl_position_tracking::WireRange;
 use perl_semantic_facts::{
     AnchorId, Confidence, Provenance, ProviderFactFreshness, ProviderFactSourceKind,
     ProviderFactTrace, ProviderFallbackState, ProviderSurface,
@@ -24,6 +25,52 @@ pub struct SemanticTokenShadowLegacy {
     pub identity: String,
 }
 
+/// Source-backed LSP span for a semantic-token candidate.
+///
+/// Semantic tokens are encoded as single-line LSP 5-tuples. Compiler-backed
+/// candidates must prove this shape before they can count as usable shadow
+/// identities for staged cutover.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct SemanticTokenShadowSpan {
+    /// LSP wire range for the token.
+    pub range: WireRange,
+}
+
+impl SemanticTokenShadowSpan {
+    /// Build a source-backed semantic-token span from byte offsets.
+    #[must_use]
+    pub fn from_byte_offsets(source: &str, start_byte: usize, end_byte: usize) -> Option<Self> {
+        if start_byte >= end_byte
+            || end_byte > source.len()
+            || !source.is_char_boundary(start_byte)
+            || !source.is_char_boundary(end_byte)
+        {
+            return None;
+        }
+
+        Some(Self { range: WireRange::from_byte_offsets(source, start_byte, end_byte) })
+    }
+
+    /// Return the LSP token length when the range is a valid single-line token span.
+    #[must_use]
+    pub fn single_line_lsp_length(&self) -> Option<u32> {
+        if self.range.start.line == self.range.end.line
+            && self.range.end.character > self.range.start.character
+        {
+            Some(self.range.end.character - self.range.start.character)
+        } else {
+            None
+        }
+    }
+
+    /// Whether this span can be represented as one LSP semantic-token tuple.
+    #[must_use]
+    pub fn is_valid_lsp_token_span(&self) -> bool {
+        self.single_line_lsp_length().is_some()
+    }
+}
+
 /// Compiler-fact semantic-token classification candidate.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
@@ -38,6 +85,8 @@ pub struct SemanticTokenShadowCandidate {
     pub confidence: Confidence,
     /// Freshness of the candidate relative to the request.
     pub freshness: ProviderFactFreshness,
+    /// Source-backed token span, required for non-blocked compiler-token claims.
+    pub source_span: Option<SemanticTokenShadowSpan>,
     /// Whether the candidate is shadowed, fallback, or blocked.
     pub fallback_state: ProviderFallbackState,
     /// Optional source hash for fact freshness proof.
@@ -56,6 +105,22 @@ pub struct SemanticTokenShadowResult {
     pub legacy_tokens: Vec<SemanticTokenShadowLegacy>,
     /// Shadow receipt comparing legacy tokens with compiler-fact candidates.
     pub receipt: SemanticShadowCompareReceipt,
+}
+
+/// Candidate span invariant summary for semantic-token shadow proof.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct SemanticTokenSpanInvariantReport {
+    /// Total compiler-token candidates inspected.
+    pub candidate_count: usize,
+    /// Candidates blocked before they can become semantic-token identities.
+    pub blocked_candidate_count: usize,
+    /// Non-blocked candidates with a valid single-line source-backed span.
+    pub source_backed_span_count: usize,
+    /// Non-blocked candidates missing a source-backed span.
+    pub missing_source_span_count: usize,
+    /// Non-blocked candidates with a span that cannot encode as one LSP token.
+    pub invalid_source_span_count: usize,
 }
 
 /// Compare legacy semantic-token output against compiler-fact candidates.
@@ -110,37 +175,78 @@ fn semantic_token_answer_identities(
 ) -> Vec<String> {
     compiler_candidates
         .iter()
-        .filter(|candidate| {
-            matches!(
-                candidate.fallback_state,
-                ProviderFallbackState::Primary
-                    | ProviderFallbackState::Shadow
-                    | ProviderFallbackState::Fallback
-            )
-        })
+        .filter(|candidate| semantic_token_candidate_can_count(candidate))
         .map(|candidate| candidate.identity.clone())
         .collect()
+}
+
+fn semantic_token_candidate_can_count(candidate: &SemanticTokenShadowCandidate) -> bool {
+    matches!(
+        candidate.fallback_state,
+        ProviderFallbackState::Primary
+            | ProviderFallbackState::Shadow
+            | ProviderFallbackState::Fallback
+    ) && candidate
+        .source_span
+        .as_ref()
+        .is_some_and(SemanticTokenShadowSpan::is_valid_lsp_token_span)
+}
+
+/// Summarize whether semantic-token candidates have source-backed LSP spans.
+#[must_use]
+pub fn semantic_token_span_invariant_report(
+    compiler_candidates: &[SemanticTokenShadowCandidate],
+) -> SemanticTokenSpanInvariantReport {
+    let mut report = SemanticTokenSpanInvariantReport {
+        candidate_count: compiler_candidates.len(),
+        blocked_candidate_count: 0,
+        source_backed_span_count: 0,
+        missing_source_span_count: 0,
+        invalid_source_span_count: 0,
+    };
+
+    for candidate in compiler_candidates {
+        if candidate.fallback_state == ProviderFallbackState::Blocked {
+            report.blocked_candidate_count += 1;
+            continue;
+        }
+
+        match candidate.source_span {
+            Some(span) if span.is_valid_lsp_token_span() => {
+                report.source_backed_span_count += 1;
+            }
+            Some(_) => {
+                report.invalid_source_span_count += 1;
+            }
+            None => {
+                report.missing_source_span_count += 1;
+            }
+        }
+    }
+
+    report
 }
 
 fn semantic_token_shadow_note(
     legacy_tokens: &[SemanticTokenShadowLegacy],
     compiler_candidates: &[SemanticTokenShadowCandidate],
 ) -> String {
-    let blocked_count = compiler_candidates
-        .iter()
-        .filter(|candidate| candidate.fallback_state == ProviderFallbackState::Blocked)
-        .count();
+    let span_report = semantic_token_span_invariant_report(compiler_candidates);
     format!(
-        "semantic-token shadow proof: legacy_tokens={}; compiler_fact_candidates={}; blocked_candidates={}; no live semantic-token behavior change",
+        "semantic-token shadow proof: legacy_tokens={}; compiler_fact_candidates={}; blocked_candidates={}; source_backed_spans={}; missing_spans={}; invalid_spans={}; no live semantic-token behavior change",
         legacy_tokens.len(),
         compiler_candidates.len(),
-        blocked_count
+        span_report.blocked_candidate_count,
+        span_report.source_backed_span_count,
+        span_report.missing_source_span_count,
+        span_report.invalid_source_span_count
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_position_tracking::{WirePosition, WireRange};
     use perl_workspace::semantic_shadow_compare::ShadowCompareVerdict;
 
     #[test]
@@ -155,6 +261,7 @@ mod tests {
                 Provenance::ExactAst,
                 Confidence::High,
                 ProviderFactFreshness::Fresh,
+                Some(valid_span(0, 0, 7)),
                 ProviderFallbackState::Shadow,
             )],
             "package",
@@ -187,6 +294,7 @@ mod tests {
                 Provenance::SemanticAnalyzer,
                 Confidence::Medium,
                 ProviderFactFreshness::Fresh,
+                Some(valid_span(0, 4, 8)),
                 ProviderFallbackState::Shadow,
             )],
             "exported",
@@ -216,6 +324,7 @@ mod tests {
                 Provenance::DynamicBoundary,
                 Confidence::High,
                 ProviderFactFreshness::Fresh,
+                None,
                 ProviderFallbackState::Blocked,
             )],
             "$Package::{name}",
@@ -242,6 +351,7 @@ mod tests {
                 Provenance::SemanticAnalyzer,
                 Confidence::Low,
                 ProviderFactFreshness::Stale,
+                None,
                 ProviderFallbackState::Blocked,
             )],
             "old_function",
@@ -258,8 +368,111 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn semantic_token_shadow_excludes_unspanned_compiler_candidates()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let result = semantic_token_source_shadow(
+            Vec::new(),
+            vec![shadow_candidate(
+                "token:function:Foo::unspanned",
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::Medium,
+                ProviderFactFreshness::Fresh,
+                None,
+                ProviderFallbackState::Shadow,
+            )],
+            "unspanned",
+        );
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Same);
+        assert_eq!(result.receipt.new_result.match_count, 0);
+        assert_eq!(result.receipt.fact_source_traces.len(), 1);
+
+        let report = semantic_token_span_invariant_report(&[shadow_candidate(
+            "token:function:Foo::unspanned",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::Medium,
+            ProviderFactFreshness::Fresh,
+            None,
+            ProviderFallbackState::Shadow,
+        )]);
+        assert_eq!(report.missing_source_span_count, 1);
+        assert_eq!(report.source_backed_span_count, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_shadow_excludes_multiline_compiler_candidate_spans()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let invalid_span = SemanticTokenShadowSpan {
+            range: WireRange::new(WirePosition::new(0, 4), WirePosition::new(1, 3)),
+        };
+        let result = semantic_token_source_shadow(
+            Vec::new(),
+            vec![shadow_candidate(
+                "token:function:Foo::multiline",
+                ProviderFactSourceKind::CompilerFact,
+                Provenance::SemanticAnalyzer,
+                Confidence::High,
+                ProviderFactFreshness::Fresh,
+                Some(invalid_span),
+                ProviderFallbackState::Shadow,
+            )],
+            "multiline",
+        );
+
+        assert_eq!(result.receipt.verdict, ShadowCompareVerdict::Same);
+        assert_eq!(result.receipt.new_result.match_count, 0);
+
+        let report = semantic_token_span_invariant_report(&[shadow_candidate(
+            "token:function:Foo::multiline",
+            ProviderFactSourceKind::CompilerFact,
+            Provenance::SemanticAnalyzer,
+            Confidence::High,
+            ProviderFactFreshness::Fresh,
+            Some(invalid_span),
+            ProviderFallbackState::Shadow,
+        )]);
+        assert_eq!(report.invalid_source_span_count, 1);
+        assert_eq!(report.source_backed_span_count, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_token_source_span_rejects_zero_length_or_out_of_bounds_ranges() {
+        let source = "package Foo;\n";
+        assert!(SemanticTokenShadowSpan::from_byte_offsets(source, 0, 0).is_none());
+        assert!(SemanticTokenShadowSpan::from_byte_offsets(source, 0, source.len() + 1).is_none());
+    }
+
+    #[test]
+    fn semantic_token_source_span_reports_lsp_length() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "package Foo;\n";
+        let start = source.find("Foo").ok_or("expected Foo in fixture source")?;
+        let end = start + "Foo".len();
+        let span = SemanticTokenShadowSpan::from_byte_offsets(source, start, end)
+            .ok_or("expected source-backed Foo span")?;
+
+        assert_eq!(span.range.start.line, 0);
+        assert_eq!(span.range.start.character, 8);
+        assert_eq!(span.single_line_lsp_length(), Some(3));
+        assert!(span.is_valid_lsp_token_span());
+        Ok(())
+    }
+
     fn legacy_token(identity: &str) -> SemanticTokenShadowLegacy {
         SemanticTokenShadowLegacy { identity: identity.to_string() }
+    }
+
+    fn valid_span(line: u32, start: u32, length: u32) -> SemanticTokenShadowSpan {
+        SemanticTokenShadowSpan {
+            range: WireRange::new(
+                WirePosition::new(line, start),
+                WirePosition::new(line, start + length),
+            ),
+        }
     }
 
     fn shadow_candidate(
@@ -268,6 +481,7 @@ mod tests {
         provenance: Provenance,
         confidence: Confidence,
         freshness: ProviderFactFreshness,
+        source_span: Option<SemanticTokenShadowSpan>,
         fallback_state: ProviderFallbackState,
     ) -> SemanticTokenShadowCandidate {
         SemanticTokenShadowCandidate {
@@ -276,6 +490,7 @@ mod tests {
             provenance,
             confidence,
             freshness,
+            source_span,
             fallback_state,
             source_hash: Some("fixture-source-sha".to_string()),
             anchor_id: Some(AnchorId(1)),
