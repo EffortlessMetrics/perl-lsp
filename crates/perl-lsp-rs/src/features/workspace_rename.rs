@@ -118,6 +118,31 @@ pub fn build_rename_edit(
             )));
         }
 
+        let mut edit_start_line = start_line;
+        let mut edit_start_char = start_char;
+        let mut edit_end_line = end_line;
+        let mut edit_end_char = end_char;
+        let mut narrowed_sub_name = false;
+
+        if key.kind == SymKind::Sub
+            && let Some(((name_start_line, name_start_char), (name_end_line, name_end_char))) =
+                sub_name_range_in_source_span(
+                    idx,
+                    &loc.uri,
+                    start_line,
+                    start_char,
+                    end_line,
+                    end_char,
+                    key.name.as_ref(),
+                )
+        {
+            edit_start_line = name_start_line;
+            edit_start_char = name_start_char;
+            edit_end_line = name_end_line;
+            edit_end_char = name_end_char;
+            narrowed_sub_name = true;
+        }
+
         // Compute replacement text based on symbol kind
         let replacement = match key.kind {
             SymKind::Var => {
@@ -128,7 +153,7 @@ pub fn build_rename_edit(
                 // For subroutines, preserve any existing package qualifier
                 let mut replacement = new_name_bare.to_string();
 
-                if let Some(doc) = idx.document_store().get(&loc.uri) {
+                if !narrowed_sub_name && let Some(doc) = idx.document_store().get(&loc.uri) {
                     if let (Some(start_off), Some(end_off)) = (
                         doc.line_index.position_to_offset(start_line, start_char),
                         doc.line_index.position_to_offset(end_line, end_char),
@@ -147,8 +172,8 @@ pub fn build_rename_edit(
         };
 
         grouped.entry(loc.uri.clone()).or_default().push(TextEdit {
-            start: (start_line, start_char),
-            end: (end_line, end_char),
+            start: (edit_start_line, edit_start_char),
+            end: (edit_end_line, edit_end_char),
             new_text: replacement,
         });
     }
@@ -221,19 +246,79 @@ fn package_name_for_line(text: &str, target_line: u32) -> &str {
     current_pkg
 }
 
-fn is_sub_declaration_line(line_text: &str, name: &str) -> bool {
-    let trimmed = line_text.trim_start();
-    if !trimmed.starts_with("sub ") {
-        return false;
+fn is_ident_char(ch: char) -> bool {
+    ch.is_alphanumeric() || ch == '_'
+}
+
+fn find_sub_name_in_text(text: &str, name: &str) -> Option<(usize, usize)> {
+    let mut search_from = 0;
+    while let Some(relative_start) = text[search_from..].find(name) {
+        let start = search_from + relative_start;
+        let end = start + name.len();
+        let before_ok = text[..start].chars().next_back().is_none_or(|ch| !is_ident_char(ch));
+        let after_ok = text[end..].chars().next().is_none_or(|ch| !is_ident_char(ch));
+        if before_ok && after_ok {
+            return Some((start, end));
+        }
+        search_from = end;
     }
 
-    let tail = trimmed.trim_start_matches("sub ").trim_start();
+    None
+}
+
+fn sub_name_range_in_source_span(
+    idx: &WorkspaceIndex,
+    uri: &str,
+    start_line: u32,
+    start_char: u32,
+    end_line: u32,
+    end_char: u32,
+    name: &str,
+) -> Option<((u32, u32), (u32, u32))> {
+    let doc = idx.document_store().get(uri)?;
+    let start_off = doc.line_index.position_to_offset(start_line, start_char)?;
+    let end_off = doc.line_index.position_to_offset(end_line, end_char)?;
+    let original = doc.text.get(start_off..end_off)?;
+    let (name_start, name_end) = find_sub_name_in_text(original, name)?;
+
+    Some((
+        doc.line_index.offset_to_position(start_off + name_start),
+        doc.line_index.offset_to_position(start_off + name_end),
+    ))
+}
+
+fn sub_declaration_name_span(line_text: &str, name: &str) -> Option<(usize, usize)> {
+    let leading_ws = line_text.len() - line_text.trim_start().len();
+    let trimmed = &line_text[leading_ws..];
+    let after_sub = trimmed.strip_prefix("sub")?;
+    if !after_sub.chars().next().is_some_and(char::is_whitespace) {
+        return None;
+    }
+
+    let whitespace_bytes: usize =
+        after_sub.chars().take_while(|ch| ch.is_whitespace()).map(char::len_utf8).sum();
+    let name_start = leading_ws + "sub".len() + whitespace_bytes;
+    let tail = &line_text[name_start..];
     let declared_name = tail
         .split(|ch: char| ch.is_whitespace() || ch == '(' || ch == '{' || ch == ';')
         .next()
         .unwrap_or_default();
 
-    declared_name == name || declared_name.rsplit_once("::").is_some_and(|(_, bare)| bare == name)
+    if declared_name.is_empty() {
+        return None;
+    }
+
+    if declared_name == name
+        || declared_name.rsplit_once("::").is_some_and(|(_, bare)| bare == name)
+    {
+        Some((name_start, name_start + declared_name.len()))
+    } else {
+        None
+    }
+}
+
+fn is_sub_declaration_line(line_text: &str, name: &str) -> bool {
+    sub_declaration_name_span(line_text, name).is_some()
 }
 
 fn is_non_target_package_declaration(

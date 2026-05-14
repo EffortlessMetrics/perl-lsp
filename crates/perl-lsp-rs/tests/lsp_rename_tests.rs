@@ -8,10 +8,124 @@
 //! - WorkspaceEdit response structure validation
 
 mod support;
-use serde_json::json;
+use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use support::lsp_harness::LspHarness;
 
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
+
+#[derive(Debug, Clone)]
+struct InverseTextEdit {
+    start: usize,
+    end: usize,
+    old_text: String,
+}
+
+fn lsp_position_to_offset(text: &str, line: u64, character: u64) -> TestResult<usize> {
+    let mut current_line = 0_u64;
+    let mut line_start = 0_usize;
+
+    for (idx, ch) in text.char_indices() {
+        if current_line == line {
+            break;
+        }
+        if ch == '\n' {
+            current_line += 1;
+            line_start = idx + ch.len_utf8();
+        }
+    }
+
+    if current_line != line {
+        return Err(format!("line {line} is outside the document").into());
+    }
+
+    let line_end = text[line_start..].find('\n').map_or(text.len(), |rel| line_start + rel);
+    let mut utf16_units = 0_u64;
+    for (rel, ch) in text[line_start..line_end].char_indices() {
+        if utf16_units == character {
+            return Ok(line_start + rel);
+        }
+        utf16_units += ch.len_utf16() as u64;
+        if utf16_units > character {
+            return Err(format!("character {character} splits a UTF-16 code unit").into());
+        }
+    }
+
+    if utf16_units == character {
+        return Ok(line_end);
+    }
+
+    Err(format!("character {character} is outside line {line}").into())
+}
+
+fn edit_offsets(text: &str, edit: &Value) -> TestResult<(usize, usize, String)> {
+    let range = edit.get("range").ok_or("text edit missing range")?;
+    let start = range.get("start").ok_or("text edit missing start range")?;
+    let end = range.get("end").ok_or("text edit missing end range")?;
+    let start_line =
+        start.get("line").and_then(Value::as_u64).ok_or("text edit start line missing")?;
+    let start_character = start
+        .get("character")
+        .and_then(Value::as_u64)
+        .ok_or("text edit start character missing")?;
+    let end_line = end.get("line").and_then(Value::as_u64).ok_or("text edit end line missing")?;
+    let end_character =
+        end.get("character").and_then(Value::as_u64).ok_or("text edit end character missing")?;
+    let new_text =
+        edit.get("newText").and_then(Value::as_str).ok_or("text edit missing newText")?.to_string();
+
+    Ok((
+        lsp_position_to_offset(text, start_line, start_character)?,
+        lsp_position_to_offset(text, end_line, end_character)?,
+        new_text,
+    ))
+}
+
+fn apply_edits_with_inverse(
+    text: &str,
+    edits: &[Value],
+) -> TestResult<(String, Vec<InverseTextEdit>)> {
+    let mut parsed_edits = Vec::new();
+    for edit in edits {
+        parsed_edits.push(edit_offsets(text, edit)?);
+    }
+    parsed_edits.sort_by_key(|(start, _, _)| *start);
+
+    for pair in parsed_edits.windows(2) {
+        let (_, previous_end, _) = &pair[0];
+        let (next_start, _, _) = &pair[1];
+        if previous_end > next_start {
+            return Err("workspace edit contains overlapping ranges".into());
+        }
+    }
+
+    let mut current = text.to_string();
+    let mut delta = 0_isize;
+    let mut inverse = Vec::new();
+
+    for (start, end, new_text) in parsed_edits {
+        let old_text = text.get(start..end).ok_or("text edit range is not on UTF-8 boundary")?;
+        let adjusted_start = (start as isize + delta) as usize;
+        let adjusted_end = (end as isize + delta) as usize;
+
+        current.replace_range(adjusted_start..adjusted_end, &new_text);
+        inverse.push(InverseTextEdit {
+            start: adjusted_start,
+            end: adjusted_start + new_text.len(),
+            old_text: old_text.to_string(),
+        });
+        delta += new_text.len() as isize - (end - start) as isize;
+    }
+
+    Ok((current, inverse))
+}
+
+fn rollback_edits(mut text: String, inverse: &[InverseTextEdit]) -> String {
+    for edit in inverse.iter().rev() {
+        text.replace_range(edit.start..edit.end, &edit.old_text);
+    }
+    text
+}
 
 /// Test renaming a variable and verifying the WorkspaceEdit response structure
 #[test]
@@ -679,6 +793,80 @@ fn test_workspace_rename_returns_multi_file_workspace_edit() -> TestResult {
         response["changes"].as_object().ok_or("workspace rename should return changes map")?;
     assert!(changes.contains_key(lib_uri), "workspace rename must include definition file edits");
     assert!(changes.contains_key(app_uri), "workspace rename must include usage file edits");
+
+    Ok(())
+}
+
+/// Workspace rename edits must be invertible before broader compiler-backed
+/// refactor cutover can rely on them as a safe live operation.
+#[test]
+fn test_workspace_rename_workspace_edit_rolls_back_cleanly() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let lib_uri = "file:///Rollback/A.pm";
+    let app_uri = "file:///Rollback/B.pm";
+    let lib_text = "package A;\nsub target_name { return 1; }\n1;\n";
+    let app_text = "package B;\nuse A;\nsub run { return A::target_name(); }\n1;\n";
+
+    harness.open(lib_uri, lib_text)?;
+    harness.open(app_uri, app_text)?;
+
+    let response = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": lib_uri },
+            "position": { "line": 1, "character": 5 },
+            "newName": "renamed_target"
+        }),
+    )?;
+
+    let changes =
+        response["changes"].as_object().ok_or("workspace rename should return changes map")?;
+    let originals = BTreeMap::from([
+        (lib_uri.to_string(), lib_text.to_string()),
+        (app_uri.to_string(), app_text.to_string()),
+    ]);
+    assert_eq!(
+        changes.len(),
+        originals.len(),
+        "rollback receipt should cover exactly the expected workspace files"
+    );
+
+    let mut renamed_docs = BTreeMap::new();
+    let mut inverse_edits = BTreeMap::new();
+    for (uri, original_text) in &originals {
+        let edits = changes
+            .get(uri)
+            .and_then(Value::as_array)
+            .ok_or_else(|| format!("workspace edit missing expected URI {uri}"))?;
+        let (renamed_text, inverse) = apply_edits_with_inverse(original_text, edits)?;
+        renamed_docs.insert(uri.clone(), renamed_text);
+        inverse_edits.insert(uri.clone(), inverse);
+    }
+
+    let renamed_lib = renamed_docs.get(lib_uri).ok_or("missing renamed library document")?;
+    let renamed_app = renamed_docs.get(app_uri).ok_or("missing renamed app document")?;
+    assert!(
+        renamed_lib.contains("sub renamed_target"),
+        "definition was not renamed: {renamed_lib}"
+    );
+    assert!(
+        renamed_app.contains("A::renamed_target()"),
+        "qualified call site was not renamed: {renamed_app}"
+    );
+
+    let mut rolled_back = BTreeMap::new();
+    for (uri, renamed_text) in renamed_docs {
+        let inverse =
+            inverse_edits.get(&uri).ok_or_else(|| format!("missing inverse edits for {uri}"))?;
+        rolled_back.insert(uri, rollback_edits(renamed_text, inverse));
+    }
+
+    assert_eq!(
+        rolled_back, originals,
+        "workspace rename inverse edits must restore the original documents exactly"
+    );
 
     Ok(())
 }
