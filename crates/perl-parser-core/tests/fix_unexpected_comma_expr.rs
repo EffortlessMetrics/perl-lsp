@@ -458,3 +458,17 @@ fn test_pdl_dbg_pattern() {
     let source = r#"$stab = $stab->{$_.'::'} for grep length, split /::/, $package;"#;
     assert_clean_parse(source);
 }
+
+#[test]
+fn test_app_cpan_generator_returns_anonymous_sub_list() {
+    // From App::Cpan::_generator: a block may return a bare list of anonymous
+    // subroutines without an explicit return statement.
+    let source = r#"sub _generator {
+    my @files = ();
+    sub {
+        push @files, File::Spec->canonpath($File::Find::name) if m/\A\w+\.pm\z/
+    },
+    sub { \@files },
+}"#;
+    assert_clean_parse(source);
+}

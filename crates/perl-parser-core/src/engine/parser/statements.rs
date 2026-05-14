@@ -107,12 +107,15 @@ impl<'a> Parser<'a> {
     fn finish_subroutine_statement(&mut self, sub_node: Node) -> ParseResult<Node> {
         Ok(if let NodeKind::Subroutine { name, .. } = &sub_node.kind {
             if name.is_none() {
-                // Anonymous sub may be followed by arrow: sub { 42 }->()
-                let expr = if self.peek_kind() == Some(TokenKind::Arrow) {
+                // Anonymous sub may be followed by arrow or participate in a
+                // comma-list expression: sub { 1 }, sub { 2 }
+                let mut expr = if self.peek_kind() == Some(TokenKind::Arrow) {
                     self.parse_postfix_chain(sub_node)?
                 } else {
                     sub_node
                 };
+                expr = self.collect_comma_fat_arrow_continuation(expr)?;
+                expr = self.parse_word_or_expr(expr)?;
                 // Wrap anonymous subroutines in expression statements
                 let location = expr.location;
                 Node::new(
