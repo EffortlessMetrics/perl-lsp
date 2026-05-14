@@ -936,6 +936,7 @@ impl<'a> Parser<'a> {
                         let was_comma = self.peek_kind() == Some(TokenKind::Comma);
                         if was_comma {
                             self.consume_token()?; // consume comma
+                            self.consume_redundant_commas()?;
                         }
 
                         // Handle `, =>` (comma then fat arrow) and chained `=>`
@@ -1051,6 +1052,7 @@ impl<'a> Parser<'a> {
                     // picks up `c` as the value.
                     if self.peek_kind() == Some(TokenKind::Comma) {
                         self.consume_token()?; // consume ,
+                        self.consume_redundant_commas()?;
                     } else if self.peek_kind() == Some(TokenKind::FatArrow) {
                         // Chained fat arrow: the value we just pushed becomes
                         // the auto-quoted key for the next pair.  Autoquote the

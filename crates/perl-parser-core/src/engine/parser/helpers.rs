@@ -436,6 +436,13 @@ impl<'a> Parser<'a> {
         Ok(token)
     }
 
+    fn consume_redundant_commas(&mut self) -> ParseResult<()> {
+        while self.peek_kind() == Some(TokenKind::Comma) {
+            self.consume_token()?;
+        }
+        Ok(())
+    }
+
     /// Get closing delimiter for a given opening delimiter
     #[inline]
     fn closing_delim_for(open_txt: &str) -> Option<String> {
@@ -517,6 +524,7 @@ impl<'a> Parser<'a> {
             let was_comma = self.peek_kind() == Some(TokenKind::Comma);
             if was_comma {
                 self.consume_token()?; // consume comma
+                self.consume_redundant_commas()?;
             }
 
             if self.peek_kind() == Some(TokenKind::FatArrow) {
