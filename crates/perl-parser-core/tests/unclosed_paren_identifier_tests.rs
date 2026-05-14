@@ -514,6 +514,13 @@ fn max_values_postfix_deref() {
 }
 
 #[test]
+fn dbix_class_shift_dynamic_array_deref_join() {
+    // From DBIx::Class::SQLMaker::ClassicExtensions: a join argument may shift
+    // from an old-style dynamic array dereference.
+    assert_clean_parse(r#"\[ join( ' IN ', shift @$$lhs, shift @$$rhs ), @$$lhs, @$$rhs ];"#);
+}
+
+#[test]
 fn unless_null_in_paren() {
     // unless (null $root)
     assert_clean_parse(r#"unless (null $root) { print "not null" }"#);
