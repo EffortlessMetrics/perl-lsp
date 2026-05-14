@@ -939,6 +939,77 @@ impl StashGraph {
 
         builders.into_values().map(ExportSetBuilder::into_export_set).collect()
     }
+
+    /// Project static constant-like code slots into a compile-time constant table.
+    ///
+    /// The table is a compiler-substrate receipt only. It records facts already
+    /// present in the stash graph and does not execute Perl, evaluate constant
+    /// values, or change provider behavior.
+    #[must_use]
+    pub fn constant_table(&self) -> ConstantTable {
+        let mut entries = Vec::new();
+
+        for package in &self.packages {
+            for slot in &package.slots {
+                if slot.kind != GlobSlotKind::Code
+                    || slot.source != GlobSlotSource::ConstantDeclaration
+                {
+                    continue;
+                }
+
+                entries.push(ConstantTableEntry {
+                    package: package.package.clone(),
+                    name: slot.name.clone(),
+                    canonical_name: format!("{}::{}", package.package, slot.name),
+                    range: slot.range,
+                    declaration_item: slot.declaration_item,
+                    source: slot.source,
+                    provenance: slot.provenance,
+                    confidence: slot.confidence,
+                });
+            }
+        }
+
+        ConstantTable { entries }
+    }
+}
+
+/// Compile-time constant projection derived from the HIR stash graph.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct ConstantTable {
+    /// Static constant-like code slots in stable source order.
+    pub entries: Vec<ConstantTableEntry>,
+}
+
+impl ConstantTable {
+    /// Returns true when no static constants were recorded.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}
+
+/// One static constant-like code slot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ConstantTableEntry {
+    /// Package that owns the constant.
+    pub package: String,
+    /// Bare constant name.
+    pub name: String,
+    /// Fully qualified constant name.
+    pub canonical_name: String,
+    /// Source range for the declaration or desugaring that produced the slot.
+    pub range: SourceLocation,
+    /// HIR item that produced the slot, when available.
+    pub declaration_item: Option<HirId>,
+    /// Source shape that produced this constant-like code slot.
+    pub source: GlobSlotSource,
+    /// How this constant fact was produced.
+    pub provenance: StashProvenance,
+    /// Confidence in this constant fact.
+    pub confidence: StashConfidence,
 }
 
 #[derive(Debug)]
