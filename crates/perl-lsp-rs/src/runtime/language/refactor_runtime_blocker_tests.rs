@@ -1,7 +1,10 @@
 use crate::runtime::LspServer;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
+use std::fs;
 use std::io::Cursor;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 const REFACTOR_URI: &str = "file:///workspace/lib/Refactor/Runtime.pm";
@@ -59,6 +62,8 @@ sub caller {
 1;
 "#;
 
+const DANCER2_DSL_URI: &str = "file:///workspace/lib/Dancer2/Core/DSL.pm";
+
 fn create_server() -> LspServer {
     let output =
         Arc::new(Mutex::new(Box::new(Cursor::new(Vec::new())) as Box<dyn std::io::Write + Send>));
@@ -79,6 +84,56 @@ fn open_document(
         }
     })))?;
     Ok(())
+}
+
+fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .ok_or("CARGO_MANIFEST_DIR must be nested under the workspace root")?;
+    Ok(root.to_path_buf())
+}
+
+fn is_perl_source(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| matches!(extension, "pm" | "pl" | "t"))
+}
+
+fn collect_perl_files(
+    root: &Path,
+    dir: &Path,
+    files: &mut BTreeMap<String, String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_perl_files(root, &path, files)?;
+        } else if is_perl_source(&path) {
+            let relative_path = path.strip_prefix(root)?.to_string_lossy().replace('\\', "/");
+            let content = fs::read_to_string(&path)?;
+            files.insert(relative_path, content);
+        }
+    }
+    Ok(())
+}
+
+fn load_dancer2_fixture_files() -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let root = workspace_root()?.join("test_corpus").join("real_projects").join("dancer2_skeleton");
+    let mut files = BTreeMap::new();
+    collect_perl_files(&root, &root, &mut files)?;
+    Ok(files)
+}
+
+fn open_dancer2_workspace(
+    server: &LspServer,
+) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let files = load_dancer2_fixture_files()?;
+    for (relative_path, content) in &files {
+        open_document(server, &format!("file:///workspace/{relative_path}"), content)?;
+    }
+    Ok(files)
 }
 
 fn position_of(text: &str, needle: &str) -> Result<(u32, u32), Box<dyn std::error::Error>> {
@@ -513,6 +568,49 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_generated_member()
             "compiler_plan_safe=false",
             "blocker_count=1",
             "blocker_reasons=GeneratedMember",
+            "requires_confirmation=true",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_stale_symbol_fixture()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_dancer2_workspace(&server)?;
+    let dsl = files.get("lib/Dancer2/Core/DSL.pm").ok_or("missing Dancer2 Core DSL fixture")?;
+
+    let (compile_line, compile_character) = position_of(dsl, "_compile {")?;
+    let compile_params = json!({
+        "textDocument": {"uri": DANCER2_DSL_URI},
+        "position": {"line": compile_line, "character": compile_character},
+        "compilerPlanFixture": "stale_fact"
+    });
+    let compile_receipt = server
+        .test_safe_delete_runtime_blocker_ux_receipt(Some(compile_params))?
+        .ok_or("missing Dancer2 stale-symbol safe-delete receipt")?;
+    let compile_compiler = compiler_receipt(&compile_receipt)?;
+
+    assert_eq!(compile_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(
+        compile_receipt.get("compiler_plan_fixture").and_then(Value::as_str),
+        Some("stale_fact")
+    );
+    assert_eq!(compile_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(compile_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_trace_contains(compile_compiler, "CompilerFact", "Low", "Stale")?;
+    assert!(trace_count(compile_compiler)? > 0, "_compile receipt must carry fact-source traces");
+    assert_note_contains(
+        compile_compiler,
+        &[
+            "safe-delete runtime blocker UX",
+            "compiler_plan_fixture=stale_fact",
+            "compiler_plan_safe=false",
+            "blocker_reasons=StaleFact",
+            "stale_fact=true",
             "requires_confirmation=true",
             "no live refactor behavior change",
         ],
