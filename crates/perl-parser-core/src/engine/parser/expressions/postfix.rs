@@ -753,7 +753,7 @@ impl<'a> Parser<'a> {
                         } else if name.contains("::")
                             && !self.is_at_statement_end()
                             && self.peek_kind() != Some(TokenKind::FatArrow)
-                            && matches!(
+                            && (matches!(
                                 self.peek_kind(),
                                 Some(
                                     TokenKind::String
@@ -761,10 +761,17 @@ impl<'a> Parser<'a> {
                                         | TokenKind::QuoteDouble
                                         | TokenKind::Number
                                 )
-                            )
+                            ) || (self.peek_kind() == Some(TokenKind::Identifier)
+                                && self
+                                    .tokens
+                                    .peek_second()
+                                    .ok()
+                                    .is_some_and(|t| t.kind == TokenKind::FatArrow)))
                         {
                             // Qualified call with string/number literal argument — issue #2750 Pattern B.
                             // e.g. `(Carp::croak "error")`, `(utf8::downgrade $$buf or Carp::croak "Wide char")`
+                            // Also handles `Sub::Name::subname bareword => sub { ... }`,
+                            // where the uppercase package prefix otherwise looks like a non-call.
                             // In paren-expression context, qualified names followed by a literal argument
                             // are treated as function calls (same as unqualified `croak "err"` via looks_like_bare_call).
                             // Guard: NOT followed by => (would be a hash-key) and NOT at statement end.
