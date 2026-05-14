@@ -330,6 +330,11 @@ impl<'a> Parser<'a> {
 
             // Parse postfix chain (handles function call parens, method calls, etc.)
             inner = self.parse_postfix_chain(inner)?;
+            if self.peek_kind() == Some(TokenKind::Question) {
+                // `${ref($x) ? $x : fallback($x)}` may enter this partial-deref
+                // path when the lexer greedily captures `${ref` as one token.
+                inner = self.parse_ternary_with(inner)?;
+            }
 
             self.consume_deref_body_terminators()?;
             self.expect(TokenKind::RightBrace)?;
