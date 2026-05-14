@@ -472,3 +472,21 @@ fn test_app_cpan_generator_returns_anonymous_sub_list() {
 }"#;
     assert_clean_parse(source);
 }
+
+#[test]
+fn test_types_common_inlined_undef_comma_return() {
+    // From Types::Common::{Numeric,String}: an anonymous subroutine can return
+    // a list whose first element is bare `undef`.
+    let source = r#"my $type = declare(
+    inlined => sub { undef, qq($_ > 0) },
+);"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_types_common_inlined_undef_three_item_return() {
+    let source = r#"my $type = declare(
+    inlined => sub { undef, qq($_ >= -9), qq($_ <= 9) },
+);"#;
+    assert_clean_parse(source);
+}
