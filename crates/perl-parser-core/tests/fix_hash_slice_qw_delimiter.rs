@@ -12,6 +12,16 @@ fn hash_slice_qw_slash_delimiter_simple() {
 }
 
 #[test]
+fn hash_slice_qw_slash_delimiter_keeps_following_block_statement() {
+    let source = "sub verify { my ($got, $exists) = @params{qw/got exists/}; return 0; }";
+    let sexp = parse(source).to_sexp();
+    assert!(
+        sexp.contains("(return (number 0))"),
+        "expected return statement after hash-slice qw expression for source:\n{source}\n\nsexp:\n{sexp}",
+    );
+}
+
+#[test]
 fn delete_hash_slice_qw_slash_delimiter() {
     assert_clean_parse("delete @hash{qw/a b/};");
 }
@@ -39,6 +49,11 @@ fn hash_slice_string_keys_still_works() {
 #[test]
 fn hash_slice_qw_single_word() {
     assert_clean_parse("my @v = @hash{qw/only/};");
+}
+
+#[test]
+fn hash_slice_qw_bareword_key_still_works() {
+    assert_clean_parse("my @v = @hash{qw, other};");
 }
 
 #[test]
