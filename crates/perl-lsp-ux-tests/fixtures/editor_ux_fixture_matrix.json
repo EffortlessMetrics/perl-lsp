@@ -812,6 +812,34 @@
       ]
     },
     {
+      "id": "mojolicious_workspace_symbol_noise",
+      "scenario_file": "ux_scenario_33_mojolicious_workspace_symbol_noise.rs",
+      "subsystem_owner": "workspace_indexing",
+      "ci_tier": "pr",
+      "component": "workspace_symbols",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request workspace symbols over the Mojolicious real-workspace fixture and record live-provider noise boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "workspace-symbol probes return without JSON-RPC errors",
+        "returned symbols use valid LSP WorkspaceSymbol shapes",
+        "receipt records useful hits, unrelated/noisy hits, generated candidate gating, dynamic-boundary-shaped names, and edit freshness"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "incremental_text_sync_recovery",
       "scenario_file": "ux_scenario_19_incremental_text_sync.rs",
       "subsystem_owner": "text_sync",
