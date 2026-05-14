@@ -441,6 +441,21 @@ impl<'a> Parser<'a> {
             let mut name = name_token.text.to_string();
             let mut end = name_token.end;
 
+            // `%$$slice` may arrive as `%`, `$$`, `slice`; only join an
+            // adjacent tail so whitespace-delimited `$$ eq` keeps `eq` as op.
+            if name == "$$"
+                && self.peek_kind() == Some(TokenKind::Identifier)
+                && self
+                    .tokens
+                    .peek()
+                    .ok()
+                    .is_some_and(|next_token| next_token.start == end)
+            {
+                let next_token = self.tokens.next()?;
+                name.push_str(&next_token.text);
+                end = next_token.end;
+            }
+
             // Handle :: in package-qualified variables
             while self.peek_kind() == Some(TokenKind::DoubleColon) {
                 self.tokens.next()?; // consume ::
