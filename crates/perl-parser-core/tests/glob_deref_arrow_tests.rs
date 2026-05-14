@@ -78,6 +78,15 @@ fn glob_hash_slot_assign() {
     assert_clean_parse(r#"*alias = *$oldglob{$slot};"#);
 }
 
+#[test]
+fn dynamic_glob_double_scalar_in_condition_decl() {
+    // Data::Printer::Filter::GLOB: ref tied *$$glob inside an if condition
+    // must consume the full dynamic glob operand before the closing paren.
+    assert_clean_parse(
+        r#"if ($ddp->show_tied and my $tie = ref tied *$$glob) { $string .= " (tied)" }"#,
+    );
+}
+
 // Full context patterns from real files
 
 #[test]
