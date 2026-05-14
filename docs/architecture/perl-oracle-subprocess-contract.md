@@ -8,16 +8,22 @@
 
 ## Purpose
 
-This file is the **authoritative inventory** of every call site where the LSP or its
-tooling spawns a Perl (or Perl-adjacent) subprocess. It is the Phase 1 deliverable of
-#8620; Phase 2 (#8551) introduces `PerlOracleEnv` and migrates any call site that still
-uses a bare `Command::new("perl")`.
+This file is the **authoritative inventory** of Rust call sites where the LSP or its
+tooling spawns the Perl interpreter or `perldoc` as an `ask-Perl` subprocess seam. It is
+the Phase 1 deliverable of #8620; Phase 2 (#8551) introduces `PerlOracleEnv` and migrates
+any call site that still uses a bare `Command::new("perl")`.
 
-**Maintenance rule:** If you add or remove an `ask-Perl` call site, update this table in
-the same PR. Any call site that appears in a `grep` for `Command::new("perl")`,
-`Command::new("perldoc")`, `tokio::process::Command::new("perl")`, or
-`subprocess::Exec::cmd("perl")` across `crates/*/src/**.rs`, `xtask/src/**.rs`, and
-`scripts/**` but is NOT in this table is a contract violation.
+This inventory does not claim every external Perl ecosystem tool. Adapters such as
+`perltidy`, `perlcritic`, direct `cpanm`, `prove`, and release shell scripts remain under
+their formatter, critic, corpus, or release-tooling contracts unless they invoke the Perl
+interpreter through a Rust call site covered here.
+
+**Maintenance rule:** If you add or remove a Rust `ask-Perl` interpreter or `perldoc`
+call site, update this table in the same PR. Any call site that appears in a `grep` for
+`Command::new("perl")`, `Command::new("perldoc")`,
+`tokio::process::Command::new("perl")`, or `subprocess::Exec::cmd("perl")` across
+`crates/*/src/**.rs` and `xtask/src/**.rs` but is NOT in this table is a contract
+violation.
 
 ---
 
