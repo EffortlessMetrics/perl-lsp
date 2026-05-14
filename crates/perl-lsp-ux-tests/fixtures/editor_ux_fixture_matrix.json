@@ -952,6 +952,34 @@
       ]
     },
     {
+      "id": "dancer2_semantic_tokens_quality",
+      "scenario_file": "ux_scenario_38_dancer2_semantic_tokens_quality.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "semantic_tokens",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request semantic tokens over the Dancer2 real-workspace fixture and record second-project token quality boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "semantic-token requests return valid 5-tuple data without JSON-RPC errors",
+        "decoded token spans do not overlap and map back to source text",
+        "receipt records expected source-backed tokens, typeglob dynamic-boundary-shaped strings, and edit freshness"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "incremental_text_sync_recovery",
       "scenario_file": "ux_scenario_19_incremental_text_sync.rs",
       "subsystem_owner": "text_sync",

@@ -120,6 +120,9 @@ support claims, real-workspace receipts, and next PRs, see
   LSP 5-tuple/span validity, expected source-backed token hits,
   dynamic-boundary string non-promotion, and edit freshness without broadening
   semantic-token provider behavior.
+- Dancer2 scenario 38 adds second-project semantic-token quality proof for
+  package, DSL, app, typeglob-boundary, and edit-freshness token shapes without
+  broadening semantic-token provider behavior.
 - Other provider surfaces remain trace/proof infrastructure only until their
   own cutover proof lands.
 
@@ -173,7 +176,7 @@ the relevant receipt command.
 | Safe delete | `boundary-shadowed` | Safe-delete receipts trace exact static allow decisions, dynamic-boundary blockers, framework-generated blockers, stale compiler facts, runtime blocker UX notes, live-vs-compiler exact-static receipt data, and Mojolicious scenario 36 file-delete warning UX before any live compiler-backed symbol refactor behavior | Symbol-level real-workspace unsafe-delete receipts and explicit blocker UX in live safe-delete surfaces before any broader refactor migration |
 | Workspace symbols | `shadowed` | Existing workspace index remains the live provider source; semantic-shadow fixtures trace fresh compiler, generated, dynamic-boundary, stale fact, and real-workspace quality candidates; runtime quality receipts capture live provider counts/results without changing live behavior; Mojolicious scenario 33 records live-provider noise, generated candidate gating, dynamic-boundary-shaped names, and edit freshness | Live high-confidence compiler-symbol cutover proof after additional noise/rank receipts |
 | Document symbols | `partial live source-backed` | Fresh, high-confidence, source-backed parser-syntax `ExactAst` symbols can drive live `textDocument/documentSymbol` results with fallback retained for astless documents and gated generated/no-source, dynamic-boundary, stale, low-confidence, and ambiguous candidates. Semantic-shadow fixtures still trace explicit syntax, generated, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live provider counts/results plus source-backed compiler traces; Mojolicious scenario 32 records real-workspace symbol quality, generated candidate counts, and edit freshness. | Generated-label proof plus additional real-workspace document-symbol receipts before generated, dynamic, or broader symbol cutover |
-| Semantic tokens | `shadowed` | Existing parser/token provider remains the live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live token count and shadow state without changing live behavior; Mojolicious scenario 34 records project-shaped token/span validity and edit freshness | Additional project-shape semantic-token quality and narrow compiler-backed token-class proof before any live cutover |
+| Semantic tokens | `shadowed` | Existing parser/token provider remains the live source; semantic-shadow fixtures trace parser/HIR, compiler-backed, dynamic-boundary, and stale fact candidates; runtime quality receipts capture live token count and shadow state without changing live behavior; Mojolicious scenario 34 and Dancer2 scenario 38 record project-shaped token/span validity and edit freshness | Narrow compiler-backed token-class proof before any live cutover |
 
 ## Cutover Rules
 
