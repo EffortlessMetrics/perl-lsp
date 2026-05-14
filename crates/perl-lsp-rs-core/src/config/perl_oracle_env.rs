@@ -379,6 +379,48 @@ impl PerlOracleEnv {
             extra_env: BTreeMap::new(),
         }
     }
+
+    /// Constructor for DAP test fixture Perl probes.
+    ///
+    /// Checks whether `perl` is available on `PATH` and, if so, returns a
+    /// `PerlOracleEnv` with the DAP test fixture env contract:
+    ///
+    /// - `allow_perl5lib`: `false` — DAP tests must be hermetic; ambient
+    ///   `PERL5LIB` must not change which tests pass or skip.
+    /// - `allow_perl5opt`: `false` — runtime injection flags must not affect
+    ///   test results.
+    /// - `allow_local_lib`: `false` — `local::lib` activation is not part of
+    ///   the test fixture contract.
+    /// - `timeout`: 5 seconds (sufficient for unit/integration test probes).
+    /// - `cwd`: current working directory of the test process.
+    /// - `extra_env`: empty.
+    ///
+    /// Returns `None` when `perl` is not on `PATH`, enabling skip-when-missing
+    /// semantics: `if oracle.is_none() { return; }`.
+    ///
+    /// The existence check itself runs with an inherited environment so that
+    /// PATH resolution works in all CI configurations; the deny-all-ambient
+    /// policy applies to every subsequent invocation via [`into_command`].
+    ///
+    /// [`into_command`]: PerlOracleEnv::into_command
+    pub fn for_dap_test_fixture() -> Option<Self> {
+        let available = std::process::Command::new("perl").arg("--version").output().is_ok();
+        if !available {
+            return None;
+        }
+
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        Some(Self {
+            perl_binary: PathBuf::from("perl"),
+            cwd,
+            timeout: Duration::from_secs(5),
+            allow_perl5lib: false,
+            allow_perl5opt: false,
+            allow_local_lib: false,
+            extra_env: BTreeMap::new(),
+        })
+    }
 }
 
 // ── WASM stub ─────────────────────────────────────────────────────────────────

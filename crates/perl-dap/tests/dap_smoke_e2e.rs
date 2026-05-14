@@ -1,6 +1,7 @@
 //! End-to-end DAP smoke test using the native debug adapter and real `perl -d`.
 
 use perl_dap::{DapMessage, DebugAdapter};
+use perl_lsp_rs_core::config::PerlOracleEnv;
 use serde_json::{Value, json};
 use std::fs::write;
 use std::sync::mpsc::{Receiver, channel};
@@ -10,7 +11,7 @@ use tempfile::tempdir;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn perl_available() -> bool {
-    std::process::Command::new("perl").arg("--version").output().is_ok()
+    PerlOracleEnv::for_dap_test_fixture().is_some()
 }
 
 fn smoke_timeout() -> Duration {

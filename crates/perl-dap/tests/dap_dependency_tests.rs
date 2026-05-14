@@ -7,9 +7,9 @@
 #[cfg(feature = "dap-phase3")]
 mod dap_dependencies {
     use anyhow::Result;
+    use perl_lsp_rs_core::config::PerlOracleEnv;
     use serde_json::Value;
     use std::path::PathBuf;
-    use std::process::Command;
 
     fn repo_root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -81,10 +81,14 @@ mod dap_dependencies {
     #[test]
     // AC:18
     fn test_perl_version_compatibility() -> Result<()> {
-        let perl_version = Command::new("perl").arg("-e").arg("print $];").output();
+        let perl_version = PerlOracleEnv::for_dap_test_fixture().and_then(|oracle| {
+            let mut cmd = oracle.into_command();
+            cmd.arg("-e").arg("print $];");
+            cmd.output().ok()
+        });
 
         match perl_version {
-            Ok(output) if output.status.success() => {
+            Some(output) if output.status.success() => {
                 let version_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 let version_num: f64 = version_str.parse().map_err(|e| {
                     anyhow::anyhow!("failed to parse perl version '{version_str}': {e}")

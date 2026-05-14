@@ -27,6 +27,7 @@ use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use perl_dap::platform::{
     format_command_args, normalize_path, resolve_perl_path, setup_environment,
 };
+use perl_lsp_rs_core::config::PerlOracleEnv;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::hint::black_box;
@@ -312,7 +313,7 @@ fn benchmark_dap_dispatch(c: &mut Criterion) {
 // ========== Phase 3: Live Session Benchmarks ==========
 
 fn perl_available() -> bool {
-    std::process::Command::new("perl").arg("--version").output().is_ok()
+    PerlOracleEnv::for_dap_test_fixture().is_some()
 }
 
 fn write_script(path: &Path, line_count: usize) -> std::io::Result<()> {

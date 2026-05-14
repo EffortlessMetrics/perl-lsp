@@ -5,6 +5,7 @@
 //! required to drive a real `perl -d` debug session in tests.
 
 use perl_dap::{DapMessage, DebugAdapter};
+use perl_lsp_rs_core::config::PerlOracleEnv;
 use serde_json::{Value, json};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::{Duration, Instant};
@@ -357,5 +358,5 @@ pub fn workflow_timeout() -> Duration {
 
 /// Returns `true` when `perl` is on `PATH`.
 pub fn perl_available() -> bool {
-    std::process::Command::new("perl").arg("--version").output().is_ok()
+    PerlOracleEnv::for_dap_test_fixture().is_some()
 }
