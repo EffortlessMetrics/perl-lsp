@@ -17,6 +17,9 @@
   },
   "colorProvider": true,
   "completionProvider": {
+    "completionItem": {
+      "labelDetailsSupport": true
+    },
     "resolveProvider": true,
     "triggerCharacters": [
       "$",
@@ -65,7 +68,8 @@
       "perl.debugFile",
       "perl.debugTest",
       "perl.goToTest",
-      "perl.goToImplementation"
+      "perl.goToImplementation",
+      "perl.explainProviderDecision"
     ]
   },
   "experimental": {
@@ -161,7 +165,8 @@
   },
   "textDocumentSync": {
     "change": 1,
-    "openClose": true
+    "openClose": true,
+    "save": true
   },
   "typeDefinitionProvider": true,
   "typeHierarchyProvider": {

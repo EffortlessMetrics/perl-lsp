@@ -64,9 +64,9 @@ blocker when relevant.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `feat(ux): expose explain-provider-decision command`
-2. `docs(user): explain measured Perl editor trust`
-3. `feat(diagnostics): label dynamic-boundary and low-confidence diagnostics`
+1. `docs(user): explain measured Perl editor trust`
+2. `feat(diagnostics): label dynamic-boundary and low-confidence diagnostics`
+3. `feat(provider): attach live provider receipts to explain-provider-decision`
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
 Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain

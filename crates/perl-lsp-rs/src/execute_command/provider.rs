@@ -4,6 +4,12 @@ use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
 #[cfg(not(target_arch = "wasm32"))]
 use perl_lsp_rs_core::config::PerlOracleEnv;
 use perl_lsp_rs_core::config::WorkspaceConfig;
+use perl_lsp_rs_core::providers::{
+    ProviderDecisionConfidence, ProviderDecisionExplanation, ProviderDecisionFactSource,
+    ProviderDecisionFallback, ProviderDecisionFreshness, ProviderDecisionOutcome,
+    ProviderDecisionProvider, ProviderDecisionReason,
+};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::borrow::Cow;
 #[cfg(windows)]
@@ -74,6 +80,15 @@ pub(crate) enum TestRunner {
     Yath,
     Prove,
     Perl,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExplainProviderDecisionRequest {
+    provider: ProviderDecisionProvider,
+    #[serde(default)]
+    receipt_id: Option<String>,
+    #[serde(default)]
+    scenario: Option<String>,
 }
 
 impl Default for ExecuteCommandProvider {
@@ -176,8 +191,38 @@ impl ExecuteCommandProvider {
                 let file_path = self.resolve_path_from_args(&arguments)?;
                 Ok(self.go_to_implementation(&file_path))
             }
+            "perl.explainProviderDecision" => self.explain_provider_decision(&arguments),
             _ => Err(format!("Unknown command: {}", command)),
         }
+    }
+
+    fn explain_provider_decision(&self, arguments: &[Value]) -> Result<Value, String> {
+        let request_value = arguments
+            .first()
+            .ok_or_else(|| "Missing explain-provider-decision argument".to_string())?;
+        let request: ExplainProviderDecisionRequest = serde_json::from_value(request_value.clone())
+            .map_err(|error| format!("Invalid explain-provider-decision argument: {error}"))?;
+
+        let mut explanation = ProviderDecisionExplanation::new(
+            request.provider,
+            ProviderDecisionOutcome::Fallback,
+            ProviderDecisionReason::MissingFact,
+            ProviderDecisionFactSource::Unknown,
+            ProviderDecisionConfidence::Low,
+            ProviderDecisionFreshness::Unknown,
+            false,
+            ProviderDecisionFallback::NoResult,
+        );
+
+        if let Some(receipt_id) = request.receipt_id {
+            explanation = explanation.with_receipt_id(receipt_id);
+        }
+        if let Some(scenario) = request.scenario {
+            explanation = explanation.with_scenario(scenario);
+        }
+
+        serde_json::to_value(explanation)
+            .map_err(|error| format!("Failed to serialize provider decision explanation: {error}"))
     }
 
     pub(crate) fn run_tests(&self, file_path: &Path) -> Result<Value, String> {
@@ -997,6 +1042,7 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.debugTest".to_string(),
         "perl.goToTest".to_string(),
         "perl.goToImplementation".to_string(),
+        "perl.explainProviderDecision".to_string(),
     ]
 }
 
