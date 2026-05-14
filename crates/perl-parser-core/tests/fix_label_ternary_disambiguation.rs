@@ -118,6 +118,31 @@ fn test_label_ternary_disambiguation_valid_return() {
     assert_clean_parse(r#"EXIT: return $result if defined $result;"#);
 }
 
+#[test]
+fn test_return_keyword_can_be_label_at_block_end() {
+    // From Hash::Merge: `return:` is a legal label, not a return statement
+    // followed by a stray colon. The label is the final statement in the block.
+    assert_clean_parse(
+        r#"
+sub get_behavior_spec {
+    exists $self->{behaviors}{$name} and return $self->{behaviors}{$name};
+  return:
+}
+"#,
+    );
+}
+
+#[test]
+fn test_return_keyword_can_be_label_before_statement() {
+    assert_clean_parse(
+        r#"
+sub get_behavior_spec {
+  return: print "after label";
+}
+"#,
+    );
+}
+
 /// Token after colon is `;` — labeled empty statement. Valid Perl.
 ///
 /// `LABEL: ;` is a legal labeled empty-statement in Perl.  Earlier versions of

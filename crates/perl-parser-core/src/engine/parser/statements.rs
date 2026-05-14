@@ -388,6 +388,17 @@ impl<'a> Parser<'a> {
             | TokenKind::Init
             | TokenKind::Unitcheck => self.parse_expression_statement(),
 
+            TokenKind::Return
+                if self
+                    .tokens
+                    .peek_second()
+                    .ok()
+                    .map(|t| t.kind == TokenKind::Colon)
+                    .unwrap_or(false) =>
+            {
+                self.parse_keyword_as_label()
+            }
+
             // Data sections
             TokenKind::DataMarker => self.parse_data_section(),
 
@@ -1203,8 +1214,7 @@ impl<'a> Parser<'a> {
         // Consume the colon
         self.expect(TokenKind::Colon)?;
 
-        // Parse the statement after the label
-        let statement = Box::new(self.parse_statement()?);
+        let statement = self.parse_label_statement_body()?;
 
         let end = self.previous_position();
         Ok(Node::new(
@@ -1264,14 +1274,25 @@ impl<'a> Parser<'a> {
         // Consume the `:`
         self.expect(TokenKind::Colon)?;
 
-        // Parse the statement that follows the label
-        let statement = Box::new(self.parse_statement()?);
+        let statement = self.parse_label_statement_body()?;
 
         let end = self.previous_position();
         Ok(Node::new(
             NodeKind::LabeledStatement { label, statement },
             SourceLocation { start, end },
         ))
+    }
+
+    fn parse_label_statement_body(&mut self) -> ParseResult<Box<Node>> {
+        if matches!(self.peek_kind(), Some(TokenKind::RightBrace) | Some(TokenKind::Eof)) {
+            let pos = self.current_position();
+            return Ok(Box::new(Node::new(
+                NodeKind::Block { statements: Vec::new() },
+                SourceLocation { start: pos, end: pos },
+            )));
+        }
+
+        Ok(Box::new(self.parse_statement()?))
     }
 
 }
