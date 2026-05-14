@@ -271,6 +271,11 @@ impl<'a> Parser<'a> {
                     if op_token.kind == TokenKind::Star {
                         if let Some(next_kind) = self.peek_kind() {
                             let next_text = self.tokens.peek()?.text.to_string();
+                            let next_is_sigil_identifier = next_kind == TokenKind::Identifier
+                                && next_text
+                                    .chars()
+                                    .next()
+                                    .is_some_and(|c| matches!(c, '$' | '@' | '%' | '&' | '*'));
                             let terminator_kind =
                                 self.tokens.peek_second().ok().map(|t| t.kind);
                             if let Some(name) = typeglob_punctuation_name(
@@ -286,7 +291,9 @@ impl<'a> Parser<'a> {
                             }
 
                             match next_kind {
-                                kind if Self::can_be_sub_name(kind) => {
+                                kind if Self::can_be_sub_name(kind)
+                                    && !next_is_sigil_identifier =>
+                                {
                                     let id_token = self.tokens.next()?;
                                     let end = id_token.end;
                                     let node = Node::new(
