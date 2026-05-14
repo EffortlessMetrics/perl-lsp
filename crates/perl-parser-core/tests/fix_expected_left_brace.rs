@@ -251,3 +251,18 @@ catch Git::Error::Command { my $e = shift; warn $e; };
         "Expected 'with' before catch block",
     );
 }
+
+#[test]
+fn test_type_params_return_scalar_deref_named_variable() {
+    // From Type::Params::Parameter: scalar dereference of a named variable can
+    // appear as a return expression.
+    assert_no_diagnostics(
+        r#"
+sub _code_for_default {
+    if (is_ScalarRef $default) {
+        return $$default;
+    }
+}
+"#,
+    );
+}

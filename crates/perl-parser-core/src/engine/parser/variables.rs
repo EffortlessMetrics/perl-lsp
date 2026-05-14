@@ -380,7 +380,7 @@ impl<'a> Parser<'a> {
         if (full_name.is_empty()
             || (sigil == "$" && full_name == "$")
             || (matches!(sigil.as_str(), "@" | "%") && full_name == "$$"))
-            && self.peek_kind() == Some(TokenKind::Identifier)
+            && self.peek_kind().is_some_and(Self::is_variable_name_kind)
             && (full_name.is_empty()
                 || self
                     .tokens
@@ -444,11 +444,9 @@ impl<'a> Parser<'a> {
         // Check if next token is an identifier or a keyword that should be treated as identifier
         let next_kind = self.peek_kind();
 
-        let (name, end) = if next_kind == Some(TokenKind::Identifier) ||
-                             // Keywords can be used as variable names with any sigil
-                             // e.g., %try, $default, @for, &try are all valid Perl
-                             matches!(next_kind, Some(k) if Self::can_be_sub_name(k))
-        {
+        // Keywords can be used as variable names with any sigil
+        // e.g., %try, $default, @for, &try are all valid Perl.
+        let (name, end) = if next_kind.is_some_and(Self::is_variable_name_kind) {
             let name_token = self.tokens.next()?;
             let mut name = name_token.text.to_string();
             let mut end = name_token.end;
@@ -493,7 +491,9 @@ impl<'a> Parser<'a> {
                     // `$$` is the PID special variable, but `$$ident` is a scalar
                     // dereference target that must preserve the referenced name.
                     let token = self.tokens.next()?;
-                    if self.peek_kind() == Some(TokenKind::Identifier) {
+                    if self.tokens.peek().ok().is_some_and(|name_token| {
+                        Self::is_variable_name_kind(name_token.kind) && name_token.start == token.end
+                    }) {
                         let name_token = self.tokens.next()?;
                         let mut name = format!("${}", name_token.text);
                         let mut end = name_token.end;
@@ -1129,6 +1129,10 @@ impl<'a> Parser<'a> {
         }
 
         Ok(prototype)
+    }
+
+    fn is_variable_name_kind(kind: TokenKind) -> bool {
+        kind == TokenKind::Identifier || Self::can_be_sub_name(kind)
     }
 }
 
