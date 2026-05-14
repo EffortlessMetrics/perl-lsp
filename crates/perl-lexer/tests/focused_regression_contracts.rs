@@ -67,6 +67,38 @@ fn quote_like_qr_bracket_is_quote_regex() -> TestResult {
 }
 
 #[test]
+fn quote_like_words_after_sub_are_identifiers() -> TestResult {
+    let cases = [
+        ("sub m { # source comment keeps the block open\n}\n", "m"),
+        ("sub s { 1 }\n", "s"),
+        ("sub tr { 1 }\n", "tr"),
+        ("sub q { 1 }\n", "q"),
+    ];
+
+    for (input, expected_name) in cases {
+        let mut lexer = PerlLexer::new(input);
+
+        let sub = next_non_trivia(&mut lexer).ok_or("missing sub token")?;
+        assert!(
+            matches!(&sub.token_type, TokenType::Keyword(keyword) if keyword.as_ref() == "sub")
+        );
+
+        let name = next_non_trivia(&mut lexer).ok_or("missing sub name token")?;
+        assert!(matches!(
+            &name.token_type,
+            TokenType::Identifier(identifier) | TokenType::Keyword(identifier)
+                if identifier.as_ref() == expected_name
+        ));
+        assert_eq!(name.text.as_ref(), expected_name);
+
+        let brace = next_non_trivia(&mut lexer).ok_or("missing sub block brace")?;
+        assert_eq!(brace.token_type, TokenType::LeftBrace);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn transliteration_tr_with_modifiers_is_single_token() -> TestResult {
     let input = "tr/a-z/A-Z/cdr";
     let mut lexer = PerlLexer::new(input);
