@@ -1,4 +1,5 @@
 use perl_dap::{DapMessage, DebugAdapter};
+use perl_lsp_rs_core::config::PerlOracleEnv;
 use serde_json::json;
 use std::fs::write;
 use std::sync::mpsc::channel;
@@ -10,7 +11,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 #[test]
 fn test_dap_basic_flow() -> TestResult {
     // Skip if perl is not available
-    if std::process::Command::new("perl").arg("--version").output().is_err() {
+    if PerlOracleEnv::for_dap_test_fixture().is_none() {
         eprintln!("Skipping DAP basic flow test - perl not available");
         return Ok(());
     }

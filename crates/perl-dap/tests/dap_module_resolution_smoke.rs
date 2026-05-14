@@ -10,6 +10,7 @@
 //! Related issue: #8621
 
 use perl_dap::{DapMessage, DebugAdapter};
+use perl_lsp_rs_core::config::PerlOracleEnv;
 use serde_json::{Value, json};
 use std::fs;
 use std::path::PathBuf;
@@ -30,7 +31,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 const MODULE_BREAKPOINT_LINE: u64 = 14; // my $x = 1 — first executable line in sub run
 
 fn perl_available() -> bool {
-    std::process::Command::new("perl").arg("--version").output().is_ok()
+    PerlOracleEnv::for_dap_test_fixture().is_some()
 }
 
 fn smoke_timeout() -> Duration {
