@@ -921,7 +921,8 @@ impl LspServer {
                 | "perl.runCritic"
                 | "perl.goToTest"
                 | "perl.goToImplementation"
-                | "perl.debugTests" => {
+                | "perl.debugTests"
+                | "perl.explainProviderDecision" => {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {

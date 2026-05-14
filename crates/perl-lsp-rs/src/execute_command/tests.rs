@@ -4,7 +4,7 @@ use super::get_supported_commands;
 use super::provider::{ExecuteCommandProvider, TestRunner, select_test_runner};
 use super::test_support::mock_status;
 use perl_lsp_rs_core::config::WorkspaceConfig;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::fs;
 use std::path::PathBuf;
 use tempfile::tempdir;
@@ -179,6 +179,55 @@ fn test_supported_commands_includes_go_to_test() {
         commands.contains(&"perl.goToImplementation".to_string()),
         "perl.goToImplementation should be in supported commands list"
     );
+    assert!(
+        commands.contains(&"perl.explainProviderDecision".to_string()),
+        "perl.explainProviderDecision should be in supported commands list"
+    );
+}
+
+#[test]
+fn test_explain_provider_decision_returns_honest_no_receipt_fallback()
+-> Result<(), Box<dyn std::error::Error>> {
+    let provider = ExecuteCommandProvider::new();
+    let result = provider.execute_command(
+        "perl.explainProviderDecision",
+        vec![json!({
+            "provider": "safe_delete",
+            "receipt_id": "semantic-shadow-compare",
+            "scenario": "mojolicious-safe-delete"
+        })],
+    )?;
+
+    assert_eq!(result.get("provider").and_then(Value::as_str), Some("safe_delete"));
+    assert_eq!(result.get("decision").and_then(Value::as_str), Some("fallback"));
+    assert_eq!(result.get("reason").and_then(Value::as_str), Some("missing_fact"));
+    assert_eq!(result.get("fact_source").and_then(Value::as_str), Some("unknown"));
+    assert_eq!(result.get("confidence").and_then(Value::as_str), Some("low"));
+    assert_eq!(result.get("freshness").and_then(Value::as_str), Some("unknown"));
+    assert_eq!(result.get("fallback").and_then(Value::as_str), Some("no_result"));
+    assert_eq!(result.get("receipt_id").and_then(Value::as_str), Some("semantic-shadow-compare"));
+    assert_eq!(result.get("scenario").and_then(Value::as_str), Some("mojolicious-safe-delete"));
+    assert_eq!(result.get("dynamic_boundary").and_then(Value::as_bool), Some(false));
+    Ok(())
+}
+
+#[test]
+fn test_explain_provider_decision_rejects_missing_provider()
+-> Result<(), Box<dyn std::error::Error>> {
+    let provider = ExecuteCommandProvider::new();
+    let result = provider.execute_command("perl.explainProviderDecision", vec![json!({})]);
+
+    let error = match result {
+        Ok(value) => {
+            return Err(format!("missing provider should reject the request: {value}").into());
+        }
+        Err(error) => error,
+    };
+    assert!(
+        error.contains("Invalid explain-provider-decision argument"),
+        "error should identify invalid explain-provider payload, got: {error}"
+    );
+    Ok(())
 }
 
 #[test]

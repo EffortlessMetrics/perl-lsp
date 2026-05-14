@@ -13,3 +13,4 @@ expression: "&commands"
 - perl.debugTest
 - perl.goToTest
 - perl.goToImplementation
+- perl.explainProviderDecision

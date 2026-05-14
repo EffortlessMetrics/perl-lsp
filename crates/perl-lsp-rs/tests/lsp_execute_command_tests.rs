@@ -225,6 +225,50 @@ fn test_execute_command_capabilities() -> Result<(), Box<dyn std::error::Error>>
     assert!(command_strs.contains(&"perl.runFile"));
     assert!(command_strs.contains(&"perl.runTestSub"));
     assert!(command_strs.contains(&"perl.runCritic"));
+    assert!(command_strs.contains(&"perl.explainProviderDecision"));
+
+    Ok(())
+}
+
+#[test]
+fn test_execute_command_explain_provider_decision() -> Result<(), Box<dyn std::error::Error>> {
+    let server = setup_server(None);
+
+    let execute_request = JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        method: "workspace/executeCommand".to_string(),
+        params: Some(json!({
+            "command": "perl.explainProviderDecision",
+            "arguments": [{
+                "provider": "goto_definition",
+                "receipt_id": "semantic-shadow-compare",
+                "scenario": "mojolicious-navigation"
+            }]
+        })),
+        id: Some(json!(2)),
+    };
+
+    let response = server
+        .handle_request(execute_request)
+        .ok_or("No response from explain-provider-decision command")?;
+    let result = response.result.ok_or("No result in explain-provider-decision response")?;
+
+    assert_eq!(result.get("provider").and_then(|value| value.as_str()), Some("goto_definition"));
+    assert_eq!(result.get("decision").and_then(|value| value.as_str()), Some("fallback"));
+    assert_eq!(result.get("reason").and_then(|value| value.as_str()), Some("missing_fact"));
+    assert_eq!(result.get("fact_source").and_then(|value| value.as_str()), Some("unknown"));
+    assert_eq!(result.get("confidence").and_then(|value| value.as_str()), Some("low"));
+    assert_eq!(result.get("freshness").and_then(|value| value.as_str()), Some("unknown"));
+    assert_eq!(result.get("fallback").and_then(|value| value.as_str()), Some("no_result"));
+    assert_eq!(
+        result.get("receipt_id").and_then(|value| value.as_str()),
+        Some("semantic-shadow-compare")
+    );
+    assert_eq!(
+        result.get("scenario").and_then(|value| value.as_str()),
+        Some("mojolicious-navigation")
+    );
+    assert_eq!(result.get("dynamic_boundary").and_then(|value| value.as_bool()), Some(false));
 
     Ok(())
 }

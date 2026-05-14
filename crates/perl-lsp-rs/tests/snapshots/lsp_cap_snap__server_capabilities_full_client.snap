@@ -1,5 +1,6 @@
 ---
 source: crates/perl-lsp-rs/tests/lsp_cap_snap.rs
+assertion_line: 52
 expression: caps
 ---
 callHierarchyProvider: true
@@ -7,7 +8,10 @@ codeActionProvider:
   codeActionKinds:
     - quickfix
     - source.organizeImports
+    - refactor
     - refactor.extract
+    - refactor.inline
+    - refactor.rewrite
     - source.fixAll
   resolveProvider: true
 codeLensProvider:
@@ -21,15 +25,20 @@ completionProvider:
     - $
     - "@"
     - "%"
+    - "-"
     - ">"
     - ":"
-    - "-"
+    - /
+    - "\\"
+    - "\""
+    - "'"
 declarationProvider: true
 definitionProvider: true
 diagnosticProvider:
   identifier: perl-lsp
   interFileDependencies: false
   workspaceDiagnostics: true
+documentFormattingProvider: true
 documentHighlightProvider: true
 documentLinkProvider:
   resolveProvider: true
@@ -38,6 +47,7 @@ documentOnTypeFormattingProvider:
   moreTriggerCharacter:
     - ;
     - "\n"
+documentRangeFormattingProvider: true
 documentSymbolProvider: true
 executeCommandProvider:
   commands:
@@ -52,6 +62,7 @@ executeCommandProvider:
     - perl.debugTest
     - perl.goToTest
     - perl.goToImplementation
+    - perl.explainProviderDecision
 experimental:
   perlInlineCompletionStream: true
 foldingRangeProvider: true
