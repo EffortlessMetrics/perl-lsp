@@ -337,6 +337,21 @@ mod dollar_dollar_scalar_deref {
     }
 
     #[test]
+    fn scalar_deref_keyword_named_variable_keeps_name() {
+        let source = "my $x = $$default;";
+        assert_clean_parse(source);
+        let sexp = sexp(source);
+        assert!(
+            sexp.contains("(variable $ $default)"),
+            "expected $$default to survive as a scalar-deref target token, got: {sexp}"
+        );
+        assert!(
+            !sexp.contains("(variable $ $))"),
+            "expected $$default not to collapse to the bare $$ PID variable, got: {sexp}"
+        );
+    }
+
+    #[test]
     fn bare_pid_special_variable_still_parses_as_pid() {
         let sexp = sexp("my $pid = $$;");
         assert!(
