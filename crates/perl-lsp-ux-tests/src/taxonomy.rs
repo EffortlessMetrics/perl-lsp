@@ -84,6 +84,7 @@ pub enum UxComponent {
     SignatureHelp,
     CodeLens,
     FoldingRange,
+    SemanticTokens,
     Infra,
     AiCompletion,
 }
@@ -229,6 +230,7 @@ mod tests {
             UxComponent::SignatureHelp,
             UxComponent::CodeLens,
             UxComponent::FoldingRange,
+            UxComponent::SemanticTokens,
             UxComponent::Infra,
             UxComponent::AiCompletion,
         ];
