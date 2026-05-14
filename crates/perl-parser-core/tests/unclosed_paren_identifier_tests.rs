@@ -841,6 +841,13 @@ fn reftype_tied_typeglob_comparison() {
 }
 
 #[test]
+fn dbi_profile_dumper_apache_pid_ternary() {
+    // From DBI::ProfileDumper::Apache: the PID special variable may appear on
+    // both sides of a parenthesized string comparison before a ternary.
+    assert_clean_parse(r#"my $group_pid = ($$ eq $initial_pid) ? $$ : getppid();"#);
+}
+
+#[test]
 fn looks_like_number_sigil() {
     // looks_like_number $val — common in Type::Tiny and Params::Util
     assert_clean_parse(r#"return 0 unless looks_like_number $val;"#);
