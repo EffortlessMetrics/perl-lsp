@@ -106,9 +106,9 @@ returns an LSP error and refuses ambient fallback.
 | Field | Value |
 |---|---|
 | **Call site** | `perl-lsp-rs/src/execute_command/provider.rs:perl_command_for` |
-| **Spawn mechanism** | `PerlOracleEnv::for_execute_command(config, cwd).into_command()` with fallback to bare `Command::new("perl")` when config is absent or binary resolution fails |
-| **Current env** | Via oracle: deny-all-ambient base; `PERL5LIB` user-gated; `PERL5OPT` **allowed** (user scripts may use `-M` pragmas); `local::lib` **allowed** (user scripts may depend on it). Fallback path: inherits ALL ambient. |
-| **Desired contract** | Same oracle path is correct. Fallback bare `Command::new("perl")` at `provider.rs:104,109` should surface a user-visible error instead of silently inheriting ambient. |
+| **Spawn mechanism** | `PerlOracleEnv::for_execute_command(config, cwd).into_command()`; unresolved Perl or missing workspace config returns a user-visible error instead of falling back to bare `Command::new("perl")` |
+| **Current env** | Deny-all-ambient base; `PERL5LIB` user-gated; `PERL5OPT` **allowed** (user scripts may use `-M` pragmas); `local::lib` **allowed** (user scripts may depend on it). |
+| **Desired contract** | Already meets the post-#8551 execute-command contract. Missing oracle config or unresolved Perl fails closed with an actionable error. |
 | **Timeout** | 30 s |
 | **Cache key** | None — on-demand per user command invocation |
 | **Internalization path** | **Permanent** — user-initiated script execution requires the user's Perl |
@@ -373,7 +373,6 @@ Quick-reference. Sorted by internalization path priority (gaps first).
 
 | # | Call site | Mechanism | PERL5LIB | PERL5OPT | local::lib | Timeout | Internalization |
 |---|---|---|---|---|---|---|---|
-| 1.4 | `provider.rs` (fallback path) | Bare `Command::new("perl")` | ⚠ ambient | ⚠ ambient | ⚠ ambient | 30 s | Permanent — **GAP** |
 | 1.3 | `misc.rs:perl.debugFile` | `PerlOracleEnv::for_language_probe` | user-gated | ✓ denied | ✓ denied | 30 s | Permanent |
 | 1.5 | `virtual_content.rs:fetch_perldoc` | `PerlOracleEnv::for_perldoc` | user-gated | ✓ denied | ✓ denied | 10 s | Bridge |
 | 1.1 | `mod.rs:fetch_perl_inc` | `PerlOracleEnv::for_module_resolution` | user-gated | ✓ denied | ✓ denied | 1 000 ms | Bridge |
@@ -397,16 +396,12 @@ Legend: ✓ denied/removed = no leak · user-gated = follows `usePerl5lib` confi
 
 ---
 
-## Section 5 — Open gaps (action items for Phase 2 / #8551)
+## Section 5 — Gap status for Phase 2 / #8551
 
-The `perldoc` hover seam (§1.5) is wrapped by `PerlOracleEnv::for_perldoc`, and
-`perl.debugFile` (§1.3) now refuses unresolved Perl instead of falling back to ambient
-`perl`. The remaining editor-runtime gap is the silent execute-command fallback below.
-
-### Gap A: `provider.rs` fallback (§1.4) — medium priority
-
-`ExecuteCommandProvider::perl_command_for` falls back to bare `Command::new("perl")` when
-no config is available. Remove fallback; surface error.
+The editor-runtime subprocess seams in this inventory are now routed through
+`PerlOracleEnv` or fail closed with a user-visible error instead of silently
+falling back to ambient `perl`. Remaining bare `Command::new("perl")` rows are
+oracle, fixture, or xtask/CI tooling seams, not editor-runtime truth paths.
 
 ---
 
