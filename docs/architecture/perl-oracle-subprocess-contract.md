@@ -15,9 +15,9 @@ uses a bare `Command::new("perl")`.
 
 **Maintenance rule:** If you add or remove an `ask-Perl` call site, update this table in
 the same PR. Any call site that appears in a `grep` for `Command::new("perl")`,
-`tokio::process::Command::new("perl")`, or `subprocess::Exec::cmd("perl")` across
-`crates/*/src/**.rs`, `xtask/src/**.rs`, and `scripts/**` but is NOT in this table is a
-contract violation.
+`Command::new("perldoc")`, `tokio::process::Command::new("perl")`, or
+`subprocess::Exec::cmd("perl")` across `crates/*/src/**.rs`, `xtask/src/**.rs`, and
+`scripts/**` but is NOT in this table is a contract violation.
 
 ---
 
@@ -429,12 +429,16 @@ no config is available. Remove fallback; surface error.
 
 ## Section 6 — How to verify completeness
 
-Run the following grep from the workspace root. The command should produce no output
-(every matched call site is in this document):
+Run the following grep from the workspace root. Every matched production call site
+should already be represented in this document:
 
 ```bash
 # All Command::new("perl") in crates/
 grep -rn 'Command::new("perl")\|Command::new.*"perl"\b' crates/*/src/ --include='*.rs' \
+  | grep -v 'target/' | grep -v '.spec/'
+
+# All Command::new("perldoc") in crates/
+grep -rn 'Command::new("perldoc")\|Command::new.*"perldoc"\b' crates/*/src/ --include='*.rs' \
   | grep -v 'target/' | grep -v '.spec/'
 
 # All Command::new("perl") in xtask/
