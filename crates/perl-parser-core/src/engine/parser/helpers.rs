@@ -239,11 +239,12 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// Check if an identifier is an optional-argument builtin that can operate
-    /// on `$_` when called without an explicit argument.  When followed by a
-    /// binary operator in expression context (e.g., `defined && ...`,
-    /// `length > 0`, `ord >= 32`), these builtins should be treated as having
-    /// no argument rather than trying to parse the operator as their operand.
+    /// Check if an identifier is an optional-argument builtin that can be called
+    /// without an explicit argument. Some use implicit `$_`; others, such as
+    /// `umask`, have a true nullary form. When followed by a binary operator in
+    /// expression context (e.g., `defined && ...`, `length > 0`, `ord >= 32`,
+    /// `umask || 0`), these builtins should be treated as having no argument
+    /// rather than trying to parse the operator as their operand.
     pub(crate) fn is_optional_arg_builtin(name: &str) -> bool {
         matches!(
             name,
@@ -268,6 +269,7 @@ impl<'a> Parser<'a> {
                 | "sin"
                 | "log"
                 | "exp"
+                | "umask"
         )
     }
 

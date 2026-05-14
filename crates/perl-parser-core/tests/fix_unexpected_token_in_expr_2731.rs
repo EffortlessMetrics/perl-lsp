@@ -59,6 +59,12 @@ fn test_defined_or_die() {
     assert_clean_parse("defined || die;");
 }
 
+#[test]
+fn test_umask_before_or_in_bitwise_not() {
+    // From File::Copy: nullary umask may appear before `||` inside a unary bitwise not.
+    assert_clean_parse(r#"my $perm = $fromstat[2] & ~(umask || 0);"#);
+}
+
 // === Sub-Pattern B: Special variable $: and friends ===
 // Perl punctuation variables $:, $;, $, that the parser did not handle.
 
