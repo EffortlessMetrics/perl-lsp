@@ -504,3 +504,50 @@ fn test_types_common_inlined_undef_three_item_return() {
 );"#;
     assert_clean_parse(source);
 }
+
+#[test]
+fn test_dancer2_method_args_redundant_leading_comma() {
+    // From Dancer2::Plugin::LogReport: style with a trailing comma on one
+    // line and a leading comma before the next named argument.
+    let source = r#"sub x {
+    $dsl->app->add_route
+      ( method => 'get'
+      , regexp => qr!^/foo$!,
+      , code   => sub { shift->app->template($forward_template) }
+      );
+}"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_throwable_moo_attribute_double_comma_after_call() {
+    // From Throwable::Error: a Moo attribute value can be followed by a
+    // redundant comma before the next named argument.
+    let source = r#"use Moo;
+has message => (
+  is       => 'ro',
+  isa      => Sub::Quote::quote_sub(q{
+      die "message must be a string"
+          unless defined($_[0]) && !ref($_[0]);
+  }),,
+  required => 1,
+);"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_data_printer_hash_pair_double_comma() {
+    // From Data::Printer::Profile::Dumper: nested hash pairs may contain
+    // redundant comma separators.
+    let source = r#"sub profile {
+    return {
+        filters => [
+            {
+                'REF'     => \&_data_dumper_ref_filter,,
+                'Regexp'  => \&_data_dumper_regexp_filter,
+            },
+        ],
+    };
+}"#;
+    assert_clean_parse(source);
+}

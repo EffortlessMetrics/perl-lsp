@@ -155,7 +155,8 @@ impl<'a> Parser<'a> {
                 pairs.push((first_expr, value));
             } else if self.peek_kind() == Some(TokenKind::Comma) {
                 // comma-separated pattern: key, value, key2, value2
-                self.tokens.next()?; // consume comma
+                self.consume_token()?; // consume comma
+                self.consume_redundant_commas()?;
 
                 if self.peek_kind() != Some(TokenKind::RightBrace) {
                     let second = self.parse_expression()?;
@@ -179,6 +180,7 @@ impl<'a> Parser<'a> {
             {
                 if self.peek_kind() == Some(TokenKind::Comma) {
                     self.consume_token()?; // consume comma
+                    self.consume_redundant_commas()?;
                 }
 
                 if self.peek_kind() == Some(TokenKind::RightBrace) {
@@ -194,6 +196,7 @@ impl<'a> Parser<'a> {
                     pairs.push((key, value));
                 } else if self.peek_kind() == Some(TokenKind::Comma) {
                     self.consume_token()?; // consume comma
+                    self.consume_redundant_commas()?;
 
                     if self.peek_kind() == Some(TokenKind::RightBrace) {
                         // Odd number of elements - last one becomes undef value
