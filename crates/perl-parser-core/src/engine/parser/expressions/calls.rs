@@ -520,19 +520,7 @@ impl<'a> Parser<'a> {
             let mut variables = Vec::new();
 
             while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                // `undef` is valid as a throw-away placeholder in list
-                // destructuring: my ($a, undef, $b) = func();
-                // This also covers the nested form:
-                //   (my ($a, $b, undef), $c) = func();
-                let var = if self.peek_kind() == Some(TokenKind::Undef) {
-                    let undef_token = self.consume_token()?;
-                    Node::new(
-                        NodeKind::Undef,
-                        SourceLocation { start: undef_token.start, end: undef_token.end },
-                    )
-                } else {
-                    self.parse_variable()?
-                };
+                let var = self.parse_variable_list_item()?;
                 variables.push(var);
 
                 if self.peek_kind() == Some(TokenKind::Comma) {
