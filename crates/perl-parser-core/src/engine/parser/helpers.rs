@@ -269,6 +269,7 @@ impl<'a> Parser<'a> {
                 | "sin"
                 | "log"
                 | "exp"
+                | "undef"
                 | "umask"
         )
     }
