@@ -81,6 +81,17 @@ unless( eval {require warnings::register; warnings::register->import; 1} ) {
 }
 
 #[test]
+fn fields_phash_grep_prefix_increment_hash_slice() {
+    // From fields.pm: a dereferenced hash slice may use grep EXPR, LIST where
+    // the grep expression starts with a prefix increment.
+    let source = r#"
+my $i = 0;
+@$h{grep ++$i % 2, @_} = 1 .. @_ / 2;
+"#;
+    assert_clean_parse(source);
+}
+
+#[test]
 fn test_more_unless_diag_heredoc() {
     // From Test::More: heredoc terminators inside an unless block must close the
     // diagnostic call without leaving the block body waiting for another `}`.
