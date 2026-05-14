@@ -375,6 +375,13 @@ impl<'a> Parser<'a> {
         // name instead of leaving the tail as a stray identifier node.
         if (full_name.is_empty() || (sigil == "$" && full_name == "$"))
             && self.peek_kind() == Some(TokenKind::Identifier)
+            && (sigil != "$"
+                || full_name != "$"
+                || self
+                    .tokens
+                    .peek()
+                    .ok()
+                    .is_some_and(|name_token| name_token.start == end))
         {
             let name_token = self.tokens.next()?;
             full_name.push_str(&name_token.text);
