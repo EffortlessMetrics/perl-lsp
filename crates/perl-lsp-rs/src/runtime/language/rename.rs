@@ -101,17 +101,28 @@ impl LspServer {
             rest = after_paren.trim_start();
         }
 
+        if let Some(after_quote) = rest.strip_prefix(['\'', '"']) {
+            rest = after_quote.trim_start();
+        }
+
         if let Some(after_plus) = rest.strip_prefix('+') {
             rest = after_plus.trim_start();
         }
 
-        matches!(rest, "" | "'" | "\"")
+        if let Some(after_quote) = rest.strip_prefix(['\'', '"']) {
+            rest = after_quote.trim_start();
+        }
+
+        rest.is_empty()
     }
 
     fn generated_accessor_arrow_follows(suffix: &str) -> bool {
         let mut rest = suffix.trim_start();
         if let Some(quote) = rest.chars().next().filter(|ch| matches!(ch, '\'' | '"')) {
             rest = rest[quote.len_utf8()..].trim_start();
+        }
+        if let Some(after_paren) = rest.strip_prefix(')') {
+            rest = after_paren.trim_start();
         }
         rest.starts_with("=>")
     }
@@ -807,14 +818,25 @@ mod tests {
 
     #[test]
     fn rename_guard_detects_quoted_generated_accessors() -> Result<(), Box<dyn std::error::Error>> {
-        let text = "use Moose;\nhas 'name' => (is => 'rw');\nhas'compact' => 1;\nhash name => 1;\n";
+        let text = "use Moose;\nhas 'name' => (is => 'rw');\nhas'compact' => 1;\nhas '+extended' => 1;\nhas + 'spaced' => 1;\nhas ('wrapped') => 1;\nhash name => 1;\n";
         let accessor_offset = text.find("name' =>").ok_or("missing quoted accessor")? + 1;
         let compact_accessor_offset =
             text.find("compact' =>").ok_or("missing compact accessor")? + 1;
+        let extended_accessor_offset =
+            text.find("extended' =>").ok_or("missing extended accessor")? + 1;
+        let spaced_accessor_offset = text.find("spaced' =>").ok_or("missing spaced accessor")? + 1;
+        let wrapped_accessor_offset =
+            text.find("wrapped') =>").ok_or("missing wrapped accessor")? + 1;
         let hash_offset = text.rfind("name").ok_or("missing hash key")? + 1;
 
         assert!(LspServer::offset_is_generated_accessor_declaration(text, accessor_offset));
         assert!(LspServer::offset_is_generated_accessor_declaration(text, compact_accessor_offset));
+        assert!(LspServer::offset_is_generated_accessor_declaration(
+            text,
+            extended_accessor_offset
+        ));
+        assert!(LspServer::offset_is_generated_accessor_declaration(text, spaced_accessor_offset));
+        assert!(LspServer::offset_is_generated_accessor_declaration(text, wrapped_accessor_offset));
         assert!(!LspServer::offset_is_generated_accessor_declaration(text, hash_offset));
         Ok(())
     }
