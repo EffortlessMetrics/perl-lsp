@@ -913,6 +913,18 @@ fn caller_in_condition() {
     assert_clean_parse(r#"if (caller ne 'main') { run_tests() }"#);
 }
 
+#[test]
+fn net_telnet_caller_prefix_increment_level() {
+    // From Net::Telnet: caller may take a prefix-increment stack-level
+    // expression while assigning the returned package/file/line tuple.
+    assert_clean_parse(
+        r#"while (($pkg, $file, $line) = caller ++$i) {
+    next if $isa{$pkg};
+    return ($pkg, $file, $line);
+}"#,
+    );
+}
+
 // === ref + string comparison operators (is_str_op_terminated) ===
 
 #[test]

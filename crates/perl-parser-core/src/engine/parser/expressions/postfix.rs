@@ -83,6 +83,30 @@ impl<'a> Parser<'a> {
                 }
             }
 
+            if let NodeKind::Identifier { name } = &expr.kind {
+                // `caller ++$i` passes a pre-incremented stack level to caller;
+                // do not read it as post-incrementing the `caller` bareword.
+                let next_is_prefix_inc_arg = matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::Increment | TokenKind::Decrement)
+                ) && self.tokens.peek_second().ok().is_some_and(|token| {
+                    token.text.starts_with('$')
+                        || token.text.starts_with('@')
+                        || token.text.starts_with('%')
+                });
+                if name == "caller" && next_is_prefix_inc_arg {
+                    let start = expr.location.start;
+                    let func_name = name.clone();
+                    let arg = self.parse_unary()?;
+                    let end = arg.location.end;
+                    expr = Node::new(
+                        NodeKind::FunctionCall { name: func_name, args: vec![arg] },
+                        SourceLocation { start, end },
+                    );
+                    continue;
+                }
+            }
+
             match self.peek_kind() {
                 Some(k) if Self::is_postfix_op(Some(k)) => {
                     let op_token = self.consume_token()?;
