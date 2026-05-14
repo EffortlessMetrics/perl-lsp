@@ -87,18 +87,17 @@ when `config.use_system_inc` is `false`, so no subprocess is spawned in that cas
 | Field | Value |
 |---|---|
 | **Call site** | `perl-lsp-rs/src/runtime/language/misc.rs` (inline `perl -d` launch) |
-| **Spawn mechanism** | `PerlOracleEnv::for_language_probe(config, debug_cwd).into_command()` with fallback to bare `std::process::Command::new("perl")` on WASM and when `for_language_probe` returns `None` |
-| **Current env** | Via oracle: deny-all-ambient; `PERL5LIB` user-gated; `PERL5OPT` stripped; `local::lib` stripped. Fallback path: inherits ALL ambient env (wasm gate or `None` config). |
-| **Desired contract** | Remove bare fallback; surface actionable error if config is unavailable rather than silently inheriting ambient env. See #8551. |
+| **Spawn mechanism** | `PerlOracleEnv::for_language_probe(config, debug_cwd).into_command()`; unresolved Perl returns an actionable error instead of falling back to bare `Command::new("perl")` |
+| **Current env** | Via oracle: deny-all-ambient; `PERL5LIB` user-gated; `PERL5OPT` stripped; `local::lib` stripped. No ambient fallback. |
+| **Desired contract** | Already meets the post-#8551 permanent-subprocess contract. |
 | **Timeout** | 30 s (oracle default for `for_language_probe`) |
 | **Cache key** | None — on-demand per user action |
 | **Internalization path** | **Permanent** — launching the user's Perl debugger is inherently external |
 
 **Perl invocation:** `perl -d -- <file> <args>`
 
-**Gap (needs #8551 fix):** The bare `Command::new("perl")` fallback at
-`misc.rs:982` inherits ambient env. When `PerlOracleEnv::for_language_probe` returns
-`None` (binary not resolved), callers should surface an error, not fall through.
+**Failure mode:** If no Perl binary can be resolved from config or `PATH`, the handler
+returns an LSP error and refuses ambient fallback.
 
 ---
 
@@ -374,15 +373,14 @@ Quick-reference. Sorted by internalization path priority (gaps first).
 
 | # | Call site | Mechanism | PERL5LIB | PERL5OPT | local::lib | Timeout | Internalization |
 |---|---|---|---|---|---|---|---|
-| 1.3 | `misc.rs` (fallback path) | Bare `Command::new("perl")` | ⚠ ambient | ⚠ ambient | ⚠ ambient | 30 s | Permanent — **GAP** |
 | 1.4 | `provider.rs` (fallback path) | Bare `Command::new("perl")` | ⚠ ambient | ⚠ ambient | ⚠ ambient | 30 s | Permanent — **GAP** |
+| 1.3 | `misc.rs:perl.debugFile` | `PerlOracleEnv::for_language_probe` | user-gated | ✓ denied | ✓ denied | 30 s | Permanent |
 | 1.5 | `virtual_content.rs:fetch_perldoc` | `PerlOracleEnv::for_perldoc` | user-gated | ✓ denied | ✓ denied | 10 s | Bridge |
 | 1.1 | `mod.rs:fetch_perl_inc` | `PerlOracleEnv::for_module_resolution` | user-gated | ✓ denied | ✓ denied | 1 000 ms | Bridge |
 | 1.2 | `perl_oracle_env.rs:for_module_resolution` | `PerlOracleEnv` alias of §1.1 | user-gated | ✓ denied | ✓ denied | 1 000 ms | Bridge |
 | 1.6 | `process.rs:check_syntax` | `PerlOracleEnv::for_version_probe` | ✓ denied | ✓ denied | ✓ denied | 5 s | Bridge |
 | 1.7 | `process.rs:launch_perl` | `PerlOracleEnv::for_version_probe` | ✓ denied | ✓ denied | ✓ denied | 30 s | Permanent |
 | 1.8 | `bridge_adapter.rs:build_pls_dap_command` | `PerlOracleEnv::for_dap_bridge` | configurable | configurable | ✓ denied | 30 s | Permanent |
-| 1.3 | `misc.rs` (oracle path) | `PerlOracleEnv::for_language_probe` | user-gated | ✓ denied | ✓ denied | 30 s | Permanent |
 | 1.4 | `provider.rs` (oracle path) | `PerlOracleEnv::for_execute_command` | user-gated | ✓ allowed | ✓ allowed | 30 s | Permanent |
 | 1.9 | `perl_oracle_env.rs:for_dap_test_fixture` | `Command::new("perl")` (partial strip) | ✓ removed | ✓ removed | ✓ removed | 5 s (subsequent) | Oracle |
 | 2.1 | `test_runner.rs:hermetic_perl_command` | `Command::new` + `env_clear()` | ✓ denied | ✓ denied | ✓ denied | per-test | Oracle |
@@ -401,23 +399,13 @@ Legend: ✓ denied/removed = no leak · user-gated = follows `usePerl5lib` confi
 
 ## Section 5 — Open gaps (action items for Phase 2 / #8551)
 
-The `perldoc` hover seam (§1.5) is wrapped by `PerlOracleEnv::for_perldoc`. The
-remaining editor-runtime gaps are the silent `perl` fallback paths below.
+The `perldoc` hover seam (§1.5) is wrapped by `PerlOracleEnv::for_perldoc`, and
+`perl.debugFile` (§1.3) now refuses unresolved Perl instead of falling back to ambient
+`perl`. The remaining editor-runtime gap is the silent execute-command fallback below.
 
-### Gap B: `misc.rs` fallback (§1.3) — medium priority
+### Gap A: `provider.rs` fallback (§1.4) — medium priority
 
-The bare `Command::new("perl")` fallback in the `perl.debugFile` handler fires when
-`PerlOracleEnv::for_language_probe` returns `None` (binary unresolved). The fallback
-silently inherits ambient env — the exact behaviour the oracle contract is designed to
-prevent.
-
-**Proposed fix:** Remove the silent fallback. When `for_language_probe` returns `None`,
-surface an actionable LSP error notification: `"Perl binary not found. Set
-`perl-lsp.perlPath` in workspace settings."` Do not fall through to `Command::new("perl")`.
-
-### Gap C: `provider.rs` fallback (§1.4) — medium priority
-
-Same pattern as Gap B: `perl_command_for` falls back to bare `Command::new("perl")` when
+`ExecuteCommandProvider::perl_command_for` falls back to bare `Command::new("perl")` when
 no config is available. Remove fallback; surface error.
 
 ---

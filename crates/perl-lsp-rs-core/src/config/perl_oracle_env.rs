@@ -293,8 +293,9 @@ impl PerlOracleEnv {
     ///   processed).
     /// - `extra_env`: empty.
     ///
-    /// Returns `None` if the Perl binary cannot be resolved.  The caller should fall
-    /// back to `Command::new("perl")` or surface an actionable error to the user.
+    /// Returns `None` if the Perl binary cannot be resolved.  The caller should
+    /// surface an actionable error to the user instead of falling back to ambient
+    /// `perl` lookup.
     pub fn for_language_probe(config: &WorkspaceConfig, cwd: PathBuf) -> Option<Self> {
         use crate::platform::resolve_perl_path_with_toolchain;
 
