@@ -3,11 +3,19 @@
 use super::get_supported_commands;
 use super::provider::{ExecuteCommandProvider, TestRunner, select_test_runner};
 use super::test_support::mock_status;
+use perl_lsp_rs_core::config::WorkspaceConfig;
 use serde_json::{Value, json};
 use std::fs;
+use std::path::PathBuf;
 use tempfile::tempdir;
 
 // ============= GO-TO-TEST / GO-TO-IMPLEMENTATION TESTS =============
+
+fn provider_with_execute_perl(workspace_roots: Vec<PathBuf>) -> ExecuteCommandProvider {
+    let mut config = WorkspaceConfig::default();
+    config.perl_path = Some("perl".to_string());
+    ExecuteCommandProvider::with_workspace_roots(workspace_roots).with_workspace_config(config)
+}
 
 #[test]
 fn test_go_to_test_basic_mapping() -> Result<(), Box<dyn std::error::Error>> {
@@ -545,8 +553,7 @@ fn test_command_routing_perl_run_file() -> Result<(), Box<dyn std::error::Error>
     let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'hello world';\n";
     fs::write(&temp_file, test_content)?;
 
-    let provider =
-        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let provider = provider_with_execute_perl(vec![temp_dir.path().to_path_buf()]);
     let result = provider
         .execute_command("perl.runFile", vec![Value::String(temp_file.display().to_string())]);
 
@@ -569,8 +576,7 @@ fn test_command_routing_perl_run_test_sub() -> Result<(), Box<dyn std::error::Er
         "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_sub { print 'test executed'; }\n";
     fs::write(&temp_file, test_content)?;
 
-    let provider =
-        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let provider = provider_with_execute_perl(vec![temp_dir.path().to_path_buf()]);
     let result = provider.execute_command(
         "perl.runTestSub",
         vec![Value::String(temp_file.display().to_string()), Value::String("test_sub".to_string())],
@@ -582,6 +588,48 @@ fn test_command_routing_perl_run_test_sub() -> Result<(), Box<dyn std::error::Er
     assert!(result_value.is_object(), "Should return a structured result");
     assert!(result_value["success"].is_boolean(), "Should have success field");
     assert!(result_value["subroutine"].is_string(), "Should have subroutine field");
+    Ok(())
+}
+
+#[test]
+fn test_run_file_rejects_unresolved_perl_fallback() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let temp_file = temp_dir.path().join("test_no_ambient_run_file.pl");
+    fs::write(&temp_file, "print 'hello';\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider
+        .execute_command("perl.runFile", vec![Value::String(temp_file.display().to_string())]);
+
+    assert!(result.is_err(), "perl.runFile must reject missing oracle config");
+    let error = result.err().ok_or("expected error")?;
+    assert!(
+        error.contains("refusing ambient fallback"),
+        "error should explain ambient fallback refusal: {error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_run_test_sub_rejects_unresolved_perl_fallback() -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempdir()?;
+    let temp_file = temp_dir.path().join("test_no_ambient_run_test_sub.pl");
+    fs::write(&temp_file, "sub test_sub { print 'hello'; }\n")?;
+
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let result = provider.execute_command(
+        "perl.runTestSub",
+        vec![Value::String(temp_file.display().to_string()), Value::String("test_sub".to_string())],
+    );
+
+    assert!(result.is_err(), "perl.runTestSub must reject missing oracle config");
+    let error = result.err().ok_or("expected error")?;
+    assert!(
+        error.contains("refusing ambient fallback"),
+        "error should explain ambient fallback refusal: {error}"
+    );
     Ok(())
 }
 
@@ -1183,7 +1231,7 @@ fn test_run_critic_file_existence_logic() -> Result<(), Box<dyn std::error::Erro
 
 #[test]
 fn test_method_return_values_not_defaults() -> Result<(), Box<dyn std::error::Error>> {
-    let provider = ExecuteCommandProvider::new();
+    let provider = provider_with_execute_perl(Vec::new());
 
     // Create real test files using a portable temp directory
     let tmp = tempdir()?;
@@ -1264,10 +1312,7 @@ fn test_execute_command_multi_root_security() -> Result<(), Box<dyn std::error::
     fs::write(&file2, "print 'file2';")?;
     fs::write(&outside_file, "print 'outside';")?;
 
-    let provider = ExecuteCommandProvider::with_workspace_roots(vec![
-        workspace_dir1.clone(),
-        workspace_dir2.clone(),
-    ]);
+    let provider = provider_with_execute_perl(vec![workspace_dir1.clone(), workspace_dir2.clone()]);
 
     // 1. Should succeed for file in workspace 1
     let result1 = provider
@@ -1392,8 +1437,7 @@ fn test_command_routing_perl_run_subtest() -> Result<(), Box<dyn std::error::Err
         "use Test::More;\nsub my_subtest { ok(1); }\nmy_subtest();\ndone_testing;\n",
     )?;
 
-    let provider =
-        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+    let provider = provider_with_execute_perl(vec![temp_dir.path().to_path_buf()]);
     let result = provider.execute_command(
         "perl.runSubtest",
         vec![
