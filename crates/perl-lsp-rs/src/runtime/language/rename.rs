@@ -57,7 +57,9 @@ impl LspServer {
         if !result.is_valid || result.edits.is_empty() {
             return None;
         }
-        if !result.edits.iter().any(|edit| self.is_lexical_declaration_edit(doc, edit)) {
+        let lexical_declaration_edit_count =
+            result.edits.iter().filter(|edit| self.is_lexical_declaration_edit(doc, edit)).count();
+        if lexical_declaration_edit_count != 1 {
             return None;
         }
 
