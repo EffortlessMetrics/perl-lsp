@@ -370,13 +370,15 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // The lexer may hand us a sigil-only token (`&`) or a precombined `$$`
-        // token followed by the referenced identifier. Preserve the full target
-        // name instead of leaving the tail as a stray identifier node.
-        if (full_name.is_empty() || (sigil == "$" && full_name == "$"))
+        // The lexer may hand us a sigil-only token (`&`), a precombined `$$`
+        // token, or an old-style deref prefix such as `@$$` followed by the
+        // referenced identifier. Preserve the full target name instead of
+        // leaving the tail as a stray identifier node.
+        if (full_name.is_empty()
+            || (sigil == "$" && full_name == "$")
+            || (matches!(sigil.as_str(), "@" | "%") && full_name == "$$"))
             && self.peek_kind() == Some(TokenKind::Identifier)
-            && (sigil != "$"
-                || full_name != "$"
+            && (full_name.is_empty()
                 || self
                     .tokens
                     .peek()
