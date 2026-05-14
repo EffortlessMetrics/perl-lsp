@@ -64,9 +64,9 @@ blocker when relevant.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `docs(user): explain measured Perl editor trust`
-2. `feat(diagnostics): label dynamic-boundary and low-confidence diagnostics`
-3. `feat(provider): attach live provider receipts to explain-provider-decision`
+1. `feat(diagnostics): label dynamic-boundary and low-confidence diagnostics`
+2. `feat(provider): attach live provider receipts to explain-provider-decision`
+3. `docs(status): refresh support tiers after diagnostic or provider proof changes`
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
 Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain

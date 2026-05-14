@@ -34,6 +34,7 @@ Choose the path that matches what you are trying to do:
 | Share project settings with my team | [Project Configuration File (.perl-lsp.toml)](reference/CONFIG.md#project-configuration-file-perl-lsptoml) |
 | Migrate from perltidy or perlcritic to native tooling | [Native Tooling Migration](how-to/NATIVE_TOOLING_MIGRATION.md) |
 | Troubleshoot startup, indexing, or editor issues | [Troubleshooting](how-to/TROUBLESHOOTING.md) |
+| Understand what editor results are trusted or bounded | [Measured Perl Editor Trust](user/EDITOR_TRUST.md) |
 | Understand the server architecture | [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md) |
 | Understand the compiler-backed LSP direction | [Compiler-Backed LSP Roadmap](project/COMPILER_BACKED_LSP_ROADMAP.md) |
 | Work on LSP features as a contributor | [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md) |
@@ -93,6 +94,7 @@ Background material that explains why the system is designed the way it is (unde
 - [Cancellation Architecture Guide](explanation/CANCELLATION_ARCHITECTURE_GUIDE.md)
 - [Pure Rust Parser](explanation/PURE_RUST_PARSER.md)
 - [Slash Disambiguation](explanation/SLASH_DISAMBIGUATION.md)
+- [Measured Perl Editor Trust](user/EDITOR_TRUST.md)
 
 ### Project / ADR / Specs
 Decision records, project status, and planning documents.
