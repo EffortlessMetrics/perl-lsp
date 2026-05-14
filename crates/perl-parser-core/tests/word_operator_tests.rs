@@ -91,6 +91,18 @@ fn test_system_and_die() {
 }
 
 #[test]
+fn test_print_parens_symbolic_or_die() {
+    // From Test::Script: parenthesized print call followed by symbolic OR.
+    assert_clean_parse(r#"print($fh 'unshift @INC, ') || die "unable to write $filename: $!";"#);
+}
+
+#[test]
+fn test_system_parens_symbolic_and_die() {
+    // From Win32::GuiTest::Cmd: parenthesized system call followed by symbolic AND.
+    assert_clean_parse(r#"system("regsvr32 $server") && die "regsvr32 failed";"#);
+}
+
+#[test]
 fn test_eval_or_die() {
     assert_clean_parse(r#"eval { require Foo } or die "Cannot load Foo";"#);
 }

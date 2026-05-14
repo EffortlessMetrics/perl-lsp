@@ -556,8 +556,15 @@ impl<'a> Parser<'a> {
         // First, try to parse the initial part as a simple statement
         let mut expr = self.parse_simple_statement()?;
 
-        // Check for word operators (or, and, xor) which have very low precedence
-        expr = self.parse_word_or_expr(expr)?;
+        // Some statement-start calls parse their argument list before returning
+        // here, but symbolic logical operators still belong to the surrounding
+        // expression: `print(...) || die`, `system(...) && die`.
+        if self.peek_kind() == Some(TokenKind::And) || Self::is_logical_or(self.peek_kind()) {
+            expr = self.parse_named_unary_statement_tail(expr)?;
+        } else {
+            // Check for word operators (or, and, xor) which have very low precedence.
+            expr = self.parse_word_or_expr(expr)?;
+        }
 
         // Statement modifiers are handled at the statement level in parse_statement()
 
