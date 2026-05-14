@@ -125,16 +125,15 @@ contract for the execute-command seam.
 | Field | Value |
 |---|---|
 | **Call site** | `perl-lsp-rs/src/runtime/language/virtual_content.rs:fetch_perldoc` |
-| **Spawn mechanism** | Bare `std::process::Command::new("perldoc")` — **not yet migrated to `PerlOracleEnv`** |
-| **Current env** | Inherits ALL ambient env from the LSP process (PERL5LIB, PERL5OPT, HOME, PATH, perlbrew shims, etc.) |
-| **Desired contract** | Use an explicit binary path for `perldoc` (resolved from same toolchain as `perl_path`). Strip `PERL5OPT`. Allow `PERL5LIB` user-gated (so documentation from project libraries is available). Bound timeout. |
+| **Spawn mechanism** | `PerlOracleEnv::for_perldoc(config, cwd).into_command()` |
+| **Current env** | Deny-all-ambient base. `PERL5LIB` passes through only when `config.use_perl5lib=true`. `PERL5OPT` and `local::lib` variables are stripped. `PATH` is preserved for binary/helper resolution. `LC_ALL=C` is forced for stable text output. |
+| **Desired contract** | Already meets the post-#8551 bridge contract. `perldoc` resolves from the configured Perl toolchain directory when possible, then falls back to `perldoc` on `PATH`. Long-term: replace with an in-process POD reader. |
 | **Timeout** | 10 s (via `run_command_with_timeout` at call site) |
 | **Cache key** | None currently — per-request; caching by module name would reduce subprocess churn |
 | **Internalization path** | **Bridge** — replace with embedded documentation tables or bundled POD extractor that does not need a subprocess |
 
-**Gap (needs #8551 fix):** This is the one editor-runtime call site that remains as a
-bare `Command::new("perldoc")` after the #8525/#8537 migration wave. It should either be
-wrapped in an oracle or migrated to an in-process POD reader.
+**Perl invocation:** `perldoc -T -- <module>` with the perldoc binary resolved from the
+configured Perl toolchain when possible.
 
 ---
 
@@ -375,9 +374,9 @@ Quick-reference. Sorted by internalization path priority (gaps first).
 
 | # | Call site | Mechanism | PERL5LIB | PERL5OPT | local::lib | Timeout | Internalization |
 |---|---|---|---|---|---|---|---|
-| 1.5 | `virtual_content.rs:fetch_perldoc` | Bare `Command::new("perldoc")` | ⚠ ambient | ⚠ ambient | ⚠ ambient | 10 s | Bridge — **GAP** |
 | 1.3 | `misc.rs` (fallback path) | Bare `Command::new("perl")` | ⚠ ambient | ⚠ ambient | ⚠ ambient | 30 s | Permanent — **GAP** |
 | 1.4 | `provider.rs` (fallback path) | Bare `Command::new("perl")` | ⚠ ambient | ⚠ ambient | ⚠ ambient | 30 s | Permanent — **GAP** |
+| 1.5 | `virtual_content.rs:fetch_perldoc` | `PerlOracleEnv::for_perldoc` | user-gated | ✓ denied | ✓ denied | 10 s | Bridge |
 | 1.1 | `mod.rs:fetch_perl_inc` | `PerlOracleEnv::for_module_resolution` | user-gated | ✓ denied | ✓ denied | 1 000 ms | Bridge |
 | 1.2 | `perl_oracle_env.rs:for_module_resolution` | `PerlOracleEnv` alias of §1.1 | user-gated | ✓ denied | ✓ denied | 1 000 ms | Bridge |
 | 1.6 | `process.rs:check_syntax` | `PerlOracleEnv::for_version_probe` | ✓ denied | ✓ denied | ✓ denied | 5 s | Bridge |
@@ -402,18 +401,8 @@ Legend: ✓ denied/removed = no leak · user-gated = follows `usePerl5lib` confi
 
 ## Section 5 — Open gaps (action items for Phase 2 / #8551)
 
-### Gap A: `perldoc` (§1.5) — highest priority
-
-`fetch_perldoc` in `virtual_content.rs` uses a bare `Command::new("perldoc")` that
-inherits all ambient env. This is an editor-runtime seam that runs on hover requests.
-
-**Proposed fix:**
-1. Resolve `perldoc` binary from the same toolchain as `perl_path` (prefer explicit
-   path over `PATH` lookup).
-2. Wrap in `PerlOracleEnv` or an equivalent strip: strip `PERL5OPT`, user-gate
-   `PERL5LIB`, set explicit `LC_ALL=C`.
-3. Cache the result by module name to avoid repeated subprocesses on hover.
-4. Long-term: replace with an in-process POD reader.
+The `perldoc` hover seam (§1.5) is wrapped by `PerlOracleEnv::for_perldoc`. The
+remaining editor-runtime gaps are the silent `perl` fallback paths below.
 
 ### Gap B: `misc.rs` fallback (§1.3) — medium priority
 
