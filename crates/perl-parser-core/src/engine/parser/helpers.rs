@@ -994,15 +994,18 @@ impl<'a> Parser<'a> {
                             || third.kind == TokenKind::LeftParen;
                     }
                 }
-                // Builtin functions that take a single sigiled argument as argument:
-                // `max values %hash`, `func keys %h`, `func reverse @list`
-                // These are builtins whose first/only argument is a sigiled expression.
+                // Builtin functions that take a single sigiled/typeglob argument:
+                // `max values %hash`, `func keys %h`, `func reverse @list`,
+                // `reftype tied *STDOUT`.
+                // These are builtins whose first/only argument is a sigiled
+                // expression or explicit typeglob.
                 if Self::is_builtin_function(&next_text) {
                     if let Ok(third) = self.tokens.peek_second() {
                         let third_text: &str = &third.text;
                         return third_text.starts_with('$')
                             || third_text.starts_with('@')
                             || third_text.starts_with('%')
+                            || third.kind == TokenKind::Star
                             || third.kind == TokenKind::ScalarSigil
                             || third.kind == TokenKind::ArraySigil
                             || third.kind == TokenKind::HashSigil;
