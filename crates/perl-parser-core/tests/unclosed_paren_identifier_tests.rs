@@ -848,6 +848,15 @@ fn dbi_profile_dumper_apache_pid_ternary() {
 }
 
 #[test]
+fn dbi_each_hash_over_scalar_deref_slice() {
+    // From DBI: each may iterate over a hash dereference whose target is a
+    // scalar dereference, without leaving the parenthesized declaration open.
+    assert_clean_parse(
+        r#"while ( my ($idx, $name) = each %$$slice ) { $sth->bind_col($idx+1, \$row{$name}); }"#,
+    );
+}
+
+#[test]
 fn looks_like_number_sigil() {
     // looks_like_number $val — common in Type::Tiny and Params::Util
     assert_clean_parse(r#"return 0 unless looks_like_number $val;"#);
