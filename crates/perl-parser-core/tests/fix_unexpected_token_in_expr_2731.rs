@@ -65,6 +65,18 @@ fn test_umask_before_or_in_bitwise_not() {
     assert_clean_parse(r#"my $perm = $fromstat[2] & ~(umask || 0);"#);
 }
 
+#[test]
+fn test_statement_start_builtin_paren_call_comparison_or_do() {
+    // From IPC::Cmd: statement-start builtin with explicit parens followed by
+    // an equality comparison and a low-precedence `or do` fallback.
+    assert_clean_parse(
+        r#"system( ref $cmd ? @$cmd : $cmd ) == 0 or do {
+    $self->error( $self->_pp_child_error( $cmd, $? ) );
+    $self->ok( 0 );
+};"#,
+    );
+}
+
 // === Sub-Pattern B: Special variable $: and friends ===
 // Perl punctuation variables $:, $;, $, that the parser did not handle.
 

@@ -1003,10 +1003,11 @@ impl<'a> Parser<'a> {
                             }
 
                             let end = self.previous_position();
-                            Ok(Node::new(
+                            let call = Node::new(
                                 NodeKind::FunctionCall { name: func_name.to_string(), args },
                                 SourceLocation { start, end },
-                            ))
+                            );
+                            self.parse_named_unary_statement_tail(call)
                         }
                     }
                 }
