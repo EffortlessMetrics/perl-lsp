@@ -15,6 +15,7 @@ const VALID_COMPONENTS: &[&str] = &[
     "module_resolution",
     "workspace_symbols",
     "rename",
+    "safe_delete",
     "hover",
     "goto_definition",
     "signature_help",
