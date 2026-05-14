@@ -69,6 +69,16 @@ fn test_bare_hash_key_eval() {
     assert_clean_parse(r#"my $x = $h{eval};"#);
 }
 
+#[test]
+fn test_bare_hash_key_cmp() {
+    assert_clean_parse(r#"my %opt; $opt{cmp} ||= '=';"#);
+}
+
+#[test]
+fn test_arrow_hash_key_cmp() {
+    assert_clean_parse(r#"my $x = $opts->{cmp};"#);
+}
+
 // Chained deref with keyword key
 #[test]
 fn test_chained_hash_key_not() {

@@ -1283,7 +1283,7 @@ impl<'a> Parser<'a> {
     /// This function builds a proper parse tree node for them, including support
     /// for hash slices like `@h{m, s}` which require a list node.
     fn parse_hash_subscript_key(&mut self) -> ParseResult<Node> {
-        // Try keyword-as-bareword first (not, and, or, xor, do, eval)
+        // Try keyword/operator-as-bareword first (not, and, or, xor, do, eval, cmp)
         if let Some(node) = self.try_parse_keyword_bareword_key()? {
             return Ok(node);
         }
@@ -1297,11 +1297,13 @@ impl<'a> Parser<'a> {
         self.parse_expression()
     }
 
-    /// Attempt to parse a keyword (`not`, `and`, `or`, `xor`, `do`, `eval`) as a
-    /// bareword hash key when it appears directly before `}`.
+    /// Attempt to parse a keyword or word operator (`not`, `and`, `or`, `xor`,
+    /// `do`, `eval`, `cmp`) as a bareword hash key when it appears directly
+    /// before `}`.
     ///
-    /// Returns `Some(Node)` if the current token is a keyword followed by `}`,
-    /// otherwise returns `None` to fall through to general expression parsing.
+    /// Returns `Some(Node)` if the current token is a keyword/operator followed
+    /// by `}`, otherwise returns `None` to fall through to general expression
+    /// parsing.
     fn try_parse_keyword_bareword_key(&mut self) -> ParseResult<Option<Node>> {
         let Some(kind) = self.peek_kind() else {
             return Ok(None);
@@ -1315,6 +1317,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::WordXor
                 | TokenKind::Do
                 | TokenKind::Eval
+                | TokenKind::StringCompare
         );
 
         if !is_simple_keyword_key {
