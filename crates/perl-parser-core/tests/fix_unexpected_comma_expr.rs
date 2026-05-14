@@ -182,6 +182,20 @@ fn test_shift_with_bare_arg_then_comma() {
     assert_clean_parse(source);
 }
 
+#[test]
+fn test_mojo_file_map_block_imported_bare_call_comma_args() {
+    // From Mojo::File: imported bare calls inside map blocks may pass
+    // comma-separated args after a sigil-starting first arg.
+    let source = r#"@files = map { catfile $$self, $_ } @files;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_imported_bare_call_comma_args_stays_before_ternary() {
+    let source = r#"my $value = is_ready $obj, $ctx ? 1 : 0;"#;
+    assert_clean_parse(source);
+}
+
 // === no warnings with multiple args ===
 
 #[test]

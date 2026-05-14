@@ -358,11 +358,18 @@ impl<'a> Parser<'a> {
         let mut args = vec![];
 
         // In Perl, `=>` (fat arrow) is equivalent to `,` everywhere, including
-        // in indirect-call argument lists.  Consume any leading `=>` that
-        // separates the filehandle/object from the first argument:
+        // in indirect-call argument lists.  Consume a leading fat arrow, or the
+        // comma form for the double-sigil object shape that otherwise reaches
+        // this parser as an indirect call:
         //   print STDERR => "msg";  — STDERR is object, "msg" is first arg
-        if self.peek_kind() == Some(TokenKind::FatArrow) {
-            self.tokens.next()?; // consume =>
+        //   imported $$obj, $arg    — double-sigil object plus argument list
+        let comma_after_double_sigil_object = self.peek_kind() == Some(TokenKind::Comma)
+            && matches!(
+                &object.kind,
+                NodeKind::Variable { sigil, name } if sigil == "$" && name.starts_with('$')
+            );
+        if self.peek_kind() == Some(TokenKind::FatArrow) || comma_after_double_sigil_object {
+            self.tokens.next()?; // consume , or =>
         }
 
         // Continue parsing arguments until we hit a statement terminator

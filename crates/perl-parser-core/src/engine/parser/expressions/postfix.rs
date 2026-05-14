@@ -743,11 +743,24 @@ impl<'a> Parser<'a> {
                             // lower-precedence operators remain outside the call.
                             // Example: `is_ready $obj ? 1 : 0` must parse as
                             // `(is_ready $obj) ? 1 : 0`, not `is_ready($obj ? 1 : 0)`.
-                            let arg = self.parse_shift()?;
+                            let first_arg = self.parse_shift()?;
+                            let mut args = vec![first_arg];
+
+                            while matches!(
+                                self.peek_kind(),
+                                Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                            ) {
+                                self.consume_token()?;
+                                if self.is_at_statement_end() {
+                                    break;
+                                }
+                                args.push(self.parse_assignment_or_declaration()?);
+                            }
+
                             let start = expr.location.start;
-                            let end = arg.location.end;
+                            let end = args.last().map_or(expr.location.end, |arg| arg.location.end);
                             expr = Node::new(
-                                NodeKind::FunctionCall { name: name.clone(), args: vec![arg] },
+                                NodeKind::FunctionCall { name: name.clone(), args },
                                 SourceLocation { start, end },
                             );
                         } else if name.contains("::")
