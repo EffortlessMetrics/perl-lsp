@@ -57,16 +57,16 @@ blocker when relevant.
 | Workspace symbols | `shadowed` | Shadow compare records quality candidates; Mojolicious scenario 33 records live-provider query latency, useful/noisy hits, generated candidate gating, dynamic-boundary-shaped names, and edit freshness | Existing workspace index remains live; stale/dynamic/generated compiler candidates stay gated | Live high-confidence compiler-symbol cutover proof after additional noise/rank receipts |
 | Semantic tokens | `shadowed` | Mojolicious scenario 34 records live token counts, LSP 5-tuple/span validity, source-backed token hits, dynamic-boundary string non-promotion, and edit freshness; Dancer2 scenario 38 adds second-project package, DSL, app, typeglob-boundary, and edit-freshness token proof | Existing parser/token provider remains live; stale/dynamic compiler classifications stay shadowed | Narrow compiler-backed token classes before live cutover |
 | Rename | `partial live lexical / boundary-shadowed compiler facts` | Mojolicious scenario 35 records exact local lexical edits, generated-accessor no-edit boundary, dynamic typeglob-string no-edit boundary, and open-document freshness; Dancer2 scenario 37 adds a second real-workspace unsafe-edit receipt covering exact lexical edits, generated `has` accessor no-edit behavior, dynamic typeglob no-edit behavior, and freshness; #8915 proves a narrow same-file scoped lexical live slice; `lsp_rename_tests::test_workspace_rename_workspace_edit_rolls_back_cleanly` proves scoped qualified multi-file WorkspaceEdits can be inverted exactly | Same-file scoped live rename requires exactly one source-backed `my` or `state` declaration edit; stale, low-confidence, generated, dynamic, package-wide, and broader compiler-backed facts cannot authorize edits | Additional package/compiler-backed rename receipts plus fallback/noise proof before broader rename migration |
-| Safe delete | `boundary-shadowed` | Mojolicious scenario 36 records file-delete warning UX for a dependent module delete; symbol-level real-workspace unsafe-delete proof remains pending | Stale, low-confidence, generated, imported/exported, and dynamic facts cannot authorize symbol deletion | Symbol-level exact-static safe-delete live proof plus explicit blocker UX receipts |
+| Safe delete | `boundary-shadowed` | Mojolicious scenario 36 records file-delete warning UX for a dependent module delete; a Dancer2 runtime receipt records a symbol-level `_compile` request where a stale compiler-fact fixture blocks deletion without live behavior changes | Stale, low-confidence, generated, imported/exported, and dynamic facts cannot authorize symbol deletion | Actual real-workspace semantic unsafe-delete blockers plus symbol-level live blocker UX receipts |
 
 ## Near-Term PR Order
 
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `test(semantic-tokens): add Dancer2 token quality receipt`
-2. `test(safe-delete): add symbol-level unsafe-delete receipt`
-3. `docs(status): refresh support tiers after provider receipts`
+1. `test(safe-delete): add actual real-workspace semantic blocker receipt`
+2. `docs(status): refresh support tiers after provider receipts`
+3. `feat(provider): add provider decision explanation model`
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
 Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain
