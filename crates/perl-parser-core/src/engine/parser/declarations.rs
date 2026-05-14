@@ -793,7 +793,7 @@ impl<'a> Parser<'a> {
             }
         }
         // Handle bare arguments (no parentheses)
-        else if matches!(self.peek_kind(), Some(k) if matches!(k, TokenKind::String | TokenKind::Identifier | TokenKind::Minus | TokenKind::QuoteWords | TokenKind::QuoteSingle | TokenKind::QuoteDouble))
+        else if matches!(self.peek_kind(), Some(k) if matches!(k, TokenKind::String | TokenKind::Identifier | TokenKind::StringCompare | TokenKind::Minus | TokenKind::QuoteWords | TokenKind::QuoteSingle | TokenKind::QuoteDouble))
             && !Self::is_statement_terminator(self.peek_kind())
         {
             // Parse bare arguments like: use warnings 'void' or use constant FOO => 42
@@ -923,7 +923,7 @@ impl<'a> Parser<'a> {
                             args.push(minus.text.to_string());
                         }
                     }
-                    Some(TokenKind::Identifier) => {
+                    Some(TokenKind::Identifier | TokenKind::StringCompare) => {
                         // Check if this might be a constant declaration
                         let ident = self.consume_token()?;
                         let ident_text = ident.text.to_string();
@@ -1183,7 +1183,10 @@ impl<'a> Parser<'a> {
         let mut args = Vec::new();
 
         // Handle bare arguments (no parentheses)
-        if matches!(self.peek_kind(), Some(TokenKind::String) | Some(TokenKind::Identifier))
+        if matches!(
+            self.peek_kind(),
+            Some(TokenKind::String | TokenKind::Identifier | TokenKind::StringCompare)
+        )
             && !matches!(self.peek_kind(), Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None)
         {
             // Parse bare arguments like: no warnings 'void'
@@ -1247,7 +1250,7 @@ impl<'a> Parser<'a> {
                             }
                         }
                     }
-                    Some(TokenKind::Identifier) => {
+                    Some(TokenKind::Identifier | TokenKind::StringCompare) => {
                         args.push(self.consume_token()?.text.to_string());
 
                         // Handle comma or fat arrow after identifier

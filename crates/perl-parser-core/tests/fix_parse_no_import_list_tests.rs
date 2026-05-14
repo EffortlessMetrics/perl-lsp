@@ -26,6 +26,16 @@ fn test_no_overload_multiple_ops() {
 }
 
 #[test]
+fn test_no_overload_bare_cmp_key() {
+    let source = r#"
+no overload
+    '""' => 'type'
+  , cmp  => 'cmp';
+"#;
+    assert_clean_parse(source);
+}
+
+#[test]
 fn test_no_feature_nested_parens() {
     // Nested parens inside the arg list must be depth-tracked
     let source = r#"no feature ('say', 'state');"#;

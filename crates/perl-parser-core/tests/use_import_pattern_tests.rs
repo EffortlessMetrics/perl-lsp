@@ -135,6 +135,17 @@ fn use_overload_coderef_in_parens() {
 }
 
 #[test]
+fn use_overload_bare_cmp_key() {
+    assert_clean_parse(
+        r#"
+use overload
+    '""' => 'type'
+  , cmp  => 'cmp';
+"#,
+    );
+}
+
+#[test]
 fn use_sub_block_in_import_parens() {
     assert_clean_parse(r#"use overload ('""' => sub { $_[0]->{name} });"#);
 }
