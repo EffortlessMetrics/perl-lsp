@@ -76,16 +76,18 @@ impl LspServer {
     }
 
     fn offset_is_inside_quoted_string(content: &str, offset: usize) -> bool {
-        let chars = content.chars().collect::<Vec<_>>();
-        let limit = offset.min(chars.len());
         let mut in_single = false;
         let mut in_double = false;
         let mut escaped = false;
         let mut in_comment = false;
 
-        for ch in chars.iter().take(limit) {
+        for (byte_offset, ch) in content.char_indices() {
+            if byte_offset >= offset {
+                break;
+            }
+
             if in_comment {
-                if *ch == '\n' {
+                if ch == '\n' {
                     in_comment = false;
                 }
                 continue;
@@ -525,6 +527,18 @@ mod tests {
     fn rename_guard_detects_dynamic_typeglob_string_positions()
     -> Result<(), Box<dyn std::error::Error>> {
         let text = r#"*{"Mojolicious::Routes::Route::$name"} = sub { $cb->(@_) };"#;
+        let string_offset = text.find("Routes::Route").ok_or("missing dynamic package")? + 2;
+        let code_offset = text.find("$cb").ok_or("missing callback")? + 1;
+
+        assert!(LspServer::offset_is_inside_quoted_string(text, string_offset));
+        assert!(!LspServer::offset_is_inside_quoted_string(text, code_offset));
+        Ok(())
+    }
+
+    #[test]
+    fn rename_guard_uses_byte_offsets_with_unicode_prefix() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let text = "my $emoji = \"🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀\";\n*{\"Mojolicious::Routes::Route::$name\"} = sub { $cb->(@_) };";
         let string_offset = text.find("Routes::Route").ok_or("missing dynamic package")? + 2;
         let code_offset = text.find("$cb").ok_or("missing callback")? + 1;
 
