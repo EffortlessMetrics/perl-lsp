@@ -834,6 +834,13 @@ fn reftype_scalar_comparison() {
 }
 
 #[test]
+fn reftype_tied_typeglob_comparison() {
+    // From Capture::Tiny: an imported unary-style call may wrap a builtin call
+    // whose argument is a typeglob.
+    assert_clean_parse(r#"if (tied(*STDOUT) && (reftype tied *STDOUT eq 'GLOB')) { 1 }"#);
+}
+
+#[test]
 fn looks_like_number_sigil() {
     // looks_like_number $val — common in Type::Tiny and Params::Util
     assert_clean_parse(r#"return 0 unless looks_like_number $val;"#);
