@@ -37,6 +37,97 @@ fn lexical_declaration_keyword_before(source: &str, symbol_start: usize) -> bool
 }
 
 impl LspServer {
+    fn token_byte_span_in_line(line: &str, offset: usize) -> Option<(usize, usize)> {
+        let is_ident_char = |ch: char| ch.is_alphanumeric() || ch == '_';
+        let clamped_offset = offset.min(line.len());
+
+        let mut probe = None;
+        let mut previous = None;
+        for (idx, ch) in line.char_indices() {
+            let end = idx + ch.len_utf8();
+            if idx <= clamped_offset && clamped_offset < end {
+                probe = Some((idx, ch));
+                break;
+            }
+            if idx >= clamped_offset {
+                break;
+            }
+            previous = Some((idx, ch));
+        }
+
+        if probe.is_none()
+            && let Some((idx, ch)) = previous
+            && idx + ch.len_utf8() == clamped_offset
+        {
+            probe = Some((idx, ch));
+        }
+
+        let (probe_idx, probe_char) = probe?;
+        if !is_ident_char(probe_char) {
+            return None;
+        }
+
+        let mut start = probe_idx;
+        while start > 0 {
+            let prefix = &line[..start];
+            let Some((prev_idx, prev_char)) = prefix.char_indices().next_back() else {
+                break;
+            };
+            if !is_ident_char(prev_char) {
+                break;
+            }
+            start = prev_idx;
+        }
+
+        let mut end = probe_idx + probe_char.len_utf8();
+        while end < line.len() {
+            let suffix = &line[end..];
+            let Some(next_char) = suffix.chars().next() else {
+                break;
+            };
+            if !is_ident_char(next_char) {
+                break;
+            }
+            end += next_char.len_utf8();
+        }
+
+        Some((start, end))
+    }
+
+    fn offset_is_generated_accessor_declaration(source: &str, offset: usize) -> bool {
+        let clamped_offset = offset.min(source.len());
+        let line_start = if clamped_offset == 0 {
+            0
+        } else {
+            source[..clamped_offset].rfind('\n').map_or(0, |p| p + 1)
+        };
+        let line_end =
+            source[clamped_offset..].find('\n').map_or(source.len(), |p| clamped_offset + p);
+        let Some(line) = source.get(line_start..line_end) else {
+            return false;
+        };
+        let relative_offset = clamped_offset.saturating_sub(line_start);
+        let Some((token_start, token_end)) = Self::token_byte_span_in_line(line, relative_offset)
+        else {
+            return false;
+        };
+
+        let before_token = line[..token_start].trim_start();
+        let Some(after_has) = before_token.strip_prefix("has") else {
+            return false;
+        };
+        if !after_has.chars().next().is_some_and(char::is_whitespace) {
+            return false;
+        }
+
+        let accessor_prefix = after_has.trim_start();
+        if !matches!(accessor_prefix, "" | "'" | "\"" | "+") {
+            return false;
+        }
+
+        line[token_end..].contains("=>")
+    }
+
     fn scoped_lexical_rename_edits(
         &self,
         doc: &crate::state::DocumentState,
@@ -310,6 +401,9 @@ impl LspServer {
             if let Some(doc) = self.get_document(&documents, uri) {
                 if let Some(_ast) = &doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
+                    if Self::offset_is_generated_accessor_declaration(&doc.text, offset) {
+                        return Ok(Some(json!(null)));
+                    }
                     if Self::offset_is_inside_quoted_string(&doc.text, offset) {
                         return Ok(Some(json!(null)));
                     }
@@ -366,16 +460,19 @@ impl LspServer {
                 p.get("position").and_then(|p| p.get("character")).and_then(|n| n.as_u64()),
                 p.get("newName").and_then(|s| s.as_str()),
             ) {
-                let rename_starts_in_quoted_string = {
+                let (rename_starts_in_quoted_string, rename_starts_in_generated_accessor) = {
                     let documents = self.documents_guard();
                     self.get_document(&documents, uri)
                         .map(|doc| {
                             let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
-                            Self::offset_is_inside_quoted_string(&doc.text, offset)
+                            (
+                                Self::offset_is_inside_quoted_string(&doc.text, offset),
+                                Self::offset_is_generated_accessor_declaration(&doc.text, offset),
+                            )
                         })
-                        .unwrap_or(false)
+                        .unwrap_or((false, false))
                 };
-                if rename_starts_in_quoted_string {
+                if rename_starts_in_quoted_string || rename_starts_in_generated_accessor {
                     return Ok(Some(json!({"changes": {}})));
                 }
 
@@ -653,6 +750,29 @@ mod tests {
 
         assert!(LspServer::offset_is_inside_quoted_string(text, string_offset));
         assert!(!LspServer::offset_is_inside_quoted_string(text, code_offset));
+        Ok(())
+    }
+
+    #[test]
+    fn rename_guard_detects_unquoted_generated_accessors() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let text = "use Moo;\nhas routes      => (is => 'ro');\nsub routes { 1 }\n";
+        let accessor_offset = text.find("routes      =>").ok_or("missing has accessor")? + 2;
+        let sub_offset = text.rfind("routes").ok_or("missing sub name")? + 2;
+
+        assert!(LspServer::offset_is_generated_accessor_declaration(text, accessor_offset));
+        assert!(!LspServer::offset_is_generated_accessor_declaration(text, sub_offset));
+        Ok(())
+    }
+
+    #[test]
+    fn rename_guard_detects_quoted_generated_accessors() -> Result<(), Box<dyn std::error::Error>> {
+        let text = "use Moose;\nhas 'name' => (is => 'rw');\nhash name => 1;\n";
+        let accessor_offset = text.find("name' =>").ok_or("missing quoted accessor")? + 1;
+        let hash_offset = text.rfind("name").ok_or("missing hash key")? + 1;
+
+        assert!(LspServer::offset_is_generated_accessor_declaration(text, accessor_offset));
+        assert!(!LspServer::offset_is_generated_accessor_declaration(text, hash_offset));
         Ok(())
     }
 }

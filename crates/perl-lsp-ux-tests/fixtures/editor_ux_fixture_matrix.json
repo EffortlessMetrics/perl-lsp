@@ -924,6 +924,34 @@
       ]
     },
     {
+      "id": "dancer2_rename_unsafe_edit",
+      "scenario_file": "ux_scenario_37_dancer2_rename_unsafe_edit.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "component": "rename",
+      "instrumentation": {
+        "run_receipt": true,
+        "first_useful_result": true,
+        "protocol_goldens": false
+      },
+      "user_journey": "request rename over the Dancer2 real-workspace fixture and record unsafe-edit boundaries",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "exact local lexical rename returns same-file scoped edits",
+        "generated accessor and dynamic-boundary probes do not produce unsafe edits",
+        "rename after an open-document edit does not act on stale source text"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
       "id": "incremental_text_sync_recovery",
       "scenario_file": "ux_scenario_19_incremental_text_sync.rs",
       "subsystem_owner": "text_sync",
