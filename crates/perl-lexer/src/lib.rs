@@ -1964,12 +1964,13 @@ impl<'a> PerlLexer<'a> {
                     }
                     // Quote operators expect a delimiter next.
                     // Skip if after '->' -- these are method names, not operators.
-                    // Skip inside hash subscript braces (hash_brace_depth > 0) — all
-                    // positions inside `$h{...}` or `@h{...}` treat quote-op names as
-                    // bareword keys, including after commas in slices like `@h{m, s}`.
+                    // Inside hash subscript braces, regex-like operators stay bareword
+                    // keys (`@h{m, s}`), but q-family operators can still introduce real
+                    // quote expressions in slices (`@h{qw/a b/}`).
                     op if !self.after_arrow
-                        && self.hash_brace_depth == 0
-                        && quote_handler::is_quote_operator(op) =>
+                        && quote_handler::is_quote_operator(op)
+                        && (self.hash_brace_depth == 0
+                            || matches!(op, "q" | "qq" | "qw" | "qr" | "qx")) =>
                     {
                         // Perl allows whitespace between a quote-like operator and its delimiter,
                         // but ONLY for paired delimiters (s { ... } { ... }g).
@@ -2017,8 +2018,11 @@ impl<'a> PerlLexer<'a> {
                             let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
                             let is_quote_char = matches!(next, '\'' | '"') && op != "s";
                             let is_spaced_slash_delim = next == '/' && op != "s";
+                            let is_hash_subscript_bare_key_boundary =
+                                self.hash_brace_depth > 0 && matches!(next, ',' | '}');
                             let is_valid_delim = Self::is_quote_delim(next)
                                 && !is_fat_arrow
+                                && !is_hash_subscript_bare_key_boundary
                                 && (!has_whitespace
                                     || is_paired_delim
                                     || is_quote_char
