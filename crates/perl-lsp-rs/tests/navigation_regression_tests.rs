@@ -901,32 +901,33 @@ fn test_rename_scope_isolation_nested_same_name() -> TestResult {
         )
         .unwrap_or(json!(null));
 
-    if !response.is_null() {
-        // Gather all affected line numbers.
-        let mut affected_lines: Vec<u64> = Vec::new();
-        if let Some(changes) = response.get("changes").and_then(|c| c.as_object()) {
-            for edits in changes.values() {
-                if let Some(edits_arr) = edits.as_array() {
-                    for edit in edits_arr {
-                        if let Some(line) =
-                            edit.pointer("/range/start/line").and_then(|l| l.as_u64())
-                        {
-                            affected_lines.push(line);
-                        }
-                    }
-                }
-            }
-        }
+    assert!(response.is_object(), "rename should return a WorkspaceEdit, got {response:?}");
 
-        // If scope isolation is implemented, lines 2 and 3 (inner block) must NOT be touched.
-        for &line in &affected_lines {
-            assert!(
-                line != 2 && line != 3,
-                "rename of outer `$x` must not touch inner-scope `$x` on lines 2-3, \
-                 but got an edit at line {line}"
-            );
+    let mut affected_lines: Vec<u64> = Vec::new();
+    let changes = response
+        .get("changes")
+        .and_then(|c| c.as_object())
+        .ok_or("rename response should include changes")?;
+    for edits in changes.values() {
+        let edits_arr = edits.as_array().ok_or("rename changes should contain edit arrays")?;
+        for edit in edits_arr {
+            let line = edit
+                .pointer("/range/start/line")
+                .and_then(|l| l.as_u64())
+                .ok_or("rename edit should include start line")?;
+            let new_text =
+                edit.get("newText").and_then(|text| text.as_str()).ok_or("missing newText")?;
+            assert_eq!(new_text, "$outer_x", "lexical rename should preserve the scalar sigil");
+            affected_lines.push(line);
         }
     }
+    affected_lines.sort_unstable();
+
+    assert_eq!(
+        affected_lines,
+        vec![0, 5],
+        "rename of outer `$x` must only touch the outer declaration and reference"
+    );
 
     Ok(())
 }
