@@ -13,13 +13,113 @@ use super::super::*;
 use crate::protocol::{req_position, req_uri};
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use perl_lsp_rs_core::providers::rename::{RenameOptions, RenameProvider, TextEdit as RenameEdit};
 
 /// Returns true if `c` is a Perl variable sigil (`$`, `@`, or `%`).
 fn is_perl_sigil(c: char) -> bool {
     matches!(c, '$' | '@' | '%')
 }
 
+fn strip_perl_sigil(name: &str) -> &str {
+    match name.chars().next() {
+        Some(c) if is_perl_sigil(c) => &name[c.len_utf8()..],
+        _ => name,
+    }
+}
+
+fn lexical_declaration_keyword_before(source: &str, symbol_start: usize) -> bool {
+    let line_start =
+        if symbol_start == 0 { 0 } else { source[..symbol_start].rfind('\n').map_or(0, |p| p + 1) };
+    let prefix = source[line_start..symbol_start].trim_end();
+    let previous_word =
+        prefix.split(|c: char| !c.is_alphanumeric() && c != '_').rfind(|word| !word.is_empty());
+    matches!(previous_word, Some("my" | "state"))
+}
+
 impl LspServer {
+    fn scoped_lexical_rename_edits(
+        &self,
+        doc: &crate::state::DocumentState,
+        ast: &perl_parser_core::Node,
+        offset: usize,
+        normalized_name: &str,
+    ) -> Option<Vec<Value>> {
+        if normalized_name.chars().next().is_none_or(|c| !is_perl_sigil(c)) {
+            return None;
+        }
+
+        let provider = RenameProvider::new(ast, doc.text.clone());
+        let result = provider.scoped_rename(
+            offset,
+            strip_perl_sigil(normalized_name),
+            &RenameOptions::default(),
+        );
+        if !result.is_valid || result.edits.is_empty() {
+            return None;
+        }
+        if !result.edits.iter().any(|edit| self.is_lexical_declaration_edit(doc, edit)) {
+            return None;
+        }
+
+        Some(
+            result
+                .edits
+                .iter()
+                .map(|edit| self.rename_edit_to_lsp_text_edit(doc, edit, normalized_name))
+                .collect(),
+        )
+    }
+
+    fn is_lexical_declaration_edit(
+        &self,
+        doc: &crate::state::DocumentState,
+        edit: &RenameEdit,
+    ) -> bool {
+        if edit.location.start == 0 || edit.location.start > doc.text.len() {
+            return false;
+        }
+        let Some(prefix) = doc.text.get(..edit.location.start) else {
+            return false;
+        };
+        let Some(previous) = prefix.chars().next_back() else {
+            return false;
+        };
+        if !is_perl_sigil(previous) {
+            return false;
+        }
+        lexical_declaration_keyword_before(&doc.text, edit.location.start - previous.len_utf8())
+    }
+
+    fn rename_edit_to_lsp_text_edit(
+        &self,
+        doc: &crate::state::DocumentState,
+        edit: &RenameEdit,
+        normalized_name: &str,
+    ) -> Value {
+        let mut start = edit.location.start;
+        let mut new_text = edit.new_text.clone();
+
+        if start > 0
+            && let Some(prefix) = doc.text.get(..start)
+            && let Some(previous) = prefix.chars().next_back()
+            && is_perl_sigil(previous)
+        {
+            start = start.saturating_sub(previous.len_utf8());
+            new_text = normalized_name.to_string();
+        }
+
+        let (start_line, start_char) = self.offset_to_pos16(doc, start);
+        let (end_line, end_char) = self.offset_to_pos16(doc, edit.location.end);
+
+        json!({
+            "range": {
+                "start": { "line": start_line, "character": start_char },
+                "end": { "line": end_line, "character": end_char }
+            },
+            "newText": new_text
+        })
+    }
+
     fn token_span_at(content: &str, offset: usize) -> Option<(usize, usize)> {
         let chars: Vec<char> = content.chars().collect();
         if chars.is_empty() {
@@ -308,10 +408,7 @@ impl LspServer {
                         self.normalize_rename_target(current_symbol.as_deref(), new_name)?;
                     // build_rename_edit re-applies the sigil from key.sigil, so pass the
                     // bare identifier to avoid double-sigil output like "$$total".
-                    let normalized_bare: &str = match normalized_name.chars().next() {
-                        Some(c) if is_perl_sigil(c) => &normalized_name[c.len_utf8()..],
-                        _ => normalized_name.as_str(),
-                    };
+                    let normalized_bare = strip_perl_sigil(&normalized_name);
                     let workspace_symbol_key =
                         symbol_key.as_ref().map(super::to_workspace_symbol_key);
 
@@ -397,6 +494,16 @@ impl LspServer {
                         let current_symbol = self.get_token_at_position(&doc.text, offset);
                         let normalized_name =
                             self.normalize_rename_target(Some(current_symbol.as_str()), new_name)?;
+
+                        if let Some(edits) =
+                            self.scoped_lexical_rename_edits(doc, ast, offset, &normalized_name)
+                        {
+                            return Ok(Some(json!({
+                                "changes": {
+                                    uri: edits
+                                }
+                            })));
+                        }
 
                         // Create semantic analyzer for same-file rename
                         let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
