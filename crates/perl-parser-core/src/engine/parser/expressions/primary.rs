@@ -786,6 +786,10 @@ impl<'a> Parser<'a> {
                                             | TokenKind::RightBrace
                                             | TokenKind::Comma
                                             | TokenKind::FatArrow
+                                            | TokenKind::WordOr
+                                            | TokenKind::WordAnd
+                                            | TokenKind::WordXor
+                                            | TokenKind::WordNot
                                     )
                                 )
                             {
