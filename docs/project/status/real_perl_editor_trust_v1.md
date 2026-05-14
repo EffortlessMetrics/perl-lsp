@@ -54,7 +54,7 @@ blocker when relevant.
 | References | `partial live exact/imported` | Mojolicious scenario 30 records exact-local, imported-symbol, and declaration-including boundary reference probes | Legacy fallback for generated/no-source, declaration-including, coderef, typeglob, dynamic, stale, low-confidence, and ambiguous cases | Precision/recall receipts for generated, coderef, typeglob, dynamic, and broader declaration-including cases |
 | Diagnostics | `partial live` | Mojolicious baseline explicitly defers diagnostic correctness | Conservative diagnostics remain when semantic evidence is absent, ambiguous, stale, or dynamic | Broader false-positive / false-negative receipts plus real-workspace diagnostic correctness proof |
 | Document symbols | `partial live source-backed` | Runtime quality receipts record source-backed parser-syntax symbol counts and fact traces; Mojolicious scenario 32 records source-backed explicit symbols, generated `has` candidate counts, dynamic-boundary-shaped names, and edit freshness | Astless, stale, dynamic, virtual generated/no-source, low-confidence, and ambiguous candidates keep fallback/gated behavior | Generated-label proof and additional project-shape document-symbol receipts before generated, dynamic, or broader symbol cutover |
-| Workspace symbols | `shadowed` | Shadow compare records quality candidates; noise/rank receipt pending | Existing workspace index remains live; stale/dynamic/generated candidates stay gated | Real-workspace workspace-symbol noise receipt before live high-confidence compiler symbols |
+| Workspace symbols | `shadowed` | Shadow compare records quality candidates; Mojolicious scenario 33 records live-provider query latency, useful/noisy hits, generated candidate gating, dynamic-boundary-shaped names, and edit freshness | Existing workspace index remains live; stale/dynamic/generated compiler candidates stay gated | Live high-confidence compiler-symbol cutover proof after additional noise/rank receipts |
 | Semantic tokens | `shadowed` | No dedicated real-workspace semantic-token quality receipt yet | Existing parser/token provider remains live; stale/dynamic compiler classifications stay shadowed | Token/span invariant receipt, then narrow compiler-backed token classes |
 | Rename | `boundary-shadowed` | Real-workspace unsafe-edit proof pending | Stale, low-confidence, generated, and dynamic facts cannot authorize edits | Lexical rename live proof plus real-workspace unsafe-edit receipts |
 | Safe delete | `boundary-shadowed` | Real-workspace unsafe-delete proof pending | Stale, low-confidence, generated, imported/exported, and dynamic facts cannot authorize deletion | Exact-static safe-delete live proof plus explicit blocker UX receipts |
@@ -64,10 +64,10 @@ blocker when relevant.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `test(workspace-symbols): add real-workspace compiler symbol noise receipt`
-2. `feat(rename): enable lexical rename from ScopeGraph`
-3. `feat(framework): add Class::Tiny generated-member facts`
-4. `feat(compile): add constant table`
+1. `feat(rename): enable lexical rename from ScopeGraph`
+2. `feat(framework): add Class::Tiny generated-member facts`
+3. `feat(compile): add constant table`
+4. `test(semantic-tokens): prove compiler token span invariants`
 
 Parser raw-bucket work, Linux corpus refresh, security alert classification,
 Rust 1.95 rollout, native formatter, native critic, PIR, and determinism remain
