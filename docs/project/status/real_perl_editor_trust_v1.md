@@ -4,7 +4,7 @@
 > It does not generate metrics, broaden live provider behavior, or replace the
 > provider-specific proof surfaces.
 
-Last reviewed: 2026-05-13.
+Last reviewed: 2026-05-14.
 
 This page answers:
 
@@ -56,7 +56,7 @@ blocker when relevant.
 | Document symbols | `partial live source-backed` | Runtime quality receipts record source-backed parser-syntax symbol counts and fact traces; Mojolicious scenario 32 records source-backed explicit symbols, generated `has` candidate counts, dynamic-boundary-shaped names, and edit freshness | Astless, stale, dynamic, virtual generated/no-source, low-confidence, and ambiguous candidates keep fallback/gated behavior | Generated-label proof and additional project-shape document-symbol receipts before generated, dynamic, or broader symbol cutover |
 | Workspace symbols | `shadowed` | Shadow compare records quality candidates; Mojolicious scenario 33 records live-provider query latency, useful/noisy hits, generated candidate gating, dynamic-boundary-shaped names, and edit freshness | Existing workspace index remains live; stale/dynamic/generated compiler candidates stay gated | Live high-confidence compiler-symbol cutover proof after additional noise/rank receipts |
 | Semantic tokens | `shadowed` | Mojolicious scenario 34 records live token counts, LSP 5-tuple/span validity, source-backed token hits, dynamic-boundary string non-promotion, and edit freshness | Existing parser/token provider remains live; stale/dynamic compiler classifications stay shadowed | Additional project-shape token quality, then narrow compiler-backed token classes |
-| Rename | `boundary-shadowed` | Mojolicious scenario 35 records exact local lexical edits, generated-accessor no-edit boundary, dynamic typeglob-string no-edit boundary, and open-document freshness | Stale, low-confidence, generated, and dynamic facts cannot authorize edits; one Mojolicious receipt is not broad live rename proof | Additional real-workspace unsafe-edit receipts plus narrow lexical rename live proof and rollback |
+| Rename | `partial live lexical / boundary-shadowed compiler facts` | Mojolicious scenario 35 records exact local lexical edits, generated-accessor no-edit boundary, dynamic typeglob-string no-edit boundary, and open-document freshness; #8915 proves a narrow same-file scoped lexical live slice | Same-file scoped live rename requires exactly one source-backed `my` or `state` declaration edit; stale, low-confidence, generated, dynamic, package-wide, and broader compiler-backed facts cannot authorize edits | Additional real-workspace unsafe-edit receipts plus rollback proof before broader lexical, package, or compiler-backed rename promotion |
 | Safe delete | `boundary-shadowed` | Real-workspace unsafe-delete proof pending | Stale, low-confidence, generated, imported/exported, and dynamic facts cannot authorize deletion | Exact-static safe-delete live proof plus explicit blocker UX receipts |
 
 ## Near-Term PR Order
@@ -64,7 +64,7 @@ blocker when relevant.
 This dashboard keeps the next provider lane separate from parser capability,
 framework facts, PIR, formatter, critic, release, and security work.
 
-1. `feat(rename): enable lexical rename from ScopeGraph after real-workspace unsafe-edit proof`
+1. `test(rename): add a second real-workspace unsafe-edit receipt before broader compiler-backed cutover`
 2. `feat(framework): add Class::Tiny generated-member facts`
 3. `feat(compile): add constant table`
 4. `test(semantic-tokens): prove compiler token span invariants`
