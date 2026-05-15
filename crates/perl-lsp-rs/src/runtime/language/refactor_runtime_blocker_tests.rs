@@ -452,6 +452,87 @@ fn refactor_runtime_blocker_ux_rename_receipt_compares_live_and_compiler_plans()
 }
 
 #[test]
+fn refactor_runtime_blocker_ux_rename_receipt_records_package_fallback_noise()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let util = files.get("lib/RealBaseline/Util.pm").ok_or("missing RealBaseline Util fixture")?;
+
+    let (helper_line, helper_character) = position_of(util, "helper {")?;
+    let helper_params = json!({
+        "textDocument": {"uri": REAL_BASELINE_UTIL_URI},
+        "position": {"line": helper_line, "character": helper_character},
+        "newName": "renamed_helper"
+    });
+    let receipt = server
+        .test_rename_runtime_blocker_ux_receipt(Some(helper_params))?
+        .ok_or("missing real-workspace rename fallback/noise receipt")?;
+    let compiler = compiler_receipt(&receipt)?;
+    let fallback_noise = receipt.get("fallback_noise").ok_or("missing fallback_noise")?;
+
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(receipt.get("symbol").and_then(Value::as_str), Some("helper"));
+    assert_eq!(receipt.get("new_name").and_then(Value::as_str), Some("renamed_helper"));
+    assert_eq!(receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert_eq!(fallback_noise.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(fallback_noise.get("symbol").and_then(Value::as_str), Some("helper"));
+    assert_eq!(fallback_noise.get("new_name").and_then(Value::as_str), Some("renamed_helper"));
+    assert_eq!(
+        fallback_noise.get("compiler_requires_confirmation").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert_eq!(
+        fallback_noise.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_empty")
+    );
+    let live_edit_count = fallback_noise
+        .get("live_provider_edit_count")
+        .and_then(Value::as_u64)
+        .ok_or("missing live_provider_edit_count")?;
+    let compiler_edit_count = fallback_noise
+        .get("compiler_plan_edit_count")
+        .and_then(Value::as_u64)
+        .ok_or("missing compiler_plan_edit_count")?;
+    assert_eq!(
+        compiler_edit_count, 0,
+        "package/compiler-backed rename receipt should not promote an empty compiler plan: {fallback_noise}"
+    );
+    let live_state =
+        fallback_noise.get("live_provider_state").and_then(Value::as_str).ok_or("missing state")?;
+    assert_eq!(live_state, "error", "unexpected live provider state: {fallback_noise}");
+    assert!(
+        fallback_noise
+            .get("live_provider_error")
+            .and_then(Value::as_str)
+            .is_some_and(|message| !message.is_empty()),
+        "error state must include the live provider error: {fallback_noise}"
+    );
+    assert_eq!(
+        live_edit_count, 0,
+        "live provider should not produce edits after refusal: {fallback_noise}"
+    );
+    assert!(
+        fallback_noise.get("live_provider_error").and_then(Value::as_str).is_some_and(|message| {
+            message.contains("ambiguous symbol identity") && message.contains("helper")
+        }),
+        "package/compiler-backed rename receipt should expose the live fallback/noise reason: {fallback_noise}"
+    );
+    assert_trace_contains(compiler, "Fallback", "Low", "NotApplicable")?;
+    assert_note_contains(
+        compiler,
+        &[
+            "rename runtime blocker UX",
+            "compiler_plan_edits=",
+            "blocker_count=0",
+            "requires_confirmation=false",
+            "no live refactor behavior change",
+        ],
+    )?;
+
+    Ok(())
+}
+
+#[test]
 fn refactor_runtime_blocker_ux_safe_delete_receipt_records_exact_static_plan()
 -> Result<(), Box<dyn std::error::Error>> {
     let server = create_server();
