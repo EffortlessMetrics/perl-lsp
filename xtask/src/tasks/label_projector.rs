@@ -132,18 +132,16 @@ pub fn run_project_labels(args: LabelProjectorArgs) -> Result<()> {
 
     let receipt = LabelProjectionReceipt { dry_run, verdict, projections };
 
-    if dry_run {
-        if let Some(path) = receipt_path {
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent).with_context(|| {
-                    format!("failed to create receipt directory: {}", parent.display())
-                })?;
-            }
-            let serialized = serde_json::to_string_pretty(&receipt)
-                .context("failed to serialize label projection receipt")?;
-            fs::write(&path, serialized)
-                .with_context(|| format!("failed to write receipt: {}", path.display()))?;
+    if let Some(path) = receipt_path {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create receipt directory: {}", parent.display())
+            })?;
         }
+        let serialized = serde_json::to_string_pretty(&receipt)
+            .context("failed to serialize label projection receipt")?;
+        fs::write(&path, serialized)
+            .with_context(|| format!("failed to write receipt: {}", path.display()))?;
     }
 
     println!("label projection verdict: {}", receipt.verdict);
