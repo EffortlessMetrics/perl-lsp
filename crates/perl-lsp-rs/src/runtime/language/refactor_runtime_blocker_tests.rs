@@ -811,7 +811,11 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dynamic_boundary()
     let compiler = compiler_receipt(&runtime_receipt)?;
 
     assert_eq!(runtime_receipt.get("provider").and_then(Value::as_str), Some("safe_delete"));
-    assert_safe_delete_decision_trace(&runtime_receipt, "blocked", "compiler_blocked", "no_edit")?;
+    assert_safe_delete_decision_trace(&runtime_receipt, "blocked", "dynamic_boundary", "no_edit")?;
+    assert_eq!(
+        runtime_receipt.get("fact_source").and_then(Value::as_str),
+        Some("dynamic_boundary")
+    );
     assert_eq!(runtime_receipt.get("dynamic_boundary").and_then(Value::as_bool), Some(true));
     assert_json_array_contains(&runtime_receipt, "blocker_reasons", "DynamicBoundary")?;
     assert_eq!(runtime_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
@@ -846,11 +850,11 @@ fn refactor_runtime_blocker_ux_safe_delete_fixture_persists_blocker_decision_tra
     let receipt = server
         .test_safe_delete_runtime_blocker_ux_receipt(Some(params))?
         .ok_or("missing safe-delete fixture receipt")?;
-    assert_safe_delete_decision_trace(&receipt, "blocked", "compiler_blocked", "no_edit")?;
+    assert_safe_delete_decision_trace(&receipt, "blocked", "dynamic_boundary", "no_edit")?;
 
     let explanation = explain_provider_decision(&server, "safe_delete")?;
     let persisted = request_receipt(&explanation)?;
-    assert_safe_delete_decision_trace(persisted, "blocked", "compiler_blocked", "no_edit")?;
+    assert_safe_delete_decision_trace(persisted, "blocked", "dynamic_boundary", "no_edit")?;
     assert_eq!(persisted.get("symbol").and_then(Value::as_str), Some("renamable"));
     assert_eq!(persisted.get("dynamic_boundary").and_then(Value::as_bool), Some(true));
     assert_eq!(persisted.get("blocker_count").and_then(Value::as_u64), Some(1));
@@ -961,6 +965,14 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_stale_symbol_f
     );
     assert_eq!(compile_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
     assert_eq!(compile_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
+    assert_safe_delete_decision_trace(
+        &compile_receipt,
+        "blocked",
+        "stale_fact",
+        "refresh_workspace_facts",
+    )?;
+    assert_eq!(compile_receipt.get("confidence").and_then(Value::as_str), Some("low"));
+    assert_eq!(compile_receipt.get("freshness").and_then(Value::as_str), Some("stale"));
     assert_trace_contains(compile_compiler, "CompilerFact", "Low", "Stale")?;
     assert!(trace_count(compile_compiler)? > 0, "_compile receipt must carry fact-source traces");
     assert_note_contains(
@@ -1010,6 +1022,16 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_generated_dyna
         Some(true)
     );
     assert_eq!(generated_receipt.get("symbol").and_then(Value::as_str), Some("routes"));
+    assert_safe_delete_decision_trace(
+        &generated_receipt,
+        "blocked",
+        "generated_no_source",
+        "no_edit",
+    )?;
+    assert_eq!(
+        generated_receipt.get("fact_source").and_then(Value::as_str),
+        Some("framework_adapter")
+    );
     assert_trace_contains(generated_compiler, "FrameworkAdapter", "High", "Fresh")?;
     assert_note_contains(
         generated_compiler,
@@ -1043,6 +1065,12 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_generated_dyna
     assert_eq!(dynamic_receipt.get("live_provider_edit_count").and_then(Value::as_u64), Some(0));
     assert_eq!(dynamic_receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
     assert_eq!(dynamic_receipt.get("symbol").and_then(Value::as_str), Some("plugin_keywords"));
+    assert_safe_delete_decision_trace(&dynamic_receipt, "blocked", "dynamic_boundary", "no_edit")?;
+    assert_eq!(
+        dynamic_receipt.get("fact_source").and_then(Value::as_str),
+        Some("dynamic_boundary")
+    );
+    assert_eq!(dynamic_receipt.get("dynamic_boundary").and_then(Value::as_bool), Some(true));
     assert_trace_contains(dynamic_compiler, "DynamicBoundary", "High", "Fresh")?;
     assert_note_contains(
         dynamic_compiler,
@@ -1082,6 +1110,13 @@ fn refactor_runtime_blocker_ux_safe_delete_receipt_blocks_dancer2_generated_dyna
         Some(true)
     );
     assert_eq!(low_confidence_receipt.get("symbol").and_then(Value::as_str), Some("_compile"));
+    assert_safe_delete_decision_trace(
+        &low_confidence_receipt,
+        "blocked",
+        "ambiguous_low_confidence_candidates",
+        "require_confirmation",
+    )?;
+    assert_eq!(low_confidence_receipt.get("confidence").and_then(Value::as_str), Some("low"));
     assert_trace_contains(low_confidence_compiler, "SemanticFact", "Low", "Fresh")?;
     assert_note_contains(
         low_confidence_compiler,

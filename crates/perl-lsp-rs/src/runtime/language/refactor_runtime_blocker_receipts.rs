@@ -594,21 +594,72 @@ fn enrich_safe_delete_decision_trace(
         return;
     };
 
-    let (decision, reason, fact_source, confidence, freshness, fallback_state) = match blockers {
-        Some(blockers) if blockers.is_empty() => {
-            ("allowed", "compiler_allowed", "compiler_fact", "high", "fresh", "none")
-        }
-        Some(_) => ("blocked", "compiler_blocked", "compiler_fact", "high", "fresh", "no_edit"),
-        None => {
-            ("fallback", missing_reason, "provider_runtime", "low", "unknown", "compiler_missing")
-        }
-    };
     let blocker_reasons = blockers
         .unwrap_or(&[])
         .iter()
         .map(|blocker| format!("{:?}", blocker.reason))
         .collect::<Vec<_>>();
-    let dynamic_boundary = blocker_reasons.iter().any(|reason| reason == "DynamicBoundary");
+    let dynamic_boundary = blockers
+        .unwrap_or(&[])
+        .iter()
+        .any(|blocker| matches!(blocker.reason, PlanBlockerReason::DynamicBoundary));
+    let (decision, reason, fact_source, confidence, freshness, fallback_state) = match blockers {
+        Some([]) => ("allowed", "compiler_allowed", "compiler_fact", "high", "fresh", "none"),
+        Some(blockers)
+            if blockers
+                .iter()
+                .any(|blocker| matches!(blocker.reason, PlanBlockerReason::StaleFact)) =>
+        {
+            ("blocked", "stale_fact", "compiler_fact", "low", "stale", "refresh_workspace_facts")
+        }
+        Some(blockers)
+            if blockers
+                .iter()
+                .any(|blocker| matches!(blocker.reason, PlanBlockerReason::DynamicBoundary)) =>
+        {
+            ("blocked", "dynamic_boundary", "dynamic_boundary", "high", "fresh", "no_edit")
+        }
+        Some(blockers)
+            if blockers
+                .iter()
+                .any(|blocker| matches!(blocker.reason, PlanBlockerReason::GeneratedMember)) =>
+        {
+            ("blocked", "generated_no_source", "framework_adapter", "high", "fresh", "no_edit")
+        }
+        Some(blockers)
+            if blockers
+                .iter()
+                .any(|blocker| matches!(blocker.reason, PlanBlockerReason::AmbiguousReference)) =>
+        {
+            (
+                "blocked",
+                "ambiguous_low_confidence_candidates",
+                "semantic_fact",
+                "low",
+                "fresh",
+                "require_confirmation",
+            )
+        }
+        Some(blockers)
+            if blockers.iter().any(|blocker| {
+                matches!(
+                    blocker.reason,
+                    PlanBlockerReason::CrossModuleExport
+                        | PlanBlockerReason::ImportedSymbol
+                        | PlanBlockerReason::ExportedSymbol
+                        | PlanBlockerReason::ReferencesExist
+                )
+            }) =>
+        {
+            ("blocked", "references_exist", "compiler_fact", "high", "fresh", "no_edit")
+        }
+        Some(_) => {
+            ("blocked", "unclassified_occurrence", "semantic_fact", "low", "fresh", "no_edit")
+        }
+        None => {
+            ("fallback", missing_reason, "provider_runtime", "low", "unknown", "compiler_missing")
+        }
+    };
 
     object.insert("provider_action".to_string(), json!("safeDelete/runtimeBlockerUxReceipt"));
     object.insert("decision".to_string(), json!(decision));
