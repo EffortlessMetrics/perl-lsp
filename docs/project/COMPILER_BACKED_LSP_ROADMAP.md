@@ -2,9 +2,10 @@
 
 This document defines the next semantic direction for `perl-lsp`.
 
-The product is still the language server. The goal is not to ship a
-general-purpose `rust-perl` replacement. The goal is to grow a Rust language
-engine that can answer compiler-grade questions for editor features:
+The current product is still the language server. The near-term goal is not to
+claim a general-purpose `rust-perl` replacement. The near-term goal is to grow a
+Rust language engine that can answer compiler-grade questions for editor
+features:
 
 - What package, lexical scope, and pragma state are active here?
 - Which symbols are declared by syntax, imported by compile-time rules, or
@@ -14,11 +15,16 @@ engine that can answer compiler-grade questions for editor features:
 - Which diagnostics are proven false positives by the semantic model?
 
 Parsing stays the fast front lens. The path forward is to add the compiler
-layers that turn syntax into durable semantic facts.
+layers that turn syntax into durable semantic facts. Those same layers should
+also be shaped so a future Rust-native Perl compiler/runtime path is a
+continuation of the system, not a rewrite.
 
 ## Design Position
 
-`perl-lsp` should be a compiler-backed LSP, not a Perl runtime host.
+`perl-lsp` should be a compiler-backed LSP first, not a Perl runtime host in the
+current lane. That is a product claim boundary, not an architectural ceiling.
+The long-term platform direction is a Rust-native Perl compiler, runtime, and
+tooling replacement path grown from the same fact substrate.
 
 The primary engine is Rust:
 
@@ -37,6 +43,8 @@ source
 -> tooling IR
 -> semantic fact graph
 -> LSP providers
+-> formatter / critic / refactor / determinism
+-> bounded compiler/runtime targets
 ```
 
 Real Perl still matters, but as a conformance oracle and validation instrument:

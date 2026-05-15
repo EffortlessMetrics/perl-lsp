@@ -100,6 +100,7 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.debugTest".to_string(),
         "perl.goToTest".to_string(),
         "perl.goToImplementation".to_string(),
+        "perl.explainProviderDecision".to_string(),
     ]
 }
 
@@ -209,6 +210,16 @@ mod tests {
         assert!(
             cmds.iter().any(|c| c == "perl.runSubtest"),
             "perl.runSubtest must be in get_supported_commands"
+        );
+    }
+
+    /// Verify that `perl.explainProviderDecision` is included in the supported commands list.
+    #[test]
+    fn explain_provider_decision_command_id_is_registered() {
+        let cmds = get_supported_commands();
+        assert!(
+            cmds.iter().any(|c| c == "perl.explainProviderDecision"),
+            "perl.explainProviderDecision must be in get_supported_commands"
         );
     }
 

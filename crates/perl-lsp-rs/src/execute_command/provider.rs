@@ -4,6 +4,12 @@ use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
 #[cfg(not(target_arch = "wasm32"))]
 use perl_lsp_rs_core::config::PerlOracleEnv;
 use perl_lsp_rs_core::config::WorkspaceConfig;
+use perl_lsp_rs_core::providers::{
+    ProviderDecisionConfidence, ProviderDecisionExplanation, ProviderDecisionFactSource,
+    ProviderDecisionFallback, ProviderDecisionFreshness, ProviderDecisionOutcome,
+    ProviderDecisionProvider, ProviderDecisionReason,
+};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::borrow::Cow;
 #[cfg(windows)]
@@ -76,6 +82,15 @@ pub(crate) enum TestRunner {
     Perl,
 }
 
+#[derive(Debug, Deserialize)]
+struct ExplainProviderDecisionRequest {
+    provider: ProviderDecisionProvider,
+    #[serde(default)]
+    receipt_id: Option<String>,
+    #[serde(default)]
+    scenario: Option<String>,
+}
+
 impl Default for ExecuteCommandProvider {
     fn default() -> Self {
         Self::new()
@@ -84,29 +99,35 @@ impl Default for ExecuteCommandProvider {
 
 // Private helpers for PerlOracleEnv subprocess isolation.
 impl ExecuteCommandProvider {
-    /// Build a `Command` for a Perl subprocess using `PerlOracleEnv` when a
-    /// workspace config is available; falls back to `Command::new("perl")`
-    /// for backward compatibility when no config is attached.
+    /// Build a `Command` for a Perl subprocess using `PerlOracleEnv`.
     ///
     /// The `file_path` is used only to derive a `cwd` (its parent directory).
     /// Callers must append the actual Perl arguments after this call.
     #[cfg(not(target_arch = "wasm32"))]
-    fn perl_command_for(&self, file_path: &Path) -> Command {
+    fn perl_command_for(&self, file_path: &Path) -> Result<Command, String> {
         let cwd = file_path
             .parent()
             .map(Path::to_path_buf)
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-        if let Some(ref config) = self.workspace_config {
-            if let Some(oracle) = PerlOracleEnv::for_execute_command(config, cwd) {
-                return oracle.into_command();
-            }
-        }
-        Command::new("perl")
+        let Some(config) = self.workspace_config.as_ref() else {
+            return Err(Self::unresolved_execute_command_perl_error(file_path));
+        };
+        let Some(oracle) = PerlOracleEnv::for_execute_command(config, cwd) else {
+            return Err(Self::unresolved_execute_command_perl_error(file_path));
+        };
+        Ok(oracle.into_command())
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn perl_command_for(&self, _file_path: &Path) -> Command {
-        Command::new("perl")
+    fn perl_command_for(&self, file_path: &Path) -> Result<Command, String> {
+        Err(Self::unresolved_execute_command_perl_error(file_path))
+    }
+
+    fn unresolved_execute_command_perl_error(file_path: &Path) -> String {
+        format!(
+            "Cannot run Perl command for '{}': Perl binary could not be resolved from `perl.path` or PATH. Configure `perl.path` to an explicit Perl executable; refusing ambient fallback.",
+            file_path.display()
+        )
     }
 }
 
@@ -124,9 +145,9 @@ impl ExecuteCommandProvider {
     /// Attach a workspace configuration to enable PerlOracleEnv isolation for
     /// Perl subprocess calls (`perl.runFile`, `perl.runTestSub`).
     ///
-    /// When a config is present, `run_file` and `run_test_sub` use
-    /// `PerlOracleEnv::for_execute_command` instead of a bare
-    /// `Command::new("perl")`, applying the deny-all-ambient env policy.
+    /// `run_file` and `run_test_sub` use `PerlOracleEnv::for_execute_command`
+    /// instead of a bare `Command::new("perl")`, applying the
+    /// deny-all-ambient env policy.
     pub fn with_workspace_config(mut self, config: WorkspaceConfig) -> Self {
         self.workspace_config = Some(config);
         self
@@ -176,8 +197,38 @@ impl ExecuteCommandProvider {
                 let file_path = self.resolve_path_from_args(&arguments)?;
                 Ok(self.go_to_implementation(&file_path))
             }
+            "perl.explainProviderDecision" => self.explain_provider_decision(&arguments),
             _ => Err(format!("Unknown command: {}", command)),
         }
+    }
+
+    fn explain_provider_decision(&self, arguments: &[Value]) -> Result<Value, String> {
+        let request_value = arguments
+            .first()
+            .ok_or_else(|| "Missing explain-provider-decision argument".to_string())?;
+        let request: ExplainProviderDecisionRequest = serde_json::from_value(request_value.clone())
+            .map_err(|error| format!("Invalid explain-provider-decision argument: {error}"))?;
+
+        let mut explanation = ProviderDecisionExplanation::new(
+            request.provider,
+            ProviderDecisionOutcome::Fallback,
+            ProviderDecisionReason::MissingFact,
+            ProviderDecisionFactSource::Unknown,
+            ProviderDecisionConfidence::Low,
+            ProviderDecisionFreshness::Unknown,
+            false,
+            ProviderDecisionFallback::NoResult,
+        );
+
+        if let Some(receipt_id) = request.receipt_id {
+            explanation = explanation.with_receipt_id(receipt_id);
+        }
+        if let Some(scenario) = request.scenario {
+            explanation = explanation.with_scenario(scenario);
+        }
+
+        serde_json::to_value(explanation)
+            .map_err(|error| format!("Failed to serialize provider decision explanation: {error}"))
     }
 
     pub(crate) fn run_tests(&self, file_path: &Path) -> Result<Value, String> {
@@ -280,7 +331,7 @@ impl ExecuteCommandProvider {
         "#;
         let ext_path = normalize_path_for_external_command(file_path);
 
-        let mut perl_cmd = self.perl_command_for(file_path);
+        let mut perl_cmd = self.perl_command_for(file_path)?;
         perl_cmd.arg("-e").arg(perl_code).arg("--").arg(ext_path.as_os_str()).arg(sub_name);
         match crate::util::run_command_with_timeout(perl_cmd, 30) {
             Ok(result) => {
@@ -295,7 +346,7 @@ impl ExecuteCommandProvider {
 
     pub(crate) fn run_file(&self, file_path: &Path) -> Result<Value, String> {
         let ext_path = normalize_path_for_external_command(file_path);
-        let mut perl_cmd = self.perl_command_for(file_path);
+        let mut perl_cmd = self.perl_command_for(file_path)?;
         perl_cmd.arg("--").arg(ext_path.as_os_str());
         match crate::util::run_command_with_timeout(perl_cmd, 30) {
             Ok(result) => Ok(self.format_command_result(result, None)),
@@ -997,6 +1048,7 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.debugTest".to_string(),
         "perl.goToTest".to_string(),
         "perl.goToImplementation".to_string(),
+        "perl.explainProviderDecision".to_string(),
     ]
 }
 

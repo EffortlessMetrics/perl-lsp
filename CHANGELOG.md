@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added the conservative `perl.explainProviderDecision` LSP execute-command
+  surface. It returns the structured provider decision explanation payload and
+  reports a low-confidence `missing_fact` / `no_result` fallback when no
+  provider-specific receipt is attached, avoiding false certainty while the
+  live provider receipt wiring lands.
+
 ### Planned
 
 - Documented the Rust 1.95 / 0.14.0 rollout sequence before implementation: compatibility spike first, then MSRV/toolchain, lint, no-panic, file-policy, CI routing, and release-prep lanes.

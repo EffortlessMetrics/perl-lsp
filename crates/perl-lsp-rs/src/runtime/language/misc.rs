@@ -19,6 +19,30 @@ use std::time::Instant;
 
 static INLINE_VALUE_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
+fn unresolved_debug_perl_error(resolved: &std::path::Path) -> JsonRpcError {
+    JsonRpcError {
+        code: -32603,
+        message: format!(
+            "Cannot start Perl debugger for '{}': Perl binary could not be resolved from \
+             `perl.path` or PATH. Configure `perl.path` to an explicit Perl executable; \
+             refusing ambient fallback.",
+            resolved.display()
+        ),
+        data: Some(json!({"file": resolved.display().to_string()})),
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn debug_command_from_oracle(
+    oracle: Option<perl_lsp_rs_core::config::PerlOracleEnv>,
+    resolved: &std::path::Path,
+) -> Result<std::process::Command, JsonRpcError> {
+    oracle
+        .as_ref()
+        .map(perl_lsp_rs_core::config::PerlOracleEnv::into_command)
+        .ok_or_else(|| unresolved_debug_perl_error(resolved))
+}
+
 fn get_inline_value_regex() -> Option<&'static regex::Regex> {
     INLINE_VALUE_REGEX
         .get_or_init(|| regex::Regex::new(r"([$@%])([a-zA-Z_][a-zA-Z0-9_]*)"))
@@ -897,7 +921,8 @@ impl LspServer {
                 | "perl.runCritic"
                 | "perl.goToTest"
                 | "perl.goToImplementation"
-                | "perl.debugTests" => {
+                | "perl.debugTests"
+                | "perl.explainProviderDecision" => {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {
@@ -959,28 +984,24 @@ impl LspServer {
                     // PerlOracleEnv enforces a deny-all-ambient policy: PERL5OPT and
                     // local::lib are stripped; PERL5LIB passes through only when the
                     // user has explicitly opted in via `usePerl5lib` config.
-                    let debug_cwd =
-                        resolved.parent().map(std::path::Path::to_path_buf).unwrap_or_else(|| {
-                            std::env::current_dir()
-                                .unwrap_or_else(|_| std::path::PathBuf::from("."))
-                        });
                     #[cfg(not(target_arch = "wasm32"))]
                     let mut debug_cmd = {
                         use perl_lsp_rs_core::config::PerlOracleEnv;
+                        let debug_cwd = resolved
+                            .parent()
+                            .map(std::path::Path::to_path_buf)
+                            .unwrap_or_else(|| {
+                                std::env::current_dir()
+                                    .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                            });
                         let debug_config = self.workspace_config.lock().clone();
-                        if let Some(oracle) =
-                            PerlOracleEnv::for_language_probe(&debug_config, debug_cwd)
-                        {
-                            oracle.into_command()
-                        } else {
-                            std::process::Command::new("perl")
-                        }
+                        debug_command_from_oracle(
+                            PerlOracleEnv::for_language_probe(&debug_config, debug_cwd),
+                            &resolved,
+                        )?
                     };
                     #[cfg(target_arch = "wasm32")]
-                    let mut debug_cmd = {
-                        let _ = debug_cwd;
-                        std::process::Command::new("perl")
-                    };
+                    return Err(unresolved_debug_perl_error(&resolved));
                     match debug_cmd
                         .arg("-d")
                         .arg("--")
@@ -1258,5 +1279,26 @@ mod tests {
             caps.inlay_hint_resolve_support.is_none(),
             "inlay_hint_resolve_support must remain None when client sends no resolveSupport"
         );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn debug_command_from_oracle_rejects_missing_oracle() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let resolved = std::path::PathBuf::from("script.pl");
+        let err = super::debug_command_from_oracle(None, &resolved).err().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "expected missing Perl oracle to reject debug launch",
+            )
+        })?;
+
+        assert_eq!(err.code, -32603);
+        assert!(
+            err.message.contains("refusing ambient fallback"),
+            "debugFile should fail closed instead of falling back to ambient perl: {}",
+            err.message
+        );
+        Ok(())
     }
 }

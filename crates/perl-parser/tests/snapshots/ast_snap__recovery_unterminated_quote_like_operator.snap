@@ -3,4 +3,4 @@ source: crates/perl-parser/tests/ast_snap.rs
 assertion_line: 257
 expression: "parse_sexp(\"my @vals = qw(foo bar;\\nmy $ok = 1;\")"
 ---
-(source_file (ERROR "expected expression, found unknown token at position 11"))
+(source_file (my_declaration (variable @ vals)(array (string "foo") (string "bar;") (string "my") (string "$ok") (string "=") (string "1;"))))

@@ -538,6 +538,7 @@ cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_de
 - ✅ `perl.runTestSub` - Execute specific test subroutine with isolation
 - ✅ `perl.debugTests` - Debug test execution with breakpoint support
 - ✅ `perl.runCritic` - Native critic analysis with explicit Perl::Critic compatibility
+- ✅ `perl.explainProviderDecision` - Return a structured provider decision explanation. The v1 command is conservative: when no provider-specific receipt is attached, it returns a low-confidence `missing_fact` / `no_result` fallback instead of inventing certainty.
 
 ### Advanced Code Actions Testing (*Diataxis: How-to Guide* - Code action workflows)
 
