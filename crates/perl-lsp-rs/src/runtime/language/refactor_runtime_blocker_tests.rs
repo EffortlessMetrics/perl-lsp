@@ -66,6 +66,7 @@ const DANCER2_DSL_URI: &str = "file:///workspace/lib/Dancer2/Core/DSL.pm";
 const DANCER2_APP_URI: &str = "file:///workspace/lib/Dancer2/Core/App.pm";
 const DANCER2_PLUGIN_URI: &str = "file:///workspace/lib/Dancer2/Plugin.pm";
 const REAL_BASELINE_UTIL_URI: &str = "file:///workspace/lib/RealBaseline/Util.pm";
+const REAL_BASELINE_APP_URI: &str = "file:///workspace/lib/RealBaseline/App.pm";
 
 fn create_server() -> LspServer {
     let output =
@@ -609,6 +610,63 @@ fn refactor_runtime_blocker_ux_rename_request_receipt_preserves_package_fallback
             message.contains("ambiguous symbol identity") && message.contains("helper")
         }),
         "request-local receipt must preserve live fallback/noise reason: {request_receipt:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn refactor_runtime_blocker_ux_rename_receipt_records_imported_call_fallback_noise()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_server();
+    let files = open_semantic_real_workspace(&server)?;
+    let app = files.get("lib/RealBaseline/App.pm").ok_or("missing RealBaseline App fixture")?;
+
+    let (alias_line, alias_character) = position_of(app, "alias($self->shared)")?;
+    let alias_params = json!({
+        "textDocument": {"uri": REAL_BASELINE_APP_URI},
+        "position": {"line": alias_line, "character": alias_character},
+        "newName": "renamed_alias"
+    });
+    let receipt = server
+        .test_rename_runtime_blocker_ux_receipt(Some(alias_params))?
+        .ok_or("missing real-workspace imported-call rename fallback/noise receipt")?;
+    let fallback_noise = receipt.get("fallback_noise").ok_or("missing fallback_noise")?;
+
+    assert_eq!(receipt.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(receipt.get("symbol").and_then(Value::as_str), Some("alias"));
+    assert_eq!(receipt.get("new_name").and_then(Value::as_str), Some("renamed_alias"));
+    assert_eq!(receipt.get("no_live_behavior_change").and_then(Value::as_bool), Some(true));
+    assert!(
+        receipt.get("compiler_receipt").is_some_and(Value::is_null),
+        "imported-call receipt should record missing compiler receipt explicitly: {receipt}"
+    );
+    assert_eq!(fallback_noise.get("provider").and_then(Value::as_str), Some("rename"));
+    assert_eq!(fallback_noise.get("symbol").and_then(Value::as_str), Some("alias"));
+    assert_eq!(fallback_noise.get("new_name").and_then(Value::as_str), Some("renamed_alias"));
+    assert_eq!(
+        fallback_noise.get("fallback_state").and_then(Value::as_str),
+        Some("compiler_missing")
+    );
+    assert_eq!(fallback_noise.get("compiler_available").and_then(Value::as_bool), Some(false));
+    assert_eq!(fallback_noise.get("compiler_requires_confirmation"), Some(&Value::Null));
+    assert!(
+        fallback_noise.get("compiler_plan_edit_count").is_some_and(Value::is_null),
+        "imported-call rename receipt should not claim compiler edits without a compiler receipt: {fallback_noise}"
+    );
+    assert_eq!(
+        fallback_noise.get("live_provider_edit_count").and_then(Value::as_u64),
+        Some(1),
+        "imported-call live provider noise should stay visible before promotion: {fallback_noise}"
+    );
+    assert_eq!(
+        fallback_noise.get("live_provider_state").and_then(Value::as_str),
+        Some("edits"),
+        "unexpected imported-call live provider state: {fallback_noise}"
+    );
+    assert!(
+        fallback_noise.get("live_provider_error").is_some_and(Value::is_null),
+        "live edit-noise state should not fabricate a provider error: {fallback_noise}"
     );
 
     Ok(())
