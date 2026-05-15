@@ -28,7 +28,20 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let live_provider_result = self.handle_rename_workspace(params.clone())?;
+        let (live_provider_result, live_provider_error) =
+            match self.handle_rename_workspace(params.clone()) {
+                Ok(result) => (result, None),
+                Err(error) => (
+                    Some(json!({
+                        "error": {
+                            "code": error.code,
+                            "message": error.message,
+                            "data": error.data
+                        }
+                    })),
+                    Some(error.message),
+                ),
+            };
         let live_provider_edit_count = lsp_workspace_edit_count(live_provider_result.as_ref());
 
         #[cfg(not(all(feature = "workspace", not(target_arch = "wasm32"))))]
@@ -94,7 +107,7 @@ impl LspServer {
                 })));
             }
 
-            let compiler_receipt = match route_index_access(self.coordinator()) {
+            let compiler_receipt_parts = match route_index_access(self.coordinator()) {
                 IndexAccessMode::Full(coordinator) => {
                     let index = coordinator.index();
                     index
@@ -126,19 +139,37 @@ impl LspServer {
                                 runtime_blocker_descriptions(&blockers),
                                 !blockers.is_empty()
                             ));
-                            Some(receipt)
+                            Some((receipt, compiler_plan_edit_count, blockers))
                         })
                         .flatten()
                 }
                 IndexAccessMode::Partial(_) | IndexAccessMode::None => None,
             };
+            let (compiler_receipt, compiler_plan_edit_count, compiler_blockers) =
+                compiler_receipt_parts.map_or(
+                    (None, None, None),
+                    |(receipt, edit_count, blockers)| {
+                        (Some(receipt), Some(edit_count), Some(blockers))
+                    },
+                );
 
             Ok(Some(json!({
                 "provider": "rename",
                 "symbol": symbol,
+                "new_name": new_name,
                 "live_provider_result": live_provider_result,
+                "live_provider_error": live_provider_error,
                 "live_provider_edit_count": live_provider_edit_count,
                 "compiler_receipt": compiler_receipt,
+                "fallback_noise": rename_fallback_noise_json(
+                    &symbol,
+                    new_name,
+                    live_provider_result.as_ref(),
+                    live_provider_error.as_deref(),
+                    live_provider_edit_count,
+                    compiler_plan_edit_count,
+                    compiler_blockers.as_deref()
+                ),
                 "no_live_behavior_change": true
             })))
         }
@@ -482,6 +513,72 @@ fn lsp_workspace_edit_count(value: Option<&Value>) -> usize {
         value.get("documentChanges").and_then(Value::as_array).map(std::vec::Vec::len).unwrap_or(0);
 
     changes_count + document_changes_count
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn rename_fallback_noise_json(
+    symbol: &str,
+    new_name: &str,
+    live_provider_result: Option<&Value>,
+    live_provider_error: Option<&str>,
+    live_provider_edit_count: usize,
+    compiler_plan_edit_count: Option<usize>,
+    blockers: Option<&[PlanBlocker]>,
+) -> Value {
+    let (Some(compiler_plan_edit_count), Some(blockers)) = (compiler_plan_edit_count, blockers)
+    else {
+        return Value::Null;
+    };
+    let blocker_reasons =
+        blockers.iter().map(|blocker| format!("{:?}", blocker.reason)).collect::<Vec<_>>();
+    let blocker_messages =
+        blockers.iter().map(|blocker| blocker.description.clone()).collect::<Vec<_>>();
+    let live_provider_state = rename_live_provider_state(
+        live_provider_result,
+        live_provider_error,
+        live_provider_edit_count,
+    );
+
+    let fallback_state = if !blockers.is_empty() {
+        "compiler_blocked"
+    } else if compiler_plan_edit_count == 0 {
+        "compiler_empty"
+    } else {
+        "compiler_allowed"
+    };
+
+    json!({
+        "provider": "rename",
+        "symbol": symbol,
+        "new_name": new_name,
+        "live_provider_state": live_provider_state,
+        "live_provider_error": live_provider_error,
+        "live_provider_edit_count": live_provider_edit_count,
+        "compiler_plan_edit_count": compiler_plan_edit_count,
+        "compiler_blocker_reasons": blocker_reasons,
+        "compiler_blocker_messages": blocker_messages,
+        "compiler_requires_confirmation": !blockers.is_empty(),
+        "fallback_state": fallback_state,
+        "claim_boundary": "package/compiler-backed rename stays receipt-only until fallback/noise proof justifies cutover"
+    })
+}
+
+#[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
+fn rename_live_provider_state(
+    live_provider_result: Option<&Value>,
+    live_provider_error: Option<&str>,
+    live_provider_edit_count: usize,
+) -> &'static str {
+    if live_provider_error.is_some() {
+        return "error";
+    }
+
+    match live_provider_result {
+        Some(value) if value.is_null() => "null",
+        Some(_) if live_provider_edit_count > 0 => "edits",
+        Some(_) => "empty_edit",
+        None => "missing",
+    }
 }
 
 #[cfg(all(feature = "workspace", not(target_arch = "wasm32")))]
