@@ -369,14 +369,15 @@ impl LspServer {
         Ok(Some(json!(all_symbols)))
     }
 
-    /// Workspace symbol runtime quality receipt — shadow-only proof.
+    /// Workspace symbol runtime quality receipt for staged trust proof.
     ///
     /// Calls the live `workspace/symbol` handler and wraps the result in a typed
-    /// receipt for staged cutover proof. Workspace symbols is in `shadowed` state:
-    /// the live workspace index remains the source of truth; compiler-fact candidates
-    /// are not yet promoted to the runtime path.
+    /// receipt for staged cutover proof. Ready-index, non-empty queries can be
+    /// classified as the narrow source-backed live slice; fallback and unproven
+    /// shapes remain gated.
     ///
-    /// Does not change live provider behavior (`no_live_behavior_change: true`).
+    /// Does not promote generated, stale, dynamic, ambiguous, partial-index, or
+    /// open-document fallback candidates.
     #[cfg(any(test, feature = "expose_lsp_test_api"))]
     pub(crate) fn workspace_symbols_runtime_quality_receipt(
         &self,
@@ -1893,7 +1894,7 @@ enum WorkspaceSymbolsTraceKind {
 
 #[cfg(feature = "workspace")]
 impl LspServer {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "expose_lsp_test_api"))]
     fn workspace_symbols_source_backed_count(&self, query: &str) -> usize {
         if query.is_empty() {
             return 0;
